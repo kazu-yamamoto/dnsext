@@ -238,3 +238,33 @@ cacheRR rr = do
 
 debug :: Bool
 debug = True
+
+printResult :: Either DNSError DNSMessage -> IO ()
+printResult = either print pmsg
+  where
+    pmsg msg =
+      putStr $ unlines $
+      ["answer:"] ++
+      map show (DNS.answer msg) ++
+      [""] ++
+      ["authority:"] ++
+      map show (DNS.authority msg) ++
+      [""] ++
+      ["additional:"] ++
+      map show (DNS.additional msg) ++
+      [""]
+
+-----
+
+_examples :: IO ()
+_examples =
+  mapM_ ((printResult =<<) . uncurry runQuery)
+  [ ("google.com", DNS.NS)
+  , ("iij.ad.jp", DNS.NS)
+  , ("google.com", DNS.MX)
+  , ("iij.ad.jp", DNS.MX)
+  , ("www.google.com", DNS.A)
+  , ("www.iij.ad.jp", DNS.A)
+  , ("5.0.130.210.in-addr.arpa.", DNS.PTR) -- 210.130.0.5
+  , ("porttest.dns-oarc.net", DNS.TXT)
+  ]
