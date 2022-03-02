@@ -15,7 +15,7 @@ import Numeric (showHex)
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear, FlagSet), DNSError, RData (..),
-   TYPE(A, PTR), ResourceRecord (ResourceRecord, rrname, rdata), DNSMessage)
+   TYPE(A, PTR), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
 import qualified Network.DNS as DNS
 
 
@@ -105,20 +105,23 @@ runQuery n typ = withNormalized n (`query` typ)
 query :: Name -> TYPE -> DNSQuery DNSMessage
 query n typ = do
   msg <- query1 n typ
-  -- TODO: 目的の TYPE と CNAME が両方あったらエラーにする
-  let cname = listToMaybe $ mapMaybe takeCNAME $ DNS.answer msg
-  maybe (pure msg) (uncurry resolveCNAME) cname
-  where
+  let answers = DNS.answer msg
 
+  -- TODO: CNAME 解決の回数制限
+  let resolveCNAME cn cnRR = do
+        when (any ((== typ) . rrtype) answers) $ throwE DNS.UnexpectedRDATA
+        x <- query (B8.unpack cn) typ
+        lift $ cacheRR cnRR
+        return x
+
+  maybe
+    (pure msg)
+    (uncurry resolveCNAME)
+    $ listToMaybe $ mapMaybe takeCNAME answers
+  where
     takeCNAME (rr@ResourceRecord { rdata = RD_CNAME cn})
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
-
-    -- TODO: CNAME 解決の回数制限
-    resolveCNAME cn cnRR = do
-      x <- query (B8.unpack cn) typ
-      lift $ cacheRR cnRR
-      return x
 
 runQuery1 :: Name -> TYPE -> IO (Either DNSError DNSMessage)
 runQuery1 n typ = withNormalized n (`query1` typ)
