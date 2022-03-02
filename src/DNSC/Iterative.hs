@@ -8,12 +8,14 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 -- import Data.Monoid (Last (..))
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr)
+import Data.List (isSuffixOf, unfoldr, intercalate)
+import Data.Bits ((.&.), shiftR)
+import Numeric (showHex)
 
-import Data.IP (IP (IPv4, IPv6))
+import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
 import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..),
-   TYPE(A), ResourceRecord (ResourceRecord, rrname, rdata), DNSMessage)
+  (Domain, ResolvConf (..), FlagOp (FlagClear, FlagSet), DNSError, RData (..),
+   TYPE(A, PTR), ResourceRecord (ResourceRecord, rrname, rdata), DNSMessage)
 import qualified Network.DNS as DNS
 
 
@@ -228,9 +230,56 @@ selectA as = do
   -- naive implementation
   return $ listToMaybe as
 
+v4PtrDomain :: IPv4 -> Name
+v4PtrDomain ipv4 = dom
+  where
+    octets = reverse $ fromIPv4 ipv4
+    dom = intercalate "." $ map show octets ++ ["in-addr.arpa."]
+
+v6PtrDomain :: IPv6 -> Name
+v6PtrDomain ipv6 = dom
+  where
+    w16hx w =
+      [ (w `shiftR` 12) .&. 0x0f
+      , (w `shiftR`  8) .&. 0x0f
+      , (w `shiftR`  4) .&. 0x0f
+      ,  w              .&. 0x0f
+      ]
+    hxs = reverse $ concatMap w16hx $ fromIPv6 ipv6
+    showH x = showHex x ""
+    dom = intercalate "." $ map showH hxs ++ ["ip6.arpa."]
+
 verifyA :: ResourceRecord -> DNSQuery Bool
-verifyA _ = return True
--- TODO: reverse lookup to verify
+verifyA aRR@(ResourceRecord { rrname = ns }) =
+  case rdata aRR of
+    RD_A ipv4     ->  resolvePTR $ v4PtrDomain ipv4
+    RD_AAAA ipv6  ->  resolvePTR $ v6PtrDomain ipv6
+    _             ->  return False
+  where
+    resolvePTR ptrDom = do
+      msg <- qSystem ptrDom PTR  -- query が循環しないようにシステムのレゾルバを使う
+      let mayPTR = listToMaybe $ mapMaybe takePTR $ DNS.answer msg
+      maybe (pure True) checkPTR mayPTR  -- 逆引きが割り当てられていないときは通す
+
+    checkPTR (ptr, ptrRR) = do
+      let good =  ptr == ns
+      when good $ liftIO $ do
+        cacheRR ptrRR
+        when debug $ putStrLn $ "verifyA: verification pass: " ++ show ns
+      return good
+    takePTR (rr@ResourceRecord { rdata = RD_PTR ptr})  =  Just (ptr, rr)
+    takePTR _                                          =  Nothing
+
+    qSystem :: Name -> TYPE -> DNSQuery DNSMessage
+    qSystem name typ = ExceptT $ do
+      rs <- DNS.makeResolvSeed conf
+      DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (B8.pack name) typ
+        where
+          conf = DNS.defaultResolvConf
+                 { resolvTimeout = 5 * 1000 * 1000
+                 , resolvRetry = 2
+                 , resolvQueryControls = DNS.rdFlag FlagSet
+                 }
 
 cacheRR :: ResourceRecord -> IO ()
 cacheRR rr = do
