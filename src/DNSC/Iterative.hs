@@ -172,24 +172,38 @@ qNorec1 aserver name typ = do
            , resolvQueryControls = DNS.rdFlag FlagClear
            }
 
+-- authority section 内の、Domain に対応する NS レコードが一つも無いときに Nothing
+-- そうでなければ、additional section 内の NS の名前に対応する A を利用してアドレスを得る
+-- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
 selectAuthNS :: Domain -> DNSMessage -> DNSQuery (Maybe IP)
 selectAuthNS dom msg = runMaybeT $ do
   (ns, nsRR) <- MaybeT $ liftIO $ selectNS $ mapMaybe takeNS $ DNS.authority msg
-  (a , aRR)  <- MaybeT $ liftIO $ selectA $ mapMaybe (takeAx ns) $ DNS.additional msg
 
-  when debug $ liftIO $ putStrLn $ "selectAuthNS: " ++ show (dom, (ns, a))
+  let resolveNS :: DNSQuery IP
+      resolveNS =
+        (maybe (query1AofNS ns) pure =<<) . runMaybeT $ do
+          (a, aRR) <- MaybeT $ liftIO $ selectA $ mapMaybe (takeAx ns) $ DNS.additional msg
+          when debug $ liftIO $ putStrLn $ "selectAuthNS: " ++ show (dom, (ns, a))
+          lift $ cacheVerifiedNS a aRR
+          return a
 
-  lift $ do
-    good <- verifyA aRR
-    if good
-      then liftIO $ do cacheRR nsRR
-                       cacheRR aRR
-      else do liftIO $ putStrLn $ "selectAuthNS: verification failed: " ++ show (ns, a)
-              throwE DNS.IllegalDomain
+      cacheVerifiedNS :: IP -> ResourceRecord -> ExceptT DNSError IO ()
+      cacheVerifiedNS a aRR  = do
+        good <- verifyA aRR
+        if good
+          then liftIO $ do cacheRR nsRR
+                           cacheRR aRR
+          else do liftIO $ putStrLn $ "selectAuthNS: verification failed: " ++ show (ns, a)
+                  throwE DNS.IllegalDomain  -- 失敗時: NS に対応する A の verify 失敗
 
-  return a
+  lift resolveNS
 
   where
+    query1AofNS :: Domain -> DNSQuery IP
+    query1AofNS ns =
+      maybe (throwE DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
+      . listToMaybe . mapMaybe (takeAx ns) . DNS.answer
+      =<< query1 (B8.unpack ns) A
 
     takeNS (rr@ResourceRecord { rdata = RD_NS ns})
       | rrname rr == dom  =  Just (ns, rr)
@@ -209,7 +223,7 @@ selectNS rs =
 
 selectA :: [a] -> IO (Maybe a)
 selectA as = do
-  when (null as) $ putStrLn $ "selectA: warning: zero address list is passed."
+  -- when (null as) $ putStrLn $ "selectA: warning: zero address list is passed." -- no glue record?
   -- TODO: customize selection
   -- naive implementation
   return $ listToMaybe as
