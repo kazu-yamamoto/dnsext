@@ -129,7 +129,9 @@ query1 n typ = do
   when debug $ liftIO $ putStrLn $ "query1: " ++ show (n, typ)
   roota <- maybe (throwE DNS.BadConfiguration) pure =<< liftIO selectRoot
   sa <- iterative roota n
-  ExceptT $ qNorec1 sa (B8.pack n) typ
+  msg <- ExceptT $ qNorec1 sa (B8.pack n) typ
+  liftIO $ mapM_ cacheRR $ DNS.answer msg
+  return msg
 
 selectRoot :: IO (Maybe IP)
 selectRoot =
