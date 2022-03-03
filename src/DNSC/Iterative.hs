@@ -196,7 +196,9 @@ selectAuthNS dom msg = runMaybeT $ do
 
       cacheVerifiedNS :: IP -> ResourceRecord -> ExceptT DNSError IO ()
       cacheVerifiedNS a aRR  = do
-        good <- verifyA aRR
+        good <- if skipVerify
+                then return True
+                else verifyA aRR
         if good
           then liftIO $ do cacheRR nsRR
                            cacheRR aRR
@@ -253,6 +255,14 @@ v6PtrDomain ipv6 = dom
     hxs = reverse $ concatMap w16hx $ fromIPv6 ipv6
     showH x = showHex x ""
     dom = intercalate "." $ map showH hxs ++ ["ip6.arpa."]
+
+{-
+逆引きによる verify をするべきか?
+
+たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない
+ -}
+skipVerify :: Bool
+skipVerify = True
 
 verifyA :: ResourceRecord -> DNSQuery Bool
 verifyA aRR@(ResourceRecord { rrname = ns }) =
