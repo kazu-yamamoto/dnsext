@@ -25,6 +25,7 @@ library
                        base >=4.13 && <5
                      , bytestring
                      , transformers
+                     , random
                      , iproute
                      , dns
   hs-source-dirs:      src

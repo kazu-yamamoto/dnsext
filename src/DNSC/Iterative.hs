@@ -11,6 +11,7 @@ import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, intercalate)
 import Data.Bits ((.&.), shiftR)
 import Numeric (showHex)
+import System.Random (randomR, getStdRandom)
 
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
 import Network.DNS
@@ -136,14 +137,6 @@ query1 n typ = do
   liftIO $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
-selectRoot :: IO (Maybe IP)
-selectRoot =
-  -- TODO: customize selection
-  -- naive implementation
-  return $ listToMaybe as
-  where
-    as = rootServers
-
 runIterative :: IP -> Name -> IO (Either DNSError IP)
 runIterative sa n = withNormalized n $ iterative sa
 
@@ -224,18 +217,37 @@ selectAuthNS dom msg = runMaybeT $ do
       | rrname rr == ns  =  Just (IPv6 ipv6, rr)
     takeAx _  _          =  Nothing
 
+randomSelect :: Bool
+randomSelect = True
+
+selectRoot :: IO (Maybe IP)
+selectRoot
+  | randomSelect  =  randomizedSelect as
+  | otherwise     =  return $ listToMaybe as  -- naive implementation
+  where
+    as = rootServers
+
 selectNS :: [a] -> IO (Maybe a)
-selectNS rs =
-  -- TODO: customize selection
-  -- naive implementation
-  return $ listToMaybe rs
+selectNS rs
+  | randomSelect  =  randomizedSelect rs
+  | otherwise     =  return $ listToMaybe rs -- naive implementation
 
 selectA :: [a] -> IO (Maybe a)
-selectA as = do
-  -- when (null as) $ putStrLn $ "selectA: warning: zero address list is passed." -- no glue record?
-  -- TODO: customize selection
-  -- naive implementation
-  return $ listToMaybe as
+selectA as
+  | randomSelect  =  randomizedSelect as
+  | otherwise     =  do
+      -- when (null as) $ putStrLn $ "selectA: warning: zero address list is passed." -- no glue record?
+      -- naive implementation
+      return $ listToMaybe as
+
+randomizedSelect :: [a] -> IO (Maybe a)
+randomizedSelect = d
+  where
+    d []   =  return Nothing
+    d [x]  =  return $ Just x
+    d xs   =  do
+      ix <- getStdRandom $ randomR (0, length xs - 1)
+      return $ Just $ xs !! ix
 
 v4PtrDomain :: IPv4 -> Name
 v4PtrDomain ipv4 = dom
