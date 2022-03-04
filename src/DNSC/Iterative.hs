@@ -5,7 +5,6 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
--- import Data.Monoid (Last (..))
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, intercalate)
@@ -69,16 +68,6 @@ rootServers =
   ]
 
 -----
-
-{-
-type Error = Last DNSError
-
-dnsError :: DNSError -> Error
-dnsError = Last . Just
-
-mapDnsError :: Either DNSError a -> Either Error a
-mapDnsError = either (Left . dnsError) Right
- -}
 
 type DNSQuery = ExceptT DNSError IO
 
