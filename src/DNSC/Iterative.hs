@@ -4,11 +4,10 @@ import Control.Concurrent (forkIO)
 import Control.Monad (when, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, intercalate)
+import Data.List (isSuffixOf, unfoldr, intercalate, uncons)
 import Data.Bits ((.&.), shiftR)
 import Numeric (showHex)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
@@ -19,6 +18,8 @@ import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear, FlagSet), DNSError, RData (..),
    TYPE(A, PTR), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
 import qualified Network.DNS as DNS
+
+import DNSC.RootServers (rootServers)
 
 
 type Name = String
@@ -59,15 +60,6 @@ domains name
       | otherwise  =  Just (p, p)
       where
         p = parent n
-
------
-
-rootServers :: [IP]
-rootServers =
-  [ read "198.41.0.4"     -- a
-  , read "192.58.128.30"  -- j
-  , read "2001:503:ba3e::2:30"
-  ]
 
 -----
 
@@ -127,34 +119,62 @@ runQuery1 n typ = withNormalized n (`query1` typ)
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
   liftIO $ debugLn $ "query1: " ++ show (n, typ)
-  roota <- maybe (throwE DNS.BadConfiguration) pure =<< liftIO selectRoot
-  sa <- iterative roota n
+  nss <- iterative rootNS n
+  sa <- selectAuthNS nss
   msg <- ExceptT $ qNorec1 sa (B8.pack n) typ
   liftIO $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
-runIterative :: IP -> Name -> IO (Either DNSError IP)
+runIterative :: AuthNS -> Name -> IO (Either DNSError AuthNS)
 runIterative sa n = withNormalized n $ iterative sa
 
+type NE a = (a, [a])
+
+-- ドメインに対する複数の NS の情報
+type AuthNS = (NE (Domain, ResourceRecord), [ResourceRecord])
+
+rootNS :: AuthNS
+rootNS =
+  maybe
+  (error "rootNS: bad configuration.")
+  id
+  $ uncurry (authorityNS_ (B8.pack ".")) rootServers
+
 -- 反復検索でドメインの NS のアドレスを得る
-iterative :: IP -> Name -> DNSQuery IP
+iterative :: AuthNS -> Name -> DNSQuery AuthNS
 iterative sa n = iterative_ sa $ reverse $ domains n
 
 -- 反復検索の本体
-iterative_ :: IP -> [Name] -> DNSQuery IP
-iterative_ sa []     = return sa  -- 最後に返った NS
-iterative_ sa (x:xs) = do
-  liftIO $ debugLn $ "iterative: " ++ show (sa, name)
-  msg <- ExceptT $ qstep sa name
-  selectAuthNS name msg >>=
-    maybe
-    (iterative_ sa xs)    -- ex. or.jp, ad.jp, NS が返らない場合は同じ server address で子ドメインへ. 通常のホスト名もこのケース
-    (\nsa -> iterative_ nsa xs)
+iterative_ :: AuthNS -> [Name] -> DNSQuery AuthNS
+iterative_ nss []     = return nss
+iterative_ nss (x:xs) =
+  step nss >>=
+  maybe
+  (iterative_ nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
+  (\nss_ -> iterative_ nss_ xs)
   where
     name = B8.pack x
 
-qstep :: IP -> Domain -> IO (Either DNSError DNSMessage)
-qstep aserver name = qNorec1 aserver name A
+    step :: AuthNS -> DNSQuery (Maybe AuthNS)
+    step nss_ = do
+      sa <- selectAuthNS nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
+      liftIO $ debugLn $ "iterative: " ++ show (sa, name)
+      msg <- ExceptT $ qNorec1 sa name A
+      pure $ authorityNS name msg
+
+-- 選択可能な NS が有るときだけ Just
+authorityNS :: Domain -> DNSMessage -> Maybe AuthNS
+authorityNS dom msg = authorityNS_ dom (DNS.authority msg) (DNS.additional msg)
+
+authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe AuthNS
+authorityNS_ dom auths adds =
+  fmap (\x -> (x, adds)) $ uncons nss
+  where
+    nss = mapMaybe takeNS auths
+
+    takeNS (rr@ResourceRecord { rdata = RD_NS ns})
+      | rrname rr == dom  =  Just (ns, rr)
+    takeNS _              =  Nothing
 
 qNorec1 :: IP -> Domain -> TYPE -> IO (Either DNSError DNSMessage)
 qNorec1 aserver name typ = do
@@ -171,17 +191,18 @@ qNorec1 aserver name typ = do
 -- authority section 内の、Domain に対応する NS レコードが一つも無いときに Nothing
 -- そうでなければ、additional section 内の NS の名前に対応する A を利用してアドレスを得る
 -- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
-selectAuthNS :: Domain -> DNSMessage -> DNSQuery (Maybe IP)
-selectAuthNS dom msg = runMaybeT $ do
-  (ns, nsRR) <- MaybeT $ liftIO $ selectNS $ mapMaybe takeNS $ DNS.authority msg
+selectAuthNS :: AuthNS -> DNSQuery IP
+selectAuthNS (nss, as) = do
+  (ns, nsRR) <- liftIO $ selectNS nss
 
   let resolveNS :: DNSQuery IP
-      resolveNS =
-        (maybe (query1AofNS ns) pure =<<) . runMaybeT $ do
-          (a, aRR) <- MaybeT $ liftIO $ selectA $ mapMaybe (takeAx ns) $ DNS.additional msg
-          liftIO $ debugLn $ "selectAuthNS: " ++ show (dom, (ns, a))
-          liftIO $ void $ forkIO $ cacheVerifiedTh aRR nsRR  -- 別スレッドに切り離す.
-          return a
+      resolveNS = do
+        let doCache (a, aRR)
+              | rrname nsRR == B8.pack "." = return a  -- root は cache しない
+              | otherwise  = do
+                  void $ forkIO $ cacheVerifiedTh aRR nsRR  -- verify を別スレッドに切り離す.
+                  return a
+        liftIO (selectA $ mapMaybe (takeAx ns) as) >>= maybe (query1AofNS ns) (liftIO . doCache)
 
       -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
       -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
@@ -190,7 +211,9 @@ selectAuthNS dom msg = runMaybeT $ do
         either (debugLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
         runExceptT (cacheVerifiedNS aRR_ nsRR_)
 
-  lift resolveNS
+  a <- resolveNS
+  liftIO $ debugLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
+  return a
 
   where
     query1AofNS :: Domain -> DNSQuery IP
@@ -198,10 +221,6 @@ selectAuthNS dom msg = runMaybeT $ do
       maybe (throwE DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
       . listToMaybe . mapMaybe (takeAx ns) . DNS.answer
       =<< query1 (B8.unpack ns) A
-
-    takeNS (rr@ResourceRecord { rdata = RD_NS ns})
-      | rrname rr == dom  =  Just (ns, rr)
-    takeNS _              =  Nothing
 
     takeAx ns (rr@ResourceRecord { rdata = RD_A ipv4 })
       | rrname rr == ns  =  Just (IPv4 ipv4, rr)
@@ -220,17 +239,10 @@ cacheVerifiedNS aRR nsRR= do
 randomSelect :: Bool
 randomSelect = True
 
-selectRoot :: IO (Maybe IP)
-selectRoot
-  | randomSelect  =  randomizedSelect as
-  | otherwise     =  return $ listToMaybe as  -- naive implementation
-  where
-    as = rootServers
-
-selectNS :: [a] -> IO (Maybe a)
+selectNS :: NE a -> IO a
 selectNS rs
-  | randomSelect  =  randomizedSelect rs
-  | otherwise     =  return $ listToMaybe rs -- naive implementation
+  | randomSelect  =  randomizedSelectN rs
+  | otherwise     =  return $ fst rs  -- naive implementation
 
 selectA :: [a] -> IO (Maybe a)
 selectA as
@@ -239,6 +251,14 @@ selectA as
       -- when (null as) $ putStrLn $ "selectA: warning: zero address list is passed." -- no glue record?
       -- naive implementation
       return $ listToMaybe as
+
+randomizedSelectN :: NE a -> IO a
+randomizedSelectN = d
+  where
+    d (x, []) = return x
+    d (x, xs) = do
+      ix <- getStdRandom $ randomR (0, length xs)
+      return $ (x:xs) !! ix
 
 randomizedSelect :: [a] -> IO (Maybe a)
 randomizedSelect = d
