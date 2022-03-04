@@ -130,7 +130,7 @@ runQuery1 n typ = withNormalized n (`query1` typ)
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
-  when debug $ liftIO $ putStrLn $ "query1: " ++ show (n, typ)
+  liftIO $ debugLn $ "query1: " ++ show (n, typ)
   roota <- maybe (throwE DNS.BadConfiguration) pure =<< liftIO selectRoot
   sa <- iterative roota n
   msg <- ExceptT $ qNorec1 sa (B8.pack n) typ
@@ -148,7 +148,7 @@ iterative sa n = iterative_ sa $ reverse $ domains n
 iterative_ :: IP -> [Name] -> DNSQuery IP
 iterative_ sa []     = return sa  -- 最後に返った NS
 iterative_ sa (x:xs) = do
-  when debug $ liftIO $ putStrLn $ "iterative: " ++ show (sa, name)
+  liftIO $ debugLn $ "iterative: " ++ show (sa, name)
   msg <- ExceptT $ qstep sa name
   selectAuthNS name msg >>=
     maybe
@@ -183,7 +183,7 @@ selectAuthNS dom msg = runMaybeT $ do
       resolveNS =
         (maybe (query1AofNS ns) pure =<<) . runMaybeT $ do
           (a, aRR) <- MaybeT $ liftIO $ selectA $ mapMaybe (takeAx ns) $ DNS.additional msg
-          when debug $ liftIO $ putStrLn $ "selectAuthNS: " ++ show (dom, (ns, a))
+          liftIO $ debugLn $ "selectAuthNS: " ++ show (dom, (ns, a))
           lift $ cacheVerifiedNS a aRR
           return a
 
@@ -292,7 +292,7 @@ verifyA aRR@(ResourceRecord { rrname = ns }) =
       let good =  ptr == ns
       when good $ liftIO $ do
         cacheRR ptrRR
-        when debug $ putStrLn $ "verifyA: verification pass: " ++ show ns
+        debugLn $ "verifyA: verification pass: " ++ show ns
       return good
     takePTR (rr@ResourceRecord { rdata = RD_PTR ptr})  =  Just (ptr, rr)
     takePTR _                                          =  Nothing
@@ -310,10 +310,13 @@ verifyA aRR@(ResourceRecord { rrname = ns }) =
 
 cacheRR :: ResourceRecord -> IO ()
 cacheRR rr = do
-  when debug $ putStrLn $ "cacheRR: " ++ show rr
+  debugLn $ "cacheRR: " ++ show rr
 
 debug :: Bool
 debug = True
+
+debugLn :: String -> IO ()
+debugLn = when debug . putStrLn
 
 printResult :: Either DNSError DNSMessage -> IO ()
 printResult = either print pmsg
