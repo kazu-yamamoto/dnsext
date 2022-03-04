@@ -119,7 +119,7 @@ query n typ = do
     (uncurry resolveCNAME)
     $ listToMaybe $ mapMaybe takeCNAME answers
   where
-    takeCNAME (rr@ResourceRecord { rdata = RD_CNAME cn})
+    takeCNAME rr@ResourceRecord { rdata = RD_CNAME cn}
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
 
@@ -144,6 +144,7 @@ type NE a = (a, [a])
 -- ドメインに対する複数の NS の情報
 type AuthNS = (NE (Domain, ResourceRecord), [ResourceRecord])
 
+{-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
 rootNS :: AuthNS
 rootNS =
   maybe
@@ -162,7 +163,7 @@ iterative_ nss (x:xs) =
   step nss >>=
   maybe
   (iterative_ nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
-  (\nss_ -> iterative_ nss_ xs)
+  (`iterative_` xs)
   where
     name = B8.pack x
 
@@ -177,13 +178,14 @@ iterative_ nss (x:xs) =
 authorityNS :: Domain -> DNSMessage -> Maybe AuthNS
 authorityNS dom msg = authorityNS_ dom (DNS.authority msg) (DNS.additional msg)
 
+{-# ANN authorityNS_ ("HLint: ignore Use tuple-section") #-}
 authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe AuthNS
 authorityNS_ dom auths adds =
-  fmap (\x -> (x, adds)) $ uncons nss
+  (\x -> (x, adds)) <$> uncons nss
   where
     nss = mapMaybe takeNS auths
 
-    takeNS (rr@ResourceRecord { rdata = RD_NS ns})
+    takeNS rr@ResourceRecord { rdata = RD_NS ns}
       | rrname rr == dom  =  Just (ns, rr)
     takeNS _              =  Nothing
 
@@ -233,9 +235,9 @@ selectAuthNS (nss, as) = do
       . listToMaybe . mapMaybe (takeAx ns) . DNS.answer
       =<< query1 (B8.unpack ns) A
 
-    takeAx ns (rr@ResourceRecord { rdata = RD_A ipv4 })
+    takeAx ns rr@ResourceRecord { rdata = RD_A ipv4 }
       | rrname rr == ns  =  Just (IPv4 ipv4, rr)
-    takeAx ns (rr@ResourceRecord { rdata = RD_AAAA ipv6 })
+    takeAx ns rr@ResourceRecord { rdata = RD_AAAA ipv6 }
       | rrname rr == ns  =  Just (IPv6 ipv6, rr)
     takeAx _  _          =  Nothing
 
@@ -300,7 +302,7 @@ v6PtrDomain ipv6 = dom
     dom = intercalate "." $ map showH hxs ++ ["ip6.arpa."]
 
 verifyA :: ResourceRecord -> DNSQuery Bool
-verifyA aRR@(ResourceRecord { rrname = ns }) =
+verifyA aRR@ResourceRecord { rrname = ns } =
   case rdata aRR of
     RD_A ipv4     ->  resolvePTR $ v4PtrDomain ipv4
     RD_AAAA ipv6  ->  resolvePTR $ v6PtrDomain ipv6
@@ -317,8 +319,8 @@ verifyA aRR@(ResourceRecord { rrname = ns }) =
         cacheRR ptrRR
         debugLn $ "verifyA: verification pass: " ++ show ns
       return good
-    takePTR (rr@ResourceRecord { rdata = RD_PTR ptr})  =  Just (ptr, rr)
-    takePTR _                                          =  Nothing
+    takePTR rr@ResourceRecord { rdata = RD_PTR ptr}  =  Just (ptr, rr)
+    takePTR _                                        =  Nothing
 
     qSystem :: Name -> TYPE -> DNSQuery DNSMessage
     qSystem name typ = ExceptT $ do
