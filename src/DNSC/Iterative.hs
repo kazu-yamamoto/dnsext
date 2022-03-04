@@ -1,6 +1,7 @@
 module DNSC.Iterative where
 
-import Control.Monad (when)
+import Control.Concurrent (forkIO)
+import Control.Monad (when, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -10,6 +11,7 @@ import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, intercalate)
 import Data.Bits ((.&.), shiftR)
 import Numeric (showHex)
+import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
@@ -84,8 +86,13 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
+runDNSQuery :: DNSQuery a -> IO (Either DNSError a)
+runDNSQuery q = do
+  hSetBuffering stdout LineBuffering
+  runExceptT q
+
 withNormalized :: Name -> (Name -> DNSQuery a) -> IO (Either DNSError a)
-withNormalized n action = runExceptT $ do
+withNormalized n action = runDNSQuery $ do
   action =<< maybe (throwE DNS.IllegalDomain) return (normalize n)
 
 runQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
@@ -173,19 +180,15 @@ selectAuthNS dom msg = runMaybeT $ do
         (maybe (query1AofNS ns) pure =<<) . runMaybeT $ do
           (a, aRR) <- MaybeT $ liftIO $ selectA $ mapMaybe (takeAx ns) $ DNS.additional msg
           liftIO $ debugLn $ "selectAuthNS: " ++ show (dom, (ns, a))
-          lift $ cacheVerifiedNS a aRR
+          liftIO $ void $ forkIO $ cacheVerifiedTh aRR nsRR  -- 別スレッドに切り離す.
           return a
 
-      cacheVerifiedNS :: IP -> ResourceRecord -> ExceptT DNSError IO ()
-      cacheVerifiedNS a aRR  = do
-        good <- if skipVerify
-                then return True
-                else verifyA aRR
-        if good
-          then liftIO $ do cacheRR nsRR
-                           cacheRR aRR
-          else do liftIO $ putStrLn $ "selectAuthNS: verification failed: " ++ show (ns, a)
-                  throwE DNS.IllegalDomain  -- 失敗時: NS に対応する A の verify 失敗
+      -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
+      -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
+      cacheVerifiedTh :: ResourceRecord -> ResourceRecord -> IO ()
+      cacheVerifiedTh aRR_ nsRR_ =
+        either (debugLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
+        runExceptT (cacheVerifiedNS aRR_ nsRR_)
 
   lift resolveNS
 
@@ -205,6 +208,14 @@ selectAuthNS dom msg = runMaybeT $ do
     takeAx ns (rr@ResourceRecord { rdata = RD_AAAA ipv6 })
       | rrname rr == ns  =  Just (IPv6 ipv6, rr)
     takeAx _  _          =  Nothing
+
+cacheVerifiedNS :: ResourceRecord -> ResourceRecord -> DNSQuery ()
+cacheVerifiedNS aRR nsRR= do
+  good <- verifyA aRR
+  liftIO $ if good
+           then do cacheRR nsRR
+                   cacheRR aRR
+           else    debugLn $ unlines ["cacheVerifiedNS: reverse lookup inconsistent: ", show aRR, show nsRR]
 
 randomSelect :: Bool
 randomSelect = True
@@ -256,14 +267,6 @@ v6PtrDomain ipv6 = dom
     hxs = reverse $ concatMap w16hx $ fromIPv6 ipv6
     showH x = showHex x ""
     dom = intercalate "." $ map showH hxs ++ ["ip6.arpa."]
-
-{-
-逆引きによる verify をするべきか?
-
-たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない
- -}
-skipVerify :: Bool
-skipVerify = True
 
 verifyA :: ResourceRecord -> DNSQuery Bool
 verifyA aRR@(ResourceRecord { rrname = ns }) =
