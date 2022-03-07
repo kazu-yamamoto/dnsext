@@ -1,4 +1,15 @@
-module DNSC.Iterative where
+module DNSC.Iterative (
+  -- * query interfaces
+  runQuery,
+  runQuery1,
+  runIterative,
+  rootNS, AuthNS,
+  printResult,
+
+  -- * low-level interfaces
+  DNSQuery, runDNSQuery,
+  query, query1, iterative,
+  ) where
 
 import Control.Concurrent (forkIO)
 import Control.Monad (when, void)
