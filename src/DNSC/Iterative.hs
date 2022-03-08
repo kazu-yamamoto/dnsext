@@ -5,6 +5,7 @@ module DNSC.Iterative (
   runIterative,
   rootNS, AuthNS,
   printResult,
+  traceQuery,
 
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
@@ -16,6 +17,7 @@ import Control.Monad (when, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, intercalate, uncons)
@@ -74,7 +76,9 @@ domains name
 
 -----
 
-type DNSQuery = ExceptT DNSError IO
+type Context = Bool
+
+type DNSQuery = ExceptT DNSError (ReaderT Context IO)
 
 ---
 
@@ -89,17 +93,37 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
+dnsQueryT :: (Context -> IO (Either DNSError a)) -> DNSQuery a
+dnsQueryT = ExceptT . ReaderT
+
 runDNSQuery :: DNSQuery a -> IO (Either DNSError a)
-runDNSQuery q = do
-  hSetBuffering stdout LineBuffering
-  runExceptT q
+runDNSQuery = (`runDNSQuery_` False)
+
+runDNSQuery_ :: DNSQuery a -> Bool -> IO (Either DNSError a)
+runDNSQuery_ q trace = do
+  when trace $ hSetBuffering stdout LineBuffering
+  runReaderT (runExceptT q) trace
+
+trace_ :: Context -> Bool
+trace_ = id
+
+getTrace :: DNSQuery Bool
+getTrace = lift $ asks trace_
 
 withNormalized :: Name -> (Name -> DNSQuery a) -> IO (Either DNSError a)
-withNormalized n action = runDNSQuery $ do
-  action =<< maybe (throwE DNS.IllegalDomain) return (normalize n)
+withNormalized = withNormalized_ False
+
+withNormalized_ :: Bool -> Name -> (Name -> DNSQuery a) -> IO (Either DNSError a)
+withNormalized_ trace n action =
+  runDNSQuery_
+  (action =<< maybe (throwE DNS.IllegalDomain) return (normalize n))
+  trace
 
 runQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
 runQuery n typ = withNormalized n (`query` typ)
+
+traceQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
+traceQuery n typ = withNormalized_ True n (`query` typ)
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
@@ -129,11 +153,11 @@ runQuery1 n typ = withNormalized n (`query1` typ)
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
-  liftIO $ debugLn $ "query1: " ++ show (n, typ)
+  lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectAuthNS nss
-  msg <- ExceptT $ qNorec1 sa (B8.pack n) typ
-  liftIO $ mapM_ cacheRR $ DNS.answer msg
+  msg <- dnsQueryT $ const $ qNorec1 sa (B8.pack n) typ
+  lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
 runIterative :: AuthNS -> Name -> IO (Either DNSError AuthNS)
@@ -170,8 +194,8 @@ iterative_ nss (x:xs) =
     step :: AuthNS -> DNSQuery (Maybe AuthNS)
     step nss_ = do
       sa <- selectAuthNS nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
-      liftIO $ debugLn $ "iterative: " ++ show (sa, name)
-      msg <- ExceptT $ qNorec1 sa name A
+      lift $ traceLn $ "iterative: " ++ show (sa, name)
+      msg <- dnsQueryT $ const $ qNorec1 sa name A
       pure $ authorityNS name msg
 
 -- 選択可能な NS が有るときだけ Just
@@ -210,22 +234,23 @@ selectAuthNS (nss, as) = do
 
   let resolveNS :: DNSQuery IP
       resolveNS = do
+        trace <- getTrace
         let doCache (a, aRR)
               | rrname nsRR == B8.pack "." = return a  -- root は cache しない
               | otherwise  = do
-                  void $ forkIO $ cacheVerifiedTh aRR nsRR  -- verify を別スレッドに切り離す.
+                  void $ forkIO $ cacheVerifiedTh trace aRR nsRR  -- verify を別スレッドに切り離す.
                   return a
         liftIO (selectA $ mapMaybe (takeAx ns) as) >>= maybe (query1AofNS ns) (liftIO . doCache)
 
       -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
       -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
-      cacheVerifiedTh :: ResourceRecord -> ResourceRecord -> IO ()
-      cacheVerifiedTh aRR_ nsRR_ =
-        either (debugLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
-        runExceptT (cacheVerifiedNS aRR_ nsRR_)
+      cacheVerifiedTh :: Bool -> ResourceRecord -> ResourceRecord -> IO ()
+      cacheVerifiedTh trace aRR_ nsRR_ =
+        either (when trace . putStrLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
+        runReaderT (runExceptT $ cacheVerifiedNS aRR_ nsRR_) trace
 
   a <- resolveNS
-  liftIO $ debugLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
+  lift $ traceLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
   return a
 
   where
@@ -244,10 +269,10 @@ selectAuthNS (nss, as) = do
 cacheVerifiedNS :: ResourceRecord -> ResourceRecord -> DNSQuery ()
 cacheVerifiedNS aRR nsRR= do
   good <- verifyA aRR
-  liftIO $ if good
-           then do cacheRR nsRR
-                   cacheRR aRR
-           else    debugLn $ unlines ["cacheVerifiedNS: reverse lookup inconsistent: ", show aRR, show nsRR]
+  lift $ if good
+         then do cacheRR nsRR
+                 cacheRR aRR
+         else    traceLn $ unlines ["cacheVerifiedNS: reverse lookup inconsistent: ", show aRR, show nsRR]
 
 randomSelect :: Bool
 randomSelect = True
@@ -315,15 +340,15 @@ verifyA aRR@ResourceRecord { rrname = ns } =
 
     checkPTR (ptr, ptrRR) = do
       let good =  ptr == ns
-      when good $ liftIO $ do
+      when good $ lift $ do
         cacheRR ptrRR
-        debugLn $ "verifyA: verification pass: " ++ show ns
+        traceLn $ "verifyA: verification pass: " ++ show ns
       return good
     takePTR rr@ResourceRecord { rdata = RD_PTR ptr}  =  Just (ptr, rr)
     takePTR _                                        =  Nothing
 
     qSystem :: Name -> TYPE -> DNSQuery DNSMessage
-    qSystem name typ = ExceptT $ do
+    qSystem name typ = dnsQueryT $ const $ do
       rs <- DNS.makeResolvSeed conf
       DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (B8.pack name) typ
         where
@@ -333,15 +358,14 @@ verifyA aRR@ResourceRecord { rrname = ns } =
                  , resolvQueryControls = DNS.rdFlag FlagSet
                  }
 
-cacheRR :: ResourceRecord -> IO ()
+cacheRR :: ResourceRecord -> ReaderT Context IO ()
 cacheRR rr = do
-  debugLn $ "cacheRR: " ++ show rr
+  traceLn $ "cacheRR: " ++ show rr
 
-debug :: Bool
-debug = True
-
-debugLn :: String -> IO ()
-debugLn = when debug . putStrLn
+traceLn :: String -> ReaderT Context IO ()
+traceLn s = do
+  trace <- asks trace_
+  when trace $ liftIO $ putStrLn s
 
 printResult :: Either DNSError DNSMessage -> IO ()
 printResult = either print pmsg
