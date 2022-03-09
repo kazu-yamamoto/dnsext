@@ -149,7 +149,7 @@ query1 n typ = do
   lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectAuthNS nss
-  msg <- dnsQueryT $ const $ qNorec1 sa (B8.pack n) typ
+  msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
   lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
@@ -188,7 +188,7 @@ iterative_ nss (x:xs) =
     step nss_ = do
       sa <- selectAuthNS nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ traceLn $ "iterative: " ++ show (sa, name)
-      msg <- dnsQueryT $ const $ qNorec1 sa name A
+      msg <- dnsQueryT $ const $ norec1 sa name A
       pure $ authorityNS name msg
 
 -- 選択可能な NS が有るときだけ Just
@@ -206,8 +206,8 @@ authorityNS_ dom auths adds =
       | rrname rr == dom  =  Just (ns, rr)
     takeNS _              =  Nothing
 
-qNorec1 :: IP -> Domain -> TYPE -> IO (Either DNSError DNSMessage)
-qNorec1 aserver name typ = do
+norec1 :: IP -> Domain -> TYPE -> IO (Either DNSError DNSMessage)
+norec1 aserver name typ = do
   rs <- DNS.makeResolvSeed conf
   DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver name typ
   where
