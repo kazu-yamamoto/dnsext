@@ -83,7 +83,12 @@ data Context =
   }
   deriving Show
 
-type DNSQuery = ExceptT DNSError (ReaderT Context IO)
+data QueryError
+  = DnsError DNSError
+  | ResponseError String DNSMessage
+  deriving Show
+
+type DNSQuery = ExceptT QueryError (ReaderT Context IO)
 
 ---
 
@@ -98,23 +103,37 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
-dnsQueryT :: (Context -> IO (Either DNSError a)) -> DNSQuery a
+dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
-runDNSQuery :: DNSQuery a -> Bool -> Bool -> IO (Either DNSError a)
+runDNSQuery :: DNSQuery a -> Bool -> Bool -> IO (Either QueryError a)
 runDNSQuery q trace disableV6NS = do
   when trace $ hSetBuffering stdout LineBuffering
   runReaderT (runExceptT q) (Context trace disableV6NS)
 
-withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> Bool -> IO (Either DNSError a)
+throwDnsError :: DNSError -> DNSQuery a
+throwDnsError = throwE . DnsError
+
+handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
+handleResponseError e f msg
+  | DNS.qOrR flags /= DNS.QR_Response      =  e $ ResponseError ("Not response code: " ++ show (DNS.qOrR flags)) msg
+  | DNS.rcode flags /= DNS.NoErr           =  e $ ResponseError ("Error RCODE: " ++ show (DNS.rcode flags)) msg
+  | DNS.ednsHeader msg == DNS.InvalidEDNS  =  e $ ResponseError  "Invalid EDNS header" msg
+  | otherwise                              =  f msg
+  where
+    flags = DNS.flags $ DNS.header msg
+-- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
+-- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
+
+withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> Bool -> IO (Either QueryError a)
 withNormalized n action =
   runDNSQuery
-  (action =<< maybe (throwE DNS.IllegalDomain) return (normalize n))
+  (action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n))
 
-runQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
+runQuery :: Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery n typ = withNormalized n (`query` typ) False False
 
-traceQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
+traceQuery :: Name -> TYPE -> IO (Either QueryError DNSMessage)
 traceQuery n typ = withNormalized n (`query` typ) True False
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
@@ -125,7 +144,7 @@ query n typ = do
 
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn cnRR = do
-        when (any ((== typ) . rrtype) answers) $ throwE DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+        when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         x <- query (B8.unpack cn) typ
         lift $ cacheRR cnRR
         return x
@@ -139,7 +158,7 @@ query n typ = do
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
 
-runQuery1 :: Name -> TYPE -> IO (Either DNSError DNSMessage)
+runQuery1 :: Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery1 n typ = withNormalized n (`query1` typ) False False
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
@@ -152,7 +171,7 @@ query1 n typ = do
   lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
-runIterative :: AuthNS -> Name -> IO (Either DNSError AuthNS)
+runIterative :: AuthNS -> Name -> IO (Either QueryError AuthNS)
 runIterative sa n = withNormalized n (iterative sa) False False
 
 type NE a = (a, [a])
@@ -205,10 +224,11 @@ authorityNS_ dom auths adds =
       | rrname rr == dom  =  Just (ns, rr)
     takeNS _              =  Nothing
 
-norec1 :: IP -> Domain -> TYPE -> IO (Either DNSError DNSMessage)
+norec1 :: IP -> Domain -> TYPE -> IO (Either QueryError DNSMessage)
 norec1 aserver name typ = do
   rs <- DNS.makeResolvSeed conf
-  DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver name typ
+  either (Left . DnsError) (handleResponseError Left Right) <$>
+    DNS.withResolver rs ( \resolver -> DNS.lookupRaw resolver name typ )
   where
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver
@@ -235,7 +255,7 @@ selectAuthNS (nss, as) = do
 
       query1AofNS :: DNSQuery IP
       query1AofNS =
-        maybe (throwE DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
+        maybe (throwDnsError DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
         . listToMaybe . mapMaybe takeAx . DNS.answer
         =<< query1 (B8.unpack ns) A
 
@@ -344,7 +364,8 @@ verifyA aRR@ResourceRecord { rrname = ns } =
     qSystem :: Name -> TYPE -> DNSQuery DNSMessage
     qSystem name typ = dnsQueryT $ const $ do
       rs <- DNS.makeResolvSeed conf
-      DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (B8.pack name) typ
+      either (Left . DnsError) (handleResponseError Left Right) <$>
+        DNS.withResolver rs ( \resolver -> DNS.lookupRaw resolver (B8.pack name) typ )
         where
           conf = DNS.defaultResolvConf
                  { resolvTimeout = 5 * 1000 * 1000
@@ -361,7 +382,7 @@ traceLn s = do
   trace <- asks trace_
   when trace $ liftIO $ putStrLn s
 
-printResult :: Either DNSError DNSMessage -> IO ()
+printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
   where
     pmsg msg =
