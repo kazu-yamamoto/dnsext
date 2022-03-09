@@ -96,11 +96,8 @@ additional セクションにその名前に対するアドレス (A および A
 dnsQueryT :: (Context -> IO (Either DNSError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
-runDNSQuery :: DNSQuery a -> IO (Either DNSError a)
-runDNSQuery = (`runDNSQuery_` False)
-
-runDNSQuery_ :: DNSQuery a -> Bool -> IO (Either DNSError a)
-runDNSQuery_ q trace = do
+runDNSQuery :: DNSQuery a -> Bool -> IO (Either DNSError a)
+runDNSQuery q trace = do
   when trace $ hSetBuffering stdout LineBuffering
   runReaderT (runExceptT q) trace
 
@@ -110,20 +107,16 @@ trace_ = id
 getTrace :: DNSQuery Bool
 getTrace = lift $ asks trace_
 
-withNormalized :: Name -> (Name -> DNSQuery a) -> IO (Either DNSError a)
-withNormalized = withNormalized_ False
-
-withNormalized_ :: Bool -> Name -> (Name -> DNSQuery a) -> IO (Either DNSError a)
-withNormalized_ trace n action =
-  runDNSQuery_
+withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> IO (Either DNSError a)
+withNormalized n action =
+  runDNSQuery
   (action =<< maybe (throwE DNS.IllegalDomain) return (normalize n))
-  trace
 
 runQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-runQuery n typ = withNormalized n (`query` typ)
+runQuery n typ = withNormalized n (`query` typ) False
 
 traceQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-traceQuery n typ = withNormalized_ True n (`query` typ)
+traceQuery n typ = withNormalized n (`query` typ) True
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
@@ -148,7 +141,7 @@ query n typ = do
     takeCNAME _                 =  Nothing
 
 runQuery1 :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-runQuery1 n typ = withNormalized n (`query1` typ)
+runQuery1 n typ = withNormalized n (`query1` typ) False
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
@@ -161,7 +154,7 @@ query1 n typ = do
   return msg
 
 runIterative :: AuthNS -> Name -> IO (Either DNSError AuthNS)
-runIterative sa n = withNormalized n $ iterative sa
+runIterative sa n = withNormalized n (iterative sa) False
 
 type NE a = (a, [a])
 
