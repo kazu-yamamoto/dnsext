@@ -76,7 +76,12 @@ domains name
 
 -----
 
-type Context = Bool
+data Context =
+  Context
+  { trace_ :: Bool
+  , disableV6NS_ :: Bool
+  }
+  deriving Show
 
 type DNSQuery = ExceptT DNSError (ReaderT Context IO)
 
@@ -96,27 +101,21 @@ additional セクションにその名前に対するアドレス (A および A
 dnsQueryT :: (Context -> IO (Either DNSError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
-runDNSQuery :: DNSQuery a -> Bool -> IO (Either DNSError a)
-runDNSQuery q trace = do
+runDNSQuery :: DNSQuery a -> Bool -> Bool -> IO (Either DNSError a)
+runDNSQuery q trace disableV6NS = do
   when trace $ hSetBuffering stdout LineBuffering
-  runReaderT (runExceptT q) trace
+  runReaderT (runExceptT q) (Context trace disableV6NS)
 
-trace_ :: Context -> Bool
-trace_ = id
-
-getTrace :: DNSQuery Bool
-getTrace = lift $ asks trace_
-
-withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> IO (Either DNSError a)
+withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> Bool -> IO (Either DNSError a)
 withNormalized n action =
   runDNSQuery
   (action =<< maybe (throwE DNS.IllegalDomain) return (normalize n))
 
 runQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-runQuery n typ = withNormalized n (`query` typ) False
+runQuery n typ = withNormalized n (`query` typ) False False
 
 traceQuery :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-traceQuery n typ = withNormalized n (`query` typ) True
+traceQuery n typ = withNormalized n (`query` typ) True False
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
@@ -141,7 +140,7 @@ query n typ = do
     takeCNAME _                 =  Nothing
 
 runQuery1 :: Name -> TYPE -> IO (Either DNSError DNSMessage)
-runQuery1 n typ = withNormalized n (`query1` typ) False
+runQuery1 n typ = withNormalized n (`query1` typ) False False
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
@@ -154,7 +153,7 @@ query1 n typ = do
   return msg
 
 runIterative :: AuthNS -> Name -> IO (Either DNSError AuthNS)
-runIterative sa n = withNormalized n (iterative sa) False
+runIterative sa n = withNormalized n (iterative sa) False False
 
 type NE a = (a, [a])
 
@@ -224,40 +223,42 @@ norec1 aserver name typ = do
 selectAuthNS :: AuthNS -> DNSQuery IP
 selectAuthNS (nss, as) = do
   (ns, nsRR) <- liftIO $ selectNS nss
+  disableV6NS <- lift $ asks disableV6NS_
 
-  let resolveNS :: DNSQuery IP
+  let takeAx :: ResourceRecord -> Maybe (IP, ResourceRecord)
+      takeAx rr@ResourceRecord { rdata = RD_A ipv4 }
+        | rrname rr == ns  =  Just (IPv4 ipv4, rr)
+      takeAx rr@ResourceRecord { rdata = RD_AAAA ipv6 }
+        | not disableV6NS &&
+          rrname rr == ns  =  Just (IPv6 ipv6, rr)
+      takeAx _          =  Nothing
+
+      query1AofNS :: DNSQuery IP
+      query1AofNS =
+        maybe (throwE DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
+        . listToMaybe . mapMaybe takeAx . DNS.answer
+        =<< query1 (B8.unpack ns) A
+
+      resolveNS :: DNSQuery IP
       resolveNS = do
-        trace <- getTrace
+        context <- lift $ asks id
         let doCache (a, aRR)
               | rrname nsRR == B8.pack "." = return a  -- root は cache しない
               | otherwise  = do
-                  void $ forkIO $ cacheVerifiedTh trace aRR nsRR  -- verify を別スレッドに切り離す.
+                  void $ forkIO $ cacheVerifiedTh context aRR nsRR  -- verify を別スレッドに切り離す.
                   return a
-        liftIO (selectA $ mapMaybe (takeAx ns) as) >>= maybe (query1AofNS ns) (liftIO . doCache)
+        liftIO (selectA $ mapMaybe takeAx as) >>= maybe query1AofNS (liftIO . doCache)
 
       -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
       -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
-      cacheVerifiedTh :: Bool -> ResourceRecord -> ResourceRecord -> IO ()
-      cacheVerifiedTh trace aRR_ nsRR_ =
+      cacheVerifiedTh :: Context -> ResourceRecord -> ResourceRecord -> IO ()
+      cacheVerifiedTh context@Context { trace_ = trace } aRR_ nsRR_ =
         either (when trace . putStrLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
-        runReaderT (runExceptT $ cacheVerifiedNS aRR_ nsRR_) trace
+        runReaderT (runExceptT $ cacheVerifiedNS aRR_ nsRR_) context
 
   a <- resolveNS
   lift $ traceLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
   return a
-
-  where
-    query1AofNS :: Domain -> DNSQuery IP
-    query1AofNS ns =
-      maybe (throwE DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
-      . listToMaybe . mapMaybe (takeAx ns) . DNS.answer
-      =<< query1 (B8.unpack ns) A
-
-    takeAx ns rr@ResourceRecord { rdata = RD_A ipv4 }
-      | rrname rr == ns  =  Just (IPv4 ipv4, rr)
-    takeAx ns rr@ResourceRecord { rdata = RD_AAAA ipv6 }
-      | rrname rr == ns  =  Just (IPv6 ipv6, rr)
-    takeAx _  _          =  Nothing
 
 cacheVerifiedNS :: ResourceRecord -> ResourceRecord -> DNSQuery ()
 cacheVerifiedNS aRR nsRR= do
