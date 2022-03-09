@@ -5,11 +5,17 @@ import Test.Hspec
 import Data.Either (isRight)
 import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT))
 import qualified Network.DNS as DNS
+import System.Environment (lookupEnv)
 
-import DNSC.Iterative (runQuery, runQuery1, runIterative, rootNS)
+import DNSC.Iterative (runDNSQuery, query, query1, iterative, rootNS)
 
 spec :: Spec
 spec = describe "query" $ do
+  disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
+
+  let runIterative ns n = runDNSQuery (iterative ns n) False disableV6NS
+      runQuery1 n ty = runDNSQuery (query1 n ty) False disableV6NS
+      runQuery n ty = runDNSQuery (query n ty) False disableV6NS
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
