@@ -126,7 +126,7 @@ query n typ = do
 
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn cnRR = do
-        when (any ((== typ) . rrtype) answers) $ throwE DNS.UnexpectedRDATA
+        when (any ((== typ) . rrtype) answers) $ throwE DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         x <- query (B8.unpack cn) typ
         lift $ cacheRR cnRR
         return x
