@@ -39,6 +39,19 @@ library
   default-language:    Haskell2010
   ghc-options:         -Wall
 
+Test-Suite cache-test
+  type:                exitcode-stdio-1.0
+  other-modules:       CacheProp
+  main-is:             cache.hs
+  build-depends:       base
+                     , bytestring
+                     , dns
+                     , dns-resolver
+                     , QuickCheck
+  hs-source-dirs:      test
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+
 Test-Suite query-test
   type:                exitcode-stdio-1.0
   other-modules:       QuerySpec
