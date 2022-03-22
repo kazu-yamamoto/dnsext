@@ -272,7 +272,7 @@ selectAuthNS (nss, as) = do
   return a
 
 reverseVerify :: Bool
-reverseVerify = True
+reverseVerify = False
 
 forkQueryIO :: DNSQuery () -> String -> Context -> IO ThreadId
 forkQueryIO dq errPrefix context@Context { trace_ = trace } =
