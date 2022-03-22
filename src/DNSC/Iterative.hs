@@ -29,7 +29,7 @@ import System.Random (randomR, getStdRandom)
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear, FlagSet), DNSError, RData (..),
-   TYPE(A, PTR), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
+   TYPE(A, NS, AAAA, CNAME, PTR), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
@@ -154,7 +154,7 @@ query n typ = do
     (uncurry resolveCNAME)
     $ listToMaybe $ mapMaybe takeCNAME answers
   where
-    takeCNAME rr@ResourceRecord { rdata = RD_CNAME cn}
+    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
 
@@ -220,7 +220,7 @@ authorityNS_ dom auths adds =
   where
     nss = mapMaybe takeNS auths
 
-    takeNS rr@ResourceRecord { rdata = RD_NS ns}
+    takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns }
       | rrname rr == dom  =  Just (ns, rr)
     takeNS _              =  Nothing
 
@@ -246,9 +246,9 @@ selectAuthNS (nss, as) = do
   disableV6NS <- lift $ asks disableV6NS_
 
   let takeAx :: ResourceRecord -> Maybe (IP, ResourceRecord)
-      takeAx rr@ResourceRecord { rdata = RD_A ipv4 }
+      takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 }
         | rrname rr == ns  =  Just (IPv4 ipv4, rr)
-      takeAx rr@ResourceRecord { rdata = RD_AAAA ipv6 }
+      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 }
         | not disableV6NS &&
           rrname rr == ns  =  Just (IPv6 ipv6, rr)
       takeAx _          =  Nothing
@@ -358,8 +358,8 @@ verifyA aRR@ResourceRecord { rrname = ns } =
         cacheRR ptrRR
         traceLn $ "verifyA: verification pass: " ++ show ns
       return good
-    takePTR rr@ResourceRecord { rdata = RD_PTR ptr}  =  Just (ptr, rr)
-    takePTR _                                        =  Nothing
+    takePTR rr@ResourceRecord { rrtype = PTR, rdata = RD_PTR ptr }  =  Just (ptr, rr)
+    takePTR _                                                       =  Nothing
 
     qSystem :: Name -> TYPE -> DNSQuery DNSMessage
     qSystem name typ = dnsQueryT $ const $ do
