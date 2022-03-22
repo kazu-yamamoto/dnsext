@@ -12,7 +12,7 @@ module DNSC.Iterative (
   query, query1, iterative,
   ) where
 
-import Control.Concurrent (forkIO)
+import Control.Concurrent (forkIO, ThreadId)
 import Control.Monad (when, void)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -253,35 +253,36 @@ selectAuthNS (nss, as) = do
           rrname rr == ns  =  Just (IPv6 ipv6, rr)
       takeAx _          =  Nothing
 
-      query1AofNS :: DNSQuery IP
+      query1AofNS :: DNSQuery (IP, ResourceRecord)
       query1AofNS =
-        maybe (throwDnsError DNS.IllegalDomain) (pure . fst)  -- 失敗時: NS に対応する A の返答が空
+        maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
         . listToMaybe . mapMaybe takeAx . DNS.answer
         =<< query1 (B8.unpack ns) A
 
-      resolveNS :: DNSQuery IP
-      resolveNS = do
-        context <- lift $ asks id
-        let doCache (a, aRR)
-              | rrname nsRR == B8.pack "." = return a  -- root は cache しない
-              | otherwise  = do
-                  void $ forkIO $ cacheVerifiedTh context aRR nsRR  -- verify を別スレッドに切り離す.
-                  return a
-        liftIO (selectA $ mapMaybe takeAx as) >>= maybe query1AofNS (liftIO . doCache)
-
-      -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
-      -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
-      cacheVerifiedTh :: Context -> ResourceRecord -> ResourceRecord -> IO ()
-      cacheVerifiedTh context@Context { trace_ = trace } aRR_ nsRR_ =
-        either (when trace . putStrLn . ("cacheVerifiedNS: verify query: " ++) . show) pure =<<
-        runReaderT (runExceptT $ cacheVerifiedNS aRR_ nsRR_) context
-
-  a <- resolveNS
+  (a, aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
+
+  when reverseVerify $ do
+    -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
+    -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
+    context <- lift $ asks id
+    liftIO $ void $ forkQueryIO (cacheVerifiedNS aRR nsRR) "cacheVerifiedNS: verify query" context  -- verify を別スレッドに切り離す.
+
   return a
 
+reverseVerify :: Bool
+reverseVerify = True
+
+forkQueryIO :: DNSQuery () -> String -> Context -> IO ThreadId
+forkQueryIO dq errPrefix context@Context { trace_ = trace } =
+  forkIO $
+  either (when trace . putStrLn . ((errPrefix ++ ": ") ++) . show) pure =<<
+  runReaderT (runExceptT dq) context
+
 cacheVerifiedNS :: ResourceRecord -> ResourceRecord -> DNSQuery ()
-cacheVerifiedNS aRR nsRR= do
+cacheVerifiedNS aRR nsRR
+  | rrname nsRR == B8.pack "."  =  return ()  -- root は cache しない
+  | otherwise   =  do
   good <- verifyA aRR
   lift $ if good
          then do cacheRR nsRR
