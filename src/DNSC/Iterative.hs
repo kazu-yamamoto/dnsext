@@ -19,8 +19,9 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.Ord (comparing)
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, intercalate, uncons)
+import Data.List (isSuffixOf, unfoldr, intercalate, uncons, sort, sortBy)
 import Data.Bits ((.&.), shiftR)
 import Numeric (showHex)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
@@ -377,6 +378,38 @@ verifyA aRR@ResourceRecord { rrname = ns } =
 cacheRR :: ResourceRecord -> ReaderT Context IO ()
 cacheRR rr = do
   traceLn $ "cacheRR: " ++ show rr
+
+cacheAuthNS :: AuthNS -> ReaderT Context IO ()
+cacheAuthNS (nss0@((_, rr), _), as0)
+  | rrname rr == B8.pack "."  =  pure ()
+  | otherwise                 =
+    do cacheNS
+       cacheAx
+  where
+    nss1 = uncurry (:) nss0
+    cacheNS = mapM_ (cacheRR . snd) nss1
+    as = filter isA as0
+    a4s = filter is4A as0
+    isA ResourceRecord { rrtype = A, rdata = RD_A {} }  =  True
+    isA _                                               =  False
+    is4A ResourceRecord { rrtype = AAAA, rdata = RD_AAAA {} }  =  True
+    is4A _                                                     =  False
+    cacheAx = do
+      let nss = map fst nss1
+          cacheRRs = mapM_ cacheRR
+      mapM_ cacheRRs $ matchAx nss as ++ matchAx nss a4s
+
+matchAx :: [Domain] -> [ResourceRecord] -> [[ResourceRecord]]
+matchAx ds0 rs0 =
+  filter (not . null)
+  $ rec_ id id (sort ds0) (sortBy (comparing rrname) rs0)
+  where
+    rec_ res _       []      _        =  res []
+    rec_ res as     (_:_)       []    =  res [as []]
+    rec_ res as dds@(d:ds) rrs@(r:rs)
+      | d < rrname r  =  rec_ (res . (as []:))  id         ds  rrs
+      | d > rrname r  =  rec_  res              as         dds rs
+      | otherwise     =  rec_  res             (as . (r:)) dds rs
 
 traceLn :: String -> ReaderT Context IO ()
 traceLn s = do
