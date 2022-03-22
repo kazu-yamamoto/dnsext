@@ -208,7 +208,9 @@ iterative_ nss (x:xs) =
       sa <- selectAuthNS nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ traceLn $ "iterative: " ++ show (sa, name)
       msg <- dnsQueryT $ const $ norec1 sa name A
-      pure $ authorityNS name msg
+      let result = authorityNS name msg
+      lift $ maybe (pure ()) cacheAuthNS result
+      return result
 
 -- 選択可能な NS が有るときだけ Just
 authorityNS :: Domain -> DNSMessage -> Maybe AuthNS
