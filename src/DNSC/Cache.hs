@@ -10,6 +10,8 @@ module DNSC.Cache (
   size,
   Timestamp,
 
+  Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
+
   -- * handy interface
   insertRRs,
 
@@ -24,6 +26,7 @@ module DNSC.Cache (
 
 import Prelude hiding (lookup)
 import Control.Monad (guard)
+import Data.Ord (Down (..))
 import Data.Maybe (isJust, catMaybes)
 import Data.List (group, uncons)
 import Data.Word (Word16, Word32)
@@ -55,7 +58,41 @@ data CRSet
   | CR_AAAA [IPv6]
   deriving (Eq, Ord, Show)
 
-type Ranking = ()
+---
+
+-- Ranking data (section 5.4.1 of RFC2181 - Clarifications to the DNS Specification)
+-- <https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1>
+
+data Ranking_
+{- + Data from a primary zone file, other than glue data, -}
+  --
+{- + Data from a zone transfer, other than glue, -}
+  --
+{- + The authoritative data included in the answer section of an
+     authoritative reply. -}
+  = RankAuthAnswer
+{- + Data from the authority section of an authoritative answer, -}
+  -- -- avoiding issue of authority section in reply with aa flag
+{- + Glue from a primary zone, or glue from a zone transfer, -}
+  --
+{- + Data from the answer section of a non-authoritative answer, and
+     non-authoritative data from the answer section of authoritative
+     answers, -}
+  | RankAnswer
+{- + Additional information from an authoritative answer,
+     Data from the authority section of a non-authoritative answer,
+     Additional information from non-authoritative answers. -}
+  | RankAdditional
+  deriving (Eq, Ord, Show)
+
+type Ranking = Down Ranking_  -- upper rank is better
+
+rankAuthAnswer, rankAnswer, rankAdditional :: Ranking
+rankAuthAnswer  =  Down RankAuthAnswer
+rankAnswer      =  Down RankAnswer
+rankAdditional  =  Down RankAdditional
+
+---
 
 data Key = K CDomain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = V CRSet Ranking deriving Show
@@ -103,13 +140,21 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
-insert now k ttl crs rank (Cache lifetimes vals) =
-  Just $
-  Cache
-  (PSQ.insert k eol lifetimes)
-  (Map.insert k (V crs rank) vals)
+insert now k@(K dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
+  maybe inserted withOldRank lookupRank
   where
+    lookupRank =
+      lookup_ now (\_ _ (V _ r) -> r)
+      dom typ cls c
+    withOldRank r = do
+      guard $ rank > r
+      inserted
     eol = now <+ ttl
+    inserted =
+      return $
+      Cache
+      (PSQ.insert k eol lifetimes)
+      (Map.insert k (V crs rank) vals)
 
 expires :: Timestamp -> Cache -> Maybe Cache
 expires now = rec0
