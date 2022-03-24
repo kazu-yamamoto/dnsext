@@ -19,6 +19,7 @@ import Text.Read (readMaybe)
 
 import DNSC.Cache
   (Cache (..), Key (K), Val (V), CRSet (..), Timestamp, (<+),
+   Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
 
@@ -107,6 +108,8 @@ removeExpiresUpdates = filter (not . expire)
     expire (_, E)  =  True
     expire _       =  False
 
+rankings :: [Ranking]
+rankings = [rankAuthAnswer, rankAnswer, rankAdditional]
 
 -----
 
@@ -150,6 +153,9 @@ genCRPair = do
 genTTL :: Gen TTL
 genTTL = choose (1, 7200000)
 
+genRanking :: Gen Ranking
+genRanking = elements rankings
+
 genTimestamp :: Gen Timestamp
 genTimestamp = (ts0 <+) <$> choose (1, 21600000)
 
@@ -162,13 +168,25 @@ genUpdate =
   where
     genInsert = do
       (k, crs) <- genCRPair
-      I k <$> genTTL <*> pure (V crs ())
+      I k <$> genTTL <*> (V crs <$> genRanking)
 
 genUpdates :: Gen [(Timestamp, Update)]
 genUpdates = do
   ks <- listOf genUpdate
   tss <- sort <$> vectorOf (length ks) genTimestamp
   pure $ zip tss ks
+
+genRankOrds :: Gen (Ranking, Ranking)
+genRankOrds = elements ords
+  where
+    ords =   [ (r1, r2) | r1 <- rankings, r2 <- rankings, r1 > r2 ]
+    -- ordered pairs
+
+genRankOrdsCo :: Gen (Ranking, Ranking)
+genRankOrdsCo = elements ordsCo
+  where
+    ordsCo = [ (r1, r2) | r1 <- rankings, r2 <- rankings, r1 <= r2 ]
+    -- complement pairs
 
 -----
 
@@ -192,10 +210,10 @@ newtype ACRPair = ACRPair (Key, CRSet) deriving Show
 instance Arbitrary ACRPair where
   arbitrary = ACRPair <$> genCRPair
 
-newtype ARanking = ARanking () deriving Show
+newtype ARanking = ARanking Ranking deriving Show
 
 instance Arbitrary ARanking where
-  arbitrary = pure $ ARanking ()
+  arbitrary = ARanking <$> genRanking
 
 newtype ATimestamp = ATimestamp Timestamp deriving Show
 
@@ -206,6 +224,25 @@ newtype AUpdates = AUpdates [(Timestamp, Update)] deriving Show
 
 instance Arbitrary AUpdates where
   arbitrary = AUpdates <$> genUpdates
+
+newtype ARankOrds = ARankOrds (Ranking, Ranking) deriving Show
+
+instance Arbitrary ARankOrds where
+  arbitrary = ARankOrds <$> genRankOrds
+
+newtype ARankOrdsCo = ARankOrdsCo (Ranking, Ranking) deriving Show
+
+instance Arbitrary ARankOrdsCo where
+  arbitrary = ARankOrdsCo <$> genRankOrdsCo
+
+newtype ACR2 = ACR2 (Key, (CRSet, CRSet)) deriving Show
+
+instance Arbitrary ACR2 where
+  arbitrary = ACR2 <$> gen
+    where
+      gen = do
+        (k, genCrs) <- genCRsPair
+        (,) k <$> ((,) <$> genCrs <*> genCrs)
 
 -----
 
@@ -303,6 +340,31 @@ lookupTTL (ACRPair (k@(K dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATimes
 
 ---
 
+-- ranking
+
+rankingOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrds -> AUpdates -> Property
+rankingOrdered (ACR2 (k@(K dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
+  maybe (property False) id action
+  where
+    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    action = do
+      c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
+      c1 <- Cache.insert ts0 k ttl1 crs1 r1 c2
+      (rrs, rank) <- Cache.lookup ts0 (toDomain dom) typ cls c1
+      return $ rrs === extractRRSet k ttl1 crs1 .&&. rank === r1
+
+rankingNotOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrdsCo -> AUpdates -> Property
+rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo (r1, r2)) (AUpdates us) =
+  action === Nothing
+  where
+    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    action = do
+      c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
+      _  <- Cache.insert ts0 k ttl1 crs1 r1 c2
+      pure ()
+
+---
+
 -- expires
 
 expiresAlives :: AUpdates -> ATimestamp -> Property
@@ -349,6 +411,9 @@ props =
   , nprop "lookup - new inserted"           lookupNewInserted
   , nprop "lookup - inserted"               lookupInserted
   , nprop "lookup - ttl"                    lookupTTL
+
+  , nprop "ranking - ordered"               rankingOrdered
+  , nprop "ranking - not ordered"           rankingNotOrdered
 
   , nprop "expires - alives"                expiresAlives
   , nprop "expires - with max EOL"          expiresMaxEOL
