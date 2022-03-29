@@ -11,6 +11,9 @@ module DNSC.Cache (
   Timestamp,
 
   Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
+  rankedAnswer, rankedAuthority, rankedAdditional,
+
+  insertSetFromSection,
 
   -- * handy interface
   insertRRs,
@@ -27,8 +30,10 @@ module DNSC.Cache (
 import Prelude hiding (lookup)
 import Control.Monad (guard)
 import Data.Ord (Down (..))
+import Data.Function (on)
 import Data.Maybe (isJust, catMaybes)
-import Data.List (group, uncons)
+import Data.Either (partitionEithers)
+import Data.List (group, groupBy, sortOn, uncons)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 import Data.Time (UTCTime, addUTCTime, diffUTCTime)
@@ -38,9 +43,13 @@ import qualified Data.Map.Strict as Map
 import Data.PSQueue (Binding ((:->)), PSQ)
 import qualified Data.PSQueue as PSQ
 import Data.IP (IPv4, IPv6)
-import Network.DNS (Domain, CLASS, TTL, TYPE (..), RData (..), ResourceRecord (ResourceRecord))
+import Network.DNS
+  (Domain, CLASS, TTL, TYPE (..), RData (..),
+   ResourceRecord (ResourceRecord), DNSMessage)
 import qualified Network.DNS as DNS
 
+
+---
 
 type CDomain = ShortByteString
 type CMailbox = ShortByteString
@@ -91,6 +100,35 @@ rankAuthAnswer, rankAnswer, rankAdditional :: Ranking
 rankAuthAnswer  =  Down RankAuthAnswer
 rankAnswer      =  Down RankAnswer
 rankAdditional  =  Down RankAdditional
+
+rankedSection :: Maybe Ranking -> Maybe Ranking -> (DNSMessage -> [ResourceRecord])
+              -> DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedSection authRank noauthRank section msg =
+  (,) (section msg)
+  <$> if DNS.authAnswer flags then authRank else noauthRank
+  where
+    flags = DNS.flags $ DNS.header msg
+
+rankedAnswer :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAnswer =
+  rankedSection
+  (Just rankAuthAnswer)
+  (Just rankAnswer)
+  DNS.answer
+
+rankedAuthority :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAuthority =
+  rankedSection
+  Nothing  -- avoid security hole with authorized reply and authority section case
+  (Just rankAdditional)
+  DNS.authority
+
+rankedAdditional :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAdditional =
+  rankedSection
+  (Just rankAdditional)
+  (Just rankAdditional)
+  DNS.additional
 
 ---
 
@@ -280,3 +318,11 @@ takeRRSet rrs@(_:_) = do
 
 extractRRSet :: Key -> TTL -> CRSet -> [ResourceRecord]
 extractRRSet (K dom ty cls) ttl = map (ResourceRecord (toDomain dom) ty cls ttl) . toRDatas
+
+insertSetFromSection :: [ResourceRecord] -> Ranking -> ([[ResourceRecord]], [(((Key, TTL), CRSet), Ranking)])
+insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
+  where
+    key rr = (DNS.rrname rr, DNS.rrtype rr, DNS.rrclass rr)
+    getRRSet rs = maybe (Left rs) Right $ takeRRSet rs
+    (errRS, rrss) = partitionEithers . map getRRSet . groupBy ((==) `on` key) . sortOn key $ rs0
+    iset ss rank = [ (rrset, rank) | rrset <- ss]
