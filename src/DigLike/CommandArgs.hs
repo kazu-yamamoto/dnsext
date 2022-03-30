@@ -5,6 +5,7 @@ import Control.Monad (guard)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (Except, runExcept, throwE)
 import Control.Monad.Trans.State (StateT (..), get, put)
+import Data.Functor (($>))
 import Data.Char (toUpper)
 import Data.Monoid (Last (..))
 
@@ -32,12 +33,12 @@ type Params = (((Maybe String, String), TYPE), QueryControls)
 
 params :: ArgsP Params
 params =
-  eoi *> pure (((Nothing, "."), NS), mempty)
+  eoi $> (((Nothing, "."), NS), mempty)
   <|>
   do server <- takeServer
-     name   <- eoi *> pure "." <|> takeName
-     typ    <- eoi *> pure A   <|> takeTYPE
-     qopt   <- eoi *> pure mempty <|> takeQueryOpt
+     name   <- eoi $> "." <|> takeName
+     typ    <- eoi $> A   <|> takeTYPE
+     qopt   <- eoi $> mempty <|> takeQueryOpt
 
      return (((server, name), typ), qopt)
 
@@ -72,6 +73,7 @@ decodeTYPE tn = case map toUpper tn of
 type Error = Last String
 type ArgsP = StateT [String] (Except Error)
 
+{-# ANN unError "HLint: ignore Use fromMaybe" #-}
 unError :: Last String -> String
 unError = maybe "<error: empty message>" id . getLast
 
@@ -86,7 +88,7 @@ arg = do
   args <- get
   case args of
     []    -> errorM "arg: argument required."
-    a:as  -> put as *> pure a
+    a:as  -> put as $> a
 
 satisfy :: (String -> Bool) -> ArgsP String
 satisfy p = do
