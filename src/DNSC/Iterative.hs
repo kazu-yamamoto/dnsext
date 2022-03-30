@@ -21,7 +21,7 @@ import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Ord (comparing)
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, intercalate, uncons, sort, sortBy)
+import Data.List (isSuffixOf, unfoldr, intercalate, uncons, sort, sortOn)
 import Data.Bits ((.&.), shiftR)
 import Numeric (showHex)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
@@ -404,7 +404,7 @@ cacheAuthNS (nss0@((_, rr), _), as0)
 matchAx :: [Domain] -> [ResourceRecord] -> [[ResourceRecord]]
 matchAx ds0 rs0 =
   filter (not . null)
-  $ rec_ id id (sort ds0) (sortBy (comparing rrname) rs0)
+  $ rec_ id id (sort ds0) (sortOn rrname rs0)
   where
     rec_ res _       []      _        =  res []
     rec_ res as     (_:_)       []    =  res [as []]
