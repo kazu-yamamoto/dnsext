@@ -12,24 +12,21 @@ module DNSC.Iterative (
   query, query1, iterative,
   ) where
 
-import Control.Concurrent (forkIO, ThreadId)
-import Control.Monad (when, void)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, intercalate, uncons, sort, sortOn)
-import Data.Bits ((.&.), shiftR)
-import Numeric (showHex)
+import Data.List (isSuffixOf, unfoldr, uncons, sort, sortOn)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
-import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, fromIPv4, fromIPv6)
+import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear, FlagSet), DNSError, RData (..),
-   TYPE(A, NS, AAAA, CNAME, PTR), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
+  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..),
+   TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
@@ -261,35 +258,10 @@ selectAuthNS (nss, as) = do
         . listToMaybe . mapMaybe takeAx . DNS.answer
         =<< query1 (B8.unpack ns) A
 
-  (a, aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
+  (a, _aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
 
-  when reverseVerify $ do
-    -- NS 逆引きの verify は別スレッドに切り離してキャッシュの可否だけに利用する.
-    -- たとえば e.in-addr-servers.arpa.  は正引きして逆引きすると  anysec.apnic.net. になって一致しない.
-    context <- lift $ asks id
-    liftIO $ void $ forkQueryIO (cacheVerifiedNS aRR nsRR) "cacheVerifiedNS: verify query" context  -- verify を別スレッドに切り離す.
-
   return a
-
-reverseVerify :: Bool
-reverseVerify = False
-
-forkQueryIO :: DNSQuery () -> String -> Context -> IO ThreadId
-forkQueryIO dq errPrefix context@Context { trace_ = trace } =
-  forkIO $
-  either (when trace . putStrLn . ((errPrefix ++ ": ") ++) . show) pure =<<
-  runReaderT (runExceptT dq) context
-
-cacheVerifiedNS :: ResourceRecord -> ResourceRecord -> DNSQuery ()
-cacheVerifiedNS aRR nsRR
-  | rrname nsRR == B8.pack "."  =  return ()  -- root は cache しない
-  | otherwise   =  do
-  good <- verifyA aRR
-  lift $ if good
-         then do cacheRR nsRR
-                 cacheRR aRR
-         else    traceLn $ unlines ["cacheVerifiedNS: reverse lookup inconsistent: ", show aRR, show nsRR]
 
 randomSelect :: Bool
 randomSelect = True
@@ -323,58 +295,6 @@ randomizedSelect = d
     d xs   =  do
       ix <- getStdRandom $ randomR (0, length xs - 1)
       return $ Just $ xs !! ix
-
-v4PtrDomain :: IPv4 -> Name
-v4PtrDomain ipv4 = dom
-  where
-    octets = reverse $ fromIPv4 ipv4
-    dom = intercalate "." $ map show octets ++ ["in-addr.arpa."]
-
-v6PtrDomain :: IPv6 -> Name
-v6PtrDomain ipv6 = dom
-  where
-    w16hx w =
-      [ (w `shiftR` 12) .&. 0x0f
-      , (w `shiftR`  8) .&. 0x0f
-      , (w `shiftR`  4) .&. 0x0f
-      ,  w              .&. 0x0f
-      ]
-    hxs = reverse $ concatMap w16hx $ fromIPv6 ipv6
-    showH x = showHex x ""
-    dom = intercalate "." $ map showH hxs ++ ["ip6.arpa."]
-
-verifyA :: ResourceRecord -> DNSQuery Bool
-verifyA aRR@ResourceRecord { rrname = ns } =
-  case rdata aRR of
-    RD_A ipv4     ->  resolvePTR $ v4PtrDomain ipv4
-    RD_AAAA ipv6  ->  resolvePTR $ v6PtrDomain ipv6
-    _             ->  return False
-  where
-    resolvePTR ptrDom = do
-      msg <- qSystem ptrDom PTR  -- query が循環しないようにシステムのレゾルバを使う
-      let mayPTR = listToMaybe $ mapMaybe takePTR $ DNS.answer msg
-      maybe (pure True) checkPTR mayPTR  -- 逆引きが割り当てられていないときは通す
-
-    checkPTR (ptr, ptrRR) = do
-      let good =  ptr == ns
-      when good $ lift $ do
-        cacheRR ptrRR
-        traceLn $ "verifyA: verification pass: " ++ show ns
-      return good
-    takePTR rr@ResourceRecord { rrtype = PTR, rdata = RD_PTR ptr }  =  Just (ptr, rr)
-    takePTR _                                                       =  Nothing
-
-    qSystem :: Name -> TYPE -> DNSQuery DNSMessage
-    qSystem name typ = dnsQueryT $ const $ do
-      rs <- DNS.makeResolvSeed conf
-      either (Left . DnsError) (handleResponseError Left Right) <$>
-        DNS.withResolver rs ( \resolver -> DNS.lookupRaw resolver (B8.pack name) typ )
-        where
-          conf = DNS.defaultResolvConf
-                 { resolvTimeout = 5 * 1000 * 1000
-                 , resolvRetry = 2
-                 , resolvQueryControls = DNS.rdFlag FlagSet
-                 }
 
 cacheRR :: ResourceRecord -> ReaderT Context IO ()
 cacheRR rr = do
