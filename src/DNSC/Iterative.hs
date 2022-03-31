@@ -152,17 +152,17 @@ query n typ = do
   let answers = DNS.answer msg
 
   -- TODO: CNAME 解決の回数制限
-  let resolveCNAME cn _cnRR = do
+  let resolveCNAME cn = do
         when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         query (B8.unpack cn) typ
 
   maybe
     (pure msg)
-    (uncurry resolveCNAME)
+    resolveCNAME
     =<< liftIO (selectCNAME $ mapMaybe takeCNAME answers)
   where
     takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-      | rrname rr == B8.pack n  =  Just (cn, rr)
+      | rrname rr == B8.pack n  =  Just cn
     takeCNAME _                 =  Nothing
 
     selectCNAME = randomizedSelect
