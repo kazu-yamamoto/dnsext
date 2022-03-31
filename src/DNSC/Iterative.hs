@@ -20,7 +20,7 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, uncons, sort, sortOn)
+import Data.List (isSuffixOf, unfoldr, uncons)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
@@ -152,10 +152,9 @@ query n typ = do
   let answers = DNS.answer msg
 
   -- TODO: CNAME 解決の回数制限
-  let resolveCNAME cn cnRR = do
+  let resolveCNAME cn _cnRR = do
         when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         x <- query (B8.unpack cn) typ
-        lift $ cacheRR cnRR
         return x
 
   maybe
@@ -176,7 +175,6 @@ query1 n typ = do
   nss <- iterative rootNS n
   sa <- selectDelegation nss
   msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
-  lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
 type NE a = (a, [a])
@@ -213,7 +211,6 @@ iterative_ nss (x:xs) =
       lift $ traceLn $ "iterative: " ++ show (sa, name)
       msg <- dnsQueryT $ const $ norec1 sa name A
       let result = authorityNS name msg
-      lift $ maybe (pure ()) cacheAuthNS result
       return result
 
 -- 選択可能な NS が有るときだけ Just
@@ -307,42 +304,6 @@ randomizedSelect
     d xs   =  do
       ix <- getStdRandom $ randomR (0, length xs - 1)
       return $ Just $ xs !! ix
-
-cacheRR :: ResourceRecord -> ReaderT Context IO ()
-cacheRR rr = do
-  traceLn $ "cacheRR: " ++ show rr
-
-cacheAuthNS :: Delegation -> ReaderT Context IO ()
-cacheAuthNS (nss0@((_, rr), _), as0)
-  | rrname rr == B8.pack "."  =  pure ()
-  | otherwise                 =
-    do cacheNS
-       cacheAx
-  where
-    nss1 = uncurry (:) nss0
-    cacheNS = mapM_ (cacheRR . snd) nss1
-    as = filter isA as0
-    a4s = filter is4A as0
-    isA ResourceRecord { rrtype = A, rdata = RD_A {} }  =  True
-    isA _                                               =  False
-    is4A ResourceRecord { rrtype = AAAA, rdata = RD_AAAA {} }  =  True
-    is4A _                                                     =  False
-    cacheAx = do
-      let nss = map fst nss1
-          cacheRRs = mapM_ cacheRR
-      mapM_ cacheRRs $ matchAx nss as ++ matchAx nss a4s
-
-matchAx :: [Domain] -> [ResourceRecord] -> [[ResourceRecord]]
-matchAx ds0 rs0 =
-  filter (not . null)
-  $ rec_ id id (sort ds0) (sortOn rrname rs0)
-  where
-    rec_ res _       []      _        =  res []
-    rec_ res as     (_:_)       []    =  res [as []]
-    rec_ res as dds@(d:ds) rrs@(r:rs)
-      | d < rrname r  =  rec_ (res . (as []:))  id         ds  rrs
-      | d > rrname r  =  rec_  res              as         dds rs
-      | otherwise     =  rec_  res             (as . (r:)) dds rs
 
 tracePut :: String -> ReaderT Context IO ()
 tracePut s = do
