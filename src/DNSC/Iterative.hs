@@ -412,10 +412,13 @@ matchAx ds0 rs0 =
       | d > rrname r  =  rec_  res              as         dds rs
       | otherwise     =  rec_  res             (as . (r:)) dds rs
 
-traceLn :: String -> ReaderT Context IO ()
-traceLn s = do
+tracePut :: String -> ReaderT Context IO ()
+tracePut s = do
   trace <- asks trace_
-  when trace $ liftIO $ putStrLn s
+  when trace $ liftIO $ putStr s
+
+traceLn :: String -> ReaderT Context IO ()
+traceLn = tracePut . (++ "\n")
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
