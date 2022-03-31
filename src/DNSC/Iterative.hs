@@ -255,7 +255,7 @@ selectAuthNS (nss, as) = do
       query1AofNS :: DNSQuery (IP, ResourceRecord)
       query1AofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        . listToMaybe . mapMaybe takeAx . DNS.answer
+        =<< liftIO . selectA . mapMaybe takeAx . DNS.answer
         =<< query1 (B8.unpack ns) A
 
   (a, _aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
