@@ -13,6 +13,7 @@ module DNSC.Iterative (
   query, query1, iterative,
   ) where
 
+import Control.Arrow ((&&&))
 import Control.Monad (when, join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -20,7 +21,8 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, uncons)
+import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import qualified Data.Set as Set
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
@@ -32,7 +34,8 @@ import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
 import DNSC.Cache
-  (Ranking, insertSetFromSection)
+  (Ranking, rankedAnswer, rankedAuthority, rankedAdditional,
+   insertSetFromSection)
 
 
 type Name = String
@@ -151,21 +154,23 @@ query :: Name -> TYPE -> DNSQuery DNSMessage
 query n CNAME = query1 n CNAME
 query n typ = do
   msg <- query1 n typ
-  let answers = DNS.answer msg
+  cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn = do
-        when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+        when (any ((== typ) . rrtype) $ DNS.answer msg) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         query (B8.unpack cn) typ
 
   maybe
     (pure msg)
     resolveCNAME
-    =<< liftIO (selectCNAME $ mapMaybe takeCNAME answers)
+    =<< liftIO (selectCNAME cnames)
   where
     takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-      | rrname rr == B8.pack n  =  Just cn
+      | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
+
+    refinesCNAME = unzip . mapMaybe takeCNAME
 
     selectCNAME = randomizedSelect
 
@@ -187,8 +192,10 @@ rootNS :: Delegation
 rootNS =
   maybe
   (error "rootNS: bad configuration.")
-  id
-  $ uncurry (authorityNS_ (B8.pack ".")) rootServers
+  (flip (,) as)
+  $ uncons $ nsList (B8.pack ".") (,) ns
+  where
+    (ns, as) = rootServers
 
 -- 反復検索でドメインの NS のアドレスを得る
 iterative :: Delegation -> Name -> DNSQuery Delegation
@@ -210,21 +217,30 @@ iterative_ nss (x:xs) =
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ traceLn $ "iterative: " ++ show (sa, name)
       msg <- dnsQueryT $ const $ norec1 sa name A
-      return $ authorityNS name msg
+      lift $ delegationWithCache name msg
 
--- 選択可能な NS が有るときだけ Just
-authorityNS :: Domain -> DNSMessage -> Maybe Delegation
-authorityNS dom msg = authorityNS_ dom (DNS.authority msg) (DNS.additional msg)
-
-{-# ANN authorityNS_ ("HLint: ignore Use tuple-section") #-}
-authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe Delegation
-authorityNS_ dom auths adds =
-  (\x -> (x, adds)) <$> uncons nss
+delegationWithCache :: Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
+delegationWithCache dom msg =
+  -- 選択可能な NS が有るときだけ Just
+  mapM action $ uncons nss
   where
-    nss = mapMaybe takeNS auths
+    action xs = do
+      cacheNS
+      cacheAdds
+      return (xs, adds)
+    (nss, cacheNS) = getSection rankedAuthority refinesNS msg
+      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
+    (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
+      where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
+            match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
+            nsSet = Set.fromList $ map fst nss
 
+nsList :: Domain -> (Domain ->  ResourceRecord -> a)
+       -> [ResourceRecord] -> [a]
+nsList dom h = mapMaybe takeNS
+  where
     takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns }
-      | rrname rr == dom  =  Just (ns, rr)
+      | rrname rr == dom  =  Just $ h ns rr
     takeNS _              =  Nothing
 
 norec1 :: IP -> Domain -> TYPE -> IO (Either QueryError DNSMessage)
@@ -258,13 +274,16 @@ selectDelegation (nss, as) = do
           rrname rr == ns  =  Just (IPv6 ipv6, rr)
       takeAx _             =  Nothing
 
+      refinesAx rrs = (ps, map snd ps)
+        where ps = mapMaybe takeAx rrs
+
       queryAx
         | disableV6NS  =  q4
         | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
         where
           v4f = q4 +? q6 ; v6f = q6 +? q4
-          q4 = DNS.answer <$> query1 nsName A
-          q6 = DNS.answer <$> query1 nsName AAAA
+          q4 = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName A
+          q6 = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName AAAA
           qx +? qy = do
             xs <- qx
             if null xs then qy else pure xs
@@ -273,7 +292,7 @@ selectDelegation (nss, as) = do
       query1AXofNS :: DNSQuery (IP, ResourceRecord)
       query1AXofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA . mapMaybe takeAx =<< queryAx
+        =<< liftIO . selectA =<< queryAx
 
   (a, _aRR) <- maybe query1AXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
