@@ -3,7 +3,7 @@ module DNSC.Iterative (
   runQuery,
   runQuery1,
   runIterative,
-  rootNS, AuthNS,
+  rootNS, Delegation,
   printResult,
   traceQuery,
 
@@ -163,21 +163,21 @@ query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
   lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
-  sa <- selectAuthNS nss
+  sa <- selectDelegation nss
   msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
   lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
 
-runIterative :: AuthNS -> Name -> IO (Either QueryError AuthNS)
+runIterative :: Delegation -> Name -> IO (Either QueryError Delegation)
 runIterative sa n = withNormalized n (iterative sa) False False
 
 type NE a = (a, [a])
 
--- ドメインに対する複数の NS の情報
-type AuthNS = (NE (Domain, ResourceRecord), [ResourceRecord])
+-- ドメインに対する NS 委任情報
+type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
 
 {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
-rootNS :: AuthNS
+rootNS :: Delegation
 rootNS =
   maybe
   (error "rootNS: bad configuration.")
@@ -185,11 +185,11 @@ rootNS =
   $ uncurry (authorityNS_ (B8.pack ".")) rootServers
 
 -- 反復検索でドメインの NS のアドレスを得る
-iterative :: AuthNS -> Name -> DNSQuery AuthNS
+iterative :: Delegation -> Name -> DNSQuery Delegation
 iterative sa n = iterative_ sa $ reverse $ domains n
 
 -- 反復検索の本体
-iterative_ :: AuthNS -> [Name] -> DNSQuery AuthNS
+iterative_ :: Delegation -> [Name] -> DNSQuery Delegation
 iterative_ nss []     = return nss
 iterative_ nss (x:xs) =
   step nss >>=
@@ -199,9 +199,9 @@ iterative_ nss (x:xs) =
   where
     name = B8.pack x
 
-    step :: AuthNS -> DNSQuery (Maybe AuthNS)
+    step :: Delegation -> DNSQuery (Maybe Delegation)
     step nss_ = do
-      sa <- selectAuthNS nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
+      sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ traceLn $ "iterative: " ++ show (sa, name)
       msg <- dnsQueryT $ const $ norec1 sa name A
       let result = authorityNS name msg
@@ -209,11 +209,11 @@ iterative_ nss (x:xs) =
       return result
 
 -- 選択可能な NS が有るときだけ Just
-authorityNS :: Domain -> DNSMessage -> Maybe AuthNS
+authorityNS :: Domain -> DNSMessage -> Maybe Delegation
 authorityNS dom msg = authorityNS_ dom (DNS.authority msg) (DNS.additional msg)
 
 {-# ANN authorityNS_ ("HLint: ignore Use tuple-section") #-}
-authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe AuthNS
+authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe Delegation
 authorityNS_ dom auths adds =
   (\x -> (x, adds)) <$> uncons nss
   where
@@ -239,8 +239,8 @@ norec1 aserver name typ = do
 -- authority section 内の、Domain に対応する NS レコードが一つも無いときに Nothing
 -- そうでなければ、additional section 内の NS の名前に対応する A を利用してアドレスを得る
 -- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
-selectAuthNS :: AuthNS -> DNSQuery IP
-selectAuthNS (nss, as) = do
+selectDelegation :: Delegation -> DNSQuery IP
+selectDelegation (nss, as) = do
   (ns, nsRR) <- liftIO $ selectNS nss
   disableV6NS <- lift $ asks disableV6NS_
 
@@ -259,7 +259,7 @@ selectAuthNS (nss, as) = do
         =<< query1 (B8.unpack ns) A
 
   (a, _aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
-  lift $ traceLn $ "selectAuthNS: " ++ show (rrname nsRR, (ns, a))
+  lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
 
   return a
 
@@ -300,7 +300,7 @@ cacheRR :: ResourceRecord -> ReaderT Context IO ()
 cacheRR rr = do
   traceLn $ "cacheRR: " ++ show rr
 
-cacheAuthNS :: AuthNS -> ReaderT Context IO ()
+cacheAuthNS :: Delegation -> ReaderT Context IO ()
 cacheAuthNS (nss0@((_, rr), _), as0)
   | rrname rr == B8.pack "."  =  pure ()
   | otherwise                 =
