@@ -154,8 +154,7 @@ query n typ = do
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn _cnRR = do
         when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-        x <- query (B8.unpack cn) typ
-        return x
+        query (B8.unpack cn) typ
 
   maybe
     (pure msg)
@@ -174,8 +173,7 @@ query1 n typ = do
   lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectDelegation nss
-  msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
-  return msg
+  dnsQueryT $ const $ norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
 
@@ -210,8 +208,7 @@ iterative_ nss (x:xs) =
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ traceLn $ "iterative: " ++ show (sa, name)
       msg <- dnsQueryT $ const $ norec1 sa name A
-      let result = authorityNS name msg
-      return result
+      return $ authorityNS name msg
 
 -- 選択可能な NS が有るときだけ Just
 authorityNS :: Domain -> DNSMessage -> Maybe Delegation
