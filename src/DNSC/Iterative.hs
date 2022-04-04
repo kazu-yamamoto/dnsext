@@ -1,5 +1,6 @@
 module DNSC.Iterative (
   -- * query interfaces
+  runReply,
   runQuery,
   runQuery1,
   newContext,
@@ -10,6 +11,7 @@ module DNSC.Iterative (
 
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
+  replyMessage, reply,
   query, query1, iterative,
   ) where
 
@@ -34,7 +36,7 @@ import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
 import DNSC.Cache
-  (Ranking, rankedAnswer, rankedAuthority, rankedAdditional,
+  (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection)
 
 
@@ -138,6 +140,10 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
+runReply :: Context -> Name -> TYPE -> DNS.Identifier -> IO (Maybe DNSMessage)
+runReply cxt n typ ident =
+  (`replyMessage` ident) <$> withNormalized n (`reply` typ) cxt
+
 runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
@@ -148,6 +154,59 @@ runIterative :: Context -> Delegation -> Name -> IO (Either QueryError Delegatio
 runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
+
+replyMessage :: Either QueryError [ResourceRecord]
+             -> DNS.Identifier
+             -> Maybe DNSMessage
+replyMessage eas ident =
+  either queryError (Just . message DNS.NoErr) eas
+  where
+    dnsError de = message <$> rcodeDNSError de <*> pure []
+    rcodeDNSError e = case e of
+      DNS.FormatError       ->  Just DNS.FormatErr
+      DNS.ServerFailure     ->  Just DNS.ServFail
+      DNS.NameError         ->  Just DNS.NameErr
+      DNS.NotImplemented    ->  Just DNS.NotImpl
+      DNS.OperationRefused  ->  Just DNS.Refused
+      DNS.BadOptRecord      ->  Just DNS.BadVers
+      _                     ->  Nothing
+
+    queryError qe = case qe of
+      DnsError e      ->  dnsError e
+      NotResponse {}  ->  Nothing
+      HasError rc _m  ->  Just $ message rc []
+      InvalidEDNS {}  ->  Nothing
+
+    message rcode rrs =
+      res
+      { DNS.header = h { DNS.identifier = ident
+                       , DNS.flags = f { DNS.authAnswer = False, DNS.rcode = rcode } }
+      , DNS.answer = rrs
+      }
+    res = DNS.defaultResponse
+    h = DNS.header res
+    f = DNS.flags h
+
+reply :: Name -> TYPE -> DNSQuery [ResourceRecord]
+reply n typ =
+  maybe withQuery pure =<< lift lookupCache_
+  where
+    dom = B8.pack n
+    replyRank (rrs, rank)
+      -- 最も低い ranking は reply の answer に利用しない
+      -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
+      | rank <= rankAdditional  =  Nothing
+      | otherwise               =  Just rrs
+    lookupCache_ = (replyRank =<<) <$> lookupCache dom typ
+
+    withQuery = lift . getSectionWithCache rankedAnswer refinesX =<< query n typ
+      where
+        takeX rr
+          | rrname rr == dom && rrtype rr == typ  =  Just rr
+          | otherwise                             =  Nothing
+        refinesX rrs = (ps, ps)
+          where
+            ps = mapMaybe takeX rrs
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
@@ -180,6 +239,7 @@ query1 n typ = do
   lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectDelegation nss
+  lift $ traceLn $ "query1: norec1: " ++ show (sa, n, typ)
   dnsQueryT $ const $ norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
