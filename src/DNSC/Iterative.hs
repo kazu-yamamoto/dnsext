@@ -133,6 +133,14 @@ runQuery n typ = withNormalized n (`query` typ) False False
 traceQuery :: Name -> TYPE -> IO (Either QueryError DNSMessage)
 traceQuery n typ = withNormalized n (`query` typ) True False
 
+runQuery1 :: Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery1 n typ = withNormalized n (`query1` typ) False False
+
+runIterative :: Delegation -> Name -> IO (Either QueryError Delegation)
+runIterative sa n = withNormalized n (iterative sa) False False
+
+---
+
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
 query n typ = do
@@ -155,9 +163,6 @@ query n typ = do
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
 
-runQuery1 :: Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery1 n typ = withNormalized n (`query1` typ) False False
-
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
@@ -167,9 +172,6 @@ query1 n typ = do
   msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
   lift $ mapM_ cacheRR $ DNS.answer msg
   return msg
-
-runIterative :: Delegation -> Name -> IO (Either QueryError Delegation)
-runIterative sa n = withNormalized n (iterative sa) False False
 
 type NE a = (a, [a])
 
