@@ -4,6 +4,7 @@ module DNSC.Iterative (
   runQuery1,
   runIterative,
   rootNS, Delegation,
+  QueryError (..),
   printResult,
   traceQuery,
 
