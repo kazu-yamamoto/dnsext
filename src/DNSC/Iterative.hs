@@ -247,10 +247,12 @@ norec1 aserver name typ = do
 -- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
 selectDelegation :: Delegation -> DNSQuery IP
 selectDelegation (nss, as) = do
+  let selectNS = randomizedSelectN
   (ns, nsRR) <- liftIO $ selectNS nss
   disableV6NS <- lift $ asks disableV6NS_
 
-  let takeAx :: ResourceRecord -> Maybe (IP, ResourceRecord)
+  let selectA = randomizedSelect
+      takeAx :: ResourceRecord -> Maybe (IP, ResourceRecord)
       takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 }
         | rrname rr == ns  =  Just (IPv4 ipv4, rr)
       takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 }
@@ -283,21 +285,10 @@ selectDelegation (nss, as) = do
 randomSelect :: Bool
 randomSelect = True
 
-selectNS :: NE a -> IO a
-selectNS rs
-  | randomSelect  =  randomizedSelectN rs
-  | otherwise     =  return $ fst rs  -- naive implementation
-
-selectA :: [a] -> IO (Maybe a)
-selectA as
-  | randomSelect  =  randomizedSelect as
-  | otherwise     =  do
-      -- when (null as) $ putStrLn $ "selectA: warning: zero address list is passed." -- no glue record?
-      -- naive implementation
-      return $ listToMaybe as
-
 randomizedSelectN :: NE a -> IO a
-randomizedSelectN = d
+randomizedSelectN
+  | randomSelect  =  d
+  | otherwise     =  return . fst  -- naive implementation
   where
     d (x, []) = return x
     d (x, xs) = do
@@ -305,7 +296,9 @@ randomizedSelectN = d
       return $ (x:xs) !! ix
 
 randomizedSelect :: [a] -> IO (Maybe a)
-randomizedSelect = d
+randomizedSelect
+  | randomSelect  =  d
+  | otherwise     =  return . listToMaybe  -- naive implementation
   where
     d []   =  return Nothing
     d [x]  =  return $ Just x
