@@ -69,7 +69,7 @@ spec = describe "query" $ do
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query - a" $ do
+  it "query - txt" $ do
     result <- runQuery "porttest.dns-oarc.net." TXT
     printQueryError result
     isRight result `shouldBe` True
