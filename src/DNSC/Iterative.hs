@@ -2,6 +2,7 @@ module DNSC.Iterative (
   -- * query interfaces
   runQuery,
   runQuery1,
+  newContext,
   runIterative,
   rootNS, Delegation,
   QueryError (..),
@@ -103,11 +104,15 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
+newContext :: Bool -> Bool -> IO Context
+newContext trace disableV6NS =
+  return Context { trace_ = trace, disableV6NS_ = disableV6NS }
+
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
-runDNSQuery :: DNSQuery a -> Bool -> Bool -> IO (Either QueryError a)
-runDNSQuery q trace disableV6NS = do
+runDNSQuery :: DNSQuery a -> Context -> IO (Either QueryError a)
+runDNSQuery q (Context trace disableV6NS) = do
   when trace $ hSetBuffering stdout LineBuffering
   runReaderT (runExceptT q) (Context trace disableV6NS)
 
@@ -125,22 +130,22 @@ handleResponseError e f msg
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
-withNormalized :: Name -> (Name -> DNSQuery a) -> Bool -> Bool -> IO (Either QueryError a)
+withNormalized :: Name -> (Name -> DNSQuery a) -> Context -> IO (Either QueryError a)
 withNormalized n action =
-  runDNSQuery
-  (action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n))
+  runDNSQuery $
+  action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
 runQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery disableV6NS n typ = withNormalized n (`query` typ) False disableV6NS
+runQuery disableV6NS n typ = withNormalized n (`query` typ) $ Context False disableV6NS
 
 traceQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-traceQuery disableV6NS n typ = withNormalized n (`query` typ) True disableV6NS
+traceQuery disableV6NS n typ = withNormalized n (`query` typ) $ Context True disableV6NS
 
-runQuery1 :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery1 disableV6NS n typ = withNormalized n (`query1` typ) False disableV6NS
+runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery1 cxt n typ = withNormalized n (`query1` typ) cxt
 
-runIterative :: Bool -> Delegation -> Name -> IO (Either QueryError Delegation)
-runIterative disableV6NS sa n = withNormalized n (iterative sa) False disableV6NS
+runIterative :: Context -> Delegation -> Name -> IO (Either QueryError Delegation)
+runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
 
