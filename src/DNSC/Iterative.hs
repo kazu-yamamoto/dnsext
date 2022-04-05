@@ -130,17 +130,17 @@ withNormalized n action =
   runDNSQuery
   (action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n))
 
-runQuery :: Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery n typ = withNormalized n (`query` typ) False False
+runQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery disableV6NS n typ = withNormalized n (`query` typ) False disableV6NS
 
-traceQuery :: Name -> TYPE -> IO (Either QueryError DNSMessage)
-traceQuery n typ = withNormalized n (`query` typ) True False
+traceQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+traceQuery disableV6NS n typ = withNormalized n (`query` typ) True disableV6NS
 
-runQuery1 :: Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery1 n typ = withNormalized n (`query1` typ) False False
+runQuery1 :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery1 disableV6NS n typ = withNormalized n (`query1` typ) False disableV6NS
 
-runIterative :: Delegation -> Name -> IO (Either QueryError Delegation)
-runIterative sa n = withNormalized n (iterative sa) False False
+runIterative :: Bool -> Delegation -> Name -> IO (Either QueryError Delegation)
+runIterative disableV6NS sa n = withNormalized n (iterative sa) False disableV6NS
 
 ---
 
