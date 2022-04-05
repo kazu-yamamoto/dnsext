@@ -161,11 +161,13 @@ query n typ = do
   maybe
     (pure msg)
     (uncurry resolveCNAME)
-    $ listToMaybe $ mapMaybe takeCNAME answers
+    =<< liftIO (selectCNAME $ mapMaybe takeCNAME answers)
   where
     takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
+
+    selectCNAME = randomizedSelect
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
