@@ -31,6 +31,8 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
+import DNSC.Cache
+  (Ranking, insertSetFromSection)
 
 
 type Name = String
@@ -301,6 +303,44 @@ randomizedSelect
     d xs   =  do
       ix <- getStdRandom $ randomR (0, length xs - 1)
       return $ Just $ xs !! ix
+
+---
+
+getSection :: (m -> Maybe ([ResourceRecord], Ranking))
+           -> ([ResourceRecord] -> (a, [ResourceRecord]))
+           -> m -> (a, ReaderT Context IO ())
+getSection getP refines msg =
+  maybe (fst $ refines [], return ()) withSection $ getP msg
+  where
+    withSection (rrs0, rank) = (result, cacheSection srrs rank)
+      where (result, srrs) = refines rrs0
+
+getSectionWithCache :: (m -> Maybe ([ResourceRecord], Ranking))
+                    -> ([ResourceRecord] -> (a, [ResourceRecord]))
+                    -> m -> ReaderT Context IO a
+getSectionWithCache get refines msg = do
+  let (res, doCache) = getSection get refines msg
+  doCache
+  return res
+
+cacheSection :: [ResourceRecord] -> Ranking -> ReaderT Context IO ()
+cacheSection rs rank =
+  uncurry cacheRRSet $ insertSetFromSection rs rank
+  where
+    putRRSet ((kp, crs), r) =
+      tracePut $
+      unlines
+      [ "cacheRRSet: " ++ show (kp, r)
+      , "  " ++ show crs ]
+    putInvalidRRS rrs =
+      tracePut $ unlines $
+      "invalid RR set:" :
+      map (("  " ++) . show) rrs
+    cacheRRSet errRRSs rrss = do
+      mapM_ putInvalidRRS errRRSs
+      mapM_ putRRSet rrss
+
+---
 
 tracePut :: String -> ReaderT Context IO ()
 tracePut s = do
