@@ -69,6 +69,13 @@ spec = describe "query" $ do
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
+  it "query - cname" $ do
+    result <- runQuery "porttest.dns-oarc.net." CNAME
+    printQueryError result
+    isRight result `shouldBe` True
+    let Right msg = result
+    length (DNS.answer msg) `shouldSatisfy` (> 0)
+
   it "query - txt" $ do
     result <- runQuery "porttest.dns-oarc.net." TXT
     printQueryError result
