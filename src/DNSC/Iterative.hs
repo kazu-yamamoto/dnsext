@@ -325,6 +325,11 @@ randomizedSelect
 
 ---
 
+lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
+lookupCache dom typ = do
+  traceLn $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN]
+  return Nothing
+
 getSection :: (m -> Maybe ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
            -> m -> (a, ReaderT Context IO ())
