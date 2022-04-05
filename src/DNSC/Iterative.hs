@@ -267,12 +267,12 @@ selectDelegation (nss, as) = do
         | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
         where
           v4f = q4 +? q6 ; v6f = q6 +? q4
-          q4 = DNS.answer <$> query1 bns A
-          q6 = DNS.answer <$> query1 bns AAAA
+          q4 = DNS.answer <$> query1 nsName A
+          q6 = DNS.answer <$> query1 nsName AAAA
           qx +? qy = do
             xs <- qx
             if null xs then qy else pure xs
-          bns = B8.unpack ns
+          nsName = B8.unpack ns
 
       query1AXofNS :: DNSQuery (IP, ResourceRecord)
       query1AXofNS =
