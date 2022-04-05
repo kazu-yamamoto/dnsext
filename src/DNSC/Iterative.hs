@@ -212,12 +212,24 @@ iterative_ nss (x:xs) =
   where
     name = B8.pack x
 
-    step :: Delegation -> DNSQuery (Maybe Delegation)
-    step nss_ = do
+    lookupNS :: ReaderT Context IO (Maybe Delegation)
+    lookupNS = do
+      m <- lookupCache name NS
+      return $ do
+        (rrs, _) <- m
+        ns <- uncons $ nsList name (,) rrs
+        Just (ns, [])
+
+    stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
+    stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
-      lift $ traceLn $ "iterative: " ++ show (sa, name)
+      lift $ traceLn $ "iterative: norec1: " ++ show (sa, name, A)
       msg <- dnsQueryT $ const $ norec1 sa name A
       lift $ delegationWithCache name msg
+
+    step :: Delegation -> DNSQuery (Maybe Delegation)
+    step nss_ =
+      maybe (stepQuery nss_) (return . Just) =<< lift lookupNS
 
 delegationWithCache :: Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
 delegationWithCache dom msg =
@@ -282,11 +294,16 @@ selectDelegation (nss, as) = do
         | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
         where
           v4f = q4 +? q6 ; v6f = q6 +? q4
-          q4 = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName A
-          q6 = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName AAAA
+          q4 = lookupOrQueryAx A
+          q6 = lookupOrQueryAx AAAA
           qx +? qy = do
             xs <- qx
             if null xs then qy else pure xs
+          lookupOrQueryAx typ =
+            maybe
+            (lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName typ)
+            (pure . mapMaybe takeAx . fst)
+            =<< lift (lookupCache ns typ)
           nsName = B8.unpack ns
 
       query1AXofNS :: DNSQuery (IP, ResourceRecord)
