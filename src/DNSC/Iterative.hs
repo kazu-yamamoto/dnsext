@@ -82,7 +82,9 @@ data Context =
 
 data QueryError
   = DnsError DNSError
-  | ResponseError String DNSMessage
+  | NotResponse DNS.QorR DNSMessage
+  | HasError DNS.RCODE DNSMessage
+  | InvalidEDNS DNS.EDNSheader DNSMessage
   deriving Show
 
 type DNSQuery = ExceptT QueryError (ReaderT Context IO)
@@ -113,9 +115,9 @@ throwDnsError = throwE . DnsError
 
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
-  | DNS.qOrR flags /= DNS.QR_Response      =  e $ ResponseError ("Not response code: " ++ show (DNS.qOrR flags)) msg
-  | DNS.rcode flags /= DNS.NoErr           =  e $ ResponseError ("Error RCODE: " ++ show (DNS.rcode flags)) msg
-  | DNS.ednsHeader msg == DNS.InvalidEDNS  =  e $ ResponseError  "Invalid EDNS header" msg
+  | DNS.qOrR flags /= DNS.QR_Response      =  e $ NotResponse (DNS.qOrR flags) msg
+  | DNS.rcode flags /= DNS.NoErr           =  e $ HasError (DNS.rcode flags) msg
+  | DNS.ednsHeader msg == DNS.InvalidEDNS  =  e $ InvalidEDNS (DNS.ednsHeader msg) msg
   | otherwise                              =  f msg
   where
     flags = DNS.flags $ DNS.header msg
