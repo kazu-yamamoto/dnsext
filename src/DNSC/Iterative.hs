@@ -143,6 +143,7 @@ runIterative sa n = withNormalized n (iterative sa) False False
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
+query n CNAME = query1 n CNAME
 query n typ = do
   msg <- query1 n typ
   let answers = DNS.answer msg
