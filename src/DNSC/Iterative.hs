@@ -13,7 +13,7 @@ module DNSC.Iterative (
   query, query1, iterative,
   ) where
 
-import Control.Monad (when)
+import Control.Monad (when, join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -256,15 +256,26 @@ selectDelegation (nss, as) = do
       takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 }
         | not disableV6NS &&
           rrname rr == ns  =  Just (IPv6 ipv6, rr)
-      takeAx _          =  Nothing
+      takeAx _             =  Nothing
 
-      query1AofNS :: DNSQuery (IP, ResourceRecord)
-      query1AofNS =
+      queryAx
+        | disableV6NS  =  q4
+        | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
+        where
+          v4f = q4 +? q6 ; v6f = q6 +? q4
+          q4 = DNS.answer <$> query1 bns A
+          q6 = DNS.answer <$> query1 bns AAAA
+          qx +? qy = do
+            xs <- qx
+            if null xs then qy else pure xs
+          bns = B8.unpack ns
+
+      query1AXofNS :: DNSQuery (IP, ResourceRecord)
+      query1AXofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA . mapMaybe takeAx . DNS.answer
-        =<< query1 (B8.unpack ns) A
+        =<< liftIO . selectA . mapMaybe takeAx =<< queryAx
 
-  (a, _aRR) <- maybe query1AofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
+  (a, _aRR) <- maybe query1AXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
 
   return a
