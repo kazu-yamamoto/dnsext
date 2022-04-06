@@ -25,7 +25,6 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
 import qualified Data.Set as Set
-import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
 import Data.IP (IP (IPv4, IPv6))
@@ -36,6 +35,7 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
+import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection)
@@ -84,10 +84,9 @@ domains name
 
 data Context =
   Context
-  { trace_ :: Bool
+  { tracePut_ :: String -> IO ()
   , disableV6NS_ :: Bool
   }
-  deriving Show
 
 data QueryError
   = DnsError DNSError
@@ -113,8 +112,8 @@ additional セクションにその名前に対するアドレス (A および A
 
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
-  when trace $ hSetBuffering stdout LineBuffering
-  return Context { trace_ = trace, disableV6NS_ = disableV6NS }
+  put <- Log.new trace
+  return Context { tracePut_ = put, disableV6NS_ = disableV6NS }
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
@@ -479,8 +478,8 @@ cacheSection rs rank =
 
 tracePut :: String -> ReaderT Context IO ()
 tracePut s = do
-  trace <- asks trace_
-  when trace $ liftIO $ putStr s
+  put <- asks tracePut_
+  liftIO $ put s
 
 traceLn :: String -> ReaderT Context IO ()
 traceLn = tracePut . (++ "\n")
