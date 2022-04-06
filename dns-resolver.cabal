@@ -21,6 +21,7 @@ library
   exposed-modules:
                        DNSC.Iterative
                        DNSC.Cache
+                       DNSC.Log
 
   other-modules:
                        DNSC.RootServers
