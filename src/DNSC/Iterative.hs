@@ -104,16 +104,15 @@ additional セクションにその名前に対するアドレス (A および A
  -}
 
 newContext :: Bool -> Bool -> IO Context
-newContext trace disableV6NS =
+newContext trace disableV6NS = do
+  when trace $ hSetBuffering stdout LineBuffering
   return Context { trace_ = trace, disableV6NS_ = disableV6NS }
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
 runDNSQuery :: DNSQuery a -> Context -> IO (Either QueryError a)
-runDNSQuery q (Context trace disableV6NS) = do
-  when trace $ hSetBuffering stdout LineBuffering
-  runReaderT (runExceptT q) (Context trace disableV6NS)
+runDNSQuery = runReaderT . runExceptT
 
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwE . DnsError
