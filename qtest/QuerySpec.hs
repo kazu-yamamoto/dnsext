@@ -2,9 +2,11 @@ module QuerySpec where
 
 import Test.Hspec
 
+import Control.Concurrent (threadDelay)
 import Data.Either (isRight)
+import Data.List (uncons)
 import Data.String (fromString)
-import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT))
+import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT, PTR))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
@@ -91,6 +93,15 @@ spec = describe "query" $ do
     result <- runQuery "clients4.google.com." A
     printQueryError result
     isRight result `shouldBe` True
+
+  it "reply - ptr - cache" $ do
+    m1 <- runReply "5.0.130.210.in-addr.arpa." PTR 0
+    threadDelay $ 2 * 1000 * 1000
+    m2 <- runReply "5.0.130.210.in-addr.arpa." PTR 0
+    let getTTL = fmap (DNS.rrttl . fst) . uncons . DNS.answer
+        t1 = getTTL =<< m1
+        t2 = getTTL =<< m2
+    (>) <$> t1 <*> t2 `shouldBe` Just True
 
   it "reply - a accumulated via cname" $ do
     result <- runReply "media-router-aol1.prod.media.yahoo.com." A 0
