@@ -13,6 +13,7 @@ module DNSC.Iterative (
   DNSQuery, runDNSQuery,
   replyMessage, reply,
   query, query1, iterative,
+  Context (..),
   ) where
 
 import Control.Arrow ((&&&))
@@ -22,6 +23,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.Ord (Down (..))
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
 import qualified Data.Set as Set
@@ -29,7 +31,7 @@ import System.Random (randomR, getStdRandom)
 
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..),
+  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL, CLASS,
    TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
@@ -38,7 +40,8 @@ import DNSC.RootServers (rootServers)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection)
+   insertSetFromSection, Timestamp, Key, Val, CRSet)
+import DNSC.UpdateCache (newCache)
 
 
 type Name = String
@@ -85,7 +88,10 @@ domains name
 data Context =
   Context
   { tracePut_ :: String -> IO ()
-  , disableV6NS_ :: Bool
+  , disableV6NS_ :: !Bool
+  , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
+  , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
+  , dump_ :: IO [(Key, (Timestamp, Val))]
   }
 
 data QueryError
@@ -113,7 +119,8 @@ additional セクションにその名前に対するアドレス (A および A
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
   put <- Log.new trace
-  return Context { tracePut_ = put, disableV6NS_ = disableV6NS }
+  (lk, ins, dump) <- newCache put
+  return Context { tracePut_ = put, disableV6NS_ = disableV6NS, insert_ = ins, lookup_ = lk, dump_ = dump }
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
@@ -437,8 +444,11 @@ randomizedSelect
 
 lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = do
-  traceLn $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN]
-  return Nothing
+  lookupRRs <- asks lookup_
+  result <- liftIO $ lookupRRs dom typ DNS.classIN
+  traceLn $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
+                                        maybe "miss" (\ (_, Down rank) -> "hit: " ++ show rank) result]
+  return result
 
 getSection :: (m -> Maybe ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
@@ -473,6 +483,8 @@ cacheSection rs rank =
     cacheRRSet errRRSs rrss = do
       mapM_ putInvalidRRS errRRSs
       mapM_ putRRSet rrss
+      insertRRSet <- uncurry . uncurry . uncurry <$> asks insert_
+      mapM_ (liftIO . insertRRSet) rrss
 
 ---
 
