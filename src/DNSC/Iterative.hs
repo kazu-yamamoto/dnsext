@@ -7,7 +7,6 @@ module DNSC.Iterative (
   rootNS, Delegation,
   QueryError (..),
   printResult,
-  traceQuery,
 
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
@@ -135,11 +134,8 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
-runQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery disableV6NS n typ = withNormalized n (`query` typ) $ Context False disableV6NS
-
-traceQuery :: Bool -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-traceQuery disableV6NS n typ = withNormalized n (`query` typ) $ Context True disableV6NS
+runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
 runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery1 cxt n typ = withNormalized n (`query1` typ) cxt
