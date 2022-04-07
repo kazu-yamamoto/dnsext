@@ -22,10 +22,9 @@ module DNSC.Cache (
   -- * low-level interfaces
   Cache, Key (..), Val (..), CRSet (..),
   extractRRSet,
-  queueSize, (<+), alive,
+  (<+), alive,
   expire1, member,
-  dump, consistent,
-  dumpKeys, minKey,
+  dump, dumpKeys, minKey,
   ) where
 
 import Prelude hiding (lookup)
@@ -215,9 +214,6 @@ size = PSQ.size
 ---
 {- debug interfaces -}
 
-queueSize :: Cache -> Int
-queueSize = PSQ.size
-
 member :: Timestamp
        -> CDomain -> TYPE -> CLASS
        -> Cache -> Bool
@@ -225,10 +221,6 @@ member now dom typ cls = isJust . lookup_ now (\_ _ _ -> ()) dom typ cls
 
 dump :: Cache -> [(Key, (Timestamp, Val))]
 dump c = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
-
-consistent :: Cache -> Bool
-consistent cache = queueSize cache == sz && length (dump cache) == sz
-  where sz = size cache
 
 dumpKeys :: Cache -> [(Key, Timestamp)]
 dumpKeys c = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
