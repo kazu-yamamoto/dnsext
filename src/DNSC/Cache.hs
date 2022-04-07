@@ -20,7 +20,7 @@ module DNSC.Cache (
   insertRRs,
 
   -- * low-level interfaces
-  Cache (Cache), Key (..), Val (..), CRSet (..),
+  Cache, Key (..), Val (..), CRSet (..),
   extractRRSet,
   queueSize, (<+), alive,
   expire1, member,
@@ -32,17 +32,15 @@ import Prelude hiding (lookup)
 import Control.Monad (guard)
 import Data.Ord (Down (..))
 import Data.Function (on)
-import Data.Maybe (isJust, catMaybes)
+import Data.Maybe (isJust)
 import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 import Data.Time (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
 
-import Data.PSQueue (Binding ((:->)), PSQ)
-import qualified Data.PSQueue as PSQ
+import Data.OrdPSQ (OrdPSQ)
+import qualified Data.OrdPSQ as PSQ
 import Data.IP (IPv4, IPv6)
 import Network.DNS
   (Domain, CLASS, TTL, TYPE (..), RData (..),
@@ -138,10 +136,10 @@ data Val = Val CRSet Ranking deriving Show
 
 type Timestamp = UTCTime
 
-data Cache = Cache (PSQ Key Timestamp) (Map Key Val) deriving Show
+type Cache = OrdPSQ Key Timestamp Val
 
 empty :: Cache
-empty = Cache PSQ.empty Map.empty
+empty = PSQ.empty
 
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
@@ -153,12 +151,11 @@ lookup now dom = lookup_ now result (fromDomain dom)
 lookup_ :: Timestamp -> (Key -> TTL -> Val -> a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
-lookup_ now mk dom typ cls (Cache lifetimes crss) = do
+lookup_ now mk dom typ cls cache = do
   let k = Key dom typ cls
-  eol <- k `PSQ.lookup` lifetimes
+  (eol, v) <- k `PSQ.lookup` cache
   ttl <- alive now eol
-  rds <- k `Map.lookup` crss
-  return $ mk k ttl rds
+  return $ mk k ttl v
 
 insertRRs :: Timestamp -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
@@ -179,7 +176,7 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
-insert now k@(Key dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
+insert now k@(Key dom typ cls) ttl crs rank c =
   maybe inserted withOldRank lookupRank
   where
     lookupRank =
@@ -190,10 +187,7 @@ insert now k@(Key dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
       inserted
     eol = now <+ ttl
     inserted =
-      return $
-      Cache
-      (PSQ.insert k eol lifetimes)
-      (Map.insert k (Val crs rank) vals)
+      return $ PSQ.insert k eol (Val crs rank) c
 
 expires :: Timestamp -> Cache -> Maybe Cache
 expires now = rec0
@@ -202,12 +196,12 @@ expires now = rec0
     rec1 c = maybe c rec1 $ expire1 now c
 
 expire1 :: Timestamp -> Cache -> Maybe Cache
-expire1 now (Cache lifetimes crss) =
-  uncurry ex =<< PSQ.minView lifetimes
+expire1 now c =
+  ex =<< PSQ.minView c
   where
-    ex (k :-> eol) lifetimes'
+    ex (_k, eol, _v, c')
       | Just {} <- alive now eol  =  Nothing
-      | otherwise                 =  Just $ Cache lifetimes' $ Map.delete k crss
+      | otherwise                 =  Just c'
 
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
@@ -216,13 +210,13 @@ alive now eol = do
   return $ floor ttl'
 
 size :: Cache -> Int
-size (Cache _ crss) = Map.size crss
+size = PSQ.size
 
 ---
 {- debug interfaces -}
 
 queueSize :: Cache -> Int
-queueSize (Cache lifetimes _) = PSQ.size lifetimes
+queueSize = PSQ.size
 
 member :: Timestamp
        -> CDomain -> TYPE -> CLASS
@@ -230,21 +224,14 @@ member :: Timestamp
 member now dom typ cls = isJust . lookup_ now (\_ _ _ -> ()) dom typ cls
 
 dump :: Cache -> [(Key, (Timestamp, Val))]
-dump (Cache lifetimes vals) =
-  catMaybes $ zipWith op (PSQ.toAscList lifetimes) (Map.toAscList vals)
-  where
-    op (lk :-> eol) (k, v)
-      | lk == k    =  Just (k, (eol, v))
-      | otherwise  =  Nothing
+dump c = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
 
 consistent :: Cache -> Bool
 consistent cache = queueSize cache == sz && length (dump cache) == sz
   where sz = size cache
 
 dumpKeys :: Cache -> [(Key, Timestamp)]
-dumpKeys (Cache lifetimes _) = map unBinding $ PSQ.toAscList lifetimes
-  where
-    unBinding (k :-> eol) = (k, eol)
+dumpKeys c = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
 
 minKey :: Cache -> Maybe (Key, Timestamp)
 minKey = fmap fst . uncons . dumpKeys
