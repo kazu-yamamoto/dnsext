@@ -16,11 +16,11 @@ import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Network.DNS (TYPE (..), TTL)
 import qualified Network.DNS as DNS
-import Text.Read (readMaybe)
+import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
 import DNSC.Cache
-  (Cache (..), Key (Key), Val (Val), CRSet (..), Timestamp, (<+),
+  (Cache (..), Key (Key), Val (Val), CRSet (..), Timestamp, (<+), getTimestamp,
    Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
@@ -78,9 +78,7 @@ nsList =
   , "ns4.example.com.", "ns5.example.com." ]
 
 ts0 :: Timestamp
-ts0 =
-  maybe (error "cache-test: Timestamp: wrong setup") id
-  $ readMaybe "2022-01-01 00:00:00 UTC"
+ts0 = unsafePerformIO getTimestamp
 
 -----
 
