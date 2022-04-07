@@ -40,6 +40,7 @@ library
                      , PSQueue
 
                      -- dns packages
+                     , psqueues
                      , iproute
                      , dns
 
