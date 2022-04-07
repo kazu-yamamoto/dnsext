@@ -37,7 +37,6 @@ library
                      -- other packages
                      , random
                      , time
-                     , PSQueue
 
                      -- dns packages
                      , psqueues
