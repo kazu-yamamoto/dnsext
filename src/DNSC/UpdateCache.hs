@@ -6,11 +6,10 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Monad (void, forever)
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.Time (UTCTime, getCurrentTime)
 
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
-import DNSC.Cache (Cache, Key, Val, CRSet, Ranking)
+import DNSC.Cache (Cache, Key, Val, CRSet, Ranking, Timestamp, getTimestamp)
 import qualified DNSC.Cache as Cache
 
 data Update
@@ -18,14 +17,14 @@ data Update
   | E
   deriving Show
 
-runUpdate :: UTCTime -> Update -> Cache -> Maybe Cache
+runUpdate :: Timestamp -> Update -> Cache -> Maybe Cache
 runUpdate t u = case u of
   I k ttl crs rank -> Cache.insert t k ttl crs rank
   E                -> Cache.expires t
 
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
-type Dump = IO [(Key, (UTCTime, Val))]
+type Dump = IO [(Key, (Timestamp, Val))]
 
 newCache :: (String -> IO ()) -> IO (Lookup, Insert, Dump)
 newCache putLog = do
@@ -46,16 +45,16 @@ newCache putLog = do
 
   let expires1 = do
         threadDelay $ 1000 * 1000
-        writeChan updateQ =<< (,) <$> getCurrentTime <*> pure E
+        writeChan updateQ =<< (,) <$> getTimestamp <*> pure E
   void $ forkIO $ forever expires1
 
   let lookup_ dom typ cls = do
         cache <- readIORef cacheRef
-        ts <- getCurrentTime
+        ts <- getTimestamp
         return $ Cache.lookup ts dom typ cls cache
 
       insert k ttl crs rank =
-        writeChan updateQ =<< (,) <$> getCurrentTime <*> pure (I k ttl crs rank)
+        writeChan updateQ =<< (,) <$> getTimestamp <*> pure (I k ttl crs rank)
 
       dump = do
         cache <- readIORef cacheRef
