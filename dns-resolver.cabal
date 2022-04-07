@@ -36,7 +36,6 @@ library
 
                      -- other packages
                      , random
-                     , time
 
                      -- dns packages
                      , hourglass
