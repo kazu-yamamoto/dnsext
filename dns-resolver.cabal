@@ -39,6 +39,7 @@ library
                      , time
 
                      -- dns packages
+                     , hourglass
                      , psqueues
                      , iproute
                      , dns
