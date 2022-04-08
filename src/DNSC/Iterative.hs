@@ -216,7 +216,7 @@ reply n typ rd =
       | otherwise  =  withQuery
 
     withQuery = do
-      (msg, rn) <- query_ n typ
+      ((arrs, rn), msg) <- query_ n typ
       let takeX rr
             | rrname rr == rn && rrtype rr == typ   =  Just rr
             | otherwise                             =  Nothing
@@ -224,37 +224,42 @@ reply n typ rd =
             where
               ps = mapMaybe takeX rrs
 
-      lift $ getSectionWithCache rankedAnswer refinesX msg
+      lift $ arrs <$> getSectionWithCache rankedAnswer refinesX msg
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
-query n typ = fst <$> query_ n typ
+query n typ = snd <$> query_ n typ
 
-query_ :: Name -> TYPE -> DNSQuery (DNSMessage, Domain)
-query_ n CNAME = (,) <$> query1 n CNAME <*> pure (B8.pack n)
-query_ n typ = do
-  msg <- query1 n typ
-  cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
+type DRRList = [ResourceRecord] -> [ResourceRecord]
 
-  -- TODO: CNAME 解決の回数制限
-  let resolveCNAME cn = do
-        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg)  $
-          throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-        query_ (B8.unpack cn) typ
-
-  maybe
-    (pure (msg, bn))
-    resolveCNAME
-    =<< liftIO (selectCNAME cnames)
+query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), DNSMessage)
+query_ n CNAME = (,) (id, B8.pack n) <$> query1 n CNAME
+query_ n0 typ  = recCN n0 id
   where
-    bn = B8.pack n
-    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-      | rrname rr == bn         =  Just (cn, rr)
-    takeCNAME _                 =  Nothing
+    -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
+    recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), DNSMessage)
+    recCN n arrs = do
+      msg <- query1 n typ
+      cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
-    refinesCNAME = unzip . mapMaybe takeCNAME
+      -- TODO: CNAME 解決の回数制限
+      let resolveCNAME (cn, cnRR) = do
+            when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+              throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+            recCN (B8.unpack cn) (arrs . (cnRR :))
 
-    selectCNAME = randomizedSelect
+      maybe (pure ((arrs, bn), msg)) resolveCNAME
+        =<< liftIO (selectCNAME cnames)
+        where
+          bn = B8.pack n
+          takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
+            | rrname rr == bn         =  Just (cn, rr)
+          takeCNAME _                 =  Nothing
+
+          refinesCNAME rrs = (ps, map snd ps)
+            where ps = mapMaybe takeCNAME rrs
+
+          selectCNAME = randomizedSelect
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
