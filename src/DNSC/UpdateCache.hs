@@ -25,9 +25,9 @@ runUpdate t u = case u of
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-newCache :: (String -> IO ()) -> IO (Lookup, Insert, IO Cache)
-newCache putLog = do
-  let putLn = putLog . (++ "\n")
+newCache :: ([String] -> IO ()) -> IO (Lookup, Insert, IO Cache)
+newCache putLines = do
+  let putLn = putLines . (:[])
   cacheRef <- newIORef Cache.empty
   updateQ <- newChan
 
