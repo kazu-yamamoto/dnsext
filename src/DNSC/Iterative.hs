@@ -478,12 +478,11 @@ cacheSection rs rank =
   uncurry cacheRRSet $ insertSetFromSection rs rank
   where
     putRRSet ((kp, crs), r) =
-      tracePut $
-      unlines
+      traceLines
       [ "cacheRRSet: " ++ show (kp, r)
       , "  " ++ show crs ]
     putInvalidRRS rrs =
-      tracePut $ unlines $
+      traceLines $
       "invalid RR set:" :
       map (("  " ++) . show) rrs
     cacheRRSet errRRSs rrss = do
@@ -494,13 +493,13 @@ cacheSection rs rank =
 
 ---
 
-tracePut :: String -> ReaderT Context IO ()
-tracePut s = do
-  put <- asks tracePut_
-  liftIO $ put s
+traceLines :: [String] -> ReaderT Context IO ()
+traceLines xs = do
+  putLines <- asks traceLines_
+  liftIO $ putLines xs
 
 traceLn :: String -> ReaderT Context IO ()
-traceLn = tracePut . (++ "\n")
+traceLn = traceLines . (:[])
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
