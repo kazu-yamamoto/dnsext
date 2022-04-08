@@ -191,42 +191,47 @@ reply :: Name -> TYPE -> DNSQuery [ResourceRecord]
 reply n typ =
   maybe withQuery pure =<< lift lookupCache_
   where
-    dom = B8.pack n
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
       | rank <= rankAdditional  =  Nothing
       | otherwise               =  Just rrs
-    lookupCache_ = (replyRank =<<) <$> lookupCache dom typ
+    lookupCache_ = (replyRank =<<) <$> lookupCache (B8.pack n) typ
 
-    withQuery = lift . getSectionWithCache rankedAnswer refinesX =<< query n typ
-      where
-        takeX rr
-          | rrname rr == dom && rrtype rr == typ  =  Just rr
-          | otherwise                             =  Nothing
-        refinesX rrs = (ps, ps)
-          where
-            ps = mapMaybe takeX rrs
+    withQuery = do
+      (msg, rn) <- query_ n typ
+      let takeX rr
+            | rrname rr == rn && rrtype rr == typ   =  Just rr
+            | otherwise                             =  Nothing
+          refinesX rrs = (ps, ps)
+            where
+              ps = mapMaybe takeX rrs
+
+      lift $ getSectionWithCache rankedAnswer refinesX msg
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
-query n CNAME = query1 n CNAME
-query n typ = do
+query n typ = fst <$> query_ n typ
+
+query_ :: Name -> TYPE -> DNSQuery (DNSMessage, Domain)
+query_ n CNAME = (,) <$> query1 n CNAME <*> pure (B8.pack n)
+query_ n typ = do
   msg <- query1 n typ
   cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn = do
         when (any ((== typ) . rrtype) $ DNS.answer msg) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-        query (B8.unpack cn) typ
+        query_ (B8.unpack cn) typ
 
   maybe
-    (pure msg)
+    (pure (msg, bn))
     resolveCNAME
     =<< liftIO (selectCNAME cnames)
   where
+    bn = B8.pack n
     takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-      | rrname rr == B8.pack n  =  Just (cn, rr)
+      | rrname rr == bn         =  Just (cn, rr)
     takeCNAME _                 =  Nothing
 
     refinesCNAME = unzip . mapMaybe takeCNAME
