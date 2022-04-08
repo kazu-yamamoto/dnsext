@@ -7,7 +7,7 @@ import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
-import DNSC.Iterative (newContext, runDNSQuery, query, query1, iterative, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, reply, query, query1, iterative, rootNS)
 
 spec :: Spec
 spec = describe "query" $ do
@@ -16,6 +16,9 @@ spec = describe "query" $ do
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
       runQuery n ty = runDNSQuery (query n ty) cxt
+      runReply n ty ident = do
+        e <- runDNSQuery (reply n ty) cxt
+        return $ replyMessage e ident
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
@@ -76,9 +79,6 @@ spec = describe "query" $ do
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query - txt" $ do
-    result <- runQuery "porttest.dns-oarc.net." TXT
-    printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+  it "reply - txt via cname" $ do
+    result <- runReply "porttest.dns-oarc.net." TXT 0
+    maybe [] DNS.answer result `shouldSatisfy` (not . null)
