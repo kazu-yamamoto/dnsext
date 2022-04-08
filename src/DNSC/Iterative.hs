@@ -88,8 +88,7 @@ domains name
 
 data Context =
   Context
-  { tracePut_ :: String -> IO ()
-  , traceLines_ :: [String] -> IO ()
+  { traceLines_ :: [String] -> IO ()
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
@@ -121,11 +120,10 @@ additional セクションにその名前に対するアドレス (A および A
 
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
-  put <- Log.new trace
-  let putLines = put . unlines
+  putLines <- (. unlines) <$> Log.new trace
   (lk, ins, getCache) <- newCache putLines
   return Context
-    { tracePut_ = put, traceLines_ = putLines, disableV6NS_ = disableV6NS
+    { traceLines_ = putLines, disableV6NS_ = disableV6NS
     , lookup_ = lk, insert_ = ins
     , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
