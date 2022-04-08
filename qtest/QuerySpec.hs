@@ -3,6 +3,7 @@ module QuerySpec where
 import Test.Hspec
 
 import Data.Either (isRight)
+import Data.String (fromString)
 import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
@@ -17,8 +18,8 @@ spec = describe "query" $ do
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
       runQuery n ty = runDNSQuery (query n ty) cxt
       runReply n ty ident = do
-        e <- runDNSQuery (reply n ty) cxt
-        return $ replyMessage e ident
+        e <- runDNSQuery (reply n ty True) cxt
+        return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
