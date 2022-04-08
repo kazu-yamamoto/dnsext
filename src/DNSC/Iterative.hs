@@ -122,9 +122,10 @@ additional セクションにその名前に対するアドレス (A および A
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
   put <- Log.new trace
-  (lk, ins, getCache) <- newCache put
+  let putLines = put . unlines
+  (lk, ins, getCache) <- newCache putLines
   return Context
-    { tracePut_ = put, traceLines_ = put . unlines, disableV6NS_ = disableV6NS
+    { tracePut_ = put, traceLines_ = putLines, disableV6NS_ = disableV6NS
     , lookup_ = lk, insert_ = ins
     , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
