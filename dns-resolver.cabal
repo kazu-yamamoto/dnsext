@@ -19,6 +19,7 @@ extra-source-files:  CHANGELOG.md
 
 library
   exposed-modules:
+                       DNSC.Server
                        DNSC.Iterative
                        DNSC.UpdateCache
                        DNSC.Cache
