@@ -9,7 +9,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
-import DNSC.Cache (Cache, Key, Val, CRSet, Ranking, Timestamp, getTimestamp)
+import DNSC.Cache (Cache, Key, CRSet, Ranking, Timestamp, getTimestamp)
 import qualified DNSC.Cache as Cache
 
 data Update
@@ -24,9 +24,8 @@ runUpdate t u = case u of
 
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
-type Dump = IO [(Key, (Timestamp, Val))]
 
-newCache :: (String -> IO ()) -> IO (Lookup, Insert, Dump)
+newCache :: (String -> IO ()) -> IO (Lookup, Insert, IO Cache)
 newCache putLog = do
   let putLn = putLog . (++ "\n")
   cacheRef <- newIORef Cache.empty
@@ -56,8 +55,4 @@ newCache putLog = do
       insert k ttl crs rank =
         writeChan updateQ =<< (,) <$> getTimestamp <*> pure (I k ttl crs rank)
 
-      dump = do
-        cache <- readIORef cacheRef
-        return $ Cache.dump cache
-
-  return (lookup_, insert, dump)
+  return (lookup_, insert, readIORef cacheRef)
