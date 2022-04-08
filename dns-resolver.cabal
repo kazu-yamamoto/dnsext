@@ -25,6 +25,7 @@ library
                        DNSC.Log
 
   other-modules:
+                       DNSC.DNSUtil
                        DNSC.RootServers
                        DNSC.Concurrent
 
