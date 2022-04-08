@@ -72,6 +72,13 @@ spec = describe "query" $ do
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
+  it "query1 - cname with nx" $ do
+    result <- runQuery1 "media-router-aol1.prod.media.yahoo.com." CNAME
+    printQueryError result
+    isRight result `shouldBe` True
+    let Right msg = result
+    length (DNS.answer msg) `shouldSatisfy` (> 0)
+
   it "query - cname" $ do
     result <- runQuery "porttest.dns-oarc.net." CNAME
     printQueryError result
