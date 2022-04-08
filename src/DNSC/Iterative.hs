@@ -89,6 +89,7 @@ domains name
 data Context =
   Context
   { tracePut_ :: String -> IO ()
+  , traceLines_ :: [String] -> IO ()
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
@@ -123,7 +124,7 @@ newContext trace disableV6NS = do
   put <- Log.new trace
   (lk, ins, getCache) <- newCache put
   return Context
-    { tracePut_ = put, disableV6NS_ = disableV6NS
+    { tracePut_ = put, traceLines_ = put . unlines, disableV6NS_ = disableV6NS
     , lookup_ = lk, insert_ = ins
     , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
