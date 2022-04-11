@@ -19,7 +19,7 @@ module DNSC.Cache (
   insertRRs,
 
   -- * low-level interfaces
-  Cache (Cache), Key (K), Val (V), CRSet (..),
+  Cache (Cache), Key (..), Val (..), CRSet (..),
   extractRRSet,
   queueSize, (<+), alive,
   expire1, member,
@@ -132,8 +132,8 @@ rankedAdditional =
 
 ---
 
-data Key = K CDomain TYPE CLASS deriving (Eq, Ord, Show)
-data Val = V CRSet Ranking deriving Show
+data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
+data Val = Val CRSet Ranking deriving Show
 
 type Timestamp = UTCTime
 
@@ -147,13 +147,13 @@ lookup :: Timestamp
        -> Cache -> Maybe ([ResourceRecord], Ranking)
 lookup now dom = lookup_ now result (fromDomain dom)
   where
-    result k ttl (V crs rank) = (extractRRSet k ttl crs, rank)
+    result k ttl (Val crs rank) = (extractRRSet k ttl crs, rank)
 
 lookup_ :: Timestamp -> (Key -> TTL -> Val -> a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache lifetimes crss) = do
-  let k = K dom typ cls
+  let k = Key dom typ cls
   eol <- k `PSQ.lookup` lifetimes
   ttl <- alive now eol
   rds <- k `Map.lookup` crss
@@ -178,11 +178,11 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
-insert now k@(K dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
+insert now k@(Key dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
   maybe inserted withOldRank lookupRank
   where
     lookupRank =
-      lookup_ now (\_ _ (V _ r) -> r)
+      lookup_ now (\_ _ (Val _ r) -> r)
       dom typ cls c
     withOldRank r = do
       guard $ rank > r
@@ -192,7 +192,7 @@ insert now k@(K dom typ cls) ttl crs rank c@(Cache lifetimes vals) =
       return $
       Cache
       (PSQ.insert k eol lifetimes)
-      (Map.insert k (V crs rank) vals)
+      (Map.insert k (Val crs rank) vals)
 
 expires :: Timestamp -> Cache -> Maybe Cache
 expires now = rec0
@@ -304,7 +304,7 @@ rdTYPE cr = case cr of
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    rdTYPE rd == Just rrtype  =  Just (K (fromDomain rrname) rrtype rrclass, rrttl)
+    rdTYPE rd == Just rrtype  =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key, TTL), CRSet)
@@ -317,7 +317,7 @@ takeRRSet rrs@(_:_) = do
   return (k', rds)
 
 extractRRSet :: Key -> TTL -> CRSet -> [ResourceRecord]
-extractRRSet (K dom ty cls) ttl = map (ResourceRecord (toDomain dom) ty cls ttl) . toRDatas
+extractRRSet (Key dom ty cls) ttl = map (ResourceRecord (toDomain dom) ty cls ttl) . toRDatas
 
 insertSetFromSection :: [ResourceRecord] -> Ranking -> ([[ResourceRecord]], [(((Key, TTL), CRSet), Ranking)])
 insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
