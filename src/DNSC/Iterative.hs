@@ -41,6 +41,7 @@ import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Timestamp, Key, Val, CRSet)
+import qualified DNSC.Cache as Cache
 import DNSC.UpdateCache (newCache)
 
 
@@ -91,6 +92,7 @@ data Context =
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
+  , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
   }
 
@@ -119,8 +121,11 @@ additional セクションにその名前に対するアドレス (A および A
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
   put <- Log.new trace
-  (lk, ins, dump) <- newCache put
-  return Context { tracePut_ = put, disableV6NS_ = disableV6NS, insert_ = ins, lookup_ = lk, dump_ = dump }
+  (lk, ins, getCache) <- newCache put
+  return Context
+    { tracePut_ = put, disableV6NS_ = disableV6NS
+    , lookup_ = lk, insert_ = ins
+    , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
