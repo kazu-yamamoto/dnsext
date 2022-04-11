@@ -372,29 +372,35 @@ selectDelegation (nss, as) = do
       refinesAx rrs = (ps, map snd ps)
         where ps = mapMaybe takeAx rrs
 
-      queryAx
-        | disableV6NS  =  q4
-        | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
+      lookupAx
+        | disableV6NS  =  lk4
+        | otherwise    =  join $ liftIO $ randomizedSelectN (lk46, [lk64])
         where
-          v4f = q4 +? q6 ; v6f = q6 +? q4
-          q4 = lookupOrQueryAx A
-          q6 = lookupOrQueryAx AAAA
-          qx +? qy = do
+          lk46 = lk4 +? lk6
+          lk64 = lk6 +? lk4
+          lk4 = lookupCache ns A
+          lk6 = lookupCache ns AAAA
+          lx +? ly = maybe ly (return . Just) =<< lx
+
+      query1Ax
+        | disableV6NS  =  q4
+        | otherwise    =  join $ liftIO $ randomizedSelectN (q46, [q64])
+        where
+          q46 = q4 +!? q6 ; q64 = q6 +!? q4
+          q4 = querySection A
+          q6 = querySection AAAA
+          qx +!? qy = do
             xs <- qx
             if null xs then qy else pure xs
-          lookupOrQueryAx typ =
-            maybe
-            (lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName typ)
-            (pure . mapMaybe takeAx . fst)
-            =<< lift (lookupCache ns typ)
+          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName typ
           nsName = B8.unpack ns
 
-      query1AXofNS :: DNSQuery (IP, ResourceRecord)
-      query1AXofNS =
+      resolveAXofNS :: DNSQuery (IP, ResourceRecord)
+      resolveAXofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA =<< queryAx
+        =<< liftIO . selectA =<< maybe query1Ax (pure . mapMaybe takeAx . fst) =<< lift lookupAx
 
-  (a, _aRR) <- maybe query1AXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
+  (a, _aRR) <- maybe resolveAXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
 
   return a
