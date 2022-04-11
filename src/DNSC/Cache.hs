@@ -36,11 +36,12 @@ import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
-import Data.Time (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 import Data.IP (IPv4, IPv6)
+import Time.System (timeCurrent)
+import Time.Types (Elapsed (Elapsed))
 import Network.DNS
   (Domain, CLASS, TTL, TYPE (..), RData (..),
    ResourceRecord (ResourceRecord), DNSMessage)
@@ -133,7 +134,7 @@ rankedAdditional =
 data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = Val CRSet Ranking deriving Show
 
-type Timestamp = UTCTime
+type Timestamp = Elapsed
 
 type Cache = OrdPSQ Key Timestamp Val
 
@@ -204,9 +205,14 @@ expire1 now c =
 
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
-  let ttl' = eol `diffUTCTime` now
-  guard $ ttl' >= 1  -- TTL が Word32 なので、負のときに floor すると underflow してしまう
-  return $ floor ttl'
+  let ttl' = eol - now
+      safeToTTL :: Elapsed -> Maybe TTL
+      safeToTTL (Elapsed sec) = do
+        let y = fromIntegral sec
+        guard $ toInteger y == toInteger sec
+        return y
+  guard $ ttl' >= 1
+  safeToTTL ttl'
 
 size :: Cache -> Int
 size = PSQ.size
@@ -231,12 +237,12 @@ minKey = fmap fst . uncons . dumpKeys
 ---
 
 (<+) :: Timestamp -> TTL -> Timestamp
-now <+ ttl = fromIntegral ttl `addUTCTime` now
+now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
 getTimestamp :: IO Timestamp
-getTimestamp = getCurrentTime
+getTimestamp = timeCurrent
 
 toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort

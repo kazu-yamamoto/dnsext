@@ -36,9 +36,9 @@ library
 
                      -- other packages
                      , random
-                     , time
 
                      -- dns packages
+                     , hourglass
                      , psqueues
                      , iproute
                      , dns
