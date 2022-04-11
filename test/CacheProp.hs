@@ -8,6 +8,7 @@ module CacheProp
 
 import Test.QuickCheck
 
+import Control.Monad (when)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (ord)
@@ -16,6 +17,7 @@ import qualified Data.ByteString.Short as Short
 import Network.DNS (TYPE (..), TTL)
 import qualified Network.DNS as DNS
 import Text.Read (readMaybe)
+import System.Exit (exitFailure)
 
 import DNSC.Cache
   (Cache (..), Key (Key), Val (Val), CRSet (..), Timestamp, (<+),
@@ -421,7 +423,12 @@ props =
   where
     nprop name = counterexample ("prop: " ++ name) . label name
 
+runProps :: [Property] -> IO ()
+runProps ps = do
+  rs <- mapM quickCheckResult ps
+  when (not $ all isSuccess rs) $ exitFailure
+
 run :: IO ()
-run = mapM_ quickCheck props
+run = runProps props
 
 -----
