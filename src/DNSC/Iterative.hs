@@ -127,13 +127,21 @@ throwDnsError = throwE . DnsError
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
   | DNS.qOrR flags /= DNS.QR_Response      =  e $ NotResponse (DNS.qOrR flags) msg
-  | DNS.rcode flags /= DNS.NoErr           =  e $ HasError (DNS.rcode flags) msg
+  | DNS.rcode flags `notElem`
+    [DNS.NoErr, DNS.NameErr]               =  e $ HasError (DNS.rcode flags) msg
   | DNS.ednsHeader msg == DNS.InvalidEDNS  =  e $ InvalidEDNS (DNS.ednsHeader msg) msg
   | otherwise                              =  f msg
   where
     flags = DNS.flags $ DNS.header msg
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
+
+handleNX :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
+handleNX e f msg
+  | DNS.rcode flags == DNS.NameErr         =  e $ HasError (DNS.rcode flags) msg
+  | otherwise                              =  f msg
+  where
+    flags = DNS.flags $ DNS.header msg
 
 withNormalized :: Name -> (Name -> DNSQuery a) -> Context -> IO (Either QueryError a)
 withNormalized n action =
@@ -245,7 +253,7 @@ query1 n typ = do
   nss <- iterative rootNS n
   sa <- selectDelegation nss
   lift $ traceLn $ "query1: norec1: " ++ show (sa, n, typ)
-  dnsQueryT $ const $ norec1 sa (B8.pack n) typ
+  dnsQueryT $ const $ (handleNX Left Right =<<) <$> norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
 
