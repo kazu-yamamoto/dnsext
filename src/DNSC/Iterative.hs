@@ -88,7 +88,7 @@ domains name
 
 data Context =
   Context
-  { tracePut_ :: String -> IO ()
+  { traceLines_ :: [String] -> IO ()
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
@@ -120,10 +120,10 @@ additional セクションにその名前に対するアドレス (A および A
 
 newContext :: Bool -> Bool -> IO Context
 newContext trace disableV6NS = do
-  put <- Log.new trace
-  (lk, ins, getCache) <- newCache put
+  putLines <- (. unlines) <$> Log.new trace
+  (lk, ins, getCache) <- newCache putLines
   return Context
-    { tracePut_ = put, disableV6NS_ = disableV6NS
+    { traceLines_ = putLines, disableV6NS_ = disableV6NS
     , lookup_ = lk, insert_ = ins
     , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
@@ -477,12 +477,11 @@ cacheSection rs rank =
   uncurry cacheRRSet $ insertSetFromSection rs rank
   where
     putRRSet ((kp, crs), r) =
-      tracePut $
-      unlines
+      traceLines
       [ "cacheRRSet: " ++ show (kp, r)
       , "  " ++ show crs ]
     putInvalidRRS rrs =
-      tracePut $ unlines $
+      traceLines $
       "invalid RR set:" :
       map (("  " ++) . show) rrs
     cacheRRSet errRRSs rrss = do
@@ -493,13 +492,13 @@ cacheSection rs rank =
 
 ---
 
-tracePut :: String -> ReaderT Context IO ()
-tracePut s = do
-  put <- asks tracePut_
-  liftIO $ put s
+traceLines :: [String] -> ReaderT Context IO ()
+traceLines xs = do
+  putLines <- asks traceLines_
+  liftIO $ putLines xs
 
 traceLn :: String -> ReaderT Context IO ()
-traceLn = tracePut . (++ "\n")
+traceLn = traceLines . (:[])
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
