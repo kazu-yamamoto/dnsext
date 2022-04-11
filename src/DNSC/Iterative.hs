@@ -31,7 +31,8 @@ import System.Random (randomR, getStdRandom)
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..),
-   TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata), DNSMessage)
+   TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
+   DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
@@ -148,9 +149,12 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
-runReply :: Context -> Name -> TYPE -> DNS.Identifier -> IO (Maybe DNSMessage)
-runReply cxt n typ ident =
-  (`replyMessage` ident) <$> withNormalized n (`reply` typ) cxt
+runReply :: Context -> DNSHeader -> NE DNS.Question -> IO (Maybe DNSMessage)
+runReply cxt reqH qs@(DNS.Question bn typ, _) =
+  (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
+  <$> withNormalized (B8.unpack bn) (\n -> reply n typ rd) cxt
+  where
+    rd = DNS.recDesired $ DNS.flags reqH
 
 runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
@@ -164,9 +168,9 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 ---
 
 replyMessage :: Either QueryError [ResourceRecord]
-             -> DNS.Identifier
+             -> DNS.Identifier -> [DNS.Question]
              -> Maybe DNSMessage
-replyMessage eas ident =
+replyMessage eas ident rqs =
   either queryError (Just . message DNS.NoErr) eas
   where
     dnsError de = message <$> rcodeDNSError de <*> pure []
@@ -190,14 +194,15 @@ replyMessage eas ident =
       { DNS.header = h { DNS.identifier = ident
                        , DNS.flags = f { DNS.authAnswer = False, DNS.rcode = rcode } }
       , DNS.answer = rrs
+      , DNS.question = rqs
       }
     res = DNS.defaultResponse
     h = DNS.header res
     f = DNS.flags h
 
-reply :: Name -> TYPE -> DNSQuery [ResourceRecord]
-reply n typ =
-  maybe withQuery pure =<< lift lookupCache_
+reply :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
+reply n typ rd =
+  maybe rdQuery pure =<< lift lookupCache_
   where
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
@@ -205,6 +210,10 @@ reply n typ =
       | rank <= rankAdditional  =  Nothing
       | otherwise               =  Just rrs
     lookupCache_ = (replyRank =<<) <$> lookupCache (B8.pack n) typ
+
+    rdQuery
+      | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
+      | otherwise  =  withQuery
 
     withQuery = do
       (msg, rn) <- query_ n typ
