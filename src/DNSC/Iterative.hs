@@ -1,5 +1,6 @@
 module DNSC.Iterative (
   -- * query interfaces
+  runReply,
   runQuery,
   runQuery1,
   newContext,
@@ -10,9 +11,11 @@ module DNSC.Iterative (
 
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
+  replyMessage, reply,
   query, query1, iterative,
   ) where
 
+import Control.Arrow ((&&&))
 import Control.Monad (when, join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -20,7 +23,8 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Maybe (mapMaybe, listToMaybe)
-import Data.List (isSuffixOf, unfoldr, uncons, sort, sortOn)
+import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import qualified Data.Set as Set
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 import System.Random (randomR, getStdRandom)
 
@@ -31,6 +35,9 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
+import DNSC.Cache
+  (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
+   insertSetFromSection)
 
 
 type Name = String
@@ -133,6 +140,10 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
+runReply :: Context -> Name -> TYPE -> DNS.Identifier -> IO (Maybe DNSMessage)
+runReply cxt n typ ident =
+  (`replyMessage` ident) <$> withNormalized n (`reply` typ) cxt
+
 runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
@@ -144,28 +155,81 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
 
+replyMessage :: Either QueryError [ResourceRecord]
+             -> DNS.Identifier
+             -> Maybe DNSMessage
+replyMessage eas ident =
+  either queryError (Just . message DNS.NoErr) eas
+  where
+    dnsError de = message <$> rcodeDNSError de <*> pure []
+    rcodeDNSError e = case e of
+      DNS.FormatError       ->  Just DNS.FormatErr
+      DNS.ServerFailure     ->  Just DNS.ServFail
+      DNS.NameError         ->  Just DNS.NameErr
+      DNS.NotImplemented    ->  Just DNS.NotImpl
+      DNS.OperationRefused  ->  Just DNS.Refused
+      DNS.BadOptRecord      ->  Just DNS.BadVers
+      _                     ->  Nothing
+
+    queryError qe = case qe of
+      DnsError e      ->  dnsError e
+      NotResponse {}  ->  Nothing
+      HasError rc _m  ->  Just $ message rc []
+      InvalidEDNS {}  ->  Nothing
+
+    message rcode rrs =
+      res
+      { DNS.header = h { DNS.identifier = ident
+                       , DNS.flags = f { DNS.authAnswer = False, DNS.rcode = rcode } }
+      , DNS.answer = rrs
+      }
+    res = DNS.defaultResponse
+    h = DNS.header res
+    f = DNS.flags h
+
+reply :: Name -> TYPE -> DNSQuery [ResourceRecord]
+reply n typ =
+  maybe withQuery pure =<< lift lookupCache_
+  where
+    dom = B8.pack n
+    replyRank (rrs, rank)
+      -- 最も低い ranking は reply の answer に利用しない
+      -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
+      | rank <= rankAdditional  =  Nothing
+      | otherwise               =  Just rrs
+    lookupCache_ = (replyRank =<<) <$> lookupCache dom typ
+
+    withQuery = lift . getSectionWithCache rankedAnswer refinesX =<< query n typ
+      where
+        takeX rr
+          | rrname rr == dom && rrtype rr == typ  =  Just rr
+          | otherwise                             =  Nothing
+        refinesX rrs = (ps, ps)
+          where
+            ps = mapMaybe takeX rrs
+
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery DNSMessage
 query n CNAME = query1 n CNAME
 query n typ = do
   msg <- query1 n typ
-  let answers = DNS.answer msg
+  cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
   -- TODO: CNAME 解決の回数制限
-  let resolveCNAME cn cnRR = do
-        when (any ((== typ) . rrtype) answers) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-        x <- query (B8.unpack cn) typ
-        lift $ cacheRR cnRR
-        return x
+  let resolveCNAME cn = do
+        when (any ((== typ) . rrtype) $ DNS.answer msg) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+        query (B8.unpack cn) typ
 
   maybe
     (pure msg)
-    (uncurry resolveCNAME)
-    =<< liftIO (selectCNAME $ mapMaybe takeCNAME answers)
+    resolveCNAME
+    =<< liftIO (selectCNAME cnames)
   where
     takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
       | rrname rr == B8.pack n  =  Just (cn, rr)
     takeCNAME _                 =  Nothing
+
+    refinesCNAME = unzip . mapMaybe takeCNAME
 
     selectCNAME = randomizedSelect
 
@@ -175,9 +239,8 @@ query1 n typ = do
   lift $ traceLn $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectDelegation nss
-  msg <- dnsQueryT $ const $ norec1 sa (B8.pack n) typ
-  lift $ mapM_ cacheRR $ DNS.answer msg
-  return msg
+  lift $ traceLn $ "query1: norec1: " ++ show (sa, n, typ)
+  dnsQueryT $ const $ norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
 
@@ -189,8 +252,10 @@ rootNS :: Delegation
 rootNS =
   maybe
   (error "rootNS: bad configuration.")
-  id
-  $ uncurry (authorityNS_ (B8.pack ".")) rootServers
+  (flip (,) as)
+  $ uncons $ nsList (B8.pack ".") (,) ns
+  where
+    (ns, as) = rootServers
 
 -- 反復検索でドメインの NS のアドレスを得る
 iterative :: Delegation -> Name -> DNSQuery Delegation
@@ -207,28 +272,47 @@ iterative_ nss (x:xs) =
   where
     name = B8.pack x
 
-    step :: Delegation -> DNSQuery (Maybe Delegation)
-    step nss_ = do
+    lookupNS :: ReaderT Context IO (Maybe Delegation)
+    lookupNS = do
+      m <- lookupCache name NS
+      return $ do
+        (rrs, _) <- m
+        ns <- uncons $ nsList name (,) rrs
+        Just (ns, [])
+
+    stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
+    stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
-      lift $ traceLn $ "iterative: " ++ show (sa, name)
+      lift $ traceLn $ "iterative: norec1: " ++ show (sa, name, A)
       msg <- dnsQueryT $ const $ norec1 sa name A
-      let result = authorityNS name msg
-      lift $ maybe (pure ()) cacheAuthNS result
-      return result
+      lift $ delegationWithCache name msg
 
--- 選択可能な NS が有るときだけ Just
-authorityNS :: Domain -> DNSMessage -> Maybe Delegation
-authorityNS dom msg = authorityNS_ dom (DNS.authority msg) (DNS.additional msg)
+    step :: Delegation -> DNSQuery (Maybe Delegation)
+    step nss_ =
+      maybe (stepQuery nss_) (return . Just) =<< lift lookupNS
 
-{-# ANN authorityNS_ ("HLint: ignore Use tuple-section") #-}
-authorityNS_ :: Domain -> [ResourceRecord] -> [ResourceRecord] -> Maybe Delegation
-authorityNS_ dom auths adds =
-  (\x -> (x, adds)) <$> uncons nss
+delegationWithCache :: Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
+delegationWithCache dom msg =
+  -- 選択可能な NS が有るときだけ Just
+  mapM action $ uncons nss
   where
-    nss = mapMaybe takeNS auths
+    action xs = do
+      cacheNS
+      cacheAdds
+      return (xs, adds)
+    (nss, cacheNS) = getSection rankedAuthority refinesNS msg
+      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
+    (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
+      where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
+            match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
+            nsSet = Set.fromList $ map fst nss
 
+nsList :: Domain -> (Domain ->  ResourceRecord -> a)
+       -> [ResourceRecord] -> [a]
+nsList dom h = mapMaybe takeNS
+  where
     takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns }
-      | rrname rr == dom  =  Just (ns, rr)
+      | rrname rr == dom  =  Just $ h ns rr
     takeNS _              =  Nothing
 
 norec1 :: IP -> Domain -> TYPE -> IO (Either QueryError DNSMessage)
@@ -262,22 +346,30 @@ selectDelegation (nss, as) = do
           rrname rr == ns  =  Just (IPv6 ipv6, rr)
       takeAx _             =  Nothing
 
+      refinesAx rrs = (ps, map snd ps)
+        where ps = mapMaybe takeAx rrs
+
       queryAx
         | disableV6NS  =  q4
         | otherwise    =  join $ liftIO $ randomizedSelectN (v4f, [v6f])
         where
           v4f = q4 +? q6 ; v6f = q6 +? q4
-          q4 = DNS.answer <$> query1 nsName A
-          q6 = DNS.answer <$> query1 nsName AAAA
+          q4 = lookupOrQueryAx A
+          q6 = lookupOrQueryAx AAAA
           qx +? qy = do
             xs <- qx
             if null xs then qy else pure xs
+          lookupOrQueryAx typ =
+            maybe
+            (lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName typ)
+            (pure . mapMaybe takeAx . fst)
+            =<< lift (lookupCache ns typ)
           nsName = B8.unpack ns
 
       query1AXofNS :: DNSQuery (IP, ResourceRecord)
       query1AXofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA . mapMaybe takeAx =<< queryAx
+        =<< liftIO . selectA =<< queryAx
 
   (a, _aRR) <- maybe query1AXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
   lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
@@ -308,41 +400,48 @@ randomizedSelect
       ix <- getStdRandom $ randomR (0, length xs - 1)
       return $ Just $ xs !! ix
 
-cacheRR :: ResourceRecord -> ReaderT Context IO ()
-cacheRR rr = do
-  traceLn $ "cacheRR: " ++ show rr
+---
 
-cacheAuthNS :: Delegation -> ReaderT Context IO ()
-cacheAuthNS (nss0@((_, rr), _), as0)
-  | rrname rr == B8.pack "."  =  pure ()
-  | otherwise                 =
-    do cacheNS
-       cacheAx
-  where
-    nss1 = uncurry (:) nss0
-    cacheNS = mapM_ (cacheRR . snd) nss1
-    as = filter isA as0
-    a4s = filter is4A as0
-    isA ResourceRecord { rrtype = A, rdata = RD_A {} }  =  True
-    isA _                                               =  False
-    is4A ResourceRecord { rrtype = AAAA, rdata = RD_AAAA {} }  =  True
-    is4A _                                                     =  False
-    cacheAx = do
-      let nss = map fst nss1
-          cacheRRs = mapM_ cacheRR
-      mapM_ cacheRRs $ matchAx nss as ++ matchAx nss a4s
+lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
+lookupCache dom typ = do
+  traceLn $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN]
+  return Nothing
 
-matchAx :: [Domain] -> [ResourceRecord] -> [[ResourceRecord]]
-matchAx ds0 rs0 =
-  filter (not . null)
-  $ rec_ id id (sort ds0) (sortOn rrname rs0)
+getSection :: (m -> Maybe ([ResourceRecord], Ranking))
+           -> ([ResourceRecord] -> (a, [ResourceRecord]))
+           -> m -> (a, ReaderT Context IO ())
+getSection getP refines msg =
+  maybe (fst $ refines [], return ()) withSection $ getP msg
   where
-    rec_ res _       []      _        =  res []
-    rec_ res as     (_:_)       []    =  res [as []]
-    rec_ res as dds@(d:ds) rrs@(r:rs)
-      | d < rrname r  =  rec_ (res . (as []:))  id         ds  rrs
-      | d > rrname r  =  rec_  res              as         dds rs
-      | otherwise     =  rec_  res             (as . (r:)) dds rs
+    withSection (rrs0, rank) = (result, cacheSection srrs rank)
+      where (result, srrs) = refines rrs0
+
+getSectionWithCache :: (m -> Maybe ([ResourceRecord], Ranking))
+                    -> ([ResourceRecord] -> (a, [ResourceRecord]))
+                    -> m -> ReaderT Context IO a
+getSectionWithCache get refines msg = do
+  let (res, doCache) = getSection get refines msg
+  doCache
+  return res
+
+cacheSection :: [ResourceRecord] -> Ranking -> ReaderT Context IO ()
+cacheSection rs rank =
+  uncurry cacheRRSet $ insertSetFromSection rs rank
+  where
+    putRRSet ((kp, crs), r) =
+      tracePut $
+      unlines
+      [ "cacheRRSet: " ++ show (kp, r)
+      , "  " ++ show crs ]
+    putInvalidRRS rrs =
+      tracePut $ unlines $
+      "invalid RR set:" :
+      map (("  " ++) . show) rrs
+    cacheRRSet errRRSs rrss = do
+      mapM_ putInvalidRRS errRRSs
+      mapM_ putRRSet rrss
+
+---
 
 tracePut :: String -> ReaderT Context IO ()
 tracePut s = do
