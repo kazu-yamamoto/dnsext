@@ -92,6 +92,10 @@ spec = describe "query" $ do
     printQueryError result
     isRight result `shouldBe` True
 
+  it "reply - a accumulated via cname" $ do
+    result <- runReply "media-router-aol1.prod.media.yahoo.com." A 0
+    maybe 0 (length . DNS.answer) result `shouldSatisfy` (> 1)
+
   it "reply - txt via cname" $ do
     result <- runReply "porttest.dns-oarc.net." TXT 0
     maybe [] DNS.answer result `shouldSatisfy` (not . null)
