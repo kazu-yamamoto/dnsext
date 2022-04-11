@@ -20,7 +20,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
 import DNSC.Cache
-  (Cache (..), Key (Key), Val (Val), CRSet (..), Timestamp, (<+), getTimestamp,
+  (Cache, Key (Key), Val (Val), CRSet (..), Timestamp, (<+), getTimestamp,
    Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
@@ -264,13 +264,6 @@ rrsetExtractTake (ACRPair (k, crs)) (ATTL ttl) = takeRRSet (extractRRSet k ttl c
 sizeEmpty :: Property
 sizeEmpty = once $ Cache.size Cache.empty === 0
 
--- forall cache . sizeConsistent cache
-sizeConsistent :: AUpdates -> Property
-sizeConsistent (AUpdates us) =
-  Cache.consistent cache .&&. Cache.queueSize cache === sz .&&. length (Cache.dump cache) === sz
-  where cache = foldUpdates us Cache.empty
-        sz = Cache.size cache
-
 -- size of cache after new key is inserted
 sizeNewInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
 sizeNewInserted (ACRPair (k, crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
@@ -402,7 +395,6 @@ props =
   , nprop "RRSet - extract . take is just"  rrsetExtractTake
 
   , nprop "size - empty"                    sizeEmpty
-  , nprop "size - consistent"               sizeConsistent
   , nprop "size - new inserted"             sizeNewInserted
   , nprop "size - inserted"                 sizeInserted
   , nprop "size - expire1 with min-key"     sizeExpire1MinKey
