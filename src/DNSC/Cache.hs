@@ -9,6 +9,7 @@ module DNSC.Cache (
   expires,
   size,
   Timestamp,
+  getTimestamp,
 
   Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
   rankedAnswer, rankedAuthority, rankedAdditional,
@@ -36,7 +37,7 @@ import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
-import Data.Time (UTCTime, addUTCTime, diffUTCTime)
+import Data.Time (UTCTime, addUTCTime, diffUTCTime, getCurrentTime)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 
@@ -254,6 +255,9 @@ minKey = fmap fst . uncons . dumpKeys
 now <+ ttl = fromIntegral ttl `addUTCTime` now
 
 infixl 6 <+
+
+getTimestamp :: IO Timestamp
+getTimestamp = getCurrentTime
 
 toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort
