@@ -238,7 +238,8 @@ query_ n typ = do
 
   -- TODO: CNAME 解決の回数制限
   let resolveCNAME cn = do
-        when (any ((== typ) . rrtype) $ DNS.answer msg) $ throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg)  $
+          throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
         query_ (B8.unpack cn) typ
 
   maybe
