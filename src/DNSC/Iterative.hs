@@ -37,7 +37,6 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 import DNSC.RootServers (rootServers)
-import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Timestamp, Key, Val, CRSet)
@@ -118,9 +117,8 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
-newContext :: Bool -> Bool -> IO Context
-newContext trace disableV6NS = do
-  putLines <- (. unlines) <$> Log.new trace
+newContext :: ([String] -> IO ()) -> Bool -> IO Context
+newContext putLines disableV6NS = do
   (lk, ins, getCache) <- newCache putLines
   return Context
     { traceLines_ = putLines, disableV6NS_ = disableV6NS
