@@ -26,6 +26,7 @@ library
 
   other-modules:
                        DNSC.RootServers
+                       DNSC.Concurrent
 
   build-depends:
                      -- GHC packages
