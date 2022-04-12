@@ -7,14 +7,14 @@ import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Monad (void, forever, when)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 
-new :: Bool -> IO (String -> IO ())
+new :: Bool -> IO ([String] -> IO ())
 new trace = do
   when trace $ hSetBuffering stdout LineBuffering
 
   logQ <- newChan
-  let flush1 = putStr =<< readChan logQ
+  let flush1 = putStr . unlines =<< readChan logQ
   void $ forkIO $ forever flush1
 
-  let putLog = when trace . writeChan logQ
+  let traceLines = when trace . writeChan logQ
 
-  return putLog
+  return traceLines
