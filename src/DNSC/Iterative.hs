@@ -159,7 +159,7 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
-runReply :: Context -> DNSHeader -> NE DNS.Question -> IO (Maybe DNSMessage)
+runReply :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 runReply cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
   <$> withNormalized (B8.unpack bn) (\n -> reply n typ rd) cxt
@@ -179,25 +179,25 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 replyMessage :: Either QueryError [ResourceRecord]
              -> DNS.Identifier -> [DNS.Question]
-             -> Maybe DNSMessage
+             -> Either String DNSMessage
 replyMessage eas ident rqs =
-  either queryError (Just . message DNS.NoErr) eas
+  either queryError (Right . message DNS.NoErr) eas
   where
     dnsError de = message <$> rcodeDNSError de <*> pure []
     rcodeDNSError e = case e of
-      DNS.FormatError       ->  Just DNS.FormatErr
-      DNS.ServerFailure     ->  Just DNS.ServFail
-      DNS.NameError         ->  Just DNS.NameErr
-      DNS.NotImplemented    ->  Just DNS.NotImpl
-      DNS.OperationRefused  ->  Just DNS.Refused
-      DNS.BadOptRecord      ->  Just DNS.BadVers
-      _                     ->  Nothing
+      DNS.FormatError       ->  Right DNS.FormatErr
+      DNS.ServerFailure     ->  Right DNS.ServFail
+      DNS.NameError         ->  Right DNS.NameErr
+      DNS.NotImplemented    ->  Right DNS.NotImpl
+      DNS.OperationRefused  ->  Right DNS.Refused
+      DNS.BadOptRecord      ->  Right DNS.BadVers
+      _                     ->  Left $ "DNSError: " ++ show e
 
     queryError qe = case qe of
       DnsError e      ->  dnsError e
-      NotResponse {}  ->  Nothing
-      HasError rc _m  ->  Just $ message rc []
-      InvalidEDNS {}  ->  Nothing
+      NotResponse {}  ->  Left $ "qORr is not response"
+      HasError rc _m  ->  Right $ message rc []
+      InvalidEDNS {}  ->  Left "Invalid EDNS"
 
     message rcode rrs =
       res
