@@ -99,14 +99,14 @@ spec = describe "query" $ do
     threadDelay $ 2 * 1000 * 1000
     m2 <- runReply "5.0.130.210.in-addr.arpa." PTR 0
     let getTTL = fmap (DNS.rrttl . fst) . uncons . DNS.answer
-        t1 = getTTL =<< m1
-        t2 = getTTL =<< m2
-    (>) <$> t1 <*> t2 `shouldBe` Just True
+        t1 = maybe (Left "t1: no RR") return . getTTL =<< m1
+        t2 = maybe (Left "t2: no RR") return . getTTL =<< m2
+    (>) <$> t1 <*> t2 `shouldBe` Right True
 
   it "reply - a accumulated via cname" $ do
     result <- runReply "media-router-aol1.prod.media.yahoo.com." A 0
-    maybe 0 (length . DNS.answer) result `shouldSatisfy` (> 1)
+    either (const 0) (length . DNS.answer) result `shouldSatisfy` (> 1)
 
   it "reply - txt via cname" $ do
     result <- runReply "porttest.dns-oarc.net." TXT 0
-    maybe [] DNS.answer result `shouldSatisfy` (not . null)
+    either (const []) DNS.answer result `shouldSatisfy` (not . null)
