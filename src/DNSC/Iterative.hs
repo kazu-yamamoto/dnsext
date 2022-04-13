@@ -88,7 +88,7 @@ domains name
 
 data Context =
   Context
-  { traceLines_ :: [String] -> IO ()
+  { logLines_ :: Log.Level -> [String] -> IO ()
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
@@ -119,10 +119,10 @@ additional セクションにその名前に対するアドレス (A および A
  -}
 
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> IO Context
-newContext logLines disableV6NS = do
-  (lk, ins, getCache) <- newCache logLines
+newContext putLines disableV6NS = do
+  (lk, ins, getCache) <- newCache putLines
   return Context
-    { traceLines_ = logLines Log.INFO, disableV6NS_ = disableV6NS
+    { logLines_ = putLines, disableV6NS_ = disableV6NS
     , lookup_ = lk, insert_ = ins
     , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
 
@@ -274,10 +274,10 @@ query_ n0 typ  = recCN n0 id
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
 query1 n typ = do
-  lift $ traceLn $ "query1: " ++ show (n, typ)
+  lift $ logLn Log.INFO $ "query1: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectDelegation nss
-  lift $ traceLn $ "query1: norec1: " ++ show (sa, n, typ)
+  lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
   dnsQueryT $ const $ (handleNX Left Right =<<) <$> norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
@@ -321,7 +321,7 @@ iterative_ nss (x:xs) =
     stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
     stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
-      lift $ traceLn $ "iterative: norec1: " ++ show (sa, name, A)
+      lift $ logLn Log.INFO $ "iterative: norec1: " ++ show (sa, name, A)
       msg <- dnsQueryT $ const $ norec1 sa name A
       lift $ delegationWithCache name msg
 
@@ -416,7 +416,7 @@ selectDelegation (nss, as) = do
         =<< liftIO . selectA =<< maybe query1Ax (pure . mapMaybe takeAx . fst) =<< lift lookupAx
 
   (a, _aRR) <- maybe resolveAXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
-  lift $ traceLn $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
+  lift $ logLn Log.DEBUG $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
 
   return a
 
@@ -450,7 +450,7 @@ lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ra
 lookupCache dom typ = do
   lookupRRs <- asks lookup_
   result <- liftIO $ lookupRRs dom typ DNS.classIN
-  traceLn $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
+  logLn Log.DEBUG $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
                                         maybe "miss" (\ (_, Down rank) -> "hit: " ++ show rank) result]
   return result
 
@@ -476,11 +476,11 @@ cacheSection rs rank =
   uncurry cacheRRSet $ insertSetFromSection rs rank
   where
     putRRSet ((kp, crs), r) =
-      traceLines
+      logLines Log.DEBUG
       [ "cacheRRSet: " ++ show (kp, r)
       , "  " ++ show crs ]
     putInvalidRRS rrs =
-      traceLines $
+      logLines Log.NOTICE $
       "invalid RR set:" :
       map (("  " ++) . show) rrs
     cacheRRSet errRRSs rrss = do
@@ -491,13 +491,13 @@ cacheSection rs rank =
 
 ---
 
-traceLines :: [String] -> ReaderT Context IO ()
-traceLines xs = do
-  putLines <- asks traceLines_
-  liftIO $ putLines xs
+logLines :: Log.Level -> [String] -> ReaderT Context IO ()
+logLines level xs = do
+  putLines <- asks logLines_
+  liftIO $ putLines level xs
 
-traceLn :: String -> ReaderT Context IO ()
-traceLn = traceLines . (:[])
+logLn :: Log.Level -> String -> ReaderT Context IO ()
+logLn level = logLines level . (:[])
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
