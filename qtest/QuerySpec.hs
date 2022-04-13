@@ -15,7 +15,7 @@ import DNSC.Iterative (newContext, runDNSQuery, replyMessage, reply, query, quer
 spec :: Spec
 spec = describe "query" $ do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
-  cxt <- runIO $ newContext (const $ pure ()) disableV6NS
+  cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
       runQuery n ty = runDNSQuery (query n ty) cxt
