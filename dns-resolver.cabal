@@ -39,6 +39,7 @@ library
                      , random
 
                      -- dns packages
+                     , async
                      , hourglass
                      , psqueues
                      , iproute
