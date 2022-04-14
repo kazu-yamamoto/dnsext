@@ -5,10 +5,12 @@ module DNSC.Concurrent (
   forksLoop,
   ) where
 
-import Control.Concurrent (forkIO)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Monad (unless, replicateM_)
 import Data.IORef (newIORef, readIORef, writeIORef)
+
+import Control.Concurrent.Async (async, wait)
+
 
 forkProcessQ :: (a -> IO ())
            -> IO (a -> IO (), IO ())
@@ -39,7 +41,6 @@ forksLoop n body = do
 
 forksWithWait :: [IO ()] -> IO (IO ())
 forksWithWait bodies = do
-  waitQ <- newChan
-  sequence_ [ forkIO $ body *> writeChan waitQ () | body <- bodies ]
-  let waitQuit = replicateM_ (length bodies) $ readChan waitQ
+  ts <- mapM async bodies
+  let waitQuit = mapM_ wait ts
   return waitQuit
