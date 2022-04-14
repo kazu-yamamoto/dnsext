@@ -3,7 +3,7 @@ module DNSC.Concurrent (
   forkLoop,
   forksProcessQ,
   forksLoop,
-  )where
+  ) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
