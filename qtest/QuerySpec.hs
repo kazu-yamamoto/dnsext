@@ -6,7 +6,7 @@ import Control.Concurrent (threadDelay)
 import Data.Either (isRight)
 import Data.List (uncons)
 import Data.String (fromString)
-import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, TXT, PTR))
+import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
@@ -106,7 +106,3 @@ spec = describe "query" $ do
   it "reply - a accumulated via cname" $ do
     result <- runReply "media-router-aol1.prod.media.yahoo.com." A 0
     either (const 0) (length . DNS.answer) result `shouldSatisfy` (> 1)
-
-  it "reply - txt via cname" $ do
-    result <- runReply "porttest.dns-oarc.net." TXT 0
-    either (const []) DNS.answer result `shouldSatisfy` (not . null)
