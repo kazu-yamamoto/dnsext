@@ -19,12 +19,14 @@ extra-source-files:  CHANGELOG.md
 
 library
   exposed-modules:
+                       DNSC.Server
                        DNSC.Iterative
                        DNSC.UpdateCache
                        DNSC.Cache
                        DNSC.Log
 
   other-modules:
+                       DNSC.DNSUtil
                        DNSC.RootServers
                        DNSC.Concurrent
 
@@ -40,6 +42,7 @@ library
 
                      -- dns packages
                      , async
+                     , network
                      , hourglass
                      , psqueues
                      , iproute
@@ -48,6 +51,14 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall
+
+Executable cache-server
+  main-is:             server.hs
+  build-depends:       base
+                     , dns-resolver
+  hs-source-dirs:      mains
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -with-rtsopts=-N2 -with-rtsopts=-qn1
 
 Test-Suite cache-test
   type:                exitcode-stdio-1.0
