@@ -1,7 +1,7 @@
 module DNSC.Concurrent (
-  forkProcessQ,
+  forkConsumeQueue,
   forkLoop,
-  forksProcessQ,
+  forksConsumeQueue,
   forksLoop,
   ) where
 
@@ -12,16 +12,16 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Control.Concurrent.Async (async, wait)
 
 
-forkProcessQ :: (a -> IO ())
-           -> IO (a -> IO (), IO ())
-forkProcessQ = forksProcessQ 1
+forkConsumeQueue :: (a -> IO ())
+                 -> IO (a -> IO (), IO ())
+forkConsumeQueue = forksConsumeQueue 1
 
 forkLoop :: IO () -> IO (IO ())
 forkLoop = forksLoop 1
 
-forksProcessQ :: Int -> (a -> IO ())
-              -> IO (a -> IO (), IO ())
-forksProcessQ n body = do
+forksConsumeQueue :: Int -> (a -> IO ())
+                  -> IO (a -> IO (), IO ())
+forksConsumeQueue n body = do
   inQ <- newChan
   let enqueue = writeChan inQ . Just
       issueQuit = replicateM_ n $ writeChan inQ Nothing
