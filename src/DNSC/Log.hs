@@ -6,7 +6,7 @@ module DNSC.Log (
 import Control.Monad (when)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 
-import DNSC.Concurrent (forkProcessQ)
+import DNSC.Concurrent (forkConsumeQueue)
 
 
 data Level
@@ -20,7 +20,7 @@ new :: Level -> IO (Level -> [String] -> IO (), IO ())
 new level = do
   hSetBuffering stdout LineBuffering
 
-  (enqueue, quit) <- forkProcessQ $ putStr . unlines
+  (enqueue, quit) <- forkConsumeQueue $ putStr . unlines
   let logLines lv = when (level <= lv) . enqueue
 
   return (logLines, quit)
