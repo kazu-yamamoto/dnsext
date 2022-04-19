@@ -7,7 +7,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
-import DNSC.Concurrent
+import DNSC.Concurrent (forkLoop, forkConsumeQueue)
 import qualified DNSC.Log as Log
 import DNSC.Cache (Cache, Key, CRSet, Ranking, Timestamp, getTimestamp)
 import qualified DNSC.Cache as Cache
@@ -38,7 +38,7 @@ newCache putLines = do
                 I {}  ->  return ()
                 E     ->  putLn Log.NOTICE $ show ts ++ ": some records expired: size = " ++ show (Cache.size c)
         maybe (pure ()) updateRef $ runUpdate ts u cache
-  (enqueueU, quitU) <- forkProcessQ update1
+  (enqueueU, quitU) <- forkConsumeQueue update1
 
   let expires1 = do
         threadDelay $ 1000 * 1000
