@@ -79,6 +79,7 @@ nsList =
 
 ts0 :: Timestamp
 ts0 = unsafePerformIO getTimestamp
+{-# NOINLINE ts0 #-}
 
 -----
 
