@@ -10,13 +10,14 @@ import Data.Functor (($>))
 import Data.Ord (Down (..))
 import Data.List (uncons, isInfixOf)
 import qualified Data.ByteString.Char8 as B8
+import System.IO.Error (tryIOError)
 
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
-import DNSC.Concurrent (forkConsumeQueue, forksConsumeQueue)
+import DNSC.Concurrent (forksConsumeQueueWith)
 import DNSC.DNSUtil (recvFrom, sendTo)
 import qualified DNSC.Log as Log
 import DNSC.Iterative (Context (..), newContext, runReply)
@@ -50,9 +51,12 @@ bind level disableV6NS para port hosts = do
 
   sas <- udpSockets port hosts
 
-  (enqueueResp, quitResp) <- forkConsumeQueue (sendResponse sendTo cxt)
-  (enqueueReq, quitProc)  <- forksConsumeQueue para $ processRequest cxt enqueueResp
-  sequence_ [ forkIO $ forever $ recvRequest recvFrom cxt enqueueReq sock | (sock, _) <- sas ]
+  let putLn lv = putLines lv . (:[])
+
+  (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse sendTo cxt)
+  (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
+  let handleRecv = either (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show) return
+  sequence_ [ forkIO $ forever $ handleRecv =<< tryIOError (recvRequest recvFrom cxt enqueueReq sock) | (sock, _) <- sas ]
 
   mapM_ (uncurry S.bind) sas
 
