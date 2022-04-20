@@ -17,7 +17,7 @@ forkConsumeQueue :: (a -> IO ())
 forkConsumeQueue = forksConsumeQueue 1
 
 forkLoop :: IO () -> IO (IO ())
-forkLoop = forksLoop 1
+forkLoop = forksLoop . (:[])
 
 forksConsumeQueue :: Int -> (a -> IO ())
                   -> IO (a -> IO (), IO ())
@@ -30,13 +30,13 @@ forksConsumeQueue n body = do
   waitQuit <- forksWithWait $ replicate n loop
   return (enqueue, issueQuit *> waitQuit)
 
-forksLoop :: Int -> IO () -> IO (IO ())
-forksLoop n body = do
+forksLoop :: [IO ()] -> IO (IO ())
+forksLoop bodies = do
   qref <- newIORef False
-  let loop = do
+  let loop body = do
         isQuit <- readIORef qref
-        unless isQuit $ body *> loop
-  waitQuit <- forksWithWait $ replicate n loop
+        unless isQuit $ body *> loop body
+  waitQuit <- forksWithWait $ map loop bodies
   return $ writeIORef qref True *> waitQuit
 
 forksWithWait :: [IO ()] -> IO (IO ())
