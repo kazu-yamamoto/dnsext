@@ -196,7 +196,7 @@ replyMessage eas ident rqs =
 
     queryError qe = case qe of
       DnsError e      ->  dnsError e
-      NotResponse {}  ->  Left $ "qORr is not response"
+      NotResponse {}  ->  Left "qORr is not response"
       HasError rc _m  ->  Right $ message rc []
       InvalidEDNS {}  ->  Left "Invalid EDNS"
 
@@ -287,6 +287,7 @@ type NE a = (a, [a])
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
 
 {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
+{-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
 rootNS :: Delegation
 rootNS =
   maybe

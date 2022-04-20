@@ -8,7 +8,7 @@ module CacheProp
 
 import Test.QuickCheck
 
-import Control.Monad (when)
+import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (ord)
@@ -417,7 +417,7 @@ props =
 runProps :: [Property] -> IO ()
 runProps ps = do
   rs <- mapM quickCheckResult ps
-  when (not $ all isSuccess rs) $ exitFailure
+  unless (all isSuccess rs) exitFailure
 
 run :: IO ()
 run = runProps props
