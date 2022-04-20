@@ -3,11 +3,14 @@ module DNSC.Concurrent (
   forkLoop,
   forksConsumeQueue,
   forksLoop,
+  forksConsumeQueueWith,
+  forksLoopWith,
   ) where
 
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
-import Control.Monad (unless, replicateM_)
+import Control.Monad (unless, replicateM_, (<=<))
 import Data.IORef (newIORef, readIORef, writeIORef)
+import System.IO.Error (tryIOError)
 
 import Control.Concurrent.Async (async, wait)
 
@@ -21,21 +24,30 @@ forkLoop = forksLoop . (:[])
 
 forksConsumeQueue :: Int -> (a -> IO ())
                   -> IO (a -> IO (), IO ())
-forksConsumeQueue n body = do
+forksConsumeQueue n = forksConsumeQueueWith n $ const $ return ()
+
+forksLoop :: [IO ()] -> IO (IO ())
+forksLoop = forksLoopWith $ const $ return ()
+
+forksConsumeQueueWith :: Int -> (IOError -> IO ()) -> (a -> IO ())
+                  -> IO (a -> IO (), IO ())
+forksConsumeQueueWith n onError body = do
   inQ <- newChan
   let enqueue = writeChan inQ . Just
       issueQuit = replicateM_ n $ writeChan inQ Nothing
-      loop = maybe (return ()) ((*> loop) . body) =<< readChan inQ
+      hbody = either onError return <=< tryIOError . body
+      loop = maybe (return ()) ((*> loop) . hbody) =<< readChan inQ
 
   waitQuit <- forksWithWait $ replicate n loop
   return (enqueue, issueQuit *> waitQuit)
 
-forksLoop :: [IO ()] -> IO (IO ())
-forksLoop bodies = do
+forksLoopWith :: (IOError -> IO ()) -> [IO ()] -> IO (IO ())
+forksLoopWith onError bodies = do
   qref <- newIORef False
-  let loop body = do
+  let handle = either onError return <=< tryIOError
+      loop body = do
         isQuit <- readIORef qref
-        unless isQuit $ body *> loop body
+        unless isQuit $ handle body *> loop body
   waitQuit <- forksWithWait $ map loop bodies
   return $ writeIORef qref True *> waitQuit
 
