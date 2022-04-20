@@ -28,6 +28,7 @@ library
   other-modules:
                        DNSC.DNSUtil
                        DNSC.RootServers
+                       DNSC.SocketUtil
                        DNSC.Concurrent
 
   build-depends:

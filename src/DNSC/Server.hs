@@ -1,23 +1,24 @@
+{-# LANGUAGE ParallelListComp #-}
+
 module DNSC.Server (
   run,
 
   bind, monitor,
   ) where
 
-import Control.Monad (forever, (<=<), unless)
-import Control.Concurrent (forkIO)
+import Control.Monad ((<=<), when, unless)
 import Data.Functor (($>))
 import Data.Ord (Down (..))
 import Data.List (uncons, isInfixOf)
 import qualified Data.ByteString.Char8 as B8
-import System.IO.Error (tryIOError)
 
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
-import DNSC.Concurrent (forksConsumeQueueWith)
+import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
+import DNSC.SocketUtil (mkSocketWaitForInput)
 import DNSC.DNSUtil (recvFrom, sendTo)
 import qualified DNSC.Log as Log
 import DNSC.Iterative (Context (..), newContext, runReply)
@@ -55,12 +56,18 @@ bind level disableV6NS para port hosts = do
 
   (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse sendTo cxt)
   (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
-  let handleRecv = either (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show) return
-  sequence_ [ forkIO $ forever $ handleRecv =<< tryIOError (recvRequest recvFrom cxt enqueueReq sock) | (sock, _) <- sas ]
+
+  waitInputs <- mapM (mkSocketWaitForInput . fst) sas
+  quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
+             [ recvRequest waitForInput recvFrom cxt enqueueReq sock
+             | (sock, _) <- sas
+             | waitForInput <- waitInputs
+             ]
 
   mapM_ (uncurry S.bind) sas
 
   let quit = do
+        quitReq
         quitProc
         quitResp
         quitCache
@@ -69,17 +76,20 @@ bind level disableV6NS para port hosts = do
   return (cxt, quit)
 
 recvRequest :: Show a
-            => (s -> IO (DNSMessage, a))
+            => (Int -> IO Bool)
+            -> (s -> IO (DNSMessage, a))
             -> Context
             -> (Request s a -> IO ())
             -> s
             -> IO ()
-recvRequest recv cxt enqReq sock =  do
- (m, addr) <- recv sock
- let logLn level = logLines_ cxt level . (:[])
-     enqueue qs = enqReq (sock, (DNS.header m, qs), addr)
-     emptyWarn = logLn Log.NOTICE $ "empty question ignored: " ++ show addr
- maybe emptyWarn enqueue $ uncons $ DNS.question m
+recvRequest waitInput recv cxt enqReq sock = do
+  hasInput <- waitInput (3 * 1000)
+  when hasInput $ do
+    (m, addr) <- recv sock
+    let logLn level = logLines_ cxt level . (:[])
+        enqueue qs = enqReq (sock, (DNS.header m, qs), addr)
+        emptyWarn = logLn Log.NOTICE $ "empty question ignored: " ++ show addr
+    maybe emptyWarn enqueue $ uncons $ DNS.question m
 
 processRequest :: Show a
                => Context
