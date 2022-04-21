@@ -26,13 +26,14 @@ type Cmsg = Socket.Cmsg
 type Cmsg = ()
 #endif
 
-mkRecv :: Bool -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg]))
+-- return tuples that can be reused in request and response queues
+mkRecv :: Bool -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
 #if MIN_VERSION_network(3,1,2)
 mkRecv wildcard
   | wildcard    =  recvDNS recvMsg
   | otherwise   =  recvDNS recvFrom
 #else
-mkRecv _        =  recvDNS recvFrom
+mkRecv wildcard =  recvDNS recvFrom
 #endif
   where
     recvDNS recv sock = do
@@ -46,15 +47,15 @@ mkRecv _        =  recvDNS recvFrom
     recvMsg sock = do
       let cbufsiz = 64
       (peer, bs, cmsgs, _) <- Socket.recvMsg sock bufsiz cbufsiz 0
-      return (bs, (peer, cmsgs))
+      return (bs, (peer, cmsgs, wildcard))
 #endif
 
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
-      return (bs, (peer, []))
+      return (bs, (peer, [], wildcard))
     bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
-mkSend :: Bool -> Socket -> DNSMessage -> (SockAddr, [Cmsg]) -> IO ()
+mkSend :: Bool -> Socket -> DNSMessage -> SockAddr -> [Cmsg] -> IO ()
 #if MIN_VERSION_network(3,1,2)
 mkSend wildcard
   | wildcard   =  sendDNS sendMsg
@@ -63,7 +64,7 @@ mkSend wildcard
 mkSend _       =  sendDNS sendTo
 #endif
   where
-    sendDNS send sock msg (addr, cmsgs) =
+    sendDNS send sock msg addr cmsgs =
       void $ send sock (DNS.encode msg) addr cmsgs
 
 #if MIN_VERSION_network(3,1,2)
