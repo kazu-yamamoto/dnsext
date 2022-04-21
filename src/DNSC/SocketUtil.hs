@@ -1,5 +1,6 @@
 module DNSC.SocketUtil (
   mkSocketWaitForInput,
+  isAnySockAddr,
   ) where
 
 import GHC.IO.Device (IODevice (ready))
@@ -7,7 +8,7 @@ import GHC.IO.FD (mkFD)
 
 import System.IO (IOMode (ReadMode))
 
-import Network.Socket (Socket, withFdSocket)
+import Network.Socket (Socket, withFdSocket, SockAddr (..))
 
 
 {- make action to wait for socket-input from cached FD
@@ -39,3 +40,8 @@ mkSocketWaitForInput sock =
 
 -- import System.Posix.Internals (fdStat)
 -}
+
+isAnySockAddr :: SockAddr -> Bool
+isAnySockAddr (SockAddrInet _ 0)              = True
+isAnySockAddr (SockAddrInet6 _ _ (0,0,0,0) _) = True
+isAnySockAddr _                               = False

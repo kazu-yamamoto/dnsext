@@ -18,8 +18,8 @@ import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
-import DNSC.SocketUtil (mkSocketWaitForInput)
-import DNSC.DNSUtil (recvFrom, sendTo)
+import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
+import DNSC.DNSUtil (mkRecv, mkSend)
 import qualified DNSC.Log as Log
 import DNSC.Iterative (Context (..), newContext, runReply)
 
@@ -53,14 +53,17 @@ bind level disableV6NS para port hosts = do
   sas <- udpSockets port hosts
 
   let putLn lv = putLines lv . (:[])
+      send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
 
-  (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse sendTo cxt)
+  (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
   (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
   waitInputs <- mapM (mkSocketWaitForInput . fst) sas
   quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
-             [ recvRequest waitForInput recvFrom cxt enqueueReq sock
-             | (sock, _) <- sas
+             [ recvRequest waitForInput recv cxt enqueueReq sock
+             | (sock, addr) <- sas
+             , let wildcard = isAnySockAddr addr
+                   recv = mkRecv wildcard
              | waitForInput <- waitInputs
              ]
 
