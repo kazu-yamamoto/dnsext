@@ -100,7 +100,8 @@ spec = describe "query" $ do
     result <- runQuery "porttest.dns-oarc.net." CNAME
     printQueryError result
     isRight result `shouldBe` True
-    let Right msg = result
+    let Right etm = result
+        Right msg = etm
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
   it "query - a via cname" $ do
