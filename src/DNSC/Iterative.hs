@@ -186,7 +186,7 @@ runReply cxt reqH qs@(DNS.Question bn typ, _) =
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
-runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery :: Context -> Name -> TYPE -> IO (Either QueryError (Either [ResourceRecord] DNSMessage))
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
 runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
@@ -246,7 +246,7 @@ reply n typ rd =
       | otherwise  =  withQuery
 
     withQuery = do
-      ((arrs, rn), msg) <- query_ n typ
+      ((arrs, rn), etm) <- query_ n typ
       let takeX rr
             | rrname rr == rn && rrtype rr == typ   =  Just rr
             | otherwise                             =  Nothing
@@ -254,20 +254,20 @@ reply n typ rd =
             where
               ps = mapMaybe takeX rrs
 
-      lift $ arrs <$> getSectionWithCache rankedAnswer refinesX msg
+      lift $ arrs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
-query :: Name -> TYPE -> DNSQuery DNSMessage
+query :: Name -> TYPE -> DNSQuery (Either [ResourceRecord] DNSMessage)
 query n typ = snd <$> query_ n typ
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
-query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), DNSMessage)
-query_ n CNAME = (,) (id, B8.pack n) <$> query1 n CNAME
+query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+query_ n CNAME = (,) (id, B8.pack n) . Right <$> query1 n CNAME
 query_ n0 typ  = recCN n0 id
   where
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), DNSMessage)
+    recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
     recCN n arrs = do
       msg <- query1 n typ
       cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
@@ -278,7 +278,7 @@ query_ n0 typ  = recCN n0 id
               throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
             recCN (B8.unpack cn) (arrs . (cnRR :))
 
-      maybe (pure ((arrs, bn), msg)) resolveCNAME
+      maybe (pure ((arrs, bn), Right msg)) resolveCNAME
         =<< liftIO (selectCNAME cnames)
         where
           bn = B8.pack n
