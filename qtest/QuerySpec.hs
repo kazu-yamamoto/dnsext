@@ -10,12 +10,14 @@ import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
+import DNSC.UpdateCache (newCache)
 import DNSC.Iterative (newContext, runDNSQuery, replyMessage, reply, query, query1, iterative, rootNS)
 
 spec :: Spec
 spec = describe "query" $ do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
-  (cxt, _quit) <- runIO $ newContext (\_ _ -> pure ()) disableV6NS
+  (ucache, _quit) <- runIO $ newCache (\_ _ -> pure ())
+  cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
       runQuery n ty = runDNSQuery (query n ty) cxt
