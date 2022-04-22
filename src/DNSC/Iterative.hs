@@ -24,6 +24,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.Int (Int64)
 import Data.Ord (Down (..))
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
@@ -98,6 +99,8 @@ data Context =
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
+  , currentSeconds_ :: IO Int64
+  , timeString_ :: IO String
   }
 
 data QueryError
@@ -126,14 +129,16 @@ type UpdateCache =
   (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
    Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
+type TimeCache = (IO Int64, IO String)
 
-newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache
+newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
-newContext putLines disableV6NS (lk, ins, getCache) = do
+newContext putLines disableV6NS (lk, ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , lookup_ = lk, insert_ = ins
-        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
+        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache
+        , currentSeconds_ = curSec, timeString_ = timeStr }
   return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
