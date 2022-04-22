@@ -23,6 +23,7 @@ library
                        DNSC.Iterative
                        DNSC.UpdateCache
                        DNSC.Cache
+                       DNSC.TimeCache
                        DNSC.Log
 
   other-modules:
