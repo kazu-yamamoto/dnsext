@@ -37,6 +37,7 @@ library
                      , bytestring
                      , containers
                      , transformers
+                     , time
 
                      -- other packages
                      , random
