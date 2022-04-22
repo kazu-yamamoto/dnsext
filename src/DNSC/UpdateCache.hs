@@ -25,7 +25,7 @@ runUpdate t u = case u of
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-newCache :: (Log.Level -> [String] -> IO ()) -> IO (Lookup, Insert, IO Cache, IO ())
+newCache :: (Log.Level -> [String] -> IO ()) -> IO ((Lookup, Insert, IO Cache), IO ())
 newCache putLines = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef Cache.empty
@@ -53,4 +53,4 @@ newCache putLines = do
       insert k ttl crs rank =
         enqueueU =<< (,) <$> getTimestamp <*> pure (I k ttl crs rank)
 
-  return (lookup_, insert, readIORef cacheRef, quitE *> quitU)
+  return ((lookup_, insert, readIORef cacheRef), quitE *> quitU)
