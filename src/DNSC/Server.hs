@@ -53,7 +53,7 @@ bind :: Log.Level -> Bool -> Int
      -> IO (Context, IO ())
 bind level disableV6NS para port hosts = do
   (putLines, quitLog) <- Log.new level
-  (tcache, quitTimeCache) <- TimeCache.new
+  (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
   (ucache, quitCache) <- UCache.new putLines
   cxt <- newContext putLines disableV6NS ucache tcache
 
@@ -70,7 +70,9 @@ bind level disableV6NS para port hosts = do
              [ recvRequest waitForInput recv cxt enqueueReq sock
              | (sock, addr) <- sas
              , let wildcard = isAnySockAddr addr
-                   recv = mkRecv wildcard
+                   recv s = do
+                     now <- getSec
+                     mkRecv wildcard now s
              | waitForInput <- waitInputs
              ]
 
