@@ -54,7 +54,7 @@ bind :: Log.Level -> Bool -> Int
 bind level disableV6NS para port hosts = do
   (putLines, quitLog) <- Log.new level
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
-  (ucache, quitCache) <- UCache.new putLines
+  (ucache, quitCache) <- UCache.new putLines tcache
   cxt <- newContext putLines disableV6NS ucache tcache
 
   sas <- udpSockets port hosts
