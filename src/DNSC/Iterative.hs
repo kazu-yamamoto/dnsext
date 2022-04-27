@@ -43,6 +43,7 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.RootServers (rootServers)
+import DNSC.DNSUtil (lookupRaw)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
@@ -293,7 +294,7 @@ query1 n typ = do
   nss <- iterative rootNS n
   sa <- selectDelegation nss
   lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
-  dnsQueryT $ const $ (handleNX Left Right =<<) <$> norec1 sa (B8.pack n) typ
+  handleNX throwE return =<< norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
 
@@ -338,7 +339,7 @@ iterative_ nss (x:xs) =
     stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec1: " ++ show (sa, name, A)
-      msg <- dnsQueryT $ const $ norec1 sa name A
+      msg <- norec1 sa name A
       lift $ delegationWithCache name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)
@@ -369,11 +370,12 @@ nsList dom h = mapMaybe takeNS
       | rrname rr == dom  =  Just $ h ns rr
     takeNS _              =  Nothing
 
-norec1 :: IP -> Domain -> TYPE -> IO (Either QueryError DNSMessage)
-norec1 aserver name typ = do
+norec1 :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
+norec1 aserver name typ = dnsQueryT $ \cxt -> do
+  now <- currentSeconds_ cxt
   rs <- DNS.makeResolvSeed conf
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolver rs ( \resolver -> DNS.lookupRaw resolver name typ )
+    DNS.withResolver rs ( \resolver -> lookupRaw now resolver name typ )
   where
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver
