@@ -6,17 +6,20 @@ module DNSC.Server (
   bind, monitor,
   ) where
 
+-- GHC packages
 import Control.Monad ((<=<), when, unless)
 import Data.Functor (($>))
 import Data.Ord (Down (..))
 import Data.List (uncons, isInfixOf)
 import qualified Data.ByteString.Char8 as B8
 
+-- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
+-- this package
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
 import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
