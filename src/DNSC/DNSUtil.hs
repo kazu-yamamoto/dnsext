@@ -2,6 +2,9 @@
 
 module DNSC.DNSUtil (
   mkRecv, mkSend,
+
+  -- interfaces to check compile-time configs
+  isRecvSendMsg,
   ) where
 
 import qualified Control.Exception as E
@@ -72,3 +75,11 @@ mkSend _       =  sendDNS sendTo
 #endif
 
     sendTo sock bs addr _ = Socket.sendTo sock bs addr
+
+-- available recvMsg and sendMsg or not
+isRecvSendMsg :: Bool
+#if MIN_VERSION_network(3,1,2)
+isRecvSendMsg = True
+#else
+isRecvSendMsg = False
+#endif
