@@ -47,7 +47,7 @@ import DNSC.DNSUtil (lookupRaw)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Timestamp, Key, Val, CRSet, Cache)
+   insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
 
@@ -92,6 +92,8 @@ domains name
 
 -----
 
+type Timestamp = Int64
+
 data Context =
   Context
   { logLines_ :: Log.Level -> [String] -> IO ()
@@ -100,7 +102,7 @@ data Context =
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
-  , currentSeconds_ :: IO Int64
+  , currentSeconds_ :: IO Timestamp
   , timeString_ :: IO String
   }
 
