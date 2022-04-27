@@ -1,6 +1,7 @@
 module DNSC.Log (
   Level (..),
   new,
+  none,
   ) where
 
 import Control.Monad (when)
@@ -24,3 +25,7 @@ new level = do
   let logLines lv = when (level <= lv) . enqueue
 
   return (logLines, quit)
+
+-- no logging
+none :: Level -> [String] -> IO ()
+none _ _ = return ()
