@@ -35,6 +35,7 @@ import Data.Function (on)
 import Data.Maybe (isJust)
 import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
+import Data.Int (Int64)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 
@@ -42,13 +43,12 @@ import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 import Data.IP (IPv4, IPv6)
-import Time.System (timeCurrent)
-import Time.Types (Elapsed (Elapsed))
 import Network.DNS
   (Domain, CLASS, TTL, TYPE (..), RData (..),
    ResourceRecord (ResourceRecord), DNSMessage)
 import qualified Network.DNS as DNS
 
+import qualified DNSC.TimeCache as TimeCache
 
 ---
 
@@ -136,7 +136,7 @@ rankedAdditional =
 data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = Val CRSet Ranking deriving Show
 
-type Timestamp = Elapsed
+type Timestamp = Int64
 
 type Cache = OrdPSQ Key Timestamp Val
 
@@ -208,8 +208,8 @@ expire1 now c =
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
   let ttl' = eol - now
-      safeToTTL :: Elapsed -> Maybe TTL
-      safeToTTL (Elapsed sec) = do
+      safeToTTL :: Int64 -> Maybe TTL
+      safeToTTL sec = do
         let y = fromIntegral sec
         guard $ toInteger y == toInteger sec
         return y
@@ -244,7 +244,7 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 getTimestamp :: IO Timestamp
-getTimestamp = timeCurrent
+getTimestamp = fst TimeCache.none
 
 toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort
