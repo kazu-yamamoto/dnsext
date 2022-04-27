@@ -46,7 +46,6 @@ library
                      -- dns packages
                      , async
                      , network
-                     , hourglass
                      , psqueues
                      , iproute
                      , dns
