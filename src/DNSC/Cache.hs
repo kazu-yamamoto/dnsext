@@ -27,6 +27,7 @@ module DNSC.Cache (
   dump, dumpKeys, minKey,
   ) where
 
+-- GHC packages
 import Prelude hiding (lookup)
 import Control.Monad (guard)
 import Data.Ord (Down (..))
@@ -37,6 +38,7 @@ import Data.List (group, groupBy, sortOn, uncons)
 import Data.Word (Word16, Word32)
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 
+-- dns packages
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 import Data.IP (IPv4, IPv6)
