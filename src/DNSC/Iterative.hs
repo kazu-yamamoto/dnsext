@@ -16,6 +16,7 @@ module DNSC.Iterative (
   Context (..),
   ) where
 
+-- GHC packages
 import Control.Arrow ((&&&))
 import Control.Monad (when, join)
 import Control.Monad.IO.Class (liftIO)
@@ -27,8 +28,11 @@ import Data.Ord (Down (..))
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
 import qualified Data.Set as Set
+
+-- other packages
 import System.Random (randomR, getStdRandom)
 
+-- dns packages
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL, CLASS,
@@ -36,6 +40,7 @@ import Network.DNS
    DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
 
+-- this package
 import DNSC.RootServers (rootServers)
 import qualified DNSC.Log as Log
 import DNSC.Cache
