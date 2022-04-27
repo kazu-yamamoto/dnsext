@@ -2,8 +2,10 @@ module DNSC.RootServers (
   rootServers
   ) where
 
+-- GHC packages
 import qualified Data.ByteString.Char8 as B8
 
+-- dns packages
 import Network.DNS
   (RData (..), TYPE(NS, A, AAAA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata))
 import qualified Network.DNS as DNS
