@@ -1,5 +1,5 @@
 module DNSC.UpdateCache (
-  newCache,
+  new,
   ) where
 
 import Control.Concurrent (threadDelay)
@@ -25,8 +25,8 @@ runUpdate t u = case u of
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-newCache :: (Log.Level -> [String] -> IO ()) -> IO ((Lookup, Insert, IO Cache), IO ())
-newCache putLines = do
+new :: (Log.Level -> [String] -> IO ()) -> IO ((Lookup, Insert, IO Cache), IO ())
+new putLines = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef Cache.empty
 
