@@ -8,8 +8,6 @@ module DNSC.Cache (
   insert,
   expires,
   size,
-  Timestamp,
-  getTimestamp,
 
   Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
   rankedAnswer, rankedAuthority, rankedAdditional,
@@ -47,8 +45,6 @@ import Network.DNS
   (Domain, CLASS, TTL, TYPE (..), RData (..),
    ResourceRecord (ResourceRecord), DNSMessage)
 import qualified Network.DNS as DNS
-
-import qualified DNSC.TimeCache as TimeCache
 
 ---
 
@@ -242,9 +238,6 @@ minKey = fmap fst . uncons . dumpKeys
 now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
-
-getTimestamp :: IO Timestamp
-getTimestamp = fst TimeCache.none
 
 toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort
