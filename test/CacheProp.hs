@@ -12,6 +12,7 @@ import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (ord)
+import Data.Int (Int64)
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Network.DNS (TYPE (..), TTL)
@@ -19,8 +20,9 @@ import qualified Network.DNS as DNS
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
+import qualified DNSC.TimeCache as TimeCache
 import DNSC.Cache
-  (Cache, Key (Key), Val (Val), CRSet (..), Timestamp, (<+), getTimestamp,
+  (Cache, Key (Key), Val (Val), CRSet (..), (<+),
    Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
@@ -77,8 +79,10 @@ nsList =
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
+type Timestamp = Int64
+
 ts0 :: Timestamp
-ts0 = unsafePerformIO getTimestamp
+ts0 = unsafePerformIO $ fst TimeCache.none
 {-# NOINLINE ts0 #-}
 
 -----
