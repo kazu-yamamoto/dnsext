@@ -1,5 +1,6 @@
 module DNSC.UpdateCache (
   new,
+  none,
   ) where
 
 import Control.Concurrent (threadDelay)
@@ -54,3 +55,10 @@ new putLines = do
         enqueueU =<< (,) <$> getTimestamp <*> pure (I k ttl crs rank)
 
   return ((lookup_, insert, readIORef cacheRef), quitE *> quitU)
+
+-- no caching
+none :: (Lookup, Insert, IO Cache)
+none =
+  (\_ _ _ -> return Nothing,
+   \_ _ _ _ -> return (),
+   return Cache.empty)
