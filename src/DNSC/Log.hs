@@ -4,9 +4,11 @@ module DNSC.Log (
   none,
   ) where
 
+-- GHC packages
 import Control.Monad (when)
 import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
 
+-- this package
 import DNSC.Concurrent (forkConsumeQueue)
 
 
