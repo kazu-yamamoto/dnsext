@@ -7,9 +7,11 @@ module DNSC.DNSUtil (
   isRecvSendMsg,
   ) where
 
+-- GHC packages
 import qualified Control.Exception as E
 import Control.Monad (void)
 
+-- dns packages
 import Time.System (timeCurrent)
 import qualified Time.Types as Time
 import Network.Socket (Socket, SockAddr)

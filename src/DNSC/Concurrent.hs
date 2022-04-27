@@ -7,11 +7,13 @@ module DNSC.Concurrent (
   forksLoopWith,
   ) where
 
+-- GHC packages
 import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Monad (unless, replicateM_, (<=<))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Error (tryIOError)
 
+-- dns packages
 import Control.Concurrent.Async (async, wait)
 
 

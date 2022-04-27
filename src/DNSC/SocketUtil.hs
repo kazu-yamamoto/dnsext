@@ -3,11 +3,14 @@ module DNSC.SocketUtil (
   isAnySockAddr,
   ) where
 
+-- GHC internal packages
 import GHC.IO.Device (IODevice (ready))
 import GHC.IO.FD (mkFD)
 
+-- GHC packages
 import System.IO (IOMode (ReadMode))
 
+-- dns packages
 import Network.Socket (Socket, withFdSocket, SockAddr (..))
 
 

@@ -3,11 +3,14 @@ module DNSC.UpdateCache (
   none,
   ) where
 
+-- GHC packages
 import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, writeIORef)
 
+-- dns packages
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
+-- this package
 import DNSC.Concurrent (forkLoop, forkConsumeQueue)
 import qualified DNSC.Log as Log
 import DNSC.Cache (Cache, Key, CRSet, Ranking, Timestamp, getTimestamp)
