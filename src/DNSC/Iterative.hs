@@ -40,9 +40,8 @@ import DNSC.RootServers (rootServers)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Timestamp, Key, Val, CRSet)
+   insertSetFromSection, Timestamp, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
-import DNSC.UpdateCache (newCache)
 
 
 type Name = String
@@ -118,14 +117,19 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
  -}
 
-newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> IO (Context, IO ())
-newContext putLines disableV6NS = do
-  (lk, ins, getCache, quitCacheTh) <- newCache putLines
+type UpdateCache =
+  (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
+   Key -> TTL -> CRSet -> Ranking -> IO (),
+   IO Cache)
+
+newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache
+           -> IO Context
+newContext putLines disableV6NS (lk, ins, getCache) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , lookup_ = lk, insert_ = ins
         , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
-  return (cxt, quitCacheTh)
+  return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT

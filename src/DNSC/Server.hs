@@ -21,6 +21,7 @@ import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
 import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import qualified DNSC.Log as Log
+import DNSC.UpdateCache (newCache)
 import DNSC.Iterative (Context (..), newContext, runReply)
 
 
@@ -48,7 +49,8 @@ bind :: Log.Level -> Bool -> Int
      -> IO (Context, IO ())
 bind level disableV6NS para port hosts = do
   (putLines, quitLog) <- Log.new level
-  (cxt, quitCache) <- newContext putLines disableV6NS
+  (ucache, quitCache) <- newCache putLines
+  cxt <- newContext putLines disableV6NS ucache
 
   sas <- udpSockets port hosts
 
