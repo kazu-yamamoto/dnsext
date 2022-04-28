@@ -76,11 +76,15 @@ bind level disableV6NS para port hosts = do
   mapM_ (uncurry S.bind) sas
 
   let quit = do
-        quitReq
-        quitProc
-        quitResp
-        quitCache
-        quitTimeCache
+        let withLog n action = do
+              putLn Log.NOTICE $ "Quiting " ++ n ++ "..."
+              () <- action
+              putLn Log.NOTICE "done."
+        withLog "requests"          quitReq
+        withLog "query processing"  quitProc
+        withLog "responses"         quitResp
+        withLog "cache"             quitCache
+        withLog "time-cache"        quitTimeCache
         quitLog
 
   return (cxt, quit)
