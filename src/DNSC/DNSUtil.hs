@@ -2,14 +2,17 @@
 
 module DNSC.DNSUtil (
   mkRecv, mkSend,
+  lookupRaw,
 
   -- interfaces to check compile-time configs
   isRecvSendMsg,
+  isExtendedLookup,
   ) where
 
 -- GHC packages
 import qualified Control.Exception as E
 import Control.Monad (void)
+import Data.Int (Int64)
 
 -- dns packages
 import Time.System (timeCurrent)
@@ -24,6 +27,8 @@ import qualified Network.DNS as DNS
 
 
 ---
+
+type TimeStamp = Int64
 
 #if MIN_VERSION_network(3,1,2)
 type Cmsg = Socket.Cmsg
@@ -84,4 +89,25 @@ isRecvSendMsg :: Bool
 isRecvSendMsg = True
 #else
 isRecvSendMsg = False
+#endif
+
+---
+
+lookupRaw :: TimeStamp -> DNS.Resolver -> DNS.Domain -> DNS.TYPE -> IO (Either DNS.DNSError DNSMessage)
+isExtendedLookup :: Bool
+#if EXTENDED_LOOKUP
+lookupRaw now rslv dom typ = DNS.lookupRawRecv rslv dom typ mempty rcv
+  where
+    rcv sock = do
+      bs <- Socket.recv sock bufsiz
+      case DNS.decodeAt now bs of
+        Left  e   -> E.throwIO e
+        Right msg -> return msg
+    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+
+isExtendedLookup = True
+#else
+lookupRaw _ = DNS.lookupRaw
+
+isExtendedLookup = False
 #endif
