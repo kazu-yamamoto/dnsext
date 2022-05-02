@@ -18,7 +18,7 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
-import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
+import DNSC.SocketUtil (mkSocketWaitForByte, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
 import DNSC.Types (NE)
@@ -62,7 +62,7 @@ bind level disableV6NS para port hosts = do
   (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
   (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
-  waitInputs <- mapM (mkSocketWaitForInput . fst) sas
+  waitInputs <- mapM (mkSocketWaitForByte . fst) sas
   quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
              [ recvRequest waitForInput recv cxt enqueueReq sock
              | (sock, addr) <- sas
