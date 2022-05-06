@@ -14,7 +14,7 @@ import Data.List (isInfixOf, find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Char (toUpper)
 import qualified Data.ByteString.Char8 as B8
-import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hPrint, hClose)
+import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hPrint, hFlush, hClose, stdin, stdout)
 import System.IO.Error (tryIOError)
 
 -- dns packages
@@ -43,18 +43,22 @@ data Command
   | Quit
   deriving Show
 
-monitor :: Context -> IO () -> IO ()
-monitor cxt quit = do
+monitor :: Bool -> Context -> IO () -> IO ()
+monitor stdConsole cxt quit = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
   mapM_ (uncurry S.bind) ps
   sequence_ [ S.listen sock 5 | sock <- ss ]
   monQuitRef <- newIORef False
+  when stdConsole $ runStdConsole monQuitRef
   mas <- mapM (getMonitor monQuitRef) ss
   ms <- mapM async mas
   mapM_ wait ms
   where
+    runStdConsole monQuitRef = do
+      repl <- getConsole cxt quit monQuitRef stdin stdout "<std>"
+      void $ async repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
     getMonitor monQuitRef s = do
@@ -64,7 +68,7 @@ monitor cxt quit = do
             when hasInput $ do
               (sock, addr) <- S.accept s
               sockh <- S.socketToHandle sock ReadWriteMode
-              repl <- getConsole cxt quit monQuitRef sockh $ show addr
+              repl <- getConsole cxt quit monQuitRef sockh sockh $ show addr
               void $ async $ repl *> hClose sockh
           loop = do
             isQuit <- readIORef monQuitRef
@@ -73,21 +77,21 @@ monitor cxt quit = do
               loop
       return loop
 
-getConsole :: Context -> IO () -> IORef Bool -> Handle -> String -> IO (IO ())
-getConsole cxt quit monQuitRef h ainfo = do
-  let prompt = hPutStr h "monitor> "
+getConsole :: Context -> IO () -> IORef Bool -> Handle -> Handle -> String -> IO (IO ())
+getConsole cxt quit monQuitRef inH outH ainfo = do
+  let prompt = hPutStr outH "monitor> " *> hFlush outH
       input = do
-        s <- hGetLine h
-        let err = hPutStrLn h ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
+        s <- hGetLine inH
+        let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
             run_ = runCmd (writeIORef monQuitRef True)
         exit <- maybe (err $> False) run_ $ parseCmd $ words s
         unless exit prompt
         return exit
 
       step = do
-        hasInput <- hWaitForByte h $ 1 * 1000
+        hasInput <- hWaitForByte inH $ 1 * 1000
         if hasInput
-          then do eof <- hIsEOF h
+          then do eof <- hIsEOF inH
                   if eof then return True else input
           else return False
 
@@ -122,12 +126,12 @@ getConsole cxt quit monQuitRef h ainfo = do
     runCmd _            Exit  =  return True
     runCmd _            cmd   =  dispatch cmd $> False
       where
-        outLn = hPutStrLn h
+        outLn = hPutStrLn outH
         dispatch Noop             =  return ()
         dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
         dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookup_ cxt dom typ DNS.classIN
           where hit (rrs, Down rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Size             =  hPrint h =<< size_ cxt
+        dispatch Size             =  hPrint outH =<< size_ cxt
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
 
 hWaitForByte :: Handle -> Int -> IO Bool
