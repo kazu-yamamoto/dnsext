@@ -12,7 +12,7 @@ import Data.Time.Clock.System (SystemTime (..), getSystemTime, systemToUTCTime)
 import DNSC.Concurrent (forkLoop)
 
 
-new :: IO ((IO Int64, IO String), IO ())
+new :: IO ((IO Int64, IO ShowS), IO ())
 new = do
   secRef <- newIORef 0
   formatRef <- newIORef mempty
@@ -21,10 +21,10 @@ new = do
         t <- getSystemTime  {- calls clock_gettime in x86-64 linux -}
         zt <- utcToZonedTime <$> getCurrentTimeZone <*> pure (systemToUTCTime t)
         let seconds = systemSeconds t
-            fstring = formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" zt
+            fstring = (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" zt ++) {- adjust to that the Log module uses String -}
             intervalUSec = 1 * 1000 * 1000 - fromIntegral (systemNanoseconds t `quot` 1000)
         writeIORef secRef seconds
-        fstring `seq` writeIORef formatRef fstring
+        writeIORef formatRef fstring
         threadDelay intervalUSec
 
   quit <- forkLoop step
@@ -32,9 +32,9 @@ new = do
   return ((readIORef secRef, readIORef formatRef), quit)
 
 -- no caching
-none :: (IO Int64, IO String)
+none :: (IO Int64, IO ShowS)
 none =
   (systemSeconds <$> getSystemTime,
-   formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" <$> getUTC)
+   (++) . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" <$> getUTC)
   where
     getUTC = utcToZonedTime <$> getCurrentTimeZone <*> fmap systemToUTCTime getSystemTime
