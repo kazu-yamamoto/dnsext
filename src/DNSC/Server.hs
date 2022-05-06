@@ -9,6 +9,7 @@ module DNSC.Server (
 -- GHC packages
 import Control.Monad ((<=<), when)
 import Data.List (uncons)
+import System.IO (Handle)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
@@ -40,16 +41,16 @@ addrInfo :: PortNumber -> [HostName] -> IO [AddrInfo]
 addrInfo p []        = S.getAddrInfo Nothing Nothing $ Just $ show p
 addrInfo p hs@(_:_)  = concat <$> sequence [ S.getAddrInfo Nothing (Just h) $ Just $ show p | h <- hs ]
 
-run :: Log.Level -> Bool -> Int
+run :: Handle -> Log.Level -> Bool -> Int
     -> PortNumber -> [HostName] -> IO ()
-run level disableV6NS conc port hosts =
-  uncurry monitor =<< bind level disableV6NS conc port hosts
+run logFh logLevel disableV6NS conc port hosts =
+  uncurry monitor =<< bind logFh logLevel disableV6NS conc port hosts
 
-bind :: Log.Level -> Bool -> Int
+bind :: Handle -> Log.Level -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO (Context, IO ())
-bind level disableV6NS para port hosts = do
-  (putLines, quitLog) <- Log.new level
+bind logFh logLevel disableV6NS para port hosts = do
+  (putLines, quitLog) <- Log.new logFh logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
   (ucache, quitCache) <- UCache.new putLines tcache
   cxt <- newContext putLines disableV6NS ucache tcache
