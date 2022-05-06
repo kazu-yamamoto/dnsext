@@ -103,7 +103,7 @@ data Context =
   , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
   , currentSeconds_ :: IO Timestamp
-  , timeString_ :: IO String
+  , timeString_ :: IO ShowS
   }
 
 data QueryError
@@ -132,7 +132,7 @@ type UpdateCache =
   (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
    Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
-type TimeCache = (IO Int64, IO String)
+type TimeCache = (IO Int64, IO ShowS)
 
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
