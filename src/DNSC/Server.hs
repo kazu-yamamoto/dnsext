@@ -38,9 +38,9 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
 run :: Handle -> Log.Level -> Bool -> Int
-    -> PortNumber -> [HostName] -> IO ()
-run logFh logLevel disableV6NS conc port hosts =
-  uncurry monitor =<< bind logFh logLevel disableV6NS conc port hosts
+    -> PortNumber -> [HostName] -> Bool -> IO ()
+run logFh logLevel disableV6NS conc port hosts stdConsole =
+  uncurry (monitor stdConsole) =<< bind logFh logLevel disableV6NS conc port hosts
 
 bind :: Handle -> Log.Level -> Bool -> Int
      -> PortNumber -> [HostName]
