@@ -23,6 +23,7 @@ library
                        DNSC.Iterative
                        DNSC.UpdateCache
                        DNSC.Cache
+                       DNSC.TimeCache
                        DNSC.Log
 
   other-modules:
@@ -37,6 +38,7 @@ library
                      , bytestring
                      , containers
                      , transformers
+                     , time
 
                      -- other packages
                      , random
@@ -44,7 +46,6 @@ library
                      -- dns packages
                      , async
                      , network
-                     , hourglass
                      , psqueues
                      , iproute
                      , dns

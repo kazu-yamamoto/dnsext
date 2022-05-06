@@ -24,6 +24,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.Int (Int64)
 import Data.Ord (Down (..))
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
@@ -42,10 +43,11 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.RootServers (rootServers)
+import DNSC.DNSUtil (lookupRaw)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Timestamp, Key, Val, CRSet, Cache)
+   insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
 
@@ -90,6 +92,8 @@ domains name
 
 -----
 
+type Timestamp = Int64
+
 data Context =
   Context
   { logLines_ :: Log.Level -> [String] -> IO ()
@@ -98,6 +102,8 @@ data Context =
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
+  , currentSeconds_ :: IO Timestamp
+  , timeString_ :: IO ShowS
   }
 
 data QueryError
@@ -126,14 +132,16 @@ type UpdateCache =
   (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
    Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
+type TimeCache = (IO Int64, IO ShowS)
 
-newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache
+newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
-newContext putLines disableV6NS (lk, ins, getCache) = do
+newContext putLines disableV6NS (lk, ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , lookup_ = lk, insert_ = ins
-        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache }
+        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache
+        , currentSeconds_ = curSec, timeString_ = timeStr }
   return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
@@ -288,7 +296,7 @@ query1 n typ = do
   nss <- iterative rootNS n
   sa <- selectDelegation nss
   lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
-  dnsQueryT $ const $ (handleNX Left Right =<<) <$> norec1 sa (B8.pack n) typ
+  handleNX throwE return =<< norec1 sa (B8.pack n) typ
 
 type NE a = (a, [a])
 
@@ -333,7 +341,7 @@ iterative_ nss (x:xs) =
     stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec1: " ++ show (sa, name, A)
-      msg <- dnsQueryT $ const $ norec1 sa name A
+      msg <- norec1 sa name A
       lift $ delegationWithCache name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)
@@ -364,11 +372,12 @@ nsList dom h = mapMaybe takeNS
       | rrname rr == dom  =  Just $ h ns rr
     takeNS _              =  Nothing
 
-norec1 :: IP -> Domain -> TYPE -> IO (Either QueryError DNSMessage)
-norec1 aserver name typ = do
+norec1 :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
+norec1 aserver name typ = dnsQueryT $ \cxt -> do
+  now <- currentSeconds_ cxt
   rs <- DNS.makeResolvSeed conf
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolver rs ( \resolver -> DNS.lookupRaw resolver name typ )
+    DNS.withResolver rs ( \resolver -> lookupRaw now resolver name typ )
   where
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver

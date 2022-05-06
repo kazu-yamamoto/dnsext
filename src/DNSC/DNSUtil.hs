@@ -15,8 +15,6 @@ import Control.Monad (void)
 import Data.Int (Int64)
 
 -- dns packages
-import Time.System (timeCurrent)
-import qualified Time.Types as Time
 import Network.Socket (Socket, SockAddr)
 #if MIN_VERSION_network(3,1,2)
 import qualified Network.Socket as Socket
@@ -37,18 +35,17 @@ type Cmsg = ()
 #endif
 
 -- return tuples that can be reused in request and response queues
-mkRecv :: Bool -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
+mkRecv :: Bool -> TimeStamp -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
 #if MIN_VERSION_network(3,1,2)
-mkRecv wildcard
+mkRecv wildcard now
   | wildcard    =  recvDNS recvMsg
   | otherwise   =  recvDNS recvFrom
 #else
-mkRecv wildcard =  recvDNS recvFrom
+mkRecv wildcard now =  recvDNS recvFrom
 #endif
   where
     recvDNS recv sock = do
       (bs, ai) <- recv sock `E.catch` \e -> E.throwIO $ DNS.NetworkFailure e
-      Time.Elapsed (Time.Seconds now) <- timeCurrent
       case DNS.decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return (msg, ai)
