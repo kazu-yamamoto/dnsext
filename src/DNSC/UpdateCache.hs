@@ -32,7 +32,7 @@ runUpdate t u = case u of
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO String)
+new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
     -> IO ((Lookup, Insert, IO Cache), IO ())
 new putLines (getSec, getTimeStr) = do
   let putLn level = putLines level . (:[])
@@ -44,7 +44,7 @@ new putLines (getSec, getTimeStr) = do
               writeIORef cacheRef c
               case u of
                 I {}  ->  return ()
-                E     ->  putLn Log.NOTICE $ tstr ++ ": some records expired: size = " ++ show (Cache.size c)
+                E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)
         maybe (pure ()) updateRef $ runUpdate ts u cache
   (enqueueU, quitU) <- forkConsumeQueue update1
 
