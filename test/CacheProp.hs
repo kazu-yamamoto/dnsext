@@ -12,7 +12,6 @@ import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (ord)
-import Data.Int (Int64)
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Network.DNS (TYPE (..), TTL)
@@ -26,6 +25,7 @@ import DNSC.Cache
    Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
+import DNSC.Types
 
 
 {-# ANN module "HLint: ignore Use fromMaybe" #-}
@@ -79,7 +79,6 @@ nsList =
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
-type Timestamp = Int64
 
 ts0 :: Timestamp
 ts0 = unsafePerformIO $ fst TimeCache.none
