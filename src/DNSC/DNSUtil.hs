@@ -12,7 +12,6 @@ module DNSC.DNSUtil (
 -- GHC packages
 import qualified Control.Exception as E
 import Control.Monad (void)
-import Data.Int (Int64)
 
 -- dns packages
 import Network.Socket (Socket, SockAddr)
@@ -23,10 +22,10 @@ import qualified Network.Socket.ByteString as Socket
 import Network.DNS (DNSMessage)
 import qualified Network.DNS as DNS
 
+-- this package
+import DNSC.Types
 
 ---
-
-type TimeStamp = Int64
 
 #if MIN_VERSION_network(3,1,2)
 type Cmsg = Socket.Cmsg
@@ -35,7 +34,7 @@ type Cmsg = ()
 #endif
 
 -- return tuples that can be reused in request and response queues
-mkRecv :: Bool -> TimeStamp -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
+mkRecv :: Bool -> Timestamp -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
 #if MIN_VERSION_network(3,1,2)
 mkRecv wildcard now
   | wildcard    =  recvDNS recvMsg
@@ -90,7 +89,7 @@ isRecvSendMsg = False
 
 ---
 
-lookupRaw :: TimeStamp -> DNS.Resolver -> DNS.Domain -> DNS.TYPE -> IO (Either DNS.DNSError DNSMessage)
+lookupRaw :: Timestamp -> DNS.Resolver -> DNS.Domain -> DNS.TYPE -> IO (Either DNS.DNSError DNSMessage)
 isExtendedLookup :: Bool
 #if EXTENDED_LOOKUP
 lookupRaw now rslv dom typ = DNS.lookupRawRecv rslv dom typ mempty rcv
