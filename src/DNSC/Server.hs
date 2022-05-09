@@ -27,9 +27,8 @@ import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
 import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, runReply)
+import DNSC.Types
 
-
-type NE a = (a, [a])
 
 type Request s a = (s, (DNSHeader, NE Question), a)
 type Response s a = ((s, DNSMessage), a)

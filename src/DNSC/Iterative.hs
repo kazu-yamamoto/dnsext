@@ -301,8 +301,6 @@ query1 n typ = do
   lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
   handleNX throwE return =<< norec1 sa (B8.pack n) typ
 
-type NE a = (a, [a])
-
 -- ドメインに対する NS 委任情報
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
 
