@@ -8,7 +8,12 @@ module DNSC.Iterative (
   rootNS, Delegation,
   QueryError (..),
   printResult,
-
+  -- * types
+  Name,
+  NE,
+  UpdateCache,
+  TimeCache,
+  Timestamp,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, reply,

@@ -13,6 +13,11 @@ module DNSC.Cache (
   rankedAnswer, rankedAuthority, rankedAdditional,
 
   insertSetFromSection,
+  -- * types
+  Timestamp,
+  CDomain,
+  CMailbox,
+  CTxt,
 
   -- * handy interface
   insertRRs,

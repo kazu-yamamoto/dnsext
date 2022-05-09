@@ -1,6 +1,9 @@
 module DNSC.UpdateCache (
   new,
   none,
+  Lookup,
+  Insert,
+  Timestamp,
   ) where
 
 -- GHC packages
