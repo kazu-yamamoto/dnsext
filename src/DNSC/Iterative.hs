@@ -13,7 +13,6 @@ module DNSC.Iterative (
   NE,
   UpdateCache,
   TimeCache,
-  Timestamp,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, reply,
@@ -54,6 +53,7 @@ import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
+import DNSC.Types
 
 
 type Name = String
@@ -96,8 +96,6 @@ domains name
         p = parent n
 
 -----
-
-type Timestamp = Int64
 
 data Context =
   Context

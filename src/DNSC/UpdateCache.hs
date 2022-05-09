@@ -3,13 +3,11 @@ module DNSC.UpdateCache (
   none,
   Lookup,
   Insert,
-  Timestamp,
   ) where
 
 -- GHC packages
 import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.Int (Int64)
 
 -- dns packages
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
@@ -19,13 +17,12 @@ import DNSC.Concurrent (forkLoop, forkConsumeQueue)
 import qualified DNSC.Log as Log
 import DNSC.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNSC.Cache as Cache
+import DNSC.Types
 
 data Update
   = I Key TTL CRSet Ranking
   | E
   deriving Show
-
-type Timestamp = Int64
 
 runUpdate :: Timestamp -> Update -> Cache -> Maybe Cache
 runUpdate t u = case u of

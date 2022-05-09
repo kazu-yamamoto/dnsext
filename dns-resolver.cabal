@@ -25,6 +25,7 @@ library
                        DNSC.Cache
                        DNSC.TimeCache
                        DNSC.Log
+                       DNSC.Types
 
   other-modules:
                        DNSC.DNSUtil

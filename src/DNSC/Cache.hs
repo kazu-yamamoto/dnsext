@@ -14,7 +14,6 @@ module DNSC.Cache (
 
   insertSetFromSection,
   -- * types
-  Timestamp,
   CDomain,
   CMailbox,
   CTxt,
@@ -50,6 +49,9 @@ import Network.DNS
   (Domain, CLASS, TTL, TYPE (..), RData (..),
    ResourceRecord (ResourceRecord), DNSMessage)
 import qualified Network.DNS as DNS
+
+-- this package
+import DNSC.Types
 
 ---
 
@@ -136,8 +138,6 @@ rankedAdditional =
 
 data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = Val CRSet Ranking deriving Show
-
-type Timestamp = Int64
 
 type Cache = OrdPSQ Key Timestamp Val
 
