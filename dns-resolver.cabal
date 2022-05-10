@@ -28,6 +28,7 @@ library
                        DNSC.Types
 
   other-modules:
+                       DNSC.ServerMonitor
                        DNSC.DNSUtil
                        DNSC.RootServers
                        DNSC.SocketUtil
