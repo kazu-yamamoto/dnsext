@@ -48,12 +48,12 @@ import qualified Network.DNS as DNS
 -- this package
 import DNSC.RootServers (rootServers)
 import DNSC.DNSUtil (lookupRaw)
+import DNSC.Types (NE, Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
-import DNSC.Types
 
 
 type Name = String
