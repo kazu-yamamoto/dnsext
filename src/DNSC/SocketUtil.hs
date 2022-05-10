@@ -1,4 +1,5 @@
 module DNSC.SocketUtil (
+  addrInfo,
   mkSocketWaitForByte,
   isAnySockAddr,
   ) where
@@ -11,14 +12,19 @@ import GHC.IO.FD (mkFD)
 import System.IO (IOMode (ReadMode))
 
 -- dns packages
-import Network.Socket (Socket, withFdSocket, SockAddr (..))
+import Network.Socket (AddrInfo (..), HostName, PortNumber, Socket, SockAddr (..))
+import qualified Network.Socket as S
 
+
+addrInfo :: PortNumber -> [HostName] -> IO [AddrInfo]
+addrInfo p []        = S.getAddrInfo Nothing Nothing $ Just $ show p
+addrInfo p hs@(_:_)  = concat <$> sequence [ S.getAddrInfo Nothing (Just h) $ Just $ show p | h <- hs ]
 
 {- make action to wait for socket-input from cached FD
    without calling fdStat and mkFD for every wait-for calls -}
 mkSocketWaitForByte :: Socket -> IO (Int -> IO Bool)
 mkSocketWaitForByte sock =
-  withFD <$> withFdSocket sock getFD
+  withFD <$> S.withFdSocket sock getFD
   where
     withFD fd millisec =
       ready fd False millisec

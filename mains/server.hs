@@ -20,6 +20,7 @@ data ServerOptions =
   , concurrency :: Int
   , port :: Word16
   , bindHosts :: [String]
+  , stdConsole :: Bool
   }
   deriving Show
 
@@ -32,6 +33,7 @@ defaultOptions =
   , concurrency = 16
   , port = 53
   , bindHosts = []
+  , stdConsole = False
   }
 
 descs :: [OptDescr (ServerOptions -> Either String ServerOptions)]
@@ -54,6 +56,9 @@ descs =
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
+  , Option ['s'] ["std-console"]
+    (NoArg $ \opts -> return opts { stdConsole = True, logFH = stderr })
+    "open console using stdin and stdout. also set log-output to stderr"
   ]
   where
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
@@ -76,7 +81,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logFH opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts)
+run opts = Server.run (logFH opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs

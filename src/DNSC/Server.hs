@@ -19,7 +19,7 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
-import DNSC.SocketUtil (mkSocketWaitForByte, isAnySockAddr)
+import DNSC.SocketUtil (addrInfo, mkSocketWaitForByte, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
 import DNSC.Types (NE)
@@ -37,14 +37,10 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-addrInfo :: PortNumber -> [HostName] -> IO [AddrInfo]
-addrInfo p []        = S.getAddrInfo Nothing Nothing $ Just $ show p
-addrInfo p hs@(_:_)  = concat <$> sequence [ S.getAddrInfo Nothing (Just h) $ Just $ show p | h <- hs ]
-
 run :: Handle -> Log.Level -> Bool -> Int
-    -> PortNumber -> [HostName] -> IO ()
-run logFh logLevel disableV6NS conc port hosts =
-  uncurry monitor =<< bind logFh logLevel disableV6NS conc port hosts
+    -> PortNumber -> [HostName] -> Bool -> IO ()
+run logFh logLevel disableV6NS conc port hosts stdConsole =
+  uncurry (monitor stdConsole) =<< bind logFh logLevel disableV6NS conc port hosts
 
 bind :: Handle -> Log.Level -> Bool -> Int
      -> PortNumber -> [HostName]
