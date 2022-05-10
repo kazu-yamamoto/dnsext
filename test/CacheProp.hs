@@ -19,13 +19,13 @@ import qualified Network.DNS as DNS
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
+import DNSC.Types (Timestamp)
 import qualified DNSC.TimeCache as TimeCache
 import DNSC.Cache
   (Cache, Key (Key), Val (Val), CRSet (..), (<+),
    Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
    takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
-import DNSC.Types
 
 
 {-# ANN module "HLint: ignore Use fromMaybe" #-}
