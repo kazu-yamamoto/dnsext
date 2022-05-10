@@ -23,11 +23,11 @@ import qualified Network.DNS as DNS
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
 import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
+import DNSC.Types (NE)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
 import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, runReply)
-import DNSC.Types
 
 
 type Request s a = (s, (DNSHeader, NE Question), a)
