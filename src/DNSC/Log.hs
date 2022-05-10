@@ -6,7 +6,7 @@ module DNSC.Log (
 
 -- GHC packages
 import Control.Monad (when)
-import System.IO (hSetBuffering, stdout, BufferMode (LineBuffering))
+import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr)
 
 -- this package
 import DNSC.Concurrent (forkConsumeQueue)
@@ -19,11 +19,11 @@ data Level
   | WARN
   deriving (Eq, Ord, Show, Read)
 
-new :: Level -> IO (Level -> [String] -> IO (), IO ())
-new level = do
-  hSetBuffering stdout LineBuffering
+new :: Handle -> Level -> IO (Level -> [String] -> IO (), IO ())
+new outFh level = do
+  hSetBuffering outFh LineBuffering
 
-  (enqueue, quit) <- forkConsumeQueue $ putStr . unlines
+  (enqueue, quit) <- forkConsumeQueue $ hPutStr outFh . unlines
   let logLines lv = when (level <= lv) . enqueue
 
   return (logLines, quit)

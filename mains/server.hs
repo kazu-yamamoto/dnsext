@@ -1,18 +1,21 @@
 import Control.Monad ((>=>))
 import Data.Char (toUpper)
+import Data.List (intercalate)
 import Data.Word (Word16)
 import Text.Read (readEither)
 import System.Console.GetOpt
   (OptDescr (Option), ArgDescr (ReqArg, NoArg), ArgOrder (RequireOrder),
    usageInfo, getOpt)
 import System.Environment (getArgs)
+import System.IO (Handle, stdout, stderr)
 
 import qualified DNSC.Log as Log
 import qualified DNSC.Server as Server
 
 data ServerOptions =
   ServerOptions
-  { logLevel :: Log.Level
+  { logFH :: Handle
+  , logLevel :: Log.Level
   , disableV6NS :: Bool
   , concurrency :: Int
   , port :: Word16
@@ -23,7 +26,8 @@ data ServerOptions =
 defaultOptions :: ServerOptions
 defaultOptions =
   ServerOptions
-  { logLevel = Log.NOTICE
+  { logFH = stdout
+  , logLevel = Log.NOTICE
   , disableV6NS = False
   , concurrency = 16
   , port = 53
@@ -35,6 +39,9 @@ descs =
   [ Option ['h'] ["help"]
     (NoArg $ const $ Left "show help")
     "show this help text"
+  , Option [] ["log-output"]
+    (ReqArg (\s opts -> parseOutput s >>= \x -> return opts { logFH = x }) $ "{" ++ intercalate "|" (map fst outputs) ++ "}")
+    "log output target. default is stdout"
   , Option ['l'] ["log-level"]
     (ReqArg (\s opts -> readEither (map toUpper s) >>= \x -> return opts { logLevel = x }) "{WARN|NOTICE|INFO|DEBUG}")
     "server log-level"
@@ -48,6 +55,9 @@ descs =
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
   ]
+  where
+    parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
+    outputs = [("stdout", stdout), ("stderr", stderr)]
 
 help :: IO ()
 help =
@@ -66,7 +76,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts)
+run opts = Server.run (logFH opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
