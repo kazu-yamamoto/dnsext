@@ -5,7 +5,8 @@ module DNSC.ServerMonitor where
 import Control.Monad (unless)
 import Data.Functor (($>))
 import Data.Ord (Down (..))
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, find)
+import Data.Char (toUpper)
 import qualified Data.ByteString.Char8 as B8
 
 -- dns packages
@@ -25,11 +26,12 @@ data Command
 monitor :: Context -> IO () -> IO ()
 monitor cxt quit = loop
   where
-    parseTYPE "A"      = Just DNS.A
-    parseTYPE "AAAA"   = Just DNS.AAAA
-    parseTYPE "NS"     = Just DNS.NS
-    parseTYPE "CNAME"  = Just DNS.CNAME
-    parseTYPE _        = Nothing
+    parseTYPE s =
+      find match types
+      where
+        us = map toUpper s
+        match t = show t == us
+        types = map DNS.toTYPE [1..512]
     parseCmd []  =    Just Noop
     parseCmd ws  =  case ws of
       "find" : s : _      ->  Just $ Find s
