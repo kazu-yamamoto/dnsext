@@ -14,10 +14,10 @@ import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
 -- this package
 import DNSC.Concurrent (forkLoop, forkConsumeQueue)
+import DNSC.Types (Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNSC.Cache as Cache
-import DNSC.Types
 
 data Update
   = I Key TTL CRSet Ranking
