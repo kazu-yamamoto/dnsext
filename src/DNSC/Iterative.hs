@@ -8,7 +8,11 @@ module DNSC.Iterative (
   rootNS, Delegation,
   QueryError (..),
   printResult,
-
+  -- * types
+  Name,
+  NE,
+  UpdateCache,
+  TimeCache,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, reply,
@@ -49,6 +53,7 @@ import DNSC.Cache
   (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
+import DNSC.Types
 
 
 type Name = String
@@ -91,8 +96,6 @@ domains name
         p = parent n
 
 -----
-
-type Timestamp = Int64
 
 data Context =
   Context
@@ -297,8 +300,6 @@ query1 n typ = do
   sa <- selectDelegation nss
   lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
   handleNX throwE return =<< norec1 sa (B8.pack n) typ
-
-type NE a = (a, [a])
 
 -- ドメインに対する NS 委任情報
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
