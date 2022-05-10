@@ -51,7 +51,7 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 -- this package
-import DNSC.Types
+import DNSC.Types (Timestamp)
 
 ---
 
