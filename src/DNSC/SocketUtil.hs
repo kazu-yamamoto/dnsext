@@ -1,5 +1,5 @@
 module DNSC.SocketUtil (
-  mkSocketWaitForInput,
+  mkSocketWaitForByte,
   isAnySockAddr,
   ) where
 
@@ -16,8 +16,8 @@ import Network.Socket (Socket, withFdSocket, SockAddr (..))
 
 {- make action to wait for socket-input from cached FD
    without calling fdStat and mkFD for every wait-for calls -}
-mkSocketWaitForInput :: Socket -> IO (Int -> IO Bool)
-mkSocketWaitForInput sock =
+mkSocketWaitForByte :: Socket -> IO (Int -> IO Bool)
+mkSocketWaitForByte sock =
   withFD <$> withFdSocket sock getFD
   where
     withFD fd millisec =

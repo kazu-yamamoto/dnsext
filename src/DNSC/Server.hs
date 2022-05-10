@@ -18,7 +18,7 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
-import DNSC.SocketUtil (mkSocketWaitForInput, isAnySockAddr)
+import DNSC.SocketUtil (mkSocketWaitForByte, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
 import DNSC.Types (NE)
@@ -62,15 +62,15 @@ bind level disableV6NS para port hosts = do
   (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
   (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
-  waitInputs <- mapM (mkSocketWaitForInput . fst) sas
+  waitsByte <- mapM (mkSocketWaitForByte . fst) sas
   quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
-             [ recvRequest waitForInput recv cxt enqueueReq sock
+             [ recvRequest waitForByte recv cxt enqueueReq sock
              | (sock, addr) <- sas
              , let wildcard = isAnySockAddr addr
                    recv s = do
                      now <- getSec
                      mkRecv wildcard now s
-             | waitForInput <- waitInputs
+             | waitForByte <- waitsByte
              ]
 
   mapM_ (uncurry S.bind) sas
@@ -96,8 +96,8 @@ recvRequest :: Show a
             -> (Request s a -> IO ())
             -> s
             -> IO ()
-recvRequest waitInput recv cxt enqReq sock = do
-  hasInput <- waitInput (3 * 1000)
+recvRequest waitByte recv cxt enqReq sock = do
+  hasInput <- waitByte (3 * 1000)
   when hasInput $ do
     (m, addr) <- recv sock
     let logLn level = logLines_ cxt level . (:[])
