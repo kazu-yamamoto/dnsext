@@ -9,7 +9,6 @@ module DNSC.Server (
 -- GHC packages
 import Control.Monad ((<=<), when)
 import Data.List (uncons)
-import System.IO (Handle)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
@@ -37,16 +36,16 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-run :: Handle -> Log.Level -> Bool -> Int
+run :: Log.FOutput -> Log.Level -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run logFh logLevel disableV6NS conc port hosts stdConsole =
-  uncurry (monitor stdConsole) =<< bind logFh logLevel disableV6NS conc port hosts
+run logOutput logLevel disableV6NS conc port hosts stdConsole =
+  uncurry (monitor stdConsole) =<< bind logOutput logLevel disableV6NS conc port hosts
 
-bind :: Handle -> Log.Level -> Bool -> Int
+bind :: Log.FOutput -> Log.Level -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO (Context, IO ())
-bind logFh logLevel disableV6NS para port hosts = do
-  (putLines, quitLog) <- Log.new logFh logLevel
+bind logOutput logLevel disableV6NS para port hosts = do
+  (putLines, quitLog) <- Log.newFastLogger logOutput logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
   (ucache, quitCache) <- UCache.new putLines tcache
   cxt <- newContext putLines disableV6NS ucache tcache

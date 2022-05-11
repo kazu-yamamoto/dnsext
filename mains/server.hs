@@ -7,14 +7,13 @@ import System.Console.GetOpt
   (OptDescr (Option), ArgDescr (ReqArg, NoArg), ArgOrder (RequireOrder),
    usageInfo, getOpt)
 import System.Environment (getArgs)
-import System.IO (Handle, stdout, stderr)
 
 import qualified DNSC.Log as Log
 import qualified DNSC.Server as Server
 
 data ServerOptions =
   ServerOptions
-  { logFH :: Handle
+  { logOutput :: Log.FOutput
   , logLevel :: Log.Level
   , disableV6NS :: Bool
   , concurrency :: Int
@@ -27,7 +26,7 @@ data ServerOptions =
 defaultOptions :: ServerOptions
 defaultOptions =
   ServerOptions
-  { logFH = stdout
+  { logOutput = Log.FStdout
   , logLevel = Log.NOTICE
   , disableV6NS = False
   , concurrency = 16
@@ -42,7 +41,7 @@ descs =
     (NoArg $ const $ Left "show help")
     "show this help text"
   , Option [] ["log-output"]
-    (ReqArg (\s opts -> parseOutput s >>= \x -> return opts { logFH = x }) $ "{" ++ intercalate "|" (map fst outputs) ++ "}")
+    (ReqArg (\s opts -> parseOutput s >>= \x -> return opts { logOutput = x }) $ "{" ++ intercalate "|" (map fst outputs) ++ "}")
     "log output target. default is stdout"
   , Option ['l'] ["log-level"]
     (ReqArg (\s opts -> readEither (map toUpper s) >>= \x -> return opts { logLevel = x }) "{WARN|NOTICE|INFO|DEBUG}")
@@ -57,12 +56,12 @@ descs =
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
   , Option ['s'] ["std-console"]
-    (NoArg $ \opts -> return opts { stdConsole = True, logFH = stderr })
+    (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.FStderr })
     "open console using stdin and stdout. also set log-output to stderr"
   ]
   where
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
-    outputs = [("stdout", stdout), ("stderr", stderr)]
+    outputs = [("stdout", Log.FStdout), ("stderr", Log.FStderr)]
 
 help :: IO ()
 help =
@@ -81,7 +80,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logFH opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (logOutput opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
