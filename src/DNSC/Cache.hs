@@ -22,7 +22,7 @@ module DNSC.Cache (
   insertRRs,
 
   -- * low-level interfaces
-  Cache, Key (..), Val (..), CRSet (..),
+  Cache (..), Key (..), Val (..), CRSet (..),
   extractRRSet,
   (<+), alive,
   member,
@@ -132,10 +132,10 @@ rankedAdditional =
 data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = Val CRSet Ranking deriving Show
 
-type Cache = OrdPSQ Key Timestamp Val
+data Cache = Cache (OrdPSQ Key Timestamp Val) Int {- max size -}
 
 empty :: Cache
-empty = PSQ.empty
+empty = Cache PSQ.empty 1024
 
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
@@ -147,7 +147,7 @@ lookup now dom = lookup_ now result (fromDomain dom)
 lookup_ :: Timestamp -> (Key -> TTL -> Val -> a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
-lookup_ now mk dom typ cls cache = do
+lookup_ now mk dom typ cls (Cache cache _) = do
   let k = Key dom typ cls
   (eol, v) <- k `PSQ.lookup` cache
   ttl <- alive now eol
@@ -172,23 +172,28 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
-insert now k@(Key dom typ cls) ttl crs rank c =
-  maybe inserted withOldRank lookupRank
+insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
+  maybe sized withOldRank lookupRank
   where
     lookupRank =
       lookup_ now (\_ _ (Val _ r) -> r)
-      dom typ cls c
+      dom typ cls cache
     withOldRank r = do
       guard $ rank > r
-      inserted
+      sized
     eol = now <+ ttl
-    inserted =
-      return $ PSQ.insert k eol (Val crs rank) c
+    sized
+      | PSQ.size inserted <= xsz  =  return $ Cache inserted xsz
+      | otherwise                 =  do
+          (_, _, _, deleted) <- PSQ.minView inserted
+          return $ Cache deleted xsz
+    inserted = PSQ.insert k eol (Val crs rank) c
+
 
 expires :: Timestamp -> Cache -> Maybe Cache
-expires now c
+expires now (Cache c xsz)
   | null exs   =  Nothing
-  | otherwise  =  Just result
+  | otherwise  =  Just $ Cache result xsz
   where
     (exs, result) = PSQ.atMostView now c
 
@@ -204,7 +209,7 @@ alive now eol = do
   safeToTTL ttl'
 
 size :: Cache -> Int
-size = PSQ.size
+size (Cache c _) = PSQ.size c
 
 ---
 {- debug interfaces -}
@@ -215,10 +220,10 @@ member :: Timestamp
 member now dom typ cls = isJust . lookup_ now (\_ _ _ -> ()) dom typ cls
 
 dump :: Cache -> [(Key, (Timestamp, Val))]
-dump c = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
+dump (Cache c _) = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
 
 dumpKeys :: Cache -> [(Key, Timestamp)]
-dumpKeys c = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
+dumpKeys (Cache c _) = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
 
 ---
 
