@@ -23,8 +23,7 @@ import DNSC.Types (Timestamp)
 import qualified DNSC.TimeCache as TimeCache
 import DNSC.Cache
   (Cache, Key (Key), Val (Val), CRSet (..), (<+),
-   Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
-   takeRRSet, extractRRSet)
+   Ranking (..), takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
 
 
@@ -113,7 +112,7 @@ removeExpiresUpdates = filter (not . expire)
     expire _       =  False
 
 rankings :: [Ranking]
-rankings = [rankAuthAnswer, rankAnswer, rankAdditional]
+rankings = [RankAuthAnswer, RankAnswer, RankAdditional]
 
 -----
 

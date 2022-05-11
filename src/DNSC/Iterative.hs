@@ -29,7 +29,6 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
-import Data.Ord (Down (..))
 import Data.Maybe (mapMaybe, listToMaybe)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
 import qualified Data.Set as Set
@@ -51,7 +50,7 @@ import DNSC.DNSUtil (lookupRaw)
 import DNSC.Types (NE, Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache
-  (Ranking, rankAdditional, rankedAnswer, rankedAuthority, rankedAdditional,
+  (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, Key, Val, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
@@ -238,7 +237,7 @@ reply n typ rd =
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
-      | rank <= rankAdditional  =  Nothing
+      | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just rrs
     lookupCache_ = (replyRank =<<) <$> lookupCache (B8.pack n) typ
 
@@ -472,7 +471,7 @@ lookupCache dom typ = do
   lookupRRs <- asks lookup_
   result <- liftIO $ lookupRRs dom typ DNS.classIN
   logLn Log.DEBUG $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
-                                        maybe "miss" (\ (_, Down rank) -> "hit: " ++ show rank) result]
+                                        maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
 
 getSection :: (m -> Maybe ([ResourceRecord], Ranking))

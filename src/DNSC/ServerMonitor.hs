@@ -9,7 +9,6 @@ import GHC.IO.Handle.Types (Handle__ (..))
 -- GHC packages
 import Control.Monad ((<=<), when, unless, void)
 import Data.Functor (($>))
-import Data.Ord (Down (..))
 import Data.List (isInfixOf, find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Char (toUpper)
@@ -130,7 +129,7 @@ getConsole cxt quit monQuitRef inH outH ainfo = do
         dispatch Noop             =  return ()
         dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
         dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookup_ cxt dom typ DNS.classIN
-          where hit (rrs, Down rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
+          where hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Size             =  hPrint outH =<< size_ cxt
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
 

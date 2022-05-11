@@ -9,7 +9,7 @@ module DNSC.Cache (
   expires,
   size,
 
-  Ranking, rankAuthAnswer, rankAnswer, rankAdditional,
+  Ranking (..),
   rankedAnswer, rankedAuthority, rankedAdditional,
 
   insertSetFromSection,
@@ -32,7 +32,6 @@ module DNSC.Cache (
 -- GHC packages
 import Prelude hiding (lookup)
 import Control.Monad (guard)
-import Data.Ord (Down (..))
 import Data.Function (on)
 import Data.Maybe (isJust)
 import Data.Either (partitionEithers)
@@ -76,34 +75,28 @@ data CRSet
 -- Ranking data (section 5.4.1 of RFC2181 - Clarifications to the DNS Specification)
 -- <https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1>
 
-data Ranking_
-{- + Data from a primary zone file, other than glue data, -}
-  --
-{- + Data from a zone transfer, other than glue, -}
-  --
-{- + The authoritative data included in the answer section of an
-     authoritative reply. -}
-  = RankAuthAnswer
-{- + Data from the authority section of an authoritative answer, -}
-  -- -- avoiding issue of authority section in reply with aa flag
-{- + Glue from a primary zone, or glue from a zone transfer, -}
-  --
+data Ranking
+{- + Additional information from an authoritative answer,
+     Data from the authority section of a non-authoritative answer,
+     Additional information from non-authoritative answers. -}
+  = RankAdditional
 {- + Data from the answer section of a non-authoritative answer, and
      non-authoritative data from the answer section of authoritative
      answers, -}
   | RankAnswer
-{- + Additional information from an authoritative answer,
-     Data from the authority section of a non-authoritative answer,
-     Additional information from non-authoritative answers. -}
-  | RankAdditional
+{- + Glue from a primary zone, or glue from a zone transfer, -}
+  --
+{- + Data from the authority section of an authoritative answer, -}
+  -- -- avoiding issue of authority section in reply with aa flag
+{- + The authoritative data included in the answer section of an
+     authoritative reply. -}
+  | RankAuthAnswer
+{- + Data from a zone transfer, other than glue, -}
+  --
+{- + Data from a primary zone file, other than glue data, -}
+  --
   deriving (Eq, Ord, Show)
-
-type Ranking = Down Ranking_  -- upper rank is better
-
-rankAuthAnswer, rankAnswer, rankAdditional :: Ranking
-rankAuthAnswer  =  Down RankAuthAnswer
-rankAnswer      =  Down RankAnswer
-rankAdditional  =  Down RankAdditional
+  -- ranking, derived order, the lower the beter
 
 rankedSection :: Maybe Ranking -> Maybe Ranking -> (DNSMessage -> [ResourceRecord])
               -> DNSMessage -> Maybe ([ResourceRecord], Ranking)
@@ -116,22 +109,22 @@ rankedSection authRank noauthRank section msg =
 rankedAnswer :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
 rankedAnswer =
   rankedSection
-  (Just rankAuthAnswer)
-  (Just rankAnswer)
+  (Just RankAuthAnswer)
+  (Just RankAnswer)
   DNS.answer
 
 rankedAuthority :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
 rankedAuthority =
   rankedSection
   Nothing  -- avoid security hole with authorized reply and authority section case
-  (Just rankAdditional)
+  (Just RankAdditional)
   DNS.authority
 
 rankedAdditional :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
-  (Just rankAdditional)
-  (Just rankAdditional)
+  (Just RankAdditional)
+  (Just RankAdditional)
   DNS.additional
 
 ---
