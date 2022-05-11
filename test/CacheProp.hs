@@ -289,14 +289,6 @@ sizeInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (A
       | otherwise                           =  Cache.size ins === Cache.size cache + 1
     cache = foldUpdates us Cache.empty
 
-sizeExpire1MinKey :: AUpdates -> Property
-sizeExpire1MinKey (AUpdates us) =
-  maybe (property Discard) checkSize $ Cache.minKey cache
-  where
-    cache = foldUpdates us Cache.empty
-    checkSize (_, minTS) =
-      ( (+ 1) . Cache.size <$> Cache.expire1 minTS cache ) === Just (Cache.size cache)
-
 ---
 
 -- lookup
@@ -400,7 +392,6 @@ props =
   , nprop "size - empty"                    sizeEmpty
   , nprop "size - new inserted"             sizeNewInserted
   , nprop "size - inserted"                 sizeInserted
-  , nprop "size - expire1 with min-key"     sizeExpire1MinKey
 
   , nprop "lookup - empty"                  lookupEmpty
   , nprop "lookup - new inserted"           lookupNewInserted
