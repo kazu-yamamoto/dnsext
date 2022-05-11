@@ -134,8 +134,8 @@ data Val = Val CRSet Ranking deriving Show
 
 data Cache = Cache (OrdPSQ Key Timestamp Val) Int {- max size -}
 
-empty :: Cache
-empty = Cache PSQ.empty 1024
+empty :: Int -> Cache
+empty = Cache PSQ.empty
 
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
