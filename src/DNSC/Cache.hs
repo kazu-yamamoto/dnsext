@@ -25,8 +25,8 @@ module DNSC.Cache (
   Cache, Key (..), Val (..), CRSet (..),
   extractRRSet,
   (<+), alive,
-  expire1, member,
-  dump, dumpKeys, minKey,
+  member,
+  dump, dumpKeys,
   ) where
 
 -- GHC packages
@@ -186,18 +186,11 @@ insert now k@(Key dom typ cls) ttl crs rank c =
       return $ PSQ.insert k eol (Val crs rank) c
 
 expires :: Timestamp -> Cache -> Maybe Cache
-expires now = rec0
+expires now c
+  | null exs   =  Nothing
+  | otherwise  =  Just result
   where
-    rec0 c = rec1 <$> expire1 now c
-    rec1 c = maybe c rec1 $ expire1 now c
-
-expire1 :: Timestamp -> Cache -> Maybe Cache
-expire1 now c =
-  ex =<< PSQ.minView c
-  where
-    ex (_k, eol, _v, c')
-      | Just {} <- alive now eol  =  Nothing
-      | otherwise                 =  Just c'
+    (exs, result) = PSQ.atMostView now c
 
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
@@ -226,9 +219,6 @@ dump c = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
 
 dumpKeys :: Cache -> [(Key, Timestamp)]
 dumpKeys c = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
-
-minKey :: Cache -> Maybe (Key, Timestamp)
-minKey = fmap fst . uncons . dumpKeys
 
 ---
 
