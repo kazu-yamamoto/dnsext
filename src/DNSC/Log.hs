@@ -1,5 +1,7 @@
 module DNSC.Log (
   Level (..),
+  FOutput (..),
+  newFastLogger,
   new,
   none,
   ) where
@@ -7,6 +9,9 @@ module DNSC.Log (
 -- GHC packages
 import Control.Monad (when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr)
+
+-- other packages
+import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
 
 -- this package
 import DNSC.Concurrent (forkConsumeQueue)
@@ -18,6 +23,22 @@ data Level
   | NOTICE
   | WARN
   deriving (Eq, Ord, Show, Read)
+
+data FOutput
+  = FStdout
+  | FStderr
+  deriving Show
+
+newFastLogger :: FOutput -> Level -> IO (Level -> [String] -> IO (), IO ())
+newFastLogger out level = do
+  loggerSet <- newLoggerSet bufsize
+  let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
+  return (logLines, flushLogStr loggerSet)
+  where
+    bufsize = 4096
+    newLoggerSet = case out of
+      FStdout  ->  newStdoutLoggerSet
+      FStderr  ->  newStderrLoggerSet
 
 new :: Handle -> Level -> IO (Level -> [String] -> IO (), IO ())
 new outFh level = do
