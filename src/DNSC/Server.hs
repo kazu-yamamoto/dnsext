@@ -36,18 +36,18 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-run :: Log.FOutput -> Log.Level -> Bool -> Int
+run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run logOutput logLevel disableV6NS conc port hosts stdConsole =
-  uncurry (monitor stdConsole) =<< bind logOutput logLevel disableV6NS conc port hosts
+run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole =
+  uncurry (monitor stdConsole) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
 
-bind :: Log.FOutput -> Log.Level -> Bool -> Int
+bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO (Context, IO ())
-bind logOutput logLevel disableV6NS para port hosts = do
+bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
   (putLines, quitLog) <- Log.newFastLogger logOutput logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
-  (ucache, quitCache) <- UCache.new putLines tcache
+  (ucache, quitCache) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
   sas <- udpSockets port hosts
