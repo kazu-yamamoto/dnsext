@@ -18,7 +18,7 @@ spec :: Spec
 spec = describe "query" $ do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
   (tcache, _quitT) <- runIO TimeCache.new
-  (ucache, _quit) <- runIO $ UCache.new (\_ _ -> pure ()) tcache
+  (ucache, _quit) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
