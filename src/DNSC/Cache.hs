@@ -180,15 +180,15 @@ insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
       dom typ cls cache
     withOldRank r = do
       guard $ rank > r
-      sized
+      inserted  -- replacing rank does not change size
     eol = now <+ ttl
+    inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
     sized
-      | PSQ.size inserted <= xsz  =  return $ Cache inserted xsz
-      | otherwise                 =  do
-          (_, _, _, deleted) <- PSQ.minView inserted
-          return $ Cache deleted xsz
-    inserted = PSQ.insert k eol (Val crs rank) c
-
+      | PSQ.size c < xsz  =  inserted
+      | otherwise         =  do
+          (_, l, _, deleted) <- PSQ.minView c
+          guard $ eol > l  -- Guard if the tried to insert has the smallest lifetime
+          Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
 
 expires :: Timestamp -> Cache -> Maybe Cache
 expires now (Cache c xsz)
