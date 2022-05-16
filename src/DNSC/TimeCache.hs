@@ -3,33 +3,43 @@ module DNSC.TimeCache (
   none,
   ) where
 
-import Control.Concurrent (threadDelay)
+-- GHC packages
 import Data.Int (Int64)
-import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Time (defaultTimeLocale, formatTime, getCurrentTimeZone, utcToZonedTime)
 import Data.Time.Clock.System (SystemTime (..), getSystemTime, systemToUTCTime)
 
-import DNSC.Concurrent (forkLoop)
-
+-- dns packages
+import Control.AutoUpdate (mkAutoUpdate, defaultUpdateSettings, updateAction, updateFreq)
 
 new :: IO ((IO Int64, IO ShowS), IO ())
 new = do
-  secRef <- newIORef 0
-  formatRef <- newIORef mempty
+  getSec <- mkAutoSeconds
+  getTimeStr <- mkAutoTimeStr getSec
+  return ((getSec, getTimeStr), return ())
 
-  let step = do
-        t <- getSystemTime  {- calls clock_gettime in x86-64 linux -}
-        zt <- utcToZonedTime <$> getCurrentTimeZone <*> pure (systemToUTCTime t)
-        let seconds = systemSeconds t
-            fstring = (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" zt ++) {- adjust to that the Log module uses String -}
-            intervalUSec = 1 * 1000 * 1000 - fromIntegral (systemNanoseconds t `quot` 1000)
-        writeIORef secRef seconds
-        writeIORef formatRef fstring
-        threadDelay intervalUSec
+mkAutoSeconds :: IO (IO Int64)
+mkAutoSeconds =
+  mkAutoUpdate defaultUpdateSettings
+  { updateAction = getSystemSeconds  {- calls clock_gettime in x86-64 linux -}
+  , updateFreq = 1000 * 1000
+  }
+  where
+    getSystemSeconds = do
+      MkSystemTime { systemSeconds = sec } <- getSystemTime
+      return sec
 
-  quit <- forkLoop step
-
-  return ((readIORef secRef, readIORef formatRef), quit)
+mkAutoTimeStr :: IO Int64 -> IO (IO (String -> String))
+mkAutoTimeStr getSec =
+  mkAutoUpdate defaultUpdateSettings
+  { updateAction = getFormattedTime
+  , updateFreq = 1000 * 1000
+  }
+  where
+    getFormattedTime = do
+      sec <- getSec
+      let t = MkSystemTime { systemSeconds = sec, systemNanoseconds = 0 }
+      zt <- utcToZonedTime <$> getCurrentTimeZone <*> pure (systemToUTCTime t)
+      return (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" zt ++)
 
 -- no caching
 none :: (IO Int64, IO ShowS)
