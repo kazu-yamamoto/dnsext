@@ -47,6 +47,7 @@ library
 
                      -- dns packages
                      , async
+                     , auto-update
                      , network
                      , psqueues
                      , iproute
