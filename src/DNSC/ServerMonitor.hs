@@ -7,6 +7,7 @@ import GHC.IO.Handle.Internals (wantReadableHandle_)
 import GHC.IO.Handle.Types (Handle__ (..))
 
 -- GHC packages
+import Control.Concurrent (forkIO, forkFinally)
 import Control.Monad ((<=<), when, unless, void)
 import Data.Functor (($>))
 import Data.List (isInfixOf, find)
@@ -59,7 +60,7 @@ monitor stdConsole cxt getsSizeInfo quit = do
   where
     runStdConsole monQuitRef = do
       repl <- getConsole cxt getsSizeInfo quit monQuitRef stdin stdout "<std>"
-      void $ async repl
+      void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
     getMonitor monQuitRef s = do
@@ -70,7 +71,7 @@ monitor stdConsole cxt getsSizeInfo quit = do
               (sock, addr) <- S.accept s
               sockh <- S.socketToHandle sock ReadWriteMode
               repl <- getConsole cxt getsSizeInfo quit monQuitRef sockh sockh $ show addr
-              void $ async $ repl *> hClose sockh
+              void $ forkFinally repl (\_ -> hClose sockh)
           loop = do
             isQuit <- readIORef monQuitRef
             unless isQuit $ do
