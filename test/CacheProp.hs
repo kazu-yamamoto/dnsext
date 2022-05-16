@@ -54,8 +54,10 @@ domainList :: [ShortByteString]
 domainList =
   map packS8
   [ "example.com."
+  , "example.org."
   , "example.ne.jp."
   , "example.net.uk."
+  , "example.com.cn."
   ]
 
 nameList :: [ShortByteString]
@@ -64,6 +66,8 @@ nameList =
   [ "www.example.com."
   , "mail.example.com."
   , "example.ne.jp."
+  , "www.example.or.jp."
+  , "mail.example.ne.jp."
   ]
 
 v4List :: Read a => [a]
@@ -82,6 +86,10 @@ nsList =
 ts0 :: Timestamp
 ts0 = unsafePerformIO $ fst TimeCache.none
 {-# NOINLINE ts0 #-}
+
+-- avoid limitations imposed by max-size
+cacheEmpty :: Cache
+cacheEmpty = Cache.empty 4096
 
 -----
 
@@ -265,7 +273,17 @@ rrsetExtractTake (ACRPair (k, crs)) (ATTL ttl) = takeRRSet (extractRRSet k ttl c
 
 -- Cache.size Cache.empty == 0
 sizeEmpty :: Property
-sizeEmpty = once $ Cache.size Cache.empty === 0
+sizeEmpty = once $ Cache.size cacheEmpty === 0
+
+sizeSatisfyMax :: AUpdates -> Property
+sizeSatisfyMax (AUpdates us) =
+  label "leeway" (Cache.size cache < maxCacheSize)
+  .||.
+  label "max" (Cache.size cache === maxCacheSize)
+  where
+    maxCacheSize = 10
+    cache = foldUpdates us $ Cache.empty maxCacheSize
+
 
 -- size of cache after new key is inserted
 sizeNewInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
@@ -274,7 +292,7 @@ sizeNewInserted (ACRPair (k, crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
   $ Cache.insert ts0 k ttl_ crs rank rcache
   where
     checkSize ins = Cache.size ins === Cache.size rcache + 1
-    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
 
 -- forall ((k, crs) :: ACRPair) ttl cache rs . (rs == extractRRSet k ttl crs) ->
 -- (       member k cache  -> size inserted == size cache   \/
@@ -285,16 +303,16 @@ sizeInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (A
   $ Cache.insert ts0 k ttl_ crs rank cache
   where
     checkSize ins
-      | Cache.member ts0 dom typ cls cache  =  Cache.size ins === Cache.size cache
-      | otherwise                           =  Cache.size ins === Cache.size cache + 1
-    cache = foldUpdates us Cache.empty
+      | Cache.member ts0 dom typ cls cache  =  label "member" $ Cache.size ins === Cache.size cache
+      | otherwise                           =  label "normal" $ Cache.size ins === Cache.size cache + 1
+    cache = foldUpdates us cacheEmpty
 
 ---
 
 -- lookup
 
 lookupEmpty :: AKey -> Property
-lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 (toDomain dom) typ cls Cache.empty === Nothing
+lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 (toDomain dom) typ cls cacheEmpty === Nothing
 
 -- lookup key cache after inserted as new key
 lookupNewInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
@@ -303,7 +321,7 @@ lookupNewInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking ran
   =/=
   Nothing
   where
-    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
 
 lookupInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
 lookupInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
@@ -311,14 +329,14 @@ lookupInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) 
     Nothing   ->  label "old" $ Cache.lookup ts0 (toDomain dom) typ cls cache =/= Nothing
     Just ins  ->  label "new" $ Cache.lookup ts0 (toDomain dom) typ cls ins   =/= Nothing
   where
-    cache = foldUpdates us Cache.empty
+    cache = foldUpdates us cacheEmpty
 
 lookupTTL :: ACRPair -> ATTL -> ARanking -> ATimestamp -> AUpdates -> Property
 lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATimestamp ts1) (AUpdates us)  =
   maybe (property Discard) checkTTL
   $ Cache.insert ts0 k ttl_ crs rank rcache
   where
-    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
     checkTTL ins =
       case map DNS.rrttl . fst <$> Cache.lookup ts1 (toDomain dom) typ cls ins of
         Nothing    ->  life === Nothing
@@ -334,7 +352,7 @@ rankingOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrds -> AUpdates -> Property
 rankingOrdered (ACR2 (k@(Key dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
   maybe (property False) id action
   where
-    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
     action = do
       c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
       c1 <- Cache.insert ts0 k ttl1 crs1 r1 c2
@@ -345,7 +363,7 @@ rankingNotOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrdsCo -> AUpdates -> Propert
 rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo (r1, r2)) (AUpdates us) =
   action === Nothing
   where
-    rcache = foldUpdates (removeKeyUpdates k us) Cache.empty  -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
     action = do
       c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
       _  <- Cache.insert ts0 k ttl1 crs1 r1 c2
@@ -365,7 +383,7 @@ expiresAlives (AUpdates us) (ATimestamp ts1) =
       ===
       length
       [ k | (k, ts) <- Cache.dumpKeys cache, Just _  <- [Cache.alive ts1 ts] ]
-    cache = foldUpdates (removeExpiresUpdates us) Cache.empty
+    cache = foldUpdates (removeExpiresUpdates us) cacheEmpty
 
 expiresMaxEOL :: AUpdates -> Property
 expiresMaxEOL (AUpdates us) =
@@ -374,7 +392,7 @@ expiresMaxEOL (AUpdates us) =
   c  <- Cache.expires mx cache
   return $ Cache.size c
   where
-    cache = foldUpdates us Cache.empty
+    cache = foldUpdates us cacheEmpty
     eol :: (Timestamp, Update) -> Maybe Timestamp
     eol (ts, I _ ttl _)  =  Just $ ts <+ ttl
     eol ( _,  E)         =  Nothing
@@ -390,6 +408,7 @@ props =
   , nprop "RRSet - extract . take is just"  rrsetExtractTake
 
   , nprop "size - empty"                    sizeEmpty
+  , nprop "size - satisfy max"              sizeSatisfyMax
   , nprop "size - new inserted"             sizeNewInserted
   , nprop "size - inserted"                 sizeInserted
 

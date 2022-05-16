@@ -33,10 +33,11 @@ type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
+    -> Int
     -> IO ((Lookup, Insert, IO Cache), IO ())
-new putLines (getSec, getTimeStr) = do
+new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
-  cacheRef <- newIORef Cache.empty
+  cacheRef <- newIORef $Cache.empty maxCacheSize
 
   let update1 (ts, tstr, u) = do   -- step of single update theard
         cache <- readIORef cacheRef
@@ -68,4 +69,4 @@ none :: (Lookup, Insert, IO Cache)
 none =
   (\_ _ _ -> return Nothing,
    \_ _ _ _ -> return (),
-   return Cache.empty)
+   return $ Cache.empty 0)

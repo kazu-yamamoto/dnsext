@@ -1,4 +1,4 @@
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), guard)
 import Data.Char (toUpper)
 import Data.List (intercalate)
 import Data.Word (Word16)
@@ -15,6 +15,7 @@ data ServerOptions =
   ServerOptions
   { logOutput :: Log.FOutput
   , logLevel :: Log.Level
+  , maxKibiEntries :: Int
   , disableV6NS :: Bool
   , concurrency :: Int
   , port :: Word16
@@ -28,6 +29,7 @@ defaultOptions =
   ServerOptions
   { logOutput = Log.FStdout
   , logLevel = Log.NOTICE
+  , maxKibiEntries = 2 * 1024
   , disableV6NS = False
   , concurrency = 16
   , port = 53
@@ -46,6 +48,9 @@ descs =
   , Option ['l'] ["log-level"]
     (ReqArg (\s opts -> readEither (map toUpper s) >>= \x -> return opts { logLevel = x }) "{WARN|NOTICE|INFO|DEBUG}")
     "server log-level"
+  , Option ['M'] ["max-cache-entries"]
+    (ReqArg (\s opts -> readEither s >>= \x -> guard (x > 0) >> return opts { maxKibiEntries = x }) "POSITIVE_INTEGER")
+    ("max K-entries in cache (1024 entries per 1). default is " ++ show (maxKibiEntries defaultOptions) ++ " K-entries")
   , Option ['4'] ["disable-v6-ns"]
     (NoArg $ \opts -> return opts { disableV6NS = True })
     "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
@@ -80,7 +85,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logOutput opts) (logLevel opts) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
