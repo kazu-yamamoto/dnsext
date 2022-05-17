@@ -8,13 +8,15 @@ module DNSC.Concurrent (
   ) where
 
 -- GHC packages
-import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Control.Monad (unless, replicateM_, (<=<))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import System.IO.Error (tryIOError)
 
 -- dns packages
 import Control.Concurrent.Async (async, wait)
+
+-- this package hidden
+import DNSC.Queue (newQueue, readQueue, writeQueue)
 
 
 forkConsumeQueue :: (a -> IO ())
@@ -34,11 +36,11 @@ forksLoop = forksLoopWith $ const $ return ()
 forksConsumeQueueWith :: Int -> (IOError -> IO ()) -> (a -> IO ())
                   -> IO (a -> IO (), IO ())
 forksConsumeQueueWith n onError body = do
-  inQ <- newChan
-  let enqueue = writeChan inQ . Just
-      issueQuit = replicateM_ n $ writeChan inQ Nothing
+  inQ <- newQueue
+  let enqueue = writeQueue inQ . Just
+      issueQuit = replicateM_ n $ writeQueue inQ Nothing
       hbody = either onError return <=< tryIOError . body
-      loop = maybe (return ()) ((*> loop) . hbody) =<< readChan inQ
+      loop = maybe (return ()) ((*> loop) . hbody) =<< readQueue inQ
 
   waitQuit <- forksWithWait $ replicate n loop
   return (enqueue, issueQuit *> waitQuit)
