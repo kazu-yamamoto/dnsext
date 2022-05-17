@@ -43,7 +43,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
         cache <- readIORef cacheRef
         let updateRef c = do
               -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
-              atomicWriteIORef cacheRef c
+              c `seq` atomicWriteIORef cacheRef c
               case u of
                 I {}  ->  return ()
                 E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)

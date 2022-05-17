@@ -31,6 +31,7 @@ module DNSC.Cache (
 
 -- GHC packages
 import Prelude hiding (lookup)
+import Control.DeepSeq (NFData, deepseq, liftRnf)
 import Control.Monad (guard)
 import Data.Function (on)
 import Data.Maybe (isJust)
@@ -252,19 +253,26 @@ toRDatas crs = case crs of
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas []    = Nothing
 fromRDatas rds@(x:xs) = case x of
-  RD_A {}     ->  Just $ CR_A [ a | RD_A a <- rds ]
-  RD_NS {}    ->  Just $ CR_NS [ fromDomain d | RD_NS d <- rds ]
+  -- seq CRSet data in cache to cut references to bytestrings
+  RD_A {}     ->  let as = [ a | RD_A a <- rds ] in as `listseq` Just (CR_A as)
+  RD_NS {}    ->  let ds = [ fromDomain d | RD_NS d <- rds ] in ds `deepseq` Just (CR_NS ds)
   RD_CNAME d
-    | null xs   ->  Just $ CR_CNAME (fromDomain d)
+    | null xs   ->  let d' = fromDomain d in d' `seq` Just (CR_CNAME d')
     | otherwise ->  Nothing
   RD_SOA dom m a b c d e
-    | null xs   ->  Just $ CR_SOA (fromDomain dom) (toShort m) a b c d e
+    | null xs   ->  let { d' = fromDomain dom; m' = toShort m } in d' `seq` m' `seq`
+                        Just (CR_SOA d' m' a b c d e)
     | otherwise ->  Nothing
-  RD_PTR {}   ->  Just $ CR_PTR [ fromDomain d | RD_PTR d <- rds ]
-  RD_MX {}    ->  Just $ CR_MX [ (w, fromDomain d) | RD_MX w d <- rds ]
-  RD_TXT {}   ->  Just $ CR_TXT [ toShort t | RD_TXT t <- rds ]
-  RD_AAAA {}  ->  Just $ CR_AAAA [ a | RD_AAAA a <- rds ]
+  RD_PTR {}   ->  let ds = [ fromDomain d | RD_PTR d <- rds ] in ds `deepseq` Just (CR_PTR ds)
+  RD_MX {}    ->  let ps = [ (w, fromDomain d) | RD_MX w d <- rds ] in ps `deepseq` Just (CR_MX ps)
+  RD_TXT {}   ->  let ts = [ toShort t | RD_TXT t <- rds ] in ts `deepseq` Just (CR_TXT ts)
+  RD_AAAA {}  ->  let as = [ a | RD_AAAA a <- rds ] in as `listseq` Just (CR_AAAA as)
   _           ->  Nothing
+  where
+    listRnf :: [a] -> ()
+    listRnf = liftRnf (\t -> t `seq` ())
+    listseq :: [a] -> b -> b
+    listseq ps q = case listRnf ps of () -> q
 
 rdTYPE :: RData -> Maybe TYPE
 rdTYPE cr = case cr of
