@@ -31,7 +31,7 @@ module DNSC.Cache (
 
 -- GHC packages
 import Prelude hiding (lookup)
-import Control.DeepSeq (NFData, deepseq, liftRnf)
+import Control.DeepSeq (deepseq, liftRnf)
 import Control.Monad (guard)
 import Data.Function (on)
 import Data.Maybe (isJust)
