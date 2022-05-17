@@ -270,7 +270,7 @@ fromRDatas rds@(x:xs) = case x of
   _           ->  Nothing
   where
     listRnf :: [a] -> ()
-    listRnf = liftRnf (\t -> t `seq` ())
+    listRnf = liftRnf (`seq` ())
     listseq :: [a] -> b -> b
     listseq ps q = case listRnf ps of () -> q
 
