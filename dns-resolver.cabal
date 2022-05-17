@@ -42,6 +42,7 @@ library
                      , containers
                      , deepseq
                      , transformers
+                     , stm
                      , time
 
                      -- other packages
