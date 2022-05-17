@@ -31,7 +31,7 @@ module DNSC.Cache (
 
 -- GHC packages
 import Prelude hiding (lookup)
-import Control.DeepSeq (NFData, deepseq, liftRnf)
+import Control.DeepSeq (deepseq, liftRnf)
 import Control.Monad (guard)
 import Data.Function (on)
 import Data.Maybe (isJust)
@@ -270,7 +270,7 @@ fromRDatas rds@(x:xs) = case x of
   _           ->  Nothing
   where
     listRnf :: [a] -> ()
-    listRnf = liftRnf (\t -> t `seq` ())
+    listRnf = liftRnf (`seq` ())
     listseq :: [a] -> b -> b
     listseq ps q = case listRnf ps of () -> q
 
