@@ -7,7 +7,7 @@ module DNSC.UpdateCache (
 
 -- GHC packages
 import Control.Concurrent (threadDelay)
-import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
 -- dns packages
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
@@ -42,7 +42,8 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
   let update1 (ts, tstr, u) = do   -- step of single update theard
         cache <- readIORef cacheRef
         let updateRef c = do
-              writeIORef cacheRef c
+              -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
+              atomicWriteIORef cacheRef c
               case u of
                 I {}  ->  return ()
                 E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)
