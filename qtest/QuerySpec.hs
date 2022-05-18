@@ -20,6 +20,7 @@ spec = describe "query" $ do
   (tcache, _quitT) <- runIO TimeCache.new
   (ucache, _quit) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
+  cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
       runQuery1 n ty = runDNSQuery (query1 n ty) cxt
       runQuery n ty = runDNSQuery (query n ty) cxt
@@ -81,6 +82,14 @@ spec = describe "query" $ do
 
   it "query1 - cname with nx" $ do
     result <- runQuery1 "media-router-aol1.prod.media.yahoo.com." CNAME
+    printQueryError result
+    isRight result `shouldBe` True
+    let Right msg = result
+    length (DNS.answer msg) `shouldSatisfy` (> 0)
+
+  it "query1 - delegation with aa" $ do
+    -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
+    result <- runDNSQuery (query1 "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
