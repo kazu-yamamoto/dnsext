@@ -13,7 +13,7 @@ import Data.List (isInfixOf, find)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Char (toUpper)
 import qualified Data.ByteString.Char8 as B8
-import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hPrint, hFlush, hClose, stdin, stdout)
+import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 import System.IO.Error (tryIOError)
 
 -- dns packages
@@ -36,7 +36,7 @@ monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< 
 data Command
   = Find String
   | Lookup DNS.Domain DNS.TYPE
-  | Size
+  | Status
   | Noop
   | Exit
   | Quit
@@ -45,7 +45,7 @@ data Command
 monitor :: Bool -> Context
         -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
         -> IO () -> IO ()
-monitor stdConsole cxt (_, _, _, _) quit = do
+monitor stdConsole cxt getsSizeInfo quit = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
@@ -58,7 +58,7 @@ monitor stdConsole cxt (_, _, _, _) quit = do
   mapM_ wait ms
   where
     runStdConsole monQuitRef = do
-      repl <- getConsole cxt quit monQuitRef stdin stdout "<std>"
+      repl <- getConsole cxt getsSizeInfo quit monQuitRef stdin stdout "<std>"
       void $ async repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
@@ -69,7 +69,7 @@ monitor stdConsole cxt (_, _, _, _) quit = do
             when hasInput $ do
               (sock, addr) <- S.accept s
               sockh <- S.socketToHandle sock ReadWriteMode
-              repl <- getConsole cxt quit monQuitRef sockh sockh $ show addr
+              repl <- getConsole cxt getsSizeInfo quit monQuitRef sockh sockh $ show addr
               void $ async $ repl *> hClose sockh
           loop = do
             isQuit <- readIORef monQuitRef
@@ -78,8 +78,9 @@ monitor stdConsole cxt (_, _, _, _) quit = do
               loop
       return loop
 
-getConsole :: Context -> IO () -> IORef Bool -> Handle -> Handle -> String -> IO (IO ())
-getConsole cxt quit monQuitRef inH outH ainfo = do
+getConsole :: Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
+           -> IO () -> IORef Bool -> Handle -> Handle -> String -> IO (IO ())
+getConsole cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH outH ainfo = do
   let prompt = hPutStr outH "monitor> " *> hFlush outH
       input = do
         s <- hGetLine inH
@@ -118,7 +119,7 @@ getConsole cxt quit monQuitRef inH outH ainfo = do
     parseCmd ws  =  case ws of
       "find" : s : _      ->  Just $ Find s
       ["lookup", n, typ]  ->  Lookup (B8.pack n) <$> parseTYPE typ
-      "size" : _  ->  Just Size
+      "status" : _  ->  Just Status
       "exit" : _  ->  Just Exit
       "quit" : _  ->  Just Quit
       _           ->  Nothing
@@ -132,8 +133,21 @@ getConsole cxt quit monQuitRef inH outH ainfo = do
         dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
         dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookup_ cxt dom typ DNS.classIN
           where hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Size             =  hPrint outH =<< size_ cxt
+        dispatch Status           =  printStatus
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
+
+    printStatus = do
+      let outLn = hPutStrLn outH
+      outLn . ("cache size: " ++) . show =<< size_ cxt
+      let psize s getSize = do
+            (cur, mx) <- getSize
+            outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
+      psize "request queue" reqQSize
+      psize "response queue" resQSize
+      psize "ucache queue" ucacheQSize
+      lmx <- snd <$> logQSize
+      when (lmx >= 0) $ psize "log queue" logQSize
+
 
 hWaitForByte :: Handle -> Int -> IO Bool
 hWaitForByte h msecs =
