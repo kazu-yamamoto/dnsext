@@ -45,9 +45,9 @@ bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO (Context, IO ())
 bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
-  (putLines, quitLog) <- Log.newFastLogger logOutput logLevel
+  (putLines, _logQSize, quitLog) <- Log.newFastLogger logOutput logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
-  (ucache, quitCache) <- UCache.new putLines tcache maxCacheSize
+  (ucache, _ucacheQSize, quitCache) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
   sas <- udpSockets port hosts
