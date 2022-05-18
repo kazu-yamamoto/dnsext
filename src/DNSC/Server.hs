@@ -55,8 +55,8 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
   let putLn lv = putLines lv . (:[])
       send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
 
-  (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
-  (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
+  (enqueueResp, _resQSize, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
+  (enqueueReq, _reqQSize, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
   waitsByte <- mapM (mkSocketWaitForByte . fst) sas
   quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
