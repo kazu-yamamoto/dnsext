@@ -100,21 +100,21 @@ data Ranking
   -- ranking, derived order, the lower the beter
 
 rankedSection :: Ranking -> Ranking -> (DNSMessage -> [ResourceRecord])
-              -> DNSMessage -> Maybe ([ResourceRecord], Ranking)
+              -> DNSMessage -> ([ResourceRecord], Ranking)
 rankedSection authRank noauthRank section msg =
-  Just $ (,) (section msg)
+  (,) (section msg)
   $ if DNS.authAnswer flags then authRank else noauthRank
   where
     flags = DNS.flags $ DNS.header msg
 
-rankedAnswer :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAnswer :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAnswer =
   rankedSection
   RankAuthAnswer
   RankAnswer
   DNS.answer
 
-rankedAuthority :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAuthority =
   rankedSection
   {- avoid security hole with authorized reply and authority section case.
@@ -123,7 +123,7 @@ rankedAuthority =
   RankAdditional
   DNS.authority
 
-rankedAdditional :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
   RankAdditional
