@@ -21,10 +21,8 @@ import qualified DNSC.Queue as Queue
 
 
 forkConsumeQueue :: (a -> IO ())
-                 -> IO (a -> IO (), IO ())
-forkConsumeQueue body = do
-  (enqueue, _size, quit) <- forksConsumeQueue 1 body
-  return (enqueue, quit)
+                 -> IO (a -> IO (), IO (Int, Int), IO ())
+forkConsumeQueue = forksConsumeQueue 1
 
 forkLoop :: IO () -> IO (IO ())
 forkLoop = forksLoop . (:[])
