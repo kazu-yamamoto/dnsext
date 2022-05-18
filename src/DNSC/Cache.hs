@@ -99,35 +99,35 @@ data Ranking
   deriving (Eq, Ord, Show)
   -- ranking, derived order, the lower the beter
 
-rankedSection :: Maybe Ranking -> Maybe Ranking -> (DNSMessage -> [ResourceRecord])
-              -> DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedSection :: Ranking -> Ranking -> (DNSMessage -> [ResourceRecord])
+              -> DNSMessage -> ([ResourceRecord], Ranking)
 rankedSection authRank noauthRank section msg =
   (,) (section msg)
-  <$> if DNS.authAnswer flags then authRank else noauthRank
+  $ if DNS.authAnswer flags then authRank else noauthRank
   where
     flags = DNS.flags $ DNS.header msg
 
-rankedAnswer :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAnswer :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAnswer =
   rankedSection
-  (Just RankAuthAnswer)
-  (Just RankAnswer)
+  RankAuthAnswer
+  RankAnswer
   DNS.answer
 
-rankedAuthority :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAuthority =
   rankedSection
   {- avoid security hole with authorized reply and authority section case.
      RankAdditional does not overwrite glue. -}
-  (Just RankAdditional)
-  (Just RankAdditional)
+  RankAdditional
+  RankAdditional
   DNS.authority
 
-rankedAdditional :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
+rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
-  (Just RankAdditional)
-  (Just RankAdditional)
+  RankAdditional
+  RankAdditional
   DNS.additional
 
 ---

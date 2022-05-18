@@ -474,16 +474,16 @@ lookupCache dom typ = do
                                         maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
 
-getSection :: (m -> Maybe ([ResourceRecord], Ranking))
+getSection :: (m -> ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
            -> m -> (a, ReaderT Context IO ())
 getSection getP refines msg =
-  maybe (fst $ refines [], return ()) withSection $ getP msg
+  withSection $ getP msg
   where
     withSection (rrs0, rank) = (result, cacheSection srrs rank)
       where (result, srrs) = refines rrs0
 
-getSectionWithCache :: (m -> Maybe ([ResourceRecord], Ranking))
+getSectionWithCache :: (m -> ([ResourceRecord], Ranking))
                     -> ([ResourceRecord] -> (a, [ResourceRecord]))
                     -> m -> ReaderT Context IO a
 getSectionWithCache get refines msg = do
