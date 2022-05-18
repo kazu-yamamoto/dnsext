@@ -29,25 +29,25 @@ data FOutput
   | FStderr
   deriving Show
 
-newFastLogger :: FOutput -> Level -> IO (Level -> [String] -> IO (), IO ())
+newFastLogger :: FOutput -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
 newFastLogger out level = do
   loggerSet <- newLoggerSet bufsize
   let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
-  return (logLines, flushLogStr loggerSet)
+  return (logLines, return (-1, -1), flushLogStr loggerSet)
   where
     bufsize = 4096
     newLoggerSet = case out of
       FStdout  ->  newStdoutLoggerSet
       FStderr  ->  newStderrLoggerSet
 
-new :: Handle -> Level -> IO (Level -> [String] -> IO (), IO ())
+new :: Handle -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
-  (enqueue, quit) <- forkConsumeQueue $ hPutStr outFh . unlines
+  (enqueue, readSize, quit) <- forkConsumeQueue $ hPutStr outFh . unlines
   let logLines lv = when (level <= lv) . enqueue
 
-  return (logLines, quit)
+  return (logLines, readSize, quit)
 
 -- no logging
 none :: Level -> [String] -> IO ()

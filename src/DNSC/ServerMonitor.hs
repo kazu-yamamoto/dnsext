@@ -42,8 +42,10 @@ data Command
   | Quit
   deriving Show
 
-monitor :: Bool -> Context -> IO () -> IO ()
-monitor stdConsole cxt quit = do
+monitor :: Bool -> Context
+        -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
+        -> IO () -> IO ()
+monitor stdConsole cxt (_, _, _, _) quit = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]

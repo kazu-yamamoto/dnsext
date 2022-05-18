@@ -34,7 +34,7 @@ type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
     -> Int
-    -> IO ((Lookup, Insert, IO Cache), IO ())
+    -> IO ((Lookup, Insert, IO Cache), IO (Int, Int), IO ())
 new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef $Cache.empty maxCacheSize
@@ -48,7 +48,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
                 I {}  ->  return ()
                 E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)
         maybe (pure ()) updateRef $ runUpdate ts u cache
-  (enqueueU, quitU) <- forkConsumeQueue update1
+  (enqueueU, readUSize, quitU) <- forkConsumeQueue update1
 
   let expires1 = do
         threadDelay $ 1000 * 1000
@@ -63,7 +63,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
       insert k ttl crs rank =
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
 
-  return ((lookup_, insert, readIORef cacheRef), quitE *> quitU)
+  return ((lookup_, insert, readIORef cacheRef), readUSize, quitE *> quitU)
 
 -- no caching
 none :: (Lookup, Insert, IO Cache)

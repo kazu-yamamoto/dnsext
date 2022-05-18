@@ -17,24 +17,25 @@ import Control.Concurrent.Async (async, wait)
 
 -- this package hidden
 import DNSC.Queue (newSizedQueue, readQueue, writeQueue)
+import qualified DNSC.Queue as Queue
 
 
 forkConsumeQueue :: (a -> IO ())
-                 -> IO (a -> IO (), IO ())
+                 -> IO (a -> IO (), IO (Int, Int), IO ())
 forkConsumeQueue = forksConsumeQueue 1
 
 forkLoop :: IO () -> IO (IO ())
 forkLoop = forksLoop . (:[])
 
 forksConsumeQueue :: Int -> (a -> IO ())
-                  -> IO (a -> IO (), IO ())
+                  -> IO (a -> IO (), IO (Int, Int), IO ())
 forksConsumeQueue n = forksConsumeQueueWith n $ const $ return ()
 
 forksLoop :: [IO ()] -> IO (IO ())
 forksLoop = forksLoopWith $ const $ return ()
 
 forksConsumeQueueWith :: Int -> (IOError -> IO ()) -> (a -> IO ())
-                  -> IO (a -> IO (), IO ())
+                  -> IO (a -> IO (), IO (Int, Int), IO ())
 forksConsumeQueueWith n onError body = do
   inQ <- newSizedQueue $ 8 `max` n
   let enqueue = writeQueue inQ . Just
@@ -43,7 +44,7 @@ forksConsumeQueueWith n onError body = do
       loop = maybe (return ()) ((*> loop) . hbody) =<< readQueue inQ
 
   waitQuit <- forksWithWait $ replicate n loop
-  return (enqueue, issueQuit *> waitQuit)
+  return (enqueue, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ), issueQuit *> waitQuit)
 
 forksLoopWith :: (IOError -> IO ()) -> [IO ()] -> IO (IO ())
 forksLoopWith onError bodies = do

@@ -39,15 +39,17 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole =
-  uncurry (monitor stdConsole) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+  uncurry (uncurry (monitor stdConsole)) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+
+type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
 bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
-     -> IO (Context, IO ())
+     -> IO ((Context, QSizeInfo), IO ())
 bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
-  (putLines, quitLog) <- Log.newFastLogger logOutput logLevel
+  (putLines, logQSize, quitLog) <- Log.newFastLogger logOutput logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
-  (ucache, quitCache) <- UCache.new putLines tcache maxCacheSize
+  (ucache, ucacheQSize, quitCache) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
   sas <- udpSockets port hosts
@@ -55,8 +57,8 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
   let putLn lv = putLines lv . (:[])
       send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
 
-  (enqueueResp, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
-  (enqueueReq, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
+  (enqueueResp, resQSize, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
+  (enqueueReq, reqQSize, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
   waitsByte <- mapM (mkSocketWaitForByte . fst) sas
   quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
@@ -83,7 +85,7 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
         withLog "time-cache"        quitTimeCache
         quitLog
 
-  return (cxt, quit)
+  return ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
 
 recvRequest :: Show a
             => (Int -> IO Bool)
