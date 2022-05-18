@@ -117,7 +117,9 @@ rankedAnswer =
 rankedAuthority :: DNSMessage -> Maybe ([ResourceRecord], Ranking)
 rankedAuthority =
   rankedSection
-  Nothing  -- avoid security hole with authorized reply and authority section case
+  {- avoid security hole with authorized reply and authority section case.
+     RankAdditional does not overwrite glue. -}
+  (Just RankAdditional)
   (Just RankAdditional)
   DNS.authority
 
