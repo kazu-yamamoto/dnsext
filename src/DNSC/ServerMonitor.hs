@@ -19,7 +19,7 @@ import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPu
 import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (async, wait, waitSTM, withAsync)
+import Control.Concurrent.Async (waitSTM, withAsync)
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified Network.DNS as DNS
@@ -100,7 +100,7 @@ data Command
 
 monitor :: Bool -> Params -> Context
         -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
-        -> IO () -> IO ()
+        -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo quit = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
@@ -111,9 +111,7 @@ monitor stdConsole params cxt getsSizeInfo quit = do
     qRef <- newTVarIO False
     return (writeTVar qRef True, readTVar qRef >>= guard)
   when stdConsole $ runStdConsole monQuit
-  let mas = map (monitorServer monQuit) ss
-  ms <- mapM async mas
-  mapM_ wait ms
+  return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do
       let repl = console params cxt getsSizeInfo quit monQuit stdin stdout "<std>"
