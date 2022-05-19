@@ -16,7 +16,7 @@ import System.IO.Error (tryIOError)
 import Control.Concurrent.Async (async, wait)
 
 -- this package hidden
-import DNSC.Queue (newSizedQueue, readQueue, writeQueue)
+import DNSC.Queue (newQueue, readQueue, writeQueue)
 import qualified DNSC.Queue as Queue
 
 
@@ -37,7 +37,7 @@ forksLoop = forksLoopWith $ const $ return ()
 forksConsumeQueueWith :: Int -> (IOError -> IO ()) -> (a -> IO ())
                   -> IO (a -> IO (), IO (Int, Int), IO ())
 forksConsumeQueueWith n onError body = do
-  inQ <- newSizedQueue $ 8 `max` n
+  inQ <- newQueue $ 8 `max` n
   let enqueue = writeQueue inQ . Just
       issueQuit = replicateM_ n $ writeQueue inQ Nothing
       hbody = either onError return <=< tryIOError . body
