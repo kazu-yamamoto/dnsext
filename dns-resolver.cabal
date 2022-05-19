@@ -32,7 +32,6 @@ library
                        DNSC.DNSUtil
                        DNSC.RootServers
                        DNSC.SocketUtil
-                       DNSC.Concurrent
                        DNSC.Queue
 
   build-depends:
