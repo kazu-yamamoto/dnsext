@@ -46,7 +46,7 @@ bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO ((Context, QSizeInfo), IO ())
 bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
-  (putLines, logQSize, quitLog) <- Log.newFastLogger logOutput logLevel
+  (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   (tcache@(getSec, _), quitTimeCache) <- TimeCache.new
   (ucache, ucacheQSize, quitCache) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
@@ -79,7 +79,7 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
         withLog "responses"         quitResp
         withLog "cache"             quitCache
         withLog "time-cache"        quitTimeCache
-        quitLog
+        flushLog
 
   return ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
 
