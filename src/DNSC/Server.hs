@@ -55,7 +55,7 @@ bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
 bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
-  (ucache, ucacheQSize, quitCache) <- UCache.new putLines tcache maxCacheSize
+  (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
   params <- do
@@ -84,15 +84,7 @@ bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
 
   mapM_ (uncurry S.bind) sas
 
-  let quit = do
-        let withLog n action = do
-              putLn Log.NOTICE $ "Quiting " ++ n ++ "..."
-              () <- action
-              putLn Log.NOTICE "done."
-        withLog "cache"             quitCache
-        flushLog
-
-  return (respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), quit))
+  return (ucacheLoops ++ respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
 
 recvRequest :: Show a
             => (s -> IO (DNSMessage, a))
