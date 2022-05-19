@@ -1,24 +1,24 @@
 
 module DNSC.Server (
   run,
-
-  bind, monitor,
   ) where
 
 -- GHC packages
-import Control.Monad ((<=<))
 import Control.Concurrent (getNumCapabilities)
+import Control.Monad ((<=<), forever)
 import Data.List (uncons)
+import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (concurrently_)
+import Control.Concurrent.Async (concurrently_, race_)
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
 -- this package
-import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
+import DNSC.Queue (newQueue, readQueue, writeQueue)
+import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
@@ -41,15 +41,17 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
-  monParams <- bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+  (serverLoops, monParams) <- bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
   monLoops <- uncurry (uncurry $ uncurry $ monitor stdConsole) monParams
-  foldr concurrently_ (return ()) monLoops
+  race_
+    (foldr concurrently_ (return ()) serverLoops)
+    (foldr concurrently_ (return ()) monLoops)
 
 type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
 bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
-     -> IO (((Mon.Params, Context), QSizeInfo), IO ())
+     -> IO ([IO ()], (((Mon.Params, Context), QSizeInfo), IO ()))
 bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
@@ -66,17 +68,19 @@ bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   let putLn lv = putLines lv . (:[])
       send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
 
-  (enqueueResp, resQSize, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
-  (enqueueReq, reqQSize, quitProc)  <- forksConsumeQueueWith conc (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
+  (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
+  (procLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` conc) (putLn Log.NOTICE . ("Server.processRequest: error: " ++) . show) $ processRequest cxt enqueueResp
+  let procLoops = replicate conc procLoop
 
-  _ <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
-       [ recvRequest recv cxt enqueueReq sock
-       | (sock, addr) <- sas
-       , let wildcard = isAnySockAddr addr
-             recv s = do
-               now <- getSec
-               mkRecv wildcard now s
-       ]
+      reqLoops =
+        [ handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
+          $ recvRequest recv cxt enqueueReq sock
+        | (sock, addr) <- sas
+        , let wildcard = isAnySockAddr addr
+              recv s = do
+                now <- getSec
+                mkRecv wildcard now s
+        ]
 
   mapM_ (uncurry S.bind) sas
 
@@ -85,12 +89,10 @@ bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
               putLn Log.NOTICE $ "Quiting " ++ n ++ "..."
               () <- action
               putLn Log.NOTICE "done."
-        withLog "query processing"  quitProc
-        withLog "responses"         quitResp
         withLog "cache"             quitCache
         flushLog
 
-  return (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
+  return (respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), quit))
 
 recvRequest :: Show a
             => (s -> IO (DNSMessage, a))
@@ -119,3 +121,21 @@ sendResponse :: (s -> DNSMessage -> a -> IO ())
              -> Context
              -> Response s a -> IO ()
 sendResponse send _cxt = uncurry (uncurry send)
+
+---
+
+consumeLoop :: Int
+            -> (IOError -> IO ()) -> (a -> IO ())
+            -> IO (IO b, a -> IO (), IO (Int, Int))
+consumeLoop qsize onError body = do
+  inQ <- newQueue qsize
+  let enqueue = writeQueue inQ
+      hbody = either onError return <=< tryIOError . body
+      loop = forever $ hbody =<< readQueue inQ
+
+  return (loop, enqueue, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
+
+handledLoop :: (IOError -> IO a) -> IO a -> IO b
+handledLoop onError = forever . handle
+  where
+    handle = either onError return <=< tryIOError
