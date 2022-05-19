@@ -11,6 +11,7 @@ import Control.Concurrent (getNumCapabilities)
 import Data.List (uncons)
 
 -- dns packages
+import Control.Concurrent.Async (concurrently_)
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
@@ -39,8 +40,10 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole =
-  uncurry (uncurry $ uncurry $ monitor stdConsole) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
+  monParams <- bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+  monLoops <- uncurry (uncurry $ uncurry $ monitor stdConsole) monParams
+  foldr concurrently_ (return ()) monLoops
 
 type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
