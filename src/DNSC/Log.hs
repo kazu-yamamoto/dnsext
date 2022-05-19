@@ -7,14 +7,16 @@ module DNSC.Log (
   ) where
 
 -- GHC packages
-import Control.Monad (when)
+import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr)
+import System.IO.Error (tryIOError)
 
 -- other packages
 import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
 
 -- this package
-import DNSC.Concurrent (forkConsumeQueue)
+import DNSC.Queue (newQueue, readQueue, writeQueue)
+import qualified DNSC.Queue as Queue
 
 
 data Level
@@ -40,14 +42,15 @@ newFastLogger out level = do
       FStdout  ->  newStdoutLoggerSet
       FStderr  ->  newStderrLoggerSet
 
-new :: Handle -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
+new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int))
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
-  (enqueue, readSize, quit) <- forkConsumeQueue $ hPutStr outFh . unlines
-  let logLines lv = when (level <= lv) . enqueue
+  inQ <- newQueue 8
+  let body = either (const $ return ()) return =<< tryIOError (hPutStr outFh . unlines =<< readQueue inQ)
+      logLines lv = when (level <= lv) . writeQueue inQ
 
-  return (logLines, readSize, quit)
+  return (forever body, logLines, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
 -- no logging
 none :: Level -> [String] -> IO ()
