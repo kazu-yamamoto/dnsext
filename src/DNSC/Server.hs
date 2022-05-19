@@ -1,4 +1,3 @@
-{-# LANGUAGE ParallelListComp #-}
 
 module DNSC.Server (
   run,
@@ -7,7 +6,7 @@ module DNSC.Server (
   ) where
 
 -- GHC packages
-import Control.Monad ((<=<), when)
+import Control.Monad ((<=<))
 import Data.List (uncons)
 
 -- dns packages
@@ -18,7 +17,7 @@ import qualified Network.DNS as DNS
 
 -- this package
 import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
-import DNSC.SocketUtil (addrInfo, mkSocketWaitForByte, isAnySockAddr)
+import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
 import DNSC.Types (NE)
@@ -60,16 +59,14 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
   (enqueueResp, resQSize, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
   (enqueueReq, reqQSize, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
-  waitsByte <- mapM (mkSocketWaitForByte . fst) sas
-  quitReq <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
-             [ recvRequest waitForByte recv cxt enqueueReq sock
-             | (sock, addr) <- sas
-             , let wildcard = isAnySockAddr addr
-                   recv s = do
-                     now <- getSec
-                     mkRecv wildcard now s
-             | waitForByte <- waitsByte
-             ]
+  _ <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
+       [ recvRequest recv cxt enqueueReq sock
+       | (sock, addr) <- sas
+       , let wildcard = isAnySockAddr addr
+             recv s = do
+               now <- getSec
+               mkRecv wildcard now s
+       ]
 
   mapM_ (uncurry S.bind) sas
 
@@ -78,7 +75,6 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
               putLn Log.NOTICE $ "Quiting " ++ n ++ "..."
               () <- action
               putLn Log.NOTICE "done."
-        withLog "requests"          quitReq
         withLog "query processing"  quitProc
         withLog "responses"         quitResp
         withLog "cache"             quitCache
@@ -88,20 +84,17 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
   return ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
 
 recvRequest :: Show a
-            => (Int -> IO Bool)
-            -> (s -> IO (DNSMessage, a))
+            => (s -> IO (DNSMessage, a))
             -> Context
             -> (Request s a -> IO ())
             -> s
             -> IO ()
-recvRequest waitByte recv cxt enqReq sock = do
-  hasInput <- waitByte (3 * 1000)
-  when hasInput $ do
-    (m, addr) <- recv sock
-    let logLn level = logLines_ cxt level . (:[])
-        enqueue qs = enqReq (sock, (DNS.header m, qs), addr)
-        emptyWarn = logLn Log.NOTICE $ "empty question ignored: " ++ show addr
-    maybe emptyWarn enqueue $ uncons $ DNS.question m
+recvRequest recv cxt enqReq sock = do
+  (m, addr) <- recv sock
+  let logLn level = logLines_ cxt level . (:[])
+      enqueue qs = enqReq (sock, (DNS.header m, qs), addr)
+      emptyWarn = logLn Log.NOTICE $ "empty question ignored: " ++ show addr
+  maybe emptyWarn enqueue $ uncons $ DNS.question m
 
 processRequest :: Show a
                => Context
