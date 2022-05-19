@@ -1,7 +1,6 @@
 module DNSC.Queue (
   Queue,
   newQueue,
-  newSizedQueue,
   readQueue,
   writeQueue,
   readSize, maxSize,
@@ -21,11 +20,8 @@ data Queue a =
   }
 
 
-newQueue :: IO (Queue a)
-newQueue = newSizedQueue 8
-
-newSizedQueue :: Int -> IO (Queue a)
-newSizedQueue xsz = atomically $ Queue <$> newTQueue <*> newTVar 0 <*> pure xsz
+newQueue :: Int -> IO (Queue a)
+newQueue xsz = atomically $ Queue <$> newTQueue <*> newTVar 0 <*> pure xsz
 
 readQueue :: Queue a -> IO a
 readQueue q = atomically $ do
@@ -47,11 +43,8 @@ readSize = atomically . readTVar . sizeRef
 {-
 type Queue a = Chan a
 
-newQueue :: IO (Queue a)
-newQueue = newChan
-
-newSizedQueue :: Int -> IO (Queue a)
-newSizedQueue = const newQueue
+newQueue :: Int -> IO (Queue a)
+newQueue = const newChan
 
 readQueue :: Queue a -> IO a
 readQueue = readChan
