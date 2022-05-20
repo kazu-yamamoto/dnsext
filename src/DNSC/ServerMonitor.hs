@@ -1,5 +1,10 @@
 
-module DNSC.ServerMonitor where
+module DNSC.ServerMonitor (
+  monitor,
+  Params,
+  makeParams,
+  showParams,
+  ) where
 
 -- GHC internal packages
 import GHC.IO.Device (ready)
@@ -24,10 +29,63 @@ import qualified Network.Socket as S
 import qualified Network.DNS as DNS
 
 -- this package
+import qualified DNSC.DNSUtil as Config
 import DNSC.SocketUtil (addrInfo, mkSocketWaitForByte)
 import qualified DNSC.Log as Log
 import DNSC.Iterative (Context (..))
 
+
+data Params =
+  Params
+  { isRecvSendMsg :: Bool
+  , isExtendedLookup :: Bool
+  , numCapabilities :: Int
+  , logOutput :: Log.FOutput
+  , logLevel :: Log.Level
+  , maxCacheSize :: Int
+  , disableV6NS :: Bool
+  , concurrency :: Int
+  , dnsPort :: Int
+  , dnsHosts :: [String]
+  }
+
+makeParams :: Int -> Log.FOutput -> Log.Level -> Int -> Bool -> Int -> Int -> [String]
+           -> Params
+makeParams capabilities output level maxSize disableV6 conc port hosts =
+  Params
+  { isRecvSendMsg = Config.isRecvSendMsg
+  , isExtendedLookup = Config.isExtendedLookup
+  , numCapabilities = capabilities
+  , logOutput = output
+  , logLevel = level
+  , maxCacheSize = maxSize
+  , disableV6NS = disableV6
+  , concurrency = conc
+  , dnsPort = port
+  , dnsHosts = hosts
+  }
+
+showParams :: Params -> [String]
+showParams params =
+  [ field  "recvmsg / sendmsg" isRecvSendMsg
+  , field  "extended lookup" isExtendedLookup
+  , field  "capabilities" numCapabilities
+  , field_ "log output" (showOut . logOutput)
+  , field  "log level" logLevel
+  , field  "max cache size" maxCacheSize
+  , field  "disable queries to IPv6 NS" disableV6NS
+  , field  "concurrency" concurrency
+  , field  "DNS port" dnsPort
+  ] ++
+  if null hosts
+  then ["DNS host list: null"]
+  else  "DNS host list:" : map ("DNS host: " ++) hosts
+  where
+    field_ label toS = label ++ ": " ++ toS params
+    field label get = field_ label (show . get)
+    showOut Log.FStdout = "stdout - fast-logger"
+    showOut Log.FStderr = "stderr - fast-logger"
+    hosts = dnsHosts params
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -35,7 +93,8 @@ monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< 
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
 data Command
-  = Find String
+  = Param
+  | Find String
   | Lookup DNS.Domain DNS.TYPE
   | Status
   | Noop
@@ -118,6 +177,7 @@ getConsole cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH o
 
     parseCmd []  =    Just Noop
     parseCmd ws  =  case ws of
+      "param" : _ ->  Just Param
       "find" : s : _      ->  Just $ Find s
       ["lookup", n, typ]  ->  Lookup (B8.pack n) <$> parseTYPE typ
       "status" : _  ->  Just Status
