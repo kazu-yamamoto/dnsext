@@ -11,11 +11,11 @@ import Data.Time.Clock.System (SystemTime (..), getSystemTime, systemToUTCTime)
 -- dns packages
 import Control.AutoUpdate (mkAutoUpdate, defaultUpdateSettings, updateAction, updateFreq)
 
-new :: IO ((IO Int64, IO ShowS), IO ())
+new :: IO (IO Int64, IO ShowS)
 new = do
   getSec <- mkAutoSeconds
   getTimeStr <- mkAutoTimeStr getSec
-  return ((getSec, getTimeStr), return ())
+  return (getSec, getTimeStr)
 
 mkAutoSeconds :: IO (IO Int64)
 mkAutoSeconds =
