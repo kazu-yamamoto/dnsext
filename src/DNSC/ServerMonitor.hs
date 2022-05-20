@@ -111,30 +111,30 @@ monitor stdConsole params cxt getsSizeInfo quit = do
     qRef <- newTVarIO False
     return (writeTVar qRef True, readTVar qRef >>= guard)
   when stdConsole $ runStdConsole monQuit
-  mas <- mapM (getMonitor monQuit) ss
+  let mas = map (monitorServer monQuit) ss
   ms <- mapM async mas
   mapM_ wait ms
   where
     runStdConsole monQuit = do
-      repl <- getConsole params cxt getsSizeInfo quit monQuit stdin stdout "<std>"
+      let repl = console params cxt getsSizeInfo quit monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
-    getMonitor monQuit@(_, waitQuit) s = do
+    monitorServer monQuit@(_, waitQuit) s = do
       let step = do
             socketWaitRead s
             (sock, addr) <- S.accept s
             sockh <- S.socketToHandle sock ReadWriteMode
-            repl <- getConsole params cxt getsSizeInfo quit monQuit sockh sockh $ show addr
+            let repl = console params cxt getsSizeInfo quit monQuit sockh sockh $ show addr
             void $ forkFinally repl (\_ -> hClose sockh)
           loop =
             either (const $ return ()) (const loop)
             =<< withWait waitQuit (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
-      return loop
+      loop
 
-getConsole :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
-           -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO (IO ())
-getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, waitQuit) inH outH ainfo = do
+console :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
+           -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
+console params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -151,7 +151,7 @@ getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQui
           (\exit -> unless exit repl)
           =<< withWait waitQuit (handle (($> False) . print) step)
 
-  return repl
+  repl
 
   where
     handle onError = either onError return <=< tryIOError
