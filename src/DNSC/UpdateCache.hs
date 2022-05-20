@@ -9,10 +9,12 @@ module DNSC.UpdateCache (
 import Control.Monad (forever)
 import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
-import System.IO.Error (tryIOError)
 
 -- dns packages
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
+
+-- other packages
+import UnliftIO (tryAny)
 
 -- this package
 import DNSC.Queue (newQueue, readQueue, writeQueue)
@@ -55,7 +57,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
   (updateLoop, enqueueU, readUSize) <- do
     inQ <- newQueue 8
     let errorLn = putLn Log.NOTICE . ("UpdateCache.updateLoop: error: " ++) . show
-        body = either errorLn return =<< tryIOError (update1 =<< readQueue inQ)
+        body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
     return (forever body, writeQueue inQ, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
   let expires1 = do
@@ -65,7 +67,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
       expireEvsnts = forever body
         where
           errorLn = putLn Log.NOTICE . ("UpdateCache.expireEvents: error: " ++) . show
-          body = either errorLn return =<< tryIOError expires1
+          body = either errorLn return =<< tryAny expires1
 
   let lookup_ dom typ cls = do
         cache <- readIORef cacheRef
