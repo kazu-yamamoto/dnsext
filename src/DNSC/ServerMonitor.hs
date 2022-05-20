@@ -18,13 +18,12 @@ import qualified Data.ByteString.Char8 as B8
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 
 -- dns packages
-import Control.Concurrent.Async (waitSTM, withAsync)
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified Network.DNS as DNS
 
 -- other packages
-import UnliftIO (tryAny)
+import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
 import qualified DNSC.DNSUtil as Config
