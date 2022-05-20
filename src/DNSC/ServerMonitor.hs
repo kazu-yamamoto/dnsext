@@ -102,10 +102,10 @@ data Command
   | Quit
   deriving Show
 
-monitor :: Bool -> Context
+monitor :: Bool -> Params -> Context
         -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
         -> IO () -> IO ()
-monitor stdConsole cxt getsSizeInfo quit = do
+monitor stdConsole params cxt getsSizeInfo quit = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
@@ -118,7 +118,7 @@ monitor stdConsole cxt getsSizeInfo quit = do
   mapM_ wait ms
   where
     runStdConsole monQuitRef = do
-      repl <- getConsole cxt getsSizeInfo quit monQuitRef stdin stdout "<std>"
+      repl <- getConsole params cxt getsSizeInfo quit monQuitRef stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
@@ -129,7 +129,7 @@ monitor stdConsole cxt getsSizeInfo quit = do
             when hasInput $ do
               (sock, addr) <- S.accept s
               sockh <- S.socketToHandle sock ReadWriteMode
-              repl <- getConsole cxt getsSizeInfo quit monQuitRef sockh sockh $ show addr
+              repl <- getConsole params cxt getsSizeInfo quit monQuitRef sockh sockh $ show addr
               void $ forkFinally repl (\_ -> hClose sockh)
           loop = do
             isQuit <- readIORef monQuitRef
@@ -138,9 +138,9 @@ monitor stdConsole cxt getsSizeInfo quit = do
               loop
       return loop
 
-getConsole :: Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
+getConsole :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
            -> IO () -> IORef Bool -> Handle -> Handle -> String -> IO (IO ())
-getConsole cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH outH ainfo = do
+getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH outH ainfo = do
   let prompt = hPutStr outH "monitor> " *> hFlush outH
       input = do
         s <- hGetLine inH
@@ -190,6 +190,7 @@ getConsole cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH o
     runCmd _            cmd   =  dispatch cmd $> False
       where
         outLn = hPutStrLn outH
+        dispatch Param            =  mapM_ outLn $ showParams params
         dispatch Noop             =  return ()
         dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
         dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookup_ cxt dom typ DNS.classIN
