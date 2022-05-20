@@ -45,9 +45,6 @@ library
                      , stm
                      , time
 
-                     -- other packages
-                     , random
-
                      -- dns packages
                      , async
                      , auto-update
@@ -57,6 +54,7 @@ library
                      , dns
 
                      -- other packages
+                     , random
                      , fast-logger
 
   hs-source-dirs:      src
