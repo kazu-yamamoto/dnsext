@@ -6,31 +6,27 @@ module DNSC.ServerMonitor (
   showParams,
   ) where
 
--- GHC internal packages
-import GHC.IO.Device (ready)
-import GHC.IO.Handle.Internals (wantReadableHandle_)
-import GHC.IO.Handle.Types (Handle__ (..))
-
 -- GHC packages
-import Control.Concurrent (forkIO, forkFinally)
-import Control.Monad ((<=<), when, unless, void)
+import Control.Applicative ((<|>))
+import Control.Concurrent (forkIO, forkFinally, threadWaitRead)
+import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
+import Control.Monad ((<=<), guard, when, unless, void)
 import Data.Functor (($>))
 import Data.List (isInfixOf, find)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Char (toUpper)
 import qualified Data.ByteString.Char8 as B8
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (async, wait)
+import Control.Concurrent.Async (async, wait, waitSTM, withAsync)
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified Network.DNS as DNS
 
 -- this package
 import qualified DNSC.DNSUtil as Config
-import DNSC.SocketUtil (addrInfo, mkSocketWaitForByte)
+import DNSC.SocketUtil (addrInfo)
 import qualified DNSC.Log as Log
 import DNSC.Iterative (Context (..))
 
@@ -111,57 +107,51 @@ monitor stdConsole params cxt getsSizeInfo quit = do
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
   mapM_ (uncurry S.bind) ps
   sequence_ [ S.listen sock 5 | sock <- ss ]
-  monQuitRef <- newIORef False
-  when stdConsole $ runStdConsole monQuitRef
-  mas <- mapM (getMonitor monQuitRef) ss
+  monQuit <- do
+    qRef <- newTVarIO False
+    return (writeTVar qRef True, readTVar qRef >>= guard)
+  when stdConsole $ runStdConsole monQuit
+  mas <- mapM (getMonitor monQuit) ss
   ms <- mapM async mas
   mapM_ wait ms
   where
-    runStdConsole monQuitRef = do
-      repl <- getConsole params cxt getsSizeInfo quit monQuitRef stdin stdout "<std>"
+    runStdConsole monQuit = do
+      repl <- getConsole params cxt getsSizeInfo quit monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
-    getMonitor monQuitRef s = do
-      waitForInput <- mkSocketWaitForByte s
+    getMonitor monQuit@(_, waitQuit) s = do
       let step = do
-            hasInput <- waitForInput $ 1 * 1000
-            when hasInput $ do
-              (sock, addr) <- S.accept s
-              sockh <- S.socketToHandle sock ReadWriteMode
-              repl <- getConsole params cxt getsSizeInfo quit monQuitRef sockh sockh $ show addr
-              void $ forkFinally repl (\_ -> hClose sockh)
-          loop = do
-            isQuit <- readIORef monQuitRef
-            unless isQuit $ do
-              handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step
-              loop
+            socketWaitRead s
+            (sock, addr) <- S.accept s
+            sockh <- S.socketToHandle sock ReadWriteMode
+            repl <- getConsole params cxt getsSizeInfo quit monQuit sockh sockh $ show addr
+            void $ forkFinally repl (\_ -> hClose sockh)
+          loop =
+            either (const $ return ()) (const loop)
+            =<< withWait waitQuit (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
       return loop
 
 getConsole :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
-           -> IO () -> IORef Bool -> Handle -> Handle -> String -> IO (IO ())
-getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRef inH outH ainfo = do
+           -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO (IO ())
+getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, waitQuit) inH outH ainfo = do
   let prompt = hPutStr outH "monitor> " *> hFlush outH
       input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
-            run_ = runCmd (writeIORef monQuitRef True)
-        exit <- maybe (err $> False) run_ $ parseCmd $ words s
+        exit <- maybe (err $> False) runCmd $ parseCmd $ words s
         unless exit prompt
         return exit
 
       step = do
-        hasInput <- hWaitForByte inH $ 1 * 1000
-        if hasInput
-          then do eof <- hIsEOF inH
-                  if eof then return True else input
-          else return False
+        eof <- hIsEOF inH
+        if eof then return True else input
 
       repl = do
-        isQuit <- readIORef monQuitRef
-        unless isQuit $ do
-          exit <- handle (($> False) . print) step
-          unless exit repl
+        either
+          (const $ return ())
+          (\exit -> unless exit repl)
+          =<< withWait waitQuit (handle (($> False) . print) step)
 
   return (prompt *> repl)
 
@@ -185,9 +175,9 @@ getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRe
       "quit" : _  ->  Just Quit
       _           ->  Nothing
 
-    runCmd monIssueQuit Quit  =  quit *> monIssueQuit $> True
-    runCmd _            Exit  =  return True
-    runCmd _            cmd   =  dispatch cmd $> False
+    runCmd Quit  =  quit *> atomically issueQuit $> True
+    runCmd Exit  =  return True
+    runCmd cmd   =  dispatch cmd $> False
       where
         outLn = hPutStrLn outH
         dispatch Param            =  mapM_ outLn $ showParams params
@@ -211,7 +201,13 @@ getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit monQuitRe
       when (lmx >= 0) $ psize "log queue" logQSize
 
 
-hWaitForByte :: Handle -> Int -> IO Bool
-hWaitForByte h msecs =
-  wantReadableHandle_ "hWaitForByte" h $
-  \ Handle__{ haDevice = haDev } -> ready haDev False{-read-} msecs
+withWait :: STM a -> IO b -> IO (Either a b)
+withWait qstm blockAct =
+  withAsync blockAct $ \a ->
+  atomically $
+    (Left  <$> qstm)
+    <|>
+    (Right <$> waitSTM a)
+
+socketWaitRead :: Socket -> IO ()
+socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
