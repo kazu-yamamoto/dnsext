@@ -69,7 +69,7 @@ Executable cache-server
                      , dns-resolver
   hs-source-dirs:      mains
   default-language:    Haskell2010
-  ghc-options:         -Wall -threaded -with-rtsopts=-N2 -with-rtsopts=-qn1
+  ghc-options:         -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
 
 Test-Suite cache-test
   type:                exitcode-stdio-1.0
