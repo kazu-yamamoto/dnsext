@@ -7,6 +7,7 @@ module DNSC.Server (
 
 -- GHC packages
 import Control.Monad ((<=<))
+import Control.Concurrent (getNumCapabilities)
 import Data.List (uncons)
 
 -- dns packages
@@ -20,6 +21,7 @@ import DNSC.Concurrent (forksConsumeQueueWith, forksLoopWith)
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecv, mkSend)
 import DNSC.ServerMonitor (monitor)
+import qualified DNSC.ServerMonitor as Mon
 import DNSC.Types (NE)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
@@ -45,11 +47,16 @@ type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO ((Context, QSizeInfo), IO ())
-bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
+bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
   (ucache, ucacheQSize, quitCache) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
+
+  params <- do
+    cap <- getNumCapabilities
+    return $ Mon.makeParams cap logOutput logLevel maxCacheSize disableV6NS conc (fromIntegral port) hosts
+  putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
   sas <- udpSockets port hosts
 
@@ -57,7 +64,7 @@ bind logOutput logLevel maxCacheSize disableV6NS para port hosts = do
       send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
 
   (enqueueResp, resQSize, quitResp) <- forksConsumeQueueWith 1 (putLn Log.NOTICE . ("Server.sendResponse: " ++) . show) (sendResponse send cxt)
-  (enqueueReq, reqQSize, quitProc)  <- forksConsumeQueueWith para (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
+  (enqueueReq, reqQSize, quitProc)  <- forksConsumeQueueWith conc (putLn Log.NOTICE . ("Server.processRequest: " ++) . show) $ processRequest cxt enqueueResp
 
   _ <- forksLoopWith (putLn Log.NOTICE . ("Server.recvRequest: " ++) . show)
        [ recvRequest recv cxt enqueueReq sock
