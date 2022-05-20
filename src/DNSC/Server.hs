@@ -40,13 +40,13 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole =
-  uncurry (uncurry (monitor stdConsole)) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+  uncurry (uncurry $ uncurry $ monitor stdConsole) =<< bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
 
 type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
 bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
-     -> IO ((Context, QSizeInfo), IO ())
+     -> IO (((Mon.Params, Context), QSizeInfo), IO ())
 bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
@@ -87,7 +87,7 @@ bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
         withLog "cache"             quitCache
         flushLog
 
-  return ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
+  return (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), quit)
 
 recvRequest :: Show a
             => (s -> IO (DNSMessage, a))
