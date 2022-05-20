@@ -135,25 +135,23 @@ monitor stdConsole params cxt getsSizeInfo quit = do
 getConsole :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
            -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO (IO ())
 getConsole params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, waitQuit) inH outH ainfo = do
-  let prompt = hPutStr outH "monitor> " *> hFlush outH
-      input = do
+  let input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
-        exit <- maybe (err $> False) runCmd $ parseCmd $ words s
-        unless exit prompt
-        return exit
+        maybe (err $> False) runCmd $ parseCmd $ words s
 
       step = do
         eof <- hIsEOF inH
         if eof then return True else input
 
       repl = do
+        hPutStr outH "monitor> " *> hFlush outH
         either
           (const $ return ())
           (\exit -> unless exit repl)
           =<< withWait waitQuit (handle (($> False) . print) step)
 
-  return (prompt *> repl)
+  return repl
 
   where
     handle onError = either onError return <=< tryIOError
