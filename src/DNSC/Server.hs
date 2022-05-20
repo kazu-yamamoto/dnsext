@@ -9,14 +9,13 @@ import Control.Monad ((<=<), forever)
 import Data.List (uncons)
 
 -- dns packages
-import Control.Concurrent.Async (concurrently_, race_)
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
 -- other packages
-import UnliftIO (SomeException, tryAny)
+import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
 import DNSC.Queue (newQueue, readQueue, writeQueue)
