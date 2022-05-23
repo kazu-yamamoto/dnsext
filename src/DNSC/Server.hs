@@ -6,12 +6,14 @@ module DNSC.Server (
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
 import Control.Monad ((<=<), forever)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
+import Data.ByteString (ByteString)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
-import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
 
 -- other packages
@@ -21,18 +23,18 @@ import UnliftIO (SomeException, tryAny, concurrently_, race_)
 import DNSC.Queue (newQueue, readQueue, writeQueue)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
-import DNSC.DNSUtil (mkRecv, mkSend)
+import DNSC.DNSUtil (mkRecvBS, mkSendBS)
 import DNSC.ServerMonitor (monitor)
 import qualified DNSC.ServerMonitor as Mon
-import DNSC.Types (NE)
+import DNSC.Types (Timestamp)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
 import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, getReplyMessage)
 
 
-type Request s a = (s, (DNSHeader, NE Question), a)
-type Response s a = ((s, DNSMessage), a)
+type Request s a = (s, ByteString, a)
+type Response s a = ((s, ByteString), a)
 
 udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< addrInfo port
@@ -67,20 +69,16 @@ setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   sas <- udpSockets port hosts
 
   let putLn lv = putLines lv . (:[])
-      send sock msg (peer, cmsgs, wildcard) = mkSend wildcard sock msg peer cmsgs
+      send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (procLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` conc) (putLn Log.NOTICE . ("Server.processRequest: error: " ++) . show) $ processRequest cxt enqueueResp
+  (procLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` conc) (putLn Log.NOTICE . ("Server.processRequest: error: " ++) . show) $ processRequest cxt getSec enqueueResp
   let procLoops = replicate conc procLoop
 
       reqLoops =
         [ handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-          $ recvRequest recv cxt enqueueReq sock
+          $ recvRequest (mkRecvBS $ isAnySockAddr addr) cxt enqueueReq sock
         | (sock, addr) <- sas
-        , let wildcard = isAnySockAddr addr
-              recv s = do
-                now <- getSec
-                mkRecv wildcard now s
         ]
 
   mapM_ (uncurry S.bind) sas
@@ -88,29 +86,40 @@ setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   return (ucacheLoops ++ respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
 
 recvRequest :: Show a
-            => (s -> IO (DNSMessage, a))
+            => (s -> IO (ByteString, a))
             -> Context
             -> (Request s a -> IO ())
             -> s
             -> IO ()
-recvRequest recv cxt enqReq sock = do
-  (m, addr) <- recv sock
-  let logLn level = logLines_ cxt level . (:[])
-      enqueue qs = enqReq (sock, (DNS.header m, qs), addr)
-      emptyWarn = logLn Log.NOTICE $ "empty question ignored: " ++ show addr
-  maybe emptyWarn enqueue $ uncons $ DNS.question m
+recvRequest recv _cxt enqReq sock = do
+  (bs, addr) <- recv sock
+  enqReq (sock, bs, addr)
 
 processRequest :: Show a
                => Context
+               -> IO Timestamp
                -> (Response s a -> IO ())
                -> Request s a -> IO ()
-processRequest cxt enqResp (sock, rp@(_, (q,_)), addr) = do
-  let enqueue m = enqResp ((sock, m), addr)
-      logLn level = logLines_ cxt level . (:[])
-      noResponse replyErr = logLn Log.NOTICE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
-  either noResponse enqueue =<< uncurry (getReplyMessage cxt) rp
+processRequest cxt getSec enqResp (sock, bs, addr) =
+  (either (logLn Log.NOTICE) return =<<) . runExceptT $ do
+  let decode = do
+        now <- liftIO $ getSec
+        msg <- either (throwE . ("dns-error: " ++) . show) return $ DNS.decodeAt now bs
+        qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
+        return (qs, msg)
+  (qs@(q, _), reqM) <- decode
 
-sendResponse :: (s -> DNSMessage -> a -> IO ())
+  let mkReply = do
+        let noResponse replyErr = "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+        either (throwE . noResponse) return =<< liftIO (getReplyMessage cxt (DNS.header reqM) qs)
+      enqueue respM = do
+        let rbs = DNS.encode respM
+        rbs `seq` enqResp ((sock, rbs), addr)
+  liftIO . enqueue =<< mkReply
+  where
+    logLn level = logLines_ cxt level . (:[])
+
+sendResponse :: (s -> ByteString -> a -> IO ())
              -> Context
              -> Response s a -> IO ()
 sendResponse send _cxt = uncurry (uncurry send)
