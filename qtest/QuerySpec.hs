@@ -2,7 +2,7 @@ module QuerySpec where
 
 import Test.Hspec
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (forkIO, threadDelay)
 import Data.Either (isRight)
 import Data.List (uncons)
 import Data.String (fromString)
@@ -18,7 +18,8 @@ spec :: Spec
 spec = describe "query" $ do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
   tcache <- runIO TimeCache.new
-  (ucache, _, _quit) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  runIO $ mapM_ forkIO loops
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt

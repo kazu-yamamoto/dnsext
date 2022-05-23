@@ -6,14 +6,17 @@ module DNSC.UpdateCache (
   ) where
 
 -- GHC packages
+import Control.Monad (forever)
 import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
+import System.IO.Error (tryIOError)
 
 -- dns packages
 import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
 
 -- this package
-import DNSC.Concurrent (forkLoop, forkConsumeQueue)
+import DNSC.Queue (newQueue, readQueue, writeQueue)
+import qualified DNSC.Queue as Queue
 import DNSC.Types (Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache (Cache, Key, CRSet, Ranking)
@@ -34,10 +37,10 @@ type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
     -> Int
-    -> IO ((Lookup, Insert, IO Cache), IO (Int, Int), IO ())
+    -> IO ([IO ()], (Lookup, Insert, IO Cache), IO (Int, Int))
 new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
-  cacheRef <- newIORef $Cache.empty maxCacheSize
+  cacheRef <- newIORef $ Cache.empty maxCacheSize
 
   let update1 (ts, tstr, u) = do   -- step of single update theard
         cache <- readIORef cacheRef
@@ -48,12 +51,21 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
                 I {}  ->  return ()
                 E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)
         maybe (pure ()) updateRef $ runUpdate ts u cache
-  (enqueueU, readUSize, quitU) <- forkConsumeQueue update1
+
+  (updateLoop, enqueueU, readUSize) <- do
+    inQ <- newQueue 8
+    let errorLn = putLn Log.NOTICE . ("UpdateCache.updateLoop: error: " ++) . show
+        body = either errorLn return =<< tryIOError (update1 =<< readQueue inQ)
+    return (forever body, writeQueue inQ, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
   let expires1 = do
         threadDelay $ 1000 * 1000
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure E
-  quitE <- forkLoop expires1
+
+      expireEvsnts = forever body
+        where
+          errorLn = putLn Log.NOTICE . ("UpdateCache.expireEvents: error: " ++) . show
+          body = either errorLn return =<< tryIOError expires1
 
   let lookup_ dom typ cls = do
         cache <- readIORef cacheRef
@@ -63,7 +75,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
       insert k ttl crs rank =
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
 
-  return ((lookup_, insert, readIORef cacheRef), readUSize, quitE *> quitU)
+  return ([updateLoop, expireEvsnts], (lookup_, insert, readIORef cacheRef), readUSize)
 
 -- no caching
 none :: (Lookup, Insert, IO Cache)

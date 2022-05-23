@@ -19,7 +19,7 @@ import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPu
 import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (async, wait, waitSTM, withAsync)
+import Control.Concurrent.Async (waitSTM, withAsync)
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified Network.DNS as DNS
@@ -100,8 +100,8 @@ data Command
 
 monitor :: Bool -> Params -> Context
         -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
-        -> IO () -> IO ()
-monitor stdConsole params cxt getsSizeInfo quit = do
+        -> IO () -> IO [IO ()]
+monitor stdConsole params cxt getsSizeInfo flushLog = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
@@ -111,12 +111,10 @@ monitor stdConsole params cxt getsSizeInfo quit = do
     qRef <- newTVarIO False
     return (writeTVar qRef True, readTVar qRef >>= guard)
   when stdConsole $ runStdConsole monQuit
-  let mas = map (monitorServer monQuit) ss
-  ms <- mapM async mas
-  mapM_ wait ms
+  return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do
-      let repl = console params cxt getsSizeInfo quit monQuit stdin stdout "<std>"
+      let repl = console params cxt getsSizeInfo flushLog monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryIOError
@@ -125,7 +123,7 @@ monitor stdConsole params cxt getsSizeInfo quit = do
             socketWaitRead s
             (sock, addr) <- S.accept s
             sockh <- S.socketToHandle sock ReadWriteMode
-            let repl = console params cxt getsSizeInfo quit monQuit sockh sockh $ show addr
+            let repl = console params cxt getsSizeInfo flushLog monQuit sockh sockh $ show addr
             void $ forkFinally repl (\_ -> hClose sockh)
           loop =
             either (const $ return ()) (const loop)
@@ -134,7 +132,7 @@ monitor stdConsole params cxt getsSizeInfo quit = do
 
 console :: Params -> Context -> (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
            -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
-console params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, waitQuit) inH outH ainfo = do
+console params cxt (reqQSize, resQSize, ucacheQSize, logQSize) flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -173,7 +171,7 @@ console params cxt (reqQSize, resQSize, ucacheQSize, logQSize) quit (issueQuit, 
       "quit" : _  ->  Just Quit
       _           ->  Nothing
 
-    runCmd Quit  =  quit *> atomically issueQuit $> True
+    runCmd Quit  =  flushLog *> atomically issueQuit $> True
     runCmd Exit  =  return True
     runCmd cmd   =  dispatch cmd $> False
       where
