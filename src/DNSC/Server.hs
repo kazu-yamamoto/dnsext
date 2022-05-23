@@ -41,7 +41,7 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
-  (serverLoops, monParams) <- bind logOutput logLevel maxCacheSize disableV6NS conc port hosts
+  (serverLoops, monParams) <- setup logOutput logLevel maxCacheSize disableV6NS conc port hosts
   monLoops <- uncurry (uncurry $ uncurry $ monitor stdConsole) monParams
   race_
     (foldr concurrently_ (return ()) serverLoops)
@@ -49,10 +49,10 @@ run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
 
 type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
-bind :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
+setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> IO ([IO ()], (((Mon.Params, Context), QSizeInfo), IO ()))
-bind logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
+setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
   (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
