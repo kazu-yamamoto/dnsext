@@ -270,7 +270,7 @@ query_ n0 typ  = recCN n0 id
     recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
     recCN n arrs = do
       msg <- query1 n typ
-      cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
+      cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
       -- TODO: CNAME 解決の回数制限
       let resolveCNAME (cn, cnRR) = do
@@ -278,18 +278,14 @@ query_ n0 typ  = recCN n0 id
               throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
             recCN (B8.unpack cn) (arrs . (cnRR :))
 
-      maybe (pure ((arrs, bn), Right msg)) resolveCNAME
-        =<< liftIO (selectCNAME cnames)
+      maybe (pure ((arrs, bn), Right msg)) resolveCNAME cname
         where
           bn = B8.pack n
           takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
             | rrname rr == bn         =  Just (cn, rr)
           takeCNAME _                 =  Nothing
-
-          refinesCNAME rrs = (ps, map snd ps)
+          refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = mapMaybe takeCNAME rrs
-
-          selectCNAME = randomizedSelect
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
