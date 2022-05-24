@@ -246,7 +246,7 @@ reply n typ rd =
       | otherwise  =  withQuery
 
     withQuery = do
-      ((arrs, rn), etm) <- query_ n typ
+      ((aRRs, rn), etm) <- query_ n typ
       let takeX rr
             | rrname rr == rn && rrtype rr == typ   =  Just rr
             | otherwise                             =  Nothing
@@ -254,7 +254,7 @@ reply n typ rd =
             where
               ps = mapMaybe takeX rrs
 
-      lift $ arrs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
+      lift $ aRRs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
 
 -- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
 query :: Name -> TYPE -> DNSQuery (Either [ResourceRecord] DNSMessage)
@@ -264,11 +264,11 @@ type DRRList = [ResourceRecord] -> [ResourceRecord]
 
 query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
 query_ n CNAME = (,) (id, B8.pack n) . Right <$> query1 n CNAME
-query_ n0 typ  = recCN n0 id
+query_ n0 typ  = recCNAMEs n0 id
   where
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
-    recCN n arrs = do
+    recCNAMEs :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+    recCNAMEs n aRRs = do
       msg <- query1 n typ
       cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
@@ -276,16 +276,17 @@ query_ n0 typ  = recCN n0 id
       let resolveCNAME (cn, cnRR) = do
             when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
               throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-            recCN (B8.unpack cn) (arrs . (cnRR :))
+            recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))
 
-      maybe (pure ((arrs, bn), Right msg)) resolveCNAME cname
+      maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
         where
           bn = B8.pack n
-          takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-            | rrname rr == bn         =  Just (cn, rr)
-          takeCNAME _                 =  Nothing
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
-            where ps = mapMaybe takeCNAME rrs
+            where ps = mapMaybe (takeCNAME bn) rrs
+
+    takeCNAME bn rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
+      | rrname rr == bn         =  Just (cn, rr)
+    takeCNAME _  _              =  Nothing
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
