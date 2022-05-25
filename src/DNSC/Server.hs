@@ -28,7 +28,7 @@ import DNSC.Types (NE)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
 import qualified DNSC.UpdateCache as UCache
-import DNSC.Iterative (Context (..), newContext, runReply)
+import DNSC.Iterative (Context (..), newContext, getReplyMessage)
 
 
 type Request s a = (s, (DNSHeader, NE Question), a)
@@ -108,7 +108,7 @@ processRequest cxt enqResp (sock, rp@(_, (q,_)), addr) = do
   let enqueue m = enqResp ((sock, m), addr)
       logLn level = logLines_ cxt level . (:[])
       noResponse replyErr = logLn Log.NOTICE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
-  either noResponse enqueue =<< uncurry (runReply cxt) rp
+  either noResponse enqueue =<< uncurry (getReplyMessage cxt) rp
 
 sendResponse :: (s -> DNSMessage -> a -> IO ())
              -> Context
