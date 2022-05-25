@@ -278,22 +278,23 @@ query_ n0 typ
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
     recCNAMEs :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
     recCNAMEs n aRRs = do
-      let noCache = do
+      let recCNAMEs_ (cn, cnRR) = recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))
+          noCache = do
             msg <- query1 n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
             -- TODO: CNAME 解決の回数制限
-            let resolveCNAME (cn, cnRR) = do
+            let resolveCNAME cnPair = do
                   when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-                  recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))
+                  recCNAMEs_ cnPair
 
             maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
           noType =
             maybe
             noCache
-            (\(cn, cnRR) -> recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))) {- recurse with cname cache -}
+            recCNAMEs_ {- recurse with cname cache -}
             =<< lift (cachedCNAME bn)
 
       maybe
