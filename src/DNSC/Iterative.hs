@@ -19,11 +19,6 @@ module DNSC.Iterative (
   resolve, resolveJust, iterative,
   Context (..),
   normalizeName,
-
-  -- old names
-  runReply, reply,
-  runQuery1, query1,
-  runQuery, query,
   ) where
 
 -- GHC packages
@@ -188,10 +183,6 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
-{-# DEPRECATED runReply "Use getReplyMessage" #-}
-runReply :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
-runReply = getReplyMessage
-
 -- 返答メッセージを作る
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
@@ -200,18 +191,10 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
-{-# DEPRECATED runQuery "Use runResolve" #-}
-runQuery :: Context -> Name -> TYPE -> IO (Either QueryError (Either [ResourceRecord] DNSMessage))
-runQuery cxt n typ = withNormalized n (`query` typ) cxt
-
 -- 最終的な解決結果を得る
 runResolve :: Context -> Name -> TYPE
            -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either [ResourceRecord] DNSMessage))
 runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
-
-{-# DEPRECATED runQuery1 "Use runResolveJust" #-}
-runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery1 = runResolveJust
 
 -- 権威サーバーからの解決結果を得る
 runResolveJust :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
@@ -256,10 +239,6 @@ replyMessage eas ident rqs =
     h = DNS.header res
     f = DNS.flags h
 
-{-# DEPRECATED reply "Use replyAnswer" #-}
-reply :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
-reply = replyAnswer
-
 -- 反復検索を使って返答メッセージ用の応答セクションを得る.
 replyAnswer :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
 replyAnswer n typ rd = rdQuery
@@ -281,10 +260,6 @@ replyAnswer n typ rd = rdQuery
 
 maxCNameChain :: Int
 maxCNameChain = 16
-
-{-# DEPRECATED query "Use resolve" #-}
-query :: Name -> TYPE -> DNSQuery (Either [ResourceRecord] DNSMessage)
-query n typ = snd <$> resolve n typ
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
@@ -363,10 +338,6 @@ resolve n0 typ
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just rrs
-
-{-# DEPRECATED query1 "Use resolveJust" #-}
-query1 :: Name -> TYPE -> DNSQuery DNSMessage
-query1 = resolveJust
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る. CNAME は解決しない.
 resolveJust :: Name -> TYPE -> DNSQuery DNSMessage
