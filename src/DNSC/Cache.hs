@@ -194,11 +194,11 @@ insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
           Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
 
 expires :: Timestamp -> Cache -> Maybe Cache
-expires now (Cache c xsz)
-  | null exs   =  Nothing
-  | otherwise  =  Just $ Cache result xsz
-  where
-    (exs, result) = PSQ.atMostView now c
+expires now (Cache c xsz) =
+  case PSQ.findMin c of
+    Just (_, eol, _) | eol <= now ->  Just $ Cache (snd $ PSQ.atMostView now c) xsz
+                     | otherwise  ->  Nothing
+    Nothing                       ->  Nothing
 
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
