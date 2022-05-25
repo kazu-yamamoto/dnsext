@@ -12,7 +12,7 @@ import System.Environment (lookupEnv)
 
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, reply, query, query1, iterative, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, resolve, resolveJust, iterative, rootNS)
 
 spec :: Spec
 spec = describe "query" $ do
@@ -23,10 +23,10 @@ spec = describe "query" $ do
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
-      runQuery1 n ty = runDNSQuery (query1 n ty) cxt
-      runQuery n ty = runDNSQuery (query n ty) cxt
+      runQuery1 n ty = runDNSQuery (resolveJust n ty) cxt
+      runQuery n ty = runDNSQuery (snd <$> resolve n ty) cxt
       runReply n ty ident = do
-        e <- runDNSQuery (reply n ty True) cxt
+        e <- runDNSQuery (replyAnswer n ty True) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
@@ -90,7 +90,7 @@ spec = describe "query" $ do
 
   it "query1 - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-    result <- runDNSQuery (query1 "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
+    result <- runDNSQuery (resolveJust "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
