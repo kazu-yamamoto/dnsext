@@ -1,8 +1,8 @@
 module DNSC.Iterative (
-  -- * query interfaces
-  runReply,
-  runQuery,
-  runQuery1,
+  -- * resolve interfaces
+  getReplyMessage,
+  runResolve,
+  runResolveJust,
   newContext,
   runIterative,
   rootNS, Delegation,
@@ -15,9 +15,15 @@ module DNSC.Iterative (
   TimeCache,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
-  replyMessage, reply,
-  query, query1, iterative,
+  replyMessage, replyAnswer,
+  resolve, resolveJust, iterative,
   Context (..),
+  normalizeName,
+
+  -- old names
+  runReply, reply,
+  runQuery1, query1,
+  runQuery, query,
   ) where
 
 -- GHC packages
@@ -60,6 +66,9 @@ type Name = String
 validate :: Name -> Bool
 validate = not . null
 -- validate = all (not . null) . splitOn "."
+
+normalizeName :: Name -> Maybe Name
+normalizeName = normalize
 
 -- nomalize (domain) name to absolute name
 normalize :: Name -> Maybe Name
@@ -124,10 +133,10 @@ type DNSQuery = ExceptT QueryError (ReaderT Context IO)
 
 目的のドメインに対して、TLD(トップレベルドメイン) から子ドメインの方向へと順に、権威サーバへの A クエリを繰り返す.
 権威サーバへの A クエリの返答メッセージには、
-authority セクションに、次の権威サーバの名前 (NS) が、
+authority セクションに、次の権威サーバ群の名前 (NS) が、
 additional セクションにその名前に対するアドレス (A および AAAA) が入っている.
 この情報を使って、繰り返し、子ドメインへの検索を行なう.
-検索ドメインの初期値はTLD、権威サーバの初期値はルートサーバとなる.
+検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
 
 type UpdateCache =
@@ -179,19 +188,36 @@ withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
 
+{-# DEPRECATED runReply "Use getReplyMessage" #-}
 runReply :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
-runReply cxt reqH qs@(DNS.Question bn typ, _) =
+runReply = getReplyMessage
+
+-- 返答メッセージを作る
+getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
+getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized (B8.unpack bn) (\n -> reply n typ rd) cxt
+  <$> withNormalized (B8.unpack bn) (\n -> replyAnswer n typ rd) cxt
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
+{-# DEPRECATED runQuery "Use runResolve" #-}
 runQuery :: Context -> Name -> TYPE -> IO (Either QueryError (Either [ResourceRecord] DNSMessage))
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
-runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
-runQuery1 cxt n typ = withNormalized n (`query1` typ) cxt
+-- 最終的な解決結果を得る
+runResolve :: Context -> Name -> TYPE
+           -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either [ResourceRecord] DNSMessage))
+runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
 
+{-# DEPRECATED runQuery1 "Use runResolveJust" #-}
+runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery1 = runResolveJust
+
+-- 権威サーバーからの解決結果を得る
+runResolveJust :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runResolveJust cxt n typ = withNormalized n (`resolveJust` typ) cxt
+
+-- 反復後の委任情報を得る
 runIterative :: Context -> Delegation -> Name -> IO (Either QueryError Delegation)
 runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
@@ -230,15 +256,20 @@ replyMessage eas ident rqs =
     h = DNS.header res
     f = DNS.flags h
 
+{-# DEPRECATED reply "Use replyAnswer" #-}
 reply :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
-reply n typ rd = rdQuery
+reply = replyAnswer
+
+-- 反復検索を使って返答メッセージ用の応答セクションを得る.
+replyAnswer :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
+replyAnswer n typ rd = rdQuery
   where
     rdQuery
       | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
       | otherwise  =  withQuery
 
     withQuery = do
-      ((aRRs, rn), etm) <- query_ n typ
+      ((aRRs, rn), etm) <- resolve n typ
       let takeX rr
             | rrname rr == rn && rrtype rr == typ   =  Just rr
             | otherwise                             =  Nothing
@@ -251,23 +282,24 @@ reply n typ rd = rdQuery
 maxCNameChain :: Int
 maxCNameChain = 16
 
-{- 反復検索を使ったクエリ.
-   目的の TYPE の RankAnswer 以上のキャッシュ読み出しを行なう.
-   目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
-   目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
+{-# DEPRECATED query "Use resolve" #-}
 query :: Name -> TYPE -> DNSQuery (Either [ResourceRecord] DNSMessage)
-query n typ = snd <$> query_ n typ
+query n typ = snd <$> resolve n typ
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
-query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
-query_ n0 typ
+{- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
+   目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
+   目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
+   目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
+resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+resolve n0 typ
   | typ == CNAME  =  justCNAME n0
   | otherwise     =  recCNAMEs 0 n0 id
   where
     justCNAME n = do
       let noCache = do
-            msg <- query1 n CNAME
+            msg <- resolveJust n CNAME
             pure ((id, bn), Right msg)
 
       maybe
@@ -286,7 +318,7 @@ query_ n0 typ
       | otherwise = do
       let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
           noCache = do
-            msg <- query1 n typ
+            msg <- resolveJust n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
             -- TODO: CNAME 解決の回数制限
@@ -332,14 +364,18 @@ query_ n0 typ
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just rrs
 
--- 反復検索を使ったクエリ. CNAME は解決しない.
+{-# DEPRECATED query1 "Use resolveJust" #-}
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
-query1 n typ = do
-  lift $ logLn Log.INFO $ "query1: " ++ show (n, typ)
+query1 = resolveJust
+
+-- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る. CNAME は解決しない.
+resolveJust :: Name -> TYPE -> DNSQuery DNSMessage
+resolveJust n typ = do
+  lift $ logLn Log.INFO $ "resolve-just: " ++ show (n, typ)
   nss <- iterative rootNS n
   sa <- selectDelegation nss
-  lift $ logLn Log.DEBUG $ "query1: norec1: " ++ show (sa, n, typ)
-  handleNX throwE return =<< norec1 sa (B8.pack n) typ
+  lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
+  handleNX throwE return =<< norec sa (B8.pack n) typ
 
 -- ドメインに対する NS 委任情報
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
@@ -355,11 +391,11 @@ rootNS =
   where
     (ns, as) = rootServers
 
--- 反復検索でドメインの NS のアドレスを得る
+-- 反復検索
+-- 繰り返し委任情報をたどって目的の答えを知るはずの権威権威サーバー群を見つける
 iterative :: Delegation -> Name -> DNSQuery Delegation
 iterative sa n = iterative_ sa $ reverse $ domains n
 
--- 反復検索の本体
 iterative_ :: Delegation -> [Name] -> DNSQuery Delegation
 iterative_ nss []     = return nss
 iterative_ nss (x:xs) =
@@ -381,8 +417,8 @@ iterative_ nss (x:xs) =
     stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
     stepQuery nss_ = do
       sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
-      lift $ logLn Log.INFO $ "iterative: norec1: " ++ show (sa, name, A)
-      msg <- norec1 sa name A
+      lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
+      msg <- norec sa name A
       lift $ delegationWithCache name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)
@@ -413,8 +449,9 @@ nsList dom h = mapMaybe takeNS
       | rrname rr == dom  =  Just $ h ns rr
     takeNS _              =  Nothing
 
-norec1 :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
-norec1 aserver name typ = dnsQueryT $ \cxt -> do
+-- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
+norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
+norec aserver name typ = dnsQueryT $ \cxt -> do
   now <- currentSeconds_ cxt
   rs <- DNS.makeResolvSeed conf
   either (Left . DnsError) (handleResponseError Left Right) <$>
@@ -468,7 +505,7 @@ selectDelegation (nss, as) = do
           qx +!? qy = do
             xs <- qx
             if null xs then qy else pure xs
-          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx =<< query1 nsName typ
+          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx =<< resolveJust nsName typ
           nsName = B8.unpack ns
 
       resolveAXofNS :: DNSQuery (IP, ResourceRecord)
