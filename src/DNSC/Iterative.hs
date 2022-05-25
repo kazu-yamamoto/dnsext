@@ -339,14 +339,25 @@ resolve n0 typ
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just rrs
 
+maxNotSublevelDelegation :: Int
+maxNotSublevelDelegation = 16
+
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る. CNAME は解決しない.
 resolveJust :: Name -> TYPE -> DNSQuery DNSMessage
-resolveJust n typ = do
-  lift $ logLn Log.INFO $ "resolve-just: " ++ show (n, typ)
+resolveJust = resolveJustDC 0
+
+resolveJustDC :: Int -> Name -> TYPE -> DNSQuery DNSMessage
+resolveJustDC dc n typ
+  | dc > mdc   = lift (logLn Log.NOTICE $ "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ))
+                 *> throwDnsError DNS.ServerFailure
+  | otherwise  = do
+  lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
   nss <- iterative rootNS n
-  sa <- selectDelegation nss
+  sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
   handleNX throwE return =<< norec sa (B8.pack n) typ
+    where
+      mdc = maxNotSublevelDelegation
 
 -- ドメインに対する NS 委任情報
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
@@ -365,16 +376,17 @@ rootNS =
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威権威サーバー群を見つける
 iterative :: Delegation -> Name -> DNSQuery Delegation
-iterative sa n = iterative_ sa $ reverse $ domains n
+iterative sa n = iterative_ 0 sa $ reverse $ domains n
 
-iterative_ :: Delegation -> [Name] -> DNSQuery Delegation
-iterative_ nss []     = return nss
-iterative_ nss (x:xs) =
+iterative_ :: Int -> Delegation -> [Name] -> DNSQuery Delegation
+iterative_ _  nss []     = return nss
+iterative_ dc nss (x:xs) =
   step nss >>=
   maybe
-  (iterative_ nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
-  (`iterative_` xs)
+  (recurse nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
+  (`recurse` xs)
   where
+    recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
     name = B8.pack x
 
     lookupNS :: ReaderT Context IO (Maybe Delegation)
@@ -387,7 +399,7 @@ iterative_ nss (x:xs) =
 
     stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
     stepQuery nss_ = do
-      sa <- selectDelegation nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
+      sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
       msg <- norec sa name A
       lift $ delegationWithCache name msg
@@ -438,8 +450,8 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
 -- authority section 内の、Domain に対応する NS レコードが一つも無いときに Nothing
 -- そうでなければ、additional section 内の NS の名前に対応する A を利用してアドレスを得る
 -- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
-selectDelegation :: Delegation -> DNSQuery IP
-selectDelegation (nss, as) = do
+selectDelegation :: Int -> Delegation -> DNSQuery IP
+selectDelegation dc (nss, as) = do
   let selectNS = randomizedSelectN
   (ns, nsRR) <- liftIO $ selectNS nss
   disableV6NS <- lift $ asks disableV6NS_
@@ -476,7 +488,8 @@ selectDelegation (nss, as) = do
           qx +!? qy = do
             xs <- qx
             if null xs then qy else pure xs
-          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx =<< resolveJust nsName typ
+          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx
+                             =<< resolveJustDC (succ dc) nsName typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
           nsName = B8.unpack ns
 
       resolveAXofNS :: DNSQuery (IP, ResourceRecord)
