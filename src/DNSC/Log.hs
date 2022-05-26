@@ -9,10 +9,10 @@ module DNSC.Log (
 -- GHC packages
 import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr)
-import System.IO.Error (tryIOError)
 
 -- other packages
 import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
+import UnliftIO (tryAny)
 
 -- this package
 import DNSC.Queue (newQueue, readQueue, writeQueue)
@@ -47,7 +47,7 @@ new outFh level = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8
-  let body = either (const $ return ()) return =<< tryIOError (hPutStr outFh . unlines =<< readQueue inQ)
+  let body = either (const $ return ()) return =<< tryAny (hPutStr outFh . unlines =<< readQueue inQ)
       logLines lv = when (level <= lv) . writeQueue inQ
 
   return (forever body, logLines, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))

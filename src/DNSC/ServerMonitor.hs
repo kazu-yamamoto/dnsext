@@ -16,13 +16,14 @@ import Data.List (isInfixOf, find)
 import Data.Char (toUpper)
 import qualified Data.ByteString.Char8 as B8
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
-import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (waitSTM, withAsync)
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified Network.DNS as DNS
+
+-- other packages
+import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
 import qualified DNSC.DNSUtil as Config
@@ -117,7 +118,7 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
       let repl = console params cxt getsSizeInfo flushLog monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
-    handle onError = either onError return <=< tryIOError
+    handle onError = either onError return <=< tryAny
     monitorServer monQuit@(_, waitQuit) s = do
       let step = do
             socketWaitRead s
@@ -152,7 +153,7 @@ console params cxt (reqQSize, resQSize, ucacheQSize, logQSize) flushLog (issueQu
   repl
 
   where
-    handle onError = either onError return <=< tryIOError
+    handle onError = either onError return <=< tryAny
 
     parseTYPE s =
       find match types

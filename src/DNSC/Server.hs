@@ -7,14 +7,15 @@ module DNSC.Server (
 import Control.Concurrent (getNumCapabilities)
 import Control.Monad ((<=<), forever)
 import Data.List (uncons)
-import System.IO.Error (tryIOError)
 
 -- dns packages
-import Control.Concurrent.Async (concurrently_, race_)
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import Network.DNS (DNSMessage, DNSHeader, Question)
 import qualified Network.DNS as DNS
+
+-- other packages
+import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
 import DNSC.Queue (newQueue, readQueue, writeQueue)
@@ -117,17 +118,17 @@ sendResponse send _cxt = uncurry (uncurry send)
 ---
 
 consumeLoop :: Int
-            -> (IOError -> IO ()) -> (a -> IO ())
+            -> (SomeException -> IO ()) -> (a -> IO ())
             -> IO (IO b, a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
   inQ <- newQueue qsize
   let enqueue = writeQueue inQ
-      hbody = either onError return <=< tryIOError . body
+      hbody = either onError return <=< tryAny . body
       loop = forever $ hbody =<< readQueue inQ
 
   return (loop, enqueue, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
-handledLoop :: (IOError -> IO a) -> IO a -> IO b
+handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
 handledLoop onError = forever . handle
   where
-    handle = either onError return <=< tryIOError
+    handle = either onError return <=< tryAny
