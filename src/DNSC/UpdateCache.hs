@@ -30,9 +30,10 @@ data Update
   deriving Show
 
 runUpdate :: Timestamp -> Update -> Cache -> Maybe Cache
-runUpdate t u = case u of
-  I k ttl crs rank -> Cache.insert t k ttl crs rank
-  E                -> Cache.expires t
+runUpdate t u cache = case u of
+  I k ttl crs rank -> maybe (insert cache) insert $ Cache.expires t cache {- expires before insert -}
+    where insert = Cache.insert t k ttl crs rank
+  E                -> Cache.expires t cache
 
 type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
