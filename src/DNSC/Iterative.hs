@@ -248,6 +248,9 @@ reply n typ rd = rdQuery
 
       lift $ aRRs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
 
+maxCNameChain :: Int
+maxCNameChain = 16
+
 {- 反復検索を使ったクエリ.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しを行なう.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
@@ -260,7 +263,7 @@ type DRRList = [ResourceRecord] -> [ResourceRecord]
 query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
 query_ n0 typ
   | typ == CNAME  =  justCNAME n0
-  | otherwise     =  recCNAMEs n0 id
+  | otherwise     =  recCNAMEs 0 n0 id
   where
     justCNAME n = do
       let noCache = do
@@ -276,24 +279,28 @@ query_ n0 typ
           bn = B8.pack n
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCNAMEs :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
-    recCNAMEs n aRRs = do
-      let noCache = do
+    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+    recCNAMEs cc n aRRs
+      | cc > mcc  = lift (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
+                    *> throwDnsError DNS.ServerFailure
+      | otherwise = do
+      let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
+          noCache = do
             msg <- query1 n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
             -- TODO: CNAME 解決の回数制限
-            let resolveCNAME (cn, cnRR) = do
+            let resolveCNAME cnPair = do
                   when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-                  recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))
+                  recCNAMEs_ cnPair
 
             maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
           noType =
             maybe
             noCache
-            (\(cn, cnRR) -> recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))) {- recurse with cname cache -}
+            recCNAMEs_ {- recurse with cname cache -}
             =<< lift (cachedCNAME bn)
 
       maybe
@@ -302,6 +309,7 @@ query_ n0 typ
         =<< lift (lookupCache_ bn typ)
 
         where
+          mcc = maxCNameChain
           bn = B8.pack n
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = mapMaybe (takeCNAME bn) rrs
