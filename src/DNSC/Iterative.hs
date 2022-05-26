@@ -186,7 +186,7 @@ runReply cxt reqH qs@(DNS.Question bn typ, _) =
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
-runQuery :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runQuery :: Context -> Name -> TYPE -> IO (Either QueryError (Either [ResourceRecord] DNSMessage))
 runQuery cxt n typ = withNormalized n (`query` typ) cxt
 
 runQuery1 :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
@@ -231,22 +231,14 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 reply :: Name -> TYPE -> Bool -> DNSQuery [ResourceRecord]
-reply n typ rd =
-  maybe rdQuery pure =<< lift lookupCache_
+reply n typ rd = rdQuery
   where
-    replyRank (rrs, rank)
-      -- 最も低い ranking は reply の answer に利用しない
-      -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
-      | rank <= RankAdditional  =  Nothing
-      | otherwise               =  Just rrs
-    lookupCache_ = (replyRank =<<) <$> lookupCache (B8.pack n) typ
-
     rdQuery
       | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
       | otherwise  =  withQuery
 
     withQuery = do
-      ((arrs, rn), msg) <- query_ n typ
+      ((aRRs, rn), etm) <- query_ n typ
       let takeX rr
             | rrname rr == rn && rrtype rr == typ   =  Just rr
             | otherwise                             =  Nothing
@@ -254,42 +246,83 @@ reply n typ rd =
             where
               ps = mapMaybe takeX rrs
 
-      lift $ arrs <$> getSectionWithCache rankedAnswer refinesX msg
+      lift $ aRRs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
 
--- 反復検索を使ったクエリ. 結果が CNAME なら繰り返し解決する.
-query :: Name -> TYPE -> DNSQuery DNSMessage
+{- 反復検索を使ったクエリ.
+   目的の TYPE の RankAnswer 以上のキャッシュ読み出しを行なう.
+   目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
+   目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
+query :: Name -> TYPE -> DNSQuery (Either [ResourceRecord] DNSMessage)
 query n typ = snd <$> query_ n typ
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
-query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), DNSMessage)
-query_ n CNAME = (,) (id, B8.pack n) <$> query1 n CNAME
-query_ n0 typ  = recCN n0 id
+query_ :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+query_ n0 typ
+  | typ == CNAME  =  justCNAME n0
+  | otherwise     =  recCNAMEs n0 id
   where
-    -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCN :: Name -> DRRList -> DNSQuery ((DRRList, Domain), DNSMessage)
-    recCN n arrs = do
-      msg <- query1 n typ
-      cnames <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
+    justCNAME n = do
+      let noCache = do
+            msg <- query1 n CNAME
+            pure ((id, bn), Right msg)
 
-      -- TODO: CNAME 解決の回数制限
-      let resolveCNAME (cn, cnRR) = do
-            when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
-              throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-            recCN (B8.unpack cn) (arrs . (cnRR :))
+      maybe
+        noCache
+        (\(_cn, cnRR) -> pure ((id, bn), Left [cnRR]))
+        =<< lift (cachedCNAME bn)
 
-      maybe (pure ((arrs, bn), msg)) resolveCNAME
-        =<< liftIO (selectCNAME cnames)
         where
           bn = B8.pack n
-          takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-            | rrname rr == bn         =  Just (cn, rr)
-          takeCNAME _                 =  Nothing
 
-          refinesCNAME rrs = (ps, map snd ps)
-            where ps = mapMaybe takeCNAME rrs
+    -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
+    recCNAMEs :: Name -> DRRList -> DNSQuery ((DRRList, Domain), Either [ResourceRecord] DNSMessage)
+    recCNAMEs n aRRs = do
+      let noCache = do
+            msg <- query1 n typ
+            cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
-          selectCNAME = randomizedSelect
+            -- TODO: CNAME 解決の回数制限
+            let resolveCNAME (cn, cnRR) = do
+                  when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+                    throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+                  recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))
+
+            maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
+
+          noType =
+            maybe
+            noCache
+            (\(cn, cnRR) -> recCNAMEs (B8.unpack cn) (aRRs . (cnRR :))) {- recurse with cname cache -}
+            =<< lift (cachedCNAME bn)
+
+      maybe
+        noType
+        (\tyRRs -> pure ((aRRs, bn), Left tyRRs)) {- return cached result with target typ -}
+        =<< lift (lookupCache_ bn typ)
+
+        where
+          bn = B8.pack n
+          refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
+            where ps = mapMaybe (takeCNAME bn) rrs
+
+    cachedCNAME bn = do
+      mayRRs <- lookupCache_ bn CNAME
+      return $ do
+        rrs <- mayRRs
+        (rr, _) <- uncons rrs
+        takeCNAME bn rr
+
+    takeCNAME bn rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
+      | rrname rr == bn         =  Just (cn, rr)
+    takeCNAME _  _              =  Nothing
+
+    lookupCache_ bn t = (replyRank =<<) <$> lookupCache bn t
+    replyRank (rrs, rank)
+      -- 最も低い ranking は reply の answer に利用しない
+      -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
+      | rank <= RankAdditional  =  Nothing
+      | otherwise               =  Just rrs
 
 -- 反復検索を使ったクエリ. CNAME は解決しない.
 query1 :: Name -> TYPE -> DNSQuery DNSMessage
