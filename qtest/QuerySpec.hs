@@ -12,7 +12,7 @@ import System.Environment (lookupEnv)
 
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, reply, query, query1, iterative, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, resolve, resolveJust, iterative, rootNS)
 
 spec :: Spec
 spec = describe "query" $ do
@@ -23,10 +23,10 @@ spec = describe "query" $ do
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = runDNSQuery (iterative ns n) cxt
-      runQuery1 n ty = runDNSQuery (query1 n ty) cxt
-      runQuery n ty = runDNSQuery (query n ty) cxt
-      runReply n ty ident = do
-        e <- runDNSQuery (reply n ty True) cxt
+      runJust n ty = runDNSQuery (resolveJust n ty) cxt
+      runResolve n ty = runDNSQuery (snd <$> resolve n ty) cxt
+      getReply n ty ident = do
+        e <- runDNSQuery (replyAnswer n ty True) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
@@ -46,78 +46,78 @@ spec = describe "query" $ do
     printQueryError result
     result `shouldSatisfy` isRight
 
-  it "query1 - ns" $ do
-    result <- runQuery1 "iij.ad.jp." NS
+  it "resolve-just - ns" $ do
+    result <- runJust "iij.ad.jp." NS
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - a" $ do
-    result <- runQuery1 "iij.ad.jp." A
+  it "resolve-just - a" $ do
+    result <- runJust "iij.ad.jp." A
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - aaaa" $ do
-    result <- runQuery1 "iij.ad.jp." AAAA
+  it "resolve-just - aaaa" $ do
+    result <- runJust "iij.ad.jp." AAAA
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - mx" $ do
-    result <- runQuery1 "iij.ad.jp." MX
+  it "resolve-just - mx" $ do
+    result <- runJust "iij.ad.jp." MX
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - cname" $ do
-    result <- runQuery1 "porttest.dns-oarc.net." CNAME
+  it "resolve-just - cname" $ do
+    result <- runJust "porttest.dns-oarc.net." CNAME
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - cname with nx" $ do
-    result <- runQuery1 "media-router-aol1.prod.media.yahoo.com." CNAME
+  it "resolve-just - cname with nx" $ do
+    result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query1 - delegation with aa" $ do
+  it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-    result <- runDNSQuery (query1 "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
+    result <- runDNSQuery (resolveJust "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
     printQueryError result
     isRight result `shouldBe` True
     let Right msg = result
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query - cname" $ do
-    result <- runQuery "porttest.dns-oarc.net." CNAME
+  it "resolve - cname" $ do
+    result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
     isRight result `shouldBe` True
     let Right etm = result
         Right msg = etm
     length (DNS.answer msg) `shouldSatisfy` (> 0)
 
-  it "query - a via cname" $ do
-    result <- runQuery "clients4.google.com." A
+  it "resolve - a via cname" $ do
+    result <- runResolve "clients4.google.com." A
     printQueryError result
     isRight result `shouldBe` True
 
-  it "reply - ptr - cache" $ do
-    m1 <- runReply "5.0.130.210.in-addr.arpa." PTR 0
+  it "get-reply - ptr - cache" $ do
+    m1 <- getReply "5.0.130.210.in-addr.arpa." PTR 0
     threadDelay $ 2 * 1000 * 1000
-    m2 <- runReply "5.0.130.210.in-addr.arpa." PTR 0
+    m2 <- getReply "5.0.130.210.in-addr.arpa." PTR 0
     let getTTL = fmap (DNS.rrttl . fst) . uncons . DNS.answer
         t1 = maybe (Left "t1: no RR") return . getTTL =<< m1
         t2 = maybe (Left "t2: no RR") return . getTTL =<< m2
     (>) <$> t1 <*> t2 `shouldBe` Right True
 
-  it "reply - a accumulated via cname" $ do
-    result <- runReply "media-router-aol1.prod.media.yahoo.com." A 0
+  it "get-reply - a accumulated via cname" $ do
+    result <- getReply "media-router-aol1.prod.media.yahoo.com." A 0
     either (const 0) (length . DNS.answer) result `shouldSatisfy` (> 1)
