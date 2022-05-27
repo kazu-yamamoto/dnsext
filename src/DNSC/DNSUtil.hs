@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 
 module DNSC.DNSUtil (
+  mkRecvBS, mkSendBS,
   mkRecv, mkSend,
   lookupRaw,
 
@@ -13,6 +14,7 @@ module DNSC.DNSUtil (
 import qualified Control.Exception as E
 import Control.Monad (void)
 import Data.Int (Int64)
+import Data.ByteString (ByteString)
 
 -- dns packages
 import Network.Socket (Socket, SockAddr)
@@ -30,6 +32,28 @@ type Cmsg = Socket.Cmsg
 #else
 type Cmsg = ()
 #endif
+
+mkRecvBS :: Bool -> Socket -> IO (ByteString, (SockAddr, [Cmsg], Bool))
+#if MIN_VERSION_network(3,1,2)
+mkRecvBS wildcard
+  | wildcard    =  withRecv recvMsg
+  | otherwise   =  withRecv recvFrom
+#else
+mkRecvBS wildcard =  withRecv recvFrom
+#endif
+  where
+    withRecv recv sock = recv sock `E.catch` \e -> E.throwIO $ DNS.NetworkFailure e
+#if MIN_VERSION_network(3,1,2)
+    recvMsg sock = do
+      let cbufsiz = 64
+      (peer, bs, cmsgs, _) <- Socket.recvMsg sock bufsiz cbufsiz 0
+      return (bs, (peer, cmsgs, wildcard))
+#endif
+
+    recvFrom sock = do
+      (bs, peer) <- Socket.recvFrom sock bufsiz
+      return (bs, (peer, [], wildcard))
+    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 -- return tuples that can be reused in request and response queues
 mkRecv :: Bool -> Int64 -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
@@ -58,6 +82,21 @@ mkRecv wildcard now =  recvDNS recvFrom
       (bs, peer) <- Socket.recvFrom sock bufsiz
       return (bs, (peer, [], wildcard))
     bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+
+mkSendBS :: Bool -> Socket -> ByteString -> SockAddr -> [Cmsg] -> IO ()
+#if MIN_VERSION_network(3,1,2)
+mkSendBS wildcard
+  | wildcard   =  sendMsg
+  | otherwise  =  sendTo
+#else
+mkSend _       =  sendTo
+#endif
+  where
+#if MIN_VERSION_network(3,1,2)
+    sendMsg sock bs addr cmsgs = void $ Socket.sendMsg sock addr [bs] cmsgs 0
+#endif
+
+    sendTo sock bs addr _ = void $ Socket.sendTo sock bs addr
 
 mkSend :: Bool -> Socket -> DNSMessage -> SockAddr -> [Cmsg] -> IO ()
 #if MIN_VERSION_network(3,1,2)
