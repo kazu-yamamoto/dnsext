@@ -44,8 +44,10 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
-  (serverLoops, monParams) <- setup logOutput logLevel maxCacheSize disableV6NS conc port hosts
-  monLoops <- uncurry (uncurry $ uncurry $ monitor stdConsole) monParams
+  caps <- getNumCapabilities
+  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS conc (fromIntegral port) hosts
+  (serverLoops, monArgs) <- setup logOutput logLevel maxCacheSize disableV6NS conc port hosts $ Mon.showParams params
+  monLoops <- uncurry (uncurry $ monitor stdConsole params) monArgs
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
@@ -54,17 +56,15 @@ type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
-     -> IO ([IO ()], (((Mon.Params, Context), QSizeInfo), IO ()))
-setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
+     -> [String]
+     -> IO ([IO ()], ((Context, QSizeInfo), IO ()))
+setup logOutput logLevel maxCacheSize disableV6NS conc port hosts paramLogs = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
   (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
-  params <- do
-    cap <- getNumCapabilities
-    return $ Mon.makeParams cap logOutput logLevel maxCacheSize disableV6NS conc (fromIntegral port) hosts
-  putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
+  putLines Log.NOTICE $ map ("params: " ++) paramLogs
 
   sas <- udpSockets port hosts
 
@@ -83,7 +83,7 @@ setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
 
   mapM_ (uncurry S.bind) sas
 
-  return (ucacheLoops ++ respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
+  return (ucacheLoops ++ respLoop : procLoops ++ reqLoops, ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
 
 recvRequest :: Show a
             => (s -> IO (ByteString, a))
