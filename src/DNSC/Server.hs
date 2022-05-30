@@ -85,6 +85,19 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
 
   return (ucacheLoops ++ respLoop : workerLoops ++ reqLoops, ((cxt, ([(reqQSize, resQSize)], ucacheQSize, logQSize)), flushLog))
 
+getPipeline :: Int -> (IO Timestamp) -> Context -> Socket -> SockAddr
+            -> IO ([IO ()], (IO (Int, Int), IO (Int, Int)))
+getPipeline workers getSec cxt sock_ addr_ = do
+  let putLn lv = logLines_ cxt lv . (:[])
+      send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
+
+  (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
+  (workerLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt getSec enqueueResp
+  let workerLoops = replicate workers workerLoop
+      reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
+                $ recvRequest (mkRecvBS $ isAnySockAddr addr_) cxt enqueueReq sock_
+  return (respLoop : workerLoops ++ [reqLoop], (reqQSize, resQSize))
+
 recvRequest :: Show a
             => (s -> IO (ByteString, a))
             -> Context
