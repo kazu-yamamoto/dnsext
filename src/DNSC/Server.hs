@@ -43,9 +43,11 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 
 run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run logOutput logLevel maxCacheSize disableV6NS conc port hosts stdConsole = do
-  (serverLoops, monParams) <- setup logOutput logLevel maxCacheSize disableV6NS conc port hosts
-  monLoops <- uncurry (uncurry $ uncurry $ monitor stdConsole) monParams
+run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
+  caps <- getNumCapabilities
+  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers (fromIntegral port) hosts
+  (serverLoops, monArgs) <- setup logOutput logLevel maxCacheSize disableV6NS workers port hosts $ Mon.showParams params
+  monLoops <- uncurry (uncurry $ monitor stdConsole params) monArgs
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
@@ -54,17 +56,15 @@ type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
-     -> IO ([IO ()], (((Mon.Params, Context), QSizeInfo), IO ()))
-setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
+     -> [String]
+     -> IO ([IO ()], ((Context, QSizeInfo), IO ()))
+setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
   (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
-  params <- do
-    cap <- getNumCapabilities
-    return $ Mon.makeParams cap logOutput logLevel maxCacheSize disableV6NS conc (fromIntegral port) hosts
-  putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
+  putLines Log.NOTICE $ map ("params: " ++) paramLogs
 
   sas <- udpSockets port hosts
 
@@ -72,8 +72,8 @@ setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
       send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (procLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` conc) (putLn Log.NOTICE . ("Server.processRequest: error: " ++) . show) $ processRequest cxt getSec enqueueResp
-  let procLoops = replicate conc procLoop
+  (workerLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt getSec enqueueResp
+  let workerLoops = replicate workers workerLoop
 
       reqLoops =
         [ handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
@@ -83,7 +83,7 @@ setup logOutput logLevel maxCacheSize disableV6NS conc port hosts = do
 
   mapM_ (uncurry S.bind) sas
 
-  return (ucacheLoops ++ respLoop : procLoops ++ reqLoops, (((params, cxt), (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
+  return (ucacheLoops ++ respLoop : workerLoops ++ reqLoops, ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
 
 recvRequest :: Show a
             => (s -> IO (ByteString, a))
@@ -95,12 +95,12 @@ recvRequest recv _cxt enqReq sock = do
   (bs, addr) <- recv sock
   enqReq (sock, bs, addr)
 
-processRequest :: Show a
-               => Context
-               -> IO Timestamp
-               -> (Response s a -> IO ())
-               -> Request s a -> IO ()
-processRequest cxt getSec enqResp (sock, bs, addr) =
+resolvWorker :: Show a
+             => Context
+             -> IO Timestamp
+             -> (Response s a -> IO ())
+             -> Request s a -> IO ()
+resolvWorker cxt getSec enqResp (sock, bs, addr) =
   (either (logLn Log.NOTICE) return =<<) . runExceptT $ do
   let decode = do
         now <- liftIO $ getSec
