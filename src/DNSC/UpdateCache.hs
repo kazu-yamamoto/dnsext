@@ -62,7 +62,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
     return (forever body, writeQueue inQ, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
   let expires1 = do
-        threadDelay $ 1000 * 1000
+        threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure E
 
       expireEvsnts = forever body
