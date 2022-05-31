@@ -127,7 +127,8 @@ sendResponse send _cxt = uncurry (uncurry send)
 ---
 
 consumeLoop :: Int
-            -> (SomeException -> IO ()) -> (a -> IO ())
+            -> (SomeException -> IO ())
+            -> (a -> IO ())
             -> IO (IO b, a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
   inQ <- newQueue qsize
