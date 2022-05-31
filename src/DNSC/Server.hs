@@ -68,22 +68,13 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
 
   sas <- udpSockets port hosts
 
-  let putLn lv = putLines lv . (:[])
-      send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
-
-  (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (workerLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt getSec enqueueResp
-  let workerLoops = replicate workers workerLoop
-
-      reqLoops =
-        [ handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-          $ recvRequest (mkRecvBS $ isAnySockAddr addr) cxt enqueueReq sock
-        | (sock, addr) <- sas
-        ]
+  (pLoops, qsizes) <- do
+    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers getSec cxt) sas
+    return (concat loopsList, qsizes)
 
   mapM_ (uncurry S.bind) sas
 
-  return (ucacheLoops ++ respLoop : workerLoops ++ reqLoops, ((cxt, ([(reqQSize, resQSize)], ucacheQSize, logQSize)), flushLog))
+  return (ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
 
 getPipeline :: Int -> (IO Timestamp) -> Context -> Socket -> SockAddr
             -> IO ([IO ()], (IO (Int, Int), IO (Int, Int)))
