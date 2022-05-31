@@ -17,7 +17,7 @@ data ServerOptions =
   , logLevel :: Log.Level
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
-  , concurrency :: Int
+  , workers :: Int
   , port :: Word16
   , bindHosts :: [String]
   , stdConsole :: Bool
@@ -31,7 +31,7 @@ defaultOptions =
   , logLevel = Log.NOTICE
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
-  , concurrency = 16
+  , workers = 16
   , port = 53
   , bindHosts = []
   , stdConsole = False
@@ -54,9 +54,9 @@ descs =
   , Option ['4'] ["disable-v6-ns"]
     (NoArg $ \opts -> return opts { disableV6NS = True })
     "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
-  , Option ['c'] ["concurrency"]
-    (ReqArg (\s opts -> readEither s >>= \x -> return opts { concurrency = x }) "POSITIVE_INTEGER")
-    "concurrency"
+  , Option ['w'] ["workers"]
+    (ReqArg (\s opts -> readEither s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
+    "workers per host"
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
@@ -85,7 +85,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (concurrency opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
