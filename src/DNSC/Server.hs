@@ -52,7 +52,7 @@ run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = 
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-type QSizeInfo = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO (Int, Int))
+type QSizeInfo = ([(IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
@@ -83,7 +83,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
 
   mapM_ (uncurry S.bind) sas
 
-  return (ucacheLoops ++ respLoop : workerLoops ++ reqLoops, ((cxt, (reqQSize, resQSize, ucacheQSize, logQSize)), flushLog))
+  return (ucacheLoops ++ respLoop : workerLoops ++ reqLoops, ((cxt, ([(reqQSize, resQSize)], ucacheQSize, logQSize)), flushLog))
 
 recvRequest :: Show a
             => (s -> IO (ByteString, a))
