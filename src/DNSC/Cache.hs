@@ -13,6 +13,8 @@ module DNSC.Cache (
   rankedAnswer, rankedAuthority, rankedAdditional,
 
   insertSetFromSection,
+
+  nxTYPE,
   -- * types
   CDomain,
   CMailbox,
@@ -214,6 +216,11 @@ alive now eol = do
 
 size :: Cache -> Int
 size (Cache c _) = PSQ.size c
+
+-- code from Reserved for Private Use (section 3.1 of RFC6895)
+-- <https://datatracker.ietf.org/doc/html/rfc6895#section-3.1>
+nxTYPE :: TYPE
+nxTYPE = DNS.toTYPE 0xff00
 
 ---
 {- debug interfaces -}
