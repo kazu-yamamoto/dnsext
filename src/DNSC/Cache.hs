@@ -13,6 +13,7 @@ module DNSC.Cache (
   rankedAnswer, rankedAuthority, rankedAdditional,
 
   insertSetFromSection,
+  insertSetEmpty,
 
   nxTYPE,
   -- * types
@@ -177,6 +178,11 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
        ...
        ... errRRLists ...  -- error handlings
 @
+
+  Insert empty-RRSet example for negative cache
+@
+   insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
+@
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
 insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
@@ -323,3 +329,8 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
     getRRSet rs = maybe (Left rs) Right $ takeRRSet rs
     (errRS, rrss) = partitionEithers . map getRRSet . groupBy ((==) `on` key) . sortOn key $ rs0
     iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
+
+insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
+insertSetEmpty srcDom dom typ ttl rank h = h key ttl (CR_EMPTY $ fromDomain srcDom) rank
+  where
+    key = Key (fromDomain dom) typ DNS.classIN
