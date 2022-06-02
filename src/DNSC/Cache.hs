@@ -71,6 +71,7 @@ data CRSet
   | CR_MX [(Word16, CDomain)]
   | CR_TXT [CTxt]
   | CR_AAAA [IPv6]
+  | CR_EMPTY CDomain {- NXDOMAIN or NODATA, hold domain delegatoin from -}
   deriving (Eq, Ord, Show)
 
 ---
@@ -259,6 +260,7 @@ toRDatas crs = case crs of
   CR_MX ps    ->  map (\(w, d) -> RD_MX w $ toDomain d) ps
   CR_TXT ts   ->  map (RD_TXT . fromShort) ts
   CR_AAAA as  ->  map RD_AAAA as
+  CR_EMPTY {} ->  []
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas []    = Nothing
