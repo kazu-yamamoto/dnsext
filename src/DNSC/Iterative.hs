@@ -319,18 +319,19 @@ resolve n0 typ
           mcc = maxCNameChain
           bn = B8.pack n
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
-            where ps = mapMaybe (takeCNAME bn) rrs
+            where ps = cnameList bn (,) rrs
 
     cachedCNAME bn = do
       mayRRs <- lookupCache_ bn CNAME
       return $ do
         rrs <- mayRRs
-        (rr, _) <- uncons rrs
-        takeCNAME bn rr
+        fst <$> uncons (cnameList bn (,) rrs)
 
-    takeCNAME bn rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn }
-      | rrname rr == bn         =  Just (cn, rr)
-    takeCNAME _  _              =  Nothing
+    cnameList dom h = foldr takeCNAME []
+      where
+        takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn } xs
+          | rrname rr == dom  =  h cn rr : xs
+        takeCNAME _      xs   =  xs
 
     lookupCache_ bn t = (replyRank =<<) <$> lookupCache bn t
     replyRank (rrs, rank)
@@ -426,11 +427,11 @@ delegationWithCache dom msg =
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
-nsList dom h = mapMaybe takeNS
+nsList dom h = foldr takeNS []
   where
-    takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns }
-      | rrname rr == dom  =  Just $ h ns rr
-    takeNS _              =  Nothing
+    takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns } xs
+      | rrname rr == dom  =  h ns rr : xs
+    takeNS _         xs   =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
@@ -457,16 +458,18 @@ selectDelegation dc (nss, as) = do
   disableV6NS <- lift $ asks disableV6NS_
 
   let selectA = randomizedSelect
-      takeAx :: ResourceRecord -> Maybe (IP, ResourceRecord)
-      takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 }
-        | rrname rr == ns  =  Just (IPv4 ipv4, rr)
-      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 }
+      takeAx :: ResourceRecord -> [(IP, ResourceRecord)] -> [(IP, ResourceRecord)]
+      takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 } xs
+        | rrname rr == ns  =  (IPv4 ipv4, rr) : xs
+      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 } xs
         | not disableV6NS &&
-          rrname rr == ns  =  Just (IPv6 ipv6, rr)
-      takeAx _             =  Nothing
+          rrname rr == ns  =  (IPv6 ipv6, rr) : xs
+      takeAx _         xs  =  xs
+
+      axList = foldr takeAx []
 
       refinesAx rrs = (ps, map snd ps)
-        where ps = mapMaybe takeAx rrs
+        where ps = axList rrs
 
       lookupAx
         | disableV6NS  =  lk4
@@ -495,9 +498,9 @@ selectDelegation dc (nss, as) = do
       resolveAXofNS :: DNSQuery (IP, ResourceRecord)
       resolveAXofNS =
         maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA =<< maybe query1Ax (pure . mapMaybe takeAx . fst) =<< lift lookupAx
+        =<< liftIO . selectA =<< maybe query1Ax (pure . axList . fst) =<< lift lookupAx
 
-  (a, _aRR) <- maybe resolveAXofNS return =<< liftIO (selectA $ mapMaybe takeAx as)
+  (a, _aRR) <- maybe resolveAXofNS return =<< liftIO (selectA $ axList as)
   lift $ logLn Log.DEBUG $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
 
   return a
