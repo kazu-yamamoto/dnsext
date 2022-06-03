@@ -249,12 +249,10 @@ replyAnswer n typ rd = rdQuery
 
     withQuery = do
       ((aRRs, rn), etm) <- resolve n typ
-      let takeX rr
-            | rrname rr == rn && rrtype rr == typ   =  Just rr
-            | otherwise                             =  Nothing
-          refinesX rrs = (ps, ps)
+      let refinesX rrs = (ps, ps)
             where
-              ps = mapMaybe takeX rrs
+              ps = filter isX rrs
+              isX rr = rrname rr == rn && rrtype rr == typ
 
       lift $ aRRs <$> either return (getSectionWithCache rankedAnswer refinesX) etm
 
