@@ -395,18 +395,18 @@ iterative_ dc nss (x:xs) =
         Just (ns, [])
 
     stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
-    stepQuery nss_ = do
+    stepQuery nss_@(((_, nsRR), _), _) = do
       sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
       msg <- norec sa name A
-      lift $ delegationWithCache name msg
+      lift $ delegationWithCache (rrname nsRR) name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)
     step nss_ =
       maybe (stepQuery nss_) (return . Just) =<< lift lookupNS
 
-delegationWithCache :: Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
-delegationWithCache dom msg =
+delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
+delegationWithCache _srcDom dom msg =
   -- 選択可能な NS が有るときだけ Just
   mapM action $ uncons nss
   where
