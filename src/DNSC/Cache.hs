@@ -165,13 +165,14 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
   Insert RR-list example with error-handling
 
 @
-   case takeRRSet rrList of  -- take RRSet with error-handling
-     Nothing  ->  ...        -- inconsistent RR-list error
-     Just rrset  ->
-       maybe
-       ( ... )   -- no update
-       ( ... )   -- update with new-cache
-       $ uncurry (uncurry $ insert now) rrset ranking cache
+   case insertSetFromSection rrList rank of
+     (errRRLists, rrsets) ->
+       ...
+       [ k (insert now) cache  -- insert Maybe action
+       | k <- rrsets
+       ]
+       ...
+       ... errRRLists ...  -- error handlings
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
