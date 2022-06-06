@@ -31,7 +31,7 @@ import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, isJust)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
 import qualified Data.Set as Set
 
@@ -380,6 +380,9 @@ iterative_ dc nss (x:xs) =
     recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
     name = B8.pack x
 
+    lookupNX :: ReaderT Context IO Bool
+    lookupNX = isJust <$> lookupCache name Cache.nxTYPE
+
     -- Nothing のときはキャッシュに無し
     -- Just Nothing のときはキャッシュに有るが委任情報無し
     lookupNS :: ReaderT Context IO (Maybe (Maybe Delegation))
@@ -398,7 +401,11 @@ iterative_ dc nss (x:xs) =
       lift $ delegationWithCache (rrname nsRR) name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
-    step nss_ = maybe (stepQuery nss_) return =<< lift lookupNS
+    step nss_ = do
+      let withNXC nxc
+            | nxc        =  return Nothing
+            | otherwise  =  stepQuery nss_
+      maybe (withNXC =<< lift lookupNX) return =<< lift lookupNS
 
 -- 権威サーバーの返答から委任情報を取り出しつつキャッシュする
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
