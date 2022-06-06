@@ -399,12 +399,16 @@ iterative_ dc nss (x:xs) =
     step nss_ =
       maybe (stepQuery nss_) (return . Just) =<< lift lookupNS
 
+-- 権威サーバーの返答から委任情報を取り出しつつキャッシュする
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
-delegationWithCache _srcDom dom msg =
+delegationWithCache srcDom dom msg =
   -- 選択可能な NS が有るときだけ Just
-  mapM action $ uncons nss
+  maybe
+  (ncache *> return Nothing)
+  (fmap Just . delegation)
+  $ uncons nss
   where
-    action xs = do
+    delegation xs = do
       cacheNS
       cacheAdds
       return (xs, adds)
@@ -414,6 +418,20 @@ delegationWithCache _srcDom dom msg =
       where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
             match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
             nsSet = Set.fromList $ map fst nss
+
+    ncache
+      | rcode == DNS.NoErr    =  cacheEmptySection srcDom dom NS rankedAuthority msg
+      | rcode == DNS.NameErr  =
+        if hasCNAME then      do cacheCNAME
+                                 cacheEmptySection srcDom dom NS rankedAuthority msg
+        else                     cacheEmptySection srcDom dom Cache.nxTYPE rankedAuthority msg
+      | otherwise             =  pure ()
+      where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    (hasCNAME, cacheCNAME) = getSection rankedAnswer refinesCNAME msg
+      where refinesCNAME rrs = (not $ null cns, crrs)
+            {- CNAME 先の NX をキャッシュしたいならここで返す.
+               しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
+              where (cns, crrs) = unzip $ cnameList dom (,) rrs
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
