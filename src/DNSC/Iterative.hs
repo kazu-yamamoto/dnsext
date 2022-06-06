@@ -380,24 +380,25 @@ iterative_ dc nss (x:xs) =
     recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
     name = B8.pack x
 
-    lookupNS :: ReaderT Context IO (Maybe Delegation)
+    -- Nothing のときはキャッシュに無し
+    -- Just Nothing のときはキャッシュに有るが委任情報無し
+    lookupNS :: ReaderT Context IO (Maybe (Maybe Delegation))
     lookupNS = do
       m <- lookupCache name NS
       return $ do
         (rrs, _) <- m
-        ns <- uncons $ nsList name (,) rrs
-        Just (ns, [])
+        let delegation ns = (ns, [])
+        Just $ delegation <$> uncons (nsList name (,) rrs)  -- キャッシュに有り
 
-    stepQuery :: Delegation -> DNSQuery (Maybe Delegation)
+    stepQuery :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
     stepQuery nss_@(((_, nsRR), _), _) = do
       sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
       msg <- norec sa name A
       lift $ delegationWithCache (rrname nsRR) name msg
 
-    step :: Delegation -> DNSQuery (Maybe Delegation)
-    step nss_ =
-      maybe (stepQuery nss_) (return . Just) =<< lift lookupNS
+    step :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
+    step nss_ = maybe (stepQuery nss_) return =<< lift lookupNS
 
 -- 権威サーバーの返答から委任情報を取り出しつつキャッシュする
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
