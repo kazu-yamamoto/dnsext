@@ -554,22 +554,22 @@ getSectionWithCache get refines msg = do
   return res
 
 cacheSection :: [ResourceRecord] -> Ranking -> ReaderT Context IO ()
-cacheSection rs rank =
-  uncurry cacheRRSet $ insertSetFromSection rs rank
+cacheSection rs rank = cacheRRSet
   where
-    putRRSet ((kp, crs), r) =
+    (errRRSs, rrss) = insertSetFromSection rs rank
+    putRRSet putk = putk $ \key ttl crs r ->
       logLines Log.DEBUG
-      [ "cacheRRSet: " ++ show (kp, r)
+      [ "cacheRRSet: " ++ show ((key, ttl), r)
       , "  " ++ show crs ]
     putInvalidRRS rrs =
       logLines Log.NOTICE $
       "invalid RR set:" :
       map (("  " ++) . show) rrs
-    cacheRRSet errRRSs rrss = do
+    cacheRRSet = do
       mapM_ putInvalidRRS errRRSs
       mapM_ putRRSet rrss
-      insertRRSet <- uncurry . uncurry . uncurry <$> asks insert_
-      mapM_ (liftIO . insertRRSet) rrss
+      insertRRSet <- asks insert_
+      liftIO $ mapM_ ($ insertRRSet) rrss
 
 ---
 
