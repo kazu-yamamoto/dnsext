@@ -84,6 +84,10 @@ spec = describe "query" $ do
     printQueryError result
     checkResult result `shouldBe` NotEmpty DNS.NoErr
 
+  it "resolve-just - nx" $ do
+    result <- runJust "does-not-exist.dns-oarc.net." A
+    checkResult result `shouldBe` Empty DNS.NameErr
+
   it "resolve-just - nx on iterative" $ do
     result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
