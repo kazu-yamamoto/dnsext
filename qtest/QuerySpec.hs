@@ -15,6 +15,12 @@ import qualified DNSC.TimeCache as TimeCache
 import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, rootNS)
 import qualified DNSC.Iterative as Iterative
 
+data AnswerResult
+  = Empty
+  | NotEmpty
+  | Failed
+  deriving (Eq, Show)
+
 spec :: Spec
 spec = describe "query" $ do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
@@ -33,6 +39,11 @@ spec = describe "query" $ do
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
 
+      checkAnswer msg
+        | null (DNS.answer msg)  =  Empty
+        | otherwise              =  NotEmpty
+      checkResult = either (const Failed) checkAnswer
+
   it "rootNS" $ do
     let sp p = case p of (_,_) -> True  -- check not error
     rootNS `shouldSatisfy` sp
@@ -50,60 +61,46 @@ spec = describe "query" $ do
   it "resolve-just - ns" $ do
     result <- runJust "iij.ad.jp." NS
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - a" $ do
     result <- runJust "iij.ad.jp." A
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - aaaa" $ do
     result <- runJust "iij.ad.jp." AAAA
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - mx" $ do
     result <- runJust "iij.ad.jp." MX
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - cname" $ do
     result <- runJust "porttest.dns-oarc.net." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - cname with nx" $ do
     result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
     result <- Iterative.runResolveJust cxt4 "sc02.alicdn.com.danuoyi.alicdn.com." A
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve - cname" $ do
     result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right etm = result
-        Right msg = etm
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    let cached rrs
+          | null rrs   =  Empty
+          | otherwise  =  NotEmpty
+    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty
 
   it "resolve - a via cname" $ do
     result <- runResolve "clients4.google.com." A
