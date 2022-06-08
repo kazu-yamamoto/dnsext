@@ -216,7 +216,6 @@ replyMessage eas ident rqs =
     rcodeDNSError e = case e of
       DNS.FormatError       ->  Right DNS.FormatErr
       DNS.ServerFailure     ->  Right DNS.ServFail
-      DNS.NameError         ->  Right DNS.NameErr
       DNS.NotImplemented    ->  Right DNS.NotImpl
       DNS.OperationRefused  ->  Right DNS.Refused
       DNS.BadOptRecord      ->  Right DNS.BadVers
