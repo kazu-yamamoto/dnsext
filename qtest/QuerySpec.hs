@@ -121,6 +121,10 @@ spec = describe "query" $ do
         t2 = maybe (Left "t2: no RR") return . getTTL =<< m2
     (>) <$> t1 <*> t2 `shouldBe` Right True
 
+  it "get-reply - nx via cname" $ do
+    result <- getReply "media.yahoo.com." A 0
+    checkResult result `shouldBe` NotEmpty DNS.NameErr
+
   it "get-reply - a accumulated via cname" $ do
     result <- getReply "media-router-aol1.prod.media.yahoo.com." A 0
     either (const 0) (length . DNS.answer) result `shouldSatisfy` (> 1)
