@@ -83,7 +83,7 @@ spec = describe "query" $ do
     printQueryError result
     checkResult result `shouldBe` NotEmpty
 
-  it "resolve-just - cname with nx" $ do
+  it "resolve-just - nx on iterative" $ do
     result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
     checkResult result `shouldBe` NotEmpty
