@@ -171,13 +171,6 @@ handleResponseError e f msg
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
-handleNX :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
-handleNX e f msg
-  | DNS.rcode flags == DNS.NameErr         =  e $ HasError (DNS.rcode flags) msg
-  | otherwise                              =  f msg
-  where
-    flags = DNS.flags $ DNS.header msg
-
 withNormalized :: Name -> (Name -> DNSQuery a) -> Context -> IO (Either QueryError a)
 withNormalized n action =
   runDNSQuery $
@@ -356,7 +349,7 @@ resolveJustDC dc n typ
   nss <- iterative rootNS n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
-  handleNX throwE return =<< norec sa (B8.pack n) typ
+  norec sa (B8.pack n) typ
     where
       mdc = maxNotSublevelDelegation
 
