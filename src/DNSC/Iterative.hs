@@ -269,6 +269,7 @@ resolve n0 typ
     justCNAME n = do
       let noCache = do
             (msg, _nss) <- resolveJust n CNAME
+            lift $ cacheAnswer bn msg
             pure ((id, bn), Right msg)
 
       maybe
@@ -295,7 +296,7 @@ resolve n0 typ
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
                   recCNAMEs_ cnPair
 
-            maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
+            maybe (lift $ cacheAnswer bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
           noType =
             maybe
@@ -319,6 +320,13 @@ resolve n0 typ
       return $ do
         rrs <- mayRRs
         fst <$> uncons (cnameList bn (,) rrs)
+
+    cacheAnswer dom msg = getSectionWithCache rankedAnswer refinesX msg
+      where
+        refinesX rrs = ((), ps)
+          where
+            ps = filter isX rrs
+            isX rr = rrname rr == dom && rrtype rr == typ
 
     cnameList dom h = foldr takeCNAME []
       where
