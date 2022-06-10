@@ -43,7 +43,7 @@ spec = describe "query" $ do
         | null (DNS.answer msg)  =  Empty    rcode
         | otherwise              =  NotEmpty rcode
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-      checkResult = either (const Failed) checkAnswer
+      checkResult = either (const Failed) (checkAnswer . fst)
 
   it "rootNS" $ do
     let sp p = case p of (_,_) -> True  -- check not error
@@ -123,7 +123,7 @@ spec = describe "query" $ do
 
   it "get-reply - nx via cname" $ do
     result <- getReply "media.yahoo.com." A 0
-    checkResult result `shouldBe` NotEmpty DNS.NameErr
+    either (const Failed) checkAnswer result `shouldBe` NotEmpty DNS.NameErr
 
   it "get-reply - a accumulated via cname" $ do
     result <- getReply "media-router-aol1.prod.media.yahoo.com." A 0
