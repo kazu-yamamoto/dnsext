@@ -263,8 +263,8 @@ resolve n0 typ
   where
     justCNAME n = do
       let noCache = do
-            (msg, _nss) <- resolveJust n CNAME
-            lift $ cacheAnswer bn msg
+            (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n CNAME
+            lift $ cacheAnswer (rrname nsRR) bn msg
             pure ((id, bn), Right msg)
 
       maybe
@@ -283,7 +283,7 @@ resolve n0 typ
       | otherwise = do
       let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
           noCache = do
-            (msg, _nss) <- resolveJust n typ
+            (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
             let resolveCNAME cnPair = do
@@ -291,7 +291,7 @@ resolve n0 typ
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
                   recCNAMEs_ cnPair
 
-            maybe (lift $ cacheAnswer bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
+            maybe (lift $ cacheAnswer (rrname nsRR) bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
           noTypeCache =
             maybe
@@ -316,8 +316,16 @@ resolve n0 typ
         rrs <- mayRRs
         fst <$> uncons (cnameList bn (,) rrs)
 
-    cacheAnswer dom msg = getSectionWithCache rankedAnswer refinesX msg
+    cacheAnswer srcDom dom msg
+      | null $ DNS.answer msg  =  do
+          case rcode of
+            DNS.NoErr    ->  cacheEmptySection srcDom dom typ rankedAnswer msg
+            DNS.NameErr  ->  cacheEmptySection srcDom dom Cache.nxTYPE rankedAnswer msg
+            _            ->  return ()
+      | otherwise              =  do
+          getSectionWithCache rankedAnswer refinesX msg
       where
+        rcode = DNS.rcode $ DNS.flags $ DNS.header msg
         refinesX rrs = ((), ps)
           where
             ps = filter isX rrs
