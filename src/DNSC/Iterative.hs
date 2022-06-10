@@ -240,16 +240,10 @@ replyAnswer n typ rd = rdQuery
       | otherwise  =  withQuery
 
     withQuery = do
-      ((aRRs, rn), etm) <- resolve n typ
-      let refinesX rrs = (ps, ps)
-            where
-              ps = filter isX rrs
-              isX rr = rrname rr == rn && rrtype rr == typ
-          cacheAnswer msg = do
-            as <- getSectionWithCache rankedAnswer refinesX msg
-            return (DNS.rcode $ DNS.flags $ DNS.header msg, as)
+      ((aRRs, _rn), etm) <- resolve n typ
+      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg)
 
-      (rcode, as) <- lift $ either return cacheAnswer etm
+      (rcode, as) <- return $ either id answer etm
       return (rcode, aRRs as)
 
 maxCNameChain :: Int
