@@ -190,7 +190,7 @@ runResolve :: Context -> Name -> TYPE
 runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
 
 -- 権威サーバーからの解決結果を得る
-runResolveJust :: Context -> Name -> TYPE -> IO (Either QueryError DNSMessage)
+runResolveJust :: Context -> Name -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
 runResolveJust cxt n typ = withNormalized n (`resolveJust` typ) cxt
 
 -- 反復後の委任情報を得る
@@ -268,7 +268,7 @@ resolve n0 typ
   where
     justCNAME n = do
       let noCache = do
-            msg <- resolveJust n CNAME
+            (msg, _nss) <- resolveJust n CNAME
             pure ((id, bn), Right msg)
 
       maybe
@@ -287,7 +287,7 @@ resolve n0 typ
       | otherwise = do
       let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
           noCache = do
-            msg <- resolveJust n typ
+            (msg, _nss) <- resolveJust n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
             let resolveCNAME cnPair = do
@@ -336,11 +336,11 @@ resolve n0 typ
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
--- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る. CNAME は解決しない.
-resolveJust :: Name -> TYPE -> DNSQuery DNSMessage
+-- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
+resolveJust :: Name -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveJust = resolveJustDC 0
 
-resolveJustDC :: Int -> Name -> TYPE -> DNSQuery DNSMessage
+resolveJustDC :: Int -> Name -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveJustDC dc n typ
   | dc > mdc   = lift (logLn Log.NOTICE $ "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ))
                  *> throwDnsError DNS.ServerFailure
@@ -349,7 +349,7 @@ resolveJustDC dc n typ
   nss <- iterative rootNS n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
-  norec sa (B8.pack n) typ
+  (,) <$> norec sa (B8.pack n) typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
 
@@ -484,7 +484,7 @@ selectDelegation dc (nss, as) = do
           qx +!? qy = do
             xs <- qx
             if null xs then qy else pure xs
-          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx
+          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx . fst
                              =<< resolveJustDC (succ dc) nsName typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
           nsName = B8.unpack ns
 
