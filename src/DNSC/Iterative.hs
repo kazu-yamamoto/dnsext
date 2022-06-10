@@ -294,7 +294,6 @@ resolve n0 typ
             msg <- resolveJust n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
 
-            -- TODO: CNAME 解決の回数制限
             let resolveCNAME cnPair = do
                   when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
