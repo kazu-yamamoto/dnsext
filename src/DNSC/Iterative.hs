@@ -42,7 +42,7 @@ import System.Random (randomR, getStdRandom)
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL,
-   TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
+   TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
 
@@ -53,7 +53,7 @@ import DNSC.Types (NE, Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Key, CRSet, Cache)
+   insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
 
@@ -323,12 +323,6 @@ resolve n0 typ
             ps = filter isX rrs
             isX rr = rrname rr == dom && rrtype rr == typ
 
-    cnameList dom h = foldr takeCNAME []
-      where
-        takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn } xs
-          | rrname rr == dom  =  h cn rr : xs
-        takeCNAME _      xs   =  xs
-
     lookupType bn t = (replyRank =<<) <$> lookupCache bn t
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
@@ -428,6 +422,14 @@ nsList dom h = foldr takeNS []
     takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns } xs
       | rrname rr == dom  =  h ns rr : xs
     takeNS _         xs   =  xs
+
+cnameList :: Domain -> (Domain -> ResourceRecord -> a)
+          -> [ResourceRecord] -> [a]
+cnameList dom h = foldr takeCNAME []
+  where
+    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn } xs
+      | rrname rr == dom  =  h cn rr : xs
+    takeCNAME _      xs   =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
@@ -542,8 +544,8 @@ lookupCache dom typ = do
 getSection :: (m -> ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
            -> m -> (a, ReaderT Context IO ())
-getSection getP refines msg =
-  withSection $ getP msg
+getSection getRanked refines msg =
+  withSection $ getRanked msg
   where
     withSection (rrs0, rank) = (result, cacheSection srrs rank)
       where (result, srrs) = refines rrs0
@@ -573,6 +575,47 @@ cacheSection rs rank = cacheRRSet
       mapM_ putRRSet rrss
       insertRRSet <- asks insert_
       liftIO $ mapM_ ($ insertRRSet) rrss
+
+cacheEmptySection :: Domain -> Domain -> TYPE
+                  -> (DNSMessage -> ([ResourceRecord], Ranking))
+                  -> DNSMessage -> ReaderT Context IO ()
+cacheEmptySection srcDom dom typ getRanked msg =
+  when (null section) $ either ncWarn doCache takeNCTTL
+  where
+    doCache ncttl = do
+      cacheSOA
+      cacheEmpty srcDom dom typ ncttl rank
+    (section, rank) = getRanked msg
+    (takeNCTTL, cacheSOA) = getSection rankedAuthority refinesSOA msg
+      where
+        refinesSOA srrs = (single ttls, take 1 rrs)  where (ttls, rrs) = unzip $ foldr takeSOA [] srrs
+        takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA mname mail ser refresh retry expire ncttl } xs
+          | rrname rr == srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
+          | otherwise            =  xs
+        takeSOA _         xs     =  xs
+        {- the minimum of the SOA.MINIMUM field and SOA's TTL
+            https://datatracker.ietf.org/doc/html/rfc2308#section-3
+            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
+        fromSOA _ _ _ _ _ _ ncttl rr = minimum [ncttl, DNS.rrttl rr, maxNCacheTTL]
+        maxNCacheTTL = 21600
+        single list = case list of
+          []    ->  Left "no SOA records found"
+          [x]   ->  Right x
+          _:_:_ ->  Left "multiple SOA records found"
+    ncWarn s
+      | not $ null answer  =  logLines Log.DEBUG $
+                              [ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                              , "  because of non empty answers:"
+                              ] ++
+                              map (("  " ++) . show) answer
+      | otherwise          =  logLn Log.NOTICE $ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+      where answer = DNS.answer msg
+
+cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ReaderT Context IO ()
+cacheEmpty srcDom dom typ ttl rank = do
+  logLn Log.DEBUG $ "cacheEmpty: " ++ show (srcDom, dom, typ, ttl, rank)
+  insertRRSet <- asks insert_
+  liftIO $ insertSetEmpty srcDom dom typ ttl rank insertRRSet
 
 ---
 
