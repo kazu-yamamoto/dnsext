@@ -269,7 +269,7 @@ resolve n0 typ
       maybe
         noCache
         (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
-        =<< lift (cachedCNAME bn)
+        =<< lift (lookupCNAME bn)
 
         where
           bn = B8.pack n
@@ -292,16 +292,16 @@ resolve n0 typ
 
             maybe (lift $ cacheAnswer bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
-          noType =
+          noTypeCache =
             maybe
             noCache
             recCNAMEs_ {- recurse with cname cache -}
-            =<< lift (cachedCNAME bn)
+            =<< lift (lookupCNAME bn)
 
       maybe
-        noType
+        noTypeCache
         (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs) {- including NODATA case. -})) {- return cached result with target typ -}
-        =<< lift (lookupCache_ bn typ)
+        =<< lift (lookupType bn typ)
 
         where
           mcc = maxCNameChain
@@ -309,8 +309,8 @@ resolve n0 typ
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = cnameList bn (,) rrs
 
-    cachedCNAME bn = do
-      mayRRs <- lookupCache_ bn CNAME
+    lookupCNAME bn = do
+      mayRRs <- lookupType bn CNAME
       return $ do
         rrs <- mayRRs
         fst <$> uncons (cnameList bn (,) rrs)
@@ -328,7 +328,7 @@ resolve n0 typ
           | rrname rr == dom  =  h cn rr : xs
         takeCNAME _      xs   =  xs
 
-    lookupCache_ bn t = (replyRank =<<) <$> lookupCache bn t
+    lookupType bn t = (replyRank =<<) <$> lookupCache bn t
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
