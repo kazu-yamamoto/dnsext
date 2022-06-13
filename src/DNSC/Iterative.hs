@@ -267,9 +267,11 @@ resolve n0 typ
             lift $ cacheAnswer (rrname nsRR) bn msg
             pure ((id, bn), Right msg)
 
+          cachedCNAME (rrs, soa) = pure ((id, bn), Left (DNS.NoErr, rrs, soa))  {- target RR is not CNAME destination but CNAME, so NoErr -}
+
       maybe
         noCache
-        (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR], [])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
+        (cachedCNAME . either (\soa -> ([], soa)) (\(_cn, cnRR) -> ([cnRR], [])))
         =<< lift (lookupCNAME bn)
 
         where
@@ -297,7 +299,8 @@ resolve n0 typ
             maybe
             noCache
             recCNAMEs_ {- recurse with cname cache -}
-            =<< lift (lookupCNAME bn)
+            =<< lift (joinE <$> lookupCNAME bn)  {- CNAME が NODATA だったときは CNAME による再検索をしないケースとして扱う -}
+            where joinE = (either (const Nothing) Just =<<)
 
       maybe
         noTypeCache
@@ -310,11 +313,15 @@ resolve n0 typ
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = cnameList bn (,) rrs
 
+    -- Nothing のときはキャッシュに無し
+    -- Just Left のときはキャッシュに有るが CNAME レコード無し
+    lookupCNAME :: Domain -> ReaderT Context IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
     lookupCNAME bn = do
-      mayRRs <- lookupType bn CNAME
+      maySOAorCNRRs <- (replyRank =<<) <$> lookupCacheEither bn CNAME
       return $ do
-        rrs <- mayRRs
-        fst <$> uncons (cnameList bn (,) rrs)
+        let soa (rrs, _rank) = Just $ Left rrs
+            cname rrs = Right . fst <$> uncons (cnameList bn (,) rrs)  {- empty ではないはずなのに cname が空のときはキャッシュ無しとする -}
+        either soa cname =<< maySOAorCNRRs
 
     cacheAnswer srcDom dom msg
       | null $ DNS.answer msg  =  do
@@ -332,11 +339,11 @@ resolve n0 typ
             isX rr = rrname rr == dom && rrtype rr == typ
 
     lookupType bn t = (replyRank =<<) <$> lookupCache bn t
-    replyRank (rrs, rank)
+    replyRank (x, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
       | rank <= RankAdditional  =  Nothing
-      | otherwise               =  Just rrs
+      | otherwise               =  Just x
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
