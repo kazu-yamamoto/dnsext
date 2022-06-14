@@ -529,8 +529,12 @@ randomizedSelect
 
 lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = do
-  lookupRRs <- asks lookup_
-  result <- liftIO $ lookupRRs dom typ DNS.classIN
+  getCache <- asks getCache_
+  getSec <- asks currentSeconds_
+  result <- liftIO $ do
+    cache <- getCache
+    ts <- getSec
+    return $ Cache.lookup ts dom typ DNS.classIN cache
   logLn Log.DEBUG $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
                                         maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
