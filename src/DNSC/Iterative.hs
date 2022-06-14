@@ -52,7 +52,7 @@ import DNSC.Types (NE, Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Key, Val, CRSet, Cache)
+   insertSetFromSection, Key, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
 
@@ -106,8 +106,6 @@ data Context =
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , getCache_ :: IO Cache
-  , size_ :: IO Int
-  , dump_ :: IO [(Key, (Timestamp, Val))]
   , currentSeconds_ :: IO Timestamp
   , timeString_ :: IO ShowS
   }
@@ -146,7 +144,6 @@ newContext putLines disableV6NS (_lk, ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
-        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache
         , currentSeconds_ = curSec, timeString_ = timeStr }
   return cxt
 
