@@ -180,7 +180,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
         outLn = hPutStrLn outH
         dispatch Param            =  mapM_ outLn $ showParams params
         dispatch Noop             =  return ()
-        dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
+        dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ cxt
         dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookupCache
           where lookupCache = do
                   cache <- getCache_ cxt
@@ -192,7 +192,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
 
     printStatus = do
       let outLn = hPutStrLn outH
-      outLn . ("cache size: " ++) . show =<< size_ cxt
+      outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
       let psize s getSize = do
             (cur, mx) <- getSize
             outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
