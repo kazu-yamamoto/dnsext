@@ -143,18 +143,18 @@ empty = Cache PSQ.empty
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
        -> Cache -> Maybe ([ResourceRecord], Ranking)
-lookup now dom = lookup_ now result (fromDomain dom)
+lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
   where
-    result k ttl (Val crs rank) = (extractRRSet k ttl crs, rank)
+    result ttl (Val crs rank) = (extractRRSet dom typ cls ttl crs, rank)
 
-lookup_ :: Timestamp -> (Key -> TTL -> Val -> a)
+lookup_ :: Timestamp -> (TTL -> Val -> a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache cache _) = do
   let k = Key dom typ cls
   (eol, v) <- k `PSQ.lookup` cache
   ttl <- alive now eol
-  return $ mk k ttl v
+  return $ mk ttl v
 
 insertRRs :: Timestamp -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
@@ -180,7 +180,7 @@ insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
   maybe sized withOldRank lookupRank
   where
     lookupRank =
-      lookup_ now (\_ _ (Val _ r) -> r)
+      lookup_ now (\_ (Val _ r) -> r)
       dom typ cls cache
     withOldRank r = do
       guard $ rank > r
@@ -221,7 +221,7 @@ size (Cache c _) = PSQ.size c
 member :: Timestamp
        -> CDomain -> TYPE -> CLASS
        -> Cache -> Bool
-member now dom typ cls = isJust . lookup_ now (\_ _ _ -> ()) dom typ cls
+member now dom typ cls = isJust . lookup_ now (\_ _ -> ()) dom typ cls
 
 dump :: Cache -> [(Key, (Timestamp, Val))]
 dump (Cache c _) = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
@@ -304,8 +304,8 @@ takeRRSet rrs@(_:_) = do
   rds <- fromRDatas $ map DNS.rdata rrs
   return $ \h -> uncurry h k' rds
 
-extractRRSet :: Key -> TTL -> CRSet -> [ResourceRecord]
-extractRRSet (Key dom ty cls) ttl = map (ResourceRecord (toDomain dom) ty cls ttl) . toRDatas
+extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
+extractRRSet dom ty cls ttl = map (ResourceRecord dom ty cls ttl) . toRDatas
 
 insertSetFromSection :: [ResourceRecord] -> Ranking -> ([[ResourceRecord]], [(Key -> TTL -> CRSet -> Ranking -> a) -> a])
 insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
