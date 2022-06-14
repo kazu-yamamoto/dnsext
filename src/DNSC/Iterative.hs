@@ -40,7 +40,7 @@ import System.Random (randomR, getStdRandom)
 -- dns packages
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL, CLASS,
+  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL,
    TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
@@ -133,14 +133,13 @@ additional セクションにその名前に対するアドレス (A および A
  -}
 
 type UpdateCache =
-  (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
-   Key -> TTL -> CRSet -> Ranking -> IO (),
+  (Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
 type TimeCache = (IO Int64, IO ShowS)
 
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
-newContext putLines disableV6NS (_lk, ins, getCache) (curSec, timeStr) = do
+newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
