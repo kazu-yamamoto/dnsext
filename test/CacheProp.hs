@@ -37,17 +37,6 @@ packS8 = Short.pack . map (fromIntegral . ord)
 toDomain :: ShortByteString -> DNS.Domain
 toDomain = Short.fromShort
 
-_crsTYPE :: CRSet -> DNS.TYPE
-_crsTYPE cr = case cr of
-  CR_A     {}  ->  DNS.A
-  CR_NS    {}  ->  DNS.NS
-  CR_CNAME {}  ->  DNS.CNAME
-  CR_SOA   {}  ->  DNS.SOA
-  CR_PTR   {}  ->  DNS.PTR
-  CR_MX    {}  ->  DNS.MX
-  CR_TXT   {}  ->  DNS.TXT
-  CR_AAAA  {}  ->  DNS.AAAA
-
 -----
 
 domainList :: [ShortByteString]
