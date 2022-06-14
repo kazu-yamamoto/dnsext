@@ -261,11 +261,11 @@ instance Arbitrary ACR2 where
 
 -- forall ((k, crs) :: AWrongCRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Nothing
 rrsetTakeNothing :: AWrongCRPair -> ATTL -> Property
-rrsetTakeNothing (AWrongCRPair (k, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet k ttl crs) === Nothing
+rrsetTakeNothing (AWrongCRPair (Key dom typ cls, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet (toDomain dom) typ cls ttl crs) === Nothing
 
 -- forall ((k, crs) :: ACRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Just ((k, ttl), crs)
 rrsetExtractTake :: ACRPair -> ATTL  -> Property
-rrsetExtractTake (ACRPair (k, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet k ttl crs) === Just (k, ttl, crs)
+rrsetExtractTake (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet (toDomain dom) typ cls ttl crs) === Just (k, ttl, crs)
 
 ---
 
@@ -357,7 +357,7 @@ rankingOrdered (ACR2 (k@(Key dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2
       c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
       c1 <- Cache.insert ts0 k ttl1 crs1 r1 c2
       (rrs, rank) <- Cache.lookup ts0 (toDomain dom) typ cls c1
-      return $ rrs === extractRRSet k ttl1 crs1 .&&. rank === r1
+      return $ rrs === extractRRSet (toDomain dom) typ cls ttl1 crs1 .&&. rank === r1
 
 rankingNotOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrdsCo -> AUpdates -> Property
 rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo (r1, r2)) (AUpdates us) =
