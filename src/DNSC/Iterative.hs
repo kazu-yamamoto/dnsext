@@ -106,6 +106,7 @@ data Context =
   , disableV6NS_ :: !Bool
   , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
+  , getCache_ :: IO Cache
   , size_ :: IO Int
   , dump_ :: IO [(Key, (Timestamp, Val))]
   , currentSeconds_ :: IO Timestamp
@@ -145,7 +146,7 @@ newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCac
 newContext putLines disableV6NS (lk, ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
-        , lookup_ = lk, insert_ = ins
+        , lookup_ = lk, insert_ = ins, getCache_ = getCache
         , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache
         , currentSeconds_ = curSec, timeString_ = timeStr }
   return cxt
