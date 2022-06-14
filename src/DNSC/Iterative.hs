@@ -575,6 +575,20 @@ lookupCache dom typ = do
                                         maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
 
+-- when cache has EMPTY result, lookup SOA data for domain delegation from
+lookupCacheEither :: Domain -> TYPE
+                  -> ReaderT Context IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
+lookupCacheEither dom typ = do
+  getCache <- asks getCache_
+  getSec <- asks currentSeconds_
+  result <- liftIO $ do
+    cache <- getCache
+    ts <- getSec
+    return $ Cache.lookupEither ts dom typ DNS.classIN cache
+  logLn Log.DEBUG $ "lookupCacheEither: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
+                                                      maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
+  return result
+
 getSection :: (m -> ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
            -> m -> (a, ReaderT Context IO ())
