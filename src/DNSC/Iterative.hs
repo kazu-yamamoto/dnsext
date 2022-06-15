@@ -186,7 +186,7 @@ type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
 runResolve :: Context -> Name -> TYPE
-           -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either (RCODE, [ResourceRecord]) DNSMessage))
+           -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
 runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
 
 -- 権威サーバーからの解決結果を得る
@@ -243,7 +243,7 @@ replyAnswer n typ rd = rdQuery
       ((aRRs, _rn), etm) <- resolve n typ
       let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg)
 
-      (rcode, as) <- return $ either id answer etm
+      (rcode, as) <- return $ either (\(r, a, _) -> (r, a)) answer etm
       return (rcode, aRRs as)
 
 maxCNameChain :: Int
@@ -255,7 +255,7 @@ type DRRList = [ResourceRecord] -> [ResourceRecord]
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
-resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either (RCODE, [ResourceRecord]) DNSMessage)
+resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
 resolve n0 typ
   | typ == CNAME  =  justCNAME n0
   | otherwise     =  recCNAMEs 0 n0 id
@@ -268,14 +268,14 @@ resolve n0 typ
 
       maybe
         noCache
-        (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
+        (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR], [])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
         =<< lift (lookupCNAME bn)
 
         where
           bn = B8.pack n
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either (RCODE, [ResourceRecord]) DNSMessage)
+    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
     recCNAMEs cc n aRRs
       | cc > mcc  = lift (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
                     *> throwDnsError DNS.ServerFailure
@@ -300,7 +300,7 @@ resolve n0 typ
 
       maybe
         noTypeCache
-        (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs) {- including NODATA case. -})) {- return cached result with target typ -}
+        (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs, []) {- TODO: SOA required for NODATA case. -})) {- return cached result with target typ -}
         =<< lift (lookupType bn typ)
 
         where
