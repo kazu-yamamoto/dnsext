@@ -13,6 +13,7 @@ module DNSC.Iterative (
   NE,
   UpdateCache,
   TimeCache,
+  Result,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, replyAnswer,
@@ -179,6 +180,9 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   <$> withNormalized (B8.unpack bn) (\n -> replyAnswer n typ rd) cxt
   where
     rd = DNS.recDesired $ DNS.flags reqH
+
+{- response code, answer section, authority section -}
+type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
 runResolve :: Context -> Name -> TYPE
