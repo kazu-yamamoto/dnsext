@@ -102,7 +102,7 @@ spec = describe "query" $ do
   it "resolve - cname" $ do
     result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
-    let cached (rcode, rrs)
+    let cached (rcode, rrs, _)
           | null rrs   =  Empty rcode
           | otherwise  =  NotEmpty rcode
     either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty DNS.NoErr
@@ -119,7 +119,7 @@ spec = describe "query" $ do
     r2 <- handleDNS "resolve: r2: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
     let getRRsTTL n = maybe (fail $ "getTTL: " ++ n ++ ": no RR") return . fmap (DNS.rrttl . fst) . uncons
     t1 <- either (const $ fail "r1: expect not cached result") (getRRsTTL "r1" . DNS.answer) r1
-    t2 <- either (getRRsTTL "r2" . snd) (const $ fail "r2: expect cached result") r2
+    t2 <- either (\(_, rrs, _) -> getRRsTTL "r2" rrs) (const $ fail "r2: expect cached result") r2
     t1 > t2 `shouldBe` True
 
   it "get-reply - nx via cname" $ do
