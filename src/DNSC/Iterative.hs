@@ -16,7 +16,7 @@ module DNSC.Iterative (
   Result,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
-  replyMessage, replyAnswer,
+  replyMessage, replyResult,
   resolve, resolveJust, iterative,
   Context (..),
   normalizeName,
@@ -177,7 +177,7 @@ withNormalized n action =
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized (B8.unpack bn) (\n -> replyAnswer n typ rd) cxt
+  <$> withNormalized (B8.unpack bn) (\n -> replyResult n typ rd) cxt
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
@@ -199,13 +199,13 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
 
-replyMessage :: Either QueryError (RCODE, [ResourceRecord])
+replyMessage :: Either QueryError Result
              -> DNS.Identifier -> [DNS.Question]
              -> Either String DNSMessage
 replyMessage eas ident rqs =
-  either queryError (Right . uncurry message) eas
+  either queryError (Right . message) eas
   where
-    dnsError de = message <$> rcodeDNSError de <*> pure []
+    dnsError de = fmap message $ (,,) <$> rcodeDNSError de <*> pure [] <*> pure []
     rcodeDNSError e = case e of
       DNS.FormatError       ->  Right DNS.FormatErr
       DNS.ServerFailure     ->  Right DNS.ServFail
@@ -218,13 +218,14 @@ replyMessage eas ident rqs =
       DnsError e      ->  dnsError e
       NotResponse {}  ->  Left "qORr is not response"
       InvalidEDNS {}  ->  Left "Invalid EDNS"
-      HasError rc _m  ->  Right $ message rc []
+      HasError rc _m  ->  Right $ message (rc, [], [])
 
-    message rcode rrs =
+    message (rcode, rrs, auth) =
       res
       { DNS.header = h { DNS.identifier = ident
                        , DNS.flags = f { DNS.authAnswer = False, DNS.rcode = rcode } }
       , DNS.answer = rrs
+      , DNS.authority = auth
       , DNS.question = rqs
       }
     res = DNS.defaultResponse
@@ -232,8 +233,8 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 -- 反復検索を使って返答メッセージ用の結果コードと応答セクションを得る.
-replyAnswer :: Name -> TYPE -> Bool -> DNSQuery (RCODE, [ResourceRecord])
-replyAnswer n typ rd = rdQuery
+replyResult :: Name -> TYPE -> Bool -> DNSQuery Result
+replyResult n typ rd = rdQuery
   where
     rdQuery
       | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
@@ -241,10 +242,10 @@ replyAnswer n typ rd = rdQuery
 
     withQuery = do
       ((aRRs, _rn), etm) <- resolve n typ
-      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg)
+      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
 
-      (rcode, as) <- return $ either (\(r, a, _) -> (r, a)) answer etm
-      return (rcode, aRRs as)
+      (rcode, ans, auth) <- return $ either id answer etm
+      return (rcode, aRRs ans, auth)
 
 maxCNameChain :: Int
 maxCNameChain = 16
