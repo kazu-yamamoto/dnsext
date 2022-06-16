@@ -267,10 +267,12 @@ resolve n0 typ
             lift $ cacheAnswer (rrname nsRR) bn msg
             pure ((id, bn), Right msg)
 
+          withNXC (soa, _rank) = pure ((id, bn), Left (DNS.NameErr, [], soa))
+
           cachedCNAME (rrs, soa) = pure ((id, bn), Left (DNS.NoErr, rrs, soa))  {- target RR is not CNAME destination but CNAME, so NoErr -}
 
       maybe
-        noCache
+        (maybe noCache withNXC =<< lift (lookupNX bn))
         (cachedCNAME . either (\soa -> ([], soa)) (\(_cn, cnRR) -> ([cnRR], [])))
         =<< lift (lookupCNAME bn)
 
@@ -295,9 +297,11 @@ resolve n0 typ
 
             maybe (lift $ cacheAnswer (rrname nsRR) bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
+          withNXC (soa, _rank) = pure ((aRRs, bn), Left (DNS.NameErr, [], soa))
+
           noTypeCache =
             maybe
-            noCache
+            (maybe noCache withNXC =<< lift (lookupNX bn))
             recCNAMEs_ {- recurse with cname cache -}
             =<< lift (joinE <$> lookupCNAME bn)  {- CNAME が NODATA だったときは CNAME による再検索をしないケースとして扱う -}
             where joinE = (either (const Nothing) Just =<<)
@@ -312,6 +316,12 @@ resolve n0 typ
           bn = B8.pack n
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = cnameList bn (,) rrs
+
+    lookupNX :: Domain -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
+    lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< (replyRank =<<) <$> lookupCacheEither bn Cache.nxTYPE
+      where inconsistent rrs = do
+              logLn Log.NOTICE $ "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
+              return Nothing
 
     -- Nothing のときはキャッシュに無し
     -- Just Left のときはキャッシュに有るが CNAME レコード無し
