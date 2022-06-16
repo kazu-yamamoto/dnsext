@@ -320,7 +320,7 @@ resolve n0 typ
             where ps = cnameList bn (,) rrs
 
     lookupNX :: Domain -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
-    lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< (replyRank =<<) <$> lookupCacheEither bn Cache.nxTYPE
+    lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.nxTYPE
       where inconsistent rrs = do
               logLn Log.NOTICE $ "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
               return Nothing
@@ -329,7 +329,7 @@ resolve n0 typ
     -- Just Left のときはキャッシュに有るが CNAME レコード無し
     lookupCNAME :: Domain -> ReaderT Context IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
     lookupCNAME bn = do
-      maySOAorCNRRs <- (replyRank =<<) <$> lookupCacheEither bn CNAME
+      maySOAorCNRRs <- lookupType bn CNAME
       return $ do
         let soa (rrs, _rank) = Just $ Left rrs
             cname rrs = Right . fst <$> uncons (cnameList bn (,) rrs)  {- empty ではないはずなのに cname が空のときはキャッシュ無しとする -}
