@@ -12,7 +12,7 @@ import System.Environment (lookupEnv)
 
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS)
 import qualified DNSC.Iterative as Iterative
 
 data AnswerResult
@@ -33,7 +33,7 @@ spec = describe "query" $ do
       runJust = Iterative.runResolveJust cxt
       runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt n ty
       getReply n ty ident = do
-        e <- runDNSQuery (replyAnswer n ty True) cxt
+        e <- runDNSQuery (replyResult n ty True) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
