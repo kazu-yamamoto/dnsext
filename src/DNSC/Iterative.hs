@@ -306,9 +306,11 @@ resolve n0 typ
             =<< lift (joinE <$> lookupCNAME bn)  {- CNAME が NODATA だったときは CNAME による再検索をしないケースとして扱う -}
             where joinE = (either (const Nothing) Just =<<)
 
+          cachedType (tyRRs, soa) = pure ((aRRs, bn), Left (DNS.NoErr, tyRRs, soa))
+
       maybe
         noTypeCache
-        (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs, []) {- TODO: SOA required for NODATA case. -})) {- return cached result with target typ -}
+        (cachedType . either (\(soa, _rank) -> ([], soa)) (\tyRRs -> (tyRRs, []))) {- return cached result with target typ -}
         =<< lift (lookupType bn typ)
 
         where
@@ -348,7 +350,7 @@ resolve n0 typ
             ps = filter isX rrs
             isX rr = rrname rr == dom && rrtype rr == typ
 
-    lookupType bn t = (replyRank =<<) <$> lookupCache bn t
+    lookupType bn t = (replyRank =<<) <$> lookupCacheEither bn t
     replyRank (x, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
