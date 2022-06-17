@@ -76,7 +76,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
 
   return (ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
 
-getPipeline :: Int -> (IO Timestamp) -> Context -> Socket -> SockAddr
+getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], (IO (Int, Int), IO (Int, Int)))
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
@@ -105,9 +105,9 @@ resolvWorker :: Show a
              -> (Response s a -> IO ())
              -> Request s a -> IO ()
 resolvWorker cxt getSec enqResp (sock, bs, addr) =
-  (either (logLn Log.NOTICE) return =<<) . runExceptT $ do
+  either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
-        now <- liftIO $ getSec
+        now <- liftIO getSec
         msg <- either (throwE . ("dns-error: " ++) . show) return $ DNS.decodeAt now bs
         qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
         return (qs, msg)
