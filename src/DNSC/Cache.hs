@@ -159,19 +159,20 @@ lookup_ now mk dom typ cls (Cache cache _) = do
 insertRRs :: Timestamp -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
   where
-    insertRRSet rrset = uncurry (uncurry $ insert now) rrset rank c
+    insertRRSet rrset = rrset $ \key ttl cr -> insert now key ttl cr rank c
 
 {- |
   Insert RR-list example with error-handling
 
 @
-   case takeRRSet rrList of  -- take RRSet with error-handling
-     Nothing  ->  ...        -- inconsistent RR-list error
-     Just rrset  ->
-       maybe
-       ( ... )   -- no update
-       ( ... )   -- update with new-cache
-       $ uncurry (uncurry $ insert now) rrset ranking cache
+   case insertSetFromSection rrList rank of
+     (errRRLists, rrsets) ->
+       ...
+       [ k (insert now) cache  -- insert Maybe action
+       | k <- rrsets
+       ]
+       ...
+       ... errRRLists ...  -- error handlings
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
@@ -294,22 +295,22 @@ rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
     rdTYPE rd == Just rrtype  =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
-takeRRSet :: [ResourceRecord] -> Maybe ((Key, TTL), CRSet)
+takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
 takeRRSet []        =    Nothing
 takeRRSet rrs@(_:_) = do
   ps <- mapM rrSetKey rrs         -- それぞれ RR で、rrtype と rdata が整合している
   guard $ length (group ps) == 1  -- query のキーと TTL がすべて一致
   (k', _) <- uncons ps            -- rrs が空でないので必ず成功するはず
   rds <- fromRDatas $ map DNS.rdata rrs
-  return (k', rds)
+  return $ \h -> uncurry h k' rds
 
 extractRRSet :: Key -> TTL -> CRSet -> [ResourceRecord]
 extractRRSet (Key dom ty cls) ttl = map (ResourceRecord (toDomain dom) ty cls ttl) . toRDatas
 
-insertSetFromSection :: [ResourceRecord] -> Ranking -> ([[ResourceRecord]], [(((Key, TTL), CRSet), Ranking)])
+insertSetFromSection :: [ResourceRecord] -> Ranking -> ([[ResourceRecord]], [(Key -> TTL -> CRSet -> Ranking -> a) -> a])
 insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
   where
     key rr = (DNS.rrname rr, DNS.rrtype rr, DNS.rrclass rr)
     getRRSet rs = maybe (Left rs) Right $ takeRRSet rs
     (errRS, rrss) = partitionEithers . map getRRSet . groupBy ((==) `on` key) . sortOn key $ rs0
-    iset ss rank = [ (rrset, rank) | rrset <- ss]
+    iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]

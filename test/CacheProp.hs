@@ -261,11 +261,11 @@ instance Arbitrary ACR2 where
 
 -- forall ((k, crs) :: AWrongCRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Nothing
 rrsetTakeNothing :: AWrongCRPair -> ATTL -> Property
-rrsetTakeNothing (AWrongCRPair (k, crs)) (ATTL ttl) = takeRRSet (extractRRSet k ttl crs) === Nothing
+rrsetTakeNothing (AWrongCRPair (k, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet k ttl crs) === Nothing
 
 -- forall ((k, crs) :: ACRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Just ((k, ttl), crs)
 rrsetExtractTake :: ACRPair -> ATTL  -> Property
-rrsetExtractTake (ACRPair (k, crs)) (ATTL ttl) = takeRRSet (extractRRSet k ttl crs) === Just ((k, ttl), crs)
+rrsetExtractTake (ACRPair (k, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet k ttl crs) === Just (k, ttl, crs)
 
 ---
 
