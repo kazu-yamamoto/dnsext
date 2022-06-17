@@ -240,16 +240,10 @@ replyAnswer n typ rd = rdQuery
       | otherwise  =  withQuery
 
     withQuery = do
-      ((aRRs, rn), etm) <- resolve n typ
-      let refinesX rrs = (ps, ps)
-            where
-              ps = filter isX rrs
-              isX rr = rrname rr == rn && rrtype rr == typ
-          cacheAnswer msg = do
-            as <- getSectionWithCache rankedAnswer refinesX msg
-            return (DNS.rcode $ DNS.flags $ DNS.header msg, as)
+      ((aRRs, _rn), etm) <- resolve n typ
+      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg)
 
-      (rcode, as) <- lift $ either return cacheAnswer etm
+      (rcode, as) <- return $ either id answer etm
       return (rcode, aRRs as)
 
 maxCNameChain :: Int
@@ -269,12 +263,13 @@ resolve n0 typ
     justCNAME n = do
       let noCache = do
             (msg, _nss) <- resolveJust n CNAME
+            lift $ cacheAnswer bn msg
             pure ((id, bn), Right msg)
 
       maybe
         noCache
         (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
-        =<< lift (cachedCNAME bn)
+        =<< lift (lookupCNAME bn)
 
         where
           bn = B8.pack n
@@ -295,18 +290,18 @@ resolve n0 typ
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
                   recCNAMEs_ cnPair
 
-            maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
+            maybe (lift $ cacheAnswer bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
 
-          noType =
+          noTypeCache =
             maybe
             noCache
             recCNAMEs_ {- recurse with cname cache -}
-            =<< lift (cachedCNAME bn)
+            =<< lift (lookupCNAME bn)
 
       maybe
-        noType
+        noTypeCache
         (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs) {- including NODATA case. -})) {- return cached result with target typ -}
-        =<< lift (lookupCache_ bn typ)
+        =<< lift (lookupType bn typ)
 
         where
           mcc = maxCNameChain
@@ -314,11 +309,18 @@ resolve n0 typ
           refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
             where ps = cnameList bn (,) rrs
 
-    cachedCNAME bn = do
-      mayRRs <- lookupCache_ bn CNAME
+    lookupCNAME bn = do
+      mayRRs <- lookupType bn CNAME
       return $ do
         rrs <- mayRRs
         fst <$> uncons (cnameList bn (,) rrs)
+
+    cacheAnswer dom msg = getSectionWithCache rankedAnswer refinesX msg
+      where
+        refinesX rrs = ((), ps)
+          where
+            ps = filter isX rrs
+            isX rr = rrname rr == dom && rrtype rr == typ
 
     cnameList dom h = foldr takeCNAME []
       where
@@ -326,7 +328,7 @@ resolve n0 typ
           | rrname rr == dom  =  h cn rr : xs
         takeCNAME _      xs   =  xs
 
-    lookupCache_ bn t = (replyRank =<<) <$> lookupCache bn t
+    lookupType bn t = (replyRank =<<) <$> lookupCache bn t
     replyRank (rrs, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1

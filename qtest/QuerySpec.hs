@@ -112,14 +112,15 @@ spec = describe "query" $ do
     printQueryError result
     isRight result `shouldBe` True
 
-  it "get-reply - ptr - cache" $ do
-    m1 <- getReply "5.0.130.210.in-addr.arpa." PTR 0
+  it "resolve - ptr - cache" $ do
+    let handleDNS n = either (fail . (n ++) . show) return
+    r1 <- handleDNS "resolve: r1: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
     threadDelay $ 2 * 1000 * 1000
-    m2 <- getReply "5.0.130.210.in-addr.arpa." PTR 0
-    let getTTL = fmap (DNS.rrttl . fst) . uncons . DNS.answer
-        t1 = maybe (Left "t1: no RR") return . getTTL =<< m1
-        t2 = maybe (Left "t2: no RR") return . getTTL =<< m2
-    (>) <$> t1 <*> t2 `shouldBe` Right True
+    r2 <- handleDNS "resolve: r2: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
+    let getRRsTTL n = maybe (fail $ "getTTL: " ++ n ++ ": no RR") return . fmap (DNS.rrttl . fst) . uncons
+    t1 <- either (const $ fail "r1: expect not cached result") (getRRsTTL "r1" . DNS.answer) r1
+    t2 <- either (getRRsTTL "r2" . snd) (const $ fail "r2: expect cached result") r2
+    t1 > t2 `shouldBe` True
 
   it "get-reply - nx via cname" $ do
     result <- getReply "media.yahoo.com." A 0
