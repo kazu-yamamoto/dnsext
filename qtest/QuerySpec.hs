@@ -12,7 +12,14 @@ import System.Environment (lookupEnv)
 
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, resolve, resolveJust, iterative, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, rootNS)
+import qualified DNSC.Iterative as Iterative
+
+data AnswerResult
+  = Empty
+  | NotEmpty
+  | Failed
+  deriving (Eq, Show)
 
 spec :: Spec
 spec = describe "query" $ do
@@ -22,15 +29,20 @@ spec = describe "query" $ do
   runIO $ mapM_ forkIO loops
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
-  let runIterative ns n = runDNSQuery (iterative ns n) cxt
-      runJust n ty = runDNSQuery (resolveJust n ty) cxt
-      runResolve n ty = runDNSQuery (snd <$> resolve n ty) cxt
+  let runIterative = Iterative.runIterative cxt
+      runJust = Iterative.runResolveJust cxt
+      runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt n ty
       getReply n ty ident = do
         e <- runDNSQuery (replyAnswer n ty True) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
+
+      checkAnswer msg
+        | null (DNS.answer msg)  =  Empty
+        | otherwise              =  NotEmpty
+      checkResult = either (const Failed) checkAnswer
 
   it "rootNS" $ do
     let sp p = case p of (_,_) -> True  -- check not error
@@ -49,60 +61,46 @@ spec = describe "query" $ do
   it "resolve-just - ns" $ do
     result <- runJust "iij.ad.jp." NS
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - a" $ do
     result <- runJust "iij.ad.jp." A
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - aaaa" $ do
     result <- runJust "iij.ad.jp." AAAA
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - mx" $ do
     result <- runJust "iij.ad.jp." MX
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - cname" $ do
     result <- runJust "porttest.dns-oarc.net." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
-  it "resolve-just - cname with nx" $ do
+  it "resolve-just - nx on iterative" $ do
     result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-    result <- runDNSQuery (resolveJust "sc02.alicdn.com.danuoyi.alicdn.com." A) cxt4
+    result <- Iterative.runResolveJust cxt4 "sc02.alicdn.com.danuoyi.alicdn.com." A
     printQueryError result
-    isRight result `shouldBe` True
-    let Right msg = result
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    checkResult result `shouldBe` NotEmpty
 
   it "resolve - cname" $ do
     result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
-    isRight result `shouldBe` True
-    let Right etm = result
-        Right msg = etm
-    length (DNS.answer msg) `shouldSatisfy` (> 0)
+    let cached rrs
+          | null rrs   =  Empty
+          | otherwise  =  NotEmpty
+    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty
 
   it "resolve - a via cname" $ do
     result <- runResolve "clients4.google.com." A
