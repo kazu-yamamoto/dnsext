@@ -145,16 +145,16 @@ lookup :: Timestamp
        -> Cache -> Maybe ([ResourceRecord], Ranking)
 lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
   where
-    result ttl (Val crs rank) = (extractRRSet dom typ cls ttl crs, rank)
+    result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
-lookup_ :: Timestamp -> (TTL -> Val -> a)
+lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache cache _) = do
   let k = Key dom typ cls
   (eol, v) <- k `PSQ.lookup` cache
   ttl <- alive now eol
-  return $ mk ttl v
+  mk ttl v
 
 insertRRs :: Timestamp -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
@@ -180,7 +180,7 @@ insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
   maybe sized withOldRank lookupRank
   where
     lookupRank =
-      lookup_ now (\_ (Val _ r) -> r)
+      lookup_ now (\_ (Val _ r) -> Just r)
       dom typ cls cache
     withOldRank r = do
       guard $ rank > r
@@ -221,7 +221,7 @@ size (Cache c _) = PSQ.size c
 member :: Timestamp
        -> CDomain -> TYPE -> CLASS
        -> Cache -> Bool
-member now dom typ cls = isJust . lookup_ now (\_ _ -> ()) dom typ cls
+member now dom typ cls = isJust . lookup_ now (\_ _ -> Just ()) dom typ cls
 
 dump :: Cache -> [(Key, (Timestamp, Val))]
 dump (Cache c _) = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
