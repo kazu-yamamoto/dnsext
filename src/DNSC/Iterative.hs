@@ -13,9 +13,10 @@ module DNSC.Iterative (
   NE,
   UpdateCache,
   TimeCache,
+  Result,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
-  replyMessage, replyAnswer,
+  replyMessage, replyResult,
   resolve, resolveJust, iterative,
   Context (..),
   normalizeName,
@@ -176,13 +177,16 @@ withNormalized n action =
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized (B8.unpack bn) (\n -> replyAnswer n typ rd) cxt
+  <$> withNormalized (B8.unpack bn) (\n -> replyResult n typ rd) cxt
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
+{- response code, answer section, authority section -}
+type Result = (RCODE, [ResourceRecord], [ResourceRecord])
+
 -- 最終的な解決結果を得る
 runResolve :: Context -> Name -> TYPE
-           -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either (RCODE, [ResourceRecord]) DNSMessage))
+           -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
 runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
 
 -- 権威サーバーからの解決結果を得る
@@ -195,13 +199,13 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
 
-replyMessage :: Either QueryError (RCODE, [ResourceRecord])
+replyMessage :: Either QueryError Result
              -> DNS.Identifier -> [DNS.Question]
              -> Either String DNSMessage
 replyMessage eas ident rqs =
-  either queryError (Right . uncurry message) eas
+  either queryError (Right . message) eas
   where
-    dnsError de = message <$> rcodeDNSError de <*> pure []
+    dnsError de = fmap message $ (,,) <$> rcodeDNSError de <*> pure [] <*> pure []
     rcodeDNSError e = case e of
       DNS.FormatError       ->  Right DNS.FormatErr
       DNS.ServerFailure     ->  Right DNS.ServFail
@@ -214,13 +218,14 @@ replyMessage eas ident rqs =
       DnsError e      ->  dnsError e
       NotResponse {}  ->  Left "qORr is not response"
       InvalidEDNS {}  ->  Left "Invalid EDNS"
-      HasError rc _m  ->  Right $ message rc []
+      HasError rc _m  ->  Right $ message (rc, [], [])
 
-    message rcode rrs =
+    message (rcode, rrs, auth) =
       res
       { DNS.header = h { DNS.identifier = ident
                        , DNS.flags = f { DNS.authAnswer = False, DNS.rcode = rcode } }
       , DNS.answer = rrs
+      , DNS.authority = auth
       , DNS.question = rqs
       }
     res = DNS.defaultResponse
@@ -228,8 +233,8 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 -- 反復検索を使って返答メッセージ用の結果コードと応答セクションを得る.
-replyAnswer :: Name -> TYPE -> Bool -> DNSQuery (RCODE, [ResourceRecord])
-replyAnswer n typ rd = rdQuery
+replyResult :: Name -> TYPE -> Bool -> DNSQuery Result
+replyResult n typ rd = rdQuery
   where
     rdQuery
       | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
@@ -237,10 +242,10 @@ replyAnswer n typ rd = rdQuery
 
     withQuery = do
       ((aRRs, _rn), etm) <- resolve n typ
-      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg)
+      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
 
-      (rcode, as) <- return $ either id answer etm
-      return (rcode, aRRs as)
+      (rcode, ans, auth) <- return $ either id answer etm
+      return (rcode, aRRs ans, auth)
 
 maxCNameChain :: Int
 maxCNameChain = 16
@@ -251,7 +256,7 @@ type DRRList = [ResourceRecord] -> [ResourceRecord]
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
-resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either (RCODE, [ResourceRecord]) DNSMessage)
+resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
 resolve n0 typ
   | typ == CNAME  =  justCNAME n0
   | otherwise     =  recCNAMEs 0 n0 id
@@ -264,14 +269,14 @@ resolve n0 typ
 
       maybe
         noCache
-        (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
+        (\(_cn, cnRR) -> pure ((id, bn), Left (DNS.NoErr, [cnRR], [])))  {- target RR is not CNAME destination but CNAME, so NoErr -}
         =<< lift (lookupCNAME bn)
 
         where
           bn = B8.pack n
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either (RCODE, [ResourceRecord]) DNSMessage)
+    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
     recCNAMEs cc n aRRs
       | cc > mcc  = lift (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
                     *> throwDnsError DNS.ServerFailure
@@ -296,7 +301,7 @@ resolve n0 typ
 
       maybe
         noTypeCache
-        (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs) {- including NODATA case. -})) {- return cached result with target typ -}
+        (\tyRRs -> pure ((aRRs, bn), Left (DNS.NoErr, tyRRs, []) {- TODO: SOA required for NODATA case. -})) {- return cached result with target typ -}
         =<< lift (lookupType bn typ)
 
         where
