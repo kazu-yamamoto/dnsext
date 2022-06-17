@@ -1,7 +1,6 @@
 module DNSC.UpdateCache (
   new,
   none,
-  Lookup,
   Insert,
   ) where
 
@@ -11,7 +10,7 @@ import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
 -- dns packages
-import Network.DNS (TTL, Domain, TYPE, CLASS, ResourceRecord)
+import Network.DNS (TTL)
 
 -- other packages
 import UnliftIO (tryAny)
@@ -35,12 +34,11 @@ runUpdate t u cache = case u of
     where insert = Cache.insert t k ttl crs rank
   E                -> Cache.expires t cache
 
-type Lookup = Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
     -> Int
-    -> IO ([IO ()], (Lookup, Insert, IO Cache), IO (Int, Int))
+    -> IO ([IO ()], (Insert, IO Cache), IO (Int, Int))
 new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef $ Cache.empty maxCacheSize
@@ -70,19 +68,13 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
           errorLn = putLn Log.NOTICE . ("UpdateCache.expireEvents: error: " ++) . show
           body = either errorLn return =<< tryAny expires1
 
-  let lookup_ dom typ cls = do
-        cache <- readIORef cacheRef
-        ts <- getSec
-        return $ Cache.lookup ts dom typ cls cache
-
-      insert k ttl crs rank =
+  let insert k ttl crs rank =
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
 
-  return ([updateLoop, expireEvsnts], (lookup_, insert, readIORef cacheRef), readUSize)
+  return ([updateLoop, expireEvsnts], (insert, readIORef cacheRef), readUSize)
 
 -- no caching
-none :: (Lookup, Insert, IO Cache)
+none :: (Insert, IO Cache)
 none =
-  (\_ _ _ -> return Nothing,
-   \_ _ _ _ -> return (),
+  (\_ _ _ _ -> return (),
    return $ Cache.empty 0)

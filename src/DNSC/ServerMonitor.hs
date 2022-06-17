@@ -29,6 +29,7 @@ import UnliftIO (tryAny, waitSTM, withAsync)
 import qualified DNSC.DNSUtil as Config
 import DNSC.SocketUtil (addrInfo)
 import qualified DNSC.Log as Log
+import qualified DNSC.Cache as Cache
 import DNSC.Iterative (Context (..))
 
 
@@ -179,15 +180,19 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
         outLn = hPutStrLn outH
         dispatch Param            =  mapM_ outLn $ showParams params
         dispatch Noop             =  return ()
-        dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show =<< dump_ cxt
-        dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookup_ cxt dom typ DNS.classIN
-          where hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
+        dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ cxt
+        dispatch (Lookup dom typ) =  maybe (outLn "miss.") hit =<< lookupCache
+          where lookupCache = do
+                  cache <- getCache_ cxt
+                  ts <- currentSeconds_ cxt
+                  return $ Cache.lookup ts dom typ DNS.classIN cache
+                hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status           =  printStatus
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
 
     printStatus = do
       let outLn = hPutStrLn outH
-      outLn . ("cache size: " ++) . show =<< size_ cxt
+      outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
       let psize s getSize = do
             (cur, mx) <- getSize
             outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx

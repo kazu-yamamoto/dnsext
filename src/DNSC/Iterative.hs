@@ -40,7 +40,7 @@ import System.Random (randomR, getStdRandom)
 -- dns packages
 import Data.IP (IP (IPv4, IPv6))
 import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL, CLASS,
+  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL,
    TYPE(A, NS, AAAA, CNAME), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
 import qualified Network.DNS as DNS
@@ -52,7 +52,7 @@ import DNSC.Types (NE, Timestamp)
 import qualified DNSC.Log as Log
 import DNSC.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, Key, Val, CRSet, Cache)
+   insertSetFromSection, Key, CRSet, Cache)
 import qualified DNSC.Cache as Cache
 
 
@@ -104,10 +104,8 @@ data Context =
   Context
   { logLines_ :: Log.Level -> [String] -> IO ()
   , disableV6NS_ :: !Bool
-  , lookup_ :: Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking))
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
-  , size_ :: IO Int
-  , dump_ :: IO [(Key, (Timestamp, Val))]
+  , getCache_ :: IO Cache
   , currentSeconds_ :: IO Timestamp
   , timeString_ :: IO ShowS
   }
@@ -135,18 +133,16 @@ additional セクションにその名前に対するアドレス (A および A
  -}
 
 type UpdateCache =
-  (Domain -> TYPE -> CLASS -> IO (Maybe ([ResourceRecord], Ranking)),
-   Key -> TTL -> CRSet -> Ranking -> IO (),
+  (Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
 type TimeCache = (IO Int64, IO ShowS)
 
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
-newContext putLines disableV6NS (lk, ins, getCache) (curSec, timeStr) = do
+newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
-        , lookup_ = lk, insert_ = ins
-        , size_ = Cache.size <$> getCache, dump_ = Cache.dump <$> getCache
+        , insert_ = ins, getCache_ = getCache
         , currentSeconds_ = curSec, timeString_ = timeStr }
   return cxt
 
@@ -528,8 +524,12 @@ randomizedSelect
 
 lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = do
-  lookupRRs <- asks lookup_
-  result <- liftIO $ lookupRRs dom typ DNS.classIN
+  getCache <- asks getCache_
+  getSec <- asks currentSeconds_
+  result <- liftIO $ do
+    cache <- getCache
+    ts <- getSec
+    return $ Cache.lookup ts dom typ DNS.classIN cache
   logLn Log.DEBUG $ "lookupCache: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
                                         maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
