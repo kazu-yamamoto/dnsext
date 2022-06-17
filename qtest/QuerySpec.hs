@@ -16,8 +16,8 @@ import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyAnswer, rootN
 import qualified DNSC.Iterative as Iterative
 
 data AnswerResult
-  = Empty
-  | NotEmpty
+  = Empty    DNS.RCODE
+  | NotEmpty DNS.RCODE
   | Failed
   deriving (Eq, Show)
 
@@ -40,8 +40,9 @@ spec = describe "query" $ do
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
 
       checkAnswer msg
-        | null (DNS.answer msg)  =  Empty
-        | otherwise              =  NotEmpty
+        | null (DNS.answer msg)  =  Empty    rcode
+        | otherwise              =  NotEmpty rcode
+        where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) checkAnswer
 
   it "rootNS" $ do
@@ -61,46 +62,50 @@ spec = describe "query" $ do
   it "resolve-just - ns" $ do
     result <- runJust "iij.ad.jp." NS
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve-just - a" $ do
     result <- runJust "iij.ad.jp." A
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve-just - aaaa" $ do
     result <- runJust "iij.ad.jp." AAAA
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve-just - mx" $ do
     result <- runJust "iij.ad.jp." MX
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve-just - cname" $ do
     result <- runJust "porttest.dns-oarc.net." CNAME
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
+
+  it "resolve-just - nx" $ do
+    result <- runJust "does-not-exist.dns-oarc.net." A
+    checkResult result `shouldBe` Empty DNS.NameErr
 
   it "resolve-just - nx on iterative" $ do
     result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
     result <- Iterative.runResolveJust cxt4 "sc02.alicdn.com.danuoyi.alicdn.com." A
     printQueryError result
-    checkResult result `shouldBe` NotEmpty
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve - cname" $ do
     result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
-    let cached rrs
-          | null rrs   =  Empty
-          | otherwise  =  NotEmpty
-    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty
+    let cached (rcode, rrs)
+          | null rrs   =  Empty rcode
+          | otherwise  =  NotEmpty rcode
+    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve - a via cname" $ do
     result <- runResolve "clients4.google.com." A
@@ -115,6 +120,10 @@ spec = describe "query" $ do
         t1 = maybe (Left "t1: no RR") return . getTTL =<< m1
         t2 = maybe (Left "t2: no RR") return . getTTL =<< m2
     (>) <$> t1 <*> t2 `shouldBe` Right True
+
+  it "get-reply - nx via cname" $ do
+    result <- getReply "media.yahoo.com." A 0
+    checkResult result `shouldBe` NotEmpty DNS.NameErr
 
   it "get-reply - a accumulated via cname" $ do
     result <- getReply "media-router-aol1.prod.media.yahoo.com." A 0
