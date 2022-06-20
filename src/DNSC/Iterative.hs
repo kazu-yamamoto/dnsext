@@ -289,14 +289,12 @@ resolve n0 typ
           noCache = do
             (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
             cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
-            maybe (lift $ cacheAnswer (rrname nsRR) bn msg) (const $ pure ()) cname
-
-            let resolveCNAME cnPair = do
+            let checkTypeRR =
                   when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
                     throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-                  recCNAMEs_ cnPair
+            maybe (lift $ cacheAnswer (rrname nsRR) bn msg) (const checkTypeRR) cname
 
-            maybe (pure ((aRRs, bn), Right msg)) resolveCNAME cname
+            maybe (pure ((aRRs, bn), Right msg)) recCNAMEs_ cname
 
           withNXC (soa, _rank) = pure ((aRRs, bn), Left (DNS.NameErr, [], soa))
 
