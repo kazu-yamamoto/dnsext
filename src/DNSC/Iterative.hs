@@ -356,6 +356,45 @@ resolve n0 typ
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just x
 
+resolveCNAME :: Name -> DNSQuery DNSMessage
+resolveCNAME n = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n CNAME
+  lift $ cacheAnswer (rrname nsRR) bn CNAME msg
+  return msg
+    where
+      bn = B8.pack n
+
+resolveTYPE :: Name -> TYPE
+            -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
+resolveTYPE n typ = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
+  cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
+  let checkTypeRR =
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+          throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+  maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
+  return (msg, cname)
+    where
+      bn = B8.pack n
+      refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
+        where ps = cnameList bn (,) rrs
+
+cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ReaderT Context IO ()
+cacheAnswer srcDom dom typ msg
+  | null $ DNS.answer msg  =  do
+      case rcode of
+        DNS.NoErr    ->  cacheEmptySection srcDom dom typ rankedAnswer msg
+        DNS.NameErr  ->  cacheEmptySection srcDom dom Cache.nxTYPE rankedAnswer msg
+        _            ->  return ()
+  | otherwise              =  do
+      getSectionWithCache rankedAnswer refinesX msg
+  where
+    rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    refinesX rrs = ((), ps)
+      where
+        ps = filter isX rrs
+        isX rr = rrname rr == dom && rrtype rr == typ
+
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
