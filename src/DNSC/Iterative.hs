@@ -252,6 +252,9 @@ maxCNameChain = 16
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
+resolveByCache :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
+resolveByCache = resolveLogic (\_ -> pure ()) (\_ _ -> pure ((), Nothing))
+
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
