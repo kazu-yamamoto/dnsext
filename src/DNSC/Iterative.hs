@@ -16,7 +16,7 @@ module DNSC.Iterative (
   Result,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
-  replyMessage, replyResult,
+  replyMessage, replyResult, replyResultCached,
   resolve, resolveJust, iterative,
   Context (..),
   normalizeName,
@@ -246,6 +246,12 @@ replyResult n typ = do
   let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id answer etm
+
+replyResultCached :: Name -> TYPE -> DNSQuery (Maybe Result)
+replyResultCached n typ = do
+  ((aRRs, _rn), e) <- resolveByCache n typ
+  let makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
+  return $ either (Just . makeResult) (const Nothing) e
 
 maxCNameChain :: Int
 maxCNameChain = 16
