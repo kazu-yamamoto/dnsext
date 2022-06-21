@@ -177,9 +177,11 @@ withNormalized n action =
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized (B8.unpack bn) (\n -> replyResult n typ rd) cxt
+  <$> withNormalized (B8.unpack bn) getResult cxt
   where
-    rd = DNS.recDesired $ DNS.flags reqH
+    getResult n = do
+      guardRequestHeader reqH
+      replyResult n typ
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
@@ -238,18 +240,12 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 -- 反復検索を使って返答メッセージ用の結果コードと応答セクションを得る.
-replyResult :: Name -> TYPE -> Bool -> DNSQuery Result
-replyResult n typ rd = rdQuery
-  where
-    rdQuery
-      | not rd     =  throwE $ HasError DNS.Refused DNS.defaultResponse
-      | otherwise  =  withQuery
-
-    withQuery = do
-      ((aRRs, _rn), etm) <- resolve n typ
-      let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
-          makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
-      return $ makeResult $ either id answer etm
+replyResult :: Name -> TYPE -> DNSQuery Result
+replyResult n typ = do
+  ((aRRs, _rn), etm) <- resolve n typ
+  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+      makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
+  return $ makeResult $ either id answer etm
 
 maxCNameChain :: Int
 maxCNameChain = 16
