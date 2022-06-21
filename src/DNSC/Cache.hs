@@ -159,10 +159,11 @@ lookupEither now dom typ cls cache = lookup_ now result (fromDomain dom) typ cls
   where
     result ttl (Val crs rank) = case crs of
       CR_EMPTY srcDom  ->  do
-        sp <- lookup_ now (soaResult $ toDomain srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
+        sp <- lookup_ now (soaResult ttl $ toDomain srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
         return (Left sp, rank)
       _                ->  Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
-    soaResult srcDom ttl (Val crs rank) = Just (extractRRSet srcDom SOA DNS.classIN ttl crs, rank)
+    soaResult ettl srcDom ttl (Val crs rank) =
+      Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl) {- treated as TTL of empty data -} crs, rank)
 
 lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
         -> CDomain -> TYPE -> CLASS
