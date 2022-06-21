@@ -33,7 +33,7 @@ spec = describe "query" $ do
       runJust = Iterative.runResolveJust cxt
       runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt n ty
       getReply n ty ident = do
-        e <- runDNSQuery (replyResult n ty True) cxt
+        e <- runDNSQuery (replyResult n ty) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
