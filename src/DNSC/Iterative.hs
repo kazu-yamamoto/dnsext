@@ -647,12 +647,12 @@ cacheEmptySection :: Domain -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
                   -> DNSMessage -> ReaderT Context IO ()
 cacheEmptySection srcDom dom typ getRanked msg =
-  when (null section) $ either ncWarn doCache takeNCTTL
+  either ncWarn doCache takeNCTTL
   where
     doCache ncttl = do
       cacheSOA
       cacheEmpty srcDom dom typ ncttl rank
-    (section, rank) = getRanked msg
+    (_section, rank) = getRanked msg
     (takeNCTTL, cacheSOA) = getSection rankedAuthority refinesSOA msg
       where
         refinesSOA srrs = (single ttls, take 1 rrs)  where (ttls, rrs) = unzip $ foldr takeSOA [] srrs
