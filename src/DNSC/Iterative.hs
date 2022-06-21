@@ -243,9 +243,8 @@ replyResult n typ rd = rdQuery
     withQuery = do
       ((aRRs, _rn), etm) <- resolve n typ
       let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
-
-      (rcode, ans, auth) <- return $ either id answer etm
-      return (rcode, aRRs ans, auth)
+          makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
+      return $ makeResult $ either id answer etm
 
 maxCNameChain :: Int
 maxCNameChain = 16
