@@ -3,7 +3,7 @@
 module DNSC.Cache (
   -- * cache interfaces
   empty,
-  lookup,
+  lookup, lookupEither,
   takeRRSet,
   insert,
   expires,
@@ -13,6 +13,9 @@ module DNSC.Cache (
   rankedAnswer, rankedAuthority, rankedAdditional,
 
   insertSetFromSection,
+  insertSetEmpty,
+
+  nxTYPE,
   -- * types
   CDomain,
   CMailbox,
@@ -69,6 +72,7 @@ data CRSet
   | CR_MX [(Word16, CDomain)]
   | CR_TXT [CTxt]
   | CR_AAAA [IPv6]
+  | CR_EMPTY CDomain {- NXDOMAIN or NODATA, hold domain delegatoin from -}
   deriving (Eq, Ord, Show)
 
 ---
@@ -147,6 +151,20 @@ lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
   where
     result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
+-- when cache has EMPTY, returns SOA
+lookupEither :: Timestamp
+             -> Domain -> TYPE -> CLASS
+             -> Cache -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking)  {- SOA or RRs, ranking -}
+lookupEither now dom typ cls cache = lookup_ now result (fromDomain dom) typ cls cache
+  where
+    result ttl (Val crs rank) = case crs of
+      CR_EMPTY srcDom  ->  do
+        sp <- lookup_ now (soaResult ttl $ toDomain srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
+        return (Left sp, rank)
+      _                ->  Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
+    soaResult ettl srcDom ttl (Val crs rank) =
+      Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl) {- treated as TTL of empty data -} crs, rank)
+
 lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
         -> CDomain -> TYPE -> CLASS
         -> Cache -> Maybe a
@@ -173,6 +191,11 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
        ]
        ...
        ... errRRLists ...  -- error handlings
+@
+
+  Insert empty-RRSet example for negative cache
+@
+   insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
@@ -215,6 +238,11 @@ alive now eol = do
 size :: Cache -> Int
 size (Cache c _) = PSQ.size c
 
+-- code from Reserved for Private Use (section 3.1 of RFC6895)
+-- <https://datatracker.ietf.org/doc/html/rfc6895#section-3.1>
+nxTYPE :: TYPE
+nxTYPE = DNS.toTYPE 0xff00
+
 ---
 {- debug interfaces -}
 
@@ -252,6 +280,7 @@ toRDatas crs = case crs of
   CR_MX ps    ->  map (\(w, d) -> RD_MX w $ toDomain d) ps
   CR_TXT ts   ->  map (RD_TXT . fromShort) ts
   CR_AAAA as  ->  map RD_AAAA as
+  CR_EMPTY {} ->  []
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas []    = Nothing
@@ -314,3 +343,8 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
     getRRSet rs = maybe (Left rs) Right $ takeRRSet rs
     (errRS, rrss) = partitionEithers . map getRRSet . groupBy ((==) `on` key) . sortOn key $ rs0
     iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
+
+insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
+insertSetEmpty srcDom dom typ ttl rank h = h key ttl (CR_EMPTY $ fromDomain srcDom) rank
+  where
+    key = Key (fromDomain dom) typ DNS.classIN

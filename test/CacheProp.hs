@@ -37,17 +37,6 @@ packS8 = Short.pack . map (fromIntegral . ord)
 toDomain :: ShortByteString -> DNS.Domain
 toDomain = Short.fromShort
 
-_crsTYPE :: CRSet -> DNS.TYPE
-_crsTYPE cr = case cr of
-  CR_A     {}  ->  DNS.A
-  CR_NS    {}  ->  DNS.NS
-  CR_CNAME {}  ->  DNS.CNAME
-  CR_SOA   {}  ->  DNS.SOA
-  CR_PTR   {}  ->  DNS.PTR
-  CR_MX    {}  ->  DNS.MX
-  CR_TXT   {}  ->  DNS.TXT
-  CR_AAAA  {}  ->  DNS.AAAA
-
 -----
 
 domainList :: [ShortByteString]
@@ -344,6 +333,17 @@ lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATim
       where
         life = Cache.alive ts1 (ts0 <+ ttl_)
 
+lookupEither :: AKey -> AUpdates -> Property
+lookupEither (AKey (Key dom typ cls)) (AUpdates us) =
+  (foldE =<< Cache.lookupEither ts0 (toDomain dom) typ cls cache)
+  ===
+  Cache.lookup ts0 (toDomain dom) typ cls cache
+  where
+    cache = foldUpdates us cacheEmpty
+    foldE (e, rank) = do
+      x <- either (const Nothing) Just e
+      return (x, rank)
+
 ---
 
 -- ranking
@@ -416,6 +416,7 @@ props =
   , nprop "lookup - new inserted"           lookupNewInserted
   , nprop "lookup - inserted"               lookupInserted
   , nprop "lookup - ttl"                    lookupTTL
+  , nprop "lookup - lookupEither"           lookupEither
 
   , nprop "ranking - ordered"               rankingOrdered
   , nprop "ranking - not ordered"           rankingNotOrdered
