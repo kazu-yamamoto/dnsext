@@ -594,7 +594,7 @@ lookupCache dom typ = do
                                         maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
 
--- when cache has EMPTY result, lookup SOA data for domain delegation from
+-- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupCacheEither :: Domain -> TYPE
                   -> ReaderT Context IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
 lookupCacheEither dom typ = do
