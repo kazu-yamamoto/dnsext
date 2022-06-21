@@ -1,6 +1,7 @@
 module DNSC.Iterative (
   -- * resolve interfaces
   getReplyMessage,
+  getReplyCached,
   runResolve,
   runResolveJust,
   newContext,
@@ -182,6 +183,19 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
     getResult n = do
       guardRequestHeader reqH
       replyResult n typ
+
+-- キャッシュから返答メッセージを作る
+-- Nothing のときキャッシュ無し
+-- Just Left はエラー
+getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
+getReplyCached cxt reqH qs@(DNS.Question bn typ, _) =
+  fmap mkReply . either (Just . Left) (Right <$>)
+  <$> withNormalized (B8.unpack bn) getResult cxt
+  where
+    getResult n = do
+      guardRequestHeader reqH
+      replyResultCached n typ
+    mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
