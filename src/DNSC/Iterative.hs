@@ -643,6 +643,9 @@ cacheSection rs rank = cacheRRSet
       insertRRSet <- asks insert_
       liftIO $ mapM_ ($ insertRRSet) rrss
 
+-- | The `cacheEmptySection srcDom dom typ getRanked msg` caches two pieces of information from `msg`.
+--   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of `srcDom`.
+--   The `getRanked` function returns the section with the empty information.
 cacheEmptySection :: Domain -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
                   -> DNSMessage -> ReaderT Context IO ()
