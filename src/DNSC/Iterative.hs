@@ -24,7 +24,7 @@ module DNSC.Iterative (
 
 -- GHC packages
 import Control.Arrow ((&&&))
-import Control.Monad (when, join)
+import Control.Monad (when, unless, join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -198,6 +198,11 @@ runIterative :: Context -> Delegation -> Name -> IO (Either QueryError Delegatio
 runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
+
+guardRequestHeader :: DNSHeader -> DNSQuery ()
+guardRequestHeader reqH = unless rd $ throwE $ HasError DNS.Refused DNS.defaultResponse
+  where
+    rd = DNS.recDesired $ DNS.flags reqH
 
 replyMessage :: Either QueryError Result
              -> DNS.Identifier -> [DNS.Question]
