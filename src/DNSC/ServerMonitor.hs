@@ -101,7 +101,7 @@ data Command
   deriving Show
 
 monitor :: Bool -> Params -> Context
-        -> ([(IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+        -> ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
         -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo flushLog = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
@@ -132,7 +132,7 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
             =<< withWait waitQuit (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
       loop
 
-console :: Params -> Context -> ([(IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+console :: Params -> Context -> ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
            -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
 console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
@@ -198,8 +198,9 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
             outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
       sequence_
         [ do psize ("request queue " ++ show i) reqQSize
+             psize ("decoded queue " ++ show i) decQSize
              psize ("response queue " ++ show i) resQSize
-        | (i, (reqQSize, resQSize)) <- zip [0 :: Int ..] pQSizeList
+        | (i, (reqQSize, decQSize, resQSize)) <- zip [0 :: Int ..] pQSizeList
         ]
       psize "ucache queue" ucacheQSize
       lmx <- snd <$> logQSize
