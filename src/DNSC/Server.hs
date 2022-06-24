@@ -26,14 +26,15 @@ import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecvBS, mkSendBS)
 import DNSC.ServerMonitor (monitor)
 import qualified DNSC.ServerMonitor as Mon
-import DNSC.Types (Timestamp)
+import DNSC.Types (Timestamp, NE)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
 import qualified DNSC.UpdateCache as UCache
-import DNSC.Iterative (Context (..), newContext, getReplyMessage)
+import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 
 type Request s a = (s, ByteString, a)
+type Decoded s a = (s, DNS.DNSHeader, NE DNS.Question, a)
 type Response s a = ((s, ByteString), a)
 
 udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
@@ -98,6 +99,30 @@ recvRequest :: Show a
 recvRequest recv _cxt enqReq sock = do
   (bs, addr) <- recv sock
   enqReq (sock, bs, addr)
+
+cachedWorker :: Show a
+             => Context
+             -> IO Timestamp
+             -> (Decoded s a -> IO ())
+             -> (Response s a -> IO ())
+             -> Request s a -> IO ()
+cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
+  either (logLn Log.NOTICE) return <=< runExceptT $ do
+  let decode = do
+        now <- liftIO getSec
+        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
+        qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
+        return (qs, msg)
+  (qs@(q, _), reqM) <- decode
+  let reqH = DNS.header reqM
+      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (sock, reqH, qs, addr)
+      noResponse replyErr = throwE $ "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+      enqueue respM = liftIO $ do
+        let rbs = DNS.encode respM
+        rbs `seq` enqResp ((sock, rbs), addr)
+  maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH qs)
+  where
+    logLn level = logLines_ cxt level . (:[])
 
 resolvWorker :: Show a
              => Context
