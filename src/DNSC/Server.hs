@@ -53,7 +53,7 @@ run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = 
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-type QSizeInfo = ([(IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+type QSizeInfo = ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
@@ -78,17 +78,20 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
   return (ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
 
 getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
-            -> IO ([IO ()], (IO (Int, Int), IO (Int, Int)))
+            -> IO ([IO ()], (IO (Int, Int), IO (Int, Int), IO (Int, Int)))
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
+      resolvWorkers = workers * 8
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (workerLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt getSec enqueueResp
-  let workerLoops = replicate workers workerLoop
+  (resolvLoop, enqueueDec, decQSize) <- consumeLoop (8 `max` resolvWorkers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt enqueueResp
+  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec enqueueDec enqueueResp
+  let resolvLoops = replicate resolvWorkers resolvLoop
+      cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
                 $ recvRequest (mkRecvBS $ isAnySockAddr addr_) cxt enqueueReq sock_
-  return (respLoop : workerLoops ++ [reqLoop], (reqQSize, resQSize))
+  return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
 
 recvRequest :: Show a
             => (s -> IO (ByteString, a))
@@ -126,23 +129,15 @@ cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
 
 resolvWorker :: Show a
              => Context
-             -> IO Timestamp
              -> (Response s a -> IO ())
-             -> Request s a -> IO ()
-resolvWorker cxt getSec enqResp (sock, bs, addr) =
+             -> Decoded s a -> IO ()
+resolvWorker cxt enqResp (sock, reqH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
-  let decode = do
-        now <- liftIO getSec
-        msg <- either (throwE . ("dns-error: " ++) . show) return $ DNS.decodeAt now bs
-        qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
-        return (qs, msg)
-  (qs@(q, _), reqM) <- decode
-
   let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
       enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
         rbs `seq` enqResp ((sock, rbs), addr)
-  either noResponse enqueue =<< liftIO (getReplyMessage cxt (DNS.header reqM) qs)
+  either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
