@@ -113,13 +113,11 @@ resolvWorker cxt getSec enqResp (sock, bs, addr) =
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
 
-  let mkReply = do
-        let noResponse replyErr = "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
-        either (throwE . noResponse) return =<< liftIO (getReplyMessage cxt (DNS.header reqM) qs)
-      enqueue respM = do
+  let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+      enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
         rbs `seq` enqResp ((sock, rbs), addr)
-  liftIO . enqueue =<< mkReply
+  either noResponse enqueue =<< liftIO (getReplyMessage cxt (DNS.header reqM) qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
