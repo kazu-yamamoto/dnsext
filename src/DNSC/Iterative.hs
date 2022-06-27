@@ -1,6 +1,7 @@
 module DNSC.Iterative (
   -- * resolve interfaces
   getReplyMessage,
+  getReplyCached,
   runResolve,
   runResolveJust,
   newContext,
@@ -16,7 +17,7 @@ module DNSC.Iterative (
   Result,
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
-  replyMessage, replyResult,
+  replyMessage, replyResult, replyResultCached,
   resolve, resolveJust, iterative,
   Context (..),
   normalizeName,
@@ -183,6 +184,19 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
       guardRequestHeader reqH
       replyResult n typ
 
+-- キャッシュから返答メッセージを作る
+-- Nothing のときキャッシュ無し
+-- Just Left はエラー
+getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
+getReplyCached cxt reqH qs@(DNS.Question bn typ, _) =
+  fmap mkReply . either (Just . Left) (Right <$>)
+  <$> withNormalized (B8.unpack bn) getResult cxt
+  where
+    getResult n = do
+      guardRequestHeader reqH
+      replyResultCached n typ
+    mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
+
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
@@ -247,24 +261,37 @@ replyResult n typ = do
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id answer etm
 
+replyResultCached :: Name -> TYPE -> DNSQuery (Maybe Result)
+replyResultCached n typ = do
+  ((aRRs, _rn), e) <- resolveByCache n typ
+  let makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
+  return $ either (Just . makeResult) (const Nothing) e
+
 maxCNameChain :: Int
 maxCNameChain = 16
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
+
+resolveByCache :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
+resolveByCache = resolveLogic (\_ -> pure ()) (\_ _ -> pure ((), Nothing))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
 resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
-resolve n0 typ
+resolve = resolveLogic resolveCNAME resolveTYPE
+
+resolveLogic :: (Name -> DNSQuery a)
+             -> (Name -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
+             -> Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
+resolveLogic cnameHandler typeHandler n0 typ
   | typ == CNAME  =  justCNAME n0
   | otherwise     =  recCNAMEs 0 n0 id
   where
     justCNAME n = do
       let noCache = do
-            (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n CNAME
-            lift $ cacheAnswer (rrname nsRR) bn msg
+            msg <- cnameHandler n
             pure ((id, bn), Right msg)
 
           withNXC (soa, _rank) = pure ((id, bn), Left (DNS.NameErr, [], soa))
@@ -280,22 +307,15 @@ resolve n0 typ
           bn = B8.pack n
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
+    -- recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either Result a)
     recCNAMEs cc n aRRs
       | cc > mcc  = lift (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
                     *> throwDnsError DNS.ServerFailure
       | otherwise = do
       let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
           noCache = do
-            (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
-            cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
-
-            let resolveCNAME cnPair = do
-                  when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
-                    throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-                  recCNAMEs_ cnPair
-
-            maybe (lift $ cacheAnswer (rrname nsRR) bn msg >> pure ((aRRs, bn), Right msg)) resolveCNAME cname
+            (msg, cname) <- typeHandler n typ
+            maybe (pure ((aRRs, bn), Right msg)) recCNAMEs_ cname
 
           withNXC (soa, _rank) = pure ((aRRs, bn), Left (DNS.NameErr, [], soa))
 
@@ -316,8 +336,6 @@ resolve n0 typ
         where
           mcc = maxCNameChain
           bn = B8.pack n
-          refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
-            where ps = cnameList bn (,) rrs
 
     lookupNX :: Domain -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
     lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.nxTYPE
@@ -335,27 +353,51 @@ resolve n0 typ
             cname rrs = Right . fst <$> uncons (cnameList bn (,) rrs)  {- empty ではないはずなのに cname が空のときはキャッシュ無しとする -}
         either soa cname =<< maySOAorCNRRs
 
-    cacheAnswer srcDom dom msg
-      | null $ DNS.answer msg  =  do
-          case rcode of
-            DNS.NoErr    ->  cacheEmptySection srcDom dom typ rankedAnswer msg
-            DNS.NameErr  ->  cacheEmptySection srcDom dom Cache.nxTYPE rankedAnswer msg
-            _            ->  return ()
-      | otherwise              =  do
-          getSectionWithCache rankedAnswer refinesX msg
-      where
-        rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-        refinesX rrs = ((), ps)
-          where
-            ps = filter isX rrs
-            isX rr = rrname rr == dom && rrtype rr == typ
-
     lookupType bn t = (replyRank =<<) <$> lookupCacheEither bn t
     replyRank (x, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just x
+
+resolveCNAME :: Name -> DNSQuery DNSMessage
+resolveCNAME n = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n CNAME
+  lift $ cacheAnswer (rrname nsRR) bn CNAME msg
+  return msg
+    where
+      bn = B8.pack n
+
+resolveTYPE :: Name -> TYPE
+            -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
+resolveTYPE n typ = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
+  cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
+  let checkTypeRR =
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+          throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
+  maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
+  return (msg, cname)
+    where
+      bn = B8.pack n
+      refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
+        where ps = cnameList bn (,) rrs
+
+cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ReaderT Context IO ()
+cacheAnswer srcDom dom typ msg
+  | null $ DNS.answer msg  =  do
+      case rcode of
+        DNS.NoErr    ->  cacheEmptySection srcDom dom typ rankedAnswer msg
+        DNS.NameErr  ->  cacheEmptySection srcDom dom Cache.nxTYPE rankedAnswer msg
+        _            ->  return ()
+  | otherwise              =  do
+      getSectionWithCache rankedAnswer refinesX msg
+  where
+    rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    refinesX rrs = ((), ps)
+      where
+        ps = filter isX rrs
+        isX rr = rrname rr == dom && rrtype rr == typ
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
