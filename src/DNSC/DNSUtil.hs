@@ -89,7 +89,7 @@ mkSendBS wildcard
   | wildcard   =  sendMsg
   | otherwise  =  sendTo
 #else
-mkSend _       =  sendTo
+mkSendBS _     =  sendTo
 #endif
   where
 #if MIN_VERSION_network(3,1,2)
