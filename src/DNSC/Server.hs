@@ -33,9 +33,9 @@ import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 
-type Request s a = (s, ByteString, a)
-type Decoded s a = (s, DNS.DNSHeader, NE DNS.Question, a)
-type Response s a = ((s, ByteString), a)
+type Request s a = (ByteString, a)
+type Decoded s a = (DNS.DNSHeader, NE DNS.Question, a)
+type Response s a = (ByteString, a)
 
 udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< addrInfo port
@@ -92,18 +92,17 @@ getPipeline workers getSec cxt sock_ addr_ = do
   let resolvLoops = replicate resolvWorkers resolvLoop
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-                $ recvRequest recv cxt enqueueReq sock_
+                $ recvRequest recv cxt enqueueReq
   return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
 
 recvRequest :: Show a
             => IO (ByteString, a)
             -> Context
             -> (Request s a -> IO ())
-            -> s
             -> IO ()
-recvRequest recv _cxt enqReq sock = do
+recvRequest recv _cxt enqReq = do
   (bs, addr) <- recv
-  enqReq (sock, bs, addr)
+  enqReq (bs, addr)
 
 cachedWorker :: Show a
              => Context
@@ -111,7 +110,7 @@ cachedWorker :: Show a
              -> (Decoded s a -> IO ())
              -> (Response s a -> IO ())
              -> Request s a -> IO ()
-cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
+cachedWorker cxt getSec enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
         now <- liftIO getSec
@@ -120,11 +119,11 @@ cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
   let reqH = DNS.header reqM
-      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (sock, reqH, qs, addr)
+      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (reqH, qs, addr)
       noResponse replyErr = throwE $ "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
       enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
-        rbs `seq` enqResp ((sock, rbs), addr)
+        rbs `seq` enqResp (rbs, addr)
   maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH qs)
   where
     logLn level = logLines_ cxt level . (:[])
@@ -133,12 +132,12 @@ resolvWorker :: Show a
              => Context
              -> (Response s a -> IO ())
              -> Decoded s a -> IO ()
-resolvWorker cxt enqResp (sock, reqH, qs@(q, _), addr) =
+resolvWorker cxt enqResp (reqH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
       enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
-        rbs `seq` enqResp ((sock, rbs), addr)
+        rbs `seq` enqResp (rbs, addr)
   either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH qs)
   where
     logLn level = logLines_ cxt level . (:[])
@@ -146,7 +145,7 @@ resolvWorker cxt enqResp (sock, reqH, qs@(q, _), addr) =
 sendResponse :: (ByteString -> a -> IO ())
              -> Context
              -> Response s a -> IO ()
-sendResponse send _cxt ((_, bs), addr) = send bs addr
+sendResponse send _cxt (bs, addr) = send bs addr
 
 ---
 
