@@ -129,7 +129,7 @@ isRecvSendMsg = False
 lookupRaw :: Int64 -> DNS.Resolver -> DNS.Domain -> DNS.TYPE -> IO (Either DNS.DNSError DNSMessage)
 isExtendedLookup :: Bool
 #if EXTENDED_LOOKUP
-lookupRaw now rslv dom typ = DNS.lookupRawRecv rslv dom typ mempty rcv
+lookupRaw now rslv dom typ = DNS.lookupRawCtlRecv rslv dom typ mempty rcv
   where
     rcv sock = do
       bs <- Socket.recv sock bufsiz
