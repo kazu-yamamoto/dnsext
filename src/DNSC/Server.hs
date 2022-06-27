@@ -82,8 +82,8 @@ getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       wildcard = isAnySockAddr addr_
-      send sock bs (peer, cmsgs) = mkSendBS wildcard sock bs peer cmsgs
-      recv = mkRecvBS wildcard
+      send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
+      recv = mkRecvBS wildcard sock_
       resolvWorkers = workers * 8
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
@@ -96,13 +96,13 @@ getPipeline workers getSec cxt sock_ addr_ = do
   return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
 
 recvRequest :: Show a
-            => (s -> IO (ByteString, a))
+            => IO (ByteString, a)
             -> Context
             -> (Request s a -> IO ())
             -> s
             -> IO ()
 recvRequest recv _cxt enqReq sock = do
-  (bs, addr) <- recv sock
+  (bs, addr) <- recv
   enqReq (sock, bs, addr)
 
 cachedWorker :: Show a
@@ -143,10 +143,10 @@ resolvWorker cxt enqResp (sock, reqH, qs@(q, _), addr) =
   where
     logLn level = logLines_ cxt level . (:[])
 
-sendResponse :: (s -> ByteString -> a -> IO ())
+sendResponse :: (ByteString -> a -> IO ())
              -> Context
              -> Response s a -> IO ()
-sendResponse send _cxt = uncurry (uncurry send)
+sendResponse send _cxt ((_, bs), addr) = send bs addr
 
 ---
 
