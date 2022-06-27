@@ -82,7 +82,7 @@ getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       wildcard = isAnySockAddr addr_
-      send sock bs (peer, cmsgs, _) = mkSendBS wildcard sock bs peer cmsgs
+      send sock bs (peer, cmsgs) = mkSendBS wildcard sock bs peer cmsgs
       recv = mkRecvBS wildcard
       resolvWorkers = workers * 8
 
