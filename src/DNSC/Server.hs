@@ -81,7 +81,9 @@ getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], (IO (Int, Int), IO (Int, Int), IO (Int, Int)))
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
-      send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
+      wildcard = isAnySockAddr addr_
+      send sock bs (peer, cmsgs, _) = mkSendBS wildcard sock bs peer cmsgs
+      recv = mkRecvBS wildcard
       resolvWorkers = workers * 8
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
@@ -90,7 +92,7 @@ getPipeline workers getSec cxt sock_ addr_ = do
   let resolvLoops = replicate resolvWorkers resolvLoop
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-                $ recvRequest (mkRecvBS $ isAnySockAddr addr_) cxt enqueueReq sock_
+                $ recvRequest recv cxt enqueueReq sock_
   return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
 
 recvRequest :: Show a
