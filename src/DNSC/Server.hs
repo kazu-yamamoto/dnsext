@@ -33,9 +33,9 @@ import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 
-type Request s a = (ByteString, a)
-type Decoded s a = (DNS.DNSHeader, NE DNS.Question, a)
-type Response s a = (ByteString, a)
+type Request a = (ByteString, a)
+type Decoded a = (DNS.DNSHeader, NE DNS.Question, a)
+type Response a = (ByteString, a)
 
 udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< addrInfo port
@@ -98,7 +98,7 @@ getPipeline workers getSec cxt sock_ addr_ = do
 recvRequest :: Show a
             => IO (ByteString, a)
             -> Context
-            -> (Request s a -> IO ())
+            -> (Request a -> IO ())
             -> IO ()
 recvRequest recv _cxt enqReq = do
   (bs, addr) <- recv
@@ -107,9 +107,9 @@ recvRequest recv _cxt enqReq = do
 cachedWorker :: Show a
              => Context
              -> IO Timestamp
-             -> (Decoded s a -> IO ())
-             -> (Response s a -> IO ())
-             -> Request s a -> IO ()
+             -> (Decoded a -> IO ())
+             -> (Response a -> IO ())
+             -> Request a -> IO ()
 cachedWorker cxt getSec enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
@@ -130,8 +130,8 @@ cachedWorker cxt getSec enqDec enqResp (bs, addr) =
 
 resolvWorker :: Show a
              => Context
-             -> (Response s a -> IO ())
-             -> Decoded s a -> IO ()
+             -> (Response a -> IO ())
+             -> Decoded a -> IO ()
 resolvWorker cxt enqResp (reqH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
@@ -144,7 +144,7 @@ resolvWorker cxt enqResp (reqH, qs@(q, _), addr) =
 
 sendResponse :: (ByteString -> a -> IO ())
              -> Context
-             -> Response s a -> IO ()
+             -> Response a -> IO ()
 sendResponse send _cxt (bs, addr) = send bs addr
 
 ---
