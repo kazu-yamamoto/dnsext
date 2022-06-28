@@ -86,10 +86,13 @@ getPipeline workers getSec cxt sock_ addr_ = do
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
       resolvWorkers = workers * 8
+  (getHit, incHit) <- counter
+  (getMiss, incMiss) <- counter
+  (getFailed, incFailed) <- counter
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (resolvLoop, enqueueDec, decQSize) <- consumeLoop (8 `max` resolvWorkers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt enqueueResp
-  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec enqueueDec enqueueResp
+  (resolvLoop, enqueueDec, decQSize) <- consumeLoop (8 `max` resolvWorkers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt incMiss incFailed  enqueueResp
+  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
   let resolvLoops = replicate resolvWorkers resolvLoop
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
@@ -108,10 +111,12 @@ recvRequest recv _cxt enqReq = do
 cachedWorker :: Show a
              => Context
              -> IO Timestamp
+             -> IO ()
+             -> IO ()
              -> (Decoded a -> IO ())
              -> (Response a -> IO ())
              -> Request a -> IO ()
-cachedWorker cxt getSec enqDec enqResp (bs, addr) =
+cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
         now <- liftIO getSec
@@ -121,8 +126,9 @@ cachedWorker cxt getSec enqDec enqResp (bs, addr) =
   (qs@(q, _), reqM) <- decode
   let reqH = DNS.header reqM
       enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (reqH, qs, addr)
-      noResponse replyErr = throwE $ "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+      noResponse replyErr = liftIO incFailed >> throwE ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
       enqueue respM = liftIO $ do
+        incHit
         let rbs = DNS.encode respM
         rbs `seq` enqResp (rbs, addr)
   maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH qs)
@@ -131,12 +137,15 @@ cachedWorker cxt getSec enqDec enqResp (bs, addr) =
 
 resolvWorker :: Show a
              => Context
+             -> IO ()
+             -> IO ()
              -> (Response a -> IO ())
              -> Decoded a -> IO ()
-resolvWorker cxt enqResp (reqH, qs@(q, _), addr) =
+resolvWorker cxt incMiss incFailed enqResp (reqH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
-  let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+  let noResponse replyErr = liftIO incFailed >> throwE ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
       enqueue respM = liftIO $ do
+        incMiss
         let rbs = DNS.encode respM
         rbs `seq` enqResp (rbs, addr)
   either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH qs)
