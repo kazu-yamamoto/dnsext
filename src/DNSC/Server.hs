@@ -10,6 +10,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
 import Data.ByteString (ByteString)
+import Data.IORef (newIORef, readIORef, atomicModifyIORef')
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
@@ -165,3 +166,8 @@ handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
 handledLoop onError = forever . handle
   where
     handle = either onError return <=< tryAny
+
+counter :: IO (IO Int, IO ())
+counter = do
+  ref <- newIORef 0
+  return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
