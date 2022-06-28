@@ -4,6 +4,7 @@ module DNSC.ServerMonitor (
   Params,
   makeParams,
   showParams,
+  PLStatus,
   ) where
 
 -- GHC packages
@@ -85,6 +86,8 @@ showParams params =
     showOut Log.FStderr = "stderr - fast-logger"
     hosts = dnsHosts params
 
+type PLStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
+
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
   where
@@ -101,7 +104,7 @@ data Command
   deriving Show
 
 monitor :: Bool -> Params -> Context
-        -> ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+        -> ([PLStatus], IO (Int, Int), IO (Int, Int))
         -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo flushLog = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
@@ -132,7 +135,7 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
             =<< withWait waitQuit (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
       loop
 
-console :: Params -> Context -> ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+console :: Params -> Context -> ([PLStatus], IO (Int, Int), IO (Int, Int))
            -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
 console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
@@ -200,11 +203,20 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
         [ do psize ("request queue " ++ show i) reqQSize
              psize ("decoded queue " ++ show i) decQSize
              psize ("response queue " ++ show i) resQSize
-        | (i, (reqQSize, decQSize, resQSize)) <- zip [0 :: Int ..] pQSizeList
+        | (i, (reqQSize, decQSize, resQSize, _, _, _)) <- zip [0 :: Int ..] pQSizeList
         ]
       psize "ucache queue" ucacheQSize
       lmx <- snd <$> logQSize
       when (lmx >= 0) $ psize "log queue" logQSize
+
+      ts <- sequence
+        [ (,,) <$> getHit <*> getMiss <*> getFailed
+        | (_, _, _, getHit, getMiss, getFailed) <- pQSizeList ]
+      let hits = sum [ hit | (hit, _, _) <- ts ]
+          replies = hits + sum [ miss | (_, miss, _) <- ts ]
+          total = replies + sum [ failed | (_, _, failed) <- ts ]
+      outLn $ "hit rate: " ++ show hits ++ " / " ++ show replies
+      outLn $ "reply rate: " ++ show replies ++ " / " ++ show total
 
 
 withWait :: STM a -> IO b -> IO (Either a b)
