@@ -54,12 +54,12 @@ run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = 
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-type QSizeInfo = ([(IO (Int, Int), IO (Int, Int), IO (Int, Int))], IO (Int, Int), IO (Int, Int))
+type PLStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> [String]
-     -> IO ([IO ()], ((Context, QSizeInfo), IO ()))
+     -> IO ([IO ()], ((Context, ([PLStatus], IO (Int, Int), IO (Int, Int))), IO ()))
 setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs = do
   (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
   tcache@(getSec, _) <- TimeCache.new
@@ -79,7 +79,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
   return (ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
 
 getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
-            -> IO ([IO ()], (IO (Int, Int), IO (Int, Int), IO (Int, Int)))
+            -> IO ([IO ()], PLStatus)
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       wildcard = isAnySockAddr addr_
@@ -97,7 +97,7 @@ getPipeline workers getSec cxt sock_ addr_ = do
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
                 $ recvRequest recv cxt enqueueReq
-  return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
+  return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
 
 recvRequest :: Show a
             => IO (ByteString, a)
