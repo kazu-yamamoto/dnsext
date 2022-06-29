@@ -25,7 +25,7 @@ import DNSC.Queue (newQueue, readQueue, writeQueue)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecvBS, mkSendBS)
-import DNSC.ServerMonitor (monitor)
+import DNSC.ServerMonitor (monitor, PLStatus)
 import qualified DNSC.ServerMonitor as Mon
 import DNSC.Types (Timestamp, NE)
 import qualified DNSC.Log as Log
@@ -53,8 +53,6 @@ run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = 
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
-
-type PLStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
 setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
