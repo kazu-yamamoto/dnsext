@@ -33,13 +33,13 @@ type Cmsg = Socket.Cmsg
 type Cmsg = ()
 #endif
 
-mkRecvBS :: Bool -> Socket -> IO (ByteString, (SockAddr, [Cmsg], Bool))
+mkRecvBS :: Bool -> Socket -> IO (ByteString, (SockAddr, [Cmsg]))
 #if MIN_VERSION_network(3,1,2)
 mkRecvBS wildcard
   | wildcard    =  withRecv recvMsg
   | otherwise   =  withRecv recvFrom
 #else
-mkRecvBS wildcard =  withRecv recvFrom
+mkRecvBS _      =  withRecv recvFrom
 #endif
   where
     withRecv recv sock = recv sock `E.catch` \e -> E.throwIO $ DNS.NetworkFailure e
@@ -47,22 +47,22 @@ mkRecvBS wildcard =  withRecv recvFrom
     recvMsg sock = do
       let cbufsiz = 64
       (peer, bs, cmsgs, _) <- Socket.recvMsg sock bufsiz cbufsiz 0
-      return (bs, (peer, cmsgs, wildcard))
+      return (bs, (peer, cmsgs))
 #endif
 
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
-      return (bs, (peer, [], wildcard))
+      return (bs, (peer, []))
     bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 -- return tuples that can be reused in request and response queues
-mkRecv :: Bool -> Int64 -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg], Bool))
+mkRecv :: Bool -> Int64 -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg]))
 #if MIN_VERSION_network(3,1,2)
 mkRecv wildcard now
   | wildcard    =  recvDNS recvMsg
   | otherwise   =  recvDNS recvFrom
 #else
-mkRecv wildcard now =  recvDNS recvFrom
+mkRecv _        now =  recvDNS recvFrom
 #endif
   where
     recvDNS recv sock = do
@@ -75,12 +75,12 @@ mkRecv wildcard now =  recvDNS recvFrom
     recvMsg sock = do
       let cbufsiz = 64
       (peer, bs, cmsgs, _) <- Socket.recvMsg sock bufsiz cbufsiz 0
-      return (bs, (peer, cmsgs, wildcard))
+      return (bs, (peer, cmsgs))
 #endif
 
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
-      return (bs, (peer, [], wildcard))
+      return (bs, (peer, []))
     bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 mkSendBS :: Bool -> Socket -> ByteString -> SockAddr -> [Cmsg] -> IO ()

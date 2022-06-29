@@ -33,9 +33,9 @@ import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 
-type Request s a = (s, ByteString, a)
-type Decoded s a = (s, DNS.DNSHeader, NE DNS.Question, a)
-type Response s a = ((s, ByteString), a)
+type Request a = (ByteString, a)
+type Decoded a = (DNS.DNSHeader, NE DNS.Question, a)
+type Response a = (ByteString, a)
 
 udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< addrInfo port
@@ -81,7 +81,9 @@ getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], (IO (Int, Int), IO (Int, Int), IO (Int, Int)))
 getPipeline workers getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
-      send sock bs (peer, cmsgs, wildcard) = mkSendBS wildcard sock bs peer cmsgs
+      wildcard = isAnySockAddr addr_
+      send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
+      recv = mkRecvBS wildcard sock_
       resolvWorkers = workers * 8
 
   (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
@@ -90,26 +92,25 @@ getPipeline workers getSec cxt sock_ addr_ = do
   let resolvLoops = replicate resolvWorkers resolvLoop
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-                $ recvRequest (mkRecvBS $ isAnySockAddr addr_) cxt enqueueReq sock_
+                $ recvRequest recv cxt enqueueReq
   return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize))
 
 recvRequest :: Show a
-            => (s -> IO (ByteString, a))
+            => IO (ByteString, a)
             -> Context
-            -> (Request s a -> IO ())
-            -> s
+            -> (Request a -> IO ())
             -> IO ()
-recvRequest recv _cxt enqReq sock = do
-  (bs, addr) <- recv sock
-  enqReq (sock, bs, addr)
+recvRequest recv _cxt enqReq = do
+  (bs, addr) <- recv
+  enqReq (bs, addr)
 
 cachedWorker :: Show a
              => Context
              -> IO Timestamp
-             -> (Decoded s a -> IO ())
-             -> (Response s a -> IO ())
-             -> Request s a -> IO ()
-cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
+             -> (Decoded a -> IO ())
+             -> (Response a -> IO ())
+             -> Request a -> IO ()
+cachedWorker cxt getSec enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
         now <- liftIO getSec
@@ -118,33 +119,33 @@ cachedWorker cxt getSec enqDec enqResp (sock, bs, addr) =
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
   let reqH = DNS.header reqM
-      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (sock, reqH, qs, addr)
+      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (reqH, qs, addr)
       noResponse replyErr = throwE $ "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
       enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
-        rbs `seq` enqResp ((sock, rbs), addr)
+        rbs `seq` enqResp (rbs, addr)
   maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
 resolvWorker :: Show a
              => Context
-             -> (Response s a -> IO ())
-             -> Decoded s a -> IO ()
-resolvWorker cxt enqResp (sock, reqH, qs@(q, _), addr) =
+             -> (Response a -> IO ())
+             -> Decoded a -> IO ()
+resolvWorker cxt enqResp (reqH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let noResponse replyErr = throwE $ "response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
       enqueue respM = liftIO $ do
         let rbs = DNS.encode respM
-        rbs `seq` enqResp ((sock, rbs), addr)
+        rbs `seq` enqResp (rbs, addr)
   either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
-sendResponse :: (s -> ByteString -> a -> IO ())
+sendResponse :: (ByteString -> a -> IO ())
              -> Context
-             -> Response s a -> IO ()
-sendResponse send _cxt = uncurry (uncurry send)
+             -> Response a -> IO ()
+sendResponse send _cxt (bs, addr) = send bs addr
 
 ---
 
