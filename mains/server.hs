@@ -13,7 +13,7 @@ import qualified DNSC.Server as Server
 
 data ServerOptions =
   ServerOptions
-  { logOutput :: Log.FOutput
+  { logOutput :: Log.Output
   , logLevel :: Log.Level
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
@@ -27,7 +27,7 @@ data ServerOptions =
 defaultOptions :: ServerOptions
 defaultOptions =
   ServerOptions
-  { logOutput = Log.FStdout
+  { logOutput = Log.Stdout
   , logLevel = Log.NOTICE
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
@@ -61,12 +61,12 @@ descs =
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
   , Option ['s'] ["std-console"]
-    (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.FStderr })
+    (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
   ]
   where
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
-    outputs = [("stdout", Log.FStdout), ("stderr", Log.FStderr)]
+    outputs = [("stdout", Log.Stdout), ("stderr", Log.Stderr)]
 
 help :: IO ()
 help =
