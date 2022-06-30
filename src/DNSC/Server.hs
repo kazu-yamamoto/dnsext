@@ -43,7 +43,7 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-run :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
+run :: Log.Output -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
   caps <- getNumCapabilities
@@ -54,7 +54,7 @@ run logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = 
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-setup :: Log.FOutput -> Log.Level -> Int -> Bool -> Int
+setup :: Log.Output -> Log.Level -> Int -> Bool -> Int
      -> PortNumber -> [HostName]
      -> [String]
      -> IO ([IO ()], ((Context, ([PLStatus], IO (Int, Int), IO (Int, Int))), IO ()))
