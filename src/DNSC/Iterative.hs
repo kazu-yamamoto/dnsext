@@ -723,7 +723,12 @@ cacheEmptySection srcDom dom typ getRanked msg =
                               , "  because of non empty answers:"
                               ] ++
                               map (("  " ++) . show) answer
-      | otherwise          =  logLn Log.NOTICE $ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+      | otherwise          =  logLines Log.NOTICE $
+                              [ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                              , "  authority section:"
+                              ] ++
+                              map (("  " ++) . show) (DNS.authority msg)
+
       where answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ReaderT Context IO ()
