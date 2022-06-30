@@ -2,13 +2,14 @@ module DNSC.Log (
   Level (..),
   Output (..),
   newFastLogger,
+  outputHandle,
   new,
   none,
   ) where
 
 -- GHC packages
 import Control.Monad (forever, when)
-import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr)
+import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
 
 -- other packages
 import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
@@ -41,6 +42,11 @@ newFastLogger out level = do
     newLoggerSet = case out of
       Stdout  ->  newStdoutLoggerSet
       Stderr  ->  newStderrLoggerSet
+
+outputHandle :: Output -> Handle
+outputHandle o = case o of
+  Stdout  ->  stdout
+  Stderr  ->  stderr
 
 new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int))
 new outFh level = do
