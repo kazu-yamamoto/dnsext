@@ -21,6 +21,7 @@ data ServerOptions =
   , port :: Word16
   , bindHosts :: [String]
   , stdConsole :: Bool
+  , fastLogger :: Bool
   }
   deriving Show
 
@@ -35,6 +36,7 @@ defaultOptions =
   , port = 53
   , bindHosts = []
   , stdConsole = False
+  , fastLogger = False
   }
 
 descs :: [OptDescr (ServerOptions -> Either String ServerOptions)]
@@ -63,6 +65,9 @@ descs =
   , Option ['s'] ["std-console"]
     (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
+  , Option ['f'] ["fast-logger"]
+    (NoArg $ \opts -> return opts { fastLogger = True })
+    ""
   ]
   where
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
@@ -85,7 +90,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
