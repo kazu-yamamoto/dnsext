@@ -59,7 +59,15 @@ setup :: Log.Output -> Log.Level -> Int -> Bool -> Int
      -> [String]
      -> IO ([IO ()], ((Context, ([PLStatus], IO (Int, Int), IO (Int, Int))), IO ()))
 setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs = do
-  (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
+  let fastLogger = False
+      getLogger
+        | fastLogger = do
+            (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
+            return ([], putLines, logQSize, flushLog)
+        | otherwise  = do
+            (logLoop, putLines, logQSize) <- Log.new (Log.outputHandle logOutput) logLevel
+            return ([logLoop], putLines, logQSize, pure ())
+  (logLoops, putLines, logQSize, flushLog) <- getLogger
   tcache@(getSec, _) <- TimeCache.new
   (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
@@ -74,7 +82,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs =
 
   mapM_ (uncurry S.bind) sas
 
-  return (ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
+  return (logLoops ++ ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
 
 getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], PLStatus)
