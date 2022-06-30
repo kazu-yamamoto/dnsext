@@ -39,7 +39,7 @@ data Params =
   { isRecvSendMsg :: Bool
   , isExtendedLookup :: Bool
   , numCapabilities :: Int
-  , logOutput :: Log.FOutput
+  , logOutput :: Log.Output
   , logLevel :: Log.Level
   , maxCacheSize :: Int
   , disableV6NS :: Bool
@@ -48,7 +48,7 @@ data Params =
   , dnsHosts :: [String]
   }
 
-makeParams :: Int -> Log.FOutput -> Log.Level -> Int -> Bool -> Int -> Int -> [String]
+makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int -> [String]
            -> Params
 makeParams capabilities output level maxSize disableV6 conc port hosts =
   Params
@@ -82,8 +82,8 @@ showParams params =
   where
     field_ label toS = label ++ ": " ++ toS params
     field label get = field_ label (show . get)
-    showOut Log.FStdout = "stdout - fast-logger"
-    showOut Log.FStderr = "stderr - fast-logger"
+    showOut Log.Stdout = "stdout"
+    showOut Log.Stderr = "stderr"
     hosts = dnsHosts params
 
 type PLStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
