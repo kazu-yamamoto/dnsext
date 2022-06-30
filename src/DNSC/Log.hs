@@ -1,6 +1,6 @@
 module DNSC.Log (
   Level (..),
-  FOutput (..),
+  Output (..),
   newFastLogger,
   new,
   none,
@@ -26,12 +26,12 @@ data Level
   | WARN
   deriving (Eq, Ord, Show, Read)
 
-data FOutput
-  = FStdout
-  | FStderr
+data Output
+  = Stdout
+  | Stderr
   deriving Show
 
-newFastLogger :: FOutput -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
+newFastLogger :: Output -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
 newFastLogger out level = do
   loggerSet <- newLoggerSet bufsize
   let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
@@ -39,8 +39,8 @@ newFastLogger out level = do
   where
     bufsize = 4096
     newLoggerSet = case out of
-      FStdout  ->  newStdoutLoggerSet
-      FStderr  ->  newStderrLoggerSet
+      Stdout  ->  newStdoutLoggerSet
+      Stderr  ->  newStderrLoggerSet
 
 new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int))
 new outFh level = do
