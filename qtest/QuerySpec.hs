@@ -117,6 +117,11 @@ querySpec disableV6NS = describe "query" $ do
     printQueryError result
     checkResult result `shouldBe` NotEmpty DNS.NoErr
 
+  it "resolve-just - ptr" $ do
+    result <- runJust "1.1.1.1.in-addr.arpa." PTR
+    printQueryError result
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
+
   it "resolve-just - nx" $ do
     result <- runJust "does-not-exist.dns-oarc.net." A
     checkResult result `shouldBe` Empty DNS.NameErr
