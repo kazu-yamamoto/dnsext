@@ -689,29 +689,31 @@ cacheSection rs rank = cacheRRSet
       liftIO $ mapM_ ($ insertRRSet) rrss
 
 -- | The `cacheEmptySection srcDom dom typ getRanked msg` caches two pieces of information from `msg`.
---   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of `srcDom`.
+--   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
+--   the sub-domains under `srcDom`.
 --   The `getRanked` function returns the section with the empty information.
 cacheEmptySection :: Domain -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
                   -> DNSMessage -> ReaderT Context IO ()
 cacheEmptySection srcDom dom typ getRanked msg =
-  either ncWarn doCache takeNCTTL
+  either ncWarn doCache takePair
   where
-    doCache ncttl = do
+    doCache (soaDom, ncttl) = do
       cacheSOA
-      cacheEmpty srcDom dom typ ncttl rank
+      cacheEmpty soaDom dom typ ncttl rank
     (_section, rank) = getRanked msg
-    (takeNCTTL, cacheSOA) = getSection rankedAuthority refinesSOA msg
+    (takePair, cacheSOA) = getSection rankedAuthority refinesSOA msg
       where
-        refinesSOA srrs = (single ttls, take 1 rrs)  where (ttls, rrs) = unzip $ foldr takeSOA [] srrs
+        refinesSOA srrs = (single ps, take 1 rrs)  where (ps, rrs) = unzip $ foldr takeSOA [] srrs
         takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA mname mail ser refresh retry expire ncttl } xs
-          | rrname rr == srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
-          | otherwise            =  xs
+          | rrname rr `isSubDomOf` srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
+          | otherwise                      =  xs
+          where isSubDomOf x y =  B8.unpack y `elem` (domains (B8.unpack x) ++ ["."])
         takeSOA _         xs     =  xs
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
             https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA _ _ _ _ _ _ ncttl rr = minimum [ncttl, DNS.rrttl rr, maxNCacheTTL]
+        fromSOA _ _ _ _ _ _ ncttl rr = (rrname rr, minimum [ncttl, DNS.rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
         single list = case list of
           []    ->  Left "no SOA records found"
