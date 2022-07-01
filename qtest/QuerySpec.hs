@@ -5,7 +5,6 @@ import Test.Hspec
 import Control.Concurrent (forkIO, threadDelay)
 import Data.Maybe (isJust)
 import Data.Either (isRight)
-import Data.List (uncons)
 import Data.String (fromString)
 import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
 import qualified Network.DNS as DNS
@@ -149,16 +148,6 @@ querySpec disableV6NS = describe "query" $ do
     result <- runResolve "clients4.google.com." A
     printQueryError result
     isRight result `shouldBe` True
-
-  it "resolve - ptr - cache" $ do
-    let handleDNS n = either (fail . (n ++) . show) return
-    r1 <- handleDNS "resolve: r1: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
-    threadDelay $ 2 * 1000 * 1000
-    r2 <- handleDNS "resolve: r2: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
-    let getRRsTTL n = maybe (fail $ "getTTL: " ++ n ++ ": no RR") return . fmap (DNS.rrttl . fst) . uncons
-    t1 <- either (const $ fail "r1: expect not cached result") (getRRsTTL "r1" . DNS.answer) r1
-    t2 <- either (\(_, rrs, _) -> getRRsTTL "r2" rrs) (const $ fail "r2: expect cached result") r2
-    t1 > t2 `shouldBe` True
 
   it "get-reply - nx via cname" $ do
     result <- getReply "media.yahoo.com." A 0
