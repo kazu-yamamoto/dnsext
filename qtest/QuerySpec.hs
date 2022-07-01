@@ -3,6 +3,7 @@ module QuerySpec where
 import Test.Hspec
 
 import Control.Concurrent (forkIO, threadDelay)
+import Data.Maybe (isJust)
 import Data.Either (isRight)
 import Data.List (uncons)
 import Data.String (fromString)
@@ -10,9 +11,10 @@ import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
+import qualified DNSC.Cache as Cache
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
 import qualified DNSC.Iterative as Iterative
 
 data AnswerResult
@@ -25,6 +27,7 @@ spec :: Spec
 spec = do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
   envSpec
+  cacheStateSpec disableV6NS
   querySpec disableV6NS
 
 envSpec :: Spec
@@ -32,6 +35,29 @@ envSpec = describe "env" $ do
   it "rootNS" $ do
     let sp p = case p of (_,_) -> True  -- check not error
     rootNS `shouldSatisfy` sp
+
+cacheStateSpec :: Bool -> Spec
+cacheStateSpec disableV6NS = describe "cache-state" $ do
+  tcache <- runIO TimeCache.new
+  (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  runIO $ mapM_ forkIO loops
+
+  let getResolveCache n ty = do
+        cxt <- newContext (\_ _ -> pure ()) disableV6NS ucache tcache
+        eresult <- (snd  <$>) <$> Iterative.runResolve cxt n ty
+        threadDelay $ 1 * 1000 * 1000
+        let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Key dom typ _, (_, Cache.Val crs rank)) <- xs ]
+        (,) eresult . convert . Cache.dump <$> getCache_ cxt
+      clookup cs n typ = lookup (fromString n, typ) cs
+      check cs n typ = lookup (fromString n, typ) cs
+
+  it "answer - a" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    fmap snd (clookup cs "iij.ad.jp." A) `shouldSatisfy` (>= Just Cache.RankAnswer)
+
+  it "nodata - ns" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    check cs "ad.jp." NS `shouldSatisfy` isJust
 
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
