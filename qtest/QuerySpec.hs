@@ -22,8 +22,19 @@ data AnswerResult
   deriving (Eq, Show)
 
 spec :: Spec
-spec = describe "query" $ do
+spec = do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
+  envSpec
+  querySpec disableV6NS
+
+envSpec :: Spec
+envSpec = describe "env" $ do
+  it "rootNS" $ do
+    let sp p = case p of (_,_) -> True  -- check not error
+    rootNS `shouldSatisfy` sp
+
+querySpec :: Bool -> Spec
+querySpec disableV6NS = describe "query" $ do
   tcache <- runIO TimeCache.new
   (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   runIO $ mapM_ forkIO loops
@@ -44,10 +55,6 @@ spec = describe "query" $ do
         | otherwise              =  NotEmpty rcode
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) (checkAnswer . fst)
-
-  it "rootNS" $ do
-    let sp p = case p of (_,_) -> True  -- check not error
-    rootNS `shouldSatisfy` sp
 
   it "iterative" $ do
     result <- runIterative rootNS "iij.ad.jp."
