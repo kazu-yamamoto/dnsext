@@ -3,16 +3,17 @@ module QuerySpec where
 import Test.Hspec
 
 import Control.Concurrent (forkIO, threadDelay)
+import Data.Maybe (isJust)
 import Data.Either (isRight)
-import Data.List (uncons)
 import Data.String (fromString)
 import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
+import qualified DNSC.Cache as Cache
 import qualified DNSC.UpdateCache as UCache
 import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS)
+import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
 import qualified DNSC.Iterative as Iterative
 
 data AnswerResult
@@ -22,8 +23,43 @@ data AnswerResult
   deriving (Eq, Show)
 
 spec :: Spec
-spec = describe "query" $ do
+spec = do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
+  envSpec
+  cacheStateSpec disableV6NS
+  querySpec disableV6NS
+
+envSpec :: Spec
+envSpec = describe "env" $ do
+  it "rootNS" $ do
+    let sp p = case p of (_,_) -> True  -- check not error
+    rootNS `shouldSatisfy` sp
+
+cacheStateSpec :: Bool -> Spec
+cacheStateSpec disableV6NS = describe "cache-state" $ do
+  tcache <- runIO TimeCache.new
+  (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  runIO $ mapM_ forkIO loops
+
+  let getResolveCache n ty = do
+        cxt <- newContext (\_ _ -> pure ()) disableV6NS ucache tcache
+        eresult <- (snd  <$>) <$> Iterative.runResolve cxt n ty
+        threadDelay $ 1 * 1000 * 1000
+        let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Key dom typ _, (_, Cache.Val crs rank)) <- xs ]
+        (,) eresult . convert . Cache.dump <$> getCache_ cxt
+      clookup cs n typ = lookup (fromString n, typ) cs
+      check cs n typ = lookup (fromString n, typ) cs
+
+  it "answer - a" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    fmap snd (clookup cs "iij.ad.jp." A) `shouldSatisfy` (>= Just Cache.RankAnswer)
+
+  it "nodata - ns" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    check cs "ad.jp." NS `shouldSatisfy` isJust
+
+querySpec :: Bool -> Spec
+querySpec disableV6NS = describe "query" $ do
   tcache <- runIO TimeCache.new
   (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   runIO $ mapM_ forkIO loops
@@ -44,10 +80,6 @@ spec = describe "query" $ do
         | otherwise              =  NotEmpty rcode
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) (checkAnswer . fst)
-
-  it "rootNS" $ do
-    let sp p = case p of (_,_) -> True  -- check not error
-    rootNS `shouldSatisfy` sp
 
   it "iterative" $ do
     result <- runIterative rootNS "iij.ad.jp."
@@ -84,6 +116,11 @@ spec = describe "query" $ do
     printQueryError result
     checkResult result `shouldBe` NotEmpty DNS.NoErr
 
+  it "resolve-just - ptr" $ do
+    result <- runJust "1.1.1.1.in-addr.arpa." PTR
+    printQueryError result
+    checkResult result `shouldBe` NotEmpty DNS.NoErr
+
   it "resolve-just - nx" $ do
     result <- runJust "does-not-exist.dns-oarc.net." A
     checkResult result `shouldBe` Empty DNS.NameErr
@@ -111,16 +148,6 @@ spec = describe "query" $ do
     result <- runResolve "clients4.google.com." A
     printQueryError result
     isRight result `shouldBe` True
-
-  it "resolve - ptr - cache" $ do
-    let handleDNS n = either (fail . (n ++) . show) return
-    r1 <- handleDNS "resolve: r1: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
-    threadDelay $ 2 * 1000 * 1000
-    r2 <- handleDNS "resolve: r2: " =<< runResolve "5.0.130.210.in-addr.arpa." PTR
-    let getRRsTTL n = maybe (fail $ "getTTL: " ++ n ++ ": no RR") return . fmap (DNS.rrttl . fst) . uncons
-    t1 <- either (const $ fail "r1: expect not cached result") (getRRsTTL "r1" . DNS.answer) r1
-    t2 <- either (\(_, rrs, _) -> getRRsTTL "r2" rrs) (const $ fail "r2: expect cached result") r2
-    t1 > t2 `shouldBe` True
 
   it "get-reply - nx via cname" $ do
     result <- getReply "media.yahoo.com." A 0
