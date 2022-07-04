@@ -6,7 +6,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Data.Maybe (isJust)
 import Data.Either (isRight)
 import Data.String (fromString)
-import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR))
+import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
 import qualified Network.DNS as DNS
 import System.Environment (lookupEnv)
 
@@ -57,6 +57,14 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
   it "nodata - ns" $ do
     (_, cs) <- getResolveCache "iij.ad.jp." A
     check cs "ad.jp." NS `shouldSatisfy` isJust
+
+  it "sub-domain - nodata - ns" $ do
+    (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
+    check cs "arpa." NS `shouldSatisfy` isJust
+
+  it "sub-domain - soa" $ do
+    (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
+    check cs "arpa." SOA `shouldSatisfy` isJust
 
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
