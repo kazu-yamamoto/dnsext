@@ -11,7 +11,8 @@ import Test.QuickCheck
 import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
-import Data.Char (ord)
+import Data.Char (ord, toUpper, toLower)
+import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Network.DNS (TYPE (..), TTL)
@@ -39,9 +40,8 @@ toDomain = Short.fromShort
 
 -----
 
-domainList :: [ShortByteString]
+domainList :: [String]
 domainList =
-  map packS8
   [ "example.com."
   , "example.org."
   , "example.ne.jp."
@@ -49,15 +49,17 @@ domainList =
   , "example.com.cn."
   ]
 
-nameList :: [ShortByteString]
+nameList :: [String]
 nameList =
-  map packS8
   [ "www.example.com."
   , "mail.example.com."
   , "example.ne.jp."
   , "www.example.or.jp."
   , "mail.example.ne.jp."
   ]
+
+sbsDomainList :: [ShortByteString]
+sbsDomainList = map packS8 domainList
 
 v4List :: Read a => [a]
 v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
@@ -120,10 +122,17 @@ genCrsAssoc =
   , (AAAA, CR_AAAA <$> listOf1 (elements v6List))
   ]
 
+toULString :: String -> Gen String
+toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
+  where
+    ulc upper
+      | upper      =  toUpper
+      | otherwise  =  toLower
+
 genWrongCRPair :: Gen (Key, CRSet)
 genWrongCRPair = do
   (typ, genCrs) <- elements wrongs
-  key <- Key <$> elements domainList <*> pure typ <*> pure DNS.classIN
+  key <- Key <$> elements sbsDomainList <*> pure typ <*> pure DNS.classIN
   crs <- genCrs
   pure (key, crs)
   where
@@ -134,15 +143,18 @@ genWrongCRPair = do
       , typ /= gtyp
       ]
 
-genCRsPair :: Gen (Key, Gen CRSet)
-genCRsPair = do
+genCRsRec :: Gen ((Key, Gen CRSet), DNS.Domain)
+genCRsRec = do
   (typ, genCrs) <- elements genCrsAssoc
   let labelList
         | typ `elem` [NS, SOA, MX]  =  domainList
         | otherwise                 =  nameList
-  (,)
-    <$> (Key <$> elements labelList <*> pure typ <*> pure DNS.classIN)
-    <*> pure genCrs
+  lbl <- elements labelList
+  (,) (Key (packS8 lbl) typ DNS.classIN, genCrs)
+    <$> (B8.pack <$> toULString lbl)
+
+genCRsPair :: Gen (Key, Gen CRSet)
+genCRsPair = fst <$> genCRsRec
 
 genCRPair :: Gen (Key, CRSet)
 genCRPair = do
@@ -193,7 +205,7 @@ genRankOrdsCo = elements ordsCo
 newtype AKey = AKey Key deriving Show
 
 instance Arbitrary AKey where
-  arbitrary = AKey <$> (Key <$> elements domainList <*> elements [A, NS, AAAA] <*> pure DNS.classIN)
+  arbitrary = AKey <$> (Key <$> elements sbsDomainList <*> elements [A, NS, AAAA] <*> pure DNS.classIN)
 
 newtype AWrongCRPair = AWrongCRPair (Key, CRSet) deriving Show
 
@@ -209,6 +221,14 @@ newtype ACRPair = ACRPair (Key, CRSet) deriving Show
 
 instance Arbitrary ACRPair where
   arbitrary = ACRPair <$> genCRPair
+
+newtype ACRRec = ACRRec (Key, CRSet, DNS.Domain) deriving Show
+
+instance Arbitrary ACRRec where
+  arbitrary = ACRRec <$> do
+    ((key, genCrs), uldom) <- genCRsRec
+    crs <- genCrs
+    pure (key, crs, uldom)
 
 newtype ARanking = ARanking Ranking deriving Show
 
