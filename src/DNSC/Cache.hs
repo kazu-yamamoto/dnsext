@@ -42,6 +42,8 @@ import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Int (Int64)
 import Data.Word (Word16, Word32)
+import Data.Char (isAscii)
+import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 
 -- dns packages
@@ -321,7 +323,8 @@ rdTYPE cr = case cr of
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    rdTYPE rd == Just rrtype  =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
+    rdTYPE rd == Just rrtype &&
+    B8.all isAscii rrname     =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
