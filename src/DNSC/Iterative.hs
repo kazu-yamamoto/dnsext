@@ -273,22 +273,24 @@ maxCNameChain = 16
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
 resolveByCache :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
-resolveByCache = resolveLogic (\_ -> pure ()) (\_ _ -> pure ((), Nothing))
+resolveByCache = resolveLogic "cache" (\_ -> pure ()) (\_ _ -> pure ((), Nothing))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
 resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
-resolve = resolveLogic resolveCNAME resolveTYPE
+resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
-resolveLogic :: (Name -> DNSQuery a)
+resolveLogic :: String
+             -> (Name -> DNSQuery a)
              -> (Name -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
              -> Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
-resolveLogic cnameHandler typeHandler n0 typ
-  | typ == CNAME  =  justCNAME n0
-  | otherwise     =  recCNAMEs 0 n0 id
+resolveLogic logMark cnameHandler typeHandler n0 typ
+  | typ == CNAME  =  called *> justCNAME n0
+  | otherwise     =  called *> recCNAMEs 0 n0 id
   where
+    called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
     justCNAME n = do
       let noCache = do
             msg <- cnameHandler n
@@ -353,7 +355,7 @@ resolveLogic cnameHandler typeHandler n0 typ
             cname rrs = Right . fst <$> uncons (cnameList bn (,) rrs)  {- empty ではないはずなのに cname が空のときはキャッシュ無しとする -}
         either soa cname =<< maySOAorCNRRs
 
-    lookupType bn t = (replyRank =<<) <$> lookupCacheEither bn t
+    lookupType bn t = (replyRank =<<) <$> lookupCacheEither logMark bn t
     replyRank (x, rank)
       -- 最も低い ranking は reply の answer に利用しない
       -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
@@ -637,17 +639,18 @@ lookupCache dom typ = do
   return result
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupCacheEither :: Domain -> TYPE
+lookupCacheEither :: String -> Domain -> TYPE
                   -> ReaderT Context IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
-lookupCacheEither dom typ = do
+lookupCacheEither logMark dom typ = do
   getCache <- asks getCache_
   getSec <- asks currentSeconds_
   result <- liftIO $ do
     cache <- getCache
     ts <- getSec
     return $ Cache.lookupEither ts dom typ DNS.classIN cache
-  logLn Log.DEBUG $ "lookupCacheEither: " ++ unwords [show dom, show typ, show DNS.classIN, ":",
-                                                      maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
+  logLn Log.DEBUG $
+   "lookupCacheEither: " ++ logMark ++ ": " ++
+    unwords [show dom, show typ, show DNS.classIN, ":", maybe "miss" (\ (_, rank) -> "hit: " ++ show rank) result]
   return result
 
 getSection :: (m -> ([ResourceRecord], Ranking))
@@ -720,7 +723,12 @@ cacheEmptySection srcDom dom typ getRanked msg =
                               , "  because of non empty answers:"
                               ] ++
                               map (("  " ++) . show) answer
-      | otherwise          =  logLn Log.NOTICE $ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+      | otherwise          =  logLines Log.NOTICE $
+                              [ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                              , "  authority section:"
+                              ] ++
+                              map (("  " ++) . show) (DNS.authority msg)
+
       where answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ReaderT Context IO ()
