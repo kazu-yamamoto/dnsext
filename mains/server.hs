@@ -13,7 +13,7 @@ import qualified DNSC.Server as Server
 
 data ServerOptions =
   ServerOptions
-  { logOutput :: Log.FOutput
+  { logOutput :: Log.Output
   , logLevel :: Log.Level
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
@@ -21,13 +21,14 @@ data ServerOptions =
   , port :: Word16
   , bindHosts :: [String]
   , stdConsole :: Bool
+  , fastLogger :: Bool
   }
   deriving Show
 
 defaultOptions :: ServerOptions
 defaultOptions =
   ServerOptions
-  { logOutput = Log.FStdout
+  { logOutput = Log.Stdout
   , logLevel = Log.NOTICE
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
@@ -35,6 +36,7 @@ defaultOptions =
   , port = 53
   , bindHosts = []
   , stdConsole = False
+  , fastLogger = False
   }
 
 descs :: [OptDescr (ServerOptions -> Either String ServerOptions)]
@@ -61,12 +63,15 @@ descs =
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default is 53"
   , Option ['s'] ["std-console"]
-    (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.FStderr })
+    (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
+  , Option ['f'] ["fast-logger"]
+    (NoArg $ \opts -> return opts { fastLogger = True })
+    ""
   ]
   where
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
-    outputs = [("stdout", Log.FStdout), ("stderr", Log.FStderr)]
+    outputs = [("stdout", Log.Stdout), ("stderr", Log.Stderr)]
 
 help :: IO ()
 help =
@@ -85,7 +90,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
