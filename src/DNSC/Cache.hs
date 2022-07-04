@@ -42,9 +42,10 @@ import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Int (Int64)
 import Data.Word (Word16, Word32)
-import Data.Char (isAscii)
+import Data.Char (isAscii, toLower, ord)
 import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
+import qualified Data.ByteString.Short as Short
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
@@ -270,7 +271,7 @@ toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort
 
 fromDomain :: DNS.Domain -> CDomain
-fromDomain = toShort
+fromDomain = Short.pack . map (fromIntegral . ord . toLower) . B8.unpack  {- normalizing to lowercase -}
 
 toRDatas :: CRSet -> [RData]
 toRDatas crs = case crs of
