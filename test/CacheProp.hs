@@ -324,9 +324,9 @@ lookupEmpty :: AKey -> Property
 lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 (toDomain dom) typ cls cacheEmpty === Nothing
 
 -- lookup key cache after inserted as new key
-lookupNewInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
-lookupNewInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
-  (Cache.lookup ts0 (toDomain dom) typ cls =<< Cache.insert ts0 k ttl_ crs rank rcache)
+lookupNewInserted :: ACRRec -> ATTL -> ARanking -> AUpdates -> Property
+lookupNewInserted (ACRRec (k@(Key _dom typ cls), crs, ulDom)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
+  (Cache.lookup ts0 ulDom typ cls =<< Cache.insert ts0 k ttl_ crs rank rcache)
   =/=
   Nothing
   where
