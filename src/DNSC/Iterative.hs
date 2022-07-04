@@ -34,6 +34,7 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import Data.Char (isAscii, toLower)
 import qualified Data.Set as Set
 
 -- other packages
@@ -61,7 +62,7 @@ import qualified DNSC.Cache as Cache
 type Name = String
 
 validate :: Name -> Bool
-validate = not . null
+validate n = not (null n) && all isAscii n
 -- validate = all (not . null) . splitOn "."
 
 normalizeName :: Name -> Maybe Name
@@ -72,7 +73,7 @@ normalize :: Name -> Maybe Name
 normalize "." = Just "."
 normalize s
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just nn
+  | validate rn   = Just $ map toLower nn
   | otherwise     = Nothing  -- not valid
   where
     (rn, nn) | "." `isSuffixOf` s = (init s, s)
