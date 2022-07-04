@@ -258,7 +258,7 @@ replyMessage eas ident rqs =
 replyResult :: Name -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
-  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, Cache.lowerAuthority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id answer etm
 
@@ -377,7 +377,7 @@ resolveTYPE n typ = do
   (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
-        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
   maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
