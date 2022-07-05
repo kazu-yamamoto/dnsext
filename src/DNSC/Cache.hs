@@ -11,6 +11,7 @@ module DNSC.Cache (
 
   Ranking (..),
   rankedAnswer, rankedAuthority, rankedAdditional,
+  lowerAnswer, lowerAuthority, lowerAdditional,
 
   insertSetFromSection,
   insertSetEmpty,
@@ -42,7 +43,10 @@ import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Int (Int64)
 import Data.Word (Word16, Word32)
+import Data.Char (isAscii, isUpper, toLower, ord)
+import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Short (ShortByteString, toShort, fromShort)
+import qualified Data.ByteString.Short as Short
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
@@ -116,7 +120,7 @@ rankedAnswer =
   rankedSection
   RankAuthAnswer
   RankAnswer
-  DNS.answer
+  lowerAnswer
 
 rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAuthority =
@@ -125,14 +129,37 @@ rankedAuthority =
      RankAdditional does not overwrite glue. -}
   RankAdditional
   RankAdditional
-  DNS.authority
+  lowerAuthority
 
 rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
   RankAdditional
   RankAdditional
-  DNS.additional
+  lowerAdditional
+
+lowerAnswer :: DNSMessage -> [ResourceRecord]
+lowerAnswer = map lowerRR . DNS.answer
+
+lowerAuthority :: DNSMessage -> [ResourceRecord]
+lowerAuthority = map lowerRR . DNS.authority
+
+lowerAdditional :: DNSMessage -> [ResourceRecord]
+lowerAdditional = map lowerRR . DNS.additional
+
+lowerRR :: ResourceRecord -> ResourceRecord
+lowerRR rr@ResourceRecord { DNS.rrname = name } = case (DNS.rrtype rr, DNS.rdata rr) of
+  (NS   , RD_NS ns)    | B8.any isUpper ns -> urr { DNS.rdata = RD_NS $ lowerDomain ns }
+  (CNAME, RD_CNAME cn) | B8.any isUpper cn -> urr { DNS.rdata = RD_CNAME $ lowerDomain cn }
+  _                                        -> urr
+  where
+    urr
+      | B8.any isUpper name = rr { DNS.rrname = lowerDomain name }
+      | otherwise           = rr
+    toLowerAscii c
+      | isAscii c  = toLower c
+      | otherwise  = c
+    lowerDomain = B8.pack . map toLowerAscii . B8.unpack
 
 ---
 
@@ -268,7 +295,7 @@ toDomain :: CDomain -> DNS.Domain
 toDomain = fromShort
 
 fromDomain :: DNS.Domain -> CDomain
-fromDomain = toShort
+fromDomain = Short.pack . map (fromIntegral . ord . toLower) . B8.unpack  {- normalizing to lowercase -}
 
 toRDatas :: CRSet -> [RData]
 toRDatas crs = case crs of
@@ -321,7 +348,8 @@ rdTYPE cr = case cr of
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    rdTYPE rd == Just rrtype  =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
+    rdTYPE rd == Just rrtype &&
+    B8.all isAscii rrname     =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)

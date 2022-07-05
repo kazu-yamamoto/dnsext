@@ -34,6 +34,7 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import Data.Char (isAscii, toLower)
 import qualified Data.Set as Set
 
 -- other packages
@@ -61,7 +62,7 @@ import qualified DNSC.Cache as Cache
 type Name = String
 
 validate :: Name -> Bool
-validate = not . null
+validate n = not (null n) && all isAscii n
 -- validate = all (not . null) . splitOn "."
 
 normalizeName :: Name -> Maybe Name
@@ -72,7 +73,7 @@ normalize :: Name -> Maybe Name
 normalize "." = Just "."
 normalize s
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just nn
+  | validate rn   = Just $ map toLower nn
   | otherwise     = Nothing  -- not valid
   where
     (rn, nn) | "." `isSuffixOf` s = (init s, s)
@@ -257,7 +258,7 @@ replyMessage eas ident rqs =
 replyResult :: Name -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
-  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, Cache.lowerAuthority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id answer etm
 
@@ -376,7 +377,7 @@ resolveTYPE n typ = do
   (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
-        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
   maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
