@@ -541,7 +541,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver
            , resolvTimeout = 5 * 1000 * 1000
-           , resolvRetry = 2
+           , resolvRetry = 1
            , resolvQueryControls = DNS.rdFlag FlagClear
            }
 
