@@ -262,9 +262,9 @@ replyMessage eas ident rqs =
 replyResult :: Name -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
-  let answer msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, Cache.lowerAuthority msg)
+  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, Cache.lowerAuthority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
-  return $ makeResult $ either id answer etm
+  return $ makeResult $ either id fromMessage etm
 
 replyResultCached :: Name -> TYPE -> DNSQuery (Maybe Result)
 replyResultCached n typ = do
