@@ -241,7 +241,10 @@ replyMessage eas ident rqs =
       DnsError e      ->  dnsError e
       NotResponse {}  ->  Left "qORr is not response"
       InvalidEDNS {}  ->  Left "Invalid EDNS"
-      HasError rc _m  ->  Right $ message (rc, [], [])
+      HasError rc _m  ->  Right $ message (rrc, [], [])
+        where rrc = case rc of
+                DNS.Refused  ->  DNS.ServFail
+                _            ->  rc
 
     message (rcode, rrs, auth) =
       res
