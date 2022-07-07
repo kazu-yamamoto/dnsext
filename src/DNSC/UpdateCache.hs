@@ -38,7 +38,7 @@ type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
     -> Int
-    -> IO ([IO ()], (Insert, IO Cache), IO (Int, Int))
+    -> IO ([IO ()], Insert, IO Cache, Timestamp -> IO (), IO (Int, Int))
 new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef $ Cache.empty maxCacheSize
@@ -70,7 +70,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
   let insert k ttl crs rank =
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
 
-  return ([updateLoop, expireEvsnts], (insert, readIORef cacheRef), readUSize)
+  return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1, readUSize)
 
 -- no caching
 none :: (Insert, IO Cache)
