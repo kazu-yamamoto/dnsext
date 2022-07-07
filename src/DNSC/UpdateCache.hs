@@ -59,14 +59,13 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
         body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
     return (forever body, writeQueue inQ, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
 
-  let expires1 = do
-        threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
-        enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure E
+  let expires1 ts = enqueueU =<< (,,) ts <$> getTimeStr <*> pure E
 
       expireEvsnts = forever body
         where
           errorLn = putLn Log.NOTICE . ("UpdateCache.expireEvents: error: " ++) . show
-          body = either errorLn return =<< tryAny expires1
+          interval = threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
+          body = either errorLn return =<< tryAny (interval *> (expires1 =<< getSec))
 
   let insert k ttl crs rank =
         enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
