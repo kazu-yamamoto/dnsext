@@ -229,18 +229,22 @@ replyMessage eas ident rqs =
   where
     dnsError de = fmap message $ (,,) <$> rcodeDNSError de <*> pure [] <*> pure []
     rcodeDNSError e = case e of
-      DNS.FormatError       ->  Right DNS.FormatErr
-      DNS.ServerFailure     ->  Right DNS.ServFail
-      DNS.NotImplemented    ->  Right DNS.NotImpl
-      DNS.OperationRefused  ->  Right DNS.Refused
-      DNS.BadOptRecord      ->  Right DNS.BadVers
-      _                     ->  Left $ "DNSError: " ++ show e
+      DNS.RetryLimitExceeded  ->  Right DNS.ServFail
+      DNS.FormatError         ->  Right DNS.FormatErr
+      DNS.ServerFailure       ->  Right DNS.ServFail
+      DNS.NotImplemented      ->  Right DNS.NotImpl
+      DNS.OperationRefused    ->  Right DNS.ServFail {- like bind9 behavior -}
+      DNS.BadOptRecord        ->  Right DNS.BadVers
+      _                       ->  Left $ "DNSError: " ++ show e
 
     queryError qe = case qe of
       DnsError e      ->  dnsError e
       NotResponse {}  ->  Left "qORr is not response"
       InvalidEDNS {}  ->  Left "Invalid EDNS"
-      HasError rc _m  ->  Right $ message (rc, [], [])
+      HasError rc _m  ->  Right $ message (rrc, [], [])
+        where rrc = case rc of
+                DNS.Refused  ->  DNS.ServFail
+                _            ->  rc
 
     message (rcode, rrs, auth) =
       res
@@ -540,7 +544,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver
            , resolvTimeout = 5 * 1000 * 1000
-           , resolvRetry = 2
+           , resolvRetry = 1
            , resolvQueryControls = DNS.rdFlag FlagClear
            }
 
