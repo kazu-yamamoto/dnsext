@@ -65,8 +65,8 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
             return ([logLoop], putLines, logQSize, pure ())
   (logLoops, putLines, logQSize, flushLog) <- getLogger
   tcache@(getSec, _) <- TimeCache.new
-  (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
-  cxt <- newContext putLines disableV6NS ucache tcache
+  (ucacheLoops, insert, getCache, _, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
+  cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
   sas <- udpSockets port hosts
 
