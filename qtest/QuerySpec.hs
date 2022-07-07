@@ -38,11 +38,11 @@ envSpec = describe "env" $ do
 cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
   tcache <- runIO TimeCache.new
-  (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  (loops, insert, getCache, _, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   runIO $ mapM_ forkIO loops
 
   let getResolveCache n ty = do
-        cxt <- newContext (\_ _ -> pure ()) disableV6NS ucache tcache
+        cxt <- newContext (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
         eresult <- (snd  <$>) <$> Iterative.runResolve cxt n ty
         threadDelay $ 1 * 1000 * 1000
         let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Key dom typ _, (_, Cache.Val crs rank)) <- xs ]
@@ -69,8 +69,9 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
   tcache <- runIO TimeCache.new
-  (loops, ucache, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
+  (loops, insert, getCache, _, _) <- runIO $ UCache.new (\_ _ -> pure ()) tcache $ 2 * 1024 * 1024
   runIO $ mapM_ forkIO loops
+  let ucache = (insert, getCache)
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative = Iterative.runIterative cxt
