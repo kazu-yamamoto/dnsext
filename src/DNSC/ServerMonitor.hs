@@ -15,7 +15,9 @@ import Control.Monad ((<=<), guard, when, unless, void)
 import Data.Functor (($>))
 import Data.List (isInfixOf, find)
 import Data.Char (toUpper)
+import Data.Int (Int64)
 import qualified Data.ByteString.Char8 as B8
+import Text.Read (readMaybe)
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 
 -- dns packages
@@ -98,6 +100,7 @@ data Command
   | Find String
   | Lookup DNS.Domain DNS.TYPE
   | Status
+  | Expire Int64
   | Noop
   | Exit
   | Quit
@@ -105,8 +108,8 @@ data Command
 
 monitor :: Bool -> Params -> Context
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-        -> IO () -> IO [IO ()]
-monitor stdConsole params cxt getsSizeInfo flushLog = do
+        -> (Int64 -> IO ()) -> IO () -> IO [IO ()]
+monitor stdConsole params cxt getsSizeInfo expires flushLog = do
   ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
@@ -119,7 +122,7 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
   return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do
-      let repl = console params cxt getsSizeInfo flushLog monQuit stdin stdout "<std>"
+      let repl = console params cxt getsSizeInfo expires flushLog monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level . (:[])
     handle onError = either onError return <=< tryAny
@@ -128,7 +131,7 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
             socketWaitRead s
             (sock, addr) <- S.accept s
             sockh <- S.socketToHandle sock ReadWriteMode
-            let repl = console params cxt getsSizeInfo flushLog monQuit sockh sockh $ show addr
+            let repl = console params cxt getsSizeInfo expires flushLog monQuit sockh sockh $ show addr
             void $ forkFinally repl (\_ -> hClose sockh)
           loop =
             either (const $ return ()) (const loop)
@@ -136,8 +139,8 @@ monitor stdConsole params cxt getsSizeInfo flushLog = do
       loop
 
 console :: Params -> Context -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-           -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
-console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, waitQuit) inH outH ainfo = do
+           -> (Int64 -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
+console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -172,6 +175,9 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
       "find" : s : _      ->  Just $ Find s
       ["lookup", n, typ]  ->  Lookup (B8.pack n) <$> parseTYPE typ
       "status" : _  ->  Just Status
+      "expire" : args -> case args of
+        []     ->  Just $ Expire 0
+        x : _  ->  Expire <$> readMaybe x
       "exit" : _  ->  Just Exit
       "quit" : _  ->  Just Quit
       _           ->  Nothing
@@ -191,6 +197,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) flushLog (issueQuit, wait
                   return $ Cache.lookup ts dom typ DNS.classIN cache
                 hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status           =  printStatus
+        dispatch (Expire offset)  =  expires . (+ offset) =<< currentSeconds_ cxt
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
 
     printStatus = do
