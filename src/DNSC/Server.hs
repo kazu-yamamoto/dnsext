@@ -46,19 +46,16 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
-  caps <- getNumCapabilities
-  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers (fromIntegral port) hosts
-  (serverLoops, monArgs) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts $ Mon.showParams params
-  monLoops <- uncurry (uncurry $ monitor stdConsole params) monArgs
+  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole
+  mapM_ (uncurry S.bind) sas
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
 setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int
-     -> PortNumber -> [HostName]
-     -> [String]
-     -> IO ([IO ()], ((Context, ([PLStatus], IO (Int, Int), IO (Int, Int))), IO ()))
-setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts paramLogs = do
+     -> PortNumber -> [HostName] -> Bool
+     -> IO ([IO ()], [(Socket, SockAddr)], [IO ()])
+setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
   let getLogger
         | fastLogger = do
             (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
@@ -71,17 +68,19 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
   (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS ucache tcache
 
-  putLines Log.NOTICE $ map ("params: " ++) paramLogs
-
   sas <- udpSockets port hosts
 
   (pLoops, qsizes) <- do
     (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers getSec cxt) sas
     return (concat loopsList, qsizes)
 
-  mapM_ (uncurry S.bind) sas
+  caps <- getNumCapabilities
+  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers (fromIntegral port) hosts
+  putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
-  return (logLoops ++ ucacheLoops ++ pLoops, ((cxt, (qsizes, ucacheQSize, logQSize)), flushLog))
+  monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) flushLog
+
+  return (logLoops ++ ucacheLoops ++ pLoops, sas, monLoops)
 
 getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], PLStatus)
