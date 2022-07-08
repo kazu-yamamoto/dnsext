@@ -423,7 +423,7 @@ resolveJustDC dc n typ
                  *> throwDnsError DNS.ServerFailure
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
-  nss <- iterative rootNS n
+  nss <- iterative_ dc rootNS $ reverse $ domains n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
   (,) <$> norec sa (B8.pack n) typ <*> pure nss
