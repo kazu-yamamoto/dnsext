@@ -10,7 +10,6 @@ module DNSC.Iterative (
   QueryError (..),
   printResult,
   -- * types
-  Name,
   NE,
   UpdateCache,
   TimeCache,
@@ -33,7 +32,7 @@ import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
-import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import Data.List (unfoldr, uncons, sortOn)
 import Data.Char (isAscii, toLower)
 import qualified Data.Set as Set
 
@@ -59,53 +58,47 @@ import DNSC.Cache
 import qualified DNSC.Cache as Cache
 
 
-type Name = String
-
-validate :: Name -> Bool
-validate n = not (null n) && all isAscii n
--- validate = all (not . null) . splitOn "."
+validate :: Domain -> Bool
+validate n = not (B8.null n) && B8.all isAscii n
 
 normalizeName :: Domain -> Maybe Domain
 normalizeName = normalize
 
 -- nomalize (domain) name to absolute name
-normalize_ :: Name -> Maybe Name
-normalize_ "." = Just "."
-normalize_ s
+normalize :: Domain -> Maybe Domain
+normalize s
+  | s == dot      = Just dot
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just $ map toLower nn
+  | validate rn   = Just $ B8.map toLower nn
   | otherwise     = Nothing  -- not valid
   where
-    (rn, nn) | "." `isSuffixOf` s = (init s, s)
-             | otherwise          = (s, s ++ ".")
-
-normalize :: Domain -> Maybe Domain
-normalize = fmap B8.pack . normalize_ . B8.unpack
+    dot = B8.pack "."
+    (rn, nn) | dot `B8.isSuffixOf` s = (B8.init s, s)
+             | otherwise             = (s, s <> dot)
 
 -- get parent name for valid name
-parent :: String -> String
+parent :: Domain -> Domain
 parent n
-  | null dotp    =  error "parent: empty name is not valid."
-  | dotp == "."  =  "."  -- parent of "." is "."
-  | otherwise    =  tail dotp
+  | B8.null dp  =  error "parent: empty name is not valid."
+  | dp == dot   =  dot  -- parent of "." is "."
+  | otherwise   =  B8.drop 1 dp
   where
-    dotp = dropWhile (/= '.') n
+    dot = B8.pack "."
+    dp = B8.dropWhile (/= '.') n
 
 -- get domain list for normalized name
-domains_ :: Name -> [Name]
-domains_ "."  = []
-domains_ name
-  | "." `isSuffixOf` name = name : unfoldr parent_ name
-  | otherwise             = error "domains: normalized name is required."
+domains :: Domain -> [Domain]
+domains name
+  | name == dot  =  []
+  | dot `B8.isSuffixOf` name  =  name : unfoldr parent_ name
+  | otherwise                 =  error "domains: normalized name is required."
   where
+    dot = B8.pack "."
     parent_ n
-      | p == "."   =  Nothing
+      | p == dot   =  Nothing
       | otherwise  =  Just (p, p)
       where
         p = parent n
-
-domains :: Domain -> [Domain]
-domains = map B8.pack . domains_ . B8.unpack
 
 -----
 
