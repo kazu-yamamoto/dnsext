@@ -101,6 +101,9 @@ domains name
       where
         p = parent n
 
+isSubDomainOf :: Domain -> Domain -> Bool
+x `isSubDomainOf` y =  y `elem` (domains x ++ [B8.pack "."])
+
 -----
 
 data Context =
@@ -787,9 +790,8 @@ cacheEmptySection srcDom dom typ getRanked msg =
       where
         refinesSOA srrs = (single ps, take 1 rrs)  where (ps, rrs) = unzip $ foldr takeSOA [] srrs
         takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA mname mail ser refresh retry expire ncttl } xs
-          | rrname rr `isSubDomOf` srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
+          | rrname rr `isSubDomainOf` srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
           | otherwise                      =  xs
-          where isSubDomOf x y =  y `elem` (domains x ++ [B8.pack "."])
         takeSOA _         xs     =  xs
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
