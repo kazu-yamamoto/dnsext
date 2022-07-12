@@ -65,8 +65,8 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
             return ([logLoop], putLines, logQSize, pure ())
   (logLoops, putLines, logQSize, flushLog) <- getLogger
   tcache@(getSec, _) <- TimeCache.new
-  (ucacheLoops, ucache, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
-  cxt <- newContext putLines disableV6NS ucache tcache
+  (ucacheLoops, insert, getCache, expires, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
+  cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
   sas <- udpSockets port hosts
 
@@ -78,7 +78,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
   let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers (fromIntegral port) hosts
   putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
-  monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) flushLog
+  monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
 
   return (logLoops ++ ucacheLoops ++ pLoops, sas, monLoops)
 
