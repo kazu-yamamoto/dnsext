@@ -43,7 +43,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 
   let getResolveCache n ty = do
         cxt <- newContext (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
-        eresult <- (snd  <$>) <$> Iterative.runResolve cxt n ty
+        eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
         threadDelay $ 1 * 1000 * 1000
         let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Key dom typ _, (_, Cache.Val crs rank)) <- xs ]
         (,) eresult . convert . Cache.dump <$> getCache_ cxt
@@ -74,11 +74,11 @@ querySpec disableV6NS = describe "query" $ do
   let ucache = (insert, getCache)
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
-  let runIterative = Iterative.runIterative cxt
-      runJust = Iterative.runResolveJust cxt
-      runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt n ty
+  let runIterative ns n = Iterative.runIterative cxt ns (fromString n)
+      runJust n = Iterative.runResolveJust cxt (fromString n)
+      runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
       getReply n ty ident = do
-        e <- runDNSQuery (replyResult n ty) cxt
+        e <- runDNSQuery (replyResult (fromString n) ty) cxt
         return $ replyMessage e ident [DNS.Question (fromString n) ty]
 
   let printQueryError :: Show e => Either e a -> IO ()
@@ -141,7 +141,7 @@ querySpec disableV6NS = describe "query" $ do
 
   it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-    result <- Iterative.runResolveJust cxt4 "sc02.alicdn.com.danuoyi.alicdn.com." A
+    result <- Iterative.runResolveJust cxt4 (fromString "sc02.alicdn.com.danuoyi.alicdn.com.") A
     printQueryError result
     checkResult result `shouldBe` NotEmpty DNS.NoErr
 

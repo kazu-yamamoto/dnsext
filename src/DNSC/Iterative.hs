@@ -10,7 +10,6 @@ module DNSC.Iterative (
   QueryError (..),
   printResult,
   -- * types
-  Name,
   NE,
   UpdateCache,
   TimeCache,
@@ -33,7 +32,7 @@ import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
-import Data.List (isSuffixOf, unfoldr, uncons, sortOn)
+import Data.List (unfoldr, uncons, sortOn)
 import Data.Char (isAscii, toLower)
 import qualified Data.Set as Set
 
@@ -59,44 +58,44 @@ import DNSC.Cache
 import qualified DNSC.Cache as Cache
 
 
-type Name = String
+validate :: Domain -> Bool
+validate n = not (B8.null n) && B8.all isAscii n
 
-validate :: Name -> Bool
-validate n = not (null n) && all isAscii n
--- validate = all (not . null) . splitOn "."
-
-normalizeName :: Name -> Maybe Name
+normalizeName :: Domain -> Maybe Domain
 normalizeName = normalize
 
 -- nomalize (domain) name to absolute name
-normalize :: Name -> Maybe Name
-normalize "." = Just "."
+normalize :: Domain -> Maybe Domain
 normalize s
+  | s == dot      = Just dot
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just $ map toLower nn
+  | validate rn   = Just $ B8.map toLower nn
   | otherwise     = Nothing  -- not valid
   where
-    (rn, nn) | "." `isSuffixOf` s = (init s, s)
-             | otherwise          = (s, s ++ ".")
+    dot = B8.pack "."
+    (rn, nn) | dot `B8.isSuffixOf` s = (B8.init s, s)
+             | otherwise             = (s, s <> dot)
 
 -- get parent name for valid name
-parent :: String -> String
+parent :: Domain -> Domain
 parent n
-  | null dotp    =  error "parent: empty name is not valid."
-  | dotp == "."  =  "."  -- parent of "." is "."
-  | otherwise    =  tail dotp
+  | B8.null dp  =  error "parent: empty name is not valid."
+  | dp == dot   =  dot  -- parent of "." is "."
+  | otherwise   =  B8.drop 1 dp
   where
-    dotp = dropWhile (/= '.') n
+    dot = B8.pack "."
+    dp = B8.dropWhile (/= '.') n
 
 -- get domain list for normalized name
-domains :: Name -> [Name]
-domains "."  = []
+domains :: Domain -> [Domain]
 domains name
-  | "." `isSuffixOf` name = name : unfoldr parent_ name
-  | otherwise             = error "domains: normalized name is required."
+  | name == dot  =  []
+  | dot `B8.isSuffixOf` name  =  name : unfoldr parent_ name
+  | otherwise                 =  error "domains: normalized name is required."
   where
+    dot = B8.pack "."
     parent_ n
-      | p == "."   =  Nothing
+      | p == dot   =  Nothing
       | otherwise  =  Just (p, p)
       where
         p = parent n
@@ -170,7 +169,7 @@ handleResponseError e f msg
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
-withNormalized :: Name -> (Name -> DNSQuery a) -> Context -> IO (Either QueryError a)
+withNormalized :: Domain -> (Domain -> DNSQuery a) -> Context -> IO (Either QueryError a)
 withNormalized n action =
   runDNSQuery $
   action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
@@ -179,7 +178,7 @@ withNormalized n action =
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized (B8.unpack bn) getResult cxt
+  <$> withNormalized bn getResult cxt
   where
     getResult n = do
       guardRequestHeader reqH
@@ -191,7 +190,7 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
 getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
 getReplyCached cxt reqH qs@(DNS.Question bn typ, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
-  <$> withNormalized (B8.unpack bn) getResult cxt
+  <$> withNormalized bn getResult cxt
   where
     getResult n = do
       guardRequestHeader reqH
@@ -202,16 +201,16 @@ getReplyCached cxt reqH qs@(DNS.Question bn typ, _) =
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
-runResolve :: Context -> Name -> TYPE
+runResolve :: Context -> Domain -> TYPE
            -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
 runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
 
 -- 権威サーバーからの解決結果を得る
-runResolveJust :: Context -> Name -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveJust :: Context -> Domain -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
 runResolveJust cxt n typ = withNormalized n (`resolveJust` typ) cxt
 
 -- 反復後の委任情報を得る
-runIterative :: Context -> Delegation -> Name -> IO (Either QueryError Delegation)
+runIterative :: Context -> Delegation -> Domain -> IO (Either QueryError Delegation)
 runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 ---
@@ -259,7 +258,7 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 -- 反復検索を使って返答メッセージ用の結果コードと応答セクションを得る.
-replyResult :: Name -> TYPE -> DNSQuery Result
+replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
   let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, allowAuthority $ Cache.lowerAuthority msg)
@@ -270,7 +269,7 @@ replyResult n typ = do
       takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA {} } xs  =  rr : xs
       takeSOA _                                                     xs  =  xs
 
-replyResultCached :: Name -> TYPE -> DNSQuery (Maybe Result)
+replyResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
 replyResultCached n typ = do
   ((aRRs, _rn), e) <- resolveByCache n typ
   let makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
@@ -281,28 +280,28 @@ maxCNameChain = 16
 
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
-resolveByCache :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
+resolveByCache :: Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
 resolveByCache = resolveLogic "cache" (\_ -> pure ()) (\_ _ -> pure ((), Nothing))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
-resolve :: Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
+resolve :: Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 resolveLogic :: String
-             -> (Name -> DNSQuery a)
-             -> (Name -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
-             -> Name -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
+             -> (Domain -> DNSQuery a)
+             -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
+             -> Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
 resolveLogic logMark cnameHandler typeHandler n0 typ
   | typ == CNAME  =  called *> justCNAME n0
   | otherwise     =  called *> recCNAMEs 0 n0 id
   where
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
-    justCNAME n = do
+    justCNAME bn = do
       let noCache = do
-            msg <- cnameHandler n
+            msg <- cnameHandler bn
             pure ((id, bn), Right msg)
 
           withNXC (soa, _rank) = pure ((id, bn), Left (DNS.NameErr, [], soa))
@@ -314,18 +313,15 @@ resolveLogic logMark cnameHandler typeHandler n0 typ
         (cachedCNAME . either (\soa -> ([], soa)) (\(_cn, cnRR) -> ([cnRR], [])))
         =<< lift (lookupCNAME bn)
 
-        where
-          bn = B8.pack n
-
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
-    -- recCNAMEs :: Int -> Name -> DRRList -> DNSQuery ((DRRList, Domain), Either Result a)
-    recCNAMEs cc n aRRs
+    -- recCNAMEs :: Int -> Domain -> DRRList -> DNSQuery ((DRRList, Domain), Either Result a)
+    recCNAMEs cc bn aRRs
       | cc > mcc  = lift (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
                     *> throwDnsError DNS.ServerFailure
       | otherwise = do
-      let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) (B8.unpack cn) (aRRs . (cnRR :))
+      let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) cn (aRRs . (cnRR :))
           noCache = do
-            (msg, cname) <- typeHandler n typ
+            (msg, cname) <- typeHandler bn typ
             maybe (pure ((aRRs, bn), Right msg)) recCNAMEs_ cname
 
           withNXC (soa, _rank) = pure ((aRRs, bn), Left (DNS.NameErr, [], soa))
@@ -346,7 +342,6 @@ resolveLogic logMark cnameHandler typeHandler n0 typ
 
         where
           mcc = maxCNameChain
-          bn = B8.pack n
 
     lookupNX :: Domain -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
     lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.nxTYPE
@@ -371,18 +366,16 @@ resolveLogic logMark cnameHandler typeHandler n0 typ
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just x
 
-resolveCNAME :: Name -> DNSQuery DNSMessage
-resolveCNAME n = do
-  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n CNAME
+resolveCNAME :: Domain -> DNSQuery DNSMessage
+resolveCNAME bn = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust bn CNAME
   lift $ cacheAnswer (rrname nsRR) bn CNAME msg
   return msg
-    where
-      bn = B8.pack n
 
-resolveTYPE :: Name -> TYPE
+resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
-resolveTYPE n typ = do
-  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust n typ
+resolveTYPE bn typ = do
+  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
@@ -390,7 +383,6 @@ resolveTYPE n typ = do
   maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
     where
-      bn = B8.pack n
       refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
         where ps = cnameList bn (,) rrs
 
@@ -414,10 +406,10 @@ maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
-resolveJust :: Name -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveJust = resolveJustDC 0
 
-resolveJustDC :: Int -> Name -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJustDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveJustDC dc n typ
   | dc > mdc   = lift (logLn Log.NOTICE $ "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ))
                  *> throwDnsError DNS.ServerFailure
@@ -426,7 +418,7 @@ resolveJustDC dc n typ
   nss <- iterative_ dc rootNS $ reverse $ domains n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
-  (,) <$> norec sa (B8.pack n) typ <*> pure nss
+  (,) <$> norec sa n typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
 
@@ -446,10 +438,10 @@ rootNS =
 
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威権威サーバー群を見つける
-iterative :: Delegation -> Name -> DNSQuery Delegation
+iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ reverse $ domains n
 
-iterative_ :: Int -> Delegation -> [Name] -> DNSQuery Delegation
+iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _  nss []     = return nss
 iterative_ dc nss (x:xs) =
   step nss >>=
@@ -458,7 +450,7 @@ iterative_ dc nss (x:xs) =
   (`recurse` xs)
   where
     recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
-    name = B8.pack x
+    name = x
 
     lookupNX :: ReaderT Context IO Bool
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
@@ -596,8 +588,7 @@ selectDelegation dc (nss, as) = do
             xs <- qx
             if null xs then qy else pure xs
           querySection typ = lift . getSectionWithCache rankedAnswer refinesAx . fst
-                             =<< resolveJustDC (succ dc) nsName typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
-          nsName = B8.unpack ns
+                             =<< resolveJustDC (succ dc) ns typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
 
       resolveAXofNS :: DNSQuery (IP, ResourceRecord)
       resolveAXofNS =
@@ -717,7 +708,7 @@ cacheEmptySection srcDom dom typ getRanked msg =
         takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA mname mail ser refresh retry expire ncttl } xs
           | rrname rr `isSubDomOf` srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
           | otherwise                      =  xs
-          where isSubDomOf x y =  B8.unpack y `elem` (domains (B8.unpack x) ++ ["."])
+          where isSubDomOf x y =  y `elem` (domains x ++ [B8.pack "."])
         takeSOA _         xs     =  xs
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
