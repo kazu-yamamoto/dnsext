@@ -369,19 +369,19 @@ resolveLogic logMark cnameHandler typeHandler n0 typ
 
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
-  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust bn CNAME
-  lift $ cacheAnswer (rrname nsRR) bn CNAME msg
+  (msg, _nss@(srcDom, _)) <- resolveJust bn CNAME
+  lift $ cacheAnswer srcDom bn CNAME msg
   return msg
 
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
-  (msg, _nss@(((_, nsRR), _), _)) <- resolveJust bn typ
+  (msg, _nss@(srcDom, _)) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift $ cacheAnswer (rrname nsRR) bn typ msg) (const checkTypeRR) cname
+  maybe (lift $ cacheAnswer srcDom bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
     where
       refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
@@ -424,9 +424,7 @@ resolveJustDC dc n typ
       mdc = maxNotSublevelDelegation
 
 -- ドメインに対する NS 委任情報
-type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
-
-type Delegation_ = (Domain, NE DEntry)
+type Delegation = (Domain, NE DEntry)
 
 data DEntry
   = DEwithAx !Domain !IP
@@ -455,8 +453,8 @@ rootNS :: Delegation
 rootNS =
   maybe
   (error "rootNS: bad configuration.")
-  (flip (,) as)
-  $ uncons $ nsList (B8.pack ".") (,) ns
+  id
+  $ takeDelegation (nsList (B8.pack ".") (,) ns) as
   where
     (ns, as) = rootServers
 
@@ -479,33 +477,23 @@ iterative_ dc nss (x:xs) =
     lookupNX :: ReaderT Context IO Bool
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
-    -- Nothing のときはキャッシュに無し
-    -- Just Nothing のときはキャッシュに有るが委任情報無し
-    lookupNS :: ReaderT Context IO (Maybe (Maybe Delegation))
-    lookupNS = do
-      m <- lookupCache name NS
-      return $ do
-        (rrs, _) <- m
-        let delegation ns = (ns, [])
-        Just $ delegation <$> uncons (nsList name (,) rrs)  -- キャッシュに有り
-
     stepQuery :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
-    stepQuery nss_@(((_, nsRR), _), _) = do
+    stepQuery nss_@(srcDom, _) = do
       sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
       msg <- norec sa name A
-      lift $ delegationWithCache (rrname nsRR) name msg
+      lift $ delegationWithCache srcDom name msg
 
     step :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
     step nss_ = do
       let withNXC nxc
             | nxc        =  return Nothing
             | otherwise  =  stepQuery nss_
-      maybe (withNXC =<< lift lookupNX) return =<< lift lookupNS
+      maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
 
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just Nothing, cache hit but no delegation information.
-lookupDelegation :: Domain -> ReaderT Context IO (Maybe (Maybe Delegation_))
+lookupDelegation :: Domain -> ReaderT Context IO (Maybe (Maybe Delegation))
 lookupDelegation dom = do
   disableV6NS <- asks disableV6NS_
   let lookupDEs ns = do
@@ -535,43 +523,9 @@ lookupDelegation dom = do
 
   maybe (return Nothing) getDelegation =<< lookupCache dom NS
 
--- 権威サーバーの返答から委任情報を取り出しつつキャッシュする
+-- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
 delegationWithCache srcDom dom msg =
-  -- 選択可能な NS が有るときだけ Just
-  maybe
-  (ncache *> return Nothing)
-  (fmap Just . delegation)
-  $ uncons nss
-  where
-    delegation xs = do
-      cacheNS
-      cacheAdds
-      return (xs, adds)
-    (nss, cacheNS) = getSection rankedAuthority refinesNS msg
-      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
-    (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
-      where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
-            match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
-            nsSet = Set.fromList $ map fst nss
-
-    ncache
-      | rcode == DNS.NoErr    =  cacheEmptySection srcDom dom NS rankedAuthority msg
-      | rcode == DNS.NameErr  =
-        if hasCNAME then      do cacheCNAME
-                                 cacheEmptySection srcDom dom NS rankedAuthority msg
-        else                     cacheEmptySection srcDom dom Cache.nxTYPE rankedAuthority msg
-      | otherwise             =  pure ()
-      where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-    (hasCNAME, cacheCNAME) = getSection rankedAnswer refinesCNAME msg
-      where refinesCNAME rrs = (not $ null cns, crrs)
-            {- CNAME 先の NX をキャッシュしたいならここで返す.
-               しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
-              where (cns, crrs) = unzip $ cnameList dom (,) rrs
-
--- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache_ :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation_)
-delegationWithCache_ srcDom dom msg =
   -- 選択可能な NS が有るときだけ Just
   maybe
   (ncache *> return Nothing)
@@ -604,7 +558,7 @@ delegationWithCache_ srcDom dom msg =
                しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
               where (cns, crrs) = unzip $ cnameList dom (,) rrs
 
-takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delegation_
+takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delegation
 takeDelegation nsps adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
@@ -660,66 +614,10 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
            , resolvQueryControls = DNS.rdFlag FlagClear
            }
 
--- authority section 内の、Domain に対応する NS レコードが一つも無いときに Nothing
--- そうでなければ、additional section 内の NS の名前に対応する A を利用してアドレスを得る
--- NS の名前に対応する A が無いときには反復検索で解決しに行く (PTR 解決のときには glue レコードが無い)
-selectDelegation :: Int -> Delegation -> DNSQuery IP
-selectDelegation dc (nss, as) = do
-  let selectNS = randomizedSelectN
-  (ns, nsRR) <- liftIO $ selectNS nss
-  disableV6NS <- lift $ asks disableV6NS_
-
-  let selectA = randomizedSelect
-      takeAx :: ResourceRecord -> [(IP, ResourceRecord)] -> [(IP, ResourceRecord)]
-      takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 } xs
-        | rrname rr == ns  =  (IPv4 ipv4, rr) : xs
-      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 } xs
-        | not disableV6NS &&
-          rrname rr == ns  =  (IPv6 ipv6, rr) : xs
-      takeAx _         xs  =  xs
-
-      axList = foldr takeAx []
-
-      refinesAx rrs = (ps, map snd ps)
-        where ps = axList rrs
-
-      lookupAx
-        | disableV6NS  =  lk4
-        | otherwise    =  join $ liftIO $ randomizedSelectN (lk46, [lk64])
-        where
-          lk46 = lk4 +? lk6
-          lk64 = lk6 +? lk4
-          lk4 = lookupCache ns A
-          lk6 = lookupCache ns AAAA
-          lx +? ly = maybe ly (return . Just) =<< lx
-
-      query1Ax
-        | disableV6NS  =  q4
-        | otherwise    =  join $ liftIO $ randomizedSelectN (q46, [q64])
-        where
-          q46 = q4 +!? q6 ; q64 = q6 +!? q4
-          q4 = querySection A
-          q6 = querySection AAAA
-          qx +!? qy = do
-            xs <- qx
-            if null xs then qy else pure xs
-          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx . fst
-                             =<< resolveJustDC (succ dc) ns typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
-
-      resolveAXofNS :: DNSQuery (IP, ResourceRecord)
-      resolveAXofNS =
-        maybe (throwDnsError DNS.IllegalDomain) pure  -- 失敗時: NS に対応する A の返答が空
-        =<< liftIO . selectA =<< maybe query1Ax (pure . axList . fst) =<< lift lookupAx
-
-  (a, _aRR) <- maybe resolveAXofNS return =<< liftIO (selectA $ axList as)
-  lift $ logLn Log.DEBUG $ "selectDelegation: " ++ show (rrname nsRR, (ns, a))
-
-  return a
-
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.
-selectDelegation_ :: Int -> Delegation_ -> DNSQuery IP
-selectDelegation_ dc (srcDom, des) = do
+selectDelegation :: Int -> Delegation -> DNSQuery IP
+selectDelegation dc (srcDom, des) = do
   disableV6NS <- lift $ asks disableV6NS_
   let failEmptyDEs = do
         lift $ logLn Log.INFO $ "selectDelegation: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
