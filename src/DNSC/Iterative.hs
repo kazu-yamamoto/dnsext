@@ -30,9 +30,10 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.Function (on)
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
-import Data.List (unfoldr, uncons, sortOn)
+import Data.List (unfoldr, uncons, groupBy, sortOn, sort)
 import Data.Char (isAscii, toLower)
 import qualified Data.Set as Set
 
@@ -425,6 +426,29 @@ resolveJustDC dc n typ
 -- ドメインに対する NS 委任情報
 type Delegation = (NE (Domain, ResourceRecord), [ResourceRecord])
 
+type Delegation_ = (Domain, NE DEntry)
+
+data DEntry
+  = DEwithAx !Domain !IP
+  | DEonlyNS !Domain
+  deriving Show
+
+nsDomain :: DEntry -> Domain
+nsDomain (DEwithAx dom _)  =  dom
+nsDomain (DEonlyNS dom  )  =  dom
+
+v4DEntryList :: Domain -> [DEntry] -> [DEntry]
+v4DEntryList _      []          =  []
+v4DEntryList _srcDom des@(de:_)  =  concat $ map skipAAAA $ byNS des
+  where
+    byNS = groupBy ((==) `on` nsDomain)
+    skipAAAA = nullCase . filter (not . aaaaDE)
+      where
+        aaaaDE (DEwithAx _ (IPv6 {})) = True
+        aaaaDE _                      = False
+        nullCase     []    =  [DEonlyNS (nsDomain de)]
+        nullCase es@(_:_)  =  es
+
 {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
 {-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
 rootNS :: Delegation
@@ -479,6 +503,38 @@ iterative_ dc nss (x:xs) =
             | otherwise  =  stepQuery nss_
       maybe (withNXC =<< lift lookupNX) return =<< lift lookupNS
 
+-- If Nothing, it is a miss-hit against the cache.
+-- If Just Nothing, cache hit but no delegation information.
+lookupDelegation :: Domain -> ReaderT Context IO (Maybe (Maybe Delegation_))
+lookupDelegation dom = do
+  disableV6NS <- asks disableV6NS_
+  let lookupDEs ns = do
+        let takeA    ResourceRecord { rrtype = A   , rdata = RD_A v4 }    xs  =  DEwithAx ns (IPv4 v4) : xs
+            takeA    _                                                    xs  =                          xs
+            takeAAAA ResourceRecord { rrtype = AAAA, rdata = RD_AAAA v6 } xs  =  DEwithAx ns (IPv6 v6) : xs
+            takeAAAA _                                                    xs  =                          xs
+            lookupAxList typ takeAx = fmap (foldr takeAx [] . fst) <$> lookupCache ns typ
+
+        lk4 <- lookupAxList A takeA
+        lk6 <- lookupAxList AAAA takeAAAA
+        return $ case lk4 <> lk6 of
+          Nothing  ->  [DEonlyNS ns]  {- the case both A and AAAA are miss-hit -}
+          Just as  ->  as             {- just return address records. null case is wrong cache, so return null to skip this NS -}
+      noCachedV4NS es = disableV6NS && null (v4DEntryList dom es)
+      fromDEs es
+        | noCachedV4NS es  =  Nothing
+        {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
+        | otherwise        =  (Just . (,) dom) <$> uncons es
+        {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
+      getDelegation :: ([ResourceRecord], a) -> ReaderT Context IO (Maybe (Maybe Delegation))
+      getDelegation (rrs, _) = do {- NS cache hit -}
+        let nss = sort $ nsList dom const rrs
+        case nss of
+          []    ->  return $ Just Nothing  {- hit null NS list, so no delegation -}
+          _:_   ->  fromDEs . concat <$> mapM lookupDEs nss
+
+  maybe (return Nothing) getDelegation =<< lookupCache dom NS
+
 -- 権威サーバーの返答から委任情報を取り出しつつキャッシュする
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
 delegationWithCache srcDom dom msg =
@@ -512,6 +568,66 @@ delegationWithCache srcDom dom msg =
             {- CNAME 先の NX をキャッシュしたいならここで返す.
                しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
               where (cns, crrs) = unzip $ cnameList dom (,) rrs
+
+-- Caching while retrieving delegation information from the authoritative server's reply
+delegationWithCache_ :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation_)
+delegationWithCache_ srcDom dom msg =
+  -- 選択可能な NS が有るときだけ Just
+  maybe
+  (ncache *> return Nothing)
+  (fmap Just . withCache)
+  $ takeDelegation nsps adds
+  where
+    withCache x = do
+      cacheNS
+      cacheAdds
+      return x
+
+    (nsps, cacheNS) = getSection rankedAuthority refinesNS msg
+      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
+    (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
+      where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
+            match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
+            nsSet = Set.fromList $ map fst nsps
+
+    ncache
+      | rcode == DNS.NoErr    =  cacheEmptySection srcDom dom NS rankedAuthority msg
+      | rcode == DNS.NameErr  =
+        if hasCNAME then      do cacheCNAME
+                                 cacheEmptySection srcDom dom NS rankedAuthority msg
+        else                     cacheEmptySection srcDom dom Cache.nxTYPE rankedAuthority msg
+      | otherwise             =  pure ()
+      where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    (hasCNAME, cacheCNAME) = getSection rankedAnswer refinesCNAME msg
+      where refinesCNAME rrs = (not $ null cns, crrs)
+            {- CNAME 先の NX をキャッシュしたいならここで返す.
+               しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
+              where (cns, crrs) = unzip $ cnameList dom (,) rrs
+
+takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delegation_
+takeDelegation nsps adds = do
+  (p@(_, rr), ps) <- uncons nsps
+  let nss = map fst (p:ps)
+  ents <- uncons $ concatMap (uncurry dentries) $ nsPairs (sort nss) addgroups
+  return (rrname rr, ents)
+  where
+    addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
+    nsPairs []     _gs            =  []
+    nsPairs (d:ds)  []            =  (d, []) : nsPairs ds  []
+    nsPairs (d:ds) (g:gs)
+      | d <  an                   =  (d, []) : nsPairs ds (g:gs)
+      | d == an                   =  (d, g)  : nsPairs ds  gs
+      | otherwise {- d >  an  -}  =            nsPairs ds  gs  -- unknown additional RRs. just skip
+      where
+        an = rrname a
+        (a:_) = g
+    dentries d     []     =  [DEonlyNS d]
+    dentries d as@(_:_)   =  foldr takeAxDE [] as
+      where
+        takeAxDE a xs = case a of
+          ResourceRecord { rrtype = A   , rdata = RD_A    v4 }  ->  DEwithAx d (IPv4 v4) : xs
+          ResourceRecord { rrtype = AAAA, rdata = RD_AAAA v6 }  ->  DEwithAx d (IPv6 v6) : xs
+          _                                                     ->  xs
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
