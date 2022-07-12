@@ -509,8 +509,10 @@ lookupDelegation dom = do
         lk4 <- lookupAxList A takeA
         lk6 <- lookupAxList AAAA takeAAAA
         return $ case lk4 <> lk6 of
-          Nothing  ->  [DEonlyNS ns]  {- the case both A and AAAA are miss-hit -}
-          Just as  ->  as             {- just return address records. null case is wrong cache, so return null to skip this NS -}
+          Nothing
+            | ns `isSubDomainOf` dom  ->  []             {- miss-hit with sub-domain case cause iterative loop, so return null to skip this NS -}
+            | otherwise               ->  [DEonlyNS ns]  {- the case both A and AAAA are miss-hit -}
+          Just as                     ->  as             {- just return address records. null case is wrong cache, so return null to skip this NS -}
       noCachedV4NS es = disableV6NS && null (v4DEntryList dom es)
       fromDEs es
         | noCachedV4NS es  =  Nothing
