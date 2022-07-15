@@ -1,5 +1,6 @@
 
 -- ghc packages
+import Control.Concurrent (threadDelay)
 import Control.Monad ((<=<))
 import Data.Char (toUpper)
 import Data.Function (on)
@@ -53,17 +54,37 @@ mkRS host port =
   DNS.makeResolvSeed
   DNS.defaultResolvConf
   { resolvInfo = DNS.RCHostPort host (fromIntegral port)
-  , resolvTimeout = 5 * 1000 * 1000
-  , resolvRetry = 3
+  , resolvTimeout = 6 * 1000 * 1000
+  , resolvRetry = 1
   }
 
 doCompare :: ResolvSeed -> ResolvSeed -> Domain -> TYPE -> IO String
 doCompare rs1 rs2 name typ = do
-  now <- systemSeconds <$> getSystemTime
-  e1 <- query now rs1 name typ
-  e2 <- query now rs2 name typ
+  e1 <- queries rs1 name typ
+  e2 <- queries rs2 name typ
   let (code, note) = compareResult e1 e2
   return $ intercalate "\t" [show code, B8.unpack name, show typ, note]
+
+queries :: ResolvSeed
+        -> Domain -> TYPE
+        -> IO (Either DNSError DNSMessage)
+queries rs name typ = recurse (3 :: Int)
+  where
+    recurse n
+      | n <= 0    =  fail "queries.recurse: positive integer required."
+      | n == 1    =  query1
+      | otherwise =  do
+          let retry = recurse $ pred n
+              dnsError _ = threadDelay (1000 * 1000) *> retry
+              dnsMessage msg
+                | rcode msg == DNS.ServFail  =  retry
+                | otherwise                  =  pure $ Right msg
+          either dnsError dnsMessage =<< query1
+
+    query1 = do
+      now <- systemSeconds <$> getSystemTime
+      query now rs name typ
+    rcode = DNS.rcode . DNS.flags . DNS.header
 
 query :: Int64
       -> ResolvSeed
