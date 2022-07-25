@@ -24,7 +24,7 @@ module DNSC.Iterative (
 
 -- GHC packages
 import Control.Arrow ((&&&), first)
-import Control.Monad (when, unless, join)
+import Control.Monad (when, unless, join, guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -33,11 +33,13 @@ import qualified Data.ByteString.Char8 as B8
 import Data.Function (on)
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
-import Data.List (unfoldr, uncons, groupBy, sortOn, sort)
+import Data.List (unfoldr, uncons, groupBy, sortOn, sort, intercalate)
 import Data.Char (isAscii, toLower)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Bits ((.|.), shiftL)
+import Numeric (readDec, readHex, showHex)
 
 -- other packages
 import System.Random (randomR, getStdRandom)
@@ -222,6 +224,71 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 -----
 
+-- parse IPv4 8bit-parts from reverse-lookup domain
+parseV4RevDomain :: Domain -> Either String [Int]
+parseV4RevDomain dom = do
+  rstr <- maybe (throw "suffix does not match") Right $ B8.stripSuffix sufV4 dom
+  let rparts = B8.split '.' rstr
+      plen = length rparts
+  maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
+    $ guard (1 <= plen && plen <= 4)
+  mapM getByte $ reverse rparts
+  where
+    throw = Left . ("v4Rev: " ++)
+    getByte s = do
+      byte <- case [ x | (x, "")  <- readDec $ B8.unpack s ] of
+                []    ->  throw $ "cannot parse decimal from part: " ++ show s
+                [x]   ->  Right x
+                _:_   ->  throw $ "ambiguous parse result of decimal part: " ++ show s
+      maybe (throw $ "decimal part '" ++ show byte ++ "' is out of range") Right
+        $ guard (0 <= byte && byte < 256)
+      return byte
+    sufV4 = B8.pack ".in-addr.arpa."
+
+-- parse IPv6 4bit-parts from reverse-lookup domain
+parseV6RevDomain :: Domain -> Either String [Int]
+parseV6RevDomain dom = do
+  rstr <- maybe (throw "suffix does not match") Right $ B8.stripSuffix sufV6 dom
+  let rparts = B8.split '.' rstr
+      plen = length rparts
+  maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
+    $ guard (1 <= plen && plen <= 32)
+  mapM getHexDigit $ reverse rparts
+  where
+    throw = Left . ("v6Rev: " ++)
+    getHexDigit s = do
+      h <- case [ x | (x, "")  <- readHex $ B8.unpack s ] of
+             []    ->  throw $ "cannot parse hexadecimal from part: " ++ show s
+             [x]   ->  Right x
+             _:_   ->  throw $ "ambiguous parse result of hexadecimal part: " ++ show s
+      maybe (throw $ "hexadecimal part '" ++ showHex h "" ++ "' is out of range") Right
+        $ guard (0 <= h && h < 0x10)
+      return h
+    sufV6 = B8.pack ".ip6.arpa."
+
+-- show IPv4 reverse-lookup domain from 8bit-parts
+showV4RevDomain :: [Int] -> Domain
+showV4RevDomain parts = B8.pack $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
+
+-- parse IPv6 reverse-lookup domain from 4bit-parts
+showV6RevDomain :: [Int] -> Domain
+showV6RevDomain parts = B8.pack $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
+
+-- make IPv4-address and mask-length from prefix 8bit-parts
+withMaskLenV4 :: [Int] -> (IPv4, Int)
+withMaskLenV4 bs = (toIPv4 $ take 4 $ bs ++ pad, length bs * 8)
+  where pad = replicate (4-1) 0
+
+-- make IPv6-address and mask-length from prefix 4bit-parts
+withMaskLenV6 :: [Int] -> (IPv6, Int)
+withMaskLenV6 hs = (toIPv6h $ take 32 $ hs ++ pad, length hs * 4)
+  where
+    pad = replicate (32-1) 0
+    toIPv6h = toIPv6b . bytes
+    bytes []        =  []
+    bytes [h]       =  [h `shiftL` 4]
+    bytes (h:l:xs)  =  ((h `shiftL` 4) .|. l) : bytes xs
+
 -- result output tags for special IP-blocks
 data EmbedResult
   = EmbedLocal
@@ -281,6 +348,17 @@ specialV6Blocks =
   where
     groupMap rs = (IP.mlen r, IP.mask r, Map.fromList [ (IP.addr range, res) | (range, res) <- rs ])
       where r = fst $ head rs
+
+runEmbedResult :: Domain -> EmbedResult -> Result
+runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
+  where
+    soa EmbedLocal   = soaRR (b8 "localhost.") (b8 "root@localhost.") 1 604800 86400 2419200 604800
+    soa EmbedInAddr  = soaRR dom (b8 ".") 0 28800 7200 604800 86400
+    soa EmbedIp6     = soaRR dom (b8 ".") 0 28800 7200 604800 86400
+    soaRR mname mail ser refresh retry expire ncttl =
+      ResourceRecord { rrname = dom, rrtype = SOA, DNS.rrclass = DNS.classIN, DNS.rrttl = ncttl
+                     , rdata = RD_SOA mname mail ser refresh retry expire ncttl }
+    b8 = B8.pack
 
 -----
 
