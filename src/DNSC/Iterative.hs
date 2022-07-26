@@ -24,6 +24,7 @@ module DNSC.Iterative (
 
 -- GHC packages
 import Control.Arrow ((&&&), first)
+import Control.Applicative ((<|>))
 import Control.Monad (when, unless, join, guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -359,6 +360,37 @@ runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
       ResourceRecord { rrname = dom, rrtype = SOA, DNS.rrclass = DNS.classIN, DNS.rrttl = ncttl
                      , rdata = RD_SOA mname mail ser refresh retry expire ncttl }
     b8 = B8.pack
+
+-- detect embedded result for special IP-address block from reverse lookup domain
+takeEmbeddedResult :: (Ord a, IP.Addr a)
+                   => (Domain -> Either String [Int])
+                   -> ([Int] -> Domain)
+                   -> ([Int] -> (a, Int))
+                   -> [(Int, a, Map a EmbedResult)]
+                   -> Int
+                   -> Domain
+                   -> Maybe ((Domain, EmbedResult), IP.AddrRange a)
+takeEmbeddedResult parse show_ withMaskLen blocks partWidth dom = do
+  parts <- either (const Nothing) Just $ parse dom
+  let (ip, len) = withMaskLen parts
+  listToMaybe
+    [ ((show_ $ take maskedPartsLen parts, result), IP.makeAddrRange prefix mlen)
+    | (mlen, mask, pairs) <- blocks
+    , len >= mlen
+    , let prefix = IP.masked ip mask
+    , Just result <- [Map.lookup prefix pairs]
+    , let maskedPartsLen = ceiling (fromIntegral mlen / fromIntegral partWidth :: Rational)
+    ]
+
+v4EmbeddedResult :: Domain -> Maybe ((Domain, EmbedResult), IP.AddrRange IPv4)
+v4EmbeddedResult = takeEmbeddedResult parseV4RevDomain showV4RevDomain withMaskLenV4 specialV4Blocks 8
+
+v6EmbeddedResult :: Domain -> Maybe ((Domain, EmbedResult), IP.AddrRange IPv6)
+v6EmbeddedResult = takeEmbeddedResult parseV6RevDomain showV6RevDomain withMaskLenV6 specialV6Blocks 4
+
+-- result for special IP-address block from reverse lookup domain
+takeSpecialRevDomainResult :: Domain -> Maybe Result
+takeSpecialRevDomainResult dom = fmap (uncurry runEmbedResult) $ fst <$> v4EmbeddedResult dom <|> fst <$> v6EmbeddedResult dom
 
 -----
 
