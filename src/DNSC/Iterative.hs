@@ -473,10 +473,13 @@ resolveLogic :: String
              -> (Domain -> DNSQuery a)
              -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
              -> Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
-resolveLogic logMark cnameHandler typeHandler n0 typ
-  | typ == CNAME  =  called *> justCNAME n0
-  | otherwise     =  called *> recCNAMEs 0 n0 id
+resolveLogic logMark cnameHandler typeHandler n0 typ =
+  maybe notSpecial special $ takeSpecialRevDomainResult n0
   where
+    special result = return ((id, n0), Left result)
+    notSpecial
+      | typ == CNAME  =  called *> justCNAME n0
+      | otherwise     =  called *> recCNAMEs 0 n0 id
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
     justCNAME bn = do
       let noCache = do
