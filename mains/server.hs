@@ -61,7 +61,7 @@ descs =
     "workers per host"
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
-    "server port number. default is 53"
+    "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023"
   , Option ['s'] ["std-console"]
     (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
