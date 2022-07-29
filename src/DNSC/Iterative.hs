@@ -23,7 +23,7 @@ module DNSC.Iterative (
   ) where
 
 -- GHC packages
-import Control.Arrow ((&&&))
+import Control.Arrow ((&&&), first)
 import Control.Monad (when, unless, join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -35,13 +35,16 @@ import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (unfoldr, uncons, groupBy, sortOn, sort)
 import Data.Char (isAscii, toLower)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import qualified Data.Set as Set
 
 -- other packages
 import System.Random (randomR, getStdRandom)
 
 -- dns packages
-import Data.IP (IP (IPv4, IPv6))
+import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
+import qualified Data.IP as IP
 import Network.DNS
   (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
@@ -217,7 +220,69 @@ runResolveJust cxt n typ = withNormalized n (`resolveJust` typ) cxt
 runIterative :: Context -> Delegation -> Domain -> IO (Either QueryError Delegation)
 runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
----
+-----
+
+-- result output tags for special IP-blocks
+data EmbedResult
+  = EmbedLocal
+  | EmbedInAddr
+  | EmbedIp6
+  deriving Show
+
+{- IPv4 Special-Purpose Address Registry Entries
+   https://datatracker.ietf.org/doc/html/rfc6890.html#section-2.2.2 -}
+specialV4Blocks :: [(Int, IPv4, Map IPv4 EmbedResult)]
+specialV4Blocks =
+  map groupMap $
+  groupBy ((==) `on` IP.mlen . fst) $ sortOn (IP.mlen . fst) $
+  map (first read)
+  [ ("0.0.0.0/8"          , EmbedLocal ) {- This host on this network  -}
+  , ("10.0.0.0/8"         , EmbedInAddr) {- Private-Use                -}
+  , ("100.64.0.0/10"      , EmbedInAddr) {- Shared Address Space       -}
+  , ("127.0.0.0/8"        , EmbedLocal ) {- Loopback                   -}
+  , ("169.254.0.0/16"     , EmbedInAddr) {- Link Local                 -}
+  , ("172.16.0.0/12"      , EmbedInAddr) {- Private-Use                -}
+  -- ("192.0.0.0/24"       , _          ) {- IETF Protocol Assignments  -} {- not handled in resolvers -}
+  -- ("192.0.0.0/29"       , _          ) {- DS-Lite                    -} {- not handled in resolvers -}
+  , ("192.0.2.0/24"       , EmbedInAddr) {- Documentation (TEST-NET-1) -}
+  -- ("192.88.99.0/24"     , _          ) {- 6to4 Relay Anycast         -} {- not handled in resolvers -}
+  , ("192.168.0.0/16"     , EmbedInAddr) {- Private-Use                -}
+  -- ("198.18.0.0/15"      , _          ) {- Benchmarking               -} {- not handled in resolvers -}
+  , ("198.51.100.0/24"    , EmbedInAddr) {- Documentation (TEST-NET-2) -}
+  , ("203.0.113.0/24"     , EmbedInAddr) {- Documentation (TEST-NET-3) -}
+  -- ("240.0.0.0/4"        , _          ) {- Reserved                   -} {- not handled in resolvers -}
+  , ("255.255.255.255/32" , EmbedInAddr) {- Limited Broadcast          -}
+  ]
+  where
+    groupMap rs = (IP.mlen r, IP.mask r, Map.fromList [ (IP.addr range, res) | (range, res) <- rs ])
+      where r = fst $ head rs
+
+{- IPv6 Special-Purpose Address Registry Entries
+   https://datatracker.ietf.org/doc/html/rfc6890.html#section-2.2.3 -}
+specialV6Blocks :: [(Int, IPv6, Map IPv6 EmbedResult)]
+specialV6Blocks =
+  map groupMap $
+  groupBy ((==) `on` IP.mlen . fst) $ sortOn (IP.mlen . fst) $
+  map (first read)
+  [ ("::1/128"            , EmbedIp6   ) {- Loopback Address           -}
+  , ("::/128"             , EmbedIp6   ) {- Unspecified Address        -}
+  -- ("64:ff9b::/96"       , _          ) {- IPv4-IPv6 Translat.        -} {- not handled in resolvers -}
+  -- ("::ffff:0.0.0.0/96"  , _          ) {- IPv4-mapped Address        -} {- not handled in resolvers -}
+  -- ("100::/64"           , _          ) {- Discard-Only Address Block -} {- not handled in resolvers -}
+  -- ("2001::/23"          , _          ) {- IETF Protocol Assignments  -} {- not handled in resolvers -}
+  -- ("2001::/32"          , _          ) {- TEREDO                     -} {- not handled in resolvers -}
+  -- ("2001:2::/48"        , _          ) {- Benchmarking               -} {- not handled in resolvers -}
+  , ("2001:db8::/32"      , EmbedIp6   ) {- Documentation              -}
+  -- ("2001:10::/28"       , _          ) {- ORCHID                     -} {- not handled in resolvers -}
+  -- ("2002::/16"          , _          ) {- 6to4                       -} {- not handled in resolvers -}
+  -- ("fc00::/7"           , _          ) {- Unique-Local               -} {- not handled in resolvers -}
+  , ("fe80::/10"          , EmbedIp6   ) {- Linked-Scoped Unicast      -}
+  ]
+  where
+    groupMap rs = (IP.mlen r, IP.mask r, Map.fromList [ (IP.addr range, res) | (range, res) <- rs ])
+      where r = fst $ head rs
+
+-----
 
 guardRequestHeader :: DNSHeader -> DNSQuery ()
 guardRequestHeader reqH = unless rd $ throwE $ HasError DNS.Refused DNS.defaultResponse
