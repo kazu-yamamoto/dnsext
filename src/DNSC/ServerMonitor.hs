@@ -46,11 +46,11 @@ data Params =
   , maxCacheSize :: Int
   , disableV6NS :: Bool
   , concurrency :: Int
-  , dnsPort :: Int
+  , dnsPort :: PortNumber
   , dnsHosts :: [String]
   }
 
-makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int -> [String]
+makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> PortNumber -> [String]
            -> Params
 makeParams capabilities output level maxSize disableV6 conc port hosts =
   Params
