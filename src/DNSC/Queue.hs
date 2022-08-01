@@ -1,44 +1,91 @@
 module DNSC.Queue (
-  Queue,
-  newQueue,
-  readQueue,
-  writeQueue,
-  readSize, maxSize,
+  ReadQueue (..),
+  WriteQueue (..),
+  QueueSize (..),
+  TQ, newQueue,
+
+  -- compat interface
+  readSize,
+  maxSize,
   ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, when)
 import Control.Concurrent.STM
-  (TVar, newTVar, readTVar, modifyTVar',
+  (TVar, newTVar, readTVar, modifyTVar', writeTVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
-   atomically)
+   atomically, STM)
 
-data Queue a =
-  Queue
-  { content :: TQueue a
-  , sizeRef :: TVar Int
-  , maxSize :: Int
+
+class ReadQueue q where
+  readQueue :: q a -> IO a
+
+class WriteQueue q where
+  writeQueue :: q a -> a -> IO ()
+
+class QueueSize q where
+  sizeMaxBound :: q a -> Int
+  readSizes :: q a -> IO (Int, Int)
+
+---
+
+data TQ a =
+  TQ
+  { tqContent :: TQueue a
+  , tqSizeRef :: TVar Int
+  , tqLastMaxSizeRef :: TVar Int
+  , tqSizeMaxBound :: Int
   }
 
+newQueue :: Int -> IO (TQ a)
+newQueue = atomically . newTQ
 
-newQueue :: Int -> IO (Queue a)
-newQueue xsz = atomically $ Queue <$> newTQueue <*> newTVar 0 <*> pure xsz
+newTQ :: Int -> STM (TQ a)
+newTQ xsz = TQ <$> newTQueue <*> newTVar 0 <*> newTVar 0 <*> pure xsz
 
-readQueue :: Queue a -> IO a
-readQueue q = atomically $ do
-  x <- readTQueue $ content q
-  modifyTVar' (sizeRef q) pred
-  return x
-
-writeQueue :: Queue a -> a -> IO ()
-writeQueue q x = atomically $ do
-  let szRef = sizeRef q
+readTQ :: TQ a -> STM a
+readTQ q = do
+  x <- readTQueue $ tqContent q
+  let szRef = tqSizeRef q
   sz <- readTVar szRef
-  guard $ sz < maxSize q
-  writeTQueue (content q) x
+  updateLastMax sz
+  let nsz = pred sz
+  nsz `seq` writeTVar szRef nsz
+  return x
+  where
+    updateLastMax sz = do
+      let lastMaxRef = tqLastMaxSizeRef q
+      mx <- readTVar lastMaxRef
+      when (sz > mx) $ writeTVar lastMaxRef sz
+
+writeTQ :: TQ a -> a -> STM ()
+writeTQ q x = do
+  let szRef = tqSizeRef q
+  sz <- readTVar szRef
+  guard $ sz < tqSizeMaxBound q
+  writeTQueue (tqContent q) x
   modifyTVar' szRef succ
 
-readSize :: Queue a -> IO Int
-readSize = atomically . readTVar . sizeRef
+readSizesTQ :: TQ a -> STM (Int, Int)
+readSizesTQ q = do
+  sz <- readTVar $ tqSizeRef q
+  mx <- max sz <$> readTVar (tqLastMaxSizeRef q)
+  return (sz, mx)
+
+readSize :: TQ a -> IO Int
+readSize = atomically . readTVar . tqSizeRef
+
+maxSize :: TQ a -> Int
+maxSize = tqSizeMaxBound
+
+instance ReadQueue TQ where
+  readQueue = atomically . readTQ
+
+instance WriteQueue TQ where
+  writeQueue q = atomically . writeTQ q
+
+instance QueueSize TQ where
+  sizeMaxBound = tqSizeMaxBound
+  readSizes = atomically . readSizesTQ
 
 {-
 type Queue a = Chan a
