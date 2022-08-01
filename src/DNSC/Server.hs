@@ -90,13 +90,15 @@ getPipeline workers getSec cxt sock_ addr_ = do
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
       resolvWorkers = workers * 8
+      perWorker = 16
+      queueSize = workers * perWorker
   (getHit, incHit) <- counter
   (getMiss, incMiss) <- counter
   (getFailed, incFailed) <- counter
 
-  (respLoop, enqueueResp, resQSize) <- consumeLoop 8 (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (resolvLoop, enqueueDec, decQSize) <- consumeLoop (8 `max` resolvWorkers) (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt incMiss incFailed  enqueueResp
-  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop (8 `max` workers) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+  (respLoop, enqueueResp, resQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
+  (resolvLoop, enqueueDec, decQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt incMiss incFailed  enqueueResp
+  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
   let resolvLoops = replicate resolvWorkers resolvLoop
       cachedLoops = replicate workers cachedLoop
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
