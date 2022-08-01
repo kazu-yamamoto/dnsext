@@ -3,9 +3,11 @@ module DNSC.Queue (
   WriteQueue (..),
   QueueSize (..),
   TQ, newQueue,
+  ChanQ, newQueueChan,
   ) where
 
 import Control.Monad (guard, when)
+import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
   (TVar, newTVar, readTVar, modifyTVar', writeTVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
@@ -77,15 +79,19 @@ instance QueueSize TQ where
   sizeMaxBound = tqSizeMaxBound
   readSizes = atomically . readSizesTQ
 
-{-
-type Queue a = Chan a
+---
 
-newQueue :: Int -> IO (Queue a)
-newQueue = const newChan
+type ChanQ = Chan
 
-readQueue :: Queue a -> IO a
-readQueue = readChan
+newQueueChan :: IO (ChanQ a)
+newQueueChan = newChan
 
-writeQueue :: Queue a -> a -> IO ()
-writeQueue = writeChan
- -}
+instance ReadQueue Chan where
+  readQueue = readChan
+
+instance WriteQueue Chan where
+  writeQueue = writeChan
+
+instance QueueSize Chan where
+  sizeMaxBound _ = -1
+  readSizes _ = return (-1, -1)
