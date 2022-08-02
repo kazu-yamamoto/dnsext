@@ -2,12 +2,16 @@ module DNSC.Queue (
   ReadQueue (..),
   WriteQueue (..),
   QueueSize (..),
+  ReadQueueSTM (..),
+  WriteQueueSTM (..),
   TQ, newQueue,
   ChanQ, newQueueChan,
   Q1, newQueue1,
+  GetAny, makeGetAny,
+  PutAny, makePutAny,
   ) where
 
-import Control.Monad (guard, when)
+import Control.Monad (guard, msum, when)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
   (TVar, newTVar, readTVar, modifyTVar', writeTVar,
@@ -25,6 +29,90 @@ class WriteQueue q where
 class QueueSize q where
   sizeMaxBound :: q a -> Int
   readSizes :: q a -> IO (Int, Int)
+
+class ReadQueueSTM q where
+  readQueueSTM :: q a -> STM a
+
+class WriteQueueSTM q where
+  writeQueueSTM :: q a -> a -> STM ()
+
+---
+
+makeReadSizesAny :: QueueSize q => [q a] -> IO (Int, Int)
+makeReadSizesAny qs = do
+  (ss, xs) <- unzip <$> mapM readSizes qs
+  return (sum ss, sum xs)
+
+data GetAny a =
+  GetAny
+  { getAnyCycle :: TVar [STM a]
+  , getAnyQueues :: Int
+  , getAnyMaxBound :: Int
+  , getAnyReadSizes :: IO (Int, Int)
+  }
+
+makeGetAny :: (ReadQueueSTM q, QueueSize q) => [q a] -> IO (GetAny a)
+makeGetAny qs = atomically $ do
+  GetAny
+  <$> newTVar c
+  <*> pure (length qs)
+  <*> pure (sum $ map sizeMaxBound qs)
+  <*> pure (makeReadSizesAny qs)
+  where
+    c = cycle [ readQueueSTM q | q <- qs]
+
+getAnySTM :: GetAny a -> STM a
+getAnySTM getA = do
+  gs <- readTVar $ getAnyCycle getA
+  a  <- msum $ take (getAnyQueues getA) gs
+  let z = tail gs
+  z `seq` writeTVar (getAnyCycle getA) z
+  return a
+
+instance QueueSize GetAny where
+  sizeMaxBound = getAnyMaxBound
+  readSizes = getAnyReadSizes
+
+instance ReadQueueSTM GetAny where
+  readQueueSTM = getAnySTM
+
+instance ReadQueue GetAny where
+  readQueue = atomically . getAnySTM
+
+data PutAny a =
+  PutAny
+  { putAnyCycle :: TVar [a -> STM ()]
+  , putAnyQueues ::Int
+  , putAnyMaxBound :: Int
+  , putAnyReadSizes :: IO (Int, Int)
+  }
+
+makePutAny :: (WriteQueueSTM q, QueueSize q) => [q a] -> IO (PutAny a)
+makePutAny qs = atomically $ do
+  PutAny
+  <$> newTVar c
+  <*> pure (length qs)
+  <*> pure (sum $ map sizeMaxBound qs)
+  <*> pure (makeReadSizesAny qs)
+  where
+    c = cycle [ writeQueueSTM q | q <- qs ]
+
+putAnySTM :: PutAny a -> a -> STM ()
+putAnySTM putA a = do
+  ps <- readTVar $ putAnyCycle putA
+  msum [ put a | put <- take (putAnyQueues putA) ps ]
+  let z = tail ps
+  z `seq` writeTVar (putAnyCycle putA) z
+
+instance QueueSize PutAny where
+  sizeMaxBound = putAnyMaxBound
+  readSizes = putAnyReadSizes
+
+instance WriteQueueSTM PutAny where
+  writeQueueSTM = putAnySTM
+
+instance WriteQueue PutAny where
+  writeQueue putA = atomically . putAnySTM putA
 
 ---
 
@@ -81,6 +169,12 @@ instance QueueSize TQ where
   sizeMaxBound = tqSizeMaxBound
   readSizes = atomically . readSizesTQ
 
+instance ReadQueueSTM TQ where
+  readQueueSTM = readTQ
+
+instance WriteQueueSTM TQ where
+  writeQueueSTM = writeTQ
+
 ---
 
 type ChanQ = Chan
@@ -115,3 +209,9 @@ instance QueueSize TMVar where
   sizeMaxBound _ = 1
   readSizes q = atomically $ (,) <$> (emptySize <$> isEmptyTMVar q) <*> pure (-1)
     where emptySize empty = if empty then 0 else 1
+
+instance ReadQueueSTM TMVar where
+  readQueueSTM = takeTMVar
+
+instance WriteQueueSTM TMVar where
+  writeQueueSTM = putTMVar
