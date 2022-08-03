@@ -3,10 +3,6 @@ module DNSC.Queue (
   WriteQueue (..),
   QueueSize (..),
   TQ, newQueue,
-
-  -- compat interface
-  readSize,
-  maxSize,
   ) where
 
 import Control.Monad (guard, when)
@@ -70,12 +66,6 @@ readSizesTQ q = do
   sz <- readTVar $ tqSizeRef q
   mx <- max sz <$> readTVar (tqLastMaxSizeRef q)
   return (sz, mx)
-
-readSize :: TQ a -> IO Int
-readSize = atomically . readTVar . tqSizeRef
-
-maxSize :: TQ a -> Int
-maxSize = tqSizeMaxBound
 
 instance ReadQueue TQ where
   readQueue = atomically . readTQ
