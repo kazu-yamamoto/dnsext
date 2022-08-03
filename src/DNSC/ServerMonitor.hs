@@ -46,11 +46,12 @@ data Params =
   , maxCacheSize :: Int
   , disableV6NS :: Bool
   , concurrency :: Int
-  , dnsPort :: Int
+  , dnsPort :: PortNumber
+  , monitorPort :: PortNumber
   , dnsHosts :: [String]
   }
 
-makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int -> [String]
+makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> PortNumber -> [String]
            -> Params
 makeParams capabilities output level maxSize disableV6 conc port hosts =
   Params
@@ -63,6 +64,7 @@ makeParams capabilities output level maxSize disableV6 conc port hosts =
   , disableV6NS = disableV6
   , concurrency = conc
   , dnsPort = port
+  , monitorPort = port + 9970
   , dnsHosts = hosts
   }
 
@@ -77,6 +79,7 @@ showParams params =
   , field  "disable queries to IPv6 NS" disableV6NS
   , field  "concurrency" concurrency
   , field  "DNS port" dnsPort
+  , field  "Monitor port" monitorPort
   ] ++
   if null hosts
   then ["DNS host list: null"]
@@ -110,7 +113,7 @@ monitor :: Bool -> Params -> Context
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
         -> (Int64 -> IO ()) -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo expires flushLog = do
-  ps <- monitorSockets 10023 ["::1", "127.0.0.1"]
+  ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
   mapM_ (uncurry S.bind) ps
