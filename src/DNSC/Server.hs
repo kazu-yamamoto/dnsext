@@ -170,11 +170,18 @@ consumeLoop :: Int
             -> IO (IO b, a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
   inQ <- newQueue qsize
-  let enqueue = writeQueue inQ
-      hbody = either onError return <=< tryAny . body
-      loop = forever $ hbody =<< readQueue inQ
+  let loop = readLoop (readQueue inQ) onError body
+      sizeInfo = (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ)
+  return (loop, writeQueue inQ, sizeInfo)
 
-  return (loop, enqueue, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+readLoop :: IO a
+         -> (SomeException -> IO ())
+         -> (a -> IO ())
+         -> IO b
+readLoop readQ onError body = loop
+  where
+    hbody = either onError return <=< tryAny . body
+    loop = forever $ hbody =<< readQ
 
 handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
 handledLoop onError = forever . handle
