@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp #-}
 
 module DNSC.Server (
   run,
@@ -89,22 +90,31 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
       wildcard = isAnySockAddr addr_
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
-      resolvWorkers = workers * 8
-      queueSize = workers * perWorker
-  (getHit, incHit) <- counter
-  (getMiss, incMiss) <- counter
-  (getFailed, incFailed) <- counter
 
-  (respLoop, enqueueResp, resQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (resolvLoop, enqueueDec, decQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt incMiss incFailed  enqueueResp
-  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
-  let resolvLoops = replicate resolvWorkers resolvLoop
-      cachedLoops = replicate workers cachedLoop
-      reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
+  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers perWorker getSec cxt
+  (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
+
+  let reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
                 $ recvRequest recv cxt enqueueReq
-  return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
+
+  let respLoop = readLoop dequeueResp (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show)
+                 $ sendResponse send cxt
+
+  return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
 
 type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
+
+getWorkers :: Show a
+           => Int -> Int
+           -> IO Timestamp -> Context
+           -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
+getWorkers workers perWorker getSec cxt  =  do
+  let qsize = perWorker * workers
+  reqQ <- newQueue qsize
+  resQ <- newQueue qsize
+  {- share request queue and response queue -}
+  let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
+  return (wps, writeQueue reqQ, readQueue resQ)
 
 workerPipeline :: Show a
                => TQ (Request a) -> TQ (Response a)
