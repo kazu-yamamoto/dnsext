@@ -6,7 +6,7 @@ module DNSC.Server (
 
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
-import Control.Monad ((<=<), forever)
+import Control.Monad ((<=<), forever, replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
@@ -90,8 +90,9 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
       wildcard = isAnySockAddr addr_
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
+      sharedQueue = True
 
-  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers perWorker getSec cxt
+  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers sharedQueue perWorker getSec cxt
   (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
   let reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
@@ -105,16 +106,25 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
 type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
 getWorkers :: Show a
-           => Int -> Int
+           => Int -> Bool -> Int
            -> IO Timestamp -> Context
            -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers workers perWorker getSec cxt  =  do
-  let qsize = perWorker * workers
-  reqQ <- newQueue qsize
-  resQ <- newQueue qsize
-  {- share request queue and response queue -}
-  let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
-  return (wps, writeQueue reqQ, readQueue resQ)
+getWorkers workers sharedQueue perWorker getSec cxt
+  | sharedQueue  =  do
+      let qsize = perWorker * workers
+      reqQ <- newQueue qsize
+      resQ <- newQueue qsize
+      {- share request queue and response queue -}
+      let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
+      return (wps, writeQueue reqQ, readQueue resQ)
+  | otherwise    =  do
+      reqQs <- replicateM workers $ newQueue perWorker
+      enqueueReq  <- Queue.writeQueue <$> Queue.makePutAny reqQs
+      resQs <- replicateM workers $ newQueue perWorker
+      dequeueResp <- Queue.readQueue  <$> Queue.makeGetAny resQs
+      let wps = [ workerPipeline reqQ resQ perWorker getSec cxt
+                | reqQ <- reqQs | resQ <- resQs ]
+      return (wps, enqueueReq, dequeueResp)
 
 workerPipeline :: Show a
                => TQ (Request a) -> TQ (Response a)
