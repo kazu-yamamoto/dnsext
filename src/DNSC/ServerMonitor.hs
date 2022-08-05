@@ -94,7 +94,7 @@ showParams params =
     showOut Log.Stderr = "stderr"
     hosts = dnsHosts params
 
-type PLStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
+type PLStatus = [(IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)]
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -213,10 +213,12 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
             (cur, mx) <- getSize
             outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
       sequence_
-        [ do psize ("request queue " ++ show i) reqQSize
-             psize ("decoded queue " ++ show i) decQSize
-             psize ("response queue " ++ show i) resQSize
-        | (i, (reqQSize, decQSize, resQSize, _, _, _)) <- zip [0 :: Int ..] pQSizeList
+        [ do psize ("request queue " ++ index) reqQSize
+             psize ("decoded queue " ++ index) decQSize
+             psize ("response queue " ++ index) resQSize
+        | (i, workerStatusList) <- zip [0 :: Int ..] pQSizeList
+        , (j, (reqQSize, decQSize, resQSize, _, _, _)) <- zip [0 :: Int ..] workerStatusList
+        , let index = show i ++ "," ++ show j
         ]
       psize "ucache queue" ucacheQSize
       lmx <- snd <$> logQSize
@@ -224,7 +226,8 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
 
       ts <- sequence
         [ (,,) <$> getHit <*> getMiss <*> getFailed
-        | (_, _, _, getHit, getMiss, getFailed) <- pQSizeList ]
+        | workerStatusList <- pQSizeList
+        , (_, _, _, getHit, getMiss, getFailed) <- workerStatusList ]
       let hits = sum [ hit | (hit, _, _) <- ts ]
           replies = hits + sum [ miss | (_, miss, _) <- ts ]
           total = replies + sum [ failed | (_, _, failed) <- ts ]
