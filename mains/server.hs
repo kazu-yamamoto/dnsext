@@ -18,6 +18,7 @@ data ServerOptions =
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
   , workers :: Int
+  , workerSharedQueue :: Bool
   , qsizePerWorker :: Int
   , port :: Word16
   , bindHosts :: [String]
@@ -34,6 +35,7 @@ defaultOptions =
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
   , workers = 2
+  , workerSharedQueue = True
   , qsizePerWorker = 16
   , port = 53
   , bindHosts = []
@@ -61,6 +63,9 @@ descs =
   , Option ['w'] ["workers"]
     (ReqArg (\s opts -> readIntWith (> 0) "workers. not positive" s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
     "workers per host. default is 2"
+  , Option [] ["no-shared-queue"]
+    (NoArg $ \opts -> return opts { workerSharedQueue = False })
+    "not share request queue and response queue in worker threads"
   , Option [] ["per-worker"]
     (ReqArg (\s opts -> readIntWith (> 0) "per-worker. not positive" s >>= \x -> return opts { qsizePerWorker = x }) "POSITIVE_INTEGER")
     "queue size per worker. default is 16"
@@ -99,7 +104,11 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (qsizePerWorker opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts =
+  Server.run
+  (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
+  (workers opts) (workerSharedQueue opts) (qsizePerWorker opts)
+  (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
