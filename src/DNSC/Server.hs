@@ -76,7 +76,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
     return (concat loopsList, qsizes)
 
   caps <- getNumCapabilities
-  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts
+  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts
   putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
   monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
