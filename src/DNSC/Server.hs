@@ -21,7 +21,7 @@ import qualified Network.DNS as DNS
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
-import DNSC.Queue (newQueue, readQueue, writeQueue)
+import DNSC.Queue (newQueue, readQueue, writeQueue, TQ)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecvBS, mkSendBS)
@@ -103,6 +103,31 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
       reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
                 $ recvRequest recv cxt enqueueReq
   return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
+
+type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
+
+workerPipeline :: Show a
+               => TQ (Request a) -> TQ (Response a)
+               -> Int -> IO Timestamp -> Context
+               -> IO ([IO ()], WorkerStatus)
+workerPipeline reqQ resQ perWorker getSec cxt = do
+  let putLn lv = logLines_ cxt lv . (:[])
+      resolvWorkers = 8
+  (getHit, incHit) <- counter
+  (getMiss, incMiss) <- counter
+  (getFailed, incFailed) <- counter
+
+  let enqueueResp = writeQueue resQ
+      resQSize = (,) <$> (fst <$> Queue.readSizes resQ) <*> pure (Queue.sizeMaxBound resQ)
+
+  (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show)
+                                        $ resolvWorker cxt incMiss incFailed enqueueResp
+  let cachedLoop = readLoop (readQueue reqQ) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show)
+                   $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+      reqQSize = (,) <$> (fst <$> Queue.readSizes reqQ) <*> pure (Queue.sizeMaxBound reqQ)
+      resolvLoops = replicate resolvWorkers resolvLoop
+
+  return (resolvLoops ++ [cachedLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
 
 recvRequest :: Show a
             => IO (ByteString, a)
