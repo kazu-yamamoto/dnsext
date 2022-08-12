@@ -33,7 +33,7 @@ defaultOptions =
   , logLevel = Log.NOTICE
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
-  , workers = 16
+  , workers = 2
   , qsizePerWorker = 16
   , port = 53
   , bindHosts = []
@@ -60,7 +60,7 @@ descs =
     "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
   , Option ['w'] ["workers"]
     (ReqArg (\s opts -> readIntWith (> 0) "workers. not positive" s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
-    "workers per host"
+    "workers per host. default is 2"
   , Option [] ["per-worker"]
     (ReqArg (\s opts -> readIntWith (> 0) "per-worker. not positive" s >>= \x -> return opts { qsizePerWorker = x }) "POSITIVE_INTEGER")
     "queue size per worker. default is 16"
