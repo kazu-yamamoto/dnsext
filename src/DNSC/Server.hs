@@ -43,19 +43,19 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int
+run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
-  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole
+run fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole = do
+  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole
   mapM_ (uncurry S.bind) sas
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int
+setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int
      -> PortNumber -> [HostName] -> Bool
      -> IO ([IO ()], [(Socket, SockAddr)], [IO ()])
-setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts stdConsole = do
+setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole = do
   let getLogger
         | fastLogger = do
             (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
@@ -71,7 +71,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
   sas <- udpSockets port hosts
 
   (pLoops, qsizes) <- do
-    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers getSec cxt) sas
+    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers qsizePerWorker getSec cxt) sas
     return (concat loopsList, qsizes)
 
   caps <- getNumCapabilities
@@ -82,15 +82,14 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers port hosts 
 
   return (logLoops ++ ucacheLoops ++ pLoops, sas, monLoops)
 
-getPipeline :: Int -> IO Timestamp -> Context -> Socket -> SockAddr
+getPipeline :: Int -> Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], PLStatus)
-getPipeline workers getSec cxt sock_ addr_ = do
+getPipeline workers perWorker getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       wildcard = isAnySockAddr addr_
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
       resolvWorkers = workers * 8
-      perWorker = 16
       queueSize = workers * perWorker
   (getHit, incHit) <- counter
   (getMiss, incMiss) <- counter
