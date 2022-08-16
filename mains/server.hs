@@ -1,4 +1,4 @@
-import Control.Monad ((>=>), guard)
+import Control.Monad ((>=>), unless)
 import Data.Char (toUpper)
 import Data.List (intercalate)
 import Data.Word (Word16)
@@ -51,16 +51,16 @@ descs =
     (ReqArg (\s opts -> readEither (map toUpper s) >>= \x -> return opts { logLevel = x }) "{WARN|NOTICE|INFO|DEBUG}")
     "server log-level"
   , Option ['M'] ["max-cache-entries"]
-    (ReqArg (\s opts -> readEither s >>= \x -> guard (x > 0) >> return opts { maxKibiEntries = x }) "POSITIVE_INTEGER")
+    (ReqArg (\s opts -> readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts { maxKibiEntries = x }) "POSITIVE_INTEGER")
     ("max K-entries in cache (1024 entries per 1). default is " ++ show (maxKibiEntries defaultOptions) ++ " K-entries")
   , Option ['4'] ["disable-v6-ns"]
     (NoArg $ \opts -> return opts { disableV6NS = True })
     "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
   , Option ['w'] ["workers"]
-    (ReqArg (\s opts -> readEither s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
+    (ReqArg (\s opts -> readIntWith (> 0) "workers. not positive" s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
     "workers per host"
   , Option ['p'] ["port"]
-    (ReqArg (\s opts -> readEither s >>= \x -> return opts { port = x }) "PORT_NUMBER")
+    (ReqArg (\s opts -> readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023"
   , Option ['s'] ["std-console"]
     (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
@@ -70,6 +70,10 @@ descs =
     ""
   ]
   where
+    readIntWith p em s = do
+      x <- readEither s :: Either String Int
+      unless (p x) $ Left $ em ++ ": " ++ show x
+      return $ fromIntegral x
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
     outputs = [("stdout", Log.Stdout), ("stderr", Log.Stderr)]
 
