@@ -22,7 +22,7 @@ import qualified Network.DNS as DNS
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
-import DNSC.Queue (newQueue, readQueue, writeQueue, TQ)
+import DNSC.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecvBS, mkSendBS)
@@ -109,6 +109,12 @@ getWorkers :: Show a
            -> IO Timestamp -> Context
            -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getWorkers workers sharedQueue perWorker getSec cxt
+  | perWorker <= 0 = do
+      reqQ <- newQueueChan
+      resQ <- newQueueChan
+      {- share request queue and response queue -}
+      let wps = replicate workers $ workerPipeline reqQ resQ 8 getSec cxt
+      return (wps, writeQueue reqQ, readQueue resQ)
   | sharedQueue  =  do
       let qsize = perWorker * workers
       reqQ <- newQueue qsize
@@ -125,8 +131,8 @@ getWorkers workers sharedQueue perWorker getSec cxt
                 | reqQ <- reqQs | resQ <- resQs ]
       return (wps, enqueueReq, dequeueResp)
 
-workerPipeline :: Show a
-               => TQ (Request a) -> TQ (Response a)
+workerPipeline :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize q2)
+               => q1 (Request a) -> q2 (Response a)
                -> Int -> IO Timestamp -> Context
                -> IO ([IO ()], WorkerStatus)
 workerPipeline reqQ resQ perWorker getSec cxt = do
