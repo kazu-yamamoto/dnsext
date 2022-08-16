@@ -18,6 +18,7 @@ data ServerOptions =
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
   , workers :: Int
+  , qsizePerWorker :: Int
   , port :: Word16
   , bindHosts :: [String]
   , stdConsole :: Bool
@@ -33,6 +34,7 @@ defaultOptions =
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
   , workers = 16
+  , qsizePerWorker = 16
   , port = 53
   , bindHosts = []
   , stdConsole = False
@@ -59,6 +61,9 @@ descs =
   , Option ['w'] ["workers"]
     (ReqArg (\s opts -> readIntWith (> 0) "workers. not positive" s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
     "workers per host"
+  , Option [] ["per-worker"]
+    (ReqArg (\s opts -> readIntWith (> 0) "per-worker. not positive" s >>= \x -> return opts { qsizePerWorker = x }) "POSITIVE_INTEGER")
+    "queue size per worker. default is 16"
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023"
@@ -94,7 +99,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts = Server.run (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
+run opts = Server.run (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts) (workers opts) (qsizePerWorker opts) (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
