@@ -2,16 +2,20 @@
 
 module DNSC.Server (
   run,
+  workerBenchmark,
   ) where
 
 -- GHC packages
-import Control.Concurrent (getNumCapabilities)
+import Control.Concurrent (getNumCapabilities, forkIO)
+import Control.DeepSeq (deepseq)
 import Control.Monad ((<=<), forever, replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
 import Data.ByteString (ByteString)
 import Data.IORef (newIORef, readIORef, atomicModifyIORef')
+import Data.String (fromString)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
@@ -31,6 +35,7 @@ import qualified DNSC.ServerMonitor as Mon
 import DNSC.Types (Timestamp, NE)
 import qualified DNSC.Log as Log
 import qualified DNSC.TimeCache as TimeCache
+import qualified DNSC.Cache as Cache
 import qualified DNSC.UpdateCache as UCache
 import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
@@ -101,6 +106,65 @@ getPipeline workers sharedQueue perWorker getSec cxt sock_ addr_ = do
                  $ sendResponse send cxt
 
   return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
+
+benchQueries :: [ByteString]
+benchQueries =
+  [ DNS.encode $ setId mid rootA  {- TODO: seq ByteString ? -}
+  |  mid   <- cycle [0..maxBound]
+  |  rootA <- cycle rootAs
+  ]
+  where
+    setId mid qm = qm { DNS.header = dh { DNS.identifier = mid } }
+    dh = DNS.header DNS.defaultQuery
+    rootAs =
+      [ DNS.defaultQuery { DNS.question = [DNS.Question (fromString name) DNS.A] }
+      | c1 <- ["a", "b", "c", "d"], let name = c1 ++ ".root-servers.net." ]
+
+workerBenchmark :: Bool -> Int -> Int -> Int -> IO ()
+workerBenchmark noop workers perWorker size = do
+  (logLoop, putLines, _logQSize) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE
+  tcache@(getSec, _) <- TimeCache.new
+  (ucacheLoops, insert, getCache, _expires, _ucacheQSize) <- UCache.new putLines tcache (2 * 1024 * 1024)
+  cxt <- newContext putLines False (insert, getCache) tcache
+
+  let getPipieline
+        | noop       =  do
+            let qsize = perWorker * workers
+            reqQ <- newQueue qsize
+            resQ <- newQueue qsize
+            let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
+            return (pipelines, writeQueue reqQ, readQueue resQ)
+        | otherwise  =  do
+            (workerPipelines, enqReq, deqRes) <- getWorkers workers True perWorker getSec cxt
+                                                 :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
+            (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
+            return (workerLoops, enqReq, deqRes)
+
+  (workerLoops, enqueueReq, dequeueResp) <- getPipieline
+  _ <- forkIO $ foldr concurrently_ (return ()) $ logLoop : ucacheLoops ++ concat workerLoops
+
+  let runQueries qs = do
+        let len = length qs
+        _ <- forkIO $ sequence_ [ enqueueReq (q, ()) | q <- qs ]
+        replicateM len dequeueResp
+      (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
+
+  ds `deepseq` return ()
+
+  -----
+
+  putStrLn $ "workers: " ++ show workers
+  putStrLn $ "perWorker: " ++ show perWorker
+  _ <- runQueries initD
+  putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
+  before <- getCurrentTime
+  _ <- runQueries ds
+  after  <- getCurrentTime
+  let elapsed = after `diffUTCTime` before
+      toDouble = fromRational . toRational :: NominalDiffTime -> Double
+  putStrLn $ "requests: " ++ show size
+  putStrLn $ "elapsed: " ++ show elapsed
+  putStrLn $ "rate: " ++ show (toDouble $ fromIntegral size / after `diffUTCTime` before)
 
 type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
