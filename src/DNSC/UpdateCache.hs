@@ -57,7 +57,7 @@ new putLines (getSec, getTimeStr) maxCacheSize = do
     inQ <- newQueue 8
     let errorLn = putLn Log.NOTICE . ("UpdateCache.updateLoop: error: " ++) . show
         body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
-    return (forever body, writeQueue inQ, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
+    return (forever body, writeQueue inQ, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
 
   let expires1 ts = enqueueU =<< (,,) ts <$> getTimeStr <*> pure E
 

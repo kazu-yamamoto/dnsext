@@ -56,7 +56,7 @@ new outFh level = do
   let body = either (const $ return ()) return =<< tryAny (hPutStr outFh . unlines =<< readQueue inQ)
       logLines lv = when (level <= lv) . writeQueue inQ
 
-  return (forever body, logLines, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
+  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
 
 -- no logging
 none :: Level -> [String] -> IO ()

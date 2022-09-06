@@ -1,54 +1,117 @@
 module DNSC.Queue (
-  Queue,
-  newQueue,
-  readQueue,
-  writeQueue,
-  readSize, maxSize,
+  ReadQueue (..),
+  WriteQueue (..),
+  QueueSize (..),
+  TQ, newQueue,
+  ChanQ, newQueueChan,
+  Q1, newQueue1,
   ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, when)
+import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
-  (TVar, newTVar, readTVar, modifyTVar',
+  (TVar, newTVar, readTVar, modifyTVar', writeTVar,
+   TMVar, newEmptyTMVar, takeTMVar, putTMVar, isEmptyTMVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
-   atomically)
+   atomically, STM)
 
-data Queue a =
-  Queue
-  { content :: TQueue a
-  , sizeRef :: TVar Int
-  , maxSize :: Int
+
+class ReadQueue q where
+  readQueue :: q a -> IO a
+
+class WriteQueue q where
+  writeQueue :: q a -> a -> IO ()
+
+class QueueSize q where
+  sizeMaxBound :: q a -> Int
+  readSizes :: q a -> IO (Int, Int)
+
+---
+
+data TQ a =
+  TQ
+  { tqContent :: TQueue a
+  , tqSizeRef :: TVar Int
+  , tqLastMaxSizeRef :: TVar Int
+  , tqSizeMaxBound :: Int
   }
 
+newQueue :: Int -> IO (TQ a)
+newQueue = atomically . newTQ
 
-newQueue :: Int -> IO (Queue a)
-newQueue xsz = atomically $ Queue <$> newTQueue <*> newTVar 0 <*> pure xsz
+newTQ :: Int -> STM (TQ a)
+newTQ xsz = TQ <$> newTQueue <*> newTVar 0 <*> newTVar 0 <*> pure xsz
 
-readQueue :: Queue a -> IO a
-readQueue q = atomically $ do
-  x <- readTQueue $ content q
-  modifyTVar' (sizeRef q) pred
-  return x
-
-writeQueue :: Queue a -> a -> IO ()
-writeQueue q x = atomically $ do
-  let szRef = sizeRef q
+readTQ :: TQ a -> STM a
+readTQ q = do
+  x <- readTQueue $ tqContent q
+  let szRef = tqSizeRef q
   sz <- readTVar szRef
-  guard $ sz < maxSize q
-  writeTQueue (content q) x
+  updateLastMax sz
+  let nsz = pred sz
+  nsz `seq` writeTVar szRef nsz
+  return x
+  where
+    updateLastMax sz = do
+      let lastMaxRef = tqLastMaxSizeRef q
+      mx <- readTVar lastMaxRef
+      when (sz > mx) $ writeTVar lastMaxRef sz
+
+writeTQ :: TQ a -> a -> STM ()
+writeTQ q x = do
+  let szRef = tqSizeRef q
+  sz <- readTVar szRef
+  guard $ sz < tqSizeMaxBound q
+  writeTQueue (tqContent q) x
   modifyTVar' szRef succ
 
-readSize :: Queue a -> IO Int
-readSize = atomically . readTVar . sizeRef
+readSizesTQ :: TQ a -> STM (Int, Int)
+readSizesTQ q = do
+  sz <- readTVar $ tqSizeRef q
+  mx <- max sz <$> readTVar (tqLastMaxSizeRef q)
+  return (sz, mx)
 
-{-
-type Queue a = Chan a
+instance ReadQueue TQ where
+  readQueue = atomically . readTQ
 
-newQueue :: Int -> IO (Queue a)
-newQueue = const newChan
+instance WriteQueue TQ where
+  writeQueue q = atomically . writeTQ q
 
-readQueue :: Queue a -> IO a
-readQueue = readChan
+instance QueueSize TQ where
+  sizeMaxBound = tqSizeMaxBound
+  readSizes = atomically . readSizesTQ
 
-writeQueue :: Queue a -> a -> IO ()
-writeQueue = writeChan
- -}
+---
+
+type ChanQ = Chan
+
+newQueueChan :: IO (ChanQ a)
+newQueueChan = newChan
+
+instance ReadQueue Chan where
+  readQueue = readChan
+
+instance WriteQueue Chan where
+  writeQueue = writeChan
+
+instance QueueSize Chan where
+  sizeMaxBound _ = -1
+  readSizes _ = return (-1, -1)
+
+---
+
+type Q1 = TMVar
+
+newQueue1 :: IO (Q1 a)
+newQueue1 = atomically newEmptyTMVar
+
+instance ReadQueue TMVar where
+  readQueue = atomically . takeTMVar
+
+instance WriteQueue TMVar where
+  writeQueue q = atomically . putTMVar q
+
+instance QueueSize TMVar where
+  sizeMaxBound _ = 1
+  readSizes q = atomically $ (,) <$> (emptySize <$> isEmptyTMVar q) <*> pure (-1)
+    where emptySize empty = if empty then 0 else 1

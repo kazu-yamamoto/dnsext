@@ -174,7 +174,7 @@ consumeLoop qsize onError body = do
       hbody = either onError return <=< tryAny . body
       loop = forever $ hbody =<< readQueue inQ
 
-  return (loop, enqueue, (,) <$> Queue.readSize inQ <*> pure (Queue.maxSize inQ))
+  return (loop, enqueue, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
 
 handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
 handledLoop onError = forever . handle
