@@ -120,8 +120,8 @@ benchQueries =
       [ DNS.defaultQuery { DNS.question = [DNS.Question (fromString name) DNS.A] }
       | c1 <- ["a", "b", "c", "d"], let name = c1 ++ ".root-servers.net." ]
 
-workerBenchmark :: Bool -> Int -> Int -> Int -> IO ()
-workerBenchmark noop workers perWorker size = do
+workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
+workerBenchmark noop gplot workers perWorker size = do
   (logLoop, putLines, _logQSize) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE
   tcache@(getSec, _) <- TimeCache.new
   (ucacheLoops, insert, getCache, _expires, _ucacheQSize) <- UCache.new putLines tcache (2 * 1024 * 1024)
@@ -152,19 +152,26 @@ workerBenchmark noop workers perWorker size = do
   ds `deepseq` return ()
 
   -----
-
-  putStrLn $ "workers: " ++ show workers
-  putStrLn $ "perWorker: " ++ show perWorker
   _ <- runQueries initD
-  putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
   before <- getCurrentTime
   _ <- runQueries ds
   after  <- getCurrentTime
+
   let elapsed = after `diffUTCTime` before
       toDouble = fromRational . toRational :: NominalDiffTime -> Double
-  putStrLn $ "requests: " ++ show size
-  putStrLn $ "elapsed: " ++ show elapsed
-  putStrLn $ "rate: " ++ show (toDouble $ fromIntegral size / after `diffUTCTime` before)
+      rate = toDouble $ fromIntegral size / after `diffUTCTime` before
+
+  if gplot
+    then do
+    putStrLn $ unwords [show workers, show rate]
+    else do
+    putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
+    putStrLn $ "workers: " ++ show workers
+    putStrLn $ "perWorker: " ++ show perWorker
+    putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
+    putStrLn $ "requests: " ++ show size
+    putStrLn $ "elapsed: " ++ show elapsed
+    putStrLn $ "rate: " ++ show rate
 
 type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
