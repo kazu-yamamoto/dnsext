@@ -14,6 +14,7 @@ data BenchmarkOptions =
   , logLevel :: Log.Level
   , maxKibiEntries :: Int
   , noopMode :: Bool
+  , gplotMode :: Bool
   , workers :: Int
   , qsizePerWorker :: Int
   , requests :: Int
@@ -27,6 +28,7 @@ defaultOptions =
   , logLevel = Log.NOTICE
   , maxKibiEntries = 2 * 1024
   , noopMode = False
+  , gplotMode = False
   , workers = 2
   , qsizePerWorker = 16
   , requests = 512 * 1024
@@ -49,6 +51,9 @@ descs =
   , Option [] ["noop"]
     (NoArg $ \opts -> return opts { noopMode = True })
     "No-op mode"
+  , Option [] ["plot"]
+    (NoArg $ \opts -> return opts { gplotMode = True })
+    "output for GNUplot"
   , Option ['w'] ["workers"]
     (ReqArg (\s opts -> readIntWith (> 0) "workers. not positive" s >>= \x -> return opts { workers = x }) "POSITIVE_INTEGER")
     "workers per host. default is 2"
@@ -87,7 +92,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: BenchmarkOptions -> IO ()
-run opts = Server.workerBenchmark (noopMode opts) (workers opts) (qsizePerWorker opts) (requests opts)
+run opts = Server.workerBenchmark (noopMode opts) (gplotMode opts) (workers opts) (qsizePerWorker opts) (requests opts)
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
