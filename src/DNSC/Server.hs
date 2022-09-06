@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp #-}
 
 module DNSC.Server (
   run,
@@ -21,7 +22,7 @@ import qualified Network.DNS as DNS
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
-import DNSC.Queue (newQueue, readQueue, writeQueue)
+import DNSC.Queue (newQueue, readQueue, writeQueue, TQ)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
 import DNSC.DNSUtil (mkRecvBS, mkSendBS)
@@ -89,20 +90,54 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
       wildcard = isAnySockAddr addr_
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
-      resolvWorkers = workers * 8
-      queueSize = workers * perWorker
+
+  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers perWorker getSec cxt
+  (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
+
+  let reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
+                $ recvRequest recv cxt enqueueReq
+
+  let respLoop = readLoop dequeueResp (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show)
+                 $ sendResponse send cxt
+
+  return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
+
+type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
+
+getWorkers :: Show a
+           => Int -> Int
+           -> IO Timestamp -> Context
+           -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
+getWorkers workers perWorker getSec cxt  =  do
+  let qsize = perWorker * workers
+  reqQ <- newQueue qsize
+  resQ <- newQueue qsize
+  {- share request queue and response queue -}
+  let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
+  return (wps, writeQueue reqQ, readQueue resQ)
+
+workerPipeline :: Show a
+               => TQ (Request a) -> TQ (Response a)
+               -> Int -> IO Timestamp -> Context
+               -> IO ([IO ()], WorkerStatus)
+workerPipeline reqQ resQ perWorker getSec cxt = do
+  let putLn lv = logLines_ cxt lv . (:[])
+      resolvWorkers = 8
   (getHit, incHit) <- counter
   (getMiss, incMiss) <- counter
   (getFailed, incFailed) <- counter
 
-  (respLoop, enqueueResp, resQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $ sendResponse send cxt
-  (resolvLoop, enqueueDec, decQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $ resolvWorker cxt incMiss incFailed  enqueueResp
-  (cachedLoop, enqueueReq, reqQSize) <- consumeLoop queueSize (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
-  let resolvLoops = replicate resolvWorkers resolvLoop
-      cachedLoops = replicate workers cachedLoop
-      reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-                $ recvRequest recv cxt enqueueReq
-  return (respLoop : resolvLoops ++ cachedLoops ++ [reqLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
+  let enqueueResp = writeQueue resQ
+      resQSize = (,) <$> (fst <$> Queue.readSizes resQ) <*> pure (Queue.sizeMaxBound resQ)
+
+  (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show)
+                                        $ resolvWorker cxt incMiss incFailed enqueueResp
+  let cachedLoop = readLoop (readQueue reqQ) (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show)
+                   $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+      reqQSize = (,) <$> (fst <$> Queue.readSizes reqQ) <*> pure (Queue.sizeMaxBound reqQ)
+      resolvLoops = replicate resolvWorkers resolvLoop
+
+  return (resolvLoops ++ [cachedLoop], (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed))
 
 recvRequest :: Show a
             => IO (ByteString, a)
@@ -170,11 +205,18 @@ consumeLoop :: Int
             -> IO (IO b, a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
   inQ <- newQueue qsize
-  let enqueue = writeQueue inQ
-      hbody = either onError return <=< tryAny . body
-      loop = forever $ hbody =<< readQueue inQ
+  let loop = readLoop (readQueue inQ) onError body
+      sizeInfo = (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ)
+  return (loop, writeQueue inQ, sizeInfo)
 
-  return (loop, enqueue, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+readLoop :: IO a
+         -> (SomeException -> IO ())
+         -> (a -> IO ())
+         -> IO b
+readLoop readQ onError body = loop
+  where
+    hbody = either onError return <=< tryAny . body
+    loop = forever $ hbody =<< readQ
 
 handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
 handledLoop onError = forever . handle
