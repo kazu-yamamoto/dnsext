@@ -6,7 +6,7 @@ module DNSC.Server (
 
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
-import Control.Monad ((<=<), forever)
+import Control.Monad ((<=<), forever, replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
@@ -44,19 +44,19 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
   where
     aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
 
-run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int
+run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole = do
-  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole
+run fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
   mapM_ (uncurry S.bind) sas
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int
+setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
      -> PortNumber -> [HostName] -> Bool
      -> IO ([IO ()], [(Socket, SockAddr)], [IO ()])
-setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts stdConsole = do
+setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
   let getLogger
         | fastLogger = do
             (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel
@@ -72,26 +72,26 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers qsizePerWor
   sas <- udpSockets port hosts
 
   (pLoops, qsizes) <- do
-    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers qsizePerWorker getSec cxt) sas
+    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers workerSharedQueue qsizePerWorker getSec cxt) sas
     return (concat loopsList, qsizes)
 
   caps <- getNumCapabilities
-  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers qsizePerWorker port hosts
+  let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts
   putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
   monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
 
   return (logLoops ++ ucacheLoops ++ pLoops, sas, monLoops)
 
-getPipeline :: Int -> Int -> IO Timestamp -> Context -> Socket -> SockAddr
+getPipeline :: Int -> Bool -> Int -> IO Timestamp -> Context -> Socket -> SockAddr
             -> IO ([IO ()], PLStatus)
-getPipeline workers perWorker getSec cxt sock_ addr_ = do
+getPipeline workers sharedQueue perWorker getSec cxt sock_ addr_ = do
   let putLn lv = logLines_ cxt lv . (:[])
       wildcard = isAnySockAddr addr_
       send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
       recv = mkRecvBS wildcard sock_
 
-  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers perWorker getSec cxt
+  (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers sharedQueue perWorker getSec cxt
   (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
   let reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
@@ -105,16 +105,25 @@ getPipeline workers perWorker getSec cxt sock_ addr_ = do
 type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
 
 getWorkers :: Show a
-           => Int -> Int
+           => Int -> Bool -> Int
            -> IO Timestamp -> Context
            -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers workers perWorker getSec cxt  =  do
-  let qsize = perWorker * workers
-  reqQ <- newQueue qsize
-  resQ <- newQueue qsize
-  {- share request queue and response queue -}
-  let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
-  return (wps, writeQueue reqQ, readQueue resQ)
+getWorkers workers sharedQueue perWorker getSec cxt
+  | sharedQueue  =  do
+      let qsize = perWorker * workers
+      reqQ <- newQueue qsize
+      resQ <- newQueue qsize
+      {- share request queue and response queue -}
+      let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
+      return (wps, writeQueue reqQ, readQueue resQ)
+  | otherwise    =  do
+      reqQs <- replicateM workers $ newQueue perWorker
+      enqueueReq  <- Queue.writeQueue <$> Queue.makePutAny reqQs
+      resQs <- replicateM workers $ newQueue perWorker
+      dequeueResp <- Queue.readQueue  <$> Queue.makeGetAny resQs
+      let wps = [ workerPipeline reqQ resQ perWorker getSec cxt
+                | reqQ <- reqQs | resQ <- resQs ]
+      return (wps, enqueueReq, dequeueResp)
 
 workerPipeline :: Show a
                => TQ (Request a) -> TQ (Response a)

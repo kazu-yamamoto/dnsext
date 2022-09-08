@@ -46,15 +46,16 @@ data Params =
   , maxCacheSize :: Int
   , disableV6NS :: Bool
   , workersPerSocket :: Int
+  , workerSharedQueue :: Bool
   , queueSizePerWorker :: Int
   , dnsPort :: PortNumber
   , monitorPort :: PortNumber
   , dnsHosts :: [String]
   }
 
-makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Int -> PortNumber -> [String]
+makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int -> PortNumber -> [String]
            -> Params
-makeParams capabilities output level maxSize disableV6 workers perWorker port hosts =
+makeParams capabilities output level maxSize disableV6 workers sharedQueue perWorker port hosts =
   Params
   { isRecvSendMsg = Config.isRecvSendMsg
   , isExtendedLookup = Config.isExtendedLookup
@@ -64,6 +65,7 @@ makeParams capabilities output level maxSize disableV6 workers perWorker port ho
   , maxCacheSize = maxSize
   , disableV6NS = disableV6
   , workersPerSocket = workers
+  , workerSharedQueue = sharedQueue
   , queueSizePerWorker = perWorker
   , dnsPort = port
   , monitorPort = port + 9970
@@ -80,6 +82,7 @@ showParams params =
   , field  "max cache size" maxCacheSize
   , field  "disable queries to IPv6 NS" disableV6NS
   , field  "worker threads per socket" workersPerSocket
+  , field  "worker shared queue" workerSharedQueue
   , field  "queue size per worker" queueSizePerWorker
   , field  "DNS port" dnsPort
   , field  "Monitor port" monitorPort
