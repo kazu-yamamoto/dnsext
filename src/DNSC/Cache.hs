@@ -76,6 +76,7 @@ data CRSet
   | CR_MX [(Word16, CDomain)]
   | CR_TXT [CTxt]
   | CR_AAAA [IPv6]
+  | CR_SRV [(Word16, Word16, Word16, CDomain)]
   | CR_EMPTY CDomain {- NXDOMAIN or NODATA, hold domain delegatoin from -}
   deriving (Eq, Ord, Show)
 
@@ -307,6 +308,7 @@ toRDatas crs = case crs of
   CR_MX ps    ->  [ RD_MX w $ toDomain d | (w, d) <- ps ]
   CR_TXT ts   ->  map (RD_TXT . fromShort) ts
   CR_AAAA as  ->  map RD_AAAA as
+  CR_SRV qs   ->  [ RD_SRV pri w port (toDomain d) | (pri, w, port, d) <- qs ]
   CR_EMPTY {} ->  []
 
 fromRDatas :: [RData] -> Maybe CRSet
@@ -326,6 +328,7 @@ fromRDatas rds@(x:xs) = case x of
   RD_MX {}    ->  let ps = [ (w, fromDomain d) | RD_MX w d <- rds ] in ps `deepseq` Just (CR_MX ps)
   RD_TXT {}   ->  let ts = [ toShort t | RD_TXT t <- rds ] in ts `deepseq` Just (CR_TXT ts)
   RD_AAAA {}  ->  let as = [ a | RD_AAAA a <- rds ] in as `listseq` Just (CR_AAAA as)
+  RD_SRV {}   ->  let qs = [ (pri, w, port, fromDomain d) | RD_SRV pri w port d <- rds ] in qs `deepseq` Just (CR_SRV qs)
   _           ->  Nothing
   where
     listRnf :: [a] -> ()
@@ -343,6 +346,7 @@ rdTYPE cr = case cr of
   RD_MX {}     ->  Just MX
   RD_TXT {}    ->  Just TXT
   RD_AAAA {}   ->  Just AAAA
+  RD_SRV {}    ->  Just SRV
   _            ->  Nothing
 
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
