@@ -67,8 +67,8 @@ descs =
     (NoArg $ \opts -> return opts { workerSharedQueue = False })
     "not share request queue and response queue in worker threads"
   , Option [] ["per-worker"]
-    (ReqArg (\s opts -> readIntWith (> 0) "per-worker. not positive" s >>= \x -> return opts { qsizePerWorker = x }) "POSITIVE_INTEGER")
-    "queue size per worker. default is 16"
+    (ReqArg (\s opts -> readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts { qsizePerWorker = x }) "POSITIVE_INTEGER")
+    "queue size per worker. default is 16. positive integer or 0. 0 means not limited size queue"
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts { port = x }) "PORT_NUMBER")
     "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023"
