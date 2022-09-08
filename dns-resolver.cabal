@@ -69,6 +69,14 @@ Executable cache-server
   default-language:    Haskell2010
   ghc-options:         -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
 
+Executable workers-benchmark
+  main-is:             benchmark.hs
+  build-depends:       base
+                     , dns-resolver
+  hs-source-dirs:      mains
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
+
 Test-Suite cache-test
   type:                exitcode-stdio-1.0
   other-modules:       CacheProp
