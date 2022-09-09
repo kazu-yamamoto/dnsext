@@ -465,7 +465,7 @@ resolveByCache = resolveLogic "cache" (\_ -> pure ()) (\_ _ -> pure ((), Nothing
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
-   目的の TYPE の結果レコードのキャッシュ書き込みは行なわない. -}
+   目的の TYPE の結果レコードをキャッシュする. -}
 resolve :: Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessage)
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
@@ -548,12 +548,16 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
       | rank <= RankAdditional  =  Nothing
       | otherwise               =  Just x
 
+{- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
   (msg, _nss@(srcDom, _)) <- resolveJust bn CNAME
   lift $ cacheAnswer srcDom bn CNAME msg
   return msg
 
+{- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
+   結果が CNAME なら、その RR も返す.
+   どちらの場合も、結果のレコードをキャッシュする. -}
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
