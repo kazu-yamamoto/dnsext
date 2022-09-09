@@ -946,12 +946,12 @@ cacheSection rs rank = cacheRRSet
       logLines Log.DEBUG
       [ "cacheRRSet: " ++ show ((key, ttl), r)
       , "  " ++ show crs ]
-    putInvalidRRS rrs =
+    putNoCacheRRS rrs =
       logLines Log.NOTICE $
-      "invalid RR set:" :
+      "cacheSection: no caching RR set:" :
       map (("  " ++) . show) rrs
     cacheRRSet = do
-      mapM_ putInvalidRRS errRRSs
+      mapM_ putNoCacheRRS errRRSs
       mapM_ putRRSet rrss
       insertRRSet <- asks insert_
       liftIO $ mapM_ ($ insertRRSet) rrss
