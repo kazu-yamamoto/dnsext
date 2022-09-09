@@ -640,7 +640,7 @@ rootNS =
     (ns, as) = rootServers
 
 -- 反復検索
--- 繰り返し委任情報をたどって目的の答えを知るはずの権威権威サーバー群を見つける
+-- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ reverse $ domains n
 
