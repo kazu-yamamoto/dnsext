@@ -304,7 +304,7 @@ toRDatas crs = case crs of
   CR_CNAME d  -> [RD_CNAME $ toDomain d]
   CR_SOA dom m a b c d e -> [RD_SOA (toDomain dom) (fromShort m) a b c d e]
   CR_PTR ds   ->  map (RD_PTR . toDomain) ds
-  CR_MX ps    ->  map (\(w, d) -> RD_MX w $ toDomain d) ps
+  CR_MX ps    ->  [ RD_MX w $ toDomain d | (w, d) <- ps ]
   CR_TXT ts   ->  map (RD_TXT . fromShort) ts
   CR_AAAA as  ->  map RD_AAAA as
   CR_EMPTY {} ->  []
