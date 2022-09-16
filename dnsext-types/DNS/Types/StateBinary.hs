@@ -1,7 +1,6 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 
 module DNS.Types.StateBinary (
     PState(..)
@@ -14,7 +13,8 @@ module DNS.Types.StateBinary (
   , putInt8
   , putInt16
   , putInt32
-  , putByteString
+  , putShortByteString
+  , putText
   , putReplicate
   , SGet
   , failSGet
@@ -29,7 +29,8 @@ module DNS.Types.StateBinary (
   , getInt8
   , getInt16
   , getInt32
-  , getNByteString
+  , getNShortByteString
+  , getNText
   , sGetMany
   , getPosition
   , getInput
@@ -38,41 +39,43 @@ module DNS.Types.StateBinary (
   , wsPush
   , wsPosition
   , addPositionW
+  , RawDomain
   , push
   , pop
   , getNBytes
-  , getNoctets
+  , getNOctets
   , skipNBytes
-  , parseLabel
-  , unparseLabel
+  , ST.gets
   ) where
 
-import qualified Control.Exception as E
 import Control.Monad.State.Strict (State, StateT)
 import qualified Control.Monad.State.Strict as ST
 import qualified Data.Attoparsec.ByteString as A
-import qualified Data.Attoparsec.Types as T
+import qualified Data.Attoparsec.Types as AT
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Lazy.Char8 as LC8
+import qualified Data.ByteString.Short as Short
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Semigroup as Sem
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
-import DNS.Types.Base
+import DNS.Types.Error
 import DNS.Types.Imports
 
 ----------------------------------------------------------------
 
 type SPut = State WState Builder
+type RawDomain = Text
 
 data WState = WState {
-    wsDomain :: Map Domain Int
+    wsDomain :: Map RawDomain Int
   , wsPosition :: Int
 }
 
@@ -106,8 +109,11 @@ putInt16 = fixedSized 2 (BB.int16BE . fromIntegral)
 putInt32 :: Int -> SPut
 putInt32 = fixedSized 4 (BB.int32BE . fromIntegral)
 
-putByteString :: ByteString -> SPut
-putByteString = writeSized BS.length BB.byteString
+putShortByteString :: ShortByteString -> SPut
+putShortByteString = writeSized Short.length BB.shortByteString
+
+putText :: Text -> SPut
+putText = writeSized T.length T.encodeUtf8Builder
 
 putReplicate :: Int -> Word8 -> SPut
 putReplicate n w =
@@ -115,7 +121,7 @@ putReplicate n w =
 
 addPositionW :: Int -> State WState ()
 addPositionW n = do
-    (WState m cur) <- ST.get
+    WState m cur <- ST.get
     ST.put $ WState m (cur+n)
 
 fixedSized :: Int -> (a -> Builder) -> a -> SPut
@@ -126,22 +132,22 @@ writeSized :: (a -> Int) -> (a -> Builder) -> a -> SPut
 writeSized n f a = do addPositionW (n a)
                       return (f a)
 
-wsPop :: Domain -> State WState (Maybe Int)
+wsPop :: RawDomain -> State WState (Maybe Int)
 wsPop dom = do
     doms <- ST.gets wsDomain
     return $ M.lookup dom doms
 
-wsPush :: Domain -> Int -> State WState ()
+wsPush :: RawDomain -> Int -> State WState ()
 wsPush dom pos = do
-    (WState m cur) <- ST.get
+    WState m cur <- ST.get
     ST.put $ WState (M.insert dom pos m) cur
 
 ----------------------------------------------------------------
 
-type SGet = StateT PState (T.Parser ByteString)
+type SGet = StateT PState (AT.Parser ByteString)
 
 data PState = PState {
-    psDomain :: IntMap Domain
+    psDomain :: IntMap RawDomain
   , psPosition :: Int
   , psInput :: ByteString
   , psAtTime  :: Int64
@@ -162,17 +168,17 @@ addPosition :: Int -> SGet ()
 addPosition n | n < 0 = failSGet "internal error: negative position increment"
               | otherwise = do
     PState dom pos inp t <- ST.get
-    let !pos' = pos + n
+    let pos' = pos + n
     when (pos' > BS.length inp) $
         failSGet "malformed or truncated input"
     ST.put $ PState dom pos' inp t
 
-push :: Int -> Domain -> SGet ()
+push :: Int -> RawDomain -> SGet ()
 push n d = do
     PState dom pos inp t <- ST.get
     ST.put $ PState (IM.insert n d dom) pos inp t
 
-pop :: Int -> SGet (Maybe Domain)
+pop :: Int -> SGet (Maybe RawDomain)
 pop n = ST.gets (IM.lookup n . psDomain)
 
 ----------------------------------------------------------------
@@ -220,8 +226,8 @@ getNBytes n | n < 0     = overrun
   where
     toInts = map fromIntegral . BS.unpack
 
-getNoctets :: Int -> SGet [Word8]
-getNoctets n | n < 0     = overrun
+getNOctets :: Int -> SGet [Word8]
+getNOctets n | n < 0     = overrun
              | otherwise = BS.unpack <$> getNByteString n
 
 skipNBytes :: Int -> SGet ()
@@ -232,6 +238,14 @@ getNByteString :: Int -> SGet ByteString
 getNByteString n | n < 0     = overrun
                  | otherwise = ST.lift (A.take n) <* addPosition n
 
+getNShortByteString :: Int -> SGet ShortByteString
+getNShortByteString n | n < 0     = overrun
+                      | otherwise = ST.lift (Short.toShort <$> A.take n) <* addPosition n
+
+getNText :: Int -> SGet Text
+getNText n | n < 0     = overrun
+           | otherwise = ST.lift (T.decodeLatin1 <$> A.take n) <* addPosition n
+
 fitSGet :: Int -> SGet a -> SGet a
 fitSGet len parser | len < 0   = overrun
                    | otherwise = do
@@ -239,7 +253,7 @@ fitSGet len parser | len < 0   = overrun
     ret <- parser
     pos' <- getPosition
     if pos' == pos0 + len
-    then return $! ret
+    then return ret
     else if pos' > pos0 + len
     then failSGet "element size exceeds declared size"
     else failSGet "element shorter than declared size"
@@ -316,126 +330,3 @@ runSGetWithLeftovers = runSGetWithLeftoversAt dnsTimeMid
 
 runSPut :: SPut -> ByteString
 runSPut = LC8.toStrict . BB.toLazyByteString . flip ST.evalState initialWState
-
-----------------------------------------------------------------
-
--- | Decode a domain name in A-label form to a leading label and a tail with
--- the remaining labels, unescaping backlashed chars and decimal triples along
--- the way. Any  U-label conversion belongs at the layer above this code.
---
-parseLabel :: Word8 -> ByteString -> Either DNSError (ByteString, ByteString)
-parseLabel sep dom =
-    if BS.any (== bslash) dom
-    then toResult $ A.parse (labelParser sep mempty) dom
-    else check $ safeTail <$> BS.break (== sep) dom
-  where
-    toResult (A.Partial c)  = toResult (c mempty)
-    toResult (A.Done tl hd) = check (hd, tl)
-    toResult _ = bottom
-    safeTail bs | BS.null bs = mempty
-                | otherwise = BS.tail bs
-    check r@(hd, tl) | not (BS.null hd) || BS.null tl = Right r
-                     | otherwise = bottom
-    bottom = Left $ DecodeError $ "invalid domain: " ++ C8.unpack dom
-
-labelParser :: Word8 -> ByteString -> A.Parser ByteString
-labelParser sep acc = do
-    acc' <- mappend acc <$> A.option mempty simple
-    labelEnd sep acc' <|> (escaped >>= labelParser sep . BS.snoc acc')
-  where
-    simple = fst <$> A.match skipUnescaped
-      where
-        skipUnescaped = A.skipMany1 $ A.satisfy notSepOrBslash
-        notSepOrBslash w = w /= sep && w /= bslash
-
-    escaped = do
-        A.skip (== bslash)
-        either decodeDec pure =<< A.eitherP digit A.anyWord8
-      where
-        digit = fromIntegral <$> A.satisfyWith (\n -> n - zero) (<=9)
-        decodeDec d =
-            safeWord8 =<< trigraph d <$> digit <*> digit
-          where
-            trigraph :: Word -> Word -> Word -> Word
-            trigraph x y z = 100 * x + 10 * y + z
-
-            safeWord8 :: Word -> A.Parser Word8
-            safeWord8 n | n > 255 = mzero
-                        | otherwise = pure $ fromIntegral n
-
-labelEnd :: Word8 -> ByteString -> A.Parser ByteString
-labelEnd sep acc =
-    A.satisfy (== sep) *> pure acc <|>
-    A.endOfInput       *> pure acc
-
-----------------------------------------------------------------
-
--- | Convert a wire-form label to presentation-form by escaping
--- the separator, special and non-printing characters.  For simple
--- labels with no bytes that require escaping we get back the input
--- bytestring asis with no copying or re-construction.
---
--- Note: the separator is required to be either \'.\' or \'\@\', but this
--- constraint is the caller's responsibility and is not checked here.
---
-unparseLabel :: Word8 -> ByteString -> ByteString
-unparseLabel sep label =
-    if BS.all (isPlain sep) label
-    then label
-    else toResult $ A.parse (labelUnparser sep mempty) label
-  where
-    toResult (A.Partial c) = toResult (c mempty)
-    toResult (A.Done _ r) = r
-    toResult _ = E.throw UnknownDNSError -- can't happen
-
-labelUnparser :: Word8 -> ByteString -> A.Parser ByteString
-labelUnparser sep acc = do
-    acc' <- mappend acc <$> A.option mempty asis
-    A.endOfInput *> pure acc' <|> (esc >>= labelUnparser sep . mappend acc')
-  where
-    -- Non-printables are escaped as decimal trigraphs, while printable
-    -- specials just get a backslash prefix.
-    esc = do
-        w <- A.anyWord8
-        if w <= 32 || w >= 127
-        then let (q100, r100) = w `divMod` 100
-                 (q10, r10) = r100 `divMod` 10
-              in pure $ BS.pack [ bslash, zero + q100, zero + q10, zero + r10 ]
-        else pure $ BS.pack [ bslash, w ]
-
-    -- Runs of plain bytes are recognized as a single chunk, which is then
-    -- returned as-is.
-    asis = fmap fst $ A.match $ A.skipMany1 $ A.satisfy $ isPlain sep
-
--- | In the presentation form of DNS labels, these characters are escaped by
--- prepending a backlash. (They have special meaning in zone files). Whitespace
--- and other non-printable or non-ascii characters are encoded via "\DDD"
--- decimal escapes. The separator character is also quoted in each label. Note
--- that '@' is quoted even when not the separator.
-escSpecials :: ByteString
-escSpecials = "\"$();@\\"
-
--- | Is the given byte the separator or one of the specials?
-isSpecial :: Word8 -> Word8 -> Bool
-isSpecial sep w = w == sep || BS.elemIndex w escSpecials /= Nothing
-
--- | Is the given byte a plain byte that reqires no escaping. The tests are
--- ordered to succeed or fail quickly in the most common cases. The test
--- ranges assume the expected numeric values of the named special characters.
--- Note: the separator is assumed to be either '.' or '@' and so not matched by
--- any of the first three fast-path 'True' cases.
-isPlain :: Word8 -> Word8 -> Bool
-isPlain sep w | w >= 127                 = False -- <DEL> + non-ASCII
-              | w > bslash               = True  -- ']'..'_'..'a'..'z'..'~'
-              | w >= zero && w < semi    = True  -- '0'..'9'..':'
-              | w > atsign && w < bslash = True  -- 'A'..'Z'..'['
-              | w <= 32                  = False -- non-printables
-              | isSpecial sep w          = False -- one of the specials
-              | otherwise                = True  -- plain punctuation
-
--- | Some numeric byte constants.
-zero, semi, atsign, bslash :: Word8
-zero = fromIntegral $ fromEnum '0'    -- 48
-semi = fromIntegral $ fromEnum ';'    -- 59
-atsign = fromIntegral $ fromEnum '@'  -- 64
-bslash = fromIntegral $ fromEnum '\\' -- 92

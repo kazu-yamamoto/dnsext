@@ -3,13 +3,14 @@
 
 module DNS.Types.Message where
 
-import DNS.Types.Base
+import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.RData
+import DNS.Types.Type
 
 -- $setup
--- >>> import Network.DNS
+-- >>> import DNS.Types
 
 ----------------------------------------------------------------
 
@@ -86,7 +87,7 @@ mapEDNS               _ _ a = a
 -- | DNS message format for queries and replies.
 --
 data DNSMessage = DNSMessage {
-    header     :: !DNSHeader        -- ^ Header with extended 'RCODE'
+    header     :: DNSHeader        -- ^ Header with extended 'RCODE'
   , ednsHeader :: EDNSheader        -- ^ EDNS pseudo-header
   , question   :: [Question]        -- ^ The question for the name server
   , answer     :: Answers           -- ^ RRs answering the question
@@ -100,37 +101,37 @@ type Identifier = Word16
 
 -- | Raw data format for the header of DNS Query and Response.
 data DNSHeader = DNSHeader {
-    identifier :: !Identifier -- ^ Query or reply identifier.
-  , flags      :: !DNSFlags   -- ^ Flags, OPCODE, and RCODE
+    identifier :: Identifier -- ^ Query or reply identifier.
+  , flags      :: DNSFlags   -- ^ Flags, OPCODE, and RCODE
   } deriving (Eq, Show)
 
 -- | Raw data format for the flags of DNS Query and Response.
 data DNSFlags = DNSFlags {
-    qOrR         :: !QorR   -- ^ Query or response.
-  , opcode       :: !OPCODE -- ^ Kind of query.
-  , authAnswer   :: !Bool   -- ^ AA (Authoritative Answer) bit - this bit is valid in responses,
+    qOrR         :: QorR   -- ^ Query or response.
+  , opcode       :: OPCODE -- ^ Kind of query.
+  , authAnswer   :: Bool   -- ^ AA (Authoritative Answer) bit - this bit is valid in responses,
                             -- and specifies that the responding name server is an
                             -- authority for the domain name in question section.
-  , trunCation   :: !Bool   -- ^ TC (Truncated Response) bit - specifies that this message was truncated
+  , trunCation   :: Bool   -- ^ TC (Truncated Response) bit - specifies that this message was truncated
                             -- due to length greater than that permitted on the
                             -- transmission channel.
-  , recDesired   :: !Bool   -- ^ RD (Recursion Desired) bit - this bit may be set in a query and
+  , recDesired   :: Bool   -- ^ RD (Recursion Desired) bit - this bit may be set in a query and
                             -- is copied into the response.  If RD is set, it directs
                             -- the name server to pursue the query recursively.
                             -- Recursive query support is optional.
-  , recAvailable :: !Bool   -- ^ RA (Recursion Available) bit - this be is set or cleared in a
+  , recAvailable :: Bool   -- ^ RA (Recursion Available) bit - this be is set or cleared in a
                             -- response, and denotes whether recursive query support is
                             -- available in the name server.
 
-  , rcode        :: !RCODE  -- ^ The full 12-bit extended RCODE when EDNS is in use.
+  , rcode        :: RCODE  -- ^ The full 12-bit extended RCODE when EDNS is in use.
                             -- Should always be zero in well-formed requests.
                             -- When decoding replies, the high eight bits from
                             -- any EDNS response are combined with the 4-bit
                             -- RCODE from the DNS header.  When encoding
                             -- replies, if no EDNS OPT record is provided, RCODE
                             -- values > 15 are mapped to 'FormatErr'.
-  , authenData   :: !Bool   -- ^ AD (Authenticated Data) bit - (RFC4035, Section 3.2.3).
-  , chkDisable   :: !Bool   -- ^ CD (Checking Disabled) bit - (RFC4035, Section 3.2.2).
+  , authenData   :: Bool   -- ^ AD (Authenticated Data) bit - (RFC4035, Section 3.2.3).
+  , chkDisable   :: Bool   -- ^ CD (Checking Disabled) bit - (RFC4035, Section 3.2.2).
   } deriving (Eq, Show)
 
 
@@ -348,11 +349,11 @@ type TTL = Word32
 
 -- | Raw data format for resource records.
 data ResourceRecord = ResourceRecord {
-    rrname  :: !Domain -- ^ Name
-  , rrtype  :: !TYPE   -- ^ Resource record type
-  , rrclass :: !CLASS  -- ^ Resource record class
-  , rrttl   :: !TTL    -- ^ Time to live
-  , rdata   :: !RData  -- ^ Resource data
+    rrname  :: Domain -- ^ Name
+  , rrtype  :: TYPE   -- ^ Resource record type
+  , rrclass :: CLASS  -- ^ Resource record class
+  , rrttl   :: TTL    -- ^ Time to live
+  , rdata   :: RData  -- ^ Resource data
   } deriving (Eq,Show)
 
 -- | Type alias for resource records in the answer section.

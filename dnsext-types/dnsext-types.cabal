@@ -27,14 +27,17 @@ library
         DNS.Types
 
     other-modules:
-        DNS.Types.Base
         DNS.Types.Base32Hex
+        DNS.Types.Domain
         DNS.Types.EDNS
+        DNS.Types.Error
         DNS.Types.Imports
         DNS.Types.Message
+        DNS.Types.Opaque
         DNS.Types.RData
         DNS.Types.Sec
         DNS.Types.StateBinary
+        DNS.Types.Type
 
     default-language: Haskell2010
     ghc-options:      -Wall
@@ -50,3 +53,4 @@ library
         hourglass,
         iproute >=1.3.2,
         mtl,
+        text,

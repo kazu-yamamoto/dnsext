@@ -1,6 +1,7 @@
 module DNS.Types (
   -- * Base types
-    module DNS.Types.Base
+    module DNS.Types.Type
+  , module DNS.Types.Domain
   -- * EDNS
   , module DNS.Types.EDNS
   -- * DNS message
@@ -11,8 +12,9 @@ module DNS.Types (
   , module DNS.Types.Sec
   ) where
 
-import DNS.Types.Base hiding (_b16encode, _b32encode, _b64encode)
+import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Message
 import DNS.Types.RData
 import DNS.Types.Sec
+import DNS.Types.Type

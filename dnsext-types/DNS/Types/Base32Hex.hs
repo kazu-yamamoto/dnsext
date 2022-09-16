@@ -5,7 +5,10 @@ import qualified Data.Array.IArray as A
 import qualified Data.Array.ST     as A
 import qualified Data.ByteString   as BS
 
-import DNS.Types.Imports
+-- Don't import DNS.Types.Imports
+import Control.Monad
+import Data.Bits
+import Data.ByteString (ByteString)
 
 -- | Encode ByteString using the
 -- <https://tools.ietf.org/html/rfc4648#section-7 RFC4648 base32hex>

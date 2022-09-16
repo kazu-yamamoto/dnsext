@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TransformListComp #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module DNS.Types.Sec (
     RD_RRSIG(..)
@@ -22,14 +23,15 @@ module DNS.Types.Sec (
   , rd_cdnskey
   ) where
 
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.Hourglass as H
 import GHC.Exts (the, groupWith)
 
-import DNS.Types.Base
+import DNS.Types.Domain
 import DNS.Types.Imports
+import DNS.Types.Opaque
 import DNS.Types.RData
 import DNS.Types.StateBinary
+import DNS.Types.Type
 
 ----------------------------------------------------------------
 
@@ -57,15 +59,15 @@ import DNS.Types.StateBinary
 -- The 'dnsTime' function performs the requisite conversion.
 --
 data RD_RRSIG = RD_RRSIG {
-    rrsigType       :: !TYPE       -- ^ RRtype of RRset signed
-  , rrsigKeyAlg     :: !Word8      -- ^ DNSKEY algorithm
-  , rrsigNumLabels  :: !Word8      -- ^ Number of labels signed
-  , rrsigTTL        :: !Word32     -- ^ Maximum origin TTL
-  , rrsigExpiration :: !Int64      -- ^ Time last valid
-  , rrsigInception  :: !Int64      -- ^ Time first valid
-  , rrsigKeyTag     :: !Word16     -- ^ Signing key tag
-  , rrsigZone       :: !Domain     -- ^ Signing domain
-  , rrsigValue      :: !ByteString -- ^ Opaque signature
+    rrsigType       :: TYPE   -- ^ RRtype of RRset signed
+  , rrsigKeyAlg     :: Word8  -- ^ DNSKEY algorithm
+  , rrsigNumLabels  :: Word8  -- ^ Number of labels signed
+  , rrsigTTL        :: Word32 -- ^ Maximum origin TTL
+  , rrsigExpiration :: Int64  -- ^ Time last valid
+  , rrsigInception  :: Int64  -- ^ Time first valid
+  , rrsigKeyTag     :: Word16 -- ^ Signing key tag
+  , rrsigZone       :: Domain -- ^ Signing domain
+  , rrsigValue      :: Opaque -- ^ Opaque signature
   } deriving (Eq, Ord)
 
 instance ResourceData RD_RRSIG where
@@ -79,7 +81,7 @@ instance ResourceData RD_RRSIG where
               , put32 $ fromIntegral rrsigInception
               , put16   rrsigKeyTag
               , putDomain rrsigZone
-              , putByteString rrsigValue
+              , putOpaque rrsigValue
               ]
     decodeResourceData _ lim = do
         -- The signature follows a variable length zone name
@@ -98,16 +100,13 @@ instance ResourceData RD_RRSIG where
         tag <- get16
         dom <- getDomain -- XXX: Enforce no compression?
         pos <- getPosition
-        val <- getNByteString $ end - pos
+        val <- getOpaque $ end - pos
         return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
       where
         getDnsTime   = do
             tnow <- getAtTime
             tdns <- get32
             return $ dnsTime tdns tnow
-    copyResourceData r@RD_RRSIG{..} =
-        r { rrsigZone = C8.copy rrsigZone
-          , rrsigValue = C8.copy rrsigValue }
 
 instance Show RD_RRSIG where
     show RD_RRSIG{..} =
@@ -118,8 +117,8 @@ instance Show RD_RRSIG where
                 , showTime rrsigExpiration
                 , showTime rrsigInception
                 , show rrsigKeyTag
-                , C8.unpack rrsigZone
-                , _b64encode rrsigValue
+                , show rrsigZone
+                , b64encode (opaqueToByteString rrsigValue)
                 ]
       where
         showTime :: Int64 -> String
@@ -128,7 +127,7 @@ instance Show RD_RRSIG where
             fmt = [ H.Format_Year4, H.Format_Month2, H.Format_Day2
                   , H.Format_Hour,  H.Format_Minute, H.Format_Second ]
 
-rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> ByteString -> RData
+rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------
@@ -138,7 +137,7 @@ data RD_DS = RD_DS {
     dsKeyTag     :: Word16
   , dsAlgorithm  :: Word8
   , dsDigestType :: Word8
-  , dsDigest     :: ByteString
+  , dsDigest     :: Opaque
   } deriving (Eq)
 
 instance ResourceData RD_DS where
@@ -147,22 +146,21 @@ instance ResourceData RD_DS where
         mconcat [ put16 dsKeyTag
                 , put8 dsAlgorithm
                 , put8 dsDigestType
-                , putByteString dsDigest
+                , putOpaque dsDigest
                 ]
     decodeResourceData _ lim =
         RD_DS <$> get16
               <*> get8
               <*> get8
-              <*> getNByteString (lim - 4)
-    copyResourceData r@RD_DS{..} = r { dsDigest = C8.copy dsDigest }
+              <*> getOpaque (lim - 4)
 
 instance Show RD_DS where
     show RD_DS{..} = show dsKeyTag     ++ " "
                   ++ show dsAlgorithm  ++ " "
                   ++ show dsDigestType ++ " "
-                  ++ _b16encode dsDigest
+                  ++ b16encode (opaqueToByteString dsDigest)
 
-rd_ds :: Word16 -> Word8 -> Word8 -> ByteString -> RData
+rd_ds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -182,12 +180,10 @@ instance ResourceData RD_NSEC where
         dom <- getDomain
         pos <- getPosition
         RD_NSEC dom <$> getNsecTypes (end - pos)
-    copyResourceData r@RD_NSEC{..} =
-        r { nsecNextDomain = C8.copy nsecNextDomain }
 
 instance Show RD_NSEC where
     show RD_NSEC{..} =
-        unwords $ showDomain nsecNextDomain : map show nsecTypes
+        unwords $ show nsecNextDomain : map show nsecTypes
 
 rd_nsec :: Domain -> [TYPE] -> RData
 rd_nsec a b = toRData $ RD_NSEC a b
@@ -199,7 +195,7 @@ data RD_DNSKEY = RD_DNSKEY {
     dnskeyFlags     :: Word16
   , dnskeyProtocol  :: Word8
   , dnskeyAlgorithm :: Word8
-  , dnskeyPublicKey :: ByteString
+  , dnskeyPublicKey :: Opaque
   } deriving (Eq)
 
 instance ResourceData RD_DNSKEY where
@@ -208,24 +204,22 @@ instance ResourceData RD_DNSKEY where
         mconcat [ put16 dnskeyFlags
                 , put8  dnskeyProtocol
                 , put8  dnskeyAlgorithm
-                , putByteString dnskeyPublicKey
+                , putShortByteString (opaqueToShortByteString dnskeyPublicKey)
                 ]
     decodeResourceData _ len =
         RD_DNSKEY <$> get16
                   <*> get8
                   <*> get8
-                  <*> getNByteString (len - 4)
-    copyResourceData r@RD_DNSKEY{..} =
-        r { dnskeyPublicKey = C8.copy dnskeyPublicKey }
+                  <*> getOpaque (len - 4)
 
 -- <https://tools.ietf.org/html/rfc5155#section-3.2>
 instance Show RD_DNSKEY where
     show RD_DNSKEY{..} = show dnskeyFlags     ++ " "
                       ++ show dnskeyProtocol  ++ " "
                       ++ show dnskeyAlgorithm ++ " "
-                      ++ _b64encode dnskeyPublicKey
+                      ++ b64encode (opaqueToByteString dnskeyPublicKey)
 
-rd_dnskey :: Word16 -> Word8 -> Word8 -> ByteString -> RData
+rd_dnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
@@ -235,8 +229,8 @@ data RD_NSEC3 = RD_NSEC3 {
     nsec3HashAlgorithm       :: Word8
   , nsec3Flags               :: Word8
   , nsec3Iterations          :: Word16
-  , nsec3Salt                :: ByteString
-  , nsec3NextHashedOwnerName :: ByteString
+  , nsec3Salt                :: Opaque
+  , nsec3NextHashedOwnerName :: Opaque
   , nsec3Types               :: [TYPE]
   } deriving (Eq)
 
@@ -246,8 +240,8 @@ instance ResourceData RD_NSEC3 where
         mconcat [ put8 nsec3HashAlgorithm
                 , put8 nsec3Flags
                 , put16 nsec3Iterations
-                , putByteStringWithLength nsec3Salt
-                , putByteStringWithLength nsec3NextHashedOwnerName
+                , putLenOpaque nsec3Salt
+                , putLenOpaque nsec3NextHashedOwnerName
                 , putNsecTypes nsec3Types
                 ]
     decodeResourceData _ len = do
@@ -255,24 +249,20 @@ instance ResourceData RD_NSEC3 where
         halg <- get8
         flgs <- get8
         iter <- get16
-        salt <- getInt8ByteString
-        hash <- getInt8ByteString
+        salt <- getLenOpaque
+        hash <- getLenOpaque
         tpos <- getPosition
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
-    copyResourceData r@RD_NSEC3{..} =
-        r { nsec3Salt = C8.copy nsec3Salt
-          , nsec3NextHashedOwnerName = C8.copy nsec3NextHashedOwnerName
-          }
 
 instance Show RD_NSEC3 where
     show RD_NSEC3{..} = unwords $ show nsec3HashAlgorithm
                                 : show nsec3Flags
                                 : show nsec3Iterations
                                 : showSalt nsec3Salt
-                                : _b32encode nsec3NextHashedOwnerName
+                                : b32encode (opaqueToByteString nsec3NextHashedOwnerName)
                                 : map show nsec3Types
 
-rd_nsec3 :: Word8 -> Word8 -> Word16 -> ByteString -> ByteString -> [TYPE] -> RData
+rd_nsec3 :: Word8 -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
 rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 ----------------------------------------------------------------
@@ -282,7 +272,7 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM {
     nsec3paramHashAlgorithm :: Word8
   , nsec3paramFlags         :: Word8
   , nsec3paramIterations    :: Word16
-  , nsec3paramSalt          :: ByteString
+  , nsec3paramSalt          :: Opaque
   } deriving (Eq)
 
 instance ResourceData RD_NSEC3PARAM where
@@ -291,15 +281,13 @@ instance ResourceData RD_NSEC3PARAM where
         mconcat [ put8  nsec3paramHashAlgorithm
                 , put8  nsec3paramFlags
                 , put16 nsec3paramIterations
-                , putByteStringWithLength nsec3paramSalt
+                , putLenOpaque nsec3paramSalt
                 ]
     decodeResourceData _ _ =
         RD_NSEC3PARAM <$> get8
                       <*> get8
                       <*> get16
-                      <*> getInt8ByteString
-    copyResourceData r@RD_NSEC3PARAM{..} =
-        r { nsec3paramSalt = C8.copy nsec3paramSalt }
+                      <*> getLenOpaque
 
 instance Show RD_NSEC3PARAM where
     show RD_NSEC3PARAM{..} = show nsec3paramHashAlgorithm ++ " "
@@ -307,7 +295,7 @@ instance Show RD_NSEC3PARAM where
                           ++ show nsec3paramIterations    ++ " "
                           ++ showSalt nsec3paramSalt
 
-rd_nsec3param :: Word8 -> Word8 -> Word16 -> ByteString -> RData
+rd_nsec3param :: Word8 -> Word8 -> Word16 -> Opaque -> RData
 rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 
 ----------------------------------------------------------------
@@ -319,12 +307,11 @@ instance ResourceData RD_CDS where
     resourceDataType _ = CDS
     encodeResourceData (RD_CDS ds) = encodeResourceData ds
     decodeResourceData _ len = RD_CDS <$> decodeResourceData (Proxy :: Proxy RD_DS) len
-    copyResourceData (RD_CDS ds) = RD_CDS $ copyResourceData ds
 
 instance Show RD_CDS where
     show (RD_CDS ds) = show ds
 
-rd_cds :: Word16 -> Word8 -> Word8 -> ByteString -> RData
+rd_cds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -336,21 +323,14 @@ instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
     encodeResourceData (RD_CDNSKEY dnskey) = encodeResourceData dnskey
     decodeResourceData _ len =RD_CDNSKEY <$> decodeResourceData (Proxy :: Proxy RD_DNSKEY) len
-    copyResourceData (RD_CDNSKEY dnskey) = RD_CDNSKEY $ copyResourceData dnskey
 
 instance Show RD_CDNSKEY where
     show (RD_CDNSKEY dnskey) = show dnskey
 
-rd_cdnskey :: Word16 -> Word8 -> Word8 -> ByteString -> RData
+rd_cdnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
-
-getTYPE :: SGet TYPE
-getTYPE = toTYPE <$> get16
-
-getInt8ByteString :: SGet ByteString
-getInt8ByteString = getInt8 >>= getNByteString
 
 -- | Given a 32-bit circle-arithmetic DNS time, and the current absolute epoch
 -- time, return the epoch time corresponding to the DNS timestamp.
@@ -423,3 +403,10 @@ getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
         blkTypes (bitOffset, byte) =
             [ toTYPE $ fromIntegral $ bitOffset + i |
               i <- [0..7], byte .&. bit (7-i) /= 0 ]
+
+----------------------------------------------------------------
+
+showSalt :: Opaque -> String
+showSalt o = case opaqueToByteString o of
+  ""  -> "-"
+  bs  -> b16encode bs
