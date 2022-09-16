@@ -42,7 +42,7 @@ module DNS.Types.Base (
 import Control.Exception (Exception, IOException)
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64 as B64
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as C8
 
 import qualified DNS.Types.Base32Hex as B32
 import DNS.Types.Imports
@@ -276,6 +276,6 @@ instance Exception DNSError
 ----------------------------------------------------------------
 
 _b16encode, _b32encode, _b64encode :: ByteString -> String
-_b16encode = BS.unpack. B16.encode
-_b32encode = BS.unpack. B32.encode
-_b64encode = BS.unpack. B64.encode
+_b16encode = C8.unpack. B16.encode
+_b32encode = C8.unpack. B32.encode
+_b64encode = C8.unpack. B64.encode

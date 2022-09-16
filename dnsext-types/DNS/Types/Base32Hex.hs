@@ -3,7 +3,7 @@ module DNS.Types.Base32Hex (encode) where
 import qualified Data.Array.MArray as A
 import qualified Data.Array.IArray as A
 import qualified Data.Array.ST     as A
-import qualified Data.ByteString   as B
+import qualified Data.ByteString   as BS
 
 import DNS.Types.Imports
 
@@ -13,12 +13,12 @@ import DNS.Types.Imports
 -- <https://tools.ietf.org/html/rfc5155#section-3.3 RFC5155 Next Hashed Owner Name>
 -- field.
 --
-encode :: B.ByteString -- ^ input buffer
-       -> B.ByteString -- ^ base32hex output
+encode :: ByteString -- ^ input buffer
+       -> ByteString -- ^ base32hex output
 encode bs =
-    let len = (8 * B.length bs + 4) `div` 5
-        ws  = B.unpack bs
-     in B.pack $ A.elems $ A.runSTUArray $ do
+    let len = (8 * BS.length bs + 4) `div` 5
+        ws  = BS.unpack bs
+     in BS.pack $ A.elems $ A.runSTUArray $ do
         a <- A.newArray (0 :: Int, len-1) 0
         go ws a 0
   where

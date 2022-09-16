@@ -55,9 +55,9 @@ import qualified Data.Attoparsec.Types as T
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder (Builder)
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as S8
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LB
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Map (Map)
@@ -315,7 +315,7 @@ runSGetWithLeftovers :: SGet a -> ByteString -> Either DNSError ((a, PState), By
 runSGetWithLeftovers = runSGetWithLeftoversAt dnsTimeMid
 
 runSPut :: SPut -> ByteString
-runSPut = LBS.toStrict . BB.toLazyByteString . flip ST.evalState initialWState
+runSPut = LC8.toStrict . BB.toLazyByteString . flip ST.evalState initialWState
 
 ----------------------------------------------------------------
 
@@ -336,7 +336,7 @@ parseLabel sep dom =
                 | otherwise = BS.tail bs
     check r@(hd, tl) | not (BS.null hd) || BS.null tl = Right r
                      | otherwise = bottom
-    bottom = Left $ DecodeError $ "invalid domain: " ++ S8.unpack dom
+    bottom = Left $ DecodeError $ "invalid domain: " ++ C8.unpack dom
 
 labelParser :: Word8 -> ByteString -> A.Parser ByteString
 labelParser sep acc = do

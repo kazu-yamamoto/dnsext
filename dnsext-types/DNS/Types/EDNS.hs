@@ -37,7 +37,7 @@ module DNS.Types.EDNS (
   ) where
 
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as S8
+import qualified Data.ByteString.Char8 as C8
 import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
 import qualified Data.IP (addr)
 
@@ -311,7 +311,7 @@ encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
                 ]
 encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) =
     mconcat [ put16 $ fromOptCode ClientSubnet
-            , putInt16 $ 4 + S8.length addr
+            , putInt16 $ 4 + C8.length addr
             , put16 family
             , put8 srcBits
             , put8 scpBits
@@ -346,7 +346,7 @@ decodeClientSubnet len = do
         -- or too short), the OD_ECSgeneric data contains the verbatim input
         -- from the peer.
         --
-        case S8.length addrbs == (fromIntegral srcBits + 7) `div` 8 of
+        case C8.length addrbs == (fromIntegral srcBits + 7) `div` 8 of
             True | Just ip <- bstoip family addrbs srcBits scpBits
                 -> pure $ OD_ClientSubnet srcBits scpBits ip
             _   -> pure $ OD_ECSgeneric family srcBits scpBits addrbs
@@ -360,7 +360,7 @@ decodeClientSubnet len = do
          in if addr == maskedAddr && scpBits <= maxBits
             then Just $ toIP addr
             else Nothing
-    bstoip :: Word16 -> BS.ByteString -> Word8 -> Word8 -> Maybe IP
+    bstoip :: Word16 -> ByteString -> Word8 -> Word8 -> Maybe IP
     bstoip family bs srcBits scpBits = case family of
         1 -> checkBits toIPv4  IPv4 srcBits scpBits $ take 4  $ zeropad bs
         2 -> checkBits toIPv6b IPv6 srcBits scpBits $ take 16 $ zeropad bs
@@ -399,7 +399,7 @@ _showAlgList nm ws = nm ++ " " ++ intercalate "," (map show ws)
 _showNSID :: ByteString -> String
 _showNSID nsid = "NSID" ++ " " ++ _b16encode nsid ++ ";" ++ printable nsid
   where
-    printable = S8.unpack. S8.map (\c -> if c < ' ' || c > '~' then '?' else c)
+    printable = C8.unpack. C8.map (\c -> if c < ' ' || c > '~' then '?' else c)
 
 _showECS :: Word16 -> Word8 -> Word8 -> String -> String
 _showECS family srcBits scpBits address =
@@ -420,6 +420,6 @@ putODWords code ws =
 putODBytes :: Word16 -> ByteString -> SPut
 putODBytes code bs =
     mconcat [ put16 code
-            , putInt16 $ S8.length bs
+            , putInt16 $ C8.length bs
             , putByteString bs
             ]

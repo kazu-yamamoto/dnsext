@@ -8,8 +8,8 @@ module DNS.Types.RData where
 
 import qualified Control.Exception as E
 import Control.Monad.State (gets)
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import Data.Char (intToDigit)
 import Data.IP (IPv4, IPv6, fromIPv4, toIPv4, fromIPv6b, toIPv6b)
 
@@ -75,7 +75,7 @@ instance ResourceData RD_NS where
     resourceDataType _ = NS
     encodeResourceData (RD_NS d) = putDomain d
     decodeResourceData _ _ = RD_NS <$> getDomain
-    copyResourceData (RD_NS dom) = RD_NS $ B.copy dom
+    copyResourceData (RD_NS dom) = RD_NS $ BS.copy dom
 
 instance Show RD_NS where
     show (RD_NS d) = showDomain d
@@ -92,7 +92,7 @@ instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
     encodeResourceData (RD_CNAME d) = putDomain d
     decodeResourceData _ _ = RD_CNAME <$> getDomain
-    copyResourceData (RD_CNAME dom) = RD_CNAME $ B.copy dom
+    copyResourceData (RD_CNAME dom) = RD_CNAME $ BS.copy dom
 
 instance Show RD_CNAME where
     show (RD_CNAME d) = showDomain d
@@ -132,8 +132,8 @@ instance ResourceData RD_SOA where
                                     <*> get32
                                     <*> get32
     copyResourceData r@RD_SOA{..} =
-        r { soaMname = B.copy soaMname
-          , soaRname = B.copy soaRname
+        r { soaMname = BS.copy soaMname
+          , soaRname = BS.copy soaRname
           }
 
 instance Show RD_SOA where
@@ -157,7 +157,7 @@ instance ResourceData RD_NULL where
     resourceDataType _ = NULL
     encodeResourceData (RD_NULL bytes) = putByteString bytes
     decodeResourceData _ len = RD_NULL <$> getNByteString len
-    copyResourceData (RD_NULL bytes) = RD_NULL $ B.copy bytes
+    copyResourceData (RD_NULL bytes) = RD_NULL $ BS.copy bytes
 
 instance Show RD_NULL where
     show (RD_NULL bytes) = showOpaque bytes
@@ -174,7 +174,7 @@ instance ResourceData RD_PTR where
     resourceDataType _ = PTR
     encodeResourceData (RD_PTR d) = putDomain d
     decodeResourceData _ _ = RD_PTR <$> getDomain
-    copyResourceData (RD_PTR dom) = RD_PTR $ B.copy dom
+    copyResourceData (RD_PTR dom) = RD_PTR $ BS.copy dom
 
 instance Show RD_PTR where
     show (RD_PTR d) = showDomain d
@@ -197,7 +197,7 @@ instance ResourceData RD_MX where
               , putDomain mxExchange
               ]
     decodeResourceData _ _ = RD_MX <$> get16 <*> getDomain
-    copyResourceData (RD_MX prf dom) = RD_MX prf $ B.copy dom
+    copyResourceData (RD_MX prf dom) = RD_MX prf $ BS.copy dom
 
 instance Show RD_MX where
     show RD_MX{..} = show mxPreference ++ " " ++ showDomain mxExchange
@@ -214,18 +214,18 @@ instance ResourceData RD_TXT where
     resourceDataType _ = TXT
     encodeResourceData (RD_TXT txt0) = putTXT txt0
       where
-        putTXT txt = let (!h, !t) = BS.splitAt 255 txt
-                     in putByteStringWithLength h <> if BS.null t
+        putTXT txt = let (!h, !t) = C8.splitAt 255 txt
+                     in putByteStringWithLength h <> if C8.null t
                                                      then mempty
                                                      else putTXT t
     decodeResourceData _ len =
-      RD_TXT . B.concat <$> sGetMany "TXT RR string" len getstring
+      RD_TXT . BS.concat <$> sGetMany "TXT RR string" len getstring
         where
           getstring = getInt8 >>= getNByteString
-    copyResourceData (RD_TXT txt) = RD_TXT $ B.copy txt
+    copyResourceData (RD_TXT txt) = RD_TXT $ BS.copy txt
 
 instance Show RD_TXT where
-    show (RD_TXT bs) = '"' : B.foldr dnsesc ['"'] bs
+    show (RD_TXT bs) = '"' : BS.foldr dnsesc ['"'] bs
       where
         c2w = fromIntegral . fromEnum
         w2c = toEnum . fromIntegral
@@ -253,7 +253,7 @@ instance ResourceData RD_RP where
     resourceDataType _ = RP
     encodeResourceData (RD_RP mbox d) = putMailbox mbox <> putDomain d
     decodeResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
-    copyResourceData (RD_RP mbox dname) = RD_RP (B.copy mbox) (B.copy dname)
+    copyResourceData (RD_RP mbox dname) = RD_RP (BS.copy mbox) (BS.copy dname)
 
 instance Show RD_RP where
     show (RD_RP mbox d) =
@@ -301,13 +301,13 @@ instance ResourceData RD_SRV where
                                     <*> get16
                                     <*> get16
                                     <*> getDomain
-    copyResourceData r@RD_SRV{..} = r { srvTarget = B.copy srvTarget }
+    copyResourceData r@RD_SRV{..} = r { srvTarget = BS.copy srvTarget }
 
 instance Show RD_SRV where
     show RD_SRV{..} = show srvPriority ++ " "
                    ++ show srvWeight   ++ " "
                    ++ show srvPort     ++ " "
-                   ++ BS.unpack srvTarget
+                   ++ C8.unpack srvTarget
 
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
 rd_srv a b c d = toRData $ RD_SRV a b c d
@@ -321,7 +321,7 @@ instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
     encodeResourceData (RD_DNAME d) = putDomain d
     decodeResourceData _ _ = RD_DNAME <$> getDomain
-    copyResourceData (RD_DNAME dom) = RD_DNAME $ B.copy dom
+    copyResourceData (RD_DNAME dom) = RD_DNAME $ BS.copy dom
 
 instance Show RD_DNAME where
     show (RD_DNAME d) = showDomain d
@@ -369,7 +369,7 @@ instance ResourceData RD_TLSA where
               <*> get8
               <*> get8
               <*> getNByteString (len - 3)
-    copyResourceData (RD_TLSA a b c dgst) = RD_TLSA a b c $ B.copy dgst
+    copyResourceData (RD_TLSA a b c dgst) = RD_TLSA a b c $ BS.copy dgst
 
 -- Opaque RData: <https://tools.ietf.org/html/rfc3597#section-5>
 instance Show RD_TLSA where
@@ -390,7 +390,7 @@ instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
     encodeResourceData (RD_Unknown _ bytes) = putByteString bytes
     decodeResourceData = undefined -- never used
-    copyResourceData (RD_Unknown t x)  = RD_Unknown t $ B.copy x
+    copyResourceData (RD_Unknown t x)  = RD_Unknown t $ BS.copy x
 
 rd_unknown :: TYPE -> ByteString -> RData
 rd_unknown a b = toRData $ RD_Unknown a b
@@ -402,21 +402,21 @@ showSalt ""    = "-"
 showSalt salt  = _b16encode salt
 
 showDomain :: ByteString -> String
-showDomain = BS.unpack
+showDomain = C8.unpack
 
 showOpaque :: ByteString -> String
-showOpaque bs = unwords ["\\#", show (BS.length bs), _b16encode bs]
+showOpaque bs = unwords ["\\#", show (C8.length bs), _b16encode bs]
 
 ----------------------------------------------------------------
 
 -- In the case of the TXT record, we need to put the string length
 -- fixme : What happens with the length > 256 ?
-putByteStringWithLength :: BS.ByteString -> SPut
-putByteStringWithLength bs = putInt8 (fromIntegral $ BS.length bs) -- put the length of the given string
+putByteStringWithLength :: ByteString -> SPut
+putByteStringWithLength bs = putInt8 (fromIntegral $ C8.length bs) -- put the length of the given string
                           <> putByteString bs
 
 rootDomain :: Domain
-rootDomain = BS.pack "."
+rootDomain = C8.pack "."
 
 putDomain :: Domain -> SPut
 putDomain = putDomain' '.'
@@ -426,7 +426,7 @@ putMailbox = putDomain' '@'
 
 putDomain' :: Char -> ByteString -> SPut
 putDomain' sep dom
-    | BS.null dom || dom == rootDomain = put8 0
+    | C8.null dom || dom == rootDomain = put8 0
     | otherwise = do
         mpos <- wsPop dom
         cur <- gets wsPosition
@@ -443,7 +443,7 @@ putDomain' sep dom
     (hd, tl) = loop (c2w sep)
       where
         loop w = case parseLabel w dom of
-            Right p | w /= 0x2e && BS.null (snd p) -> loop 0x2e
+            Right p | w /= 0x2e && C8.null (snd p) -> loop 0x2e
                     | otherwise -> p
             Left e -> E.throw e
 
@@ -564,7 +564,7 @@ getDomain' sep1 ptrLimit = do
           ds <- getDomain' dot ptrLimit
           let dom = case ds of -- avoid trailing ".."
                   "." -> hs <> "."
-                  _   -> hs <> B.singleton sep1 <> ds
+                  _   -> hs <> BS.singleton sep1 <> ds
           push pos dom
           return dom
     getValue c = c .&. 0x3f

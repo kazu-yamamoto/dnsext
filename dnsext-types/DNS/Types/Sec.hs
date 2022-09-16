@@ -22,7 +22,7 @@ module DNS.Types.Sec (
   , rd_cdnskey
   ) where
 
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.Hourglass as H
 import GHC.Exts (the, groupWith)
 
@@ -106,8 +106,8 @@ instance ResourceData RD_RRSIG where
             tdns <- get32
             return $ dnsTime tdns tnow
     copyResourceData r@RD_RRSIG{..} =
-        r { rrsigZone = BS.copy rrsigZone
-          , rrsigValue = BS.copy rrsigValue }
+        r { rrsigZone = C8.copy rrsigZone
+          , rrsigValue = C8.copy rrsigValue }
 
 instance Show RD_RRSIG where
     show RD_RRSIG{..} =
@@ -118,7 +118,7 @@ instance Show RD_RRSIG where
                 , showTime rrsigExpiration
                 , showTime rrsigInception
                 , show rrsigKeyTag
-                , BS.unpack rrsigZone
+                , C8.unpack rrsigZone
                 , _b64encode rrsigValue
                 ]
       where
@@ -154,7 +154,7 @@ instance ResourceData RD_DS where
               <*> get8
               <*> get8
               <*> getNByteString (lim - 4)
-    copyResourceData r@RD_DS{..} = r { dsDigest = BS.copy dsDigest }
+    copyResourceData r@RD_DS{..} = r { dsDigest = C8.copy dsDigest }
 
 instance Show RD_DS where
     show RD_DS{..} = show dsKeyTag     ++ " "
@@ -183,7 +183,7 @@ instance ResourceData RD_NSEC where
         pos <- getPosition
         RD_NSEC dom <$> getNsecTypes (end - pos)
     copyResourceData r@RD_NSEC{..} =
-        r { nsecNextDomain = BS.copy nsecNextDomain }
+        r { nsecNextDomain = C8.copy nsecNextDomain }
 
 instance Show RD_NSEC where
     show RD_NSEC{..} =
@@ -216,7 +216,7 @@ instance ResourceData RD_DNSKEY where
                   <*> get8
                   <*> getNByteString (len - 4)
     copyResourceData r@RD_DNSKEY{..} =
-        r { dnskeyPublicKey = BS.copy dnskeyPublicKey }
+        r { dnskeyPublicKey = C8.copy dnskeyPublicKey }
 
 -- <https://tools.ietf.org/html/rfc5155#section-3.2>
 instance Show RD_DNSKEY where
@@ -260,8 +260,8 @@ instance ResourceData RD_NSEC3 where
         tpos <- getPosition
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
     copyResourceData r@RD_NSEC3{..} =
-        r { nsec3Salt = BS.copy nsec3Salt
-          , nsec3NextHashedOwnerName = BS.copy nsec3NextHashedOwnerName
+        r { nsec3Salt = C8.copy nsec3Salt
+          , nsec3NextHashedOwnerName = C8.copy nsec3NextHashedOwnerName
           }
 
 instance Show RD_NSEC3 where
@@ -299,7 +299,7 @@ instance ResourceData RD_NSEC3PARAM where
                       <*> get16
                       <*> getInt8ByteString
     copyResourceData r@RD_NSEC3PARAM{..} =
-        r { nsec3paramSalt = BS.copy nsec3paramSalt }
+        r { nsec3paramSalt = C8.copy nsec3paramSalt }
 
 instance Show RD_NSEC3PARAM where
     show RD_NSEC3PARAM{..} = show nsec3paramHashAlgorithm ++ " "
