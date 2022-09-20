@@ -941,7 +941,7 @@ getSectionWithCache get refines msg = do
 cacheSection :: [ResourceRecord] -> Ranking -> ReaderT Context IO ()
 cacheSection rs rank = cacheRRSet
   where
-    (errRRSs, rrss) = insertSetFromSection rs rank
+    (ncRRSs, rrss) = insertSetFromSection rs rank
     putRRSet putk = putk $ \key ttl crs r ->
       logLines Log.DEBUG
       [ "cacheRRSet: " ++ show ((key, ttl), r)
@@ -951,7 +951,7 @@ cacheSection rs rank = cacheRRSet
       "cacheSection: no caching RR set:" :
       map (("  " ++) . show) rrs
     cacheRRSet = do
-      mapM_ putNoCacheRRS errRRSs
+      mapM_ putNoCacheRRS ncRRSs
       mapM_ putRRSet rrss
       insertRRSet <- asks insert_
       liftIO $ mapM_ ($ insertRRSet) rrss
