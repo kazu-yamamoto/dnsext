@@ -48,14 +48,6 @@ import DNS.Types.Type
 -- generate the additional OPT record.  Do not add explicit @OPT@ records
 -- to the aditional section, configure EDNS via the 'EDNSheader' instead.
 --
--- >>> let getopts eh = mapEDNS eh ednsOptions []
--- >>> let optsin     = [OD_ClientSubnet 24 0 $ read "192.0.2.1"]
--- >>> let masked     = [OD_ClientSubnet 24 0 $ read "192.0.2.0"]
--- >>> let message    = makeEmptyQuery $ ednsSetOptions $ ODataSet optsin
--- >>> let optsout    = getopts. ednsHeader <$> (decode $ encode message)
--- >>> optsout       == Right masked
--- True
---
 data EDNSheader = EDNSheader EDNS -- ^ A valid EDNS message
                 | NoEDNS          -- ^ A valid non-EDNS message
                 | InvalidEDNS     -- ^ Multiple or bad additional @OPT@ RRs

@@ -2,6 +2,8 @@ module DNS.Types (
   -- * Base types
     module DNS.Types.Type
   , module DNS.Types.Domain
+  , SPut
+  , SGet
   -- * EDNS
   , module DNS.Types.EDNS
   -- * DNS message
@@ -17,4 +19,5 @@ import DNS.Types.EDNS
 import DNS.Types.Message
 import DNS.Types.RData
 import DNS.Types.Sec
+import DNS.Types.StateBinary
 import DNS.Types.Type
