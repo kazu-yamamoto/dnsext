@@ -14,6 +14,7 @@ import DNS.Types.Imports
 import DNS.Types.Opaque
 import DNS.Types.StateBinary
 import DNS.Types.Type
+import DNS.Types.Error
 
 ---------------------------------------------------------------
 
@@ -44,6 +45,12 @@ instance Eq RData where
 -- | Getting 'TYPE' of 'RData'.
 rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
+
+encodeRData :: RData -> ByteString
+encodeRData (RData x) = runSPut $ encodeResourceData x
+
+decodeRData :: ResourceData a => Proxy a -> Int -> ByteString -> Either DNSError RData
+decodeRData px len bs = RData . fst <$> runSGet (decodeResourceData px len) bs
 
 ---------------------------------------------------------------
 
