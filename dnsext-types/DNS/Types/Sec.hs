@@ -26,11 +26,11 @@ module DNS.Types.Sec (
 import qualified Data.Hourglass as H
 import GHC.Exts (the, groupWith)
 
+import DNS.StateBinary
 import DNS.Types.Domain
 import DNS.Types.Imports
 import DNS.Types.Opaque
 import DNS.Types.RData
-import DNS.Types.StateBinary
 import DNS.Types.Type
 
 ----------------------------------------------------------------

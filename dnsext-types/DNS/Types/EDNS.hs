@@ -40,9 +40,9 @@ import qualified Data.ByteString.Short as Short
 import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
 import qualified Data.IP (addr)
 
+import DNS.StateBinary
 import DNS.Types.Imports
 import DNS.Types.Opaque
-import DNS.Types.StateBinary
 
 ----------------------------------------------------------------
 -- EDNS (RFC 6891, EDNS(0))

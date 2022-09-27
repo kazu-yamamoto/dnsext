@@ -26,9 +26,9 @@ import Data.String
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 
+import DNS.StateBinary
 import DNS.Types.Error
 import DNS.Types.Imports
-import DNS.Types.StateBinary
 
 -- $setup
 -- >>> :set -XOverloadedStrings

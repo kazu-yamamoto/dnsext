@@ -14,8 +14,8 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.String
 
+import DNS.StateBinary
 import DNS.Types.Imports
-import DNS.Types.StateBinary
 
 ----------------------------------------------------------------
 

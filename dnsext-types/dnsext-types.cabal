@@ -22,8 +22,16 @@ source-repository head
     location: git://github.com/kazu-yamamoto/dnsext.git
 
 library
-    exposed-modules:  DNS.Types
+    exposed-modules:
+        DNS.Types
+        DNS.Types.Decode
+        DNS.Types.Encode
+        DNS.Types.Internal
     other-modules:
+        DNS.StateBinary
+        DNS.StateBinary.SGet
+        DNS.StateBinary.SPut
+        DNS.StateBinary.Types
         DNS.Types.Base32Hex
         DNS.Types.Domain
         DNS.Types.EDNS
@@ -33,7 +41,6 @@ library
         DNS.Types.Opaque
         DNS.Types.RData
         DNS.Types.Sec
-        DNS.Types.StateBinary
         DNS.Types.Type
 
     default-language: Haskell2010

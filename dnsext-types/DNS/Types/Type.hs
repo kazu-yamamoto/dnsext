@@ -32,10 +32,11 @@ module DNS.Types.Type (
   , fromTYPE
   , toTYPE
   , getTYPE
+  , putTYPE
   ) where
 
+import DNS.StateBinary
 import DNS.Types.Imports
-import DNS.Types.StateBinary
 
 ----------------------------------------------------------------
 
@@ -167,3 +168,6 @@ instance Show TYPE where
 
 getTYPE :: SGet TYPE
 getTYPE = toTYPE <$> get16
+
+putTYPE :: TYPE -> SPut
+putTYPE x = put16 $ fromTYPE x

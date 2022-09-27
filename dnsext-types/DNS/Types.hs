@@ -25,8 +25,6 @@ module DNS.Types (
   , fromRData
   , toRData
   , rdataType
-  , encodeRData
-  , decodeRData
   -- ** Class
   , ResourceData
   -- ** Basic resource data
