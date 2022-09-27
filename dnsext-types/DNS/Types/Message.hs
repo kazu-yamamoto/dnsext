@@ -79,7 +79,7 @@ mapEDNS               _ _ a = a
 -- | DNS message format for queries and replies.
 --
 data DNSMessage = DNSMessage {
-    header     :: DNSHeader        -- ^ Header with extended 'RCODE'
+    header     :: DNSHeader         -- ^ Header with extended 'RCODE'
   , ednsHeader :: EDNSheader        -- ^ EDNS pseudo-header
   , question   :: [Question]        -- ^ The question for the name server
   , answer     :: Answers           -- ^ RRs answering the question
