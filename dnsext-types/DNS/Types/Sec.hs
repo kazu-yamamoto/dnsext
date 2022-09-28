@@ -72,7 +72,7 @@ data RD_RRSIG = RD_RRSIG {
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    encodeResourceData RD_RRSIG{..} =
+    putResourceData RD_RRSIG{..} =
       mconcat [ put16 $ fromTYPE rrsigType
               , put8    rrsigKeyAlg
               , put8    rrsigNumLabels
@@ -83,7 +83,7 @@ instance ResourceData RD_RRSIG where
               , putDomain rrsigZone
               , putOpaque rrsigValue
               ]
-    decodeResourceData _ lim = do
+    getResourceData _ lim = do
         -- The signature follows a variable length zone name
         -- and occupies the rest of the RData.  Simplest to
         -- checkpoint the position at the start of the RData,
@@ -142,13 +142,13 @@ data RD_DS = RD_DS {
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
-    encodeResourceData RD_DS{..} =
+    putResourceData RD_DS{..} =
         mconcat [ put16 dsKeyTag
                 , put8 dsAlgorithm
                 , put8 dsDigestType
                 , putOpaque dsDigest
                 ]
-    decodeResourceData _ lim =
+    getResourceData _ lim =
         RD_DS <$> get16
               <*> get8
               <*> get8
@@ -173,9 +173,9 @@ data RD_NSEC = RD_NSEC {
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    encodeResourceData RD_NSEC{..} =
+    putResourceData RD_NSEC{..} =
         putDomain nsecNextDomain <> putNsecTypes nsecTypes
-    decodeResourceData _ len = do
+    getResourceData _ len = do
         end <- rdataEnd len
         dom <- getDomain
         pos <- getPosition
@@ -200,13 +200,13 @@ data RD_DNSKEY = RD_DNSKEY {
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
-    encodeResourceData RD_DNSKEY{..} =
+    putResourceData RD_DNSKEY{..} =
         mconcat [ put16 dnskeyFlags
                 , put8  dnskeyProtocol
                 , put8  dnskeyAlgorithm
                 , putShortByteString (opaqueToShortByteString dnskeyPublicKey)
                 ]
-    decodeResourceData _ len =
+    getResourceData _ len =
         RD_DNSKEY <$> get16
                   <*> get8
                   <*> get8
@@ -236,7 +236,7 @@ data RD_NSEC3 = RD_NSEC3 {
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
-    encodeResourceData RD_NSEC3{..} =
+    putResourceData RD_NSEC3{..} =
         mconcat [ put8 nsec3HashAlgorithm
                 , put8 nsec3Flags
                 , put16 nsec3Iterations
@@ -244,7 +244,7 @@ instance ResourceData RD_NSEC3 where
                 , putLenOpaque nsec3NextHashedOwnerName
                 , putNsecTypes nsec3Types
                 ]
-    decodeResourceData _ len = do
+    getResourceData _ len = do
         dend <- rdataEnd len
         halg <- get8
         flgs <- get8
@@ -277,13 +277,13 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM {
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
-    encodeResourceData RD_NSEC3PARAM{..} =
+    putResourceData RD_NSEC3PARAM{..} =
         mconcat [ put8  nsec3paramHashAlgorithm
                 , put8  nsec3paramFlags
                 , put16 nsec3paramIterations
                 , putLenOpaque nsec3paramSalt
                 ]
-    decodeResourceData _ _ =
+    getResourceData _ _ =
         RD_NSEC3PARAM <$> get8
                       <*> get8
                       <*> get16
@@ -305,8 +305,8 @@ newtype RD_CDS = RD_CDS RD_DS deriving (Eq)
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
-    encodeResourceData (RD_CDS ds) = encodeResourceData ds
-    decodeResourceData _ len = RD_CDS <$> decodeResourceData (Proxy :: Proxy RD_DS) len
+    putResourceData (RD_CDS ds) = putResourceData ds
+    getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
 
 instance Show RD_CDS where
     show (RD_CDS ds) = show ds
@@ -321,8 +321,8 @@ newtype RD_CDNSKEY = RD_CDNSKEY RD_DNSKEY deriving (Eq)
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
-    encodeResourceData (RD_CDNSKEY dnskey) = encodeResourceData dnskey
-    decodeResourceData _ len =RD_CDNSKEY <$> decodeResourceData (Proxy :: Proxy RD_DNSKEY) len
+    putResourceData (RD_CDNSKEY dnskey) = putResourceData dnskey
+    getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
 
 instance Show RD_CDNSKEY where
     show (RD_CDNSKEY dnskey) = show dnskey

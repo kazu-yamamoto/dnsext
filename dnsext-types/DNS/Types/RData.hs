@@ -14,14 +14,13 @@ import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.Opaque
 import DNS.Types.Type
-import DNS.Types.Error
 
 ---------------------------------------------------------------
 
 class (Typeable a, Eq a, Show a) => ResourceData a where
-    resourceDataType   :: a -> TYPE
-    encodeResourceData :: a -> SPut
-    decodeResourceData :: proxy a -> Int -> SGet a
+    resourceDataType :: a -> TYPE
+    putResourceData  :: a -> SPut
+    getResourceData  :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
 
@@ -47,10 +46,7 @@ rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
 
 putRData :: RData -> SPut
-putRData (RData x) = encodeResourceData x
-
-decodeRData :: ResourceData a => Proxy a -> Int -> ByteString -> Either DNSError RData
-decodeRData px len bs = RData . fst <$> runSGet (decodeResourceData px len) bs
+putRData (RData x) = putResourceData x
 
 ---------------------------------------------------------------
 
@@ -59,8 +55,8 @@ newtype RD_A = RD_A IPv4 deriving Eq
 
 instance ResourceData RD_A where
     resourceDataType _ = A
-    encodeResourceData (RD_A ipv4) = mconcat $ map putInt8 (fromIPv4 ipv4)
-    decodeResourceData _ _ = RD_A . toIPv4 <$> getNBytes 4
+    putResourceData (RD_A ipv4) = mconcat $ map putInt8 (fromIPv4 ipv4)
+    getResourceData _ _ = RD_A . toIPv4 <$> getNBytes 4
 
 instance Show RD_A where
     show (RD_A ipv4) = show ipv4
@@ -75,8 +71,8 @@ newtype RD_NS = RD_NS Domain deriving (Eq)
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
-    encodeResourceData (RD_NS d) = putDomain d
-    decodeResourceData _ _ = RD_NS <$> getDomain
+    putResourceData (RD_NS d) = putDomain d
+    getResourceData _ _ = RD_NS <$> getDomain
 
 instance Show RD_NS where
     show (RD_NS d) = show d
@@ -91,8 +87,8 @@ newtype RD_CNAME = RD_CNAME Domain deriving (Eq)
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
-    encodeResourceData (RD_CNAME d) = putDomain d
-    decodeResourceData _ _ = RD_CNAME <$> getDomain
+    putResourceData (RD_CNAME d) = putDomain d
+    getResourceData _ _ = RD_CNAME <$> getDomain
 
 instance Show RD_CNAME where
     show (RD_CNAME d) = show d
@@ -115,7 +111,7 @@ data RD_SOA = RD_SOA {
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
-    encodeResourceData RD_SOA{..} =
+    putResourceData RD_SOA{..} =
       mconcat [ putDomain soaMname
               , putMailbox soaRname
               , put32 soaSerial
@@ -124,7 +120,7 @@ instance ResourceData RD_SOA where
               , put32 soaExpire
               , put32 soaMinimum
               ]
-    decodeResourceData _ _ = RD_SOA <$> getDomain
+    getResourceData _ _ = RD_SOA <$> getDomain
                                     <*> getMailbox
                                     <*> get32
                                     <*> get32
@@ -151,8 +147,8 @@ newtype RD_NULL = RD_NULL Opaque deriving (Eq)
 
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
-    encodeResourceData (RD_NULL o) = putOpaque o
-    decodeResourceData _ len = RD_NULL <$> getOpaque len
+    putResourceData (RD_NULL o) = putOpaque o
+    getResourceData _ len = RD_NULL <$> getOpaque len
 
 instance Show RD_NULL where
     show (RD_NULL o) = show o
@@ -167,8 +163,8 @@ newtype RD_PTR = RD_PTR Domain deriving (Eq)
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
-    encodeResourceData (RD_PTR d) = putDomain d
-    decodeResourceData _ _ = RD_PTR <$> getDomain
+    putResourceData (RD_PTR d) = putDomain d
+    getResourceData _ _ = RD_PTR <$> getDomain
 
 instance Show RD_PTR where
     show (RD_PTR d) = show d
@@ -186,11 +182,11 @@ data RD_MX = RD_MX {
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
-    encodeResourceData RD_MX{..} =
+    putResourceData RD_MX{..} =
       mconcat [ put16 mxPreference
               , putDomain mxExchange
               ]
-    decodeResourceData _ _ = RD_MX <$> get16 <*> getDomain
+    getResourceData _ _ = RD_MX <$> get16 <*> getDomain
 
 instance Show RD_MX where
     show RD_MX{..} = show mxPreference ++ " " ++ show mxExchange
@@ -205,13 +201,13 @@ newtype RD_TXT = RD_TXT Text deriving (Eq)
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
-    encodeResourceData (RD_TXT txt0) = putTXT txt0
+    putResourceData (RD_TXT txt0) = putTXT txt0
       where
         putTXT txt = let (h, t) = T.splitAt 255 txt
                      in putLenText h <> if T.null t
                                                then mempty
                                                else putTXT t
-    decodeResourceData _ len =
+    getResourceData _ len =
       RD_TXT . T.concat <$> sGetMany "TXT RR string" len getstring
         where
           getstring = getInt8 >>= getNText
@@ -239,8 +235,8 @@ data RD_RP = RD_RP Mailbox Domain deriving (Eq)
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
-    encodeResourceData (RD_RP mbox d) = putMailbox mbox <> putDomain d
-    decodeResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
+    putResourceData (RD_RP mbox d) = putMailbox mbox <> putDomain d
+    getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
 
 instance Show RD_RP where
     show (RD_RP mbox d) =
@@ -256,8 +252,8 @@ newtype RD_AAAA = RD_AAAA IPv6 deriving (Eq)
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
-    encodeResourceData (RD_AAAA ipv6) = mconcat $ map putInt8 (fromIPv6b ipv6)
-    decodeResourceData _ _ = RD_AAAA . toIPv6b <$> getNBytes 16
+    putResourceData (RD_AAAA ipv6) = mconcat $ map putInt8 (fromIPv6b ipv6)
+    getResourceData _ _ = RD_AAAA . toIPv6b <$> getNBytes 16
 
 instance Show RD_AAAA where
     show (RD_AAAA ipv6) = show ipv6
@@ -277,13 +273,13 @@ data RD_SRV = RD_SRV {
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    encodeResourceData RD_SRV{..} =
+    putResourceData RD_SRV{..} =
       mconcat [ put16 srvPriority
               , put16 srvWeight
               , put16 srvPort
               , putDomain srvTarget
               ]
-    decodeResourceData _ _ = RD_SRV <$> get16
+    getResourceData _ _ = RD_SRV <$> get16
                                     <*> get16
                                     <*> get16
                                     <*> getDomain
@@ -304,8 +300,8 @@ newtype RD_DNAME = RD_DNAME Domain deriving (Eq)
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
-    encodeResourceData (RD_DNAME d) = putDomain d
-    decodeResourceData _ _ = RD_DNAME <$> getDomain
+    putResourceData (RD_DNAME d) = putDomain d
+    getResourceData _ _ = RD_DNAME <$> getDomain
 
 instance Show RD_DNAME where
     show (RD_DNAME d) = show d
@@ -320,8 +316,8 @@ newtype RD_OPT = RD_OPT [OData] deriving (Eq)
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    encodeResourceData (RD_OPT options) = mconcat $ fmap encodeOData options
-    decodeResourceData = undefined -- never used
+    putResourceData (RD_OPT options) = mconcat $ fmap encodeOData options
+    getResourceData = undefined -- never used
 
 instance Show RD_OPT where
     show (RD_OPT options) = show options
@@ -341,13 +337,13 @@ data RD_TLSA = RD_TLSA {
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
-    encodeResourceData RD_TLSA{..} =
+    putResourceData RD_TLSA{..} =
       mconcat [ put8 tlsaUsage
               , put8 tlsaSelector
               , put8 tlsaMatchingType
               , putOpaque tlsaAssocData
               ]
-    decodeResourceData _ len =
+    getResourceData _ len =
       RD_TLSA <$> get8
               <*> get8
               <*> get8
@@ -370,8 +366,8 @@ data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Show)
 
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
-    encodeResourceData (RD_Unknown _ o) = putOpaque o
-    decodeResourceData = undefined -- never used
+    putResourceData (RD_Unknown _ o) = putOpaque o
+    getResourceData = undefined -- never used
 
 rd_unknown :: TYPE -> Opaque -> RData
 rd_unknown a b = toRData $ RD_Unknown a b

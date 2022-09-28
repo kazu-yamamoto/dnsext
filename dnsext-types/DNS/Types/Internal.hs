@@ -4,11 +4,17 @@ module DNS.Types.Internal (
   , OptData(..)
   -- * High level
   , putDNSMessage
+  , getDNSMessage
   , putHeader
+  , getHeader
   , putDNSFlags
+  , getDNSFlags
   , putQuestion
+  , getQuestion
   , putResourceRecord
+  , getResourceRecord
   , putRData
+  , getRData
   -- * Middle level
   , putDomain
   , getDomain
@@ -24,6 +30,7 @@ module DNS.Types.Internal (
   ) where
 
 import DNS.StateBinary
+import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Message

@@ -17,6 +17,7 @@ module DNS.StateBinary.SGet (
   , getInt8
   , getInt16
   , getInt32
+  , getNByteString
   , getNShortByteString
   , getNText
   , sGetMany

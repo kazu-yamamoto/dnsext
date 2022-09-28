@@ -8,6 +8,7 @@ import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LC8
 
 import DNS.StateBinary
+import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
@@ -137,6 +138,50 @@ putDNSMessage msg = putHeader hd
                   | otherwise         = ttl0' .|. vers'
                 rdata' = RData $ RD_OPT $ ednsOptions edns
 
+getDNSMessage :: DecodeDict -> SGet DNSMessage
+getDNSMessage dict = do
+    hm <- getHeader
+    qdCount <- getInt16
+    anCount <- getInt16
+    nsCount <- getInt16
+    arCount <- getInt16
+    queries <- getQuestions qdCount
+    answers <- getResourceRecords dict anCount
+    authrrs <- getResourceRecords dict nsCount
+    addnrrs <- getResourceRecords dict arCount
+    let (opts, rest) = partition ((==) OPT. rrtype) addnrrs
+        flgs         = flags hm
+        rc           = fromRCODE $ rcode flgs
+        (eh, erc)    = getEDNS rc opts
+        hd           = hm { flags = flgs { rcode = erc } }
+    pure $ DNSMessage hd eh queries answers authrrs $ ifEDNS eh rest addnrrs
+
+  where
+
+    -- | Get EDNS pseudo-header and the high eight bits of the extended RCODE.
+    --
+    getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
+    getEDNS rc rrs = case rrs of
+        [rr] | Just (edns, erc) <- optEDNS rr
+               -> (EDNSheader edns, toRCODE erc)
+        []     -> (NoEDNS, toRCODE rc)
+        _      -> (InvalidEDNS, BadRCODE)
+
+      where
+
+        -- | Extract EDNS information from an OPT RR.
+        --
+        optEDNS :: ResourceRecord -> Maybe (EDNS, Word16)
+        optEDNS (ResourceRecord "." OPT udpsiz ttl' rd) = case fromRData rd of
+            Just (RD_OPT opts) ->
+                let hrc      = fromIntegral rc .&. 0x0f
+                    erc      = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
+                    secok    = ttl' `testBit` 15
+                    vers     = fromIntegral $ shiftR (ttl' .&. 0x00ff0000) 16
+                in Just (EDNS vers udpsiz secok opts, fromIntegral erc)
+            _ -> Nothing
+        optEDNS _ = Nothing
+
 ----------------------------------------------------------------
 
 -- | Raw data format for the header of DNS Query and Response.
@@ -176,9 +221,15 @@ data DNSFlags = DNSFlags {
 
 putHeader :: DNSHeader -> SPut
 putHeader hdr = putIdentifier (identifier hdr)
-                <> putDNSFlags (flags hdr)
+             <> putDNSFlags (flags hdr)
   where
     putIdentifier = put16
+
+getHeader :: SGet DNSHeader
+getHeader =
+    DNSHeader <$> decodeIdentifier <*> getDNSFlags
+  where
+    decodeIdentifier = get16
 
 ----------------------------------------------------------------
 
@@ -218,6 +269,30 @@ putDNSFlags DNSFlags{..} = put16 word
               ]
 
     word = execState st 0
+
+getDNSFlags :: SGet DNSFlags
+getDNSFlags = do
+    flgs <- get16
+    let oc = getOpcode flgs
+    return $ DNSFlags (getQorR flgs)
+                      oc
+                      (getAuthAnswer flgs)
+                      (getTrunCation flgs)
+                      (getRecDesired flgs)
+                      (getRecAvailable flgs)
+                      (getRcode flgs)
+                      (getAuthenData flgs)
+                      (getChkDisable flgs)
+  where
+    getQorR w = if testBit w 15 then QR_Response else QR_Query
+    getOpcode w = toOPCODE (shiftR w 11 .&. 0x0f)
+    getAuthAnswer w = testBit w 10
+    getTrunCation w = testBit w 9
+    getRecDesired w = testBit w 8
+    getRecAvailable w = testBit w 7
+    getRcode w = toRCODE $ w .&. 0x0f
+    getAuthenData w = testBit w 5
+    getChkDisable w = testBit w 4
 
 ----------------------------------------------------------------
 
@@ -441,7 +516,7 @@ type AdditionalRecords = [ResourceRecord]
 putResourceRecord :: ResourceRecord -> SPut
 putResourceRecord ResourceRecord{..} = mconcat [
     putDomain rrname
-  , put16 (fromTYPE rrtype)
+  , putTYPE rrtype
   , put16 rrclass
   , put32 rrttl
   , putResourceRData rdata
@@ -450,7 +525,30 @@ putResourceRecord ResourceRecord{..} = mconcat [
     putResourceRData :: RData -> SPut
     putResourceRData (RData rd) = do
         addPositionW 2 -- "simulate" putInt16
-        rDataBuilder <- encodeResourceData rd
+        rDataBuilder <- putResourceData rd
         let rdataLength = fromIntegral . LC8.length . BB.toLazyByteString $ rDataBuilder
         let rlenBuilder = BB.int16BE rdataLength
         return $ rlenBuilder <> rDataBuilder
+
+getResourceRecords :: DecodeDict -> Int -> SGet [ResourceRecord]
+getResourceRecords dict n = replicateM n $ getResourceRecord dict
+
+getResourceRecord :: DecodeDict -> SGet ResourceRecord
+getResourceRecord dict = do
+    dom <- getDomain
+    typ <- getTYPE
+    cls <- get16
+    ttl <- get32
+    len <- getInt16
+    dat <- getRData dict typ len
+    return $ ResourceRecord dom typ cls ttl dat
+
+getQuestions :: Int -> SGet [Question]
+getQuestions n = replicateM n getQuestion
+
+getQuestion :: SGet Question
+getQuestion = Question <$> getDomain
+                       <*> getTYPE
+                       <*  ignoreClass
+  where
+    ignoreClass = get16
