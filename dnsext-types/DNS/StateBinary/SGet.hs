@@ -3,14 +3,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module DNS.StateBinary.SGet (
+  -- * Parser
     SGet
-  , PState
   , failSGet
   , fitSGet
   , runSGet
   , runSGetAt
   , runSGetWithLeftovers
   , runSGetWithLeftoversAt
+  -- ** Basic parsers
   , get8
   , get16
   , get32
@@ -21,15 +22,16 @@ module DNS.StateBinary.SGet (
   , getNShortByteString
   , getNText
   , sGetMany
-  , getPosition
-  , getInput
-  , getAtTime
-  , push
-  , pop
   , getNBytes
   , getNOctets
   , skipNBytes
-  , ST.gets
+  -- ** Parser state
+  , PState
+  , parserPosition
+  , pushDomain
+  , popDomain
+  , getInput
+  , getAtTime
   ) where
 
 import Control.Monad.State.Strict (StateT)
@@ -47,25 +49,28 @@ import DNS.Types.Error
 import DNS.Types.Imports
 
 ----------------------------------------------------------------
+
+-- | Parser type
 type SGet = StateT PState (AT.Parser ByteString)
 
+-- | Parser state
 data PState = PState {
-    psDomain :: IntMap RawDomain
-  , psPosition :: Int
-  , psInput :: ByteString
-  , psAtTime  :: Int64
+    pstDomain :: IntMap RawDomain
+  , pstPosition :: Int
+  , pstInput :: ByteString
+  , pstAtTime  :: Int64
   }
 
 ----------------------------------------------------------------
 
-getPosition :: SGet Int
-getPosition = ST.gets psPosition
+parserPosition :: SGet Int
+parserPosition = ST.gets pstPosition
 
 getInput :: SGet ByteString
-getInput = ST.gets psInput
+getInput = ST.gets pstInput
 
 getAtTime :: SGet Int64
-getAtTime = ST.gets psAtTime
+getAtTime = ST.gets pstAtTime
 
 addPosition :: Int -> SGet ()
 addPosition n | n < 0 = failSGet "internal error: negative position increment"
@@ -76,13 +81,13 @@ addPosition n | n < 0 = failSGet "internal error: negative position increment"
         failSGet "malformed or truncated input"
     ST.put $ PState dom pos' inp t
 
-push :: Int -> RawDomain -> SGet ()
-push n d = do
+pushDomain :: Int -> RawDomain -> SGet ()
+pushDomain n d = do
     PState dom pos inp t <- ST.get
     ST.put $ PState (IM.insert n d dom) pos inp t
 
-pop :: Int -> SGet (Maybe RawDomain)
-pop n = ST.gets (IM.lookup n . psDomain)
+popDomain :: Int -> SGet (Maybe RawDomain)
+popDomain n = ST.gets (IM.lookup n . pstDomain)
 
 ----------------------------------------------------------------
 
@@ -152,9 +157,9 @@ getNText n | n < 0     = overrun
 fitSGet :: Int -> SGet a -> SGet a
 fitSGet len parser | len < 0   = overrun
                    | otherwise = do
-    pos0 <- getPosition
+    pos0 <- parserPosition
     ret <- parser
-    pos' <- getPosition
+    pos' <- parserPosition
     if pos' == pos0 + len
     then return ret
     else if pos' > pos0 + len
@@ -176,9 +181,9 @@ sGetMany elemname len parser | len < 0   = overrun
         | n < 0     = failSGet $ elemname ++ " longer than declared size"
         | n == 0    = pure $ reverse xs
         | otherwise = do
-            pos0 <- getPosition
+            pos0 <- parserPosition
             x    <- parser
-            pos1 <- getPosition
+            pos1 <- parserPosition
             if pos1 <= pos0
             then failSGet $ "internal error: in-place success for " ++ elemname
             else go (n + pos0 - pos1) (x : xs)

@@ -3,8 +3,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module DNS.StateBinary.SPut (
+  -- * Builder
     SPut
   , runSPut
+  -- ** Basic builders
   , put8
   , put16
   , put32
@@ -14,11 +16,13 @@ module DNS.StateBinary.SPut (
   , putShortByteString
   , putText
   , putReplicate
-  , WState
-  , wsPop
-  , wsPush
-  , wsPosition
-  , addPositionW
+  -- ** Builder state
+  , BState
+  , builderPosition
+  , addBuilderPosition
+  , pushPointer
+  , popPointer
+  -- ** Re-exports (fixme)
   , State
   , ST.modify
   , ST.execState
@@ -42,15 +46,17 @@ import DNS.Types.Imports
 
 ----------------------------------------------------------------
 
-type SPut = State WState Builder
+-- | Builder type
+type SPut = State BState Builder
 
-data WState = WState {
-    wsDomain :: Map RawDomain Int
-  , wsPosition :: Int
+-- | Builder state
+data BState = BState {
+    bstDomain :: Map RawDomain Int
+  , bstPosition :: Int
 }
 
-initialWState :: WState
-initialWState = WState M.empty 0
+initialBState :: BState
+initialBState = BState M.empty 0
 
 instance Sem.Semigroup SPut where
     p1 <> p2 = (Sem.<>) <$> p1 <*> p2
@@ -89,28 +95,29 @@ putReplicate :: Int -> Word8 -> SPut
 putReplicate n w =
     fixedSized n BB.lazyByteString $ LB.replicate (fromIntegral n) w
 
-addPositionW :: Int -> State WState ()
-addPositionW n = do
-    WState m cur <- ST.get
-    ST.put $ WState m (cur+n)
+addBuilderPosition :: Int -> State BState ()
+addBuilderPosition n = do
+    BState m cur <- ST.get
+    ST.put $ BState m (cur+n)
 
 fixedSized :: Int -> (a -> Builder) -> a -> SPut
-fixedSized n f a = do addPositionW n
+fixedSized n f a = do addBuilderPosition n
                       return (f a)
 
 writeSized :: (a -> Int) -> (a -> Builder) -> a -> SPut
-writeSized n f a = do addPositionW (n a)
+writeSized n f a = do addBuilderPosition (n a)
                       return (f a)
 
-wsPop :: RawDomain -> State WState (Maybe Int)
-wsPop dom = do
-    doms <- ST.gets wsDomain
-    return $ M.lookup dom doms
+builderPosition :: State BState Int
+builderPosition = ST.gets bstPosition
 
-wsPush :: RawDomain -> Int -> State WState ()
-wsPush dom pos = do
-    WState m cur <- ST.get
-    ST.put $ WState (M.insert dom pos m) cur
+popPointer :: RawDomain -> State BState (Maybe Int)
+popPointer dom = ST.gets (M.lookup dom . bstDomain)
+
+pushPointer :: RawDomain -> Int -> State BState ()
+pushPointer dom pos = do
+    BState m cur <- ST.get
+    ST.put $ BState (M.insert dom pos m) cur
 
 runSPut :: SPut -> ByteString
-runSPut = LC8.toStrict . BB.toLazyByteString . flip ST.evalState initialWState
+runSPut = LC8.toStrict . BB.toLazyByteString . flip ST.evalState initialBState

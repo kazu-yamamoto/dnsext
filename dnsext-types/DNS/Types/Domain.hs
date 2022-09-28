@@ -261,13 +261,13 @@ putDomain' :: Char -> RawDomain -> SPut
 putDomain' sep dom
     | T.null dom || dom == rootDomain = put8 0
     | otherwise = do
-        mpos <- wsPop dom
-        cur <- gets wsPosition
+        mpos <- popPointer dom
+        cur <- builderPosition
         case mpos of
             Just pos -> putPointer pos
             Nothing  -> do
                         -- Pointers are limited to 14-bits!
-                        when (cur <= 0x3fff) $ wsPush dom cur
+                        when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
                                 , putDomain' '.' tl
                                 ]
@@ -305,10 +305,10 @@ putPartialDomain = putText
 --
 
 getDomain :: SGet Domain
-getDomain = Domain <$> (getPosition >>= getDomain' '.')
+getDomain = Domain <$> (parserPosition >>= getDomain' '.')
 
 getMailbox :: SGet Mailbox
-getMailbox = Mailbox <$> (getPosition >>= getDomain' '@')
+getMailbox = Mailbox <$> (parserPosition >>= getDomain' '@')
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points
@@ -349,7 +349,7 @@ getMailbox = Mailbox <$> (getPosition >>= getDomain' '@')
 --
 getDomain' :: Char -> Int -> SGet Text
 getDomain' sep1 ptrLimit = do
-    pos <- getPosition
+    pos <- parserPosition
     c <- getInt8
     let n = getValue c
     getdomain pos c n
@@ -368,7 +368,7 @@ getDomain' sep1 ptrLimit = do
                 -- have a different presentation form, so must not share the
                 -- same cache.
                 when (sep1 == '.') $
-                    push pos $ fst o
+                    pushDomain pos $ fst o
                 return (fst o)
 
     getdomain pos c n
@@ -380,9 +380,9 @@ getDomain' sep1 ptrLimit = do
               failSGet "invalid name compression pointer"
           if sep1 /= '.'
               then getPtr pos offset
-              else pop offset >>= \case
+              else popDomain offset >>= \case
                   Nothing -> getPtr pos offset
-                  Just o  -> return o
+                  Just dm -> return dm
       -- As for now, extended labels have no use.
       -- This may change some time in the future.
       | isExtLabel c = return ""
@@ -392,7 +392,7 @@ getDomain' sep1 ptrLimit = do
           let dom = case ds of -- avoid trailing ".."
                   "." -> hs <> "."
                   _   -> hs <> T.singleton sep1 <> ds
-          push pos dom
+          pushDomain pos dom
           return dom
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6

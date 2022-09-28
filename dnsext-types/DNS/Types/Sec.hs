@@ -99,7 +99,7 @@ instance ResourceData RD_RRSIG where
         tin <- getDnsTime
         tag <- get16
         dom <- getDomain -- XXX: Enforce no compression?
-        pos <- getPosition
+        pos <- parserPosition
         val <- getOpaque $ end - pos
         return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
       where
@@ -178,7 +178,7 @@ instance ResourceData RD_NSEC where
     getResourceData _ len = do
         end <- rdataEnd len
         dom <- getDomain
-        pos <- getPosition
+        pos <- parserPosition
         RD_NSEC dom <$> getNsecTypes (end - pos)
 
 instance Show RD_NSEC where
@@ -251,7 +251,7 @@ instance ResourceData RD_NSEC3 where
         iter <- get16
         salt <- getLenOpaque
         hash <- getLenOpaque
-        tpos <- getPosition
+        tpos <- parserPosition
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
 
 instance Show RD_NSEC3 where
@@ -349,7 +349,7 @@ dnsTime tdns tnow =
 --
 rdataEnd :: Int      -- ^ number of bytes left from current position
          -> SGet Int -- ^ end position
-rdataEnd lim = (+) lim <$> getPosition
+rdataEnd lim = (+) lim <$> parserPosition
 
 ----------------------------------------------------------------
 

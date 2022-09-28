@@ -265,7 +265,7 @@ putDNSFlags DNSFlags{..} = put16 word
               , when trunCation          $ set (bit 9)
               , when authAnswer          $ set (bit 10)
               , set (fromOPCODE opcode `shiftL` 11)
-              , when (qOrR==QR_Response) $ set (bit 15)
+              , when (qOrR == QR_Response) $ set (bit 15)
               ]
 
     word = execState st 0
@@ -524,7 +524,7 @@ putResourceRecord ResourceRecord{..} = mconcat [
   where
     putResourceRData :: RData -> SPut
     putResourceRData (RData rd) = do
-        addPositionW 2 -- "simulate" putInt16
+        addBuilderPosition 2 -- "simulate" putInt16
         rDataBuilder <- putResourceData rd
         let rdataLength = fromIntegral . LC8.length . BB.toLazyByteString $ rDataBuilder
         let rlenBuilder = BB.int16BE rdataLength
