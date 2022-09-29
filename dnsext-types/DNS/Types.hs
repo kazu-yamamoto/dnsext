@@ -1,6 +1,8 @@
 module DNS.Types (
   -- * DNS message
     DNSMessage(..)
+  , defaultQuery
+  , defaultResponse
   -- ** Header
   , DNSHeader(..)
   , Identifier
@@ -10,9 +12,12 @@ module DNS.Types (
   , EDNSheader(..)
   , EDNS(..)
   , defaultEDNS
+  , minUdpSize
+  , maxUdpSize
   -- * Resource record
   , ResourceRecord(..)
   , CLASS
+  , classIN
   , TTL
   -- ** Sections
   , Question(..)
@@ -34,27 +39,27 @@ module DNS.Types (
   , rd_ns
   , RD_CNAME(..)
   , rd_cname
-  , RD_SOA
+  , RD_SOA(..)
   , rd_soa
-  , RD_NULL
+  , RD_NULL(..)
   , rd_null
-  , RD_PTR
+  , RD_PTR(..)
   , rd_ptr
-  , RD_MX
+  , RD_MX(..)
   , rd_mx
-  , RD_TXT
+  , RD_TXT(..)
   , rd_txt
-  , RD_RP
+  , RD_RP(..)
   , rd_rp
-  , RD_AAAA
+  , RD_AAAA(..)
   , rd_aaaa
-  , RD_SRV
+  , RD_SRV(..)
   , rd_srv
-  , RD_DNAME
+  , RD_DNAME(..)
   , rd_dname
-  , RD_OPT
+  , RD_OPT(..)
   , rd_opt
-  , RD_TLSA
+  , RD_TLSA(..)
   , rd_tlsa
   -- ** DNSSEC resource data
   , RD_RRSIG(..)

@@ -184,6 +184,56 @@ getDNSMessage dict = do
 
 ----------------------------------------------------------------
 
+-- | A 'DNSMessage' template for queries with default settings for
+-- the message 'DNSHeader' and 'EDNSheader'.  This is the initial
+-- query message state, before customization via 'QueryControls'.
+--
+defaultQuery :: DNSMessage
+defaultQuery = DNSMessage {
+    header = DNSHeader {
+       identifier = 0
+     , flags = defaultDNSFlags
+     }
+  , ednsHeader = EDNSheader defaultEDNS
+  , question   = []
+  , answer     = []
+  , authority  = []
+  , additional = []
+  }
+
+-- | Default response.  When responding to EDNS queries, the response must
+-- either be an EDNS response, or else FormatErr must be returned.  The default
+-- response message has EDNS disabled ('ednsHeader' set to 'NoEDNS'), it should
+-- be updated as appropriate.
+--
+-- Do not explicitly add OPT RRs to the additional section, instead let the
+-- encoder compute and add the OPT record based on the EDNS pseudo-header.
+--
+-- The 'RCODE' in the 'DNSHeader' should be set to the appropriate 12-bit
+-- extended value, which will be split between the primary header and EDNS OPT
+-- record during message encoding (low 4 bits in DNS header, high 8 bits in
+-- EDNS OPT record).  See 'EDNSheader' for more details.
+--
+defaultResponse :: DNSMessage
+defaultResponse = DNSMessage {
+    header = DNSHeader {
+       identifier = 0
+     , flags = defaultDNSFlags {
+              qOrR = QR_Response
+            , authAnswer = True
+            , recAvailable = True
+            , authenData = False
+       }
+     }
+  , ednsHeader = NoEDNS
+  , question   = []
+  , answer     = []
+  , authority  = []
+  , additional = []
+  }
+
+----------------------------------------------------------------
+
 -- | Raw data format for the header of DNS Query and Response.
 data DNSHeader = DNSHeader {
     identifier :: Identifier -- ^ Query or reply identifier.

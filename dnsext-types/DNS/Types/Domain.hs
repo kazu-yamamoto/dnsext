@@ -160,7 +160,7 @@ labelParser sep acc = do
         P.skip (== '\\')
         either decodeDec pure =<< P.eitherP digit P.anyChar
       where
-        digit = ord <$> P.satisfy isDigit
+        digit = (\n -> ord n - ord '0') <$> P.satisfy isDigit
         decodeDec d =
             safeChar =<< trigraph d <$> digit <*> digit
           where
@@ -284,7 +284,7 @@ putPointer :: Int -> SPut
 putPointer pos = putInt16 (pos .|. 0xc000)
 
 putPartialDomain :: RawDomain -> SPut
-putPartialDomain = putText
+putPartialDomain = putLenText
 
 ----------------------------------------------------------------
 

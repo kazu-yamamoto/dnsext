@@ -371,11 +371,3 @@ instance ResourceData RD_Unknown where
 
 rd_unknown :: TYPE -> Opaque -> RData
 rd_unknown a b = toRData $ RD_Unknown a b
-
-----------------------------------------------------------------
-
--- In the case of the TXT record, we need to put the string length
--- fixme : What happens with the length > 256 ?
-putLenText :: Text -> SPut
-putLenText txt = putInt8 (fromIntegral $ T.length txt) -- put the length of the given string
-              <> putText txt

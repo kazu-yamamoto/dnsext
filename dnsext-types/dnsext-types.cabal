@@ -27,6 +27,7 @@ library
         DNS.Types.Decode
         DNS.Types.Encode
         DNS.Types.Internal
+
     other-modules:
         DNS.StateBinary
         DNS.StateBinary.SGet
@@ -69,3 +70,25 @@ test-suite doctests
     build-depends:
         base,
         doctest
+
+test-suite spec
+    type:               exitcode-stdio-1.0
+    main-is:            Spec.hs
+    build-tool-depends: hspec-discover:hspec-discover
+    hs-source-dirs:     test
+    other-modules:
+        EncodeSpec
+        DecodeSpec
+        RoundTripSpec
+
+    default-language:   Haskell2010
+    ghc-options:        -Wall
+    build-depends:
+        dnsext-types,
+        QuickCheck >=2.9,
+        base,
+        bytestring,
+        hspec,
+        iproute >=1.3.2,
+        text,
+        word8

@@ -15,6 +15,7 @@ module DNS.StateBinary.SPut (
   , putInt32
   , putShortByteString
   , putText
+  , putLenText
   , putReplicate
   -- ** Builder state
   , BState
@@ -90,6 +91,12 @@ putShortByteString = writeSized Short.length BB.shortByteString
 
 putText :: Text -> SPut
 putText = writeSized T.length T.encodeUtf8Builder
+
+-- In the case of the TXT record, we need to put the string length
+-- fixme : What happens with the length > 256 ?
+putLenText :: Text -> SPut
+putLenText txt = putInt8 (fromIntegral $ T.length txt) -- put the length of the given string
+              <> putText txt
 
 putReplicate :: Int -> Word8 -> SPut
 putReplicate n w =
