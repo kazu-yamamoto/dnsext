@@ -129,6 +129,8 @@ textToMailbox = Mailbox
 --
 -- >>> parseLabel '.' "abc\\.def.xyz"
 -- Right ("abc.def","xyz")
+-- >>> parseLabel '.' "\\097.xyz"
+-- Right ("a","xyz")
 -- >>> parseLabel '.' ".abc.def.xyz"
 -- Left (DecodeError "invalid domain: .abc.def.xyz")
 parseLabel :: Char -> Text -> Either DNSError (Text, Text)
