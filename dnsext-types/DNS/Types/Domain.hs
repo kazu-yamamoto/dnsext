@@ -20,7 +20,7 @@ module DNS.Types.Domain (
 
 import qualified Control.Exception as E
 import qualified Data.Attoparsec.Text as P
-import Data.Char (chr, ord, isDigit)
+import Data.Char (chr, ord, isDigit, digitToInt)
 import Data.Functor (($>))
 import Data.String
 import qualified Data.Text as T
@@ -160,9 +160,8 @@ labelParser sep acc = do
         P.skip (== '\\')
         either decodeDec pure =<< P.eitherP digit P.anyChar
       where
-        digit = (\n -> ord n - ord '0') <$> P.satisfy isDigit
-        decodeDec d =
-            safeChar =<< trigraph d <$> digit <*> digit
+        digit = digitToInt <$> P.satisfy isDigit
+        decodeDec d = safeChar =<< trigraph d <$> digit <*> digit
           where
             trigraph :: Int -> Int -> Int -> Int
             trigraph x y z = 100 * x + 10 * y + z
@@ -187,11 +186,11 @@ labelEnd sep acc =
 -- constraint is the caller's responsibility and is not checked here.
 --
 unparseLabel :: Char -> Text -> Text
-unparseLabel sep label =
-    if T.all (isPlain sep) label
-    then label
-    else toResult $ P.parse (labelUnparser sep mempty) label
+unparseLabel sep label
+  | isAllPlain label = label
+  | otherwise        = toResult $ P.parse (labelUnparser sep mempty) label
   where
+    isAllPlain = T.all (isPlain sep)
     toResult (P.Partial c) = toResult (c mempty)
     toResult (P.Done _ r) = r
     toResult _ = E.throw UnknownDNSError -- can't happen

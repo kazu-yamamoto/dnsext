@@ -204,9 +204,9 @@ instance ResourceData RD_TXT where
     putResourceData (RD_TXT txt0) = putTXT txt0
       where
         putTXT txt = let (h, t) = T.splitAt 255 txt
-                     in putLenText h <> if T.null t
-                                               then mempty
-                                               else putTXT t
+                         next | T.null t  = mempty
+                              | otherwise = putTXT t
+                     in putLenText h <> next
     getResourceData _ len =
       RD_TXT . T.concat <$> sGetMany "TXT RR string" len getstring
         where
