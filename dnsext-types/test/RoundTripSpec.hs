@@ -5,11 +5,11 @@ module RoundTripSpec where
 
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
-import Data.Char (chr)
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Short as Short
 import qualified Data.IP
 import Data.IP (Addr, IP(..), IPv4, IPv6, toIPv4, toIPv6, makeAddrRange)
 import Data.Text (Text)
-import qualified Data.Text as T
 import Data.Word
 import GHC.Exts (the, groupWith)
 import Test.Hspec
@@ -121,7 +121,7 @@ mkRData dom typ =
         NSEC3 -> genNSEC3
         TLSA  -> rd_tlsa <$> genWord8 <*> genWord8 <*> genWord8 <*> genOpaque
 
-        _ -> pure . rd_txt $ "Unhandled type " <> T.pack (show typ)
+        _ -> pure . rd_txt $ byteStringToOpaque ("Unhandled type " <> C8.pack (show typ))
   where
     genNSEC3 = do
         (alg, hlen)  <- elements [(1,32),(2,64)]
@@ -132,7 +132,7 @@ mkRData dom typ =
         rd_nsec3 alg flgs iter salt hash <$> genNsecTypes
     genTextString = do
         len <- elements [0, 1, 63, 255, 256, 511, 512, 1023, 1024]
-        T.pack . map (chr . fromIntegral) <$> replicateM len genWord8
+        shortByteStringToOpaque . Short.pack <$> replicateM len genWord8
     genNsecTypes = do
         ntypes <- elements [0..15]
         types <- sequence $ replicate ntypes $ toTYPE <$> elements [1..1024]

@@ -4,9 +4,10 @@
 
 module DNS.Types.RData where
 
-import qualified Data.Text as T
-import Data.Char (intToDigit, ord)
+import qualified Data.ByteString.Short as Short
+import Data.Char (chr)
 import Data.IP (IPv4, IPv6, fromIPv4, toIPv4, fromIPv6b, toIPv6b)
+import Data.Word8
 
 import DNS.StateBinary
 import DNS.Types.Domain
@@ -227,36 +228,47 @@ rd_mx a b = toRData $ RD_MX a b
 ----------------------------------------------------------------
 
 -- | Text strings (RFC1035)
-newtype RD_TXT = RD_TXT Text deriving (Eq)
+newtype RD_TXT = RD_TXT {
+    -- | Setter/getter for 'Opaque'
+    txt_opaque :: Opaque
+  } deriving (Eq)
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
-    putResourceData (RD_TXT txt0) = putTXT txt0
+    putResourceData (RD_TXT o) = putTXT sbs
       where
-        putTXT txt = let (h, t) = T.splitAt 255 txt
-                         next | T.null t  = mempty
-                              | otherwise = putTXT t
-                     in putLenText h <> next
+        sbs = opaqueToShortByteString o
+        putTXT txt = let (h, t) = Short.splitAt 255 txt
+                         next | Short.null t = mempty
+                              | otherwise    = putTXT t
+                     in putLenShortByteString h <> next
     getResourceData _ len =
-      RD_TXT . T.concat <$> sGetMany "TXT RR string" len getstring
+      RD_TXT . shortByteStringToOpaque . Short.concat <$> sGetMany "TXT RR string" len getstring
         where
-          getstring = getInt8 >>= getNText
+          getstring = getInt8 >>= getNShortByteString
 
 instance Show RD_TXT where
-    show (RD_TXT txt) = '"' : T.foldr dnsesc ['"'] txt
+    show (RD_TXT o) = '"' : conv sbs '"'
       where
-        dnsesc c s
-          | c == '"'             = '\\' : c : s
-          | c == '\\'            = '\\' : c : s
-          | ' ' <= c && c <= '~' =        c : s
-          | otherwise            = '\\' : ddd c s
-        ddd c s =
-            let (q100, r100) = divMod (ord c) 100
-                (q10, r10) = divMod r100 10
-             in intToDigit q100 : intToDigit q10 : intToDigit r10 : s
+        conv x c = Short.foldr escape [c] x
+        sbs = opaqueToShortByteString o
+        escape :: Word8 -> [Char] -> [Char]
+        escape w s
+          | w == _quotedbl             = '\\' : c : s
+          | w == _backslash            = '\\' : c : s
+          | _space <= w && w <= _tilde =        c : s
+          | otherwise                  = '\\' : ddd w s
+          where
+            c = w8ToChar w
+        ddd w s =
+            let (q100, r100) = divMod w 100
+                (q10,  r10)  = divMod r100 10
+             in w8ToDigit q100 : w8ToDigit q10 : w8ToDigit r10 : s
+        w8ToDigit w = chr $ fromIntegral (w + _0)
+        w8ToChar    = chr . fromIntegral
 
 -- | Smart constructor.
-rd_txt :: Text -> RData
+rd_txt :: Opaque -> RData
 rd_txt x = toRData $ RD_TXT x
 
 ----------------------------------------------------------------

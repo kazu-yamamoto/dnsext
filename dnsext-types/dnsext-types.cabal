@@ -59,7 +59,8 @@ library
         hourglass,
         iproute >=1.3.2,
         mtl,
-        text
+        text,
+        word8
 
 test-suite doctests
     type:             exitcode-stdio-1.0

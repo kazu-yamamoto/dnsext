@@ -69,8 +69,9 @@ module DNS.Types (
   , mx_preference
   , mx_exchange
   -- *** TXT RR
-  , RD_TXT(..)
+  , RD_TXT
   , rd_txt
+  , txt_opaque
   -- *** RP RR
   , RD_RP(..)
   , rd_rp

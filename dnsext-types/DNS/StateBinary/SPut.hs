@@ -14,6 +14,7 @@ module DNS.StateBinary.SPut (
   , putInt16
   , putInt32
   , putShortByteString
+  , putLenShortByteString
   , putText
   , putLenText
   , putReplicate
@@ -97,6 +98,12 @@ putLenText :: Text -> SPut
 putLenText txt = putInt8 len <> putText txt
    where
      len = fromIntegral $ T.length txt
+
+-- In the case of the TXT record, we need to put the string length
+putLenShortByteString :: ShortByteString -> SPut
+putLenShortByteString txt = putInt8 len <> putShortByteString txt
+   where
+     len = fromIntegral $ Short.length txt
 
 putReplicate :: Int -> Word8 -> SPut
 putReplicate n w =
