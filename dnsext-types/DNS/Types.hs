@@ -33,32 +33,60 @@ module DNS.Types (
   -- ** Class
   , ResourceData
   -- ** Basic resource data
-  , RD_A(..)
+  -- *** A RR
+  , RD_A
   , rd_a
-  , RD_NS(..)
+  , a_ipv4
+  -- *** NS RR
+  , RD_NS
   , rd_ns
-  , RD_CNAME(..)
+  , ns_domain
+  -- *** CNAME RR
+  , RD_CNAME
   , rd_cname
-  , RD_SOA(..)
+  , cname_domain
+  -- *** SOA RR
+  , RD_SOA
   , rd_soa
-  , RD_NULL(..)
+  , soa_mname
+  , soa_rname
+  , soa_serial
+  , soa_refresh
+  , soa_retry
+  , soa_expire
+  , soa_minimum
+  -- *** NULL RR
+  , RD_NULL
   , rd_null
-  , RD_PTR(..)
+  , null_opaque
+  -- *** PTR RR
+  , RD_PTR
   , rd_ptr
-  , RD_MX(..)
+  , ptr_domain
+  -- *** MX RR
+  , RD_MX
   , rd_mx
+  , mx_preference
+  , mx_exchange
+  -- *** TXT RR
   , RD_TXT(..)
   , rd_txt
+  -- *** RP RR
   , RD_RP(..)
   , rd_rp
+  -- *** AAAA RR
   , RD_AAAA(..)
   , rd_aaaa
+  -- *** SRV RR
   , RD_SRV(..)
   , rd_srv
+  -- *** DNAME RR
   , RD_DNAME(..)
   , rd_dname
+  -- *** OPT RR
   , RD_OPT(..)
   , rd_opt
+  -- *** TLSA RR
   , RD_TLSA(..)
   , rd_tlsa
   -- ** DNSSEC resource data

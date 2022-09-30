@@ -127,6 +127,7 @@ instance Show RD_RRSIG where
             fmt = [ H.Format_Year4, H.Format_Month2, H.Format_Day2
                   , H.Format_Hour,  H.Format_Minute, H.Format_Second ]
 
+-- | Smart constructor.
 rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
@@ -160,6 +161,7 @@ instance Show RD_DS where
                   ++ show dsDigestType ++ " "
                   ++ b16encode (opaqueToByteString dsDigest)
 
+-- | Smart constructor.
 rd_ds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_ds a b c d = toRData $ RD_DS a b c d
 
@@ -185,6 +187,7 @@ instance Show RD_NSEC where
     show RD_NSEC{..} =
         unwords $ show nsecNextDomain : map show nsecTypes
 
+-- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
 rd_nsec a b = toRData $ RD_NSEC a b
 
@@ -219,6 +222,7 @@ instance Show RD_DNSKEY where
                       ++ show dnskeyAlgorithm ++ " "
                       ++ b64encode (opaqueToByteString dnskeyPublicKey)
 
+-- | Smart constructor.
 rd_dnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
@@ -262,6 +266,7 @@ instance Show RD_NSEC3 where
                                 : b32encode (opaqueToByteString nsec3NextHashedOwnerName)
                                 : map show nsec3Types
 
+-- | Smart constructor.
 rd_nsec3 :: Word8 -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
 rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
@@ -295,6 +300,7 @@ instance Show RD_NSEC3PARAM where
                           ++ show nsec3paramIterations    ++ " "
                           ++ showSalt nsec3paramSalt
 
+-- | Smart constructor.
 rd_nsec3param :: Word8 -> Word8 -> Word16 -> Opaque -> RData
 rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 
@@ -311,6 +317,7 @@ instance ResourceData RD_CDS where
 instance Show RD_CDS where
     show (RD_CDS ds) = show ds
 
+-- | Smart constructor.
 rd_cds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 
@@ -327,6 +334,7 @@ instance ResourceData RD_CDNSKEY where
 instance Show RD_CDNSKEY where
     show (RD_CDNSKEY dnskey) = show dnskey
 
+-- | Smart constructor.
 rd_cdnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
 rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 

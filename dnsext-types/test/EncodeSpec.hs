@@ -91,8 +91,8 @@ testResponseA = DNSMessage {
         , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [119, 147, 15, 100])
         ]
   , authority =
-        [ ResourceRecord "qzone.qq.com." NS classIN 45919 (toRData $ RD_NS "ns-tel2.qq.com.")
-        , ResourceRecord "qzone.qq.com." NS classIN 45919 (toRData $ RD_NS "ns-tel1.qq.com.")
+        [ ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel2.qq.com.")
+        , ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel1.qq.com.")
         ]
   , additional =
         [ ResourceRecord "ns-tel1.qq.com." A classIN 46520 (rd_a $ toIPv4 [121, 14, 73, 115])

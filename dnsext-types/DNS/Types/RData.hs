@@ -51,7 +51,10 @@ putRData (RData x) = putResourceData x
 ---------------------------------------------------------------
 
 -- | IPv4 Address (RFC1035)
-newtype RD_A = RD_A IPv4 deriving Eq
+newtype RD_A = RD_A {
+    -- | Setter/getter for 'IPv4'.
+    a_ipv4 :: IPv4
+  } deriving Eq
 
 instance ResourceData RD_A where
     resourceDataType _ = A
@@ -61,13 +64,17 @@ instance ResourceData RD_A where
 instance Show RD_A where
     show (RD_A ipv4) = show ipv4
 
+-- | Smart constructor.
 rd_a :: IPv4 -> RData
 rd_a ipv4 = toRData $ RD_A ipv4
 
 ----------------------------------------------------------------
 
 -- | An authoritative name serve (RFC1035)
-newtype RD_NS = RD_NS Domain deriving (Eq)
+newtype RD_NS = RD_NS {
+    -- | Setter/getter for 'Domain'.
+    ns_domain :: Domain
+  } deriving (Eq)
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
@@ -77,13 +84,17 @@ instance ResourceData RD_NS where
 instance Show RD_NS where
     show (RD_NS d) = show d
 
+-- | Smart constructor.
 rd_ns :: Domain -> RData
 rd_ns d = toRData $ RD_NS d
 
 ----------------------------------------------------------------
 
 -- | The canonical name for an alias (RFC1035)
-newtype RD_CNAME = RD_CNAME Domain deriving (Eq)
+newtype RD_CNAME = RD_CNAME {
+    -- | Setter/getter for 'Domain'.
+    cname_domain :: Domain
+  } deriving (Eq)
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
@@ -93,6 +104,7 @@ instance ResourceData RD_CNAME where
 instance Show RD_CNAME where
     show (RD_CNAME d) = show d
 
+-- | Smart constructor.
 rd_cname :: Domain -> RData
 rd_cname d = toRData $ RD_CNAME d
 
@@ -100,25 +112,32 @@ rd_cname d = toRData $ RD_CNAME d
 
 -- | Marks the start of a zone of authority (RFC1035)
 data RD_SOA = RD_SOA {
-    soaMname   :: Domain
-  , soaRname   :: Mailbox
-  , soaSerial  :: Word32
-  , soaRefresh :: Word32
-  , soaRetry   :: Word32
-  , soaExpire  :: Word32
-  , soaMinimum :: Word32
+    -- | Setter/getter for mname
+    soa_mname   :: Domain
+    -- | Setter/getter for rname
+  , soa_rname   :: Mailbox
+    -- | Setter/getter for serial
+  , soa_serial  :: Word32
+    -- | Setter/getter for refresh
+  , soa_refresh :: Word32
+    -- | Setter/getter for retry
+  , soa_retry   :: Word32
+    -- | Setter/getter for expire
+  , soa_expire  :: Word32
+    -- | Setter/getter for minimum
+  , soa_minimum :: Word32
   } deriving (Eq)
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
     putResourceData RD_SOA{..} =
-      mconcat [ putDomain soaMname
-              , putMailbox soaRname
-              , put32 soaSerial
-              , put32 soaRefresh
-              , put32 soaRetry
-              , put32 soaExpire
-              , put32 soaMinimum
+      mconcat [ putDomain  soa_mname
+              , putMailbox soa_rname
+              , put32 soa_serial
+              , put32 soa_refresh
+              , put32 soa_retry
+              , put32 soa_expire
+              , put32 soa_minimum
               ]
     getResourceData _ _ = RD_SOA <$> getDomain
                                     <*> getMailbox
@@ -129,21 +148,25 @@ instance ResourceData RD_SOA where
                                     <*> get32
 
 instance Show RD_SOA where
-    show RD_SOA{..} = show soaMname   ++ " "
-                   ++ show soaRname   ++ " "
-                   ++ show soaSerial  ++ " "
-                   ++ show soaRefresh ++ " "
-                   ++ show soaRetry   ++ " "
-                   ++ show soaExpire  ++ " "
-                   ++ show soaMinimum
+    show RD_SOA{..} = show soa_mname   ++ " "
+                   ++ show soa_rname   ++ " "
+                   ++ show soa_serial  ++ " "
+                   ++ show soa_refresh ++ " "
+                   ++ show soa_retry   ++ " "
+                   ++ show soa_expire  ++ " "
+                   ++ show soa_minimum
 
+-- | Smart constructor.
 rd_soa :: Domain -> Mailbox -> Word32 -> Word32 -> Word32 -> Word32 -> Word32 -> RData
 rd_soa a b c d e f g = toRData $ RD_SOA a b c d e f g
 
 ----------------------------------------------------------------
 
 -- | NULL RR (EXPERIMENTAL, RFC1035).
-newtype RD_NULL = RD_NULL Opaque deriving (Eq)
+newtype RD_NULL = RD_NULL {
+    -- | Setter/getter for 'Opaque'.
+    null_opaque :: Opaque
+  } deriving (Eq)
 
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
@@ -159,7 +182,10 @@ rd_null = toRData . RD_NULL
 ----------------------------------------------------------------
 
 -- | A domain name pointer (RFC1035)
-newtype RD_PTR = RD_PTR Domain deriving (Eq)
+newtype RD_PTR = RD_PTR {
+    -- | Setter/getter for 'Domain'
+    ptr_domain :: Domain
+  } deriving (Eq)
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
@@ -169,6 +195,7 @@ instance ResourceData RD_PTR where
 instance Show RD_PTR where
     show (RD_PTR d) = show d
 
+-- | Smart constructor.
 rd_ptr :: Domain -> RData
 rd_ptr d = toRData $ RD_PTR d
 
@@ -176,21 +203,24 @@ rd_ptr d = toRData $ RD_PTR d
 
 -- | Mail exchange (RFC1035)
 data RD_MX = RD_MX {
-    mxPreference :: Word16
-  , mxExchange   :: Domain
+    -- | Setter/getter for preference
+    mx_preference :: Word16
+    -- | Setter/getter for 'Domain'
+  , mx_exchange   :: Domain
   } deriving (Eq)
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
     putResourceData RD_MX{..} =
-      mconcat [ put16 mxPreference
-              , putDomain mxExchange
+      mconcat [ put16 mx_preference
+              , putDomain mx_exchange
               ]
     getResourceData _ _ = RD_MX <$> get16 <*> getDomain
 
 instance Show RD_MX where
-    show RD_MX{..} = show mxPreference ++ " " ++ show mxExchange
+    show RD_MX{..} = show mx_preference ++ " " ++ show mx_exchange
 
+-- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
 rd_mx a b = toRData $ RD_MX a b
 
@@ -225,6 +255,7 @@ instance Show RD_TXT where
                 (q10, r10) = divMod r100 10
              in intToDigit q100 : intToDigit q10 : intToDigit r10 : s
 
+-- | Smart constructor.
 rd_txt :: Text -> RData
 rd_txt x = toRData $ RD_TXT x
 
@@ -242,6 +273,7 @@ instance Show RD_RP where
     show (RD_RP mbox d) =
         show mbox ++ " " ++ show d
 
+-- | Smart constructor.
 rd_rp :: Mailbox -> Domain -> RData
 rd_rp a b = toRData $ RD_RP a b
 
@@ -258,6 +290,7 @@ instance ResourceData RD_AAAA where
 instance Show RD_AAAA where
     show (RD_AAAA ipv6) = show ipv6
 
+-- | Smart constructor.
 rd_aaaa :: IPv6 -> RData
 rd_aaaa ipv6 = toRData $ RD_AAAA ipv6
 
@@ -290,6 +323,7 @@ instance Show RD_SRV where
                    ++ show srvPort     ++ " "
                    ++ show srvTarget
 
+-- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
 rd_srv a b c d = toRData $ RD_SRV a b c d
 
@@ -306,6 +340,7 @@ instance ResourceData RD_DNAME where
 instance Show RD_DNAME where
     show (RD_DNAME d) = show d
 
+-- | Smart constructor.
 rd_dname :: Domain -> RData
 rd_dname d = toRData $ RD_DNAME d
 
@@ -322,6 +357,7 @@ instance ResourceData RD_OPT where
 instance Show RD_OPT where
     show (RD_OPT options) = show options
 
+-- | Smart constructor.
 rd_opt :: [OData] -> RData
 rd_opt x = toRData $ RD_OPT x
 
@@ -356,6 +392,7 @@ instance Show RD_TLSA where
                     ++ show tlsaMatchingType ++ " "
                     ++ b16encode (opaqueToByteString tlsaAssocData)
 
+-- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData
 rd_tlsa a b c d = toRData $ RD_TLSA a b c d
 
@@ -369,5 +406,6 @@ instance ResourceData RD_Unknown where
     putResourceData (RD_Unknown _ o) = putOpaque o
     getResourceData = undefined -- never used
 
+-- | Smart constructor.
 rd_unknown :: TYPE -> Opaque -> RData
 rd_unknown a b = toRData $ RD_Unknown a b
