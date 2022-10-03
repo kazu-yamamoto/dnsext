@@ -335,6 +335,14 @@ labelEnd sep acc =
 -- Note: the separator is required to be either \'.\' or \'\@\', but this
 -- constraint is the caller's responsibility and is not checked here.
 --
+-- >>> unparseLabel _period "foo"
+-- "foo"
+-- >>> unparseLabel _period "foo.bar"
+-- "foo\\.bar"
+-- >>> unparseLabel _period "\x0aoo"
+-- "\\010oo"
+-- >>> unparseLabel _period "f\x7fo"
+-- "f\\127o"
 unparseLabel :: Word8 -> ShortByteString -> ShortByteString
 unparseLabel sep label
   | isAllPlain label = label
