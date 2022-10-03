@@ -15,8 +15,6 @@ module DNS.StateBinary.SPut (
   , putInt32
   , putShortByteString
   , putLenShortByteString
-  , putText
-  , putLenText
   , putReplicate
   -- ** Builder state
   , BState
@@ -40,8 +38,6 @@ import qualified Data.ByteString.Short as Short
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Semigroup as Sem
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 
 import DNS.StateBinary.Types
 import DNS.Types.Imports
@@ -89,15 +85,6 @@ putInt32 = fixedSized 4 (BB.int32BE . fromIntegral)
 
 putShortByteString :: ShortByteString -> SPut
 putShortByteString = writeSized Short.length BB.shortByteString
-
-putText :: Text -> SPut
-putText = writeSized T.length T.encodeUtf8Builder
-
--- In the case of the TXT record, we need to put the string length
-putLenText :: Text -> SPut
-putLenText txt = putInt8 len <> putText txt
-   where
-     len = fromIntegral $ T.length txt
 
 -- In the case of the TXT record, we need to put the string length
 putLenShortByteString :: ShortByteString -> SPut

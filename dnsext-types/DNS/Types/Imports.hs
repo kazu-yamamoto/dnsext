@@ -1,7 +1,6 @@
 module DNS.Types.Imports (
     ByteString
   , ShortByteString
-  , Text
   , Int64
   , NonEmpty(..)
   , module Control.Applicative
@@ -35,7 +34,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
-import Data.Text (Text)
 import Data.Typeable
 import Data.Word
 import Numeric

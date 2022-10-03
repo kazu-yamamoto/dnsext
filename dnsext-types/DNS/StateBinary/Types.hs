@@ -1,5 +1,5 @@
 module DNS.StateBinary.Types where
 
-import Data.Text
+import Data.ByteString.Short
 
-type RawDomain = Text
+type RawDomain = ShortByteString

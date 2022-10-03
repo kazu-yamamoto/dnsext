@@ -140,16 +140,16 @@ module DNS.Types (
   -- * Basic types
   -- ** Domain
   , Domain
+  , domainToShortByteString
+  , shortByteStringToDomain
   , domainToByteString
   , byteStringToDomain
-  , domainToText
-  , textToDomain
   -- ** Mailbox
   , Mailbox
+  , mailboxToShortByteString
+  , shortByteStringToMailbox
   , mailboxToByteString
   , byteStringToMailbox
-  , mailboxToText
-  , textToMailbox
   -- ** Opaque
   , Opaque
   , opaqueToByteString

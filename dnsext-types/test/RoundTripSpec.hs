@@ -9,7 +9,6 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import qualified Data.IP
 import Data.IP (Addr, IP(..), IPv4, IPv6, toIPv4, toIPv6, makeAddrRange)
-import Data.Text (Text)
 import Data.Word
 import GHC.Exts (the, groupWith)
 import Test.Hspec
@@ -150,19 +149,17 @@ genIPv6 = toIPv6 <$> replicateM 8 (fromIntegral <$> genWord16)
 genOpaque :: Gen Opaque
 genOpaque = byteStringToOpaque <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
-genByteString :: Gen Text
-genByteString = elements
-    [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
-
-genMboxString :: Gen Text
-genMboxString = elements
-    [ "", "a", "a@b", "abc", "a@b.c", "first.last@example.org" ]
-
 genDomain :: Gen Domain
-genDomain = textToDomain . (<> ".") <$>  genByteString
+genDomain = shortByteStringToDomain . (<> ".") <$>  genDomainString
+  where
+    genDomainString = elements
+        ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
 
 genMailbox :: Gen Mailbox
-genMailbox = textToMailbox . (<> ".") <$> genMboxString
+genMailbox = shortByteStringToMailbox . (<> ".") <$> genMboxString
+  where
+    genMboxString = elements
+        ["", "a", "a@b", "abc", "a@b.c", "first.last@example.org"]
 
 genDNSHeader :: Word16 -> Gen DNSHeader
 genDNSHeader maxrc = DNSHeader <$> genWord16 <*> genDNSFlags maxrc

@@ -20,7 +20,6 @@ module DNS.StateBinary.SGet (
   , getInt32
   , getNByteString
   , getNShortByteString
-  , getNText
   , sGetMany
   , getNBytes
   , getNOctets
@@ -42,7 +41,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
-import qualified Data.Text.Encoding as T
 
 import DNS.StateBinary.Types
 import DNS.Types.Error
@@ -149,10 +147,6 @@ getNByteString n | n < 0     = overrun
 getNShortByteString :: Int -> SGet ShortByteString
 getNShortByteString n | n < 0     = overrun
                       | otherwise = ST.lift (Short.toShort <$> A.take n) <* addPosition n
-
-getNText :: Int -> SGet Text
-getNText n | n < 0     = overrun
-           | otherwise = ST.lift (T.decodeLatin1 <$> A.take n) <* addPosition n
 
 fitSGet :: Int -> SGet a -> SGet a
 fitSGet len parser | len < 0   = overrun

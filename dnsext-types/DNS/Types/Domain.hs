@@ -3,32 +3,32 @@
 
 module DNS.Types.Domain (
     Domain
+  , domainToShortByteString
+  , shortByteStringToDomain
   , domainToByteString
   , byteStringToDomain
-  , domainToText
-  , textToDomain
   , putDomain
   , getDomain
   , Mailbox
+  , mailboxToShortByteString
+  , shortByteStringToMailbox
   , mailboxToByteString
   , byteStringToMailbox
-  , mailboxToText
-  , textToMailbox
   , putMailbox
   , getMailbox
   ) where
 
 import qualified Control.Exception as E
-import qualified Data.Attoparsec.Text as P
-import Data.Char (chr, ord, isDigit, digitToInt)
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Short as Short
 import Data.Functor (($>))
 import Data.String
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import Data.Word8
 
 import DNS.StateBinary
 import DNS.Types.Error
 import DNS.Types.Imports
+import qualified DNS.Types.ShortParser as P
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -61,25 +61,25 @@ import DNS.Types.Imports
 -- just\\.one\\.label.example.  -- First label is \"just.one.label\"
 -- @
 --
-newtype Domain = Domain Text deriving (Eq, Ord)
+newtype Domain = Domain ShortByteString deriving (Eq, Ord)
 
 instance Show Domain where
-    show (Domain d) = T.unpack d
+    show (Domain d) = shortToString d
 
 instance IsString Domain where
-    fromString = Domain . T.pack
+    fromString = Domain . Short.toShort . C8.pack
 
 domainToByteString :: Domain -> ByteString
-domainToByteString (Domain o) = T.encodeUtf8 o
+domainToByteString (Domain o) = Short.fromShort o
 
 byteStringToDomain :: ByteString -> Domain
-byteStringToDomain = Domain . T.decodeUtf8
+byteStringToDomain = Domain . Short.toShort
 
-domainToText :: Domain -> Text
-domainToText (Domain o) = o
+domainToShortByteString :: Domain -> ShortByteString
+domainToShortByteString (Domain o) = o
 
-textToDomain :: Text -> Domain
-textToDomain = Domain
+shortByteStringToDomain :: ShortByteString -> Domain
+shortByteStringToDomain = Domain
 
 ----------------------------------------------------------------
 
@@ -101,166 +101,37 @@ textToDomain = Domain
 -- john.smith\@examle.com.   -- First label is @john.smith@
 -- @
 --
-newtype Mailbox = Mailbox Text deriving (Eq, Ord)
+newtype Mailbox = Mailbox ShortByteString deriving (Eq, Ord)
 
 instance Show Mailbox where
-    show (Mailbox d) = T.unpack d
+    show (Mailbox d) = shortToString d
 
 instance IsString Mailbox where
-    fromString = Mailbox . T.pack
+    fromString = Mailbox . Short.toShort . C8.pack
 
 mailboxToByteString :: Mailbox -> ByteString
-mailboxToByteString (Mailbox o) = T.encodeUtf8 o
+mailboxToByteString (Mailbox o) = Short.fromShort o
 
 byteStringToMailbox :: ByteString -> Mailbox
-byteStringToMailbox = Mailbox . T.decodeUtf8
+byteStringToMailbox = Mailbox . Short.toShort
 
-mailboxToText :: Mailbox -> Text
-mailboxToText (Mailbox o) = o
+mailboxToShortByteString :: Mailbox -> ShortByteString
+mailboxToShortByteString (Mailbox o) = o
 
-textToMailbox :: Text -> Mailbox
-textToMailbox = Mailbox
-
-----------------------------------------------------------------
-
--- | Decode a domain name in A-label form to a leading label and a tail with
--- the remaining labels, unescaping backlashed chars and decimal triples along
--- the way. Any  U-label conversion belongs at the layer above this code.
---
--- >>> parseLabel '.' "abc\\.def.xyz"
--- Right ("abc.def","xyz")
--- >>> parseLabel '.' "\\097.xyz"
--- Right ("a","xyz")
--- >>> parseLabel '.' ".abc.def.xyz"
--- Left (DecodeError "invalid domain: .abc.def.xyz")
-parseLabel :: Char -> Text -> Either DNSError (Text, Text)
-parseLabel sep dom =
-    if T.any (== '\\') dom
-    then toResult $ P.parse (labelParser sep mempty) dom
-    else check $ safeTail <$> T.break (== sep) dom
-  where
-    toResult (P.Partial c)  = toResult (c mempty)
-    toResult (P.Done tl hd) = check (hd, tl)
-    toResult _ = bottom
-    safeTail bs | T.null bs = mempty
-                | otherwise = T.tail bs
-    check r@(hd, tl) | not (T.null hd) || T.null tl = Right r
-                     | otherwise = bottom
-    bottom = Left $ DecodeError $ "invalid domain: " ++ T.unpack dom
-
-labelParser :: Char -> Text -> P.Parser Text
-labelParser sep acc = do
-    acc' <- mappend acc <$> P.option mempty simple
-    labelEnd sep acc' <|> (escaped >>= labelParser sep . T.snoc acc')
-  where
-    simple = fst <$> P.match skipUnescaped
-      where
-        skipUnescaped = P.skipMany1 $ P.satisfy notSepOrBslash
-        notSepOrBslash w = w /= sep && w /= '\\'
-
-    escaped = do
-        P.skip (== '\\')
-        either decodeDec pure =<< P.eitherP digit P.anyChar
-      where
-        digit = digitToInt <$> P.satisfy isDigit
-        decodeDec d = safeChar =<< trigraph d <$> digit <*> digit
-          where
-            trigraph :: Int -> Int -> Int -> Int
-            trigraph x y z = 100 * x + 10 * y + z
-
-            safeChar :: Int -> P.Parser Char
-            safeChar n | n > 255   = mzero
-                       | otherwise = pure $ chr n
-
-labelEnd :: Char -> Text -> P.Parser Text
-labelEnd sep acc =
-    P.satisfy (== sep) $> acc <|>
-    P.endOfInput       $> acc
+shortByteStringToMailbox :: ShortByteString -> Mailbox
+shortByteStringToMailbox = Mailbox
 
 ----------------------------------------------------------------
-
--- | Convert a wire-form label to presentation-form by escaping
--- the separator, special and non-printing characters.  For simple
--- labels with no bytes that require escaping we get back the input
--- Text asis with no copying or re-construction.
---
--- Note: the separator is required to be either \'.\' or \'\@\', but this
--- constraint is the caller's responsibility and is not checked here.
---
-unparseLabel :: Char -> Text -> Text
-unparseLabel sep label
-  | isAllPlain label = label
-  | otherwise        = toResult $ P.parse (labelUnparser sep mempty) label
-  where
-    isAllPlain = T.all (isPlain sep)
-    toResult (P.Partial c) = toResult (c mempty)
-    toResult (P.Done _ r) = r
-    toResult _ = E.throw UnknownDNSError -- can't happen
-
-labelUnparser :: Char -> Text -> P.Parser Text
-labelUnparser sep acc = do
-    acc' <- mappend acc <$> P.option mempty asis
-    P.endOfInput $> acc' <|> (esc >>= labelUnparser sep . mappend acc')
-  where
-    -- Non-printables are escaped as decimal trigraphs, while printable
-    -- specials just get a backslash prefix.
-    esc = do
-        w <- P.anyChar
-        if w <= ' ' || w >= del
-        then let (q100, r100) = ord w `divMod` 100
-                 (q10, r10) = r100 `divMod` 10
-              in pure $ T.pack [ '\\'
-                               , chr (ord '0' + q100)
-                               , chr (ord '0' + q10)
-                               , chr (ord '0' + r10)
-                               ]
-        else pure $ T.pack [ '\\', w ]
-
-    -- Runs of plain bytes are recognized as a single chunk, which is then
-    -- returned as-is.
-    asis = fmap fst $ P.match $ P.skipMany1 $ P.satisfy $ isPlain sep
-
--- | In the presentation form of DNS labels, these characters are escaped by
--- prepending a backlash. (They have special meaning in zone files). Whitespace
--- and other non-printable or non-ascii characters are encoded via "\DDD"
--- decimal escapes. The separator character is also quoted in each label. Note
--- that '@' is quoted even when not the separator.
-escSpecials :: Text
-escSpecials = "\"$();@\\"
-
--- | Is the given byte the separator or one of the specials?
-isSpecial :: Char -> Char -> Bool
-isSpecial sep w = w == sep || T.elem w escSpecials
-
--- | Is the given byte a plain byte that reqires no escaping. The tests are
--- ordered to succeed or fail quickly in the most common cases. The test
--- ranges assume the expected numeric values of the named special characters.
--- Note: the separator is assumed to be either '.' or '@' and so not matched by
--- any of the first three fast-path 'True' cases.
-isPlain :: Char -> Char -> Bool
-isPlain sep w | w >= del             = False -- <DEL> + non-ASCII
-              | w > '\\'             = True  -- ']'..'_'..'a'..'z'..'~'
-              | w >= '0' && w < ';'  = True  -- '0'..'9'..':'
-              | w >  '@' && w < '\\' = True  -- 'A'..'Z'..'['
-              | w <= ' '             = False -- non-printables
-              | isSpecial sep w      = False -- one of the specials
-              | otherwise            = True  -- plain punctuation
-
-del :: Char
-del = chr 127
-
-rootDomain :: RawDomain
-rootDomain = "."
 
 putDomain :: Domain -> SPut
-putDomain (Domain d) = putDomain' '.' d
+putDomain (Domain d) = putDomain' _period d
 
 putMailbox :: Mailbox -> SPut
-putMailbox (Mailbox m) = putDomain' '@' m
+putMailbox (Mailbox m) = putDomain' _at m
 
-putDomain' :: Char -> RawDomain -> SPut
+putDomain' :: Word8 -> RawDomain -> SPut
 putDomain' sep dom
-    | T.null dom || dom == rootDomain = put8 0
+    | Short.null dom || dom == rootDomain = put8 0
     | otherwise = do
         mpos <- popPointer dom
         cur <- builderPosition
@@ -270,22 +141,25 @@ putDomain' sep dom
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
-                                , putDomain' '.' tl
+                                , putDomain' _period tl
                                 ]
   where
     -- Try with the preferred separator if present, else fall back to '.'.
     (hd, tl) = loop sep
       where
         loop w = case parseLabel w dom of
-            Right p | w /= '.' && T.null (snd p) -> loop '.'
+            Just p | w /= _period && Short.null (snd p) -> loop _period
                     | otherwise -> p
-            Left e -> E.throw e
+            Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
+
+rootDomain :: RawDomain
+rootDomain = "."
 
 putPointer :: Int -> SPut
 putPointer pos = putInt16 (pos .|. 0xc000)
 
 putPartialDomain :: RawDomain -> SPut
-putPartialDomain = putLenText
+putPartialDomain = putLenShortByteString
 
 ----------------------------------------------------------------
 
@@ -306,10 +180,10 @@ putPartialDomain = putLenText
 --
 
 getDomain :: SGet Domain
-getDomain = Domain <$> (parserPosition >>= getDomain' '.')
+getDomain = Domain <$> (parserPosition >>= getDomain' _period)
 
 getMailbox :: SGet Mailbox
-getMailbox = Mailbox <$> (parserPosition >>= getDomain' '@')
+getMailbox = Mailbox <$> (parserPosition >>= getDomain' _at)
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points
@@ -320,7 +194,7 @@ getMailbox = Mailbox <$> (parserPosition >>= getDomain' '@')
 --
 -- >>> :{
 -- let input = "\6\3foo\192\0\3bar\0"
---     parser = skipNBytes 1 >> getDomain' '.' 1
+--     parser = skipNBytes 1 >> getDomain' _period 1
 --     Right (output, _) = runSGet parser input
 --  in output == "foo.\\003foo\\192\\000.bar."
 -- :}
@@ -331,7 +205,7 @@ getMailbox = Mailbox <$> (parserPosition >>= getDomain' '@')
 --
 -- >>> :{
 -- let input = "\6\3foo\192\1\3bar\0"
---     parser = skipNBytes 1 >> getDomain' '.' 1
+--     parser = skipNBytes 1 >> getDomain' _period 1
 --     Left (DecodeError err) = runSGet parser input
 --  in err
 -- :}
@@ -348,14 +222,14 @@ getMailbox = Mailbox <$> (parserPosition >>= getDomain' '@')
 -- precedes the start of the current domain name.  The starting offsets form a
 -- strictly decreasing sequence, which prevents pointer loops.
 --
-getDomain' :: Char -> Int -> SGet Text
+getDomain' :: Word8 -> Int -> SGet ShortByteString
 getDomain' sep1 ptrLimit = do
     pos <- parserPosition
     c <- getInt8
     let n = getValue c
     getdomain pos c n
   where
-    -- Reprocess the same Text starting at the pointer
+    -- Reprocess the same ShortByteString starting at the pointer
     -- target (offset).
     getPtr pos offset = do
         msg <- getInput
@@ -368,7 +242,7 @@ getDomain' sep1 ptrLimit = do
                 -- mailboxes (e.g. SOA rname) are less frequently reused, and
                 -- have a different presentation form, so must not share the
                 -- same cache.
-                when (sep1 == '.') $
+                when (sep1 == _period) $
                     pushDomain pos $ fst o
                 return (fst o)
 
@@ -379,7 +253,7 @@ getDomain' sep1 ptrLimit = do
           let offset = n * 256 + d
           when (offset >= ptrLimit) $
               failSGet "invalid name compression pointer"
-          if sep1 /= '.'
+          if sep1 /= _period
               then getPtr pos offset
               else popDomain offset >>= \case
                   Nothing -> getPtr pos offset
@@ -388,11 +262,11 @@ getDomain' sep1 ptrLimit = do
       -- This may change some time in the future.
       | isExtLabel c = return ""
       | otherwise = do
-          hs <- unparseLabel sep1 <$> getNText n
-          ds <- getDomain' '.' ptrLimit
+          hs <- unparseLabel sep1 <$> getNShortByteString n
+          ds <- getDomain' _period ptrLimit
           let dom = case ds of -- avoid trailing ".."
                   "." -> hs <> "."
-                  _   -> hs <> T.singleton sep1 <> ds
+                  _   -> hs <> Short.singleton sep1 <> ds
           pushDomain pos dom
           return dom
     getValue c = c .&. 0x3f
@@ -400,3 +274,126 @@ getDomain' sep1 ptrLimit = do
     isExtLabel c = not (testBit c 7) && testBit c 6
 
 ----------------------------------------------------------------
+
+-- | Decode a domain name in A-label form to a leading label and a tail with
+-- the remaining labels, unescaping backlashed chars and decimal triples along
+-- the way. Any  U-label conversion belongs at the layer above this code.
+--
+-- >>> parseLabel _period "abc\\.def.xyz"
+-- Just ("abc.def","xyz")
+-- >>> parseLabel _period "\\097.xyz"
+-- Just ("a","xyz")
+-- >>> parseLabel _period ".abc.def.xyz"
+-- Nothing
+parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
+parseLabel sep dom =
+    if Short.any (== _backslash) dom
+    then toResult $ P.parse (labelParser sep mempty) dom
+    else check $ safeTail <$> Short.break (== sep) dom
+  where
+    toResult (Just hd, tl) = check (hd, tl)
+    toResult _             = Nothing
+    safeTail bs = case Short.uncons bs of
+      Nothing      -> mempty
+      Just (_,bs') -> bs'
+    check r@(hd, tl) | not (Short.null hd) || Short.null tl = Just r
+                     | otherwise = Nothing
+
+labelParser :: Word8 -> ShortByteString -> P.Parser ShortByteString
+labelParser sep acc = do
+    acc' <- mappend acc <$> P.option mempty simple
+    labelEnd sep acc' <|> (escaped >>= labelParser sep . Short.snoc acc')
+  where
+    simple = fst <$> P.match skipUnescaped
+      where
+        skipUnescaped = P.skipSome $ P.satisfy notSepOrBslash
+        notSepOrBslash w = w /= sep && w /= _backslash
+
+    escaped = do
+        P.skip (== _backslash)
+        (digit >>= decodeDec) <|> P.anyChar
+      where
+        digit = (subtract _0) <$> P.satisfy isDigit
+        decodeDec d = safeChar =<< trigraph d <$> digit <*> digit
+          where
+            trigraph x y z = 100 * x + 10 * y + z
+            safeChar n | n > 255   = mzero
+                       | otherwise = pure n
+
+labelEnd :: Word8 -> ShortByteString -> P.Parser ShortByteString
+labelEnd sep acc =
+    P.satisfy (== sep) $> acc <|>
+    P.eof              $> acc
+
+----------------------------------------------------------------
+
+-- | Convert a wire-form label to presentation-form by escaping
+-- the separator, special and non-printing characters.  For simple
+-- labels with no bytes that require escaping we get back the input
+-- Text asis with no copying or re-construction.
+--
+-- Note: the separator is required to be either \'.\' or \'\@\', but this
+-- constraint is the caller's responsibility and is not checked here.
+--
+unparseLabel :: Word8 -> ShortByteString -> ShortByteString
+unparseLabel sep label
+  | isAllPlain label = label
+  | otherwise        = toResult $ P.parse (labelUnparser sep mempty) label
+  where
+    isAllPlain = Short.all (isPlain sep)
+    toResult (Just r, _) = r
+    toResult _ = E.throw UnknownDNSError -- can't happen
+
+labelUnparser :: Word8 -> ShortByteString -> P.Parser ShortByteString
+labelUnparser sep acc = do
+    acc' <- mappend acc <$> P.option mempty asis
+    P.eof $> acc' <|> (esc >>= labelUnparser sep . mappend acc')
+  where
+    -- Non-printables are escaped as decimal trigraphs, while printable
+    -- specials just get a backslash prefix.
+    esc = do
+        w <- P.anyChar
+        if w <= _space || w >= _del
+        then let (q100, r100) = w `divMod` 100
+                 (q10, r10)   = r100 `divMod` 10
+              in pure $ Short.pack [ _backslash
+                                   , _0 + q100
+                                   , _0 + q10
+                                   , _0 + r10
+                                   ]
+        else pure $ Short.pack [_backslash, w]
+
+    -- Runs of plain bytes are recognized as a single chunk, which is then
+    -- returned as-is.
+    asis = fmap fst $ P.match $ P.skipSome $ P.satisfy $ isPlain sep
+
+-- | In the presentation form of DNS labels, these characters are escaped by
+-- prepending a backlash. (They have special meaning in zone files). Whitespace
+-- and other non-printable or non-ascii characters are encoded via "\DDD"
+-- decimal escapes. The separator character is also quoted in each label. Note
+-- that '@' is quoted even when not the separator.
+escSpecials :: [Word8]
+escSpecials = [_quotedbl, _dollar, _parenleft, _parenright, _semicolon, _at, _backslash]
+
+-- | Is the given byte the separator or one of the specials?
+isSpecial :: Word8 -> Word8 -> Bool
+isSpecial sep w = w == sep || elem w escSpecials
+
+-- | Is the given byte a plain byte that reqires no escaping. The tests are
+-- ordered to succeed or fail quickly in the most common cases. The test
+-- ranges assume the expected numeric values of the named special characters.
+-- Note: the separator is assumed to be either '.' or '@' and so not matched by
+-- any of the first three fast-path 'True' cases.
+isPlain :: Word8 -> Word8 -> Bool
+isPlain sep w | w >= _del                  = False -- <DEL> + non-ASCII
+              | w >  _backslash            = True  -- ']'..'_'..'a'..'z'..'~'
+              | w >= _0  && w < _semicolon = True  -- '0'..'9'..':'
+              | w >  _at && w < _backslash = True  -- 'A'..'Z'..'['
+              | w <= _space                = False -- non-printables
+              | isSpecial sep       w      = False -- one of the specials
+              | otherwise                  = True  -- plain punctuation
+
+----------------------------------------------------------------
+
+shortToString :: ShortByteString -> String
+shortToString = C8.unpack . Short.fromShort
