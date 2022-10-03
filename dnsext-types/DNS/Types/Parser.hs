@@ -1,5 +1,6 @@
 module DNS.Types.Parser (
     Parser
+  , Result(..)
   , Builder
   , ToBuilder(..)
   , parse
@@ -18,14 +19,15 @@ module DNS.Types.Parser (
 import DNS.Types.Imports
 import DNS.Types.ShortBuilder
 import qualified DNS.Types.ShortParser as P
-import DNS.Types.ShortParser hiding (parse, char, string)
+import DNS.Types.ShortParser hiding (char, string)
 
 parse :: Parser Builder
       -> ShortByteString
       -> (Maybe ShortByteString, ShortByteString)
-parse p bs0 = case P.parse p bs0 of
-  (Nothing, bs) -> (Nothing, bs)
-  (Just b,  bs) -> (Just (build b), bs)
+parse p bs0 = case P.runParser p bs0 of
+  (Unmatch, bs) -> (Nothing, bs)
+  (Match b, bs) -> (Just (build b), bs)
+  (Fail _,  bs) -> (Nothing, bs)
 
 char :: Word8 -> Parser Builder
 char w = toBuilder <$> P.char w

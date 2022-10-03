@@ -13,8 +13,13 @@ import Data.Word8
 
 data Parser a = Parser {
   -- | Getting the internal parser.
-    runParser :: ShortByteString -> (Maybe a, ShortByteString)
+    runParser :: ShortByteString -> (Result a, ShortByteString)
   }
+
+data Result a = Match a
+              | Unmatch
+              | Fail String
+              deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
@@ -22,33 +27,30 @@ instance Functor Parser where
     f `fmap` p = return f <*> p
 
 instance Applicative Parser where
-    pure a = Parser $ \bs -> (Just a, bs)
+    pure a = Parser $ \bs -> (Match a, bs)
     (<*>)  = ap
 
 instance Monad Parser where
     return   = pure
     p >>= f  = Parser $ \bs -> case runParser p bs of
-        (Nothing, bs') -> (Nothing, bs')
-        (Just a,  bs') -> runParser (f a) bs'
+        (Unmatch, bs') -> (Unmatch, bs')
+        (Match a, bs') -> runParser (f a) bs'
+        (Fail s,  bs') -> (Fail s, bs')
 
 instance MonadFail Parser where
-    fail _   = Parser $ \bs -> (Nothing, bs)
+    fail s = Parser $ \bs -> (Fail s, bs)
 
+-- no 'try'
 instance MonadPlus Parser where
-    mzero       = Parser $ \bs -> (Nothing, bs)
+    mzero       = Parser $ \bs -> (Unmatch, bs)
     p `mplus` q = Parser $ \bs -> case runParser p bs of
-        (Nothing, _)   -> runParser q bs
-        (Just a,  bs') -> (Just a, bs')
+        (Unmatch, _)    -> runParser q bs
+        (Match a,  bs') -> (Match a, bs')
+        (Fail s,   bs') -> (Fail s,  bs')
 
 instance Alternative Parser where
     empty = mzero
     (<|>) = mplus
-
-----------------------------------------------------------------
-
--- | Run a parser.
-parse :: Parser a -> ShortByteString -> (Maybe a, ShortByteString)
-parse p bs = runParser p bs
 
 ----------------------------------------------------------------
 -- | The parser @satisfy f@ succeeds for any character for which the
@@ -58,21 +60,13 @@ satisfy :: (Word8 -> Bool) -> Parser Word8
 satisfy predicate = Parser sat
   where
     sat bs = case Short.uncons bs of
-      Nothing         -> (Nothing, "")
+      Nothing         -> (Unmatch, "")
       Just (b,bs')
-        | predicate b -> (Just b,  bs')
-        | otherwise   -> (Nothing, bs)
+        | predicate b -> (Match b, bs')
+        | otherwise   -> (Unmatch, bs)
 
 eof :: Parser ()
-eof = Parser $ \bs -> if bs == "" then (Just (), "") else (Nothing, bs)
-
-----------------------------------------------------------------
--- | The parser try p behaves like parser p, except that it pretends
---   that it hasn't consumed any input when an error occurs.
-try :: Parser a -> Parser a
-try p = Parser $ \bs -> case runParser p bs of
-        (Nothing, _  ) -> (Nothing, bs)
-        (Just a,  bs') -> (Just a,  bs')
+eof = Parser $ \bs -> if bs == "" then (Match (), "") else (Unmatch, bs)
 
 ----------------------------------------------------------------
 
@@ -169,8 +163,9 @@ manyTill p end = scan
 
 match :: Parser a -> Parser (ShortByteString, a)
 match p = Parser $ \bs -> case runParser p bs of
-  (Nothing, _  ) -> (Nothing, bs)
-  (Just a,  bs') -> let len  = Short.length bs
+  (Unmatch, _)   -> (Unmatch, bs)
+  (Match a, bs') -> let len  = Short.length bs
                         len' = Short.length bs'
                         bs'' = Short.take (len - len') bs
-                    in (Just (bs'', a),  bs')
+                    in (Match (bs'', a),  bs')
+  (Fail s, _)    -> (Fail s, bs)

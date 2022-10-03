@@ -286,6 +286,10 @@ getDomain' sep1 ptrLimit = do
 -- Just ("a","xyz")
 -- >>> parseLabel _period ".abc.def.xyz"
 -- Nothing
+-- >>> parseLabel _period "\\09.xyz"
+-- Nothing
+-- >>> parseLabel _period "\\513.xyz"
+-- Nothing
 parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
 parseLabel sep dom =
     if Short.any (== _backslash) dom
@@ -301,9 +305,11 @@ parseLabel sep dom =
                      | otherwise = Nothing
 
 labelParser :: Word8 -> Builder -> Parser Builder
-labelParser sep bld0 = do
-    bld <- (bld0 <>) <$> P.option mempty simple
-    labelEnd sep bld <|> (escaped >>= \b -> labelParser sep (bld <> b))
+labelParser sep bld =
+      (P.eof $> bld)
+  <|> (P.satisfy (== sep) $> bld)
+  <|> (simple  >>= \b -> labelParser sep (bld <> b))
+  <|> (escaped >>= \b -> labelParser sep (bld <> b))
   where
     simple = P.toBuilder . fst <$> P.match skipUnescaped
       where
@@ -312,18 +318,17 @@ labelParser sep bld0 = do
 
     escaped = do
         P.skip (== _backslash)
-        (digit >>= decodeDec) <|> P.toBuilder <$> P.anyChar
+        ddd <|> nonDDD
       where
-        digit = (subtract _0) <$> P.satisfy isDigit
-        decodeDec d = P.toBuilder <$> (safeChar =<< trigraph d <$> digit <*> digit)
-          where
-            trigraph x y z = 100 * x + 10 * y + z
-            safeChar n | n > 255   = mzero
-                       | otherwise = pure n
-
-labelEnd :: Word8 -> Builder -> Parser Builder
-labelEnd sep bld = P.satisfy (== sep) $> bld
-               <|> P.eof              $> bld
+        nonDDD = P.toBuilder <$> P.anyChar
+        ddd = do
+            x <- digit
+            y <- digit <|> fail "an digit is expected (1)"
+            z <- digit <|> fail "an digit is expected (2)"
+            let d = 100 * x + 10 * y + z
+            if d > 255 then fail "DDD should be less than 256" else pure (P.toBuilder (fromIntegral d :: Word8))
+        digit :: Parser Int -- Word8 is not good enough for "d > 255"
+        digit = fromIntegral . (subtract _0) <$> P.satisfy isDigit
 
 ----------------------------------------------------------------
 
