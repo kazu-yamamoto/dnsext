@@ -41,8 +41,10 @@ library
         DNS.Types.Imports
         DNS.Types.Message
         DNS.Types.Opaque
+        DNS.Types.Parser
         DNS.Types.RData
         DNS.Types.Sec
+        DNS.Types.ShortBuilder
         DNS.Types.ShortParser
         DNS.Types.Type
 

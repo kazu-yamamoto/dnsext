@@ -28,7 +28,8 @@ import Data.Word8
 import DNS.StateBinary
 import DNS.Types.Error
 import DNS.Types.Imports
-import qualified DNS.Types.ShortParser as P
+import DNS.Types.Parser (Parser, Builder)
+import qualified DNS.Types.Parser as P
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -299,31 +300,30 @@ parseLabel sep dom =
     check r@(hd, tl) | not (Short.null hd) || Short.null tl = Just r
                      | otherwise = Nothing
 
-labelParser :: Word8 -> ShortByteString -> P.Parser ShortByteString
-labelParser sep acc = do
-    acc' <- mappend acc <$> P.option mempty simple
-    labelEnd sep acc' <|> (escaped >>= labelParser sep . Short.snoc acc')
+labelParser :: Word8 -> Builder -> Parser Builder
+labelParser sep bld0 = do
+    bld <- (bld0 <>) <$> P.option mempty simple
+    labelEnd sep bld <|> (escaped >>= \b -> labelParser sep (bld <> b))
   where
-    simple = fst <$> P.match skipUnescaped
+    simple = P.toBuilder . fst <$> P.match skipUnescaped
       where
         skipUnescaped = P.skipSome $ P.satisfy notSepOrBslash
         notSepOrBslash w = w /= sep && w /= _backslash
 
     escaped = do
         P.skip (== _backslash)
-        (digit >>= decodeDec) <|> P.anyChar
+        (digit >>= decodeDec) <|> P.toBuilder <$> P.anyChar
       where
         digit = (subtract _0) <$> P.satisfy isDigit
-        decodeDec d = safeChar =<< trigraph d <$> digit <*> digit
+        decodeDec d = P.toBuilder <$> (safeChar =<< trigraph d <$> digit <*> digit)
           where
             trigraph x y z = 100 * x + 10 * y + z
             safeChar n | n > 255   = mzero
                        | otherwise = pure n
 
-labelEnd :: Word8 -> ShortByteString -> P.Parser ShortByteString
-labelEnd sep acc =
-    P.satisfy (== sep) $> acc <|>
-    P.eof              $> acc
+labelEnd :: Word8 -> Builder -> Parser Builder
+labelEnd sep bld = P.satisfy (== sep) $> bld
+               <|> P.eof              $> bld
 
 ----------------------------------------------------------------
 
@@ -352,10 +352,10 @@ unparseLabel sep label
     toResult (Just r, _) = r
     toResult _ = E.throw UnknownDNSError -- can't happen
 
-labelUnparser :: Word8 -> ShortByteString -> P.Parser ShortByteString
-labelUnparser sep acc = do
-    acc' <- mappend acc <$> P.option mempty asis
-    P.eof $> acc' <|> (esc >>= labelUnparser sep . mappend acc')
+labelUnparser :: Word8 -> Builder -> Parser Builder
+labelUnparser sep bld0 = (P.eof $> bld0)
+                     <|> (asis >>= \b -> labelUnparser sep (bld0 <> b))
+                     <|> (esc  >>= \b -> labelUnparser sep (bld0 <> b))
   where
     -- Non-printables are escaped as decimal trigraphs, while printable
     -- specials just get a backslash prefix.
@@ -364,16 +364,18 @@ labelUnparser sep acc = do
         if w <= _space || w >= _del
         then let (q100, r100) = w `divMod` 100
                  (q10, r10)   = r100 `divMod` 10
-              in pure $ Short.pack [ _backslash
-                                   , _0 + q100
-                                   , _0 + q10
-                                   , _0 + r10
-                                   ]
-        else pure $ Short.pack [_backslash, w]
+              in pure (P.toBuilder _backslash  <>
+                       P.toBuilder (_0 + q100) <>
+                       P.toBuilder (_0 + q10)  <>
+                       P.toBuilder (_0 + r10))
+        else pure (P.toBuilder _backslash <> P.toBuilder w)
 
     -- Runs of plain bytes are recognized as a single chunk, which is then
     -- returned as-is.
-    asis = fmap fst $ P.match $ P.skipSome $ P.satisfy $ isPlain sep
+    asis :: Parser Builder
+    asis = do
+       (r, _) <- P.match $ P.skipSome $ P.satisfy (isPlain sep)
+       return $ P.toBuilder r
 
 -- | In the presentation form of DNS labels, these characters are escaped by
 -- prepending a backlash. (They have special meaning in zone files). Whitespace

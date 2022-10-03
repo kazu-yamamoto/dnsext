@@ -86,15 +86,6 @@ skip = void . satisfy
 -- | @string s@ parses a sequence of characters given by @s@. Returns
 --   the parsed string
 
-{-
-string :: ShortByteString -> Parser ShortByteString
-string bs0 = Short.pack <$> loop bs0
-  where
-    loop bs = case Short.uncons bs of
-      Nothing      -> pure []
-      Just (b,bs') -> (:) <$> char b <*> loop bs'
--}
-
 string :: ShortByteString -> Parser ShortByteString
 string bs0 = loop bs0 >> pure bs0
  where
