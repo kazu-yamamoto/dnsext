@@ -33,7 +33,6 @@ import qualified DNS.Types.Parser as P
 
 -- $setup
 -- >>> :set -XOverloadedStrings
--- >>> import Data.Text
 
 -- | This type holds the /presentation form/ of fully-qualified DNS domain
 -- names encoded as ASCII A-labels, with \'.\' separators between labels.
