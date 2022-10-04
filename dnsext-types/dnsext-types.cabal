@@ -6,7 +6,7 @@ license-file:       LICENSE
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
 author:             Kazu Yamamoto <kazu@iij.ad.jp>
 tested-with:
-    ghc ==8.0.2 ghc ==8.2.2 ghc ==8.4.4 ghc ==8.6.5 ghc ==8.8.1
+    ghc ==8.6.5 ghc ==8.8.4 ghc ==9.0.2 ghc ==9.2.4
 
 synopsis:           Types for Extensible DNS libraries
 description:
@@ -19,7 +19,7 @@ extra-source-files: Changelog.md
 
 source-repository head
     type:     git
-    location: git://github.com/kazu-yamamoto/dnsext.git
+    location: https://github.com/kazu-yamamoto/dnsext
 
 library
     exposed-modules:
