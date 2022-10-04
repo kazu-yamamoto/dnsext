@@ -41,8 +41,11 @@ library
         DNS.Types.Imports
         DNS.Types.Message
         DNS.Types.Opaque
+        DNS.Types.Parser
         DNS.Types.RData
         DNS.Types.Sec
+        DNS.Types.ShortBuilder
+        DNS.Types.ShortParser
         DNS.Types.Type
 
     default-language: Haskell2010
@@ -59,7 +62,6 @@ library
         hourglass,
         iproute >=1.3.2,
         mtl,
-        text,
         word8
 
 test-suite doctests
@@ -91,5 +93,4 @@ test-suite spec
         bytestring,
         hspec,
         iproute >=1.3.2,
-        text,
         word8
