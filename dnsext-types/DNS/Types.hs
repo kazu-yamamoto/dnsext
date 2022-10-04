@@ -216,6 +216,7 @@ module DNS.Types (
   , BadAlg
   , BadTrunc
   , BadCookie
+  , BadRCODE
   )
   , fromRCODE
   , toRCODE
