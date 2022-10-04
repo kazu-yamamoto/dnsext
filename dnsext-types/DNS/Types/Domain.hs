@@ -69,6 +69,9 @@ instance Show Domain where
 instance IsString Domain where
     fromString = Domain . Short.toShort . C8.pack
 
+instance Semigroup Domain where
+   Domain dom0 <> Domain dom1 = Domain (dom0 <> dom1)
+
 domainToByteString :: Domain -> ByteString
 domainToByteString (Domain o) = Short.fromShort o
 

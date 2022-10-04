@@ -292,7 +292,9 @@ rd_rp a b = toRData $ RD_RP a b
 ----------------------------------------------------------------
 
 -- | IPv6 Address (RFC3596)
-newtype RD_AAAA = RD_AAAA IPv6 deriving (Eq)
+newtype RD_AAAA = RD_AAAA {
+    aaaa_ipv6 :: IPv6
+  } deriving (Eq)
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA

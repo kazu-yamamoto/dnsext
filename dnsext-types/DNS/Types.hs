@@ -7,6 +7,7 @@ module DNS.Types (
   , DNSHeader(..)
   , Identifier
   , DNSFlags(..)
+  , defaultDNSFlags
   , QorR(..)
   -- ** EDNS header
   , EDNSheader(..)
@@ -76,8 +77,9 @@ module DNS.Types (
   , RD_RP(..)
   , rd_rp
   -- *** AAAA RR
-  , RD_AAAA(..)
+  , RD_AAAA
   , rd_aaaa
+  , aaaa_ipv6
   -- *** SRV RR
   , RD_SRV(..)
   , rd_srv
