@@ -2,6 +2,8 @@ module DNS.IO (
   -- * Lookups returning requested RData
     lookup
   , lookupAuth
+  , lookup'
+  , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl

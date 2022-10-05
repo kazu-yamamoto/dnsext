@@ -100,12 +100,7 @@ import DNS.IO.Resolver as DNS
 --   Right [210.155.141.200]
 --
 lookupA :: Resolver -> Domain -> IO (Either DNSError [RD_A])
-lookupA rlv dom = do
-  erds <- DNS.lookup rlv dom A
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupA = lookup' A
 
 -- | Look up all (IPv6) \'AAAA\' records for the given hostname.
 --
@@ -116,12 +111,7 @@ lookupA rlv dom = do
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
 lookupAAAA :: Resolver -> Domain -> IO (Either DNSError [RD_AAAA])
-lookupAAAA rlv dom = do
-  erds <- DNS.lookup rlv dom AAAA
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupAAAA = lookup' AAAA
 
 ----------------------------------------------------------------
 
@@ -155,12 +145,7 @@ lookupAAAA rlv dom = do
 --   Right []
 --
 lookupMX :: Resolver -> Domain -> IO (Either DNSError [RD_MX])
-lookupMX rlv dom = do
-  erds <- DNS.lookup rlv dom MX
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupMX = lookup' MX
 
 -- | Look up all \'MX\' records for the given hostname, and then
 --   resolve their hostnames to IPv4 addresses by calling
@@ -210,21 +195,6 @@ lookupXviaMX rlv dom func = do
 
 ----------------------------------------------------------------
 
--- | This function performs the real work for both 'lookupNS' and
---   'lookupNSAuth'. The only difference between those two is which
---   function, 'lookup' or 'lookupAuth', is used to perform the
---   lookup. We take either of those as our first parameter.
-lookupNSImpl :: (Resolver -> Domain -> TYPE -> IO (Either DNSError [RData]))
-             -> Resolver
-             -> Domain
-             -> IO (Either DNSError [RD_NS])
-lookupNSImpl lookup_function rlv dom = do
-  erds <- lookup_function rlv dom NS
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
-
 -- | Look up all \'NS\' records for the given hostname. The results
 --   are taken from the ANSWER section of the response (as opposed to
 --   AUTHORITY). For details, see e.g.
@@ -243,7 +213,7 @@ lookupNSImpl lookup_function rlv dom = do
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
 lookupNS :: Resolver -> Domain -> IO (Either DNSError [RD_NS])
-lookupNS = lookupNSImpl DNS.lookup
+lookupNS = lookup' NS
 
 -- | Look up all \'NS\' records for the given hostname. The results
 --   are taken from the AUTHORITY section of the response and not the
@@ -267,7 +237,7 @@ lookupNS = lookupNSImpl DNS.lookup
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
 lookupNSAuth :: Resolver -> Domain -> IO (Either DNSError [RD_NS])
-lookupNSAuth = lookupNSImpl DNS.lookupAuth
+lookupNSAuth = lookupAuth' NS
 
 ----------------------------------------------------------------
 
@@ -284,12 +254,7 @@ lookupNSAuth = lookupNSImpl DNS.lookupAuth
 --   Right ["v=spf1 +mx -all"]
 --
 lookupTXT :: Resolver -> Domain -> IO (Either DNSError [RD_TXT])
-lookupTXT rlv dom = do
-  erds <- DNS.lookup rlv dom TXT
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupTXT = lookup' TXT
 
 ----------------------------------------------------------------
 
@@ -310,12 +275,7 @@ lookupTXT rlv dom = do
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
 lookupSOA :: Resolver -> Domain -> IO (Either DNSError [RD_SOA])
-lookupSOA rlv dom = do
-  erds <- DNS.lookup rlv dom SOA
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupSOA = lookup' SOA
 
 ----------------------------------------------------------------
 
@@ -333,12 +293,7 @@ lookupSOA rlv dom = do
 --   The 'lookupRDNS' function is more suited to this particular task.
 --
 lookupPTR :: Resolver -> Domain -> IO (Either DNSError [RD_PTR])
-lookupPTR rlv dom = do
-  erds <- DNS.lookup rlv dom PTR
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
+lookupPTR = lookup' PTR
 
 -- | Convenient wrapper around 'lookupPTR' to perform a reverse lookup
 --   on a single IP address.
@@ -393,14 +348,4 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 -- by "doctest".
 
 lookupSRV :: Resolver -> Domain -> IO (Either DNSError [RD_SRV])
-lookupSRV rlv dom = do
-  erds <- DNS.lookup rlv dom SRV
-  case erds of
-    -- See lookupXviaMX for an explanation of this construct.
-    Left err  -> return (Left err)
-    Right rds -> return $ mapM unTag rds
-
-unTag :: ResourceData a => RData -> Either DNSError a
-unTag rd = case fromRData rd of
-  Nothing -> Left UnexpectedRDATA
-  Just x  -> Right x
+lookupSRV = lookup' SRV

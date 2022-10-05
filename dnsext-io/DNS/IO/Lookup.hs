@@ -4,6 +4,8 @@ module DNS.IO.Lookup (
   -- * Lookups returning requested RData
     lookup
   , lookupAuth
+  , lookup'
+  , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl
@@ -54,6 +56,22 @@ lookup = lookupSection Answer
 --   Cache is used even if 'resolvCache' is 'Just'.
 lookupAuth :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookupAuth = lookupSection Authority
+
+lookup' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
+lookup' typ rlv dom = unwrap <$> lookup rlv dom typ
+
+lookupAuth' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
+lookupAuth' typ rlv dom = unwrap <$> lookupAuth rlv dom typ
+
+unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
+unwrap erds = case erds of
+    Left err  -> Left err
+    Right rds -> mapM unTag rds
+
+unTag :: ResourceData a => RData -> Either DNSError a
+unTag rd = case fromRData rd of
+  Nothing -> Left UnexpectedRDATA
+  Just x  -> Right x
 
 ----------------------------------------------------------------
 
