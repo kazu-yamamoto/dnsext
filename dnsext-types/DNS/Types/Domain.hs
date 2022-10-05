@@ -64,7 +64,7 @@ import qualified DNS.Types.Parser as P
 newtype Domain = Domain ShortByteString deriving (Eq, Ord)
 
 instance Show Domain where
-    show (Domain d) = shortToString d
+    show (Domain d) = "\"" ++ shortToString d ++ "\""
 
 instance IsString Domain where
     fromString = Domain . Short.toShort . C8.pack
@@ -107,7 +107,7 @@ shortByteStringToDomain = Domain
 newtype Mailbox = Mailbox ShortByteString deriving (Eq, Ord)
 
 instance Show Mailbox where
-    show (Mailbox d) = shortToString d
+    show (Mailbox d) = "\"" ++ shortToString d ++ "\""
 
 instance IsString Mailbox where
     fromString = Mailbox . Short.toShort . C8.pack
