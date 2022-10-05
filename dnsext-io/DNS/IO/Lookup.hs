@@ -84,10 +84,10 @@ lookupFreshSection rlv dom typ section = do
     eans <- lookupRaw rlv dom typ
     case eans of
       Left err  -> return $ Left err
-      Right ans -> return $ fromDNSMessage ans toRData
+      Right ans -> return $ fromDNSMessage ans toRD
   where
     correct ResourceRecord{..} = rrtype == typ
-    toRData = map rdata . filter correct . sectionF
+    toRD = map rdata . filter correct . sectionF
     sectionF = case section of
       Answer    -> answer
       Authority -> authority
