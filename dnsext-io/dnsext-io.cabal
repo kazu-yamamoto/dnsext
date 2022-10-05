@@ -27,11 +27,11 @@ source-repository head
 library
     exposed-modules:
         DNS.IO
+        DNS.IO.IO
         DNS.IO.Lookup
+        DNS.IO.Query
         DNS.IO.Resolver
         DNS.IO.Transport
-        DNS.IO.IO
-        DNS.IO.Types
 
     other-modules:
         DNS.IO.Imports

@@ -5,7 +5,7 @@ import DNS.Types
 
 import DNS.IO.Imports
 import DNS.IO.Memo
-import DNS.IO.Types
+import DNS.IO.Query
 
 ----------------------------------------------------------------
 

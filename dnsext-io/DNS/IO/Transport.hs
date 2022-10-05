@@ -4,13 +4,11 @@
 module DNS.IO.Transport (
     Resolver(..)
   , resolve
-  , encodeQuery
   ) where
 
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
-import DNS.Types.Encode
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfo(..), SockAddr(..), Family(AF_INET, AF_INET6), Socket, SocketType(Stream), close, socket, connect, defaultProtocol)
@@ -20,7 +18,7 @@ import System.Timeout (timeout)
 import DNS.IO.IO
 import DNS.IO.Imports
 import DNS.IO.Resolver.Types
-import DNS.IO.Types
+import DNS.IO.Query
 
 -- | Check response for a matching identifier and question.  If we ever do
 -- pipelined TCP, we'll need to handle out of order responses.  See:
@@ -247,96 +245,3 @@ isIllegal dom
   | any (\x -> C8.length x > 63)
         (C8.split '.' dom)      = True
   | otherwise                   = False
-
-----------------------------------------------------------------
-
--- | Construct a complete query 'DNSMessage', by combining the 'defaultQuery'
--- template with the specified 'Identifier', and 'Question'.  The
--- 'QueryControls' can be 'mempty' to leave all header and EDNS settings at
--- their default values, or some combination of overrides.  A default set of
--- overrides can be enabled via the 'Network.DNS.Resolver.resolvQueryControls'
--- field of 'Network.DNS.Resolver.ResolvConf'.  Per-query overrides are
--- possible by using 'Network.DNS.LookupRaw.loookupRawCtl'.
---
-makeQuery :: Identifier        -- ^ Crypto random request id
-          -> Question          -- ^ Question name and type
-          -> QueryControls     -- ^ Custom RD\/AD\/CD flags and EDNS settings
-          -> DNSMessage
-makeQuery idt q ctls = empqry {
-      header = (header empqry) { identifier = idt }
-    , question = [q]
-    }
-  where
-    empqry = makeEmptyQuery ctls
-
--- | A query template with 'QueryControls' overrides applied,
--- with just the 'Question' and query 'Identifier' remaining
--- to be filled in.
---
-makeEmptyQuery :: QueryControls -- ^ Flag and EDNS overrides
-               -> DNSMessage
-makeEmptyQuery ctls = defaultQuery {
-      header = header'
-    , ednsHeader = queryEdns ehctls
-    }
-  where
-    hctls = qctlHeader ctls
-    ehctls = qctlEdns ctls
-    header' = (header defaultQuery) { flags = queryDNSFlags hctls }
-
-    -- | Apply the given 'FlagOp' to a default boolean value to produce the final
-    -- setting.
-    --
-    applyFlag :: FlagOp -> Bool -> Bool
-    applyFlag FlagSet   _ = True
-    applyFlag FlagClear _ = False
-    applyFlag _         v = v
-
-    -- | Construct a list of 0 or 1 EDNS OPT RRs based on EdnsControls setting.
-    --
-    queryEdns :: EdnsControls -> EDNSheader
-    queryEdns (EdnsControls en vn sz d0 od) =
-        let d  = defaultEDNS
-         in if en == FlagClear
-            then NoEDNS
-            else EDNSheader $ d { ednsVersion = fromMaybe (ednsVersion d) vn
-                                , ednsUdpSize = fromMaybe (ednsUdpSize d) sz
-                                , ednsDnssecOk = applyFlag d0 (ednsDnssecOk d)
-                                , ednsOptions  = _odataDedup od
-                                }
-
-    -- | Apply all the query flag overrides to 'defaultDNSFlags', returning the
-    -- resulting 'DNSFlags' suitable for making queries with the requested flag
-    -- settings.  This is only needed if you're creating your own 'DNSMessage',
-    -- the 'Network.DNS.LookupRaw.lookupRawCtl' function takes a 'QueryControls'
-    -- argument and handles this conversion internally.
-    --
-    -- Default overrides can be specified in the resolver configuration by setting
-    -- the 'Network.DNS.resolvQueryControls' field of the
-    -- 'Network.DNS.Resolver.ResolvConf' argument to
-    -- 'Network.DNS.Resolver.makeResolvSeed'.  These then apply to lookups via
-    -- resolvers based on the resulting configuration, with the exception of
-    -- 'Network.DNS.LookupRaw.lookupRawCtl' which takes an additional
-    -- 'QueryControls' argument to augment the default overrides.
-    --
-    queryDNSFlags :: HeaderControls -> DNSFlags
-    queryDNSFlags (HeaderControls rd ad cd) = d {
-          recDesired = applyFlag rd $ recDesired d
-        , authenData = applyFlag ad $ authenData d
-        , chkDisable = applyFlag cd $ chkDisable d
-        }
-      where
-        d = defaultDNSFlags
-
--- | The encoded 'DNSMessage' has the specified request ID.  The default values
--- of the RD, AD, CD and DO flag bits, as well as various EDNS features, can be
--- adjusted via the 'QueryControls' parameter.
---
--- The caller is responsible for generating the ID via a securely seeded
--- CSPRNG.
---
-encodeQuery :: Identifier     -- ^ Crypto random request id
-            -> Question      -- ^ Query name and type
-            -> QueryControls -- ^ Query flag and EDNS overrides
-            -> ByteString
-encodeQuery idt q ctls = encode $ makeQuery idt q ctls

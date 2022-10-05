@@ -7,8 +7,7 @@ import Network.Socket
 import Test.Hspec
 
 import DNS.IO.IO as DNS
-import DNS.IO.Transport as DNS
-import DNS.IO.Types
+import DNS.IO.Query
 
 spec :: Spec
 spec = describe "send/receive" $ do

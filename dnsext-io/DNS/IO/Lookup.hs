@@ -21,10 +21,10 @@ import Time.System (timeCurrent)
 import DNS.IO.IO
 import DNS.IO.Imports
 import DNS.IO.Memo
+import DNS.IO.Query
 import DNS.IO.Resolver
 import DNS.IO.Resolver.Types
 import DNS.IO.Transport
-import DNS.IO.Types
 
 -- $setup
 -- >>> import Network.DNS.Resolver
