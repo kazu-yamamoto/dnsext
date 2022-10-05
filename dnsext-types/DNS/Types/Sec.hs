@@ -11,7 +11,6 @@ module DNS.Types.Sec (
   , RD_NSEC3PARAM(..)
   , RD_CDS(..)
   , RD_CDNSKEY(..)
-  , getTYPE
   , dnsTime
   , rd_rrsig
   , rd_ds
