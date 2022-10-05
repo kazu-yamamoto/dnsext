@@ -1,6 +1,7 @@
 module DNS.Types (
   -- * DNS message
     DNSMessage(..)
+  , fromDNSMessage
   , defaultQuery
   , defaultResponse
   -- ** Header
@@ -234,3 +235,30 @@ import DNS.Types.Opaque
 import DNS.Types.RData
 import DNS.Types.Sec
 import DNS.Types.Type
+
+----------------------------------------------------------------
+
+-- | Messages with a non-error RCODE are passed to the supplied function
+-- for processing.  Other messages are translated to 'DNSError' instances.
+--
+-- Note that 'NameError' is not a lookup error.  The lookup is successful,
+-- bearing the sad news that the requested domain does not exist.  'NameError'
+-- responses may return a meaningful AD bit, may contain useful data in the
+-- authority section, and even initial CNAME records that lead to the
+-- ultimately non-existent domain.  Applications that wish to process the
+-- content of 'NameError' (NXDomain) messages will need to implement their
+-- own RCODE handling.
+--
+fromDNSMessage :: DNSMessage -> (DNSMessage -> a) -> Either DNSError a
+fromDNSMessage ans conv = case errcode ans of
+    NoErr     -> Right $ conv ans
+    FormatErr -> Left FormatError
+    ServFail  -> Left ServerFailure
+    NameErr   -> Left NameError
+    NotImpl   -> Left NotImplemented
+    Refused   -> Left OperationRefused
+    BadVers   -> Left BadOptRecord
+    BadRCODE  -> Left $ DecodeError "Malformed EDNS message"
+    _         -> Left UnknownDNSError
+  where
+    errcode = rcode . flags . header
