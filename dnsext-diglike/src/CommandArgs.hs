@@ -10,8 +10,7 @@ import Data.Char (toUpper)
 import Data.Monoid (Last (..))
 
 import DNS.Types (TYPE (A, NS, TXT, PTR, AAAA, SOA))
-import DNS.IO.Types (QueryControls, rdFlag, FlagOp (FlagClear, FlagSet))
-
+import DNS.IO (QueryControls, rdFlag, FlagOp (FlagClear, FlagSet))
 
 -- parse command args to get params
 
