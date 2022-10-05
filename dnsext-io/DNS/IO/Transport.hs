@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module DNS.IO.Transport (
     Resolver(..)
@@ -10,12 +10,12 @@ module DNS.IO.Transport (
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
-import qualified Data.ByteString.Char8 as BS
+import DNS.Types.Encode
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfo(..), SockAddr(..), Family(AF_INET, AF_INET6), Socket, SocketType(Stream), close, socket, connect, defaultProtocol)
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
-import DNS.Types.Encode
 
 import DNS.IO.IO
 import DNS.IO.Imports
@@ -90,7 +90,7 @@ resolve rlv dom typ qctls rcv
   | otherwise     = resolveSequential nss        gens        q tm retry ctls rcv
   where
     dom' = domainToByteString dom
-    q = case BS.last dom' of
+    q = case C8.last dom' of
           '.' -> Question dom typ
           _   -> Question (dom <> ".") typ
 
@@ -234,18 +234,18 @@ tcpLookup gen ai q tm ctls =
 
 badLength :: ByteString -> Bool
 badLength dom
-    | BS.null dom        = True
-    | BS.last dom == '.' = BS.length dom > 254
-    | otherwise          = BS.length dom > 253
+    | C8.null dom        = True
+    | C8.last dom == '.' = C8.length dom > 254
+    | otherwise          = C8.length dom > 253
 
 isIllegal :: ByteString -> Bool
 isIllegal dom
   | badLength dom               = True
-  | '.' `BS.notElem` dom        = True
-  | ':' `BS.elem` dom           = True
-  | '/' `BS.elem` dom           = True
-  | any (\x -> BS.length x > 63)
-        (BS.split '.' dom)      = True
+  | '.' `C8.notElem` dom        = True
+  | ':' `C8.elem` dom           = True
+  | '/' `C8.elem` dom           = True
+  | any (\x -> C8.length x > 63)
+        (C8.split '.' dom)      = True
   | otherwise                   = False
 
 ----------------------------------------------------------------

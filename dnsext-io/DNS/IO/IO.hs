@@ -20,10 +20,10 @@ module DNS.IO.IO (
 import qualified Control.Exception as E
 import DNS.Types
 import DNS.Types.Decode
-import qualified Data.ByteString as B
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Lazy.Char8 as LC8
 import Data.IP (IPv4, IPv6)
 import Network.Socket (Socket, SockAddr)
 import Network.Socket.ByteString (recv, recvFrom)
@@ -78,7 +78,7 @@ receiveVC sock = do
         Left e    -> E.throwIO e
         Right msg -> return msg
   where
-    toLen bs = case B.unpack bs of
+    toLen bs = case BS.unpack bs of
         [hi, lo] -> 256 * (fromIntegral hi) + (fromIntegral lo)
         _        -> 0              -- never reached
 
@@ -87,15 +87,15 @@ recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
   where
     recv1 = do
         bs1 <- recvCore len
-        if BS.length bs1 == len then
+        if C8.length bs1 == len then
             return bs1
           else do
             loop bs1
     loop bs0 = do
-        let left = len - BS.length bs0
+        let left = len - C8.length bs0
         bs1 <- recvCore left
-        let bs = bs0 `BS.append` bs1
-        if BS.length bs == len then
+        let bs = bs0 `C8.append` bs1
+        if C8.length bs == len then
             return bs
           else
             loop bs
@@ -143,7 +143,7 @@ sendVC = (. encodeVC). sendAll
 -- encapsulated with an explicit length prefix (perhaps via 'encodeVC') and
 -- then concatenated into a single buffer.  DO NOT use 'sendAll' with UDP.
 --
-sendAll :: Socket -> BS.ByteString -> IO ()
+sendAll :: Socket -> ByteString -> IO ()
 sendAll = Socket.sendAll
 {-# INLINE sendAll #-}
 
@@ -153,7 +153,7 @@ sendAll = Socket.sendAll
 --
 encodeVC :: ByteString -> ByteString
 encodeVC legacyQuery =
-    let len = LBS.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ BS.length legacyQuery
+    let len = LC8.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ C8.length legacyQuery
     in len <> legacyQuery
 {-# INLINE encodeVC #-}
 

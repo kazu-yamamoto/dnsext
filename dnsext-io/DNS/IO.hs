@@ -76,7 +76,7 @@ module DNS.IO (
   ) where
 
 import DNS.Types
-import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Char8 as C8
 
 import DNS.IO.Imports
 import DNS.IO.Lookup as DNS
@@ -354,12 +354,12 @@ lookupRDNS :: Resolver -> ByteString -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
     -- ByteString constants.
-    dot = BS.pack "."
-    suffix = BS.pack ".in-addr.arpa"
+    dot = C8.pack "."
+    suffix = C8.pack ".in-addr.arpa"
 
-    octets = BS.split '.' ip
-    reverse_ip = BS.intercalate dot (reverse octets)
-    dom = byteStringToDomain (reverse_ip `BS.append` suffix)
+    octets = C8.split '.' ip
+    reverse_ip = C8.intercalate dot (reverse octets)
+    dom = byteStringToDomain (reverse_ip `C8.append` suffix)
 
 ----------------------------------------------------------------
 
