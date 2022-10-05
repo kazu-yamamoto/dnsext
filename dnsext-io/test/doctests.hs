@@ -22,6 +22,7 @@ modules =
   , "-i","-i."
   , "-threaded"
   , "DNS/IO.hs"
+  , "DNS/IO/Utils.hs"
   ]
 
 main :: IO ()

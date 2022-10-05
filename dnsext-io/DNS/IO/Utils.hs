@@ -9,8 +9,7 @@
 --   We can think of the return type as either \"what I asked for\" or
 --   \"an error\". For example, the 'lookupA' function, if successful,
 --   will return a list of 'IPv4'. The 'lookupMX' function will
---   instead return a list of @('Domain','Int')@ pairs, where each pair
---   represents a hostname and its associated priority.
+--   instead return a list of @RD_MX@.
 --
 --   The order of multiple results may not be consistent between
 --   lookups. If you require consistent results, apply
@@ -33,21 +32,20 @@
 --
 --   We perform a successful lookup of \"www.example.com\":
 --
---   >>> let hostname = Data.ByteString.Char8.pack "www.example.com"
+--   >>> :set -XOverloadedStrings
 --   >>>
 --   >>> rs <- makeResolvSeed defaultResolvConf
---   >>> withResolver rs $ \resolver -> lookupA resolver hostname
+--   >>> withResolver rs $ \resolver -> lookupA resolver "www.example.com"
 --   Right [93.184.216.34]
 --
 --   The only error that we can easily cause is a timeout. We do this
 --   by creating and utilizing a 'ResolvConf' which has a timeout of
 --   one millisecond and a very limited number of retries:
 --
---   >>> let hostname = Data.ByteString.Char8.pack "www.example.com"
 --   >>> let badrc = defaultResolvConf { resolvTimeout = 0, resolvRetry = 1 }
 --   >>>
 --   >>> rs <- makeResolvSeed badrc
---   >>> withResolver rs $ \resolver -> lookupA resolver hostname
+--   >>> withResolver rs $ \resolver -> lookupA resolver "www.example.com"
 --   Left RetryLimitExceeded
 --
 --   As is the convention, successful results will always be wrapped
@@ -125,14 +123,14 @@ lookupAAAA = lookup' AAAA
 --
 --   >>> rs <- makeResolvSeed defaultResolvConf
 --   >>> withResolver rs $ \resolver -> lookupMX resolver "example.com"
---   Right [(".",0)]
+--   Right [RD_MX {mx_preference = 0, mx_exchange = "."}]
 --
 --
 --   The domain \"mew.org\" does however have a single MX:
 --
 --   >>> rs <- makeResolvSeed defaultResolvConf
 --   >>> withResolver rs $ \resolver -> lookupMX resolver "mew.org"
---   Right [("mail.mew.org.",10)]
+--   Right [RD_MX {mx_preference = 10, mx_exchange = "mail.mew.org."}]
 --
 --   Also note that all hostnames are returned with a trailing dot to
 --   indicate the DNS root.
@@ -271,7 +269,7 @@ lookupTXT = lookup' TXT
 --
 --   >>> rs <- makeResolvSeed defaultResolvConf
 --   >>> soa <- withResolver rs $ \resolver -> lookupSOA resolver "mew.org"
---   >>> map (\ (mn, rn, _, _, _, _, _) -> (mn, rn)) <$> soa
+--   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
 lookupSOA :: Resolver -> Domain -> IO (Either DNSError [RD_SOA])
@@ -339,7 +337,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --
 --   >>> rs <- makeResolvSeed defaultResolvConf
 --   >>> withResolver rs $ \resolver -> lookupSRV resolver "_xmpp-server._tcp.jabber.ietf.org"
---   Right [(5,0,5269,"jabber.ietf.org.")]
+--   Right [RD_SRV {srv_priority = 5, srv_weight = 0, srv_port = 5269, srv_target = "jabber.ietf.org."}]
 
 -- Though the "jabber.ietf.orgs" SRV record may prove reasonably stable, as
 -- with anything else published in DNS it is subject to change.  Also, this
