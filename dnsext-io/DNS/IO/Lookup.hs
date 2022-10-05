@@ -274,10 +274,10 @@ lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
 lookupRawCtl rslv dom typ ctls = resolve rslv dom typ ctls receive
 
 -- | Similar to 'lookupRawCtl', but the recv action can be replaced with
--- something other than `Network.DNS.IO.receive`.
+-- something other than `DNS.IO.Internal.receive`.
 -- For example, in an environment where frequent retrieval of the current time
 -- is a performance issue, you can pass the time from outside instead of
--- having `Network.DNS.IO.receive` retrieve the current time.
+-- having `DNS.IO.Internal.receive` retrieve the current time.
 lookupRawCtlRecv :: Resolver                  -- ^ Resolver obtained via 'withResolver'
                  -> Domain                    -- ^ Query domain
                  -> TYPE                      -- ^ Query RRtype

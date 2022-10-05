@@ -360,9 +360,9 @@ encodeQuery idt q ctls = encode $ makeQuery idt q ctls
 -- template with the specified 'Identifier', and 'Question'.  The
 -- 'QueryControls' can be 'mempty' to leave all header and EDNS settings at
 -- their default values, or some combination of overrides.  A default set of
--- overrides can be enabled via the 'Network.DNS.Resolver.resolvQueryControls'
--- field of 'Network.DNS.Resolver.ResolvConf'.  Per-query overrides are
--- possible by using 'Network.DNS.LookupRaw.loookupRawCtl'.
+-- overrides can be enabled via the 'DNS.IO.resolvQueryControls'
+-- field of 'DNS.IO.ResolvConf'.  Per-query overrides are
+-- possible by using 'DNS.IO.loookupRawCtl'.
 --
 makeQuery :: Identifier        -- ^ Crypto random request id
           -> Question          -- ^ Question name and type
@@ -414,15 +414,15 @@ makeEmptyQuery ctls = defaultQuery {
     -- | Apply all the query flag overrides to 'defaultDNSFlags', returning the
     -- resulting 'DNSFlags' suitable for making queries with the requested flag
     -- settings.  This is only needed if you're creating your own 'DNSMessage',
-    -- the 'Network.DNS.LookupRaw.lookupRawCtl' function takes a 'QueryControls'
+    -- the 'DNS.IO.lookupRawCtl' function takes a 'QueryControls'
     -- argument and handles this conversion internally.
     --
     -- Default overrides can be specified in the resolver configuration by setting
-    -- the 'Network.DNS.resolvQueryControls' field of the
-    -- 'Network.DNS.Resolver.ResolvConf' argument to
-    -- 'Network.DNS.Resolver.makeResolvSeed'.  These then apply to lookups via
+    -- the 'DNS.IO.resolvQueryControls' field of the
+    -- 'DNS.IO.ResolvConf' argument to
+    -- 'DNS.IO.makeResolvSeed'.  These then apply to lookups via
     -- resolvers based on the resulting configuration, with the exception of
-    -- 'Network.DNS.LookupRaw.lookupRawCtl' which takes an additional
+    -- 'DNS.IO.lookupRawCtl' which takes an additional
     -- 'QueryControls' argument to augment the default overrides.
     --
     queryDNSFlags :: HeaderControls -> DNSFlags
