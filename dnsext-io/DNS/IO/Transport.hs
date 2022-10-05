@@ -17,7 +17,7 @@ import System.Timeout (timeout)
 
 import DNS.IO.IO
 import DNS.IO.Imports
-import DNS.IO.Resolver.Types
+import DNS.IO.Resolver
 import DNS.IO.Query
 
 -- | Check response for a matching identifier and question.  If we ever do

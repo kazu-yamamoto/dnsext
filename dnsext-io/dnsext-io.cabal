@@ -27,17 +27,17 @@ source-repository head
 library
     exposed-modules:
         DNS.IO
-        DNS.IO.IO
-        DNS.IO.Lookup
-        DNS.IO.Query
-        DNS.IO.Resolver
-        DNS.IO.Transport
+        DNS.IO.Utils
 
     other-modules:
+        DNS.IO.IO
         DNS.IO.Imports
+        DNS.IO.Lookup
         DNS.IO.Memo
-        DNS.IO.Resolver.Internal
-        DNS.IO.Resolver.Types
+        DNS.IO.Query
+        DNS.IO.Resolver
+        DNS.IO.System
+        DNS.IO.Transport
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:

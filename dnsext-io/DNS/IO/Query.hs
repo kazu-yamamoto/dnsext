@@ -14,6 +14,7 @@ module DNS.IO.Query (
   , makeQuery
   , makeEmptyQuery
   , encodeQuery
+  , ODataOp(..)
   ) where
 
 import DNS.Types

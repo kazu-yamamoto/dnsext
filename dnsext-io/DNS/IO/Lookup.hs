@@ -23,7 +23,6 @@ import DNS.IO.Imports
 import DNS.IO.Memo
 import DNS.IO.Query
 import DNS.IO.Resolver
-import DNS.IO.Resolver.Types
 import DNS.IO.Transport
 
 -- $setup

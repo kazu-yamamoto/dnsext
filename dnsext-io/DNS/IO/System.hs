@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module DNS.IO.Resolver.Internal (
+module DNS.IO.System (
       getDefaultDnsServers
     ) where
 
