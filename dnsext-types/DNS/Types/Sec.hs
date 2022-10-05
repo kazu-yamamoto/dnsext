@@ -23,7 +23,6 @@ module DNS.Types.Sec (
   , rd_cdnskey
   ) where
 
-import qualified Data.Hourglass as H
 import GHC.Exts (the, groupWith)
 
 import DNS.StateBinary
@@ -59,29 +58,29 @@ import DNS.Types.Type
 -- The 'dnsTime' function performs the requisite conversion.
 --
 data RD_RRSIG = RD_RRSIG {
-    rrsigType       :: TYPE   -- ^ RRtype of RRset signed
-  , rrsigKeyAlg     :: Word8  -- ^ DNSKEY algorithm
-  , rrsigNumLabels  :: Word8  -- ^ Number of labels signed
-  , rrsigTTL        :: Word32 -- ^ Maximum origin TTL
-  , rrsigExpiration :: Int64  -- ^ Time last valid
-  , rrsigInception  :: Int64  -- ^ Time first valid
-  , rrsigKeyTag     :: Word16 -- ^ Signing key tag
-  , rrsigZone       :: Domain -- ^ Signing domain
-  , rrsigValue      :: Opaque -- ^ Opaque signature
-  } deriving (Eq, Ord)
+    rrsig_type       :: TYPE   -- ^ RRtype of RRset signed
+  , rrsig_key_alg    :: Word8  -- ^ DNSKEY algorithm
+  , rrsig_num_labels :: Word8  -- ^ Number of labels signed
+  , rrsig_ttl        :: Word32 -- ^ Maximum origin TTL
+  , rrsig_expiration :: Int64  -- ^ Time last valid
+  , rrsig_inception  :: Int64  -- ^ Time first valid
+  , rrsig_key_tag    :: Word16 -- ^ Signing key tag
+  , rrsig_zone       :: Domain -- ^ Signing domain
+  , rrsig_value      :: Opaque -- ^ Opaque signature
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
     putResourceData RD_RRSIG{..} =
-      mconcat [ put16 $ fromTYPE rrsigType
-              , put8    rrsigKeyAlg
-              , put8    rrsigNumLabels
-              , put32   rrsigTTL
-              , put32 $ fromIntegral rrsigExpiration
-              , put32 $ fromIntegral rrsigInception
-              , put16   rrsigKeyTag
-              , putDomain rrsigZone
-              , putOpaque rrsigValue
+      mconcat [ put16 $ fromTYPE rrsig_type
+              , put8    rrsig_key_alg
+              , put8    rrsig_num_labels
+              , put32   rrsig_ttl
+              , put32 $ fromIntegral rrsig_expiration
+              , put32 $ fromIntegral rrsig_inception
+              , put16   rrsig_key_tag
+              , putDomain rrsig_zone
+              , putOpaque rrsig_value
               ]
     getResourceData _ lim = do
         -- The signature follows a variable length zone name
@@ -108,25 +107,6 @@ instance ResourceData RD_RRSIG where
             tdns <- get32
             return $ dnsTime tdns tnow
 
-instance Show RD_RRSIG where
-    show RD_RRSIG{..} =
-        unwords [ show rrsigType
-                , show rrsigKeyAlg
-                , show rrsigNumLabels
-                , show rrsigTTL
-                , showTime rrsigExpiration
-                , showTime rrsigInception
-                , show rrsigKeyTag
-                , show rrsigZone
-                , b64encode (opaqueToByteString rrsigValue)
-                ]
-      where
-        showTime :: Int64 -> String
-        showTime t = H.timePrint fmt $ H.Elapsed $ H.Seconds t
-          where
-            fmt = [ H.Format_Year4, H.Format_Month2, H.Format_Day2
-                  , H.Format_Hour,  H.Format_Minute, H.Format_Second ]
-
 -- | Smart constructor.
 rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
@@ -135,31 +115,25 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 -- | Delegation Signer (RFC4034)
 data RD_DS = RD_DS {
-    dsKeyTag     :: Word16
-  , dsAlgorithm  :: Word8
-  , dsDigestType :: Word8
-  , dsDigest     :: Opaque
-  } deriving (Eq)
+    ds_key_tag     :: Word16
+  , ds_algorithm   :: Word8
+  , ds_digest_type :: Word8
+  , ds_digest      :: Opaque
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
     putResourceData RD_DS{..} =
-        mconcat [ put16 dsKeyTag
-                , put8 dsAlgorithm
-                , put8 dsDigestType
-                , putOpaque dsDigest
+        mconcat [ put16 ds_key_tag
+                , put8 ds_algorithm
+                , put8 ds_digest_type
+                , putOpaque ds_digest
                 ]
     getResourceData _ lim =
         RD_DS <$> get16
               <*> get8
               <*> get8
               <*> getOpaque (lim - 4)
-
-instance Show RD_DS where
-    show RD_DS{..} = show dsKeyTag     ++ " "
-                  ++ show dsAlgorithm  ++ " "
-                  ++ show dsDigestType ++ " "
-                  ++ b16encode (opaqueToByteString dsDigest)
 
 -- | Smart constructor.
 rd_ds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
@@ -171,7 +145,7 @@ rd_ds a b c d = toRData $ RD_DS a b c d
 data RD_NSEC = RD_NSEC {
     nsecNextDomain :: Domain
   , nsecTypes      :: [TYPE]
-  } deriving (Eq)
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
@@ -183,10 +157,6 @@ instance ResourceData RD_NSEC where
         pos <- parserPosition
         RD_NSEC dom <$> getNsecTypes (end - pos)
 
-instance Show RD_NSEC where
-    show RD_NSEC{..} =
-        unwords $ show nsecNextDomain : map show nsecTypes
-
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
 rd_nsec a b = toRData $ RD_NSEC a b
@@ -195,32 +165,25 @@ rd_nsec a b = toRData $ RD_NSEC a b
 
 -- | DNSKEY (RFC4034)
 data RD_DNSKEY = RD_DNSKEY {
-    dnskeyFlags     :: Word16
-  , dnskeyProtocol  :: Word8
-  , dnskeyAlgorithm :: Word8
-  , dnskeyPublicKey :: Opaque
-  } deriving (Eq)
+    dnskey_flags      :: Word16
+  , dnskey_protocol   :: Word8
+  , dnskey_algorithm  :: Word8
+  , dnskey_public_key :: Opaque
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
     putResourceData RD_DNSKEY{..} =
-        mconcat [ put16 dnskeyFlags
-                , put8  dnskeyProtocol
-                , put8  dnskeyAlgorithm
-                , putShortByteString (opaqueToShortByteString dnskeyPublicKey)
+        mconcat [ put16 dnskey_flags
+                , put8  dnskey_protocol
+                , put8  dnskey_algorithm
+                , putShortByteString (opaqueToShortByteString dnskey_public_key)
                 ]
     getResourceData _ len =
         RD_DNSKEY <$> get16
                   <*> get8
                   <*> get8
                   <*> getOpaque (len - 4)
-
--- <https://tools.ietf.org/html/rfc5155#section-3.2>
-instance Show RD_DNSKEY where
-    show RD_DNSKEY{..} = show dnskeyFlags     ++ " "
-                      ++ show dnskeyProtocol  ++ " "
-                      ++ show dnskeyAlgorithm ++ " "
-                      ++ b64encode (opaqueToByteString dnskeyPublicKey)
 
 -- | Smart constructor.
 rd_dnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
@@ -230,23 +193,23 @@ rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 -- | DNSSEC hashed denial of existence (RFC5155)
 data RD_NSEC3 = RD_NSEC3 {
-    nsec3HashAlgorithm       :: Word8
-  , nsec3Flags               :: Word8
-  , nsec3Iterations          :: Word16
-  , nsec3Salt                :: Opaque
-  , nsec3NextHashedOwnerName :: Opaque
-  , nsec3Types               :: [TYPE]
-  } deriving (Eq)
+    nsec3_hash_algorithm         :: Word8
+  , nsec3_flags                  :: Word8
+  , nsec3_iterations             :: Word16
+  , nsec3_salt                   :: Opaque
+  , nsec3_next_hashed_owner_name :: Opaque
+  , nsec3_types                  :: [TYPE]
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
     putResourceData RD_NSEC3{..} =
-        mconcat [ put8 nsec3HashAlgorithm
-                , put8 nsec3Flags
-                , put16 nsec3Iterations
-                , putLenOpaque nsec3Salt
-                , putLenOpaque nsec3NextHashedOwnerName
-                , putNsecTypes nsec3Types
+        mconcat [ put8 nsec3_hash_algorithm
+                , put8 nsec3_flags
+                , put16 nsec3_iterations
+                , putLenOpaque nsec3_salt
+                , putLenOpaque nsec3_next_hashed_owner_name
+                , putNsecTypes nsec3_types
                 ]
     getResourceData _ len = do
         dend <- rdataEnd len
@@ -258,14 +221,6 @@ instance ResourceData RD_NSEC3 where
         tpos <- parserPosition
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
 
-instance Show RD_NSEC3 where
-    show RD_NSEC3{..} = unwords $ show nsec3HashAlgorithm
-                                : show nsec3Flags
-                                : show nsec3Iterations
-                                : showSalt nsec3Salt
-                                : b32encode (opaqueToByteString nsec3NextHashedOwnerName)
-                                : map show nsec3Types
-
 -- | Smart constructor.
 rd_nsec3 :: Word8 -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
 rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
@@ -274,31 +229,25 @@ rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 -- | NSEC3 zone parameters (RFC5155)
 data RD_NSEC3PARAM = RD_NSEC3PARAM {
-    nsec3paramHashAlgorithm :: Word8
-  , nsec3paramFlags         :: Word8
-  , nsec3paramIterations    :: Word16
-  , nsec3paramSalt          :: Opaque
-  } deriving (Eq)
+    nsec3param_hash_algorithm :: Word8
+  , nsec3param_flags          :: Word8
+  , nsec3param_iterations     :: Word16
+  , nsec3param_salt           :: Opaque
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
     putResourceData RD_NSEC3PARAM{..} =
-        mconcat [ put8  nsec3paramHashAlgorithm
-                , put8  nsec3paramFlags
-                , put16 nsec3paramIterations
-                , putLenOpaque nsec3paramSalt
+        mconcat [ put8  nsec3param_hash_algorithm
+                , put8  nsec3param_flags
+                , put16 nsec3param_iterations
+                , putLenOpaque nsec3param_salt
                 ]
     getResourceData _ _ =
         RD_NSEC3PARAM <$> get8
                       <*> get8
                       <*> get16
                       <*> getLenOpaque
-
-instance Show RD_NSEC3PARAM where
-    show RD_NSEC3PARAM{..} = show nsec3paramHashAlgorithm ++ " "
-                          ++ show nsec3paramFlags         ++ " "
-                          ++ show nsec3paramIterations    ++ " "
-                          ++ showSalt nsec3paramSalt
 
 -- | Smart constructor.
 rd_nsec3param :: Word8 -> Word8 -> Word16 -> Opaque -> RData
@@ -307,15 +256,14 @@ rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 ----------------------------------------------------------------
 
 -- | Child DS (RFC7344)
-newtype RD_CDS = RD_CDS RD_DS deriving (Eq)
+newtype RD_CDS = RD_CDS {
+    cds_ds :: RD_DS
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
     putResourceData (RD_CDS ds) = putResourceData ds
     getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
-
-instance Show RD_CDS where
-    show (RD_CDS ds) = show ds
 
 -- | Smart constructor.
 rd_cds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
@@ -324,15 +272,14 @@ rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 ----------------------------------------------------------------
 
 -- | Child DNSKEY (RFC7344)
-newtype RD_CDNSKEY = RD_CDNSKEY RD_DNSKEY deriving (Eq)
+newtype RD_CDNSKEY = RD_CDNSKEY {
+    cdnskey_dnskey :: RD_DNSKEY
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
     putResourceData (RD_CDNSKEY dnskey) = putResourceData dnskey
     getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
-
-instance Show RD_CDNSKEY where
-    show (RD_CDNSKEY dnskey) = show dnskey
 
 -- | Smart constructor.
 rd_cdnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
@@ -411,10 +358,3 @@ getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
         blkTypes (bitOffset, byte) =
             [ toTYPE $ fromIntegral $ bitOffset + i |
               i <- [0..7], byte .&. bit (7-i) /= 0 ]
-
-----------------------------------------------------------------
-
-showSalt :: Opaque -> String
-showSalt o = case opaqueToByteString o of
-  ""  -> "-"
-  bs  -> b16encode bs
