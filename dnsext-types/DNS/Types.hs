@@ -107,23 +107,6 @@ module DNS.Types (
   , tlsa_selector
   , tlsa_matching_type
   , tlsa_assoc_data
-  -- ** DNSSEC resource data
-  , RD_RRSIG(..)
-  , rd_rrsig
-  , RD_DS(..)
-  , rd_ds
-  , RD_NSEC(..)
-  , rd_nsec
-  , RD_DNSKEY(..)
-  , rd_dnskey
-  , RD_NSEC3(..)
-  , rd_nsec3
-  , RD_NSEC3PARAM(..)
-  , rd_nsec3param
-  , RD_CDS(..)
-  , rd_cds
-  , RD_CDNSKEY(..)
-  , rd_cdnskey
   -- * OPT resource data
   , OData(..)
   , odataToOptCode
@@ -247,7 +230,6 @@ import DNS.Types.Error
 import DNS.Types.Message
 import DNS.Types.Opaque
 import DNS.Types.RData
-import DNS.Types.Sec
 import DNS.Types.Type
 
 ----------------------------------------------------------------

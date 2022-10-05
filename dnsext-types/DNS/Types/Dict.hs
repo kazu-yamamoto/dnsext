@@ -9,7 +9,6 @@ import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.Opaque
 import DNS.Types.RData
-import DNS.Types.Sec
 import DNS.Types.Type
 
 ----------------------------------------------------------------
@@ -56,15 +55,6 @@ defaultRDataDict =
     M.insert (toKey AAAA)  (RDataDecode (Proxy :: Proxy RD_AAAA)) $
     M.insert (toKey SRV)   (RDataDecode (Proxy :: Proxy RD_SRV)) $
     M.insert (toKey DNAME) (RDataDecode (Proxy :: Proxy RD_DNAME)) $
-    M.insert (toKey DS)    (RDataDecode (Proxy :: Proxy RD_DS)) $
-    M.insert (toKey RRSIG) (RDataDecode (Proxy :: Proxy RD_RRSIG)) $
-    M.insert (toKey NSEC)  (RDataDecode (Proxy :: Proxy RD_NSEC)) $
-    M.insert (toKey DNSKEY) (RDataDecode (Proxy :: Proxy RD_DNSKEY)) $
-    M.insert (toKey NSEC3) (RDataDecode (Proxy :: Proxy RD_NSEC3)) $
-    M.insert (toKey NSEC3PARAM) (RDataDecode (Proxy :: Proxy RD_NSEC3PARAM)) $
-    M.insert (toKey TLSA)  (RDataDecode (Proxy :: Proxy RD_TLSA)) $
-    M.insert (toKey CDS)   (RDataDecode (Proxy :: Proxy RD_CDS)) $
-    M.insert (toKey CDNSKEY) (RDataDecode (Proxy :: Proxy RD_CDNSKEY)) $
     M.empty
 
 ----------------------------------------------------------------

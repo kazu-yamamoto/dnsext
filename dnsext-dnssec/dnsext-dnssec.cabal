@@ -1,5 +1,5 @@
 cabal-version:      3.0
-name:               dnsext-types
+name:               dnsext-dnssec
 version:            0.0.0
 license:            BSD-3-Clause
 license-file:       LICENSE
@@ -8,10 +8,9 @@ author:             Kazu Yamamoto <kazu@iij.ad.jp>
 tested-with:
     ghc ==8.6.5 ghc ==8.8.4 ghc ==9.0.2 ghc ==9.2.4
 
-synopsis:           Types for Extensible DNS libraries
+synopsis:           DNSSEC library
 description:
-    Types for Extensible DNS libraries which are written
-    purely in Haskell
+    DNSSEC library for dnsext
 
 category:           Network
 build-type:         Simple
@@ -23,29 +22,12 @@ source-repository head
 
 library
     exposed-modules:
-        DNS.Types
-        DNS.Types.Decode
-        DNS.Types.Encode
-        DNS.Types.Internal
+        DNS.SEC
 
     other-modules:
-        DNS.StateBinary
-        DNS.StateBinary.SGet
-        DNS.StateBinary.SPut
-        DNS.StateBinary.Types
-        DNS.Types.Base32Hex
-        DNS.Types.Dict
-        DNS.Types.Domain
-        DNS.Types.EDNS
-        DNS.Types.Error
-        DNS.Types.Imports
-        DNS.Types.Message
-        DNS.Types.Opaque
-        DNS.Types.Parser
-        DNS.Types.RData
-        DNS.Types.ShortBuilder
-        DNS.Types.ShortParser
-        DNS.Types.Type
+        DNS.SEC.Imports
+        DNS.SEC.Time
+        DNS.SEC.Types
 
     default-language: Haskell2010
     ghc-options:      -Wall
@@ -53,12 +35,9 @@ library
         array,
         attoparsec,
         base >=4 && <5,
-        base16-bytestring,
-        base64-bytestring,
+        dnsext-types,
         bytestring,
         containers,
-        cryptonite,
-        hourglass,
         iproute >=1.3.2,
         mtl,
         word8

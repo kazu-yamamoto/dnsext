@@ -21,6 +21,7 @@ module DNS.Types.Internal (
   , putMailbox
   , getMailbox
   , putOpaque
+  , putLenOpaque
   , getOpaque
   , getLenOpaque
   , putTYPE

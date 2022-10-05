@@ -2,7 +2,7 @@
 {-# LANGUAGE TransformListComp #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNS.Types.Sec (
+module DNS.SEC.Types (
     RD_RRSIG(..)
   , RD_DS(..)
   , RD_NSEC(..)
@@ -23,13 +23,11 @@ module DNS.Types.Sec (
   ) where
 
 import GHC.Exts (the, groupWith)
+import DNS.Types
+import DNS.Types.Internal
 
-import DNS.StateBinary
-import DNS.Types.Domain
-import DNS.Types.Imports
-import DNS.Types.Opaque
-import DNS.Types.RData
-import DNS.Types.Type
+import DNS.SEC.Imports
+import DNS.SEC.Time
 
 ----------------------------------------------------------------
 
@@ -75,8 +73,8 @@ instance ResourceData RD_RRSIG where
               , put8    rrsig_key_alg
               , put8    rrsig_num_labels
               , put32   rrsig_ttl
-              , put32 $ fromIntegral rrsig_expiration
-              , put32 $ fromIntegral rrsig_inception
+              , putDnsTime rrsig_expiration
+              , putDnsTime rrsig_inception
               , put16   rrsig_key_tag
               , putDomain rrsig_zone
               , putOpaque rrsig_value
@@ -100,11 +98,6 @@ instance ResourceData RD_RRSIG where
         pos <- parserPosition
         val <- getOpaque $ end - pos
         return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
-      where
-        getDnsTime   = do
-            tnow <- getAtTime
-            tdns <- get32
-            return $ dnsTime tdns tnow
 
 -- | Smart constructor.
 rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
@@ -286,21 +279,6 @@ rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
 
--- | Given a 32-bit circle-arithmetic DNS time, and the current absolute epoch
--- time, return the epoch time corresponding to the DNS timestamp.
---
-dnsTime :: Word32 -- ^ DNS circle-arithmetic timestamp
-        -> Int64  -- ^ current epoch time
-        -> Int64  -- ^ absolute DNS timestamp
-dnsTime tdns tnow =
-    let delta = tdns - fromIntegral tnow
-     in if delta > 0x7FFFFFFF -- tdns is in the past?
-           then tnow - (0x100000000 - fromIntegral delta)
-           else tnow + fromIntegral delta
-
--- | Helper to find position of RData end, that is, the offset of the first
--- byte /after/ the current RData.
---
 rdataEnd :: Int      -- ^ number of bytes left from current position
          -> SGet Int -- ^ end position
 rdataEnd lim = (+) lim <$> parserPosition
