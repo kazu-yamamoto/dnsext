@@ -27,9 +27,6 @@ import DNS.IO.Query
 import DNS.IO.Resolver
 import DNS.IO.Transport
 
--- $setup
--- >>> import Network.DNS.Resolver
-
 ----------------------------------------------------------------
 
 -- | Look up resource records of a specified type for a domain,

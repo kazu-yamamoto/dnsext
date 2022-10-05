@@ -58,8 +58,8 @@ import DNS.IO.Imports
 -- >>> let ipaddr = read "192.0.2.1"
 -- >>> :{
 -- mconcat [ ednsSetVersion (Just 1)
---         , ednsSetOptions (ODataAdd [OD_NSID emptyNSID])
---         , ednsSetOptions (ODataAdd [OD_ClientSubnet mask 0 ipaddr])
+--         , ednsSetOptions (ODataAdd [od_nsid emptyNSID])
+--         , ednsSetOptions (ODataAdd [od_clientSubnet mask 0 ipaddr])
 --         ]
 -- :}
 -- edns.version:1,edns.options:[NSID,ClientSubnet]
@@ -144,7 +144,7 @@ doFlag d0 = mempty { qctlEdns = mempty { extDO = d0 } }
 -- | Generator of 'QueryControls' that adjusts the list of 'EDNS' options.
 --
 -- >>> :set -XOverloadedStrings
--- >>> ednsSetOptions (ODataAdd [OD_NSID ""])
+-- >>> ednsSetOptions (ODataAdd [od_nsid ""])
 -- edns.options:[NSID]
 ednsSetOptions :: ODataOp -> QueryControls
 ednsSetOptions od = mempty { qctlEdns = mempty { extOd = od } }
@@ -202,16 +202,17 @@ _odataDedup op =
 -- $
 -- Test associativity of the OData semigroup operation:
 --
+-- >>> import Data.IP
 -- >>> let ip1 = IPv4 $ read "127.0.0.0"
 -- >>> let ip2 = IPv4 $ read "192.0.2.0"
--- >>> let cs1 = OD_ClientSubnet 8 0 ip1
--- >>> let cs2 = OD_ClientSubnet 24 0 ip2
--- >>> let cs3 = OD_ECSgeneric 0 24 0 "foo"
--- >>> let dau1 = OD_DAU [3,5,7,8]
--- >>> let dau2 = OD_DAU [13,14]
--- >>> let dhu1 = OD_DHU [1,2]
--- >>> let dhu2 = OD_DHU [3,4]
--- >>> let nsid = OD_NSID ""
+-- >>> let cs1 = od_clientSubnet 8 0 ip1
+-- >>> let cs2 = od_clientSubnet 24 0 ip2
+-- >>> let cs3 = od_ecsGeneric 0 24 0 "foo"
+-- >>> let dau1 = od_dau [3,5,7,8]
+-- >>> let dau2 = od_dau [13,14]
+-- >>> let dhu1 = od_dhu [1,2]
+-- >>> let dhu2 = od_dhu [3,4]
+-- >>> let nsid = od_nsid ""
 -- >>> let ops1 = [ODataAdd [dau1, dau2, cs1], ODataAdd [dau2, cs2, dhu1]]
 -- >>> let ops2 = [ODataSet [], ODataSet [dhu2, cs3], ODataSet [nsid]]
 -- >>> let ops = ops1 ++ ops2
