@@ -11,8 +11,7 @@ module DNS.IO.Query (
   , ednsSetVersion
   , ednsSetUdpSize
   , ednsSetOptions
-  , makeQuery
-  , makeEmptyQuery
+  , modifyQuery
   , encodeQuery
   , ODataOp(..)
   ) where
@@ -111,7 +110,7 @@ cdFlag cd = mempty { qctlHeader = mempty { cdBit = cd } }
 -- | Generator of 'QueryControls' that enables or disables EDNS support.
 --   When EDNS is disabled, the rest of the 'EDNS' controls are ignored.
 --
--- >>> ednsHeader $ makeEmptyQuery $ ednsEnabled FlagClear <> doFlag FlagSet
+-- >>> ednsHeader $ modifyQuery (ednsEnabled FlagClear <> doFlag FlagSet) defaultQuery
 -- NoEDNS
 ednsEnabled :: FlagOp -> QueryControls
 ednsEnabled en = mempty { qctlEdns = mempty { extEn = en } }
@@ -237,7 +236,7 @@ instance Monoid ODataOp where
 -- | EDNS query controls.  When EDNS is disabled via @ednsEnabled FlagClear@,
 -- all the other EDNS-related overrides have no effect.
 --
--- >>> ednsHeader $ makeEmptyQuery $ ednsEnabled FlagClear <> doFlag FlagSet
+-- >>> ednsHeader $ modifyQuery (ednsEnabled FlagClear <> doFlag FlagSet) defaultQuery
 -- NoEDNS
 data EdnsControls = EdnsControls
     { extEn :: FlagOp       -- ^ Enabled
@@ -247,8 +246,6 @@ data EdnsControls = EdnsControls
     , extOd :: ODataOp      -- ^ EDNS option list tweaks
     }
     deriving (Eq)
-
--- | Apply all the query flag overrides to 'defaultDNSFlags', returning the
 
 instance Sem.Semigroup EdnsControls where
     (EdnsControls en1 vn1 sz1 do1 od1) <> (EdnsControls en2 vn2 sz2 do2 od2) =
@@ -351,44 +348,19 @@ encodeQuery :: Identifier     -- ^ Crypto random request id
             -> Question      -- ^ Query name and type
             -> QueryControls -- ^ Query flag and EDNS overrides
             -> ByteString
-encodeQuery idt q ctls = encode $ makeQuery idt q ctls
+encodeQuery idt q ctls = encode $ modifyQuery ctls $ makeQuery idt q
 
-
-----------------------------------------------------------------
-
--- | Construct a complete query 'DNSMessage', by combining the 'defaultQuery'
--- template with the specified 'Identifier', and 'Question'.  The
--- 'QueryControls' can be 'mempty' to leave all header and EDNS settings at
--- their default values, or some combination of overrides.  A default set of
--- overrides can be enabled via the 'DNS.IO.resolvQueryControls'
--- field of 'DNS.IO.ResolvConf'.  Per-query overrides are
--- possible by using 'DNS.IO.loookupRawCtl'.
---
-makeQuery :: Identifier        -- ^ Crypto random request id
-          -> Question          -- ^ Question name and type
-          -> QueryControls     -- ^ Custom RD\/AD\/CD flags and EDNS settings
-          -> DNSMessage
-makeQuery idt q ctls = empqry {
-      header = (header empqry) { identifier = idt }
-    , question = [q]
-    }
-  where
-    empqry = makeEmptyQuery ctls
-
--- | A query template with 'QueryControls' overrides applied,
--- with just the 'Question' and query 'Identifier' remaining
--- to be filled in.
---
-makeEmptyQuery :: QueryControls -- ^ Flag and EDNS overrides
-               -> DNSMessage
-makeEmptyQuery ctls = defaultQuery {
+modifyQuery :: QueryControls -- ^ Flag and EDNS overrides
+            -> DNSMessage
+            -> DNSMessage
+modifyQuery ctls query = query {
       header = header'
     , ednsHeader = queryEdns ehctls
     }
   where
     hctls = qctlHeader ctls
     ehctls = qctlEdns ctls
-    header' = (header defaultQuery) { flags = queryDNSFlags hctls }
+    header' = (header query) { flags = queryDNSFlags hctls }
 
     -- | Apply the given 'FlagOp' to a default boolean value to produce the final
     -- setting.
@@ -402,7 +374,7 @@ makeEmptyQuery ctls = defaultQuery {
     --
     queryEdns :: EdnsControls -> EDNSheader
     queryEdns (EdnsControls en vn sz d0 od) =
-        let d  = defaultEDNS
+        let d  = defaultEDNS -- fixme: ednsHeader query?
          in if en == FlagClear
             then NoEDNS
             else EDNSheader $ d { ednsVersion = fromMaybe (ednsVersion d) vn
@@ -411,7 +383,7 @@ makeEmptyQuery ctls = defaultQuery {
                                 , ednsOptions  = _odataDedup od
                                 }
 
-    -- | Apply all the query flag overrides to 'defaultDNSFlags', returning the
+    -- | Apply all the query flag, returning the
     -- resulting 'DNSFlags' suitable for making queries with the requested flag
     -- settings.  This is only needed if you're creating your own 'DNSMessage',
     -- the 'DNS.IO.lookupRawCtl' function takes a 'QueryControls'
@@ -432,4 +404,4 @@ makeEmptyQuery ctls = defaultQuery {
         , chkDisable = applyFlag cd $ chkDisable d
         }
       where
-        d = defaultDNSFlags
+        d = flags $ header query
