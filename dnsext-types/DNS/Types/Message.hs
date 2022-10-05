@@ -201,6 +201,17 @@ defaultQuery = DNSMessage {
   , additional = []
   }
 
+-- | Construct a complete query 'DNSMessage', by combining the 'defaultQuery'
+-- template with the specified 'Identifier', and 'Question'.
+--
+makeQuery :: Identifier        -- ^ Crypto random request id
+          -> Question          -- ^ Question name and type
+          -> DNSMessage
+makeQuery idt q = defaultQuery {
+      header = (header defaultQuery) { identifier = idt }
+    , question = [q]
+    }
+
 -- | Default response.  When responding to EDNS queries, the response must
 -- either be an EDNS response, or else FormatErr must be returned.  The default
 -- response message has EDNS disabled ('ednsHeader' set to 'NoEDNS'), it should

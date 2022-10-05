@@ -3,6 +3,7 @@ module DNS.Types (
     DNSMessage(..)
   , fromDNSMessage
   , defaultQuery
+  , makeQuery
   , defaultResponse
   , makeResponse
   -- ** Header
