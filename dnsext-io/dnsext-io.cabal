@@ -27,6 +27,7 @@ source-repository head
 library
     exposed-modules:
         DNS.IO
+        DNS.IO.Internal
         DNS.IO.Utils
 
     other-modules:
