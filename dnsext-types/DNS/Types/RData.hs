@@ -55,7 +55,7 @@ putRData (RData x) = putResourceData x
 newtype RD_A = RD_A {
     -- | Setter/getter for 'IPv4'.
     a_ipv4 :: IPv4
-  } deriving Eq
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_A where
     resourceDataType _ = A
@@ -75,7 +75,7 @@ rd_a ipv4 = toRData $ RD_A ipv4
 newtype RD_NS = RD_NS {
     -- | Setter/getter for 'Domain'.
     ns_domain :: Domain
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
@@ -95,7 +95,7 @@ rd_ns d = toRData $ RD_NS d
 newtype RD_CNAME = RD_CNAME {
     -- | Setter/getter for 'Domain'.
     cname_domain :: Domain
-  } deriving (Eq)
+  } deriving  (Eq, Ord)
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
@@ -127,7 +127,7 @@ data RD_SOA = RD_SOA {
   , soa_expire  :: Word32
     -- | Setter/getter for minimum
   , soa_minimum :: Word32
-  } deriving (Eq)
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
@@ -148,15 +148,6 @@ instance ResourceData RD_SOA where
                                     <*> get32
                                     <*> get32
 
-instance Show RD_SOA where
-    show RD_SOA{..} = show soa_mname   ++ " "
-                   ++ show soa_rname   ++ " "
-                   ++ show soa_serial  ++ " "
-                   ++ show soa_refresh ++ " "
-                   ++ show soa_retry   ++ " "
-                   ++ show soa_expire  ++ " "
-                   ++ show soa_minimum
-
 -- | Smart constructor.
 rd_soa :: Domain -> Mailbox -> Word32 -> Word32 -> Word32 -> Word32 -> Word32 -> RData
 rd_soa a b c d e f g = toRData $ RD_SOA a b c d e f g
@@ -167,7 +158,7 @@ rd_soa a b c d e f g = toRData $ RD_SOA a b c d e f g
 newtype RD_NULL = RD_NULL {
     -- | Setter/getter for 'Opaque'.
     null_opaque :: Opaque
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
@@ -186,7 +177,7 @@ rd_null = toRData . RD_NULL
 newtype RD_PTR = RD_PTR {
     -- | Setter/getter for 'Domain'
     ptr_domain :: Domain
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
@@ -208,7 +199,7 @@ data RD_MX = RD_MX {
     mx_preference :: Word16
     -- | Setter/getter for 'Domain'
   , mx_exchange   :: Domain
-  } deriving (Eq)
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
@@ -217,9 +208,6 @@ instance ResourceData RD_MX where
               , putDomain mx_exchange
               ]
     getResourceData _ _ = RD_MX <$> get16 <*> getDomain
-
-instance Show RD_MX where
-    show RD_MX{..} = show mx_preference ++ " " ++ show mx_exchange
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
@@ -231,7 +219,7 @@ rd_mx a b = toRData $ RD_MX a b
 newtype RD_TXT = RD_TXT {
     -- | Setter/getter for 'Opaque'
     txt_opaque :: Opaque
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
@@ -274,7 +262,7 @@ rd_txt x = toRData $ RD_TXT x
 ----------------------------------------------------------------
 
 -- | Responsible Person (RFC1183)
-data RD_RP = RD_RP Mailbox Domain deriving (Eq)
+data RD_RP = RD_RP Mailbox Domain deriving (Eq, Ord)
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
@@ -294,7 +282,7 @@ rd_rp a b = toRData $ RD_RP a b
 -- | IPv6 Address (RFC3596)
 newtype RD_AAAA = RD_AAAA {
     aaaa_ipv6 :: IPv6
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
@@ -312,30 +300,24 @@ rd_aaaa ipv6 = toRData $ RD_AAAA ipv6
 
 -- | Server Selection (RFC2782)
 data RD_SRV = RD_SRV {
-    srvPriority :: Word16
-  , srvWeight   :: Word16
-  , srvPort     :: Word16
-  , srvTarget   :: Domain
-  } deriving (Eq)
+    srv_priority :: Word16
+  , srv_weight   :: Word16
+  , srv_port     :: Word16
+  , srv_target   :: Domain
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
     putResourceData RD_SRV{..} =
-      mconcat [ put16 srvPriority
-              , put16 srvWeight
-              , put16 srvPort
-              , putDomain srvTarget
+      mconcat [ put16 srv_priority
+              , put16 srv_weight
+              , put16 srv_port
+              , putDomain srv_target
               ]
     getResourceData _ _ = RD_SRV <$> get16
                                     <*> get16
                                     <*> get16
                                     <*> getDomain
-
-instance Show RD_SRV where
-    show RD_SRV{..} = show srvPriority ++ " "
-                   ++ show srvWeight   ++ " "
-                   ++ show srvPort     ++ " "
-                   ++ show srvTarget
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -344,7 +326,7 @@ rd_srv a b c d = toRData $ RD_SRV a b c d
 ----------------------------------------------------------------
 
 -- | DNAME (RFC6672)
-newtype RD_DNAME = RD_DNAME Domain deriving (Eq)
+newtype RD_DNAME = RD_DNAME Domain deriving (Eq, Ord)
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
@@ -361,7 +343,7 @@ rd_dname d = toRData $ RD_DNAME d
 ----------------------------------------------------------------
 
 -- | OPT (RFC6891)
-newtype RD_OPT = RD_OPT [OData] deriving (Eq)
+newtype RD_OPT = RD_OPT [OData] deriving Eq
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
@@ -383,7 +365,7 @@ data RD_TLSA = RD_TLSA {
   , tlsaSelector     :: Word8
   , tlsaMatchingType :: Word8
   , tlsaAssocData    :: Opaque
-  } deriving (Eq)
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
@@ -413,7 +395,7 @@ rd_tlsa a b c d = toRData $ RD_TLSA a b c d
 ----------------------------------------------------------------
 
 -- | Unknown resource data
-data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Show)
+data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Ord, Show)
 
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
