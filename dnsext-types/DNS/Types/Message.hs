@@ -232,6 +232,19 @@ defaultResponse = DNSMessage {
   , additional = []
   }
 
+-- | Construct a response 'DNSMessage'.
+makeResponse :: Identifier
+             -> Question
+             -> Answers
+             -> DNSMessage
+makeResponse idt q as = defaultResponse {
+      header = header' { identifier = idt }
+    , question = [q]
+    , answer   = as
+    }
+  where
+    header' = header defaultResponse
+
 ----------------------------------------------------------------
 
 -- | Raw data format for the header of DNS Query and Response.

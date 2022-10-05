@@ -12,9 +12,6 @@ module DNS.IO.IO (
   , sendAll
     -- ** Encoding queries for transmission
   , encodeVC
-    -- ** Creating query response messages
-  , responseA
-  , responseAAAA
   ) where
 
 import qualified Control.Exception as E
@@ -156,44 +153,3 @@ encodeVC legacyQuery =
     let len = LC8.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ C8.length legacyQuery
     in len <> legacyQuery
 {-# INLINE encodeVC #-}
-
-----------------------------------------------------------------
-
--- | Compose a response with a single IPv4 RRset.  If the query
--- had an EDNS pseudo-header, a suitable EDNS pseudo-header must
--- be added to the response message, or else a 'FormatErr' response
--- must be sent.  The response TTL defaults to 300 seconds, and
--- should be updated (to the same value across all the RRs) if some
--- other TTL value is more appropriate.
---
-responseA :: Identifier -> Question -> [IPv4] -> DNSMessage
-responseA idt q ips = makeResponse idt q as
-  where
-    dom = qname q
-    as  = ResourceRecord dom A classIN 300 . rd_a <$> ips
-
--- | Compose a response with a single IPv6 RRset.  If the query
--- had an EDNS pseudo-header, a suitable EDNS pseudo-header must
--- be added to the response message, or else a 'FormatErr' response
--- must be sent.  The response TTL defaults to 300 seconds, and
--- should be updated (to the same value across all the RRs) if some
--- other TTL value is more appropriate.
---
-responseAAAA :: Identifier -> Question -> [IPv6] -> DNSMessage
-responseAAAA idt q ips = makeResponse idt q as
-  where
-    dom = qname q
-    as  = ResourceRecord dom AAAA classIN 300 . rd_aaaa <$> ips
-
--- | Construct a response 'DNSMessage'.
-makeResponse :: Identifier
-             -> Question
-             -> Answers
-             -> DNSMessage
-makeResponse idt q as = defaultResponse {
-      header = header' { identifier = idt }
-    , question = [q]
-    , answer   = as
-    }
-  where
-    header' = header defaultResponse

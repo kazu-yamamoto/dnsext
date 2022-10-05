@@ -4,6 +4,7 @@ module DNS.Types (
   , fromDNSMessage
   , defaultQuery
   , defaultResponse
+  , makeResponse
   -- ** Header
   , DNSHeader(..)
   , Identifier

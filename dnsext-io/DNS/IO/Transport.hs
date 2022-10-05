@@ -2,8 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module DNS.IO.Transport (
-    Resolver(..)
-  , resolve
+    resolve
   ) where
 
 import Control.Concurrent.Async (async, waitAnyCancel)

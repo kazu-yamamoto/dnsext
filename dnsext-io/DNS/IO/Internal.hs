@@ -11,9 +11,6 @@ module DNS.IO.Internal (
   , sendAll
     -- ** Encoding queries for transmission
   , encodeVC
-    -- ** Creating query response messages
-  , responseA
-  , responseAAAA
   ) where
 
 import DNS.IO.Query
