@@ -262,16 +262,15 @@ rd_txt x = toRData $ RD_TXT x
 ----------------------------------------------------------------
 
 -- | Responsible Person (RFC1183)
-data RD_RP = RD_RP Mailbox Domain deriving (Eq, Ord)
+data RD_RP = RD_RP {
+    rp_mbox :: Mailbox
+  , rp_domain :: Domain
+  }deriving (Eq, Ord, Show)
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
     putResourceData (RD_RP mbox d) = putMailbox mbox <> putDomain d
     getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
-
-instance Show RD_RP where
-    show (RD_RP mbox d) =
-        show mbox ++ " " ++ show d
 
 -- | Smart constructor.
 rd_rp :: Mailbox -> Domain -> RData
@@ -281,6 +280,7 @@ rd_rp a b = toRData $ RD_RP a b
 
 -- | IPv6 Address (RFC3596)
 newtype RD_AAAA = RD_AAAA {
+    -- | Setter/getter for 'IPv6'
     aaaa_ipv6 :: IPv6
   } deriving (Eq, Ord)
 
@@ -326,7 +326,9 @@ rd_srv a b c d = toRData $ RD_SRV a b c d
 ----------------------------------------------------------------
 
 -- | DNAME (RFC6672)
-newtype RD_DNAME = RD_DNAME Domain deriving (Eq, Ord)
+newtype RD_DNAME = RD_DNAME {
+    dname_target :: Domain
+  } deriving (Eq, Ord)
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
@@ -343,7 +345,9 @@ rd_dname d = toRData $ RD_DNAME d
 ----------------------------------------------------------------
 
 -- | OPT (RFC6891)
-newtype RD_OPT = RD_OPT [OData] deriving Eq
+newtype RD_OPT = RD_OPT {
+    opt_odata :: [OData]
+  } deriving Eq
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
@@ -361,32 +365,25 @@ rd_opt x = toRData $ RD_OPT x
 
 -- | TLSA (RFC6698)
 data RD_TLSA = RD_TLSA {
-    tlsaUsage        :: Word8
-  , tlsaSelector     :: Word8
-  , tlsaMatchingType :: Word8
-  , tlsaAssocData    :: Opaque
-  } deriving (Eq, Ord)
+    tlsa_usage         :: Word8
+  , tlsa_selector      :: Word8
+  , tlsa_matching_type :: Word8
+  , tlsa_assoc_data    :: Opaque
+  } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
     putResourceData RD_TLSA{..} =
-      mconcat [ put8 tlsaUsage
-              , put8 tlsaSelector
-              , put8 tlsaMatchingType
-              , putOpaque tlsaAssocData
+      mconcat [ put8 tlsa_usage
+              , put8 tlsa_selector
+              , put8 tlsa_matching_type
+              , putOpaque tlsa_assoc_data
               ]
     getResourceData _ len =
       RD_TLSA <$> get8
               <*> get8
               <*> get8
               <*> getOpaque (len - 3)
-
--- Opaque RData: <https://tools.ietf.org/html/rfc3597#section-5>
-instance Show RD_TLSA where
-    show RD_TLSA{..} = show tlsaUsage        ++ " "
-                    ++ show tlsaSelector     ++ " "
-                    ++ show tlsaMatchingType ++ " "
-                    ++ b16encode (opaqueToByteString tlsaAssocData)
 
 -- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData

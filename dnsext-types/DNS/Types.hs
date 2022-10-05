@@ -77,24 +77,36 @@ module DNS.Types (
   , rd_txt
   , txt_opaque
   -- *** RP RR
-  , RD_RP(..)
+  , RD_RP
   , rd_rp
+  , rp_mbox
+  , rp_domain
   -- *** AAAA RR
   , RD_AAAA
   , rd_aaaa
   , aaaa_ipv6
   -- *** SRV RR
-  , RD_SRV(..)
+  , RD_SRV
   , rd_srv
+  , srv_priority
+  , srv_weight
+  , srv_port
+  , srv_target
   -- *** DNAME RR
-  , RD_DNAME(..)
+  , RD_DNAME
   , rd_dname
+  , dname_target
   -- *** OPT RR
-  , RD_OPT(..)
+  , RD_OPT
   , rd_opt
+  , opt_odata
   -- *** TLSA RR
-  , RD_TLSA(..)
+  , RD_TLSA
   , rd_tlsa
+  , tlsa_usage
+  , tlsa_selector
+  , tlsa_matching_type
+  , tlsa_assoc_data
   -- ** DNSSEC resource data
   , RD_RRSIG(..)
   , rd_rrsig
