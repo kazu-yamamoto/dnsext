@@ -158,7 +158,7 @@ insertPositive CacheConf{..} c k v ttl = when (ttl /= 0) $ do
     insertCache k tim v c
   where
     life :: Seconds
-    life = fromIntegral (maximumTTL `min` ttl)
+    life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
 cacheNegative :: CacheConf -> Cache -> Key -> Entry -> DNSMessage -> IO ()
 cacheNegative cconf c key v ans = case soas of

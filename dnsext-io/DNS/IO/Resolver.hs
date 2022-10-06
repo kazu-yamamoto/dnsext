@@ -112,17 +112,19 @@ data FileOrNumericHost = RCFilePath FilePath -- ^ A path for \"resolv.conf\"
 -- | Cache configuration for responses.
 data CacheConf = CacheConf {
     -- | If RR's TTL is higher than this value, this value is used instead.
-    maximumTTL  :: TTL
+    maximumTTL   :: TTL
+    -- | If RR's TTL is lower than this value, this value is used instead.
+  , minimumTTL   :: TTL
     -- | Cache pruning interval in seconds.
-  , pruningDelay  :: Int
+  , pruningDelay :: Int
   } deriving Show
 
 -- | Default cache configuration.
 --
 -- >>> defaultCacheConf
--- CacheConf {maximumTTL = 300, pruningDelay = 10}
+-- CacheConf {maximumTTL = 300, minimumTTL = 0, pruningDelay = 10}
 defaultCacheConf :: CacheConf
-defaultCacheConf = CacheConf 300 10
+defaultCacheConf = CacheConf 300 0 10
 
 ----------------------------------------------------------------
 
