@@ -79,4 +79,4 @@ genWord8 = arbitrary
 decodeResourceRecord' :: ByteString -> Either DNSError ResourceRecord
 decodeResourceRecord' = decodeResourceRecord dict
   where
-    dict = addResourceDataforDNSSEC defaultDecodeDict
+    dict = addResourceDataForDNSSEC defaultDecodeDict

@@ -4,7 +4,7 @@
 {-# LANGUAGE TransformListComp #-}
 
 module DNS.SEC.Types (
-    addResourceDataforDNSSEC
+    addResourceDataForDNSSEC
   , TYPE (
     RRSIG
   , DS
@@ -373,8 +373,8 @@ getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
 
 ----------------------------------------------------------------
 
-addResourceDataforDNSSEC :: DecodeDict -> DecodeDict
-addResourceDataforDNSSEC dict =
+addResourceDataForDNSSEC :: DecodeDict -> DecodeDict
+addResourceDataForDNSSEC dict =
     addRData DS    (Proxy :: Proxy RD_DS)
   $ addRData NSEC  (Proxy :: Proxy RD_NSEC)
   $ addRData NSEC3 (Proxy :: Proxy RD_NSEC3)
