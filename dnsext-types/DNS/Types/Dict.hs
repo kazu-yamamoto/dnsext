@@ -26,6 +26,11 @@ addRData typ proxy dict = dict {
     rdataDict = M.insert (toKey typ) (RDataDecode proxy) (rdataDict dict)
   }
 
+addOData :: OptData a => OptCode -> Proxy a -> DecodeDict -> DecodeDict
+addOData code proxy dict = dict {
+    odataDict = M.insert (toKeyO code) (ODataDecode proxy) (odataDict dict)
+  }
+
 ----------------------------------------------------------------
 
 getRData :: DecodeDict -> TYPE -> Int -> SGet RData
