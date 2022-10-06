@@ -21,6 +21,13 @@ data DecodeDict = DecodeDict {
 defaultDecodeDict :: DecodeDict
 defaultDecodeDict = DecodeDict defaultRDataDict defaultODataDict
 
+addRData :: DecodeDict -> TYPE -> RDataDecode -> DecodeDict
+addRData dict typ proxy = dict {
+    rdataDict = M.insert (toKey typ) proxy (rdataDict dict)
+  }
+
+----------------------------------------------------------------
+
 getRData :: DecodeDict -> TYPE -> Int -> SGet RData
 getRData dict OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
   where
