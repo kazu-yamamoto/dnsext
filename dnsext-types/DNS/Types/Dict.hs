@@ -21,9 +21,9 @@ data DecodeDict = DecodeDict {
 defaultDecodeDict :: DecodeDict
 defaultDecodeDict = DecodeDict defaultRDataDict defaultODataDict
 
-addRData :: DecodeDict -> TYPE -> RDataDecode -> DecodeDict
-addRData dict typ proxy = dict {
-    rdataDict = M.insert (toKey typ) proxy (rdataDict dict)
+addRData :: ResourceData a => TYPE -> Proxy a -> DecodeDict -> DecodeDict
+addRData typ proxy dict = dict {
+    rdataDict = M.insert (toKey typ) (RDataDecode proxy) (rdataDict dict)
   }
 
 ----------------------------------------------------------------
