@@ -171,15 +171,7 @@ module DNS.Types (
   , SRV
   , DNAME
   , OPT
-  , DS
-  , RRSIG
-  , NSEC
-  , DNSKEY
-  , NSEC3
-  , NSEC3PARAM
   , TLSA
-  , CDS
-  , CDNSKEY
   , CSYNC
   , AXFR
   , ANY

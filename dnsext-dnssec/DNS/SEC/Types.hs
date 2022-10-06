@@ -1,9 +1,20 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TransformListComp #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module DNS.SEC.Types (
-    RD_RRSIG(..)
+    TYPE (
+    RRSIG
+  , DS
+  , NSEC
+  , DNSKEY
+  , NSEC3
+  , NSEC3PARAM
+  , CDS
+  , CDNSKEY
+  )
+  , RD_RRSIG(..)
   , RD_DS(..)
   , RD_NSEC(..)
   , RD_DNSKEY(..)
@@ -27,6 +38,30 @@ import DNS.Types.Internal
 
 import DNS.SEC.Imports
 import DNS.SEC.Time
+
+pattern DS :: TYPE
+pattern DS         = TYPE  43 -- RFC 4034
+-- | RRSIG (RFC4034)
+pattern RRSIG :: TYPE
+pattern RRSIG      = TYPE  46 -- RFC 4034
+-- | NSEC (RFC4034)
+pattern NSEC :: TYPE
+pattern NSEC       = TYPE  47 -- RFC 4034
+-- | DNSKEY (RFC4034)
+pattern DNSKEY :: TYPE
+pattern DNSKEY     = TYPE  48 -- RFC 4034
+-- | NSEC3 (RFC5155)
+pattern NSEC3 :: TYPE
+pattern NSEC3      = TYPE  50 -- RFC 5155
+-- | NSEC3PARAM (RFC5155)
+pattern NSEC3PARAM :: TYPE
+pattern NSEC3PARAM = TYPE  51 -- RFC 5155
+-- | Child DS (RFC7344)
+pattern CDS :: TYPE
+pattern CDS        = TYPE  59 -- RFC 7344
+-- | DNSKEY(s) the Child wants reflected in DS (RFC7344)
+pattern CDNSKEY :: TYPE
+pattern CDNSKEY    = TYPE  60 -- RFC 7344
 
 ----------------------------------------------------------------
 

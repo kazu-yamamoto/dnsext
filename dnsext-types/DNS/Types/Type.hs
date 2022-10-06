@@ -2,7 +2,8 @@
 
 module DNS.Types.Type (
     TYPE (
-    A
+    TYPE
+  , A
   , NS
   , CNAME
   , SOA
@@ -15,15 +16,7 @@ module DNS.Types.Type (
   , SRV
   , DNAME
   , OPT
-  , DS
-  , RRSIG
-  , NSEC
-  , DNSKEY
-  , NSEC3
-  , NSEC3PARAM
   , TLSA
-  , CDS
-  , CDNSKEY
   , CSYNC
   , AXFR
   , ANY
@@ -94,32 +87,9 @@ pattern DNAME      = TYPE  39 -- RFC 6672
 pattern OPT :: TYPE
 pattern OPT        = TYPE  41 -- RFC 6891
 -- | Delegation Signer (RFC4034)
-pattern DS :: TYPE
-pattern DS         = TYPE  43 -- RFC 4034
--- | RRSIG (RFC4034)
-pattern RRSIG :: TYPE
-pattern RRSIG      = TYPE  46 -- RFC 4034
--- | NSEC (RFC4034)
-pattern NSEC :: TYPE
-pattern NSEC       = TYPE  47 -- RFC 4034
--- | DNSKEY (RFC4034)
-pattern DNSKEY :: TYPE
-pattern DNSKEY     = TYPE  48 -- RFC 4034
--- | NSEC3 (RFC5155)
-pattern NSEC3 :: TYPE
-pattern NSEC3      = TYPE  50 -- RFC 5155
--- | NSEC3PARAM (RFC5155)
-pattern NSEC3PARAM :: TYPE
-pattern NSEC3PARAM = TYPE  51 -- RFC 5155
 -- | TLSA (RFC6698)
 pattern TLSA :: TYPE
 pattern TLSA       = TYPE  52 -- RFC 6698
--- | Child DS (RFC7344)
-pattern CDS :: TYPE
-pattern CDS        = TYPE  59 -- RFC 7344
--- | DNSKEY(s) the Child wants reflected in DS (RFC7344)
-pattern CDNSKEY :: TYPE
-pattern CDNSKEY    = TYPE  60 -- RFC 7344
 -- | Child-To-Parent Synchronization (RFC7477)
 pattern CSYNC :: TYPE
 pattern CSYNC      = TYPE  62 -- RFC 7477
@@ -149,15 +119,7 @@ instance Show TYPE where
     show SRV        = "SRV"
     show DNAME      = "DNAME"
     show OPT        = "OPT"
-    show DS         = "DS"
-    show RRSIG      = "RRSIG"
-    show NSEC       = "NSEC"
-    show DNSKEY     = "DNSKEY"
-    show NSEC3      = "NSEC3"
-    show NSEC3PARAM = "NSEC3PARAM"
     show TLSA       = "TLSA"
-    show CDS        = "CDS"
-    show CDNSKEY    = "CDNSKEY"
     show CSYNC      = "CSYNC"
     show AXFR       = "AXFR"
     show ANY        = "ANY"

@@ -1,6 +1,8 @@
 module DNS.Types.Internal (
+  -- * Types
+    TYPE(..)
   -- * Classes
-    ResourceData(..)
+  , ResourceData(..)
   , OptData(..)
   -- * High level
   , putDNSMessage
