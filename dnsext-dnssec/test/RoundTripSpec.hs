@@ -7,11 +7,9 @@ import Control.Monad (replicateM)
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
-import DNS.Types.Internal
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import Data.Proxy
 import Data.Word
 import GHC.Exts (the, groupWith)
 import Test.Hspec
@@ -81,7 +79,4 @@ genWord8 = arbitrary
 decodeResourceRecord' :: ByteString -> Either DNSError ResourceRecord
 decodeResourceRecord' = decodeResourceRecord dict
   where
-    dict = addRData DS    (Proxy :: Proxy RD_DS)
-         $ addRData NSEC  (Proxy :: Proxy RD_NSEC)
-         $ addRData NSEC3 (Proxy :: Proxy RD_NSEC3)
-           defaultDecodeDict
+    dict = addResourceDataforDNSSEC defaultDecodeDict
