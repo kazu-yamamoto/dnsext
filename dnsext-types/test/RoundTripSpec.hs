@@ -10,7 +10,6 @@ import qualified Data.ByteString.Short as Short
 import qualified Data.IP
 import Data.IP (Addr, IP(..), IPv4, IPv6, toIPv4, toIPv6, makeAddrRange)
 import Data.Word
-import GHC.Exts (the, groupWith)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck (Gen, arbitrary, elements, forAll, frequency, listOf, oneof)
@@ -85,9 +84,7 @@ genQuestion = Question <$> genDomain <*> genTYPE
 genTYPE :: Gen TYPE
 genTYPE = frequency
     [ (20, elements
-            [ A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, OPT, DS, RRSIG
-            , NSEC, DNSKEY, NSEC3, NSEC3PARAM, TLSA, CDS, CDNSKEY, CSYNC
-            ])
+            [ A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, OPT, TLSA ])
     , (1, toTYPE <$> genWord16)
     ]
 
@@ -98,8 +95,7 @@ genResourceRecord = frequency
   where
     genRR = do
       dom <- genDomain
-      t <- elements [A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, DS,
-                     TLSA, NSEC, NSEC3]
+      t <- elements [A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, TLSA]
       ResourceRecord dom t classIN <$> genWord32 <*> mkRData dom t
 
 mkRData :: Domain -> TYPE -> Gen RData
@@ -115,30 +111,13 @@ mkRData dom typ =
         PTR   -> rd_ptr  <$> genDomain
         SRV   -> rd_srv  <$> genWord16 <*> genWord16 <*> genWord16 <*> genDomain
         DNAME -> rd_dname <$> genDomain
-        DS    -> rd_ds   <$> genWord16 <*> genWord8 <*> genWord8 <*> genOpaque
-        NSEC  -> rd_nsec <$> genDomain <*> genNsecTypes
-        NSEC3 -> genNSEC3
         TLSA  -> rd_tlsa <$> genWord8 <*> genWord8 <*> genWord8 <*> genOpaque
 
         _ -> pure . rd_txt $ byteStringToOpaque ("Unhandled type " <> C8.pack (show typ))
   where
-    genNSEC3 = do
-        (alg, hlen)  <- elements [(1,32),(2,64)]
-        flgs <- elements [0,1]
-        iter <- elements [0..100]
-        salt <- elements ["", "AB"]
-        hash <- byteStringToOpaque . BS.pack <$> replicateM hlen genWord8
-        rd_nsec3 alg flgs iter salt hash <$> genNsecTypes
     genTextString = do
         len <- elements [0, 1, 63, 255, 256, 511, 512, 1023, 1024]
         shortByteStringToOpaque . Short.pack <$> replicateM len genWord8
-    genNsecTypes = do
-        ntypes <- elements [0..15]
-        types <- sequence $ replicate ntypes $ toTYPE <$> elements [1..1024]
-        return $ [ the t |
-                   t <- types,
-                   then group by (fromTYPE t)
-                        using groupWith ]
 
 genIPv4 :: Gen IPv4
 genIPv4 = toIPv4 <$> replicateM 4 (fromIntegral <$> genWord8)

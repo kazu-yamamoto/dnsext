@@ -55,6 +55,7 @@ defaultRDataDict =
     M.insert (toKey AAAA)  (RDataDecode (Proxy :: Proxy RD_AAAA)) $
     M.insert (toKey SRV)   (RDataDecode (Proxy :: Proxy RD_SRV)) $
     M.insert (toKey DNAME) (RDataDecode (Proxy :: Proxy RD_DNAME)) $
+    M.insert (toKey TLSA)  (RDataDecode (Proxy :: Proxy RD_TLSA)) $
     M.empty
 
 ----------------------------------------------------------------
