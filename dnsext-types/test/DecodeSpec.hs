@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module DecodeSpec where
+module DecodeSpec (spec) where
 
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Internal (ByteString(..), unsafeCreate)

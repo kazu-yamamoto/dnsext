@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module EncodeSpec where
+module EncodeSpec (spec) where
 
 import Data.ByteString (ByteString)
 import Data.IP

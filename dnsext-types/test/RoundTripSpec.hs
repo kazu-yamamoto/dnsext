@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TransformListComp #-}
 
-module RoundTripSpec where
+module RoundTripSpec (spec) where
 
 import Control.Monad (replicateM)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
@@ -50,18 +51,18 @@ spec = do
 
     prop "ResourceRecord" . forAll genResourceRecord $ \ rr -> do
         let bs = encodeResourceRecord rr
-        decodeResourceRecord defaultDecodeDict bs `shouldBe` Right rr
-        fmap encodeResourceRecord (decodeResourceRecord defaultDecodeDict bs) `shouldBe` Right bs
+        decodeResourceRecord' bs `shouldBe` Right rr
+        fmap encodeResourceRecord (decodeResourceRecord' bs) `shouldBe` Right bs
 
     prop "DNSHeader" . forAll (genDNSHeader 0x0f) $ \ hdr ->
         decodeDNSHeader (encodeDNSHeader hdr) `shouldBe` Right hdr
 
     prop "DNSMessage" . forAll genDNSMessage $ \ msg ->
-        decode defaultDecodeDict (encode msg) `shouldBe` Right msg
+        decode' (encode msg) `shouldBe` Right msg
 
     prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
         let eh = EDNSheader edns
-            Right m = decode defaultDecodeDict . encode $ DNSMessage hdr eh [] [] [] []
+            Right m = decode' . encode $ DNSMessage hdr eh [] [] [] []
         ednsHeader m `shouldBe` eh
 
 ----------------------------------------------------------------
@@ -232,11 +233,14 @@ genOData = oneof
                  then pure $ od_ecsGeneric fam srcBits scpBits $ byteStringToOpaque $ BS.pack more
                  else pure $ od_ecsGeneric fam srcBits scpBits $ byteStringToOpaque $ BS.pack less
 
-genExtRCODE :: Gen RCODE
-genExtRCODE = elements $ map toRCODE [0..4095]
-
 genEDNSHeader :: Gen (EDNS, DNSHeader)
 genEDNSHeader = do
     edns <- genEDNS
     hdr <- genDNSHeader 0xF00
     return (edns, hdr)
+
+decode' :: ByteString -> Either DNSError DNSMessage
+decode' = decode defaultDecodeDict
+
+decodeResourceRecord' :: ByteString -> Either DNSError ResourceRecord
+decodeResourceRecord' = decodeResourceRecord defaultDecodeDict
