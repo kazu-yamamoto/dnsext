@@ -58,13 +58,12 @@ test-suite spec
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
     other-modules:
-        EncodeSpec
-        DecodeSpec
         RoundTripSpec
 
     default-language:   Haskell2010
     ghc-options:        -Wall
     build-depends:
+        dnsext-dnssec,
         dnsext-types,
         QuickCheck >=2.9,
         base,
