@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module DNS.IO.Memo where
 
 import qualified Control.Reaper as R

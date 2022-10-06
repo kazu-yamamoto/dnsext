@@ -75,7 +75,7 @@ receiveVC sock = do
         Right msg -> return msg
   where
     toLen bs = case BS.unpack bs of
-        [hi, lo] -> 256 * (fromIntegral hi) + (fromIntegral lo)
+        [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
         _        -> 0              -- never reached
 
 recvDNS :: Socket -> Int -> IO ByteString
@@ -112,7 +112,7 @@ recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
 -- to the destination nameserver.
 --
 send :: Socket -> ByteString -> IO ()
-send = (void .). Socket.send
+send sock bs = void $ Socket.send sock bs
 {-# INLINE send #-}
 
 -- | Send an encoded 'DNSMessage' datagram over UDP to a given address.  The
@@ -121,7 +121,7 @@ send = (void .). Socket.send
 -- message needs to be prepended with an explicit length.
 --
 sendTo :: Socket -> ByteString -> SockAddr -> IO ()
-sendTo sock str addr = Socket.sendTo sock str addr >> return ()
+sendTo sock bs addr = void $ Socket.sendTo sock bs addr
 {-# INLINE sendTo #-}
 
 -- | Send a single encoded 'DNSMessage' over TCP.  An explicit length is
@@ -132,7 +132,7 @@ sendTo sock str addr = Socket.sendTo sock str addr >> return ()
 -- a concatenated batch of the resulting encapsulated messages.
 --
 sendVC :: Socket -> ByteString -> IO ()
-sendVC = (. encodeVC). sendAll
+sendVC sock bs = sendAll sock $ encodeVC bs
 {-# INLINE sendVC #-}
 
 -- | Send one or more encoded 'DNSMessage' buffers over TCP, each allready

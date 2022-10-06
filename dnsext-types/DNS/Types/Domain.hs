@@ -330,7 +330,7 @@ labelParser sep bld =
             let d = 100 * x + 10 * y + z
             if d > 255 then fail "DDD should be less than 256" else pure (P.toBuilder (fromIntegral d :: Word8))
         digit :: Parser Int -- Word8 is not good enough for "d > 255"
-        digit = fromIntegral . (subtract _0) <$> P.satisfy isDigit
+        digit = fromIntegral . subtract _0 <$> P.satisfy isDigit
 
 ----------------------------------------------------------------
 

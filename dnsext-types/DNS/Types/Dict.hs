@@ -67,7 +67,7 @@ defaultRDataDict =
     M.insert (toKey AAAA)  (RDataDecode (Proxy :: Proxy RD_AAAA)) $
     M.insert (toKey SRV)   (RDataDecode (Proxy :: Proxy RD_SRV)) $
     M.insert (toKey DNAME) (RDataDecode (Proxy :: Proxy RD_DNAME)) $
-    M.insert (toKey TLSA)  (RDataDecode (Proxy :: Proxy RD_TLSA)) $
+    M.insert (toKey TLSA)  (RDataDecode (Proxy :: Proxy RD_TLSA))
     M.empty
 
 ----------------------------------------------------------------
@@ -90,5 +90,5 @@ defaultODataDict =
     M.insert (toKeyO DAU)  (ODataDecode (Proxy :: Proxy OD_DAU)) $
     M.insert (toKeyO DHU)  (ODataDecode (Proxy :: Proxy OD_DHU)) $
     M.insert (toKeyO N3U)  (ODataDecode (Proxy :: Proxy OD_N3U)) $
-    M.insert (toKeyO ClientSubnet)  (ODataDecode (Proxy :: Proxy OD_ClientSubnet)) $
+    M.insert (toKeyO ClientSubnet)  (ODataDecode (Proxy :: Proxy OD_ClientSubnet))
     M.empty

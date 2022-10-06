@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module DNS.Types.ShortParser where
 
@@ -11,7 +12,7 @@ import Data.Word8
 
 ----------------------------------------------------------------
 
-data Parser a = Parser {
+newtype Parser a = Parser {
   -- | Getting the internal parser.
     runParser :: ShortByteString -> (Result a, ShortByteString)
   }
@@ -27,7 +28,7 @@ instance Functor Parser where
     f `fmap` p = return f <*> p
 
 instance Applicative Parser where
-    pure a = Parser $ \bs -> (Match a, bs)
+    pure a = Parser (Match a, )
     (<*>)  = ap
 
 instance Monad Parser where
@@ -38,11 +39,11 @@ instance Monad Parser where
         (Fail s,  bs') -> (Fail s, bs')
 
 instance MonadFail Parser where
-    fail s = Parser $ \bs -> (Fail s, bs)
+    fail s = Parser (Fail s, )
 
 -- no 'try'
 instance MonadPlus Parser where
-    mzero       = Parser $ \bs -> (Unmatch, bs)
+    mzero       = Parser (Unmatch, )
     p `mplus` q = Parser $ \bs -> case runParser p bs of
         (Unmatch, _)    -> runParser q bs
         (Match a,  bs') -> (Match a, bs')
