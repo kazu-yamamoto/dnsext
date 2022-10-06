@@ -3,6 +3,7 @@
 module EncodeSpec (spec) where
 
 import Data.ByteString (ByteString)
+import Data.Either
 import Data.IP
 import Test.Hspec
 
@@ -36,7 +37,7 @@ check2 :: DNSMessage -> Expectation
 check2 inp = bs' `shouldBe` bs
   where
     bs = encode inp
-    Right out = decode' bs
+    out = fromRight (error "check2") $ decode' bs
     bs' = encode out
 
 defaultHeader :: DNSHeader

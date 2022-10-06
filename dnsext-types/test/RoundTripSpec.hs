@@ -8,6 +8,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
+import Data.Either
 import qualified Data.IP
 import Data.IP (Addr, IP(..), IPv4, IPv6, toIPv4, toIPv6, makeAddrRange)
 import Data.Word
@@ -62,7 +63,7 @@ spec = do
 
     prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
         let eh = EDNSheader edns
-            Right m = decode' . encode $ DNSMessage hdr eh [] [] [] []
+            m = fromRight (error "prop EDNS") $ decode' $ encode $ DNSMessage hdr eh [] [] [] []
         ednsHeader m `shouldBe` eh
 
 ----------------------------------------------------------------

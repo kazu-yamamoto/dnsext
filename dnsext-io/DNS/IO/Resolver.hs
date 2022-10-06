@@ -85,7 +85,9 @@ makeResolver seed = do
 getRandom :: IORef C.ChaChaDRG -> IO Word16
 getRandom ref = I.atomicModifyIORef' ref $ \gen ->
   let (bs, gen') = C.randomBytesGenerate 2 gen
-      [u,l] = map fromIntegral $ BS.unpack bs
+      (u,l) = case map fromIntegral $ BS.unpack bs of
+        [u',l'] -> (u',l')
+        _       -> error "getRandom"
       !seqno = u * 256 + l
   in (gen', seqno)
 

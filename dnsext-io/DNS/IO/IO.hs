@@ -21,7 +21,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as LC8
-import Data.IP (IPv4, IPv6)
 import Network.Socket (Socket, SockAddr)
 import Network.Socket.ByteString (recv, recvFrom)
 import qualified Network.Socket.ByteString as Socket

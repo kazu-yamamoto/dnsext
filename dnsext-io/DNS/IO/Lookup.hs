@@ -140,7 +140,7 @@ lookupCacheSection rlv dom typ cconf = do
       Just (_,x) -> return x
   where
     toRR = filter (typ `isTypeOf`) . answer
-    Just c = cache rlv
+    c = fromJust $ cache rlv
     key = (dom,typ)
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
