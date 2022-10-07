@@ -16,14 +16,13 @@ import Data.Functor (($>))
 import Data.List (isInfixOf, find)
 import Data.Char (toUpper)
 import Data.Int (Int64)
-import qualified Data.ByteString.Char8 as B8
 import Text.Read (readMaybe)
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
-import qualified Network.DNS as DNS
+import qualified DNS.Types as DNS
 
 -- other packages
 import UnliftIO (tryAny, waitSTM, withAsync)
@@ -182,7 +181,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
     parseCmd ws  =  case ws of
       "param" : _ ->  Just Param
       "find" : s : _      ->  Just $ Find s
-      ["lookup", n, typ]  ->  Lookup (B8.pack n) <$> parseTYPE typ
+      ["lookup", n, typ]  ->  Lookup (DNS.stringToDomain n) <$> parseTYPE typ
       "status" : _  ->  Just Status
       "expire" : args -> case args of
         []     ->  Just $ Expire 0

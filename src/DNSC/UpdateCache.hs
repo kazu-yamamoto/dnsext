@@ -10,7 +10,7 @@ import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
 -- dns packages
-import Network.DNS (TTL)
+import DNS.Types (TTL)
 
 -- other packages
 import UnliftIO (tryAny)
