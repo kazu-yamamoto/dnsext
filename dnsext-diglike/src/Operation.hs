@@ -1,6 +1,5 @@
 module Operation where
 
-import qualified Data.ByteString.Char8 as B8
 import Text.Read (readMaybe)
 
 import Data.IP (IP (..))
@@ -23,7 +22,7 @@ operate server domain type_ controls = do
 operate_ :: ResolvConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
 operate_ conf name typ = do
   rs <- DNS.makeResolvSeed conf
-  DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (DNS.byteStringToDomain $ B8.pack name) typ
+  DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (DNS.stringToDomain name) typ
 
 getCustomConf :: Maybe HostName -> QueryControls -> IO ResolvConf
 getCustomConf mayServer controls = do
@@ -47,9 +46,9 @@ getCustomConf mayServer controls = do
     queryName sname = do
       rs <- DNS.makeResolvSeed DNS.defaultResolvConf
       as <- DNS.withResolver rs $ \resolver -> do
-        let bn = B8.pack sname
-        eA  <- DNS.lookupA    resolver $ DNS.byteStringToDomain bn
-        eQA <- DNS.lookupAAAA resolver $ DNS.byteStringToDomain bn
+        let dom = DNS.stringToDomain sname
+        eA  <- DNS.lookupA    resolver dom
+        eQA <- DNS.lookupAAAA resolver dom
         let catAs = do
               as  <- eA
               qas <- eQA

@@ -145,6 +145,8 @@ module DNS.Types (
   , shortByteStringToDomain
   , domainToByteString
   , byteStringToDomain
+  , domainToString
+  , stringToDomain
   , checkDomain
   , modifyDomain
   , isLowerDomain
@@ -155,6 +157,8 @@ module DNS.Types (
   , shortByteStringToMailbox
   , mailboxToByteString
   , byteStringToMailbox
+  , mailboxToString
+  , stringToMailbox
   -- ** Opaque
   , Opaque
   , opaqueToByteString

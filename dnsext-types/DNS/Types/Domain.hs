@@ -7,6 +7,8 @@ module DNS.Types.Domain (
   , shortByteStringToDomain
   , domainToByteString
   , byteStringToDomain
+  , domainToString
+  , stringToDomain
   , putDomain
   , getDomain
   , checkDomain
@@ -18,6 +20,8 @@ module DNS.Types.Domain (
   , shortByteStringToMailbox
   , mailboxToByteString
   , byteStringToMailbox
+  , mailboxToString
+  , stringToMailbox
   , putMailbox
   , getMailbox
   ) where
@@ -88,6 +92,12 @@ domainToShortByteString (Domain o) = o
 shortByteStringToDomain :: ShortByteString -> Domain
 shortByteStringToDomain = Domain
 
+domainToString :: Domain -> String
+domainToString (Domain o) = C8.unpack $ Short.fromShort o
+
+stringToDomain :: String -> Domain
+stringToDomain = Domain . Short.toShort . C8.pack
+
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain bs) = f bs
 
@@ -139,6 +149,12 @@ mailboxToShortByteString (Mailbox o) = o
 
 shortByteStringToMailbox :: ShortByteString -> Mailbox
 shortByteStringToMailbox = Mailbox
+
+mailboxToString :: Mailbox -> String
+mailboxToString (Mailbox o) = C8.unpack $ Short.fromShort o
+
+stringToMailbox :: String -> Mailbox
+stringToMailbox = Mailbox . Short.toShort . C8.pack
 
 ----------------------------------------------------------------
 
