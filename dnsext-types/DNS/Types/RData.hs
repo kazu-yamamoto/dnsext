@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Types.RData where
 
@@ -48,6 +49,11 @@ rdataType (RData x) = resourceDataType x
 
 putRData :: RData -> SPut
 putRData (RData x) = putResourceData x
+
+rdataField :: forall a b . Typeable a => RData -> (a -> b) -> Maybe b
+rdataField rd f = case fromRData rd of
+  Nothing       -> Nothing
+  Just (x :: a) -> Just $ f x
 
 ---------------------------------------------------------------
 

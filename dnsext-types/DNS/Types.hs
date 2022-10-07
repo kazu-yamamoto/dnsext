@@ -34,6 +34,7 @@ module DNS.Types (
   , fromRData
   , toRData
   , rdataType
+  , rdataField
   -- ** Class
   , ResourceData
   -- ** Basic resource data
@@ -144,6 +145,10 @@ module DNS.Types (
   , shortByteStringToDomain
   , domainToByteString
   , byteStringToDomain
+  , checkDomain
+  , modifyDomain
+  , isLowerDomain
+  , toLowerDomain
   -- ** Mailbox
   , Mailbox
   , mailboxToShortByteString

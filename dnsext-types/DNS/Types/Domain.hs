@@ -9,6 +9,10 @@ module DNS.Types.Domain (
   , byteStringToDomain
   , putDomain
   , getDomain
+  , checkDomain
+  , modifyDomain
+  , isLowerDomain
+  , toLowerDomain
   , Mailbox
   , mailboxToShortByteString
   , shortByteStringToMailbox
@@ -83,6 +87,18 @@ domainToShortByteString (Domain o) = o
 
 shortByteStringToDomain :: ShortByteString -> Domain
 shortByteStringToDomain = Domain
+
+checkDomain :: (ShortByteString -> a) -> Domain -> a
+checkDomain f (Domain bs) = f bs
+
+modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
+modifyDomain f (Domain bs) = Domain $ f bs
+
+isLowerDomain :: Domain -> Bool
+isLowerDomain = checkDomain (Short.all isLower)
+
+toLowerDomain :: Domain -> Domain
+toLowerDomain = modifyDomain (Short.map toLower)
 
 ----------------------------------------------------------------
 
