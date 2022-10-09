@@ -131,14 +131,16 @@ genOpaque :: Gen Opaque
 genOpaque = byteStringToOpaque <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
-genDomain = shortByteStringToDomain . (<> ".") <$>  genDomainString
+genDomain = ciName . (<> ".") <$>  genDomainString
   where
+    genDomainString :: Gen String
     genDomainString = elements
         ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
 
 genMailbox :: Gen Mailbox
-genMailbox = shortByteStringToMailbox . (<> ".") <$> genMboxString
+genMailbox = ciName . (<> ".") <$> genMboxString
   where
+    genMboxString :: Gen String
     genMboxString = elements
         ["", "a", "a@b", "abc", "a@b.c", "first.last@example.org"]
 

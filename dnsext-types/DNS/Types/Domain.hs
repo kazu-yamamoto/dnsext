@@ -1,27 +1,19 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module DNS.Types.Domain (
-    Domain
-  , domainToShortByteString
-  , shortByteStringToDomain
-  , domainToByteString
-  , byteStringToDomain
-  , domainToString
-  , stringToDomain
+    CaseInsensitiveName(..)
+  , Domain
   , putDomain
   , getDomain
   , checkDomain
   , modifyDomain
-  , isLowerDomain
-  , toLowerDomain
   , Mailbox
-  , mailboxToShortByteString
-  , shortByteStringToMailbox
-  , mailboxToByteString
-  , byteStringToMailbox
-  , mailboxToString
-  , stringToMailbox
+  , checkMailbox
+  , modifyMailbox
   , putMailbox
   , getMailbox
   ) where
@@ -38,6 +30,11 @@ import DNS.Types.Error
 import DNS.Types.Imports
 import DNS.Types.Parser (Parser, Builder)
 import qualified DNS.Types.Parser as P
+
+class CaseInsensitiveName a b where
+    ciName    :: b -> a
+    origName  :: a -> b
+    lowerName :: a -> b
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -69,46 +66,52 @@ import qualified DNS.Types.Parser as P
 -- just\\.one\\.label.example.  -- First label is \"just.one.label\"
 -- @
 --
-newtype Domain = Domain ShortByteString deriving (Eq, Ord)
+
+data Domain = Domain {
+    origDomain  :: ShortByteString
+  , lowerDomain :: ShortByteString
+  }
+
+instance Eq Domain where
+    Domain _ l0 == Domain _ l1 = l0 == l1
+
+instance Ord Domain where
+    Domain _ l0 <= Domain _ l1 = l0 <= l1
 
 instance Show Domain where
-    show (Domain d) = "\"" ++ shortToString d ++ "\""
+    show d = "\"" ++ origName d ++ "\""
 
 instance IsString Domain where
-    fromString = Domain . Short.toShort . C8.pack
+    fromString = ciName
 
 instance Semigroup Domain where
-   Domain dom0 <> Domain dom1 = Domain (dom0 <> dom1)
+   Domain o0 l0 <> Domain o1 l1 = Domain (o0 <> o1) (l0 <> l1)
 
-domainToByteString :: Domain -> ByteString
-domainToByteString (Domain o) = Short.fromShort o
+instance CaseInsensitiveName Domain ShortByteString where
+    ciName o = let n = Short.map toLower o
+               in Domain { origDomain = o, lowerDomain = n }
+    origName  (Domain o _) = o
+    lowerName (Domain _ n) = n
 
-byteStringToDomain :: ByteString -> Domain
-byteStringToDomain = Domain . Short.toShort
+instance CaseInsensitiveName Domain ByteString where
+    ciName o = let o' = Short.toShort o
+                   n' = Short.map toLower o'
+               in Domain { origDomain = o', lowerDomain = n' }
+    origName  (Domain o _) = Short.fromShort o
+    lowerName (Domain _ n) = Short.fromShort n
 
-domainToShortByteString :: Domain -> ShortByteString
-domainToShortByteString (Domain o) = o
-
-shortByteStringToDomain :: ShortByteString -> Domain
-shortByteStringToDomain = Domain
-
-domainToString :: Domain -> String
-domainToString (Domain o) = C8.unpack $ Short.fromShort o
-
-stringToDomain :: String -> Domain
-stringToDomain = Domain . Short.toShort . C8.pack
+instance CaseInsensitiveName Domain String where
+    ciName o = let o' = Short.toShort $ C8.pack o
+                   n' = Short.map toLower o'
+               in Domain { origDomain = o', lowerDomain = n' }
+    origName  (Domain o _) = C8.unpack $ Short.fromShort o
+    lowerName (Domain _ n) = C8.unpack $ Short.fromShort n
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
-checkDomain f (Domain bs) = f bs
+checkDomain f (Domain o _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f (Domain bs) = Domain $ f bs
-
-isLowerDomain :: Domain -> Bool
-isLowerDomain = checkDomain (Short.all isLower)
-
-toLowerDomain :: Domain -> Domain
-toLowerDomain = modifyDomain (Short.map toLower)
+modifyDomain f (Domain o l) = Domain (f o) (f l)
 
 ----------------------------------------------------------------
 
@@ -130,39 +133,60 @@ toLowerDomain = modifyDomain (Short.map toLower)
 -- john.smith\@examle.com.   -- First label is @john.smith@
 -- @
 --
-newtype Mailbox = Mailbox ShortByteString deriving (Eq, Ord)
+
+data Mailbox = Mailbox {
+    origMailbox  :: ShortByteString
+  , lowerMailbox :: ShortByteString
+  }
+
+instance Eq Mailbox where
+    Mailbox _ l0 == Mailbox _ l1 = l0 == l1
+
+instance Ord Mailbox where
+    Mailbox _ l0 <= Mailbox _ l1 = l0 <= l1
 
 instance Show Mailbox where
-    show (Mailbox d) = "\"" ++ shortToString d ++ "\""
+    show d = "\"" ++ origName d ++ "\""
 
 instance IsString Mailbox where
-    fromString = Mailbox . Short.toShort . C8.pack
+    fromString = ciName
 
-mailboxToByteString :: Mailbox -> ByteString
-mailboxToByteString (Mailbox o) = Short.fromShort o
+instance Semigroup Mailbox where
+   Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
 
-byteStringToMailbox :: ByteString -> Mailbox
-byteStringToMailbox = Mailbox . Short.toShort
+instance CaseInsensitiveName Mailbox ShortByteString where
+    ciName o = let n = Short.map toLower o
+               in Mailbox { origMailbox = o, lowerMailbox = n }
+    origName  (Mailbox o _) = o
+    lowerName (Mailbox _ n) = n
 
-mailboxToShortByteString :: Mailbox -> ShortByteString
-mailboxToShortByteString (Mailbox o) = o
+instance CaseInsensitiveName Mailbox ByteString where
+    ciName o = let o' = Short.toShort o
+                   n' = Short.map toLower o'
+               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    origName  (Mailbox o _) = Short.fromShort o
+    lowerName (Mailbox _ n) = Short.fromShort n
 
-shortByteStringToMailbox :: ShortByteString -> Mailbox
-shortByteStringToMailbox = Mailbox
+instance CaseInsensitiveName Mailbox String where
+    ciName o = let o' = Short.toShort $ C8.pack o
+                   n' = Short.map toLower o'
+               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    origName  (Mailbox o _) = C8.unpack $ Short.fromShort o
+    lowerName (Mailbox _ n) = C8.unpack $ Short.fromShort n
 
-mailboxToString :: Mailbox -> String
-mailboxToString (Mailbox o) = C8.unpack $ Short.fromShort o
+checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
+checkMailbox f (Mailbox o _) = f o
 
-stringToMailbox :: String -> Mailbox
-stringToMailbox = Mailbox . Short.toShort . C8.pack
+modifyMailbox :: (ShortByteString -> ShortByteString) -> Mailbox -> Mailbox
+modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 
 ----------------------------------------------------------------
 
 putDomain :: Domain -> SPut
-putDomain (Domain d) = putDomain' _period d
+putDomain (Domain o _) = putDomain' _period o
 
 putMailbox :: Mailbox -> SPut
-putMailbox (Mailbox m) = putDomain' _at m
+putMailbox (Mailbox o _) = putDomain' _at o
 
 putDomain' :: Word8 -> RawDomain -> SPut
 putDomain' sep dom
@@ -215,10 +239,10 @@ putPartialDomain = putLenShortByteString
 --
 
 getDomain :: SGet Domain
-getDomain = Domain <$> (parserPosition >>= getDomain' _period)
+getDomain = ciName <$> (parserPosition >>= getDomain' _period)
 
 getMailbox :: SGet Mailbox
-getMailbox = Mailbox <$> (parserPosition >>= getDomain' _at)
+getMailbox = ciName <$> (parserPosition >>= getDomain' _at)
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points

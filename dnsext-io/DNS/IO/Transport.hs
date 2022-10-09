@@ -86,7 +86,7 @@ resolve rlv dom typ qctls rcv
   | concurrent    = resolveConcurrent nss        gens        q tm retry ctls rcv
   | otherwise     = resolveSequential nss        gens        q tm retry ctls rcv
   where
-    dom' = domainToByteString dom
+    dom' = origName dom
     q = case C8.last dom' of
           '.' -> Question dom typ
           _   -> Question (dom <> ".") typ

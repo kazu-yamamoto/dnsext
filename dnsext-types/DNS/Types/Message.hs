@@ -128,7 +128,7 @@ putDNSMessage msg = putHeader hd
             fromEDNS :: AdditionalRecords -> Word16 -> EDNS -> AdditionalRecords
             fromEDNS rrs rc' edns = ResourceRecord name' type' class' ttl' rdata' : rrs
               where
-                name'  = shortByteStringToDomain "."
+                name'  = "."
                 type'  = OPT
                 class' = maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns)
                 ttl0'  = fromIntegral (rc' .&. 0xff0) `shiftL` 20

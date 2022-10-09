@@ -62,8 +62,9 @@ genOpaque :: Gen Opaque
 genOpaque = byteStringToOpaque <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
-genDomain = shortByteStringToDomain . (<> ".") <$>  genDomainString
+genDomain = ciName . (<> ".") <$> genDomainString
   where
+    genDomainString :: Gen String
     genDomainString = elements
         ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
 

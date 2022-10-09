@@ -312,7 +312,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 
     octets = C8.split '.' ip
     reverse_ip = C8.intercalate dot (reverse octets)
-    dom = byteStringToDomain (reverse_ip `C8.append` suffix)
+    dom = ciName (reverse_ip `C8.append` suffix)
 
 ----------------------------------------------------------------
 

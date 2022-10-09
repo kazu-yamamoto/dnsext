@@ -139,26 +139,19 @@ module DNS.Types (
   , od_ecsGeneric
   , od_unknown
   -- * Basic types
+  , CaseInsensitiveName(..)
   -- ** Domain
   , Domain
-  , domainToShortByteString
-  , shortByteStringToDomain
-  , domainToByteString
-  , byteStringToDomain
-  , domainToString
-  , stringToDomain
+  , putDomain
+  , getDomain
   , checkDomain
   , modifyDomain
-  , isLowerDomain
-  , toLowerDomain
   -- ** Mailbox
   , Mailbox
-  , mailboxToShortByteString
-  , shortByteStringToMailbox
-  , mailboxToByteString
-  , byteStringToMailbox
-  , mailboxToString
-  , stringToMailbox
+  , checkMailbox
+  , modifyMailbox
+  , putMailbox
+  , getMailbox
   -- ** Opaque
   , Opaque
   , opaqueToByteString
