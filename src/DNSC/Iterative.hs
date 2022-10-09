@@ -83,7 +83,7 @@ normalize :: Domain -> Maybe Domain
 normalize s
   | DNS.checkDomain (== ".") s = Just "."
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just $ DNS.modifyDomain (Short.map toLower) nn
+  | validate rn   = Just nn
   | otherwise     = Nothing  -- not valid
   where
     (rn, nn) | DNS.checkDomain ("." `Short.isSuffixOf`) s =
@@ -275,11 +275,11 @@ parseV6RevDomain dom = do
 
 -- show IPv4 reverse-lookup domain from 8bit-parts
 showV4RevDomain :: [Int] -> Domain
-showV4RevDomain parts = DNS.stringToDomain $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
+showV4RevDomain parts = DNS.ciName $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
 
 -- parse IPv6 reverse-lookup domain from 4bit-parts
 showV6RevDomain :: [Int] -> Domain
-showV6RevDomain parts = DNS.stringToDomain $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
+showV6RevDomain parts = DNS.ciName $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
 
 -- make IPv4-address and mask-length from prefix 8bit-parts
 withMaskLenV4 :: [Int] -> (IPv4, Int)
@@ -445,7 +445,7 @@ replyMessage eas ident rqs =
 replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
-  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, allowAuthority $ Cache.lowerAuthority msg)
+  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, allowAuthority $ DNS.authority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id fromMessage etm
     where
@@ -569,7 +569,7 @@ resolveTYPE bn typ = do
   (msg, _nss@(srcDom, _)) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
-        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
   maybe (lift $ cacheAnswer srcDom bn typ msg) (const checkTypeRR) cname
   return (msg, cname)

@@ -12,7 +12,6 @@ import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (toUpper, toLower)
-import qualified Data.ByteString.Char8 as B8
 import DNS.Types (TYPE (..), TTL, Domain)
 import qualified DNS.Types as DNS
 import System.IO.Unsafe (unsafePerformIO)
@@ -27,11 +26,6 @@ import qualified DNSC.Cache as Cache
 
 
 {-# ANN module "HLint: ignore Use fromMaybe" #-}
-
------
-
-packS8 :: String -> Domain
-packS8 = DNS.stringToDomain
 
 -----
 
@@ -54,7 +48,7 @@ nameList =
   ]
 
 sbsDomainList :: [Domain]
-sbsDomainList = map packS8 domainList
+sbsDomainList = map DNS.ciName domainList
 
 v4List :: Read a => [a]
 v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
@@ -64,7 +58,7 @@ v6List = map read [ "fe80::000a:0001", "fe80::000a:0002", "fe80::000a:0003", "fe
 
 nsList :: [Domain]
 nsList =
-  map packS8
+  map DNS.ciName
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
@@ -145,8 +139,8 @@ genCRsRec = do
         | typ `elem` [NS, SOA, MX]  =  domainList
         | otherwise                 =  nameList
   lbl <- elements labelList
-  (,) (Key (packS8 lbl) typ DNS.classIN, genCrs)
-    <$> (DNS.byteStringToDomain . B8.pack <$> toULString lbl)
+  (,) (Key (DNS.ciName lbl) typ DNS.classIN, genCrs)
+    <$> (DNS.ciName <$> toULString lbl)
 
 genCRsPair :: Gen (Key, Gen CRSet)
 genCRsPair = fst <$> genCRsRec

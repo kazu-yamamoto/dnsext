@@ -11,7 +11,6 @@ module DNSC.Cache (
 
   Ranking (..),
   rankedAnswer, rankedAuthority, rankedAdditional,
-  lowerAnswer, lowerAuthority, lowerAdditional,
 
   insertSetFromSection,
   insertSetEmpty,
@@ -94,7 +93,7 @@ rankedAnswer =
   rankedSection
   RankAuthAnswer
   RankAnswer
-  lowerAnswer
+  DNS.answer
 
 rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAuthority =
@@ -103,39 +102,14 @@ rankedAuthority =
      RankAdditional does not overwrite glue. -}
   RankAdditional
   RankAdditional
-  lowerAuthority
+  DNS.authority
 
 rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
   RankAdditional
   RankAdditional
-  lowerAdditional
-
-lowerAnswer :: DNSMessage -> [ResourceRecord]
-lowerAnswer = map lowerRR . DNS.answer
-
-lowerAuthority :: DNSMessage -> [ResourceRecord]
-lowerAuthority = map lowerRR . DNS.authority
-
-lowerAdditional :: DNSMessage -> [ResourceRecord]
-lowerAdditional = map lowerRR . DNS.additional
-
-lowerRR :: ResourceRecord -> ResourceRecord
-lowerRR rr@ResourceRecord { DNS.rrname = name, DNS.rdata = rd } = case DNS.rrtype rr of
-  NS    | Just ns <- DNS.rdataField rd DNS.ns_domain    ->
-          if DNS.isLowerDomain ns
-          then urr
-          else urr { DNS.rdata = DNS.rd_ns $ DNS.toLowerDomain ns }
-  CNAME | Just cn <- DNS.rdataField rd DNS.cname_domain ->
-          if DNS.isLowerDomain cn
-          then urr
-          else urr { DNS.rdata = DNS.rd_cname $ DNS.toLowerDomain cn }
-  _                         -> urr
-  where
-    urr
-      | DNS.isLowerDomain name = rr
-      | otherwise              = rr { DNS.rrname = DNS.toLowerDomain name }
+  DNS.additional
 
 ---
 
@@ -150,7 +124,7 @@ empty = Cache PSQ.empty
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
        -> Cache -> Maybe ([ResourceRecord], Ranking)
-lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
+lookup now dom typ cls = lookup_ now result dom typ cls
   where
     result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
@@ -158,7 +132,7 @@ lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
 lookupEither :: Timestamp
              -> Domain -> TYPE -> CLASS
              -> Cache -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking)  {- SOA or RRs, ranking -}
-lookupEither now dom typ cls cache = lookup_ now result (fromDomain dom) typ cls cache
+lookupEither now dom typ cls cache = lookup_ now result dom typ cls cache
   where
     result ttl (Val crs rank) = case crs of
       Left srcDom  ->  do
@@ -267,9 +241,6 @@ now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
-fromDomain :: Domain -> Domain
-fromDomain = DNS.toLowerDomain
-
 toRDatas :: CRSet -> [RData]
 toRDatas (Left _)   = []
 toRDatas (Right rs) = rs
@@ -283,7 +254,7 @@ rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
     DNS.rdataType rd == rrtype &&
     DNS.checkDomain (Short.all isAscii) rrname
-      =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
+      =  Just (Key rrname rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
@@ -307,6 +278,6 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
     iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
 
 insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty srcDom dom typ ttl rank h = h key ttl (Left $ fromDomain srcDom) rank
+insertSetEmpty srcDom dom typ ttl rank h = h key ttl (Left srcDom) rank
   where
-    key = Key (fromDomain dom) typ DNS.classIN
+    key = Key dom typ DNS.classIN
