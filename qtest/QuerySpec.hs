@@ -6,8 +6,8 @@ import Control.Concurrent (forkIO, threadDelay)
 import Data.Maybe (isJust)
 import Data.Either (isRight)
 import Data.String (fromString)
-import Network.DNS (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
-import qualified Network.DNS as DNS
+import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
+import qualified DNS.Types as DNS
 import System.Environment (lookupEnv)
 
 import qualified DNSC.Cache as Cache

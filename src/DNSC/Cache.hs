@@ -11,22 +11,17 @@ module DNSC.Cache (
 
   Ranking (..),
   rankedAnswer, rankedAuthority, rankedAdditional,
-  lowerAnswer, lowerAuthority, lowerAdditional,
 
   insertSetFromSection,
   insertSetEmpty,
 
   nxTYPE,
-  -- * types
-  CDomain,
-  CMailbox,
-  CTxt,
 
   -- * handy interface
   insertRRs,
 
   -- * low-level interfaces
-  Cache (..), Key (..), Val (..), CRSet (..),
+  Cache (..), Key (..), Val (..), CRSet,
   extractRRSet,
   (<+), alive,
   member,
@@ -35,50 +30,27 @@ module DNSC.Cache (
 
 -- GHC packages
 import Prelude hiding (lookup)
-import Control.DeepSeq (deepseq, liftRnf)
 import Control.Monad (guard)
 import Data.Function (on)
 import Data.Maybe (isJust)
 import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Int (Int64)
-import Data.Word (Word16, Word32)
-import Data.Char (isAscii, isUpper, toLower, ord)
-import qualified Data.ByteString.Char8 as B8
-import Data.ByteString.Short (ShortByteString, toShort, fromShort)
 import qualified Data.ByteString.Short as Short
+import Data.Word8 (isAscii)
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
-import Data.IP (IPv4, IPv6)
-import Network.DNS
-  (Domain, CLASS, TTL, TYPE (..), RData (..),
+import DNS.Types
+  (Domain, CLASS, TTL, TYPE (..), RData,
    ResourceRecord (ResourceRecord), DNSMessage)
-import qualified Network.DNS as DNS
+import qualified DNS.Types as DNS
 
 -- this package
 import DNSC.Types (Timestamp)
 
----
-
-type CDomain = ShortByteString
-type CMailbox = ShortByteString
-type CTxt = ShortByteString
-
-data CRSet
-  = CR_A [IPv4]
-  | CR_NS [CDomain]
-  | CR_CNAME CDomain
-  | CR_SOA CDomain CMailbox
-    Word32 Word32 Word32 Word32 Word32
-  | CR_PTR [CDomain]
-  | CR_MX [(Word16, CDomain)]
-  | CR_TXT [CTxt]
-  | CR_AAAA [IPv6]
-  | CR_SRV [(Word16, Word16, Word16, CDomain)]
-  | CR_EMPTY CDomain {- NXDOMAIN or NODATA, hold domain delegatoin from -}
-  deriving (Eq, Ord, Show)
+type CRSet = Either Domain [RData]
 
 ---
 
@@ -121,7 +93,7 @@ rankedAnswer =
   rankedSection
   RankAuthAnswer
   RankAnswer
-  lowerAnswer
+  DNS.answer
 
 rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAuthority =
@@ -130,41 +102,18 @@ rankedAuthority =
      RankAdditional does not overwrite glue. -}
   RankAdditional
   RankAdditional
-  lowerAuthority
+  DNS.authority
 
 rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAdditional =
   rankedSection
   RankAdditional
   RankAdditional
-  lowerAdditional
-
-lowerAnswer :: DNSMessage -> [ResourceRecord]
-lowerAnswer = map lowerRR . DNS.answer
-
-lowerAuthority :: DNSMessage -> [ResourceRecord]
-lowerAuthority = map lowerRR . DNS.authority
-
-lowerAdditional :: DNSMessage -> [ResourceRecord]
-lowerAdditional = map lowerRR . DNS.additional
-
-lowerRR :: ResourceRecord -> ResourceRecord
-lowerRR rr@ResourceRecord { DNS.rrname = name } = case (DNS.rrtype rr, DNS.rdata rr) of
-  (NS   , RD_NS ns)    | B8.any isUpper ns -> urr { DNS.rdata = RD_NS $ lowerDomain ns }
-  (CNAME, RD_CNAME cn) | B8.any isUpper cn -> urr { DNS.rdata = RD_CNAME $ lowerDomain cn }
-  _                                        -> urr
-  where
-    urr
-      | B8.any isUpper name = rr { DNS.rrname = lowerDomain name }
-      | otherwise           = rr
-    toLowerAscii c
-      | isAscii c  = toLower c
-      | otherwise  = c
-    lowerDomain = B8.pack . map toLowerAscii . B8.unpack
+  DNS.additional
 
 ---
 
-data Key = Key CDomain TYPE CLASS deriving (Eq, Ord, Show)
+data Key = Key Domain TYPE CLASS deriving (Eq, Ord, Show)
 data Val = Val CRSet Ranking deriving Show
 
 data Cache = Cache (OrdPSQ Key Timestamp Val) Int {- max size -}
@@ -175,7 +124,7 @@ empty = Cache PSQ.empty
 lookup :: Timestamp
        -> Domain -> TYPE -> CLASS
        -> Cache -> Maybe ([ResourceRecord], Ranking)
-lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
+lookup now dom typ cls = lookup_ now result dom typ cls
   where
     result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
@@ -183,18 +132,18 @@ lookup now dom typ cls = lookup_ now result (fromDomain dom) typ cls
 lookupEither :: Timestamp
              -> Domain -> TYPE -> CLASS
              -> Cache -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking)  {- SOA or RRs, ranking -}
-lookupEither now dom typ cls cache = lookup_ now result (fromDomain dom) typ cls cache
+lookupEither now dom typ cls cache = lookup_ now result dom typ cls cache
   where
     result ttl (Val crs rank) = case crs of
-      CR_EMPTY srcDom  ->  do
-        sp <- lookup_ now (soaResult ttl $ toDomain srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
+      Left srcDom  ->  do
+        sp <- lookup_ now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
         return (Left sp, rank)
       _                ->  Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
     soaResult ettl srcDom ttl (Val crs rank) =
       Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl) {- treated as TTL of empty data -} crs, rank)
 
 lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
-        -> CDomain -> TYPE -> CLASS
+        -> Domain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache cache _) = do
   let k = Key dom typ cls
@@ -275,7 +224,7 @@ nxTYPE = DNS.toTYPE 0xff00
 {- debug interfaces -}
 
 member :: Timestamp
-       -> CDomain -> TYPE -> CLASS
+       -> Domain -> TYPE -> CLASS
        -> Cache -> Bool
 member now dom typ cls = isJust . lookup_ now (\_ _ -> Just ()) dom typ cls
 
@@ -292,68 +241,20 @@ now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
-toDomain :: CDomain -> DNS.Domain
-toDomain = fromShort
-
-fromDomain :: DNS.Domain -> CDomain
-fromDomain = Short.pack . map (fromIntegral . ord . toLower) . B8.unpack  {- normalizing to lowercase -}
-
 toRDatas :: CRSet -> [RData]
-toRDatas crs = case crs of
-  CR_A as     ->  map RD_A as
-  CR_NS ds    ->  map (RD_NS . toDomain) ds
-  CR_CNAME d  -> [RD_CNAME $ toDomain d]
-  CR_SOA dom m a b c d e -> [RD_SOA (toDomain dom) (fromShort m) a b c d e]
-  CR_PTR ds   ->  map (RD_PTR . toDomain) ds
-  CR_MX ps    ->  [ RD_MX w $ toDomain d | (w, d) <- ps ]
-  CR_TXT ts   ->  map (RD_TXT . fromShort) ts
-  CR_AAAA as  ->  map RD_AAAA as
-  CR_SRV qs   ->  [ RD_SRV pri w port (toDomain d) | (pri, w, port, d) <- qs ]
-  CR_EMPTY {} ->  []
+toRDatas (Left _)   = []
+toRDatas (Right rs) = rs
 
 fromRDatas :: [RData] -> Maybe CRSet
-fromRDatas []    = Nothing
-fromRDatas rds@(x:xs) = case x of
-  -- seq CRSet data in cache to cut references to bytestrings
-  RD_A {}     ->  let as = [ a | RD_A a <- rds ] in as `listseq` Just (CR_A as)
-  RD_NS {}    ->  let ds = [ fromDomain d | RD_NS d <- rds ] in ds `deepseq` Just (CR_NS ds)
-  RD_CNAME d
-    | null xs   ->  let d' = fromDomain d in d' `seq` Just (CR_CNAME d')
-    | otherwise ->  Nothing
-  RD_SOA dom m a b c d e
-    | null xs   ->  let { d' = fromDomain dom; m' = toShort m } in d' `seq` m' `seq`
-                        Just (CR_SOA d' m' a b c d e)
-    | otherwise ->  Nothing
-  RD_PTR {}   ->  let ds = [ fromDomain d | RD_PTR d <- rds ] in ds `deepseq` Just (CR_PTR ds)
-  RD_MX {}    ->  let ps = [ (w, fromDomain d) | RD_MX w d <- rds ] in ps `deepseq` Just (CR_MX ps)
-  RD_TXT {}   ->  let ts = [ toShort t | RD_TXT t <- rds ] in ts `deepseq` Just (CR_TXT ts)
-  RD_AAAA {}  ->  let as = [ a | RD_AAAA a <- rds ] in as `listseq` Just (CR_AAAA as)
-  RD_SRV {}   ->  let qs = [ (pri, w, port, fromDomain d) | RD_SRV pri w port d <- rds ] in qs `deepseq` Just (CR_SRV qs)
-  _           ->  Nothing
-  where
-    listRnf :: [a] -> ()
-    listRnf = liftRnf (`seq` ())
-    listseq :: [a] -> b -> b
-    listseq ps q = case listRnf ps of () -> q
-
-rdTYPE :: RData -> Maybe TYPE
-rdTYPE cr = case cr of
-  RD_A {}      ->  Just A
-  RD_NS {}     ->  Just NS
-  RD_CNAME {}  ->  Just CNAME
-  RD_SOA {}    ->  Just SOA
-  RD_PTR {}    ->  Just PTR
-  RD_MX {}     ->  Just MX
-  RD_TXT {}    ->  Just TXT
-  RD_AAAA {}   ->  Just AAAA
-  RD_SRV {}    ->  Just SRV
-  _            ->  Nothing
+fromRDatas []  = Nothing
+fromRDatas rds = Just $ Right rds
 
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    rdTYPE rd == Just rrtype &&
-    B8.all isAscii rrname     =  Just (Key (fromDomain rrname) rrtype rrclass, rrttl)
+    DNS.rdataType rd == rrtype &&
+    DNS.checkDomain (Short.all isAscii) rrname
+      =  Just (Key rrname rrtype rrclass, rrttl)
   | otherwise                 =  Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
@@ -377,6 +278,6 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
     iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
 
 insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty srcDom dom typ ttl rank h = h key ttl (CR_EMPTY $ fromDomain srcDom) rank
+insertSetEmpty srcDom dom typ ttl rank h = h key ttl (Left srcDom) rank
   where
-    key = Key (fromDomain dom) typ DNS.classIN
+    key = Key dom typ DNS.classIN

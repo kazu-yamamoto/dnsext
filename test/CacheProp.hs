@@ -11,32 +11,21 @@ import Test.QuickCheck
 import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
-import Data.Char (ord, toUpper, toLower)
-import qualified Data.ByteString.Char8 as B8
-import Data.ByteString.Short (ShortByteString)
-import qualified Data.ByteString.Short as Short
-import Network.DNS (TYPE (..), TTL)
-import qualified Network.DNS as DNS
+import Data.Char (toUpper, toLower)
+import DNS.Types (TYPE (..), TTL, Domain)
+import qualified DNS.Types as DNS
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
 import DNSC.Types (Timestamp)
 import qualified DNSC.TimeCache as TimeCache
 import DNSC.Cache
-  (Cache, Key (Key), Val (Val), CRSet (..), (<+),
+  (Cache, Key (Key), Val (Val), CRSet, (<+),
    Ranking (..), takeRRSet, extractRRSet)
 import qualified DNSC.Cache as Cache
 
 
 {-# ANN module "HLint: ignore Use fromMaybe" #-}
-
------
-
-packS8 :: String -> ShortByteString
-packS8 = Short.pack . map (fromIntegral . ord)
-
-toDomain :: ShortByteString -> DNS.Domain
-toDomain = Short.fromShort
 
 -----
 
@@ -58,8 +47,8 @@ nameList =
   , "mail.example.ne.jp."
   ]
 
-sbsDomainList :: [ShortByteString]
-sbsDomainList = map packS8 domainList
+sbsDomainList :: [Domain]
+sbsDomainList = map DNS.ciName domainList
 
 v4List :: Read a => [a]
 v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
@@ -67,9 +56,9 @@ v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.
 v6List :: Read a => [a]
 v6List = map read [ "fe80::000a:0001", "fe80::000a:0002", "fe80::000a:0003", "fe80::000a:0004" ]
 
-nsList :: [ShortByteString]
+nsList :: [Domain]
 nsList =
-  map packS8
+  map DNS.ciName
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
@@ -117,9 +106,9 @@ rankings = [RankAuthAnswer, RankAnswer, RankAdditional]
 
 genCrsAssoc :: [(TYPE, Gen CRSet)]
 genCrsAssoc =
-  [ (A, CR_A <$> listOf1 (elements v4List))
-  , (NS, CR_NS <$> listOf1 (elements nsList))
-  , (AAAA, CR_AAAA <$> listOf1 (elements v6List))
+  [ (A,    Right . (DNS.rd_a    <$>) <$> listOf1 (elements v4List))
+  , (NS,   Right . (DNS.rd_ns   <$>) <$> listOf1 (elements nsList))
+  , (AAAA, Right . (DNS.rd_aaaa <$>) <$> listOf1 (elements v6List))
   ]
 
 toULString :: String -> Gen String
@@ -143,15 +132,15 @@ genWrongCRPair = do
       , typ /= gtyp
       ]
 
-genCRsRec :: Gen ((Key, Gen CRSet), DNS.Domain)
+genCRsRec :: Gen ((Key, Gen CRSet), Domain)
 genCRsRec = do
   (typ, genCrs) <- elements genCrsAssoc
   let labelList
         | typ `elem` [NS, SOA, MX]  =  domainList
         | otherwise                 =  nameList
   lbl <- elements labelList
-  (,) (Key (packS8 lbl) typ DNS.classIN, genCrs)
-    <$> (B8.pack <$> toULString lbl)
+  (,) (Key (DNS.ciName lbl) typ DNS.classIN, genCrs)
+    <$> (DNS.ciName <$> toULString lbl)
 
 genCRsPair :: Gen (Key, Gen CRSet)
 genCRsPair = fst <$> genCRsRec
@@ -222,7 +211,7 @@ newtype ACRPair = ACRPair (Key, CRSet) deriving Show
 instance Arbitrary ACRPair where
   arbitrary = ACRPair <$> genCRPair
 
-newtype ACRRec = ACRRec (Key, CRSet, DNS.Domain) deriving Show
+newtype ACRRec = ACRRec (Key, CRSet, Domain) deriving Show
 
 instance Arbitrary ACRRec where
   arbitrary = ACRRec <$> do
@@ -270,11 +259,11 @@ instance Arbitrary ACR2 where
 
 -- forall ((k, crs) :: AWrongCRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Nothing
 rrsetTakeNothing :: AWrongCRPair -> ATTL -> Property
-rrsetTakeNothing (AWrongCRPair (Key dom typ cls, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet (toDomain dom) typ cls ttl crs) === Nothing
+rrsetTakeNothing (AWrongCRPair (Key dom typ cls, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Nothing
 
 -- forall ((k, crs) :: ACRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Just ((k, ttl), crs)
 rrsetExtractTake :: ACRPair -> ATTL  -> Property
-rrsetExtractTake (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet (toDomain dom) typ cls ttl crs) === Just (k, ttl, crs)
+rrsetExtractTake (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Just (k, ttl, crs)
 
 ---
 
@@ -321,7 +310,7 @@ sizeInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (A
 -- lookup
 
 lookupEmpty :: AKey -> Property
-lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 (toDomain dom) typ cls cacheEmpty === Nothing
+lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 dom typ cls cacheEmpty === Nothing
 
 -- lookup key cache after inserted as new key
 lookupNewInserted :: ACRRec -> ATTL -> ARanking -> AUpdates -> Property
@@ -335,8 +324,8 @@ lookupNewInserted (ACRRec (k@(Key _dom typ cls), crs, ulDom)) (ATTL ttl_) (ARank
 lookupInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
 lookupInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
   case Cache.insert ts0 k ttl_ crs rank cache of
-    Nothing   ->  label "old" $ Cache.lookup ts0 (toDomain dom) typ cls cache =/= Nothing
-    Just ins  ->  label "new" $ Cache.lookup ts0 (toDomain dom) typ cls ins   =/= Nothing
+    Nothing   ->  label "old" $ Cache.lookup ts0 dom typ cls cache =/= Nothing
+    Just ins  ->  label "new" $ Cache.lookup ts0 dom typ cls ins   =/= Nothing
   where
     cache = foldUpdates us cacheEmpty
 
@@ -347,7 +336,7 @@ lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATim
   where
     rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
     checkTTL ins =
-      case map DNS.rrttl . fst <$> Cache.lookup ts1 (toDomain dom) typ cls ins of
+      case map DNS.rrttl . fst <$> Cache.lookup ts1 dom typ cls ins of
         Nothing    ->  life === Nothing
         Just ttls  ->  Just ttls === (replicate (length ttls) <$> life)
       where
@@ -355,9 +344,9 @@ lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATim
 
 lookupEither :: AKey -> AUpdates -> Property
 lookupEither (AKey (Key dom typ cls)) (AUpdates us) =
-  (foldE =<< Cache.lookupEither ts0 (toDomain dom) typ cls cache)
+  (foldE =<< Cache.lookupEither ts0 dom typ cls cache)
   ===
-  Cache.lookup ts0 (toDomain dom) typ cls cache
+  Cache.lookup ts0 dom typ cls cache
   where
     cache = foldUpdates us cacheEmpty
     foldE (e, rank) = do
@@ -376,8 +365,8 @@ rankingOrdered (ACR2 (k@(Key dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2
     action = do
       c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
       c1 <- Cache.insert ts0 k ttl1 crs1 r1 c2
-      (rrs, rank) <- Cache.lookup ts0 (toDomain dom) typ cls c1
-      return $ rrs === extractRRSet (toDomain dom) typ cls ttl1 crs1 .&&. rank === r1
+      (rrs, rank) <- Cache.lookup ts0 dom typ cls c1
+      return $ rrs === extractRRSet dom typ cls ttl1 crs1 .&&. rank === r1
 
 rankingNotOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrdsCo -> AUpdates -> Property
 rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo (r1, r2)) (AUpdates us) =

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DNSC.Iterative (
   -- * resolve interfaces
   getReplyMessage,
@@ -31,11 +33,13 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
+import Data.ByteString.Short (ShortByteString)
+import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (unfoldr, uncons, groupBy, sortOn, sort, intercalate)
-import Data.Char (isAscii, toLower)
+import Data.Word8
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -48,11 +52,13 @@ import System.Random (randomR, getStdRandom)
 -- dns packages
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
 import qualified Data.IP as IP
-import Network.DNS
-  (Domain, ResolvConf (..), FlagOp (FlagClear), DNSError, RData (..), TTL,
+import DNS.Types
+  (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
-import qualified Network.DNS as DNS
+import DNS.IO (ResolvConf (..), FlagOp (FlagClear))
+import qualified DNS.Types as DNS
+import qualified DNS.IO as DNS
 
 -- this package
 import DNSC.RootServers (rootServers)
@@ -66,7 +72,8 @@ import qualified DNSC.Cache as Cache
 
 
 validate :: Domain -> Bool
-validate n = not (B8.null n) && B8.all isAscii n
+validate n = not (DNS.checkDomain Short.null n)
+          && DNS.checkDomain (Short.all isAscii) n
 
 normalizeName :: Domain -> Maybe Domain
 normalizeName = normalize
@@ -74,41 +81,40 @@ normalizeName = normalize
 -- nomalize (domain) name to absolute name
 normalize :: Domain -> Maybe Domain
 normalize s
-  | s == dot      = Just dot
+  | DNS.checkDomain (== ".") s = Just "."
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just $ B8.map toLower nn
+  | validate rn   = Just nn
   | otherwise     = Nothing  -- not valid
   where
-    dot = B8.pack "."
-    (rn, nn) | dot `B8.isSuffixOf` s = (B8.init s, s)
-             | otherwise             = (s, s <> dot)
+    (rn, nn) | DNS.checkDomain ("." `Short.isSuffixOf`) s =
+               (DNS.modifyDomain Short.init s, s)
+             | otherwise                                  = (s, s <> ".")
 
 -- get parent name for valid name
 parent :: Domain -> Domain
 parent n
-  | B8.null dp  =  error "parent: empty name is not valid."
-  | dp == dot   =  dot  -- parent of "." is "."
-  | otherwise   =  B8.drop 1 dp
+  | DNS.checkDomain Short.null dp = error "parent: empty name is not valid."
+  | DNS.checkDomain (== ".") dp   = "."  -- parent of "." is "."
+  | otherwise                     = DNS.modifyDomain (Short.drop 1) dp
   where
-    dot = B8.pack "."
-    dp = B8.dropWhile (/= '.') n
+    dp = DNS.modifyDomain (Short.dropWhile (/= _period)) n
 
 -- get domain list for normalized name
 domains :: Domain -> [Domain]
 domains name
-  | name == dot  =  []
-  | dot `B8.isSuffixOf` name  =  name : unfoldr parent_ name
+  | DNS.checkDomain (== dot) name =  []
+  | DNS.checkDomain (dot `Short.isSuffixOf`) name  =  name : unfoldr parent_ name
   | otherwise                 =  error "domains: normalized name is required."
-  where
-    dot = B8.pack "."
+ where
+    dot = "." :: ShortByteString
     parent_ n
-      | p == dot   =  Nothing
-      | otherwise  =  Just (p, p)
+      | DNS.checkDomain (== dot) p = Nothing
+      | otherwise                  = Just (p, p)
       where
         p = parent n
 
 isSubDomainOf :: Domain -> Domain -> Bool
-x `isSubDomainOf` y =  y `elem` (domains x ++ [B8.pack "."])
+x `isSubDomainOf` y =  y `elem` (domains x ++ ["."])
 
 -----
 
@@ -228,8 +234,8 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 -- parse IPv4 8bit-parts from reverse-lookup domain
 parseV4RevDomain :: Domain -> Either String [Int]
 parseV4RevDomain dom = do
-  rstr <- maybe (throw "suffix does not match") Right $ B8.stripSuffix sufV4 dom
-  let rparts = B8.split '.' rstr
+  rstr <- maybe (throw "suffix does not match") Right $ DNS.checkDomain (Short.stripSuffix sufV4) dom
+  let rparts = Short.split _period rstr
       plen = length rparts
   maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
     $ guard (1 <= plen && plen <= 4)
@@ -237,20 +243,20 @@ parseV4RevDomain dom = do
   where
     throw = Left . ("v4Rev: " ++)
     getByte s = do
-      byte <- case [ x | (x, "")  <- readDec $ B8.unpack s ] of
+      byte <- case [ x | (x, "")  <- readDec $ B8.unpack (Short.fromShort s) ] of
                 []    ->  throw $ "cannot parse decimal from part: " ++ show s
                 [x]   ->  Right x
                 _:_   ->  throw $ "ambiguous parse result of decimal part: " ++ show s
       maybe (throw $ "decimal part '" ++ show byte ++ "' is out of range") Right
         $ guard (0 <= byte && byte < 256)
       return byte
-    sufV4 = B8.pack ".in-addr.arpa."
+    sufV4 = ".in-addr.arpa."
 
 -- parse IPv6 4bit-parts from reverse-lookup domain
 parseV6RevDomain :: Domain -> Either String [Int]
 parseV6RevDomain dom = do
-  rstr <- maybe (throw "suffix does not match") Right $ B8.stripSuffix sufV6 dom
-  let rparts = B8.split '.' rstr
+  rstr <- maybe (throw "suffix does not match") Right $ DNS.checkDomain (Short.stripSuffix sufV6) dom
+  let rparts = Short.split _period rstr
       plen = length rparts
   maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
     $ guard (1 <= plen && plen <= 32)
@@ -258,22 +264,22 @@ parseV6RevDomain dom = do
   where
     throw = Left . ("v6Rev: " ++)
     getHexDigit s = do
-      h <- case [ x | (x, "")  <- readHex $ B8.unpack s ] of
+      h <- case [ x | (x, "")  <- readHex $ B8.unpack (Short.fromShort s) ] of
              []    ->  throw $ "cannot parse hexadecimal from part: " ++ show s
              [x]   ->  Right x
              _:_   ->  throw $ "ambiguous parse result of hexadecimal part: " ++ show s
       maybe (throw $ "hexadecimal part '" ++ showHex h "" ++ "' is out of range") Right
         $ guard (0 <= h && h < 0x10)
       return h
-    sufV6 = B8.pack ".ip6.arpa."
+    sufV6 = ".ip6.arpa."
 
 -- show IPv4 reverse-lookup domain from 8bit-parts
 showV4RevDomain :: [Int] -> Domain
-showV4RevDomain parts = B8.pack $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
+showV4RevDomain parts = DNS.ciName $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
 
 -- parse IPv6 reverse-lookup domain from 4bit-parts
 showV6RevDomain :: [Int] -> Domain
-showV6RevDomain parts = B8.pack $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
+showV6RevDomain parts = DNS.ciName $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
 
 -- make IPv4-address and mask-length from prefix 8bit-parts
 withMaskLenV4 :: [Int] -> (IPv4, Int)
@@ -353,13 +359,12 @@ specialV6Blocks =
 runEmbedResult :: Domain -> EmbedResult -> Result
 runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
   where
-    soa EmbedLocal   = soaRR (b8 "localhost.") (b8 "root@localhost.") 1 604800 86400 2419200 604800
-    soa EmbedInAddr  = soaRR dom (b8 ".") 0 28800 7200 604800 86400
-    soa EmbedIp6     = soaRR dom (b8 ".") 0 28800 7200 604800 86400
+    soa EmbedLocal   = soaRR "localhost." "root@localhost." 1 604800 86400 2419200 604800
+    soa EmbedInAddr  = soaRR dom "." 0 28800 7200 604800 86400
+    soa EmbedIp6     = soaRR dom "." 0 28800 7200 604800 86400
     soaRR mname mail ser refresh retry expire ncttl =
       ResourceRecord { rrname = dom, rrtype = SOA, DNS.rrclass = DNS.classIN, DNS.rrttl = ncttl
-                     , rdata = RD_SOA mname mail ser refresh retry expire ncttl }
-    b8 = B8.pack
+                     , rdata = DNS.rd_soa mname mail ser refresh retry expire ncttl }
 
 -- detect embedded result for special IP-address block from reverse lookup domain
 takeEmbeddedResult :: (Ord a, IP.Addr a)
@@ -440,13 +445,13 @@ replyMessage eas ident rqs =
 replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((aRRs, _rn), etm) <- resolve n typ
-  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, Cache.lowerAnswer msg, allowAuthority $ Cache.lowerAuthority msg)
+  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, allowAuthority $ DNS.authority msg)
       makeResult (rcode, ans, auth) = (rcode, aRRs ans, auth)
   return $ makeResult $ either id fromMessage etm
     where
       allowAuthority = foldr takeSOA []
-      takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA {} } xs  =  rr : xs
-      takeSOA _                                                     xs  =  xs
+      takeSOA rr@ResourceRecord { rrtype = SOA } xs  =  rr : xs
+      takeSOA _                                  xs  =  xs
 
 replyResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
 replyResultCached n typ = do
@@ -564,7 +569,7 @@ resolveTYPE bn typ = do
   (msg, _nss@(srcDom, _)) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
-        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ Cache.lowerAnswer msg) $
+        when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
   maybe (lift $ cacheAnswer srcDom bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
@@ -632,14 +637,14 @@ v4DEntryList _srcDom des@(de:_)  =  concat $ map skipAAAA $ byNS des
         nullCase     []    =  [DEonlyNS (nsDomain de)]
         nullCase es@(_:_)  =  es
 
-{-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
-{-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
+-- {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
+-- {-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
 rootNS :: Delegation
 rootNS =
   maybe
   (error "rootNS: bad configuration.")
   id
-  $ takeDelegation (nsList (B8.pack ".") (,) ns) as
+  $ takeDelegation (nsList "." (,) ns) as
   where
     (ns, as) = rootServers
 
@@ -682,10 +687,12 @@ lookupDelegation :: Domain -> ReaderT Context IO (Maybe (Maybe Delegation))
 lookupDelegation dom = do
   disableV6NS <- asks disableV6NS_
   let lookupDEs ns = do
-        let takeA    ResourceRecord { rrtype = A   , rdata = RD_A v4 }    xs  =  DEwithAx ns (IPv4 v4) : xs
-            takeA    _                                                    xs  =                          xs
-            takeAAAA ResourceRecord { rrtype = AAAA, rdata = RD_AAAA v6 } xs  =  DEwithAx ns (IPv6 v6) : xs
-            takeAAAA _                                                    xs  =                          xs
+        let takeA    ResourceRecord { rrtype = A, rdata = rd }    xs
+              | Just v4 <- DNS.rdataField rd DNS.a_ipv4    = DEwithAx ns (IPv4 v4) : xs
+            takeA    _ xs = xs
+            takeAAAA ResourceRecord { rrtype = AAAA, rdata = rd } xs
+              | Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = DEwithAx ns (IPv6 v6) : xs
+            takeAAAA _ xs = xs
             lookupAxList typ takeAx = fmap (foldr takeAx [] . fst) <$> lookupCache ns typ
 
         lk4 <- lookupAxList A takeA
@@ -766,24 +773,26 @@ takeDelegation nsps adds = do
     dentries d as@(_:_)   =  foldr takeAxDE [] as
       where
         takeAxDE a xs = case a of
-          ResourceRecord { rrtype = A   , rdata = RD_A    v4 }  ->  DEwithAx d (IPv4 v4) : xs
-          ResourceRecord { rrtype = AAAA, rdata = RD_AAAA v6 }  ->  DEwithAx d (IPv6 v6) : xs
+          ResourceRecord { rrtype = A   , rdata = rd }
+            | Just v4 <- DNS.rdataField rd DNS.a_ipv4    ->  DEwithAx d (IPv4 v4) : xs
+          ResourceRecord { rrtype = AAAA, rdata = rd }
+            | Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 ->  DEwithAx d (IPv6 v6) : xs
           _                                                     ->  xs
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
 nsList dom h = foldr takeNS []
   where
-    takeNS rr@ResourceRecord { rrtype = NS, rdata = RD_NS ns } xs
-      | rrname rr == dom  =  h ns rr : xs
+    takeNS rr@ResourceRecord { rrtype = NS, rdata = rd } xs
+      | rrname rr == dom, Just ns <- DNS.rdataField rd DNS.ns_domain  =  h ns rr : xs
     takeNS _         xs   =  xs
 
 cnameList :: Domain -> (Domain -> ResourceRecord -> a)
           -> [ResourceRecord] -> [a]
 cnameList dom h = foldr takeCNAME []
   where
-    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = RD_CNAME cn } xs
-      | rrname rr == dom  =  h cn rr : xs
+    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = rd } xs
+      | rrname rr == dom, Just cn <- DNS.rdataField rd DNS.cname_domain  =  h cn rr : xs
     takeCNAME _      xs   =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
@@ -818,11 +827,11 @@ selectDelegation dc (srcDom, des) = do
   let selectA = randomizedSelect
       ns = nsDomain dentry
       takeAx :: ResourceRecord -> [(IP, ResourceRecord)] -> [(IP, ResourceRecord)]
-      takeAx rr@ResourceRecord { rrtype = A, rdata = RD_A ipv4 } xs
-        | rrname rr == ns  =  (IPv4 ipv4, rr) : xs
-      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = RD_AAAA ipv6 } xs
-        | not disableV6NS &&
-          rrname rr == ns  =  (IPv6 ipv6, rr) : xs
+      takeAx rr@ResourceRecord { rrtype = A, rdata = rd } xs
+        | rrname rr == ns, Just v4 <- DNS.rdataField rd DNS.a_ipv4  = (IPv4 v4, rr) : xs
+      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = rd } xs
+        | not disableV6NS && rrname rr == ns,
+          Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = (IPv6 v6, rr) : xs
       takeAx _         xs  =  xs
 
       axList = foldr takeAx []
@@ -973,14 +982,15 @@ cacheEmptySection srcDom dom typ getRanked msg =
     (takePair, cacheSOA) = getSection rankedAuthority refinesSOA msg
       where
         refinesSOA srrs = (single ps, take 1 rrs)  where (ps, rrs) = unzip $ foldr takeSOA [] srrs
-        takeSOA rr@ResourceRecord { rrtype = SOA, rdata = RD_SOA mname mail ser refresh retry expire ncttl } xs
-          | rrname rr `isSubDomainOf` srcDom  =  (fromSOA mname mail ser refresh retry expire ncttl rr, rr) : xs
+        takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
+          | rrname rr `isSubDomainOf` srcDom,
+            Just soa <- DNS.fromRData rd   =  (fromSOA soa rr, rr) : xs
           | otherwise                      =  xs
         takeSOA _         xs     =  xs
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
             https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA _ _ _ _ _ _ ncttl rr = (rrname rr, minimum [ncttl, DNS.rrttl rr, maxNCacheTTL])
+        fromSOA soa rr = (rrname rr, minimum [DNS.soa_minimum soa, DNS.rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
         single list = case list of
           []    ->  Left "no SOA records found"

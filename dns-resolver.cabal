@@ -43,6 +43,7 @@ library
                      , transformers
                      , stm
                      , time
+                     , word8
 
                      -- dns packages
                      , async
@@ -50,7 +51,9 @@ library
                      , network
                      , psqueues
                      , iproute
-                     , dns
+                     , dnsext-dnssec
+                     , dnsext-io
+                     , dnsext-types
 
                      -- other packages
                      , random
@@ -83,7 +86,8 @@ Test-Suite cache-test
   main-is:             cache.hs
   build-depends:       base
                      , bytestring
-                     , dns
+                     , dnsext-types
+                     , dnsext-io
                      , dns-resolver
                      , QuickCheck
   hs-source-dirs:      test
@@ -96,7 +100,8 @@ Test-Suite query-test
   main-is:             qtest.hs
   build-depends:       base
                      , hspec
-                     , dns
+                     , dnsext-types
+                     , dnsext-io
                      , dns-resolver
   hs-source-dirs:      qtest
   default-language:    Haskell2010

@@ -18,9 +18,11 @@ import Data.String (fromString)
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 
 -- dns packages
+import qualified DNS.Types as DNS
+import qualified DNS.Types.Encode as DNS
+import qualified DNS.Types.Decode as DNS
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
-import qualified Network.DNS as DNS
 
 -- other packages
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
@@ -29,7 +31,7 @@ import UnliftIO (SomeException, tryAny, concurrently_, race_)
 import DNSC.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
 import qualified DNSC.Queue as Queue
 import DNSC.SocketUtil (addrInfo, isAnySockAddr)
-import DNSC.DNSUtil (mkRecvBS, mkSendBS)
+import DNSC.DNSUtil (mkRecvBS, mkSendBS, decodeDict)
 import DNSC.ServerMonitor (monitor, PLStatus)
 import qualified DNSC.ServerMonitor as Mon
 import DNSC.Types (Timestamp, NE)
@@ -246,7 +248,7 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
         now <- liftIO getSec
-        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
+        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt decodeDict now bs
         qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
