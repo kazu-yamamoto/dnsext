@@ -21,7 +21,7 @@ import DNS.Types.Type
 
 class (Typeable a, Eq a, Show a) => ResourceData a where
     resourceDataType :: a -> TYPE
-    putResourceData  :: a -> SPut
+    putResourceData  :: CanonicalFlag -> a -> SPut
     getResourceData  :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
@@ -47,8 +47,8 @@ instance Eq RData where
 rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
 
-putRData :: RData -> SPut
-putRData (RData x) = putResourceData x
+putRData :: CanonicalFlag -> RData -> SPut
+putRData cf (RData x) = putResourceData cf x
 
 rdataField :: forall a b . Typeable a => RData -> (a -> b) -> Maybe b
 rdataField rd f = case fromRData rd of
@@ -65,7 +65,7 @@ newtype RD_A = RD_A {
 
 instance ResourceData RD_A where
     resourceDataType _ = A
-    putResourceData (RD_A ipv4) = mconcat $ map putInt8 (fromIPv4 ipv4)
+    putResourceData _ (RD_A ipv4) = mconcat $ map putInt8 (fromIPv4 ipv4)
     getResourceData _ _ = RD_A . toIPv4 <$> getNBytes 4
 
 instance Show RD_A where
@@ -85,7 +85,7 @@ newtype RD_NS = RD_NS {
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
-    putResourceData (RD_NS d) = putDomain d
+    putResourceData cf (RD_NS d) = putDomain cf d
     getResourceData _ _ = RD_NS <$> getDomain
 
 instance Show RD_NS where
@@ -105,7 +105,7 @@ newtype RD_CNAME = RD_CNAME {
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
-    putResourceData (RD_CNAME d) = putDomain d
+    putResourceData cf (RD_CNAME d) = putDomain cf d
     getResourceData _ _ = RD_CNAME <$> getDomain
 
 instance Show RD_CNAME where
@@ -137,9 +137,9 @@ data RD_SOA = RD_SOA {
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
-    putResourceData RD_SOA{..} =
-      mconcat [ putDomain  soa_mname
-              , putMailbox soa_rname
+    putResourceData cf RD_SOA{..} =
+      mconcat [ putDomain  cf soa_mname
+              , putMailbox cf soa_rname
               , put32 soa_serial
               , put32 soa_refresh
               , put32 soa_retry
@@ -168,7 +168,7 @@ newtype RD_NULL = RD_NULL {
 
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
-    putResourceData (RD_NULL o) = putOpaque o
+    putResourceData _ (RD_NULL o) = putOpaque o
     getResourceData _ len = RD_NULL <$> getOpaque len
 
 instance Show RD_NULL where
@@ -187,7 +187,7 @@ newtype RD_PTR = RD_PTR {
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
-    putResourceData (RD_PTR d) = putDomain d
+    putResourceData cf (RD_PTR d) = putDomain cf d
     getResourceData _ _ = RD_PTR <$> getDomain
 
 instance Show RD_PTR where
@@ -209,9 +209,9 @@ data RD_MX = RD_MX {
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
-    putResourceData RD_MX{..} =
+    putResourceData cf RD_MX{..} =
       mconcat [ put16 mx_preference
-              , putDomain mx_exchange
+              , putDomain cf mx_exchange
               ]
     getResourceData _ _ = RD_MX <$> get16 <*> getDomain
 
@@ -229,7 +229,7 @@ newtype RD_TXT = RD_TXT {
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
-    putResourceData (RD_TXT o) = putTXT sbs
+    putResourceData _ (RD_TXT o) = putTXT sbs
       where
         sbs = opaqueToShortByteString o
         putTXT txt = let (h, t) = Short.splitAt 255 txt
@@ -275,7 +275,7 @@ data RD_RP = RD_RP {
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
-    putResourceData (RD_RP mbox d) = putMailbox mbox <> putDomain d
+    putResourceData cf (RD_RP mbox d) = putMailbox cf mbox <> putDomain cf d
     getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
 
 -- | Smart constructor.
@@ -292,7 +292,7 @@ newtype RD_AAAA = RD_AAAA {
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
-    putResourceData (RD_AAAA ipv6) = mconcat $ map putInt8 (fromIPv6b ipv6)
+    putResourceData _ (RD_AAAA ipv6) = mconcat $ map putInt8 (fromIPv6b ipv6)
     getResourceData _ _ = RD_AAAA . toIPv6b <$> getNBytes 16
 
 instance Show RD_AAAA where
@@ -314,11 +314,11 @@ data RD_SRV = RD_SRV {
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    putResourceData RD_SRV{..} =
+    putResourceData cf RD_SRV{..} =
       mconcat [ put16 srv_priority
               , put16 srv_weight
               , put16 srv_port
-              , putDomain srv_target
+              , putDomain cf srv_target
               ]
     getResourceData _ _ = RD_SRV <$> get16
                                     <*> get16
@@ -338,7 +338,7 @@ newtype RD_DNAME = RD_DNAME {
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
-    putResourceData (RD_DNAME d) = putDomain d
+    putResourceData cf (RD_DNAME d) = putDomain cf d
     getResourceData _ _ = RD_DNAME <$> getDomain
 
 instance Show RD_DNAME where
@@ -357,7 +357,7 @@ newtype RD_OPT = RD_OPT {
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    putResourceData (RD_OPT options) = mconcat $ fmap encodeOData options
+    putResourceData _ (RD_OPT options) = mconcat $ fmap encodeOData options
     getResourceData = undefined -- never used
 
 instance Show RD_OPT where
@@ -379,7 +379,7 @@ data RD_TLSA = RD_TLSA {
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
-    putResourceData RD_TLSA{..} =
+    putResourceData _ RD_TLSA{..} =
       mconcat [ put8 tlsa_usage
               , put8 tlsa_selector
               , put8 tlsa_matching_type
@@ -402,7 +402,7 @@ data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Ord, Show)
 
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
-    putResourceData (RD_Unknown _ o) = putOpaque o
+    putResourceData _ (RD_Unknown _ o) = putOpaque o
     getResourceData = undefined -- never used
 
 -- | Smart constructor.

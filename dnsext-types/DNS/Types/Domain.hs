@@ -16,6 +16,7 @@ module DNS.Types.Domain (
   , modifyMailbox
   , putMailbox
   , getMailbox
+  , CanonicalFlag (..)
   ) where
 
 import qualified Control.Exception as E
@@ -182,25 +183,38 @@ modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 
 ----------------------------------------------------------------
 
-putDomain :: Domain -> SPut
-putDomain (Domain o _) = putDomain' _period o
+-- | Canonical-form flag.
+-- For example, `Canonical` is used from DNSSEC extension.
+--
+-- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
+data CanonicalFlag
+  = NoCanonical
+  | Canonical
+  deriving Show
 
-putMailbox :: Mailbox -> SPut
-putMailbox (Mailbox o _) = putDomain' _at o
+----------------------------------------------------------------
 
-putDomain' :: Word8 -> RawDomain -> SPut
-putDomain' sep dom
+putDomain :: CanonicalFlag -> Domain -> SPut
+putDomain NoCanonical (Domain o _) = putDomain' _period True  o
+putDomain Canonical   (Domain _ l) = putDomain' _period False l {- canonical form is lowercase and no name-compression. -}
+
+putMailbox :: CanonicalFlag -> Mailbox -> SPut
+putMailbox NoCanonical (Mailbox o _) = putDomain' _at True  o
+putMailbox Canonical   (Mailbox _ l) = putDomain' _at False l {- canonical form is lowercase and no name-compression. -}
+
+putDomain' :: Word8 -> Bool -> RawDomain -> SPut
+putDomain' sep compress dom
     | Short.null dom || dom == rootDomain = put8 0
     | otherwise = do
         mpos <- popPointer dom
         cur <- builderPosition
         case mpos of
-            Just pos -> putPointer pos
-            Nothing  -> do
+            Just pos | compress -> putPointer pos
+            _                   -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
-                                , putDomain' _period tl
+                                , putDomain' _period compress tl
                                 ]
   where
     -- Try with the preferred separator if present, else fall back to '.'.
