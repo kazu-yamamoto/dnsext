@@ -48,7 +48,7 @@ banner args = do
 
 rr :: Printer ResourceRecord
 rr r = do
-  string $ DNS.domainToString $ rrname r
+  string $ DNS.origName $ rrname r
   tab
   string $ show $ rrttl r
   tab
