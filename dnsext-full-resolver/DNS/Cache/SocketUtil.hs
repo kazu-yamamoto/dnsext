@@ -1,4 +1,4 @@
-module DNSC.SocketUtil (
+module DNS.Cache.SocketUtil (
   addrInfo,
   mkSocketWaitForByte,
   isAnySockAddr,

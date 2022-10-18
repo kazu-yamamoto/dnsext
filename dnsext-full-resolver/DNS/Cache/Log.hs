@@ -1,4 +1,4 @@
-module DNSC.Log (
+module DNS.Cache.Log (
   Level (..),
   Output (..),
   newFastLogger,
@@ -16,8 +16,8 @@ import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr
 import UnliftIO (tryAny)
 
 -- this package
-import DNSC.Queue (newQueue, readQueue, writeQueue)
-import qualified DNSC.Queue as Queue
+import DNS.Cache.Queue (newQueue, readQueue, writeQueue)
+import qualified DNS.Cache.Queue as Queue
 
 
 data Level

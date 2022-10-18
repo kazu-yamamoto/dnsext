@@ -5,8 +5,8 @@ import System.Console.GetOpt
    usageInfo, getOpt)
 import System.Environment (getArgs)
 
-import qualified DNSC.Log as Log
-import qualified DNSC.Server as Server
+import qualified DNS.Cache.Log as Log
+import qualified DNS.Cache.Server as Server
 
 data BenchmarkOptions =
   BenchmarkOptions

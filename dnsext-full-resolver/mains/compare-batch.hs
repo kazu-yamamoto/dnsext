@@ -19,8 +19,8 @@ import Network.DNS
 import qualified Network.DNS as DNS
 
 -- thi package
-import DNSC.DNSUtil (lookupRaw)
-import DNSC.Cache (lowerAnswer, lowerAuthority)
+import DNS.Cache.DNSUtil (lookupRaw)
+import DNS.Cache.Cache (lowerAnswer, lowerAuthority)
 
 
 run :: (String, Word16)

@@ -1,6 +1,6 @@
 {-# LANGUAGE ParallelListComp #-}
 
-module DNSC.Server (
+module DNS.Cache.Server (
   run,
   workerBenchmark,
   ) where
@@ -28,18 +28,18 @@ import qualified Network.Socket as S
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
 
 -- this package
-import DNSC.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
-import qualified DNSC.Queue as Queue
-import DNSC.SocketUtil (addrInfo, isAnySockAddr)
-import DNSC.DNSUtil (mkRecvBS, mkSendBS, decodeDict)
-import DNSC.ServerMonitor (monitor, PLStatus)
-import qualified DNSC.ServerMonitor as Mon
-import DNSC.Types (Timestamp, NE)
-import qualified DNSC.Log as Log
-import qualified DNSC.TimeCache as TimeCache
-import qualified DNSC.Cache as Cache
-import qualified DNSC.UpdateCache as UCache
-import DNSC.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
+import DNS.Cache.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
+import qualified DNS.Cache.Queue as Queue
+import DNS.Cache.SocketUtil (addrInfo, isAnySockAddr)
+import DNS.Cache.DNSUtil (mkRecvBS, mkSendBS, decodeDict)
+import DNS.Cache.ServerMonitor (monitor, PLStatus)
+import qualified DNS.Cache.ServerMonitor as Mon
+import DNS.Cache.Types (Timestamp, NE)
+import qualified DNS.Cache.Log as Log
+import qualified DNS.Cache.TimeCache as TimeCache
+import qualified DNS.Cache.Cache as Cache
+import qualified DNS.Cache.UpdateCache as UCache
+import DNS.Cache.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 
 type Request a = (ByteString, a)

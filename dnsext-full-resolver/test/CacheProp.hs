@@ -17,12 +17,12 @@ import qualified DNS.Types as DNS
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
 
-import DNSC.Types (Timestamp)
-import qualified DNSC.TimeCache as TimeCache
-import DNSC.Cache
+import DNS.Cache.Types (Timestamp)
+import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.Cache
   (Cache, Key (Key), Val (Val), CRSet, (<+),
    Ranking (..), takeRRSet, extractRRSet)
-import qualified DNSC.Cache as Cache
+import qualified DNS.Cache.Cache as Cache
 
 
 {-# ANN module "HLint: ignore Use fromMaybe" #-}

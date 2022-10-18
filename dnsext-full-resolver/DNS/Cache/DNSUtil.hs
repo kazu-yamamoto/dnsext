@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module DNSC.DNSUtil (
+module DNS.Cache.DNSUtil (
   mkRecvBS, mkSendBS,
   mkRecv, mkSend,
   lookupRaw,

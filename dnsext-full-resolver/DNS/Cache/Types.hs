@@ -1,4 +1,4 @@
-module DNSC.Types where
+module DNS.Cache.Types where
 
 import Data.Int (Int64)
 

@@ -10,11 +10,11 @@ import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
 import qualified DNS.Types as DNS
 import System.Environment (lookupEnv)
 
-import qualified DNSC.Cache as Cache
-import qualified DNSC.UpdateCache as UCache
-import qualified DNSC.TimeCache as TimeCache
-import DNSC.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
-import qualified DNSC.Iterative as Iterative
+import qualified DNS.Cache.Cache as Cache
+import qualified DNS.Cache.UpdateCache as UCache
+import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
+import qualified DNS.Cache.Iterative as Iterative
 
 data AnswerResult
   = Empty    DNS.RCODE

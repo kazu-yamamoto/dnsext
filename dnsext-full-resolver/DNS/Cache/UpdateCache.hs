@@ -1,4 +1,4 @@
-module DNSC.UpdateCache (
+module DNS.Cache.UpdateCache (
   new,
   none,
   Insert,
@@ -16,12 +16,12 @@ import DNS.Types (TTL)
 import UnliftIO (tryAny)
 
 -- this package
-import DNSC.Queue (newQueue, readQueue, writeQueue)
-import qualified DNSC.Queue as Queue
-import DNSC.Types (Timestamp)
-import qualified DNSC.Log as Log
-import DNSC.Cache (Cache, Key, CRSet, Ranking)
-import qualified DNSC.Cache as Cache
+import DNS.Cache.Queue (newQueue, readQueue, writeQueue)
+import qualified DNS.Cache.Queue as Queue
+import DNS.Cache.Types (Timestamp)
+import qualified DNS.Cache.Log as Log
+import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
+import qualified DNS.Cache.Cache as Cache
 
 data Update
   = I Key TTL CRSet Ranking

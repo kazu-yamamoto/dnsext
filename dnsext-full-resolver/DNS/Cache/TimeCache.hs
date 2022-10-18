@@ -1,4 +1,4 @@
-module DNSC.TimeCache (
+module DNS.Cache.TimeCache (
   new,
   none,
   ) where

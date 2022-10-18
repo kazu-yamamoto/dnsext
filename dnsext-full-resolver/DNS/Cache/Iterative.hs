@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNSC.Iterative (
+module DNS.Cache.Iterative (
   -- * resolve interfaces
   getReplyMessage,
   getReplyCached,
@@ -61,14 +61,14 @@ import qualified DNS.Types as DNS
 import qualified DNS.IO as DNS
 
 -- this package
-import DNSC.RootServers (rootServers)
-import DNSC.DNSUtil (lookupRaw)
-import DNSC.Types (NE, Timestamp)
-import qualified DNSC.Log as Log
-import DNSC.Cache
+import DNS.Cache.RootServers (rootServers)
+import DNS.Cache.DNSUtil (lookupRaw)
+import DNS.Cache.Types (NE, Timestamp)
+import qualified DNS.Cache.Log as Log
+import DNS.Cache.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
-import qualified DNSC.Cache as Cache
+import qualified DNS.Cache.Cache as Cache
 
 
 validate :: Domain -> Bool

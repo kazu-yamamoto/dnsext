@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNSC.RootServers (
+module DNS.Cache.RootServers (
   rootServers
   ) where
 

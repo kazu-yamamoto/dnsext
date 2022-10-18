@@ -1,5 +1,5 @@
 
-module DNSC.ServerMonitor (
+module DNS.Cache.ServerMonitor (
   monitor,
   Params,
   makeParams,
@@ -28,11 +28,11 @@ import qualified DNS.Types as DNS
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import qualified DNSC.DNSUtil as Config
-import DNSC.SocketUtil (addrInfo)
-import qualified DNSC.Log as Log
-import qualified DNSC.Cache as Cache
-import DNSC.Iterative (Context (..))
+import qualified DNS.Cache.DNSUtil as Config
+import DNS.Cache.SocketUtil (addrInfo)
+import qualified DNS.Cache.Log as Log
+import qualified DNS.Cache.Cache as Cache
+import DNS.Cache.Iterative (Context (..))
 
 
 data Params =

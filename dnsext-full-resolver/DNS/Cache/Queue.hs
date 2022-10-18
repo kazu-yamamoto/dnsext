@@ -1,4 +1,4 @@
-module DNSC.Queue (
+module DNS.Cache.Queue (
   ReadQueue (..),
   WriteQueue (..),
   QueueSize (..),

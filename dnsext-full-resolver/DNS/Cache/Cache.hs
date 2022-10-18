@@ -1,6 +1,6 @@
 {-# LANGUAGE StrictData #-}
 
-module DNSC.Cache (
+module DNS.Cache.Cache (
   -- * cache interfaces
   empty,
   lookup, lookupEither,
@@ -48,7 +48,7 @@ import DNS.Types
 import qualified DNS.Types as DNS
 
 -- this package
-import DNSC.Types (Timestamp)
+import DNS.Cache.Types (Timestamp)
 
 type CRSet = Either Domain [RData]
 
