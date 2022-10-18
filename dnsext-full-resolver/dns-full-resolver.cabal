@@ -72,6 +72,24 @@ Executable cache-server
   default-language:    Haskell2010
   ghc-options:         -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
 
+Executable dug
+  main-is:             dug.hs
+  other-modules:
+                       CommandArgs
+                       Operation
+                       Output
+  build-depends:       base
+                     , dns-full-resolver
+                     , dnsext-types
+                     , dnsext-io
+                     , iproute
+                     , transformers
+                     , bytestring
+                     , random
+  hs-source-dirs:      dug
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded
+
 Executable workers-benchmark
   main-is:             benchmark.hs
   build-depends:       base

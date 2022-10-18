@@ -2,7 +2,6 @@ module Output where
 
 import Data.Monoid (Endo (..))
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
-import qualified Data.ByteString.Char8 as B8
 
 import DNS.Types (DNSMessage, ResourceRecord (..))
 import qualified DNS.Types as DNS

@@ -17,7 +17,7 @@ import DNS.IO (QueryControls, rdFlag, FlagOp (FlagClear, FlagSet))
 help :: String
 help =
   unlines
-  [ "Usage: diglike [@server] [name [query-type [query-option]]]"
+  [ "Usage: dug [@server] [name [query-type [query-option]]]"
   , ""
   , "         query-type: a | ns | txt | ptr"
   , "         query-option:"
