@@ -30,6 +30,7 @@ module DNS.Cache.Cache (
 
 -- GHC packages
 import Prelude hiding (lookup)
+import Control.DeepSeq (liftRnf)
 import Control.Monad (guard)
 import Data.Function (on)
 import Data.Maybe (isJust)
@@ -50,6 +51,9 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Cache.Types (Timestamp)
 
+{- CRSet
+   -  Left  - NXDOMAIN or NODATA, hold domain delegatoin from
+   -  Right - not empty RRSET                                 -}
 type CRSet = Either Domain [RData]
 
 ---
@@ -247,7 +251,12 @@ toRDatas (Right rs) = rs
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas []  = Nothing
-fromRDatas rds = Just $ Right rds
+fromRDatas rds = rds `listseq` Just (Right rds)
+  where
+    listRnf :: [a] -> ()
+    listRnf = liftRnf (`seq` ())
+    listseq :: [a] -> b -> b
+    listseq ps q = case listRnf ps of () -> q
 
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
@@ -278,6 +287,6 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
     iset ss rank = [ \h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
 
 insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty srcDom dom typ ttl rank h = h key ttl (Left srcDom) rank
+insertSetEmpty srcDom dom typ ttl rank h = srcDom `seq` h key ttl (Left srcDom) rank
   where
     key = Key dom typ DNS.classIN
