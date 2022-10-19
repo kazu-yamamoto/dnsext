@@ -41,7 +41,7 @@ nl = char '\n'
 banner :: Printer [String]
 banner args = do
   semi
-  sp *> string "<<>>" *> sp *> string "DiG-like" *> sp *> string "<<>>"
+  sp *> string "<<>>" *> sp *> string "dug" *> sp *> string "<<>>"
   sp *> (string `sepBy` sp) args
   nl
 
