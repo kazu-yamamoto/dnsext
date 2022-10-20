@@ -2,9 +2,9 @@
 
 module DNS.Types.Dict where
 
-import Data.IORef
+import Data.IORef (IORef, newIORef, readIORef)
 import qualified Data.IntMap as M
-import System.IO.Unsafe
+import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.StateBinary
 import DNS.Types.EDNS

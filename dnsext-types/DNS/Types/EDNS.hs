@@ -160,6 +160,7 @@ defaultOptDict =
   $ insertOptDict ClientSubnet "ClientSubnet"
    M.empty
 
+{-# NOINLINE globalOptDict #-}
 globalOptDict :: IORef (IntMap String)
 globalOptDict = unsafePerformIO $ newIORef defaultOptDict
 

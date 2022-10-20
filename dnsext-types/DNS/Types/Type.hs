@@ -147,6 +147,7 @@ defaultTypeDict =
   $ insertTypeDict CAA   "CAA"
     M.empty
 
+{-# NOINLINE globalTypeDict #-}
 globalTypeDict :: IORef (IntMap String)
 globalTypeDict = unsafePerformIO $ newIORef defaultTypeDict
 
