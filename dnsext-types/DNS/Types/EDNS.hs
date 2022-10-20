@@ -38,8 +38,12 @@ module DNS.Types.EDNS (
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
+import Data.IORef (IORef, newIORef, readIORef)
 import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
 import qualified Data.IP (addr)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as M
+import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -133,12 +137,31 @@ pattern ClientSubnet :: OptCode
 pattern ClientSubnet = OptCode 8
 
 instance Show OptCode where
-    show NSID         = "NSID"
-    show DAU          = "DAU"
-    show DHU          = "DHU"
-    show N3U          = "N3U"
-    show ClientSubnet = "ClientSubnet"
-    show (OptCode n)  = "OptCode " ++ show n
+    show (OptCode w) = case M.lookup i dict of
+      Nothing   -> "OptCode " ++ show w
+      Just name -> name
+      where
+        i = fromIntegral w
+        dict = unsafePerformIO $ readIORef globalOptDict
+
+type OptDict = IntMap String
+
+insertOptDict :: OptCode -> String -> OptDict -> OptDict
+insertOptDict (OptCode w) name dict = M.insert i name dict
+  where
+    i = fromIntegral w
+
+defaultOptDict :: IntMap String
+defaultOptDict =
+    insertOptDict NSID "NSID"
+  $ insertOptDict DAU  "DAU"
+  $ insertOptDict DHU  "DHU"
+  $ insertOptDict N3U  "N3U"
+  $ insertOptDict ClientSubnet "ClientSubnet"
+   M.empty
+
+globalOptDict :: IORef (IntMap String)
+globalOptDict = unsafePerformIO $ newIORef defaultOptDict
 
 -- | From number to option code.
 toOptCode :: Word16 -> OptCode

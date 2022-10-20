@@ -28,6 +28,11 @@ module DNS.Types.Type (
   , putTYPE
   ) where
 
+import Data.IORef (IORef, newIORef, readIORef)
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as M
+import System.IO.Unsafe (unsafePerformIO)
+
 import DNS.StateBinary
 import DNS.Types.Imports
 
@@ -106,25 +111,44 @@ pattern CAA        = TYPE 257 -- RFC 6844
 ----------------------------------------------------------------
 
 instance Show TYPE where
-    show A          = "A"
-    show NS         = "NS"
-    show CNAME      = "CNAME"
-    show SOA        = "SOA"
-    show NULL       = "NULL"
-    show PTR        = "PTR"
-    show MX         = "MX"
-    show TXT        = "TXT"
-    show RP         = "RP"
-    show AAAA       = "AAAA"
-    show SRV        = "SRV"
-    show DNAME      = "DNAME"
-    show OPT        = "OPT"
-    show TLSA       = "TLSA"
-    show CSYNC      = "CSYNC"
-    show AXFR       = "AXFR"
-    show ANY        = "ANY"
-    show CAA        = "CAA"
-    show (TYPE n)   = "TYPE " ++ show n
+    show (TYPE w) = case M.lookup i dict of
+      Nothing   -> "TYPE " ++ show w
+      Just name -> name
+      where
+        i = fromIntegral w
+        dict = unsafePerformIO $ readIORef globalTypeDict
+
+type TypeDict = IntMap String
+
+insertTypeDict :: TYPE -> String -> TypeDict -> TypeDict
+insertTypeDict (TYPE w) name dict = M.insert i name dict
+  where
+    i = fromIntegral w
+
+defaultTypeDict :: IntMap String
+defaultTypeDict =
+    insertTypeDict A     "A"
+  $ insertTypeDict NS    "NS"
+  $ insertTypeDict CNAME "CNAME"
+  $ insertTypeDict SOA   "SOA"
+  $ insertTypeDict NULL  "NULL"
+  $ insertTypeDict PTR   "PTR"
+  $ insertTypeDict MX    "MX"
+  $ insertTypeDict TXT   "TXT"
+  $ insertTypeDict RP    "RP"
+  $ insertTypeDict AAAA  "AAAA"
+  $ insertTypeDict SRV   "SRV"
+  $ insertTypeDict DNAME "DNAME"
+  $ insertTypeDict OPT   "OPT"
+  $ insertTypeDict TLSA  "TLSA"
+  $ insertTypeDict CSYNC "CSYNC"
+  $ insertTypeDict AXFR  "AXFR"
+  $ insertTypeDict ANY   "ANY"
+  $ insertTypeDict CAA   "CAA"
+    M.empty
+
+globalTypeDict :: IORef (IntMap String)
+globalTypeDict = unsafePerformIO $ newIORef defaultTypeDict
 
 ----------------------------------------------------------------
 
