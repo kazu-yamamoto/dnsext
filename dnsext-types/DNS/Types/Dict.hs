@@ -1,6 +1,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module DNS.Types.Dict where
+module DNS.Types.Dict (
+    getRData
+  , getOData
+  , extendRR
+  , extendOpt
+  ) where
 
 import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import qualified Data.IntMap as M
@@ -97,3 +102,15 @@ defaultODataDict =
     M.insert (toKeyO N3U)  (ODataDecode (Proxy :: Proxy OD_N3U)) $
     M.insert (toKeyO ClientSubnet)  (ODataDecode (Proxy :: Proxy OD_ClientSubnet))
     M.empty
+
+----------------------------------------------------------------
+
+extendRR :: ResourceData a => TYPE -> String -> Proxy a -> IO ()
+extendRR typ name proxy = do
+    addRData typ proxy
+    addType typ name
+
+extendOpt :: OptData a => OptCode -> String -> Proxy a -> IO ()
+extendOpt code name proxy = do
+    addOData code proxy
+    addOpt code name

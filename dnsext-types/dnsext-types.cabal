@@ -36,7 +36,6 @@ library
         DNS.Types.Domain
         DNS.Types.EDNS
         DNS.Types.Error
-        DNS.Types.Ext
         DNS.Types.Imports
         DNS.Types.Message
         DNS.Types.Opaque

@@ -41,7 +41,6 @@ import DNS.StateBinary
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
-import DNS.Types.Ext
 import DNS.Types.Message
 import DNS.Types.Opaque
 import DNS.Types.RData
