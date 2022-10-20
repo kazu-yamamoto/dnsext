@@ -4,7 +4,6 @@
 module RoundTripSpec (spec) where
 
 import Control.Monad (replicateM)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
@@ -52,18 +51,18 @@ spec = do
 
     prop "ResourceRecord" . forAll genResourceRecord $ \ rr -> do
         let bs = encodeResourceRecord rr
-        decodeResourceRecord' bs `shouldBe` Right rr
-        fmap encodeResourceRecord (decodeResourceRecord' bs) `shouldBe` Right bs
+        decodeResourceRecord bs `shouldBe` Right rr
+        fmap encodeResourceRecord (decodeResourceRecord bs) `shouldBe` Right bs
 
     prop "DNSHeader" . forAll (genDNSHeader 0x0f) $ \ hdr ->
         decodeDNSHeader (encodeDNSHeader hdr) `shouldBe` Right hdr
 
     prop "DNSMessage" . forAll genDNSMessage $ \ msg ->
-        decode' (encode msg) `shouldBe` Right msg
+        decode (encode msg) `shouldBe` Right msg
 
     prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
         let eh = EDNSheader edns
-            m = fromRight (error "prop EDNS") $ decode' $ encode $ DNSMessage hdr eh [] [] [] []
+            m = fromRight (error "prop EDNS") $ decode $ encode $ DNSMessage hdr eh [] [] [] []
         ednsHeader m `shouldBe` eh
 
 ----------------------------------------------------------------
@@ -241,9 +240,3 @@ genEDNSHeader = do
     edns <- genEDNS
     hdr <- genDNSHeader 0xF00
     return (edns, hdr)
-
-decode' :: ByteString -> Either DNSError DNSMessage
-decode' = decode defaultDecodeDict
-
-decodeResourceRecord' :: ByteString -> Either DNSError ResourceRecord
-decodeResourceRecord' = decodeResourceRecord defaultDecodeDict

@@ -76,18 +76,18 @@ spec = do
         it "decodes mx" $
             tripleDecodeTest test_mx
         it "detect excess" $
-            case decode' (encode defaultQuery <> "\0") of
+            case decode (encode defaultQuery <> "\0") of
                 Left (DecodeError {}) -> True
                 _ -> error "Excess input not detected"
         it "detect truncation" $
-            case decode' (C8.init $ encode defaultQuery) of
+            case decode (C8.init $ encode defaultQuery) of
                 Left (DecodeError {}) -> True
                 _ -> error "Excess input not detected"
         it "soa mailbox presentation form" $
             case encode test_soa_in of
                 enc | enc /= fromHexString test_soa_bytes
                     -> error "Unexpected test_soa encoding"
-                    | otherwise -> case decode' enc of
+                    | otherwise -> case decode enc of
                         Left err  -> error $ "Error decoding test_soa: " ++ show err
                         Right m | m /= test_soa_out
                                   -> error $ "Wrong decode of test_soa: " ++ show m
@@ -95,9 +95,9 @@ spec = do
 
 tripleDecodeTest :: ByteString -> IO ()
 tripleDecodeTest hexbs =
-    ecase (decode' $ fromHexString hexbs) fail' $ \ x1 ->
-        ecase (decode' $ encode x1) fail' $ \ x2 ->
-            ecase (decode' $ encode x2) fail' $ \ x3 ->
+    ecase (decode $ fromHexString hexbs) fail' $ \ x1 ->
+        ecase (decode $ encode x1) fail' $ \ x2 ->
+            ecase (decode $ encode x2) fail' $ \ x3 ->
                 x3 `shouldBe` x2
   where
     fail' (DecodeError err) = fail err
@@ -130,6 +130,3 @@ h2w :: Word8 -> Word8
 h2w w
   | isDigit w = w - _0
   | otherwise = w - _a + 10
-
-decode' :: ByteString -> Either DNSError DNSMessage
-decode' = decode defaultDecodeDict

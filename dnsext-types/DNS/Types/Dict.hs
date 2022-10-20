@@ -2,7 +2,9 @@
 
 module DNS.Types.Dict where
 
+import Data.IORef
 import qualified Data.IntMap as M
+import System.IO.Unsafe
 
 import DNS.StateBinary
 import DNS.Types.EDNS
@@ -12,6 +14,10 @@ import DNS.Types.RData
 import DNS.Types.Type
 
 ----------------------------------------------------------------
+
+{-# NOINLINE globalDecodeDict #-}
+globalDecodeDict :: IORef DecodeDict
+globalDecodeDict = unsafePerformIO $ newIORef defaultDecodeDict
 
 data DecodeDict = DecodeDict {
     rdataDict :: RDataDict
@@ -33,16 +39,19 @@ addOData code proxy dict = dict {
 
 ----------------------------------------------------------------
 
-getRData :: DecodeDict -> TYPE -> Int -> SGet RData
-getRData dict OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
+getRData :: TYPE -> Int -> SGet RData
+getRData OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
   where
+    dict = unsafePerformIO $ readIORef globalDecodeDict
     getoption = do
         code <- toOptCode <$> get16
         olen <- getInt16
         getOData (odataDict dict) code olen
-getRData dict typ len = case M.lookup (toKey typ) (rdataDict dict) of
+getRData typ len = case M.lookup (toKey typ) (rdataDict dict) of
     Nothing                  -> rd_unknown typ <$> getOpaque len
     Just (RDataDecode proxy) -> toRData <$> getResourceData proxy len
+  where
+    dict = unsafePerformIO $ readIORef globalDecodeDict
 
 ----------------------------------------------------------------
 

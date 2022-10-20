@@ -43,7 +43,7 @@ receive sock = do
     let bufsiz = fromIntegral maxUdpSize
     bs <- recv sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
     Elapsed (Seconds now) <- timeCurrent
-    case decodeAt defaultDecodeDict now bs of
+    case decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return msg
 
@@ -57,7 +57,7 @@ receiveFrom sock = do
     let bufsiz = fromIntegral maxUdpSize
     (bs, client) <- recvFrom sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
     Elapsed (Seconds now) <- timeCurrent
-    case decodeAt defaultDecodeDict now bs of
+    case decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return (msg, client)
 
@@ -70,7 +70,7 @@ receiveVC sock = do
     len <- toLen <$> recvDNS sock 2
     bs <- recvDNS sock len
     Elapsed (Seconds now) <- timeCurrent
-    case decodeAt defaultDecodeDict now bs of
+    case decodeAt now bs of
         Left e    -> E.throwIO e
         Right msg -> return msg
   where

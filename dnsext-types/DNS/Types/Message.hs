@@ -138,17 +138,17 @@ putDNSMessage msg = putHeader hd
                   | otherwise         = ttl0' .|. vers'
                 rdata' = RData $ RD_OPT $ ednsOptions edns
 
-getDNSMessage :: DecodeDict -> SGet DNSMessage
-getDNSMessage dict = do
+getDNSMessage :: SGet DNSMessage
+getDNSMessage = do
     hm <- getHeader
     qdCount <- getInt16
     anCount <- getInt16
     nsCount <- getInt16
     arCount <- getInt16
     queries <- getQuestions qdCount
-    answers <- getResourceRecords dict anCount
-    authrrs <- getResourceRecords dict nsCount
-    addnrrs <- getResourceRecords dict arCount
+    answers <- getResourceRecords anCount
+    authrrs <- getResourceRecords nsCount
+    addnrrs <- getResourceRecords arCount
     let (opts, rest) = partition ((==) OPT. rrtype) addnrrs
         flgs         = flags hm
         rc           = fromRCODE $ rcode flgs
@@ -604,17 +604,17 @@ putResourceRecord ResourceRecord{..} = mconcat [
         let rlenBuilder = BB.int16BE rdataLength
         return $ rlenBuilder <> rDataBuilder
 
-getResourceRecords :: DecodeDict -> Int -> SGet [ResourceRecord]
-getResourceRecords dict n = replicateM n $ getResourceRecord dict
+getResourceRecords :: Int -> SGet [ResourceRecord]
+getResourceRecords n = replicateM n getResourceRecord
 
-getResourceRecord :: DecodeDict -> SGet ResourceRecord
-getResourceRecord dict = do
+getResourceRecord :: SGet ResourceRecord
+getResourceRecord = do
     dom <- getDomain
     typ <- getTYPE
     cls <- get16
     ttl <- get32
     len <- getInt16
-    dat <- getRData dict typ len
+    dat <- getRData typ len
     return $ ResourceRecord dom typ cls ttl dat
 
 getQuestions :: Int -> SGet [Question]
