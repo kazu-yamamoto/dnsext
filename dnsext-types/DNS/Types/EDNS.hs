@@ -34,11 +34,12 @@ module DNS.Types.EDNS (
   , od_clientSubnet
   , od_ecsGeneric
   , od_unknown
+  , addOpt
   ) where
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
-import Data.IORef (IORef, newIORef, readIORef)
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
 import qualified Data.IP (addr)
 import Data.IntMap (IntMap)
@@ -163,6 +164,11 @@ defaultOptDict =
 {-# NOINLINE globalOptDict #-}
 globalOptDict :: IORef (IntMap String)
 globalOptDict = unsafePerformIO $ newIORef defaultOptDict
+
+addOpt :: OptCode -> String -> IO ()
+addOpt code name = atomicModifyIORef' globalOptDict ins
+  where
+    ins dict = (insertOptDict code name dict, ())
 
 -- | From number to option code.
 toOptCode :: Word16 -> OptCode

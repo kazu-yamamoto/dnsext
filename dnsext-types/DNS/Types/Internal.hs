@@ -6,10 +6,11 @@ module DNS.Types.Internal (
   -- * Classes
   , ResourceData(..)
   , OptData(..)
-  -- * DecodeDict
-  , DecodeDict
+  -- * Extension
+  , addType
   , addRData
   , addOData
+  , addOpt
   -- * High level
   , putDNSMessage
   , getDNSMessage

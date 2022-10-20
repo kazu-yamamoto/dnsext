@@ -2,7 +2,7 @@
 
 module DNS.Types.Dict where
 
-import Data.IORef (IORef, newIORef, readIORef)
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -15,43 +15,39 @@ import DNS.Types.Type
 
 ----------------------------------------------------------------
 
-{-# NOINLINE globalDecodeDict #-}
-globalDecodeDict :: IORef DecodeDict
-globalDecodeDict = unsafePerformIO $ newIORef defaultDecodeDict
+{-# NOINLINE globalRDataDict #-}
+globalRDataDict :: IORef RDataDict
+globalRDataDict = unsafePerformIO $ newIORef defaultRDataDict
 
-data DecodeDict = DecodeDict {
-    rdataDict :: RDataDict
-  , odataDict :: ODataDict
-  }
+{-# NOINLINE globalODataDict #-}
+globalODataDict :: IORef ODataDict
+globalODataDict = unsafePerformIO $ newIORef defaultODataDict
 
-defaultDecodeDict :: DecodeDict
-defaultDecodeDict = DecodeDict defaultRDataDict defaultODataDict
+addRData :: ResourceData a => TYPE -> Proxy a -> IO ()
+addRData typ proxy = atomicModifyIORef' globalRDataDict f
+  where
+    f dict = (M.insert (toKey typ) (RDataDecode proxy) dict, ())
 
-addRData :: ResourceData a => TYPE -> Proxy a -> DecodeDict -> DecodeDict
-addRData typ proxy dict = dict {
-    rdataDict = M.insert (toKey typ) (RDataDecode proxy) (rdataDict dict)
-  }
-
-addOData :: OptData a => OptCode -> Proxy a -> DecodeDict -> DecodeDict
-addOData code proxy dict = dict {
-    odataDict = M.insert (toKeyO code) (ODataDecode proxy) (odataDict dict)
-  }
+addOData :: OptData a => OptCode -> Proxy a -> IO ()
+addOData code proxy = atomicModifyIORef' globalODataDict f
+  where
+    f dict = (M.insert (toKeyO code) (ODataDecode proxy) dict, ())
 
 ----------------------------------------------------------------
 
 getRData :: TYPE -> Int -> SGet RData
 getRData OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
   where
-    dict = unsafePerformIO $ readIORef globalDecodeDict
+    dict = unsafePerformIO $ readIORef globalODataDict
     getoption = do
         code <- toOptCode <$> get16
         olen <- getInt16
-        getOData (odataDict dict) code olen
-getRData typ len = case M.lookup (toKey typ) (rdataDict dict) of
+        getOData dict code olen
+getRData typ len = case M.lookup (toKey typ) dict of
     Nothing                  -> rd_unknown typ <$> getOpaque len
     Just (RDataDecode proxy) -> toRData <$> getResourceData proxy len
   where
-    dict = unsafePerformIO $ readIORef globalDecodeDict
+    dict = unsafePerformIO $ readIORef globalRDataDict
 
 ----------------------------------------------------------------
 

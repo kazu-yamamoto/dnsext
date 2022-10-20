@@ -26,9 +26,10 @@ module DNS.Types.Type (
   , toTYPE
   , getTYPE
   , putTYPE
+  , addType
   ) where
 
-import Data.IORef (IORef, newIORef, readIORef)
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
@@ -150,6 +151,11 @@ defaultTypeDict =
 {-# NOINLINE globalTypeDict #-}
 globalTypeDict :: IORef (IntMap String)
 globalTypeDict = unsafePerformIO $ newIORef defaultTypeDict
+
+addType :: TYPE -> String -> IO ()
+addType typ name = atomicModifyIORef' globalTypeDict ins
+  where
+    ins dict = (insertTypeDict typ name dict, ())
 
 ----------------------------------------------------------------
 
