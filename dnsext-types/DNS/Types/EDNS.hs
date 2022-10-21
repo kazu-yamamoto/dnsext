@@ -7,7 +7,8 @@ module DNS.Types.EDNS (
   , maxUdpSize
   , minUdpSize
   , OptCode (
-    NSID
+    OptCode
+  , NSID
   , DAU
   , DHU
   , N3U

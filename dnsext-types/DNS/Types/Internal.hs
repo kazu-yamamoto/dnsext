@@ -1,6 +1,8 @@
 module DNS.Types.Internal (
   -- * Types
     TYPE(..)
+  , OptCode(..)
+  , RCODE(..)
   -- * Classes
   , ResourceData(..)
   , OptData(..)
