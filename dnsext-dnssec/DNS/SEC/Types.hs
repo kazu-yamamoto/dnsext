@@ -373,7 +373,7 @@ getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
 
 ----------------------------------------------------------------
 
-addResourceDataForDNSSEC :: IO ()
+addResourceDataForDNSSEC :: InitIO ()
 addResourceDataForDNSSEC = do
   extendRR DS    "DS"    (Proxy :: Proxy RD_DS)
   extendRR NSEC  "NSC"   (Proxy :: Proxy RD_NSEC)

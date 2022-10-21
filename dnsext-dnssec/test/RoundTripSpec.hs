@@ -19,7 +19,7 @@ import DNS.SEC
 
 spec :: Spec
 spec = do
-    runIO addResourceDataForDNSSEC
+    runIO $ runInitIO addResourceDataForDNSSEC
     prop "ResourceRecord" . forAll genResourceRecord $ \ rr -> do
         let bs = encodeResourceRecord rr
         decodeResourceRecord bs `shouldBe` Right rr

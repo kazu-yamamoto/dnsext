@@ -216,8 +216,12 @@ module DNS.Types (
   , toRCODE
   -- ** Errors
   , DNSError(..)
+  -- * Extension
+  , InitIO
+  , runInitIO
   ) where
 
+import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Error

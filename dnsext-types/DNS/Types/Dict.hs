@@ -1,12 +1,16 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module DNS.Types.Dict (
     getRData
   , getOData
   , extendRR
   , extendOpt
+  , InitIO
+  , runInitIO
   ) where
 
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
@@ -105,12 +109,30 @@ defaultODataDict =
 
 ----------------------------------------------------------------
 
-extendRR :: ResourceData a => TYPE -> String -> Proxy a -> IO ()
-extendRR typ name proxy = do
+extendRR :: ResourceData a => TYPE -> String -> Proxy a -> InitIO ()
+extendRR typ name proxy = InitIO $ do
     addRData typ proxy
     addType typ name
 
-extendOpt :: OptData a => OptCode -> String -> Proxy a -> IO ()
-extendOpt code name proxy = do
+extendOpt :: OptData a => OptCode -> String -> Proxy a -> InitIO ()
+extendOpt code name proxy = InitIO $ do
     addOData code proxy
     addOpt code name
+
+----------------------------------------------------------------
+
+newtype InitIO a = InitIO {
+    runInitIO :: IO a
+  } deriving (Functor)
+
+instance Applicative InitIO where
+    pure x                = InitIO $ pure x
+    InitIO x <*> InitIO y = InitIO (x <*> y)
+
+instance Monad InitIO where
+    m >>= f = InitIO $ do
+        x <- runInitIO m
+        runInitIO $ f x
+
+instance MonadIO InitIO where
+    liftIO = InitIO
