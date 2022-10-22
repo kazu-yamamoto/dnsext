@@ -4,7 +4,6 @@ module DNS.Cache.DNSUtil (
   mkRecvBS, mkSendBS,
   mkRecv, mkSend,
   lookupRaw,
-  decodeDict,
 
   -- interfaces to check compile-time configs
   isRecvSendMsg,
@@ -28,7 +27,6 @@ import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified DNS.IO as DNS
-import qualified DNS.SEC as DNS
 
 ---
 
@@ -37,9 +35,6 @@ type Cmsg = Socket.Cmsg
 #else
 type Cmsg = ()
 #endif
-
-decodeDict :: DNS.DecodeDict
-decodeDict = DNS.addResourceDataForDNSSEC DNS.defaultDecodeDict
 
 mkRecvBS :: Bool -> Socket -> IO (ByteString, (SockAddr, [Cmsg]))
 #if MIN_VERSION_network(3,1,2)
@@ -75,7 +70,7 @@ mkRecv _        now =  recvDNS recvFrom
   where
     recvDNS recv sock = do
       (bs, ai) <- recv sock `E.catch` \e -> E.throwIO $ DNS.NetworkFailure e
-      case DNS.decodeAt decodeDict now bs of
+      case DNS.decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return (msg, ai)
 

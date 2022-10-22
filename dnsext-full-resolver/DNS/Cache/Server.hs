@@ -21,6 +21,7 @@ import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified DNS.Types.Decode as DNS
+import qualified DNS.SEC as DNS
 import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 
@@ -31,7 +32,7 @@ import UnliftIO (SomeException, tryAny, concurrently_, race_)
 import DNS.Cache.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
 import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.SocketUtil (addrInfo, isAnySockAddr)
-import DNS.Cache.DNSUtil (mkRecvBS, mkSendBS, decodeDict)
+import DNS.Cache.DNSUtil (mkRecvBS, mkSendBS)
 import DNS.Cache.ServerMonitor (monitor, PLStatus)
 import qualified DNS.Cache.ServerMonitor as Mon
 import DNS.Cache.Types (Timestamp, NE)
@@ -54,6 +55,7 @@ udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< ad
 run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+  DNS.runInitIO $ DNS.addResourceDataForDNSSEC
   (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
   mapM_ (uncurry S.bind) sas
   race_
@@ -248,7 +250,7 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let decode = do
         now <- liftIO getSec
-        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt decodeDict now bs
+        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
         qs <- maybe (throwE $ "empty question ignored: " ++ show addr) return $ uncons $ DNS.question msg
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
