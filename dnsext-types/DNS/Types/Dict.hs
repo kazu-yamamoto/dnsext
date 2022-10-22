@@ -1,8 +1,19 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DeriveFunctor #-}
 
-module DNS.Types.Dict where
+module DNS.Types.Dict (
+    getRData
+  , getOData
+  , extendRR
+  , extendOpt
+  , InitIO
+  , runInitIO
+  ) where
 
+import Control.Monad.IO.Class (MonadIO(..))
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import qualified Data.IntMap as M
+import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.StateBinary
 import DNS.Types.EDNS
@@ -13,36 +24,39 @@ import DNS.Types.Type
 
 ----------------------------------------------------------------
 
-data DecodeDict = DecodeDict {
-    rdataDict :: RDataDict
-  , odataDict :: ODataDict
-  }
+{-# NOINLINE globalRDataDict #-}
+globalRDataDict :: IORef RDataDict
+globalRDataDict = unsafePerformIO $ newIORef defaultRDataDict
 
-defaultDecodeDict :: DecodeDict
-defaultDecodeDict = DecodeDict defaultRDataDict defaultODataDict
+{-# NOINLINE globalODataDict #-}
+globalODataDict :: IORef ODataDict
+globalODataDict = unsafePerformIO $ newIORef defaultODataDict
 
-addRData :: ResourceData a => TYPE -> Proxy a -> DecodeDict -> DecodeDict
-addRData typ proxy dict = dict {
-    rdataDict = M.insert (toKey typ) (RDataDecode proxy) (rdataDict dict)
-  }
+addRData :: ResourceData a => TYPE -> Proxy a -> IO ()
+addRData typ proxy = atomicModifyIORef' globalRDataDict f
+  where
+    f dict = (M.insert (toKey typ) (RDataDecode proxy) dict, ())
 
-addOData :: OptData a => OptCode -> Proxy a -> DecodeDict -> DecodeDict
-addOData code proxy dict = dict {
-    odataDict = M.insert (toKeyO code) (ODataDecode proxy) (odataDict dict)
-  }
+addOData :: OptData a => OptCode -> Proxy a -> IO ()
+addOData code proxy = atomicModifyIORef' globalODataDict f
+  where
+    f dict = (M.insert (toKeyO code) (ODataDecode proxy) dict, ())
 
 ----------------------------------------------------------------
 
-getRData :: DecodeDict -> TYPE -> Int -> SGet RData
-getRData dict OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
+getRData :: TYPE -> Int -> SGet RData
+getRData OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
   where
+    dict = unsafePerformIO $ readIORef globalODataDict
     getoption = do
         code <- toOptCode <$> get16
         olen <- getInt16
-        getOData (odataDict dict) code olen
-getRData dict typ len = case M.lookup (toKey typ) (rdataDict dict) of
+        getOData dict code olen
+getRData typ len = case M.lookup (toKey typ) dict of
     Nothing                  -> rd_unknown typ <$> getOpaque len
     Just (RDataDecode proxy) -> toRData <$> getResourceData proxy len
+  where
+    dict = unsafePerformIO $ readIORef globalRDataDict
 
 ----------------------------------------------------------------
 
@@ -92,3 +106,33 @@ defaultODataDict =
     M.insert (toKeyO N3U)  (ODataDecode (Proxy :: Proxy OD_N3U)) $
     M.insert (toKeyO ClientSubnet)  (ODataDecode (Proxy :: Proxy OD_ClientSubnet))
     M.empty
+
+----------------------------------------------------------------
+
+extendRR :: ResourceData a => TYPE -> String -> Proxy a -> InitIO ()
+extendRR typ name proxy = InitIO $ do
+    addRData typ proxy
+    addType typ name
+
+extendOpt :: OptData a => OptCode -> String -> Proxy a -> InitIO ()
+extendOpt code name proxy = InitIO $ do
+    addOData code proxy
+    addOpt code name
+
+----------------------------------------------------------------
+
+newtype InitIO a = InitIO {
+    runInitIO :: IO a
+  } deriving (Functor)
+
+instance Applicative InitIO where
+    pure x                = InitIO $ pure x
+    InitIO x <*> InitIO y = InitIO (x <*> y)
+
+instance Monad InitIO where
+    m >>= f = InitIO $ do
+        x <- runInitIO m
+        runInitIO $ f x
+
+instance MonadIO InitIO where
+    liftIO = InitIO

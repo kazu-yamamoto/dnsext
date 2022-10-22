@@ -373,9 +373,13 @@ getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
 
 ----------------------------------------------------------------
 
-addResourceDataForDNSSEC :: DecodeDict -> DecodeDict
-addResourceDataForDNSSEC dict =
-    addRData DS    (Proxy :: Proxy RD_DS)
-  $ addRData NSEC  (Proxy :: Proxy RD_NSEC)
-  $ addRData NSEC3 (Proxy :: Proxy RD_NSEC3)
-    dict
+addResourceDataForDNSSEC :: InitIO ()
+addResourceDataForDNSSEC = do
+  extendRR DS      "DS"      (Proxy :: Proxy RD_DS)
+  extendRR DNSKEY  "DNSKEY"  (Proxy :: Proxy RD_DNSKEY)
+  extendRR CDS     "CDS"     (Proxy :: Proxy RD_CDS)
+  extendRR CDNSKEY "CDNSKEY" (Proxy :: Proxy RD_CDNSKEY)
+  extendRR RRSIG   "RRSIG"   (Proxy :: Proxy RD_RRSIG)
+  extendRR NSEC    "NSEC"    (Proxy :: Proxy RD_NSEC)
+  extendRR NSEC3   "NSEC3"   (Proxy :: Proxy RD_NSEC3)
+  extendRR NSEC3PARAM "NSEC3PARAM" (Proxy :: Proxy RD_NSEC3PARAM)

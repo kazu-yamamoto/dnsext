@@ -17,8 +17,6 @@ module DNS.Types.Decode (
     -- * Decoding a single DNS message
     decodeAt
   , decode
-  , DecodeDict
-  , defaultDecodeDict
     -- * Decoding multple length-encoded DNS messages,
     -- e.g., from TCP traffic.
   , decodeManyAt
@@ -51,11 +49,10 @@ import DNS.Types.Type
 -- returned.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG records) are
 -- interpreted at the supplied epoch time.
 --
-decodeAt :: DecodeDict
-         -> Int64                      -- ^ current epoch time
+decodeAt :: Int64                      -- ^ current epoch time
          -> ByteString                 -- ^ encoded input buffer
          -> Either DNSError DNSMessage -- ^ decoded message or error
-decodeAt dict t bs = fst <$> runSGetAt t (fitSGet (BS.length bs) (getDNSMessage dict)) bs
+decodeAt t bs = fst <$> runSGetAt t (fitSGet (BS.length bs) getDNSMessage) bs
 
 -- | Decode an input buffer containing a single encoded DNS message.  If the
 -- input buffer has excess content beyond the end of the message an error is
@@ -65,10 +62,9 @@ decodeAt dict t bs = fst <$> runSGetAt t (fitSGet (BS.length bs) (getDNSMessage 
 -- times to absolute 64-bit epoch times.  This will yield incorrect results
 -- starting circa 2141.
 --
-decode :: DecodeDict
-       -> ByteString                 -- ^ encoded input buffer
+decode :: ByteString                 -- ^ encoded input buffer
        -> Either DNSError DNSMessage -- ^ decoded message or error
-decode dict bs = fst <$> runSGet (fitSGet (BS.length bs) (getDNSMessage dict)) bs
+decode bs = fst <$> runSGet (fitSGet (BS.length bs) getDNSMessage) bs
 
 -- | Decode a buffer containing multiple encoded DNS messages each preceded by
 -- a 16-bit length in network byte order.  Any left-over bytes of a partial
@@ -76,13 +72,12 @@ decode dict bs = fst <$> runSGet (fitSGet (BS.length bs) (getDNSMessage dict)) b
 -- of the result tuple.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG
 -- records) are interpreted at the supplied epoch time.
 --
-decodeManyAt :: DecodeDict
-             -> Int64      -- ^ current epoch time
+decodeManyAt :: Int64      -- ^ current epoch time
              -> ByteString -- ^ encoded input buffer
              -> Either DNSError ([DNSMessage], ByteString)
                            -- ^ decoded messages and left-over partial message
                            -- or error if any complete message fails to parse.
-decodeManyAt dict t bs = decodeMParse (decodeAt dict t) bs
+decodeManyAt t bs = decodeMParse (decodeAt t) bs
 
 -- | Decode a buffer containing multiple encoded DNS messages each preceded by
 -- a 16-bit length in network byte order.  Any left-over bytes of a partial
@@ -94,12 +89,11 @@ decodeManyAt dict t bs = decodeMParse (decodeAt dict t) bs
 -- August in 2146.  Outside this date range the output is off by some non-zero
 -- multiple 2\^32 seconds.
 --
-decodeMany :: DecodeDict
-           -> ByteString -- ^ encoded input buffer
+decodeMany :: ByteString -- ^ encoded input buffer
            -> Either DNSError ([DNSMessage], ByteString)
                          -- ^ decoded messages and left-over partial message
                          -- or error if any complete message fails to parse.
-decodeMany dict bs = decodeMParse (decode dict) bs
+decodeMany bs = decodeMParse decode bs
 
 
 -- | Decode multiple messages using the given parser.
@@ -153,19 +147,18 @@ decodeMailbox bs = fst <$> runSGet getMailbox bs
 -- it is not generally possible to decode resource record separately from the
 -- enclosing DNS message.  This is an internal function.
 --
-decodeResourceRecord :: DecodeDict -> ByteString -> Either DNSError ResourceRecord
-decodeResourceRecord dict bs = fst <$> runSGet (getResourceRecord dict) bs
+decodeResourceRecord :: ByteString -> Either DNSError ResourceRecord
+decodeResourceRecord bs = fst <$> runSGet getResourceRecord bs
 
 -- | Decode a resource record (RR) with DNS timestamps interpreted at the
 -- supplied epoch time.  Since RRs may use DNS name compression, it is not
 -- generally possible to decode resource record separately from the enclosing
 -- DNS message.  This is an internal function.
 --
-decodeResourceRecordAt :: DecodeDict
-                       -> Int64      -- ^ current epoch time
+decodeResourceRecordAt :: Int64      -- ^ current epoch time
                        -> ByteString -- ^ encoded resource record
                        -> Either DNSError ResourceRecord
-decodeResourceRecordAt dict t bs = fst <$> runSGetAt t (getResourceRecord dict) bs
+decodeResourceRecordAt t bs = fst <$> runSGetAt t getResourceRecord bs
 
-decodeRData :: DecodeDict -> TYPE -> Int -> ByteString -> Either DNSError RData
-decodeRData dict typ len bs = fst <$> runSGet (getRData dict typ len) bs
+decodeRData :: TYPE -> Int -> ByteString -> Either DNSError RData
+decodeRData typ len bs = fst <$> runSGet (getRData typ len) bs

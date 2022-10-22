@@ -2,7 +2,6 @@
 
 module EncodeSpec (spec) where
 
-import Data.ByteString (ByteString)
 import Data.Either
 import Data.IP
 import Test.Hspec
@@ -31,13 +30,13 @@ check1 :: DNSMessage -> Expectation
 check1 inp = out `shouldBe` Right inp
   where
     bs = encode inp
-    out = decode' bs
+    out = decode bs
 
 check2 :: DNSMessage -> Expectation
 check2 inp = bs' `shouldBe` bs
   where
     bs = encode inp
-    out = fromRight (error "check2") $ decode' bs
+    out = fromRight (error "check2") $ decode bs
     bs' = encode out
 
 defaultHeader :: DNSHeader
@@ -139,6 +138,3 @@ testResponseTXT = DNSMessage {
         , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [218, 30, 72, 180])
         ]
   }
-
-decode' :: ByteString -> Either DNSError DNSMessage
-decode' = decode defaultDecodeDict

@@ -7,7 +7,6 @@ import Control.Monad (replicateM)
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import Data.Word
@@ -20,10 +19,11 @@ import DNS.SEC
 
 spec :: Spec
 spec = do
+    runIO $ runInitIO addResourceDataForDNSSEC
     prop "ResourceRecord" . forAll genResourceRecord $ \ rr -> do
         let bs = encodeResourceRecord rr
-        decodeResourceRecord' bs `shouldBe` Right rr
-        fmap encodeResourceRecord (decodeResourceRecord' bs) `shouldBe` Right bs
+        decodeResourceRecord bs `shouldBe` Right rr
+        fmap encodeResourceRecord (decodeResourceRecord bs) `shouldBe` Right bs
 
 genResourceRecord :: Gen ResourceRecord
 genResourceRecord = frequency
@@ -76,8 +76,3 @@ genWord32 = arbitrary
 
 genWord8 :: Gen Word8
 genWord8 = arbitrary
-
-decodeResourceRecord' :: ByteString -> Either DNSError ResourceRecord
-decodeResourceRecord' = decodeResourceRecord dict
-  where
-    dict = addResourceDataForDNSSEC defaultDecodeDict
