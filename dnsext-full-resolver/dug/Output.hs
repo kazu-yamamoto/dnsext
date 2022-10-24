@@ -1,17 +1,102 @@
-module Output where
+module Output (pprResult) where
 
 import Data.Monoid (Endo (..))
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 
-import DNS.Types (DNSMessage, ResourceRecord (..))
+import DNS.Types (DNSMessage, ResourceRecord (..), Question)
 import qualified DNS.Types as DNS
 
+----------------------------------------------------------------
 
 type Print = Writer (Endo String)
 type Printer a = a -> Print ()
 
+----------------------------------------------------------------
+
+pprResult :: [String] -> DNSMessage -> String
+pprResult = curry $ runPrinter result
+
 runPrinter :: Printer a -> a -> String
 runPrinter p = ($ "") . appEndo . execWriter . p
+
+----------------------------------------------------------------
+
+result :: Printer ([String], DNSMessage)
+result (args, msg) = do
+  banner args
+  putQS $ DNS.question msg
+  putRRS answers     $ DNS.answer     msg
+  putRRS authoritys  $ DNS.authority  msg
+  putRRS additionals $ DNS.additional msg
+
+----------------------------------------------------------------
+
+banner :: Printer [String]
+banner args = do
+  semi
+  sp *> string "<<>>" *> sp *> string "dug" *> sp *> string "<<>>"
+  sp *> (string `sepBy` sp) args
+  nl
+
+----------------------------------------------------------------
+
+putQS :: [Question] -> Print ()
+putQS [] = pure ()
+putQS qs = do
+  nl
+  dsemi *> sp *> string "QUESTION SECTION:" *> nl
+  mapM_ qq qs
+
+qq :: Printer Question
+qq q = do
+  semi *> string (DNS.origName $ DNS.qname q)
+  tab
+  tab
+  string $ cls $ DNS.qclass q
+  tab
+  string $ show $ DNS.qtype q
+  nl
+
+----------------------------------------------------------------
+
+putRRS :: Printer [ResourceRecord] -> [ResourceRecord] -> Print ()
+putRRS _   [] = pure ()
+putRRS ppr rs = nl *> ppr rs
+
+answers :: Printer DNS.Answers
+answers = rrs "ANSWER SECTION:"
+
+authoritys :: Printer DNS.AuthorityRecords
+authoritys = rrs "AUTHORITY SECTION:"
+
+additionals :: Printer DNS.AdditionalRecords
+additionals = rrs "ADDITIONAL SECTION:"
+
+rrs :: String -> Printer [DNS.ResourceRecord]
+rrs name rs = do
+  dsemi *> sp *> string name *> nl
+  mapM_ rr rs
+
+rr :: Printer ResourceRecord
+rr r = do
+  string $ DNS.origName $ rrname r
+  tab
+  string $ show $ rrttl r
+  tab
+  string $ cls $ rrclass r
+  tab
+  string $ show $ rrtype r
+  tab
+  string $ show $ rdata r
+  nl
+
+----------------------------------------------------------------
+
+cls :: DNS.CLASS -> String
+cls c | c == DNS.classIN = "IN"
+      | otherwise        = "#<" ++ show c ++ ">"
+
+----------------------------------------------------------------
 
 char :: Printer Char
 char = tell . Endo . (:)
@@ -37,53 +122,3 @@ tab = char '\t'
 
 nl :: Print ()
 nl = char '\n'
-
-banner :: Printer [String]
-banner args = do
-  semi
-  sp *> string "<<>>" *> sp *> string "dug" *> sp *> string "<<>>"
-  sp *> (string `sepBy` sp) args
-  nl
-
-rr :: Printer ResourceRecord
-rr r = do
-  string $ DNS.origName $ rrname r
-  tab
-  string $ show $ rrttl r
-  tab
-  let cls
-        | rrclass r == DNS.classIN = "IN"
-        | otherwise                = "#<" ++ show (rrclass r) ++ ">"
-  string cls
-  tab
-  string $ show $ rrtype r
-  tab
-  string $ show $ rdata r
-  nl
-
-rrs :: String -> Printer DNS.Answers
-rrs name rs = do
-  dsemi *> sp *> string name *> nl
-  mapM_ rr rs
-
-answers :: Printer DNS.Answers
-answers = rrs "ANSWER SECTION:"
-
-authoritys :: Printer DNS.AuthorityRecords
-authoritys = rrs "AUTHORITY SECTION:"
-
-additionals :: Printer DNS.AdditionalRecords
-additionals = rrs "ADDITIONAL SECTION:"
-
-result :: Printer ([String], DNSMessage)
-result (args, msg) = do
-  banner args
-  let putRRS _   [] = pure ()
-      putRRS ppr rs = nl *> ppr rs
-
-  putRRS answers $ DNS.answer msg
-  putRRS authoritys $ DNS.authority msg
-  putRRS additionals $ DNS.additional msg
-
-pprResult :: [String] -> DNSMessage -> String
-pprResult = curry $ runPrinter result
