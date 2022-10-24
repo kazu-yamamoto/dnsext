@@ -1,5 +1,5 @@
 cabal-version:      >=1.10
-name:               dns-full-resolver
+name:               dnsext-full-resolver
 version:            0.1.0.0
 license-file:       LICENSE
 maintainer:         ex8k.hibino@gmail.com
@@ -57,7 +57,7 @@ executable cache-server
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
-        dns-full-resolver
+        dnsext-full-resolver
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -74,7 +74,7 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        dns-full-resolver,
+        dnsext-full-resolver,
         dnsext-types,
         dnsext-io,
         iproute,
@@ -92,7 +92,7 @@ executable workers-benchmark
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
-        dns-full-resolver
+        dnsext-full-resolver
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -109,7 +109,7 @@ test-suite cache-test
         bytestring,
         dnsext-types,
         dnsext-io,
-        dns-full-resolver,
+        dnsext-full-resolver,
         QuickCheck
 
     if impl(ghc >=8)
@@ -127,7 +127,7 @@ test-suite query-test
         hspec,
         dnsext-types,
         dnsext-io,
-        dns-full-resolver
+        dnsext-full-resolver
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
