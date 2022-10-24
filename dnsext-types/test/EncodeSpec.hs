@@ -47,7 +47,7 @@ testQueryA = defaultQuery {
     header = defaultHeader {
          identifier = 1000
        }
-  , question = [Question "www.mew.org." A]
+  , question = [Question "www.mew.org." A classIN]
   }
 
 testQueryAAAA :: DNSMessage
@@ -55,7 +55,7 @@ testQueryAAAA = defaultQuery {
     header = defaultHeader {
          identifier = 1001
        }
-  , question = [Question "www.mew.org." AAAA]
+  , question = [Question "www.mew.org." AAAA classIN]
   }
 
 testResponseA :: DNSMessage
@@ -78,6 +78,7 @@ testResponseA = DNSMessage {
   , question = [Question {
                      qname = "492056364.qzone.qq.com."
                    , qtype = A
+                   , qclass = classIN
                    }
                 ]
   , answer =
@@ -122,6 +123,7 @@ testResponseTXT = DNSMessage {
   , question = [Question {
                      qname = "492056364.qzone.qq.com."
                    , qtype = TXT
+                   , qclass = classIN
                    }
                 ]
   , answer =

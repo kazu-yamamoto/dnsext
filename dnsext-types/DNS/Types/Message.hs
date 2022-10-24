@@ -544,18 +544,17 @@ toRCODE = RCODE
 
 ----------------------------------------------------------------
 
--- XXX: The Question really should also include the CLASS
---
 -- | Raw data format for DNS questions.
 data Question = Question {
     qname  :: Domain -- ^ A domain name
   , qtype  :: TYPE   -- ^ The type of the query
+  , qclass :: CLASS
   } deriving (Eq, Show)
 
 putQuestion :: Question -> SPut
 putQuestion Question{..} = putDomain qname
                         <> put16 (fromTYPE qtype)
-                        <> put16 classIN
+                        <> putCLASS qclass
 
 ----------------------------------------------------------------
 
@@ -565,6 +564,12 @@ type CLASS = Word16
 -- | Resource record class for the Internet.
 classIN :: CLASS
 classIN = 1
+
+putCLASS :: CLASS -> SPut
+putCLASS = put16
+
+getCLASS :: SGet CLASS
+getCLASS = get16
 
 -- | Time to live in second.
 type TTL = Word32
@@ -591,7 +596,7 @@ putResourceRecord :: ResourceRecord -> SPut
 putResourceRecord ResourceRecord{..} = mconcat [
     putDomain rrname
   , putTYPE rrtype
-  , put16 rrclass
+  , putCLASS rrclass
   , put32 rrttl
   , putResourceRData rdata
   ]
@@ -611,7 +616,7 @@ getResourceRecord :: SGet ResourceRecord
 getResourceRecord = do
     dom <- getDomain
     typ <- getTYPE
-    cls <- get16
+    cls <- getCLASS
     ttl <- get32
     len <- getInt16
     dat <- getRData typ len
@@ -623,6 +628,4 @@ getQuestions n = replicateM n getQuestion
 getQuestion :: SGet Question
 getQuestion = Question <$> getDomain
                        <*> getTYPE
-                       <*  ignoreClass
-  where
-    ignoreClass = get16
+                       <*> getCLASS
