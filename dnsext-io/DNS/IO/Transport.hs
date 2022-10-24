@@ -88,8 +88,8 @@ resolve rlv dom typ qctls rcv
   where
     dom' = origName dom
     q = case C8.last dom' of
-          '.' -> Question dom typ
-          _   -> Question (dom <> ".") typ
+          '.' -> Question dom typ classIN
+          _   -> Question (dom <> ".") typ classIN
 
     gens = NE.toList $ genIds rlv
 

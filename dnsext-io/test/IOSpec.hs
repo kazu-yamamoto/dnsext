@@ -15,7 +15,7 @@ spec = describe "send/receive" $ do
     it "resolves well with UDP" $ do
         sock <- connectedSocket Datagram
         -- Google's resolvers support the AD and CD bits
-        let qry = encodeQuery 1 (Question "www.mew.org" A) $
+        let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
                   adFlag FlagSet <> ednsEnabled FlagClear
         send sock qry
         ans <- receive sock
@@ -23,7 +23,7 @@ spec = describe "send/receive" $ do
 
     it "resolves well with TCP" $ do
         sock <- connectedSocket Stream
-        let qry = encodeQuery 1 (Question "www.mew.org" A) $
+        let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
                   adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
         sendVC sock qry
         ans <- receiveVC sock

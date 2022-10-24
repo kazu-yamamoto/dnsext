@@ -18,13 +18,14 @@ module DNS.Types (
   , defaultEDNS
   , minUdpSize
   , maxUdpSize
-  -- * Resource record
-  , ResourceRecord(..)
+  -- * Question
+  , Question(..)
   , CLASS
   , classIN
+  -- * Resource record
+  , ResourceRecord(..)
   , TTL
   -- ** Sections
-  , Question(..)
   , Answers
   , AuthorityRecords
   , AdditionalRecords

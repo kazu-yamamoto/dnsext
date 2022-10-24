@@ -80,7 +80,7 @@ genDNSMessage =
 
 
 genQuestion :: Gen Question
-genQuestion = Question <$> genDomain <*> genTYPE
+genQuestion = Question <$> genDomain <*> genTYPE <*> pure classIN
 
 genTYPE :: Gen TYPE
 genTYPE = frequency

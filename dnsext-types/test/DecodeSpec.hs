@@ -47,7 +47,7 @@ test_soa_in :: DNSMessage
 test_soa_in =
     let soard = rd_soa "ns1.example.com." "hostmaster.example.com." 0 0 0 0 0
         soarr = ResourceRecord "example.com." SOA 1 3600 soard
-     in defaultResponse { question = [Question "hostmaster.example.com." A]
+     in defaultResponse { question = [Question "hostmaster.example.com." A classIN]
                         , authority = [soarr] }
 
 -- Expected decoded presentation form of the 'test_soa' message.
@@ -55,7 +55,7 @@ test_soa_out :: DNSMessage
 test_soa_out =
     let soard = rd_soa "ns1.example.com." "hostmaster@example.com." 0 0 0 0 0
         soarr = ResourceRecord "example.com." SOA 1 3600 soard
-     in defaultResponse { question = [Question "hostmaster.example.com." A]
+     in defaultResponse { question = [Question "hostmaster.example.com." A classIN]
                         , authority = [soarr] }
 
 -- Expected compressed encoding of the 'test_soa' message

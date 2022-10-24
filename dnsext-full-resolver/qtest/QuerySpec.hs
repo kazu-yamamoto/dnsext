@@ -79,7 +79,7 @@ querySpec disableV6NS = describe "query" $ do
       runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
       getReply n ty ident = do
         e <- runDNSQuery (replyResult (fromString n) ty) cxt
-        return $ replyMessage e ident [DNS.Question (fromString n) ty]
+        return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
