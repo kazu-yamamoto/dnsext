@@ -29,10 +29,14 @@ module DNS.Types.Type (
   , addType
   ) where
 
+import Data.Char (toUpper)
 import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as M
+import qualified Data.IntMap as IM
+import Data.Map (Map)
+import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
+import Text.Read
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -112,50 +116,102 @@ pattern CAA        = TYPE 257 -- RFC 6844
 ----------------------------------------------------------------
 
 instance Show TYPE where
-    show (TYPE w) = case M.lookup i dict of
+    show (TYPE w) = case IM.lookup i dict of
       Nothing   -> "TYPE " ++ show w
       Just name -> name
       where
         i = fromIntegral w
-        dict = unsafePerformIO $ readIORef globalTypeDict
+        dict = unsafePerformIO $ readIORef globalTypeShowDict
 
-type TypeDict = IntMap String
+type TypeShowDict = IntMap String
 
-insertTypeDict :: TYPE -> String -> TypeDict -> TypeDict
-insertTypeDict (TYPE w) name dict = M.insert i name dict
+insertTypeShowDict :: TYPE -> String -> TypeShowDict -> TypeShowDict
+insertTypeShowDict (TYPE w) name dict = IM.insert i name dict
   where
     i = fromIntegral w
 
-defaultTypeDict :: IntMap String
-defaultTypeDict =
-    insertTypeDict A     "A"
-  $ insertTypeDict NS    "NS"
-  $ insertTypeDict CNAME "CNAME"
-  $ insertTypeDict SOA   "SOA"
-  $ insertTypeDict NULL  "NULL"
-  $ insertTypeDict PTR   "PTR"
-  $ insertTypeDict MX    "MX"
-  $ insertTypeDict TXT   "TXT"
-  $ insertTypeDict RP    "RP"
-  $ insertTypeDict AAAA  "AAAA"
-  $ insertTypeDict SRV   "SRV"
-  $ insertTypeDict DNAME "DNAME"
-  $ insertTypeDict OPT   "OPT"
-  $ insertTypeDict TLSA  "TLSA"
-  $ insertTypeDict CSYNC "CSYNC"
-  $ insertTypeDict AXFR  "AXFR"
-  $ insertTypeDict ANY   "ANY"
-  $ insertTypeDict CAA   "CAA"
+defaultTypeShowDict :: TypeShowDict
+defaultTypeShowDict =
+    insertTypeShowDict A     "A"
+  $ insertTypeShowDict NS    "NS"
+  $ insertTypeShowDict CNAME "CNAME"
+  $ insertTypeShowDict SOA   "SOA"
+  $ insertTypeShowDict NULL  "NULL"
+  $ insertTypeShowDict PTR   "PTR"
+  $ insertTypeShowDict MX    "MX"
+  $ insertTypeShowDict TXT   "TXT"
+  $ insertTypeShowDict RP    "RP"
+  $ insertTypeShowDict AAAA  "AAAA"
+  $ insertTypeShowDict SRV   "SRV"
+  $ insertTypeShowDict DNAME "DNAME"
+  $ insertTypeShowDict OPT   "OPT"
+  $ insertTypeShowDict TLSA  "TLSA"
+  $ insertTypeShowDict CSYNC "CSYNC"
+  $ insertTypeShowDict AXFR  "AXFR"
+  $ insertTypeShowDict ANY   "ANY"
+  $ insertTypeShowDict CAA   "CAA"
+    IM.empty
+
+{-# NOINLINE globalTypeShowDict #-}
+globalTypeShowDict :: IORef TypeShowDict
+globalTypeShowDict = unsafePerformIO $ newIORef defaultTypeShowDict
+
+----------------------------------------------------------------
+
+instance Read TYPE where
+    readListPrec = readListPrecDefault
+    readPrec = do
+        ms <- lexP
+        let str0 = case ms of
+              Ident  s -> s
+              String s -> s
+              _        -> fail "Read TYPE"
+            str = map toUpper str0
+            dict = unsafePerformIO $ readIORef globalTypeReadDict
+        case M.lookup str dict of
+          Just t -> return t
+          _      -> fail "Read TYPE"
+
+type TypeReadDict = Map String TYPE
+
+insertTypeReadDict :: TYPE -> String -> TypeReadDict -> TypeReadDict
+insertTypeReadDict t name dict = M.insert name t dict
+
+defaultTypeReadDict :: TypeReadDict
+defaultTypeReadDict =
+    insertTypeReadDict A     "A"
+  $ insertTypeReadDict NS    "NS"
+  $ insertTypeReadDict CNAME "CNAME"
+  $ insertTypeReadDict SOA   "SOA"
+  $ insertTypeReadDict NULL  "NULL"
+  $ insertTypeReadDict PTR   "PTR"
+  $ insertTypeReadDict MX    "MX"
+  $ insertTypeReadDict TXT   "TXT"
+  $ insertTypeReadDict RP    "RP"
+  $ insertTypeReadDict AAAA  "AAAA"
+  $ insertTypeReadDict SRV   "SRV"
+  $ insertTypeReadDict DNAME "DNAME"
+  $ insertTypeReadDict OPT   "OPT"
+  $ insertTypeReadDict TLSA  "TLSA"
+  $ insertTypeReadDict CSYNC "CSYNC"
+  $ insertTypeReadDict AXFR  "AXFR"
+  $ insertTypeReadDict ANY   "ANY"
+  $ insertTypeReadDict CAA   "CAA"
     M.empty
 
-{-# NOINLINE globalTypeDict #-}
-globalTypeDict :: IORef (IntMap String)
-globalTypeDict = unsafePerformIO $ newIORef defaultTypeDict
+{-# NOINLINE globalTypeReadDict #-}
+globalTypeReadDict :: IORef TypeReadDict
+globalTypeReadDict = unsafePerformIO $ newIORef defaultTypeReadDict
+
+----------------------------------------------------------------
 
 addType :: TYPE -> String -> IO ()
-addType typ name = atomicModifyIORef' globalTypeDict ins
+addType typ name = do
+    atomicModifyIORef' globalTypeShowDict insShow
+    atomicModifyIORef' globalTypeReadDict insRead
   where
-    ins dict = (insertTypeDict typ name dict, ())
+    insShow dict = (insertTypeShowDict typ name dict, ())
+    insRead dict = (insertTypeReadDict typ name dict, ())
 
 ----------------------------------------------------------------
 

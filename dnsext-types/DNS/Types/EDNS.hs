@@ -39,12 +39,16 @@ module DNS.Types.EDNS (
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
+import Data.Char (toUpper)
 import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
 import qualified Data.IP (addr)
 import Data.IntMap (IntMap)
-import qualified Data.IntMap as M
+import qualified Data.IntMap as IM
+import Data.Map (Map)
+import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
+import Text.Read
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -121,6 +125,10 @@ newtype OptCode = OptCode {
     fromOptCode :: Word16
   } deriving (Eq,Ord)
 
+-- | From number to option code.
+toOptCode :: Word16 -> OptCode
+toOptCode = OptCode
+
 -- | NSID (RFC5001, section 2.3)
 pattern NSID :: OptCode
 pattern NSID  = OptCode 3
@@ -137,42 +145,75 @@ pattern N3U   = OptCode 7
 pattern ClientSubnet :: OptCode
 pattern ClientSubnet = OptCode 8
 
+----------------------------------------------------------------
+
 instance Show OptCode where
-    show (OptCode w) = case M.lookup i dict of
+    show (OptCode w) = case IM.lookup i dict of
       Nothing   -> "OptCode " ++ show w
       Just name -> name
       where
         i = fromIntegral w
-        dict = unsafePerformIO $ readIORef globalOptDict
+        dict = unsafePerformIO $ readIORef globalOptShowDict
 
-type OptDict = IntMap String
+type OptShowDict = IntMap String
 
-insertOptDict :: OptCode -> String -> OptDict -> OptDict
-insertOptDict (OptCode w) name dict = M.insert i name dict
+insertOptShowDict :: OptCode -> String -> OptShowDict -> OptShowDict
+insertOptShowDict (OptCode w) name dict = IM.insert i name dict
   where
     i = fromIntegral w
 
-defaultOptDict :: IntMap String
-defaultOptDict =
-    insertOptDict NSID "NSID"
-  $ insertOptDict DAU  "DAU"
-  $ insertOptDict DHU  "DHU"
-  $ insertOptDict N3U  "N3U"
-  $ insertOptDict ClientSubnet "ClientSubnet"
+defaultOptShowDict :: OptShowDict
+defaultOptShowDict =
+    insertOptShowDict NSID "NSID"
+  $ insertOptShowDict DAU  "DAU"
+  $ insertOptShowDict DHU  "DHU"
+  $ insertOptShowDict N3U  "N3U"
+  $ insertOptShowDict ClientSubnet "ClientSubnet"
+   IM.empty
+
+{-# NOINLINE globalOptShowDict #-}
+globalOptShowDict :: IORef OptShowDict
+globalOptShowDict = unsafePerformIO $ newIORef defaultOptShowDict
+
+instance Read OptCode where
+    readListPrec = readListPrecDefault
+    readPrec = do
+        ms <- lexP
+        let str0 = case ms of
+              Ident  s -> s
+              String s -> s
+              _        -> fail "Read OptCode"
+            str = map toUpper str0
+            dict = unsafePerformIO $ readIORef globalOptReadDict
+        case M.lookup str dict of
+          Just t -> return t
+          _      -> fail "Read OptCode"
+
+type OptReadDict = Map String OptCode
+
+insertOptReadDict :: OptCode -> String -> OptReadDict -> OptReadDict
+insertOptReadDict o name dict = M.insert name o dict
+
+defaultOptReadDict :: OptReadDict
+defaultOptReadDict =
+    insertOptReadDict NSID "NSID"
+  $ insertOptReadDict DAU  "DAU"
+  $ insertOptReadDict DHU  "DHU"
+  $ insertOptReadDict N3U  "N3U"
+  $ insertOptReadDict ClientSubnet "ClientSubnet"
    M.empty
 
-{-# NOINLINE globalOptDict #-}
-globalOptDict :: IORef (IntMap String)
-globalOptDict = unsafePerformIO $ newIORef defaultOptDict
+{-# NOINLINE globalOptReadDict #-}
+globalOptReadDict :: IORef OptReadDict
+globalOptReadDict = unsafePerformIO $ newIORef defaultOptReadDict
 
 addOpt :: OptCode -> String -> IO ()
-addOpt code name = atomicModifyIORef' globalOptDict ins
+addOpt code name = do
+    atomicModifyIORef' globalOptShowDict insShow
+    atomicModifyIORef' globalOptReadDict insRead
   where
-    ins dict = (insertOptDict code name dict, ())
-
--- | From number to option code.
-toOptCode :: Word16 -> OptCode
-toOptCode = OptCode
+    insShow dict = (insertOptShowDict code name dict, ())
+    insRead dict = (insertOptReadDict code name dict, ())
 
 ---------------------------------------------------------------
 
