@@ -121,7 +121,7 @@ benchQueries =
     setId mid qm = qm { DNS.header = dh { DNS.identifier = mid } }
     dh = DNS.header DNS.defaultQuery
     rootAs =
-      [ DNS.defaultQuery { DNS.question = [DNS.Question (fromString name) DNS.A] }
+      [ DNS.defaultQuery { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN] }
       | c1 <- ["a", "b", "c", "d"], let name = c1 ++ ".root-servers.net." ]
 
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()

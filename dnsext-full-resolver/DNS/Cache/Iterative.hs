@@ -192,7 +192,7 @@ withNormalized n action =
 
 -- 返答メッセージを作る
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
-getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
+getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
   <$> withNormalized bn getResult cxt
   where
@@ -204,7 +204,7 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ, _) =
 -- Nothing のときキャッシュ無し
 -- Just Left はエラー
 getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
-getReplyCached cxt reqH qs@(DNS.Question bn typ, _) =
+getReplyCached cxt reqH qs@(DNS.Question bn typ _, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
   <$> withNormalized bn getResult cxt
   where
