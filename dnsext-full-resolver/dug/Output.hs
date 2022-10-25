@@ -27,8 +27,7 @@ result :: Printer DNSMessage
 result DNSMessage{..} = do
   putHeader header
   nl
-  dsemi *> sp *> string "OPTIONAL PSEUDO SECTION:" *> nl
-  semi *> string (show ednsHeader) *> nl
+  putEDNSHeader ednsHeader
   putQS question
   putRRS answers     answer
   putRRS authoritys  authority
@@ -40,8 +39,8 @@ putHeader :: Printer DNSHeader
 putHeader DNSHeader{..} = do
   dsemi *> sp *> string "HEADER SECTION:"
   nl
-  semi *> string (opcd opcode)              *> char ',' *> sp
-  string (show rcode)                       *> char ',' *> sp
+  semi *> string (opcd opcode)              *> string ", "
+  string (show rcode)                       *> string ", "
   string "id: " *> string (show identifier)
   nl
   semi *> string "Flags:" *> sp *> putFlags flags
@@ -69,6 +68,17 @@ opcd OP_SSR    = "Server status request"
 opcd OP_NOTIFY = "Change notification"
 opcd OP_UPDATE = "Update request"
 opcd x         = show x
+
+----------------------------------------------------------------
+
+putEDNSHeader :: Printer EDNSheader
+putEDNSHeader (EDNSheader EDNS{..})= do
+  nl
+  dsemi *> sp *> string "OPTIONAL PSEUDO SECTION:" *> nl
+  semi *> string "UDP: " *> string (show ednsUdpSize) *> string ", "
+  string "Data:" *> string (show ednsOptions) *> nl
+  -- fixme: ednsDnssecOk
+putEDNSHeader _ = pure ()
 
 ----------------------------------------------------------------
 
