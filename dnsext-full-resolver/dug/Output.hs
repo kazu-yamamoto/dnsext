@@ -1,9 +1,11 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Output (pprResult) where
 
 import Data.Monoid (Endo (..))
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 
-import DNS.Types (DNSMessage, ResourceRecord (..), Question)
+import DNS.Types (DNSMessage(..), DNSHeader(..), ResourceRecord (..), Question)
 import qualified DNS.Types as DNS
 
 ----------------------------------------------------------------
@@ -22,16 +24,16 @@ runPrinter p = ($ "") . appEndo . execWriter . p
 ----------------------------------------------------------------
 
 result :: Printer DNSMessage
-result msg = do
+result DNSMessage{..} = do
   dsemi *> sp *> string "Header:" *> nl
-  semi *> string (show $ DNS.header msg) *> nl
+  semi *> string (show header) *> nl
   nl
   dsemi *> sp *> string "Opt pseudo section:" *> nl
-  semi *> string (show $ DNS.ednsHeader msg) *> nl
-  putQS $ DNS.question msg
-  putRRS answers     $ DNS.answer     msg
-  putRRS authoritys  $ DNS.authority  msg
-  putRRS additionals $ DNS.additional msg
+  semi *> string (show ednsHeader) *> nl
+  putQS question
+  putRRS answers     answer
+  putRRS authoritys  authority
+  putRRS additionals additional
 
 ----------------------------------------------------------------
 
