@@ -13,8 +13,7 @@ main :: IO ()
 main = do
     runInitIO addResourceDataForDNSSEC
     args <- getArgs
-    let printResult = putStr . pprResult args
-        (at, plus, minus, targets) = divide args
+    let (at, plus, minus, targets) = divide args
     if "-h" `elem` minus || "--help" `elem` minus then
         putStr help
       else do
@@ -32,7 +31,7 @@ main = do
               ex <- operate mserver host typ ctl
               case ex of
                 Left err -> fail $ show err
-                Right rs -> printResult rs
+                Right rs -> putStr $ pprResult rs
 
 divide :: [String] -> ([String],[String],[String],[String])
 divide ls = loop ls (id,id,id,id)

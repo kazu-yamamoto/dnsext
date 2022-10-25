@@ -13,30 +13,20 @@ type Printer a = a -> Print ()
 
 ----------------------------------------------------------------
 
-pprResult :: [String] -> DNSMessage -> String
-pprResult = curry $ runPrinter result
+pprResult :: DNSMessage -> String
+pprResult = runPrinter result
 
 runPrinter :: Printer a -> a -> String
 runPrinter p = ($ "") . appEndo . execWriter . p
 
 ----------------------------------------------------------------
 
-result :: Printer ([String], DNSMessage)
-result (args, msg) = do
-  banner args
+result :: Printer DNSMessage
+result msg = do
   putQS $ DNS.question msg
   putRRS answers     $ DNS.answer     msg
   putRRS authoritys  $ DNS.authority  msg
   putRRS additionals $ DNS.additional msg
-
-----------------------------------------------------------------
-
-banner :: Printer [String]
-banner args = do
-  semi
-  sp *> string "<<>>" *> sp *> string "dug" *> sp *> string "<<>>"
-  sp *> (string `sepBy` sp) args
-  nl
 
 ----------------------------------------------------------------
 
