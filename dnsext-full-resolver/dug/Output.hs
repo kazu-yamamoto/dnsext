@@ -23,6 +23,11 @@ runPrinter p = ($ "") . appEndo . execWriter . p
 
 result :: Printer DNSMessage
 result msg = do
+  dsemi *> sp *> string "Header:" *> nl
+  semi *> string (show $ DNS.header msg) *> nl
+  nl
+  dsemi *> sp *> string "Opt pseudo section:" *> nl
+  semi *> string (show $ DNS.ednsHeader msg) *> nl
   putQS $ DNS.question msg
   putRRS answers     $ DNS.answer     msg
   putRRS authoritys  $ DNS.authority  msg
