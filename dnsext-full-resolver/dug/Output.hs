@@ -36,7 +36,6 @@ result msg = do
 ----------------------------------------------------------------
 
 putQS :: [Question] -> Print ()
-putQS [] = pure ()
 putQS qs = do
   nl
   dsemi *> sp *> string "QUESTION SECTION:" *> nl
@@ -55,7 +54,6 @@ qq q = do
 ----------------------------------------------------------------
 
 putRRS :: Printer [ResourceRecord] -> [ResourceRecord] -> Print ()
-putRRS _   [] = pure ()
 putRRS ppr rs = nl *> ppr rs
 
 answers :: Printer DNS.Answers
