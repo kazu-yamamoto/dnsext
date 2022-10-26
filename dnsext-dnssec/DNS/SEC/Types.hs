@@ -224,7 +224,7 @@ rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 -- | DNSSEC hashed denial of existence (RFC5155)
 data RD_NSEC3 = RD_NSEC3 {
     nsec3_hashalg                :: HashAlg
-  , nsec3_flags                  :: Word8
+  , nsec3_flags                  :: [NSEC3_Flag]
   , nsec3_iterations             :: Word16
   , nsec3_salt                   :: Opaque
   , nsec3_next_hashed_owner_name :: Opaque
@@ -234,17 +234,17 @@ data RD_NSEC3 = RD_NSEC3 {
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
     putResourceData _ RD_NSEC3{..} =
-        mconcat [ putHashAlg nsec3_hashalg
-                , put8 nsec3_flags
-                , put16 nsec3_iterations
-                , putLenOpaque nsec3_salt
-                , putLenOpaque nsec3_next_hashed_owner_name
-                , putNsecTypes nsec3_types
+        mconcat [ putHashAlg    nsec3_hashalg
+                , putNSEC3flags nsec3_flags
+                , put16         nsec3_iterations
+                , putLenOpaque  nsec3_salt
+                , putLenOpaque  nsec3_next_hashed_owner_name
+                , putNsecTypes  nsec3_types
                 ]
     getResourceData _ len = do
         dend <- rdataEnd len
         halg <- getHashAlg
-        flgs <- get8
+        flgs <- getNSEC3flags
         iter <- get16
         salt <- getLenOpaque
         hash <- getLenOpaque
@@ -252,7 +252,7 @@ instance ResourceData RD_NSEC3 where
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
 
 -- | Smart constructor.
-rd_nsec3 :: HashAlg -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
+rd_nsec3 :: HashAlg -> [NSEC3_Flag] -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
 rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 ----------------------------------------------------------------

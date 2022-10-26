@@ -46,7 +46,7 @@ mkRData typ =
   where
     genNSEC3 = do
         (alg, hlen)  <- elements [(1,32),(2,64)]
-        flgs <- elements [0,1]
+        flgs <- toNSEC3flags <$> elements [0,1]
         iter <- elements [0..100]
         salt <- elements ["", "AB"]
         hash <- Opaque.fromByteString . BS.pack <$> replicateM hlen genWord8
