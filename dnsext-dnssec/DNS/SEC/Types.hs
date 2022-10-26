@@ -101,13 +101,13 @@ data RD_RRSIG = RD_RRSIG {
   , rrsig_inception  :: Int64  -- ^ Time first valid
   , rrsig_key_tag    :: Word16 -- ^ Signing key tag
   , rrsig_zone       :: Domain -- ^ Signing domain
-  , rrsig_value      :: Opaque -- ^ Opaque signature
+  , rrsig_signature  :: Opaque -- ^ Opaque signature
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
     putResourceData cf RD_RRSIG{..} =
-      mconcat [ put16 $ fromTYPE rrsig_type
+      mconcat [ putTYPE    rrsig_type
               , putPubAlg  rrsig_pubalg
               , put8       rrsig_num_labels
               , putSeconds rrsig_ttl
@@ -115,7 +115,7 @@ instance ResourceData RD_RRSIG where
               , putDnsTime rrsig_inception
               , put16      rrsig_key_tag
               , putDomain  cf rrsig_zone
-              , putOpaque  rrsig_value
+              , putOpaque  rrsig_signature
               ]
     getResourceData _ lim = do
         -- The signature follows a variable length zone name
