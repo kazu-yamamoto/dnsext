@@ -195,26 +195,26 @@ data CanonicalFlag
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut
-putDomain Compression (Domain o _) = putDomain' _period True  o
-putDomain Canonical   (Domain _ l) = putDomain' _period False l {- canonical form is lowercase and no name-compression. -}
+putDomain cf@Compression (Domain o _) = putDomain' _period cf o
+putDomain cf@Canonical   (Domain _ l) = putDomain' _period cf l {- canonical form is lowercase and no name-compression. -}
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut
-putMailbox Compression (Mailbox o _) = putDomain' _at True  o
-putMailbox Canonical   (Mailbox _ l) = putDomain' _at False l {- canonical form is lowercase and no name-compression. -}
+putMailbox cf@Compression (Mailbox o _) = putDomain' _at cf o
+putMailbox cf@Canonical   (Mailbox _ l) = putDomain' _at cf l {- canonical form is lowercase and no name-compression. -}
 
-putDomain' :: Word8 -> Bool -> RawDomain -> SPut
-putDomain' sep compress dom
+putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut
+putDomain' sep cf dom
     | Short.null dom || dom == rootDomain = put8 0
     | otherwise = do
         mpos <- popPointer dom
         cur <- builderPosition
         case mpos of
-            Just pos | compress -> putPointer pos
-            _                   -> do
+            Just pos | Compression <- cf  -> putPointer pos
+            _                             -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
-                                , putDomain' _period compress tl
+                                , putDomain' _period cf tl
                                 ]
   where
     -- Try with the preferred separator if present, else fall back to '.'.
