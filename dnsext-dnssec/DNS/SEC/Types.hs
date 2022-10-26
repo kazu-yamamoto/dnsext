@@ -37,6 +37,7 @@ import GHC.Exts (the, groupWith)
 import DNS.Types
 import DNS.Types.Internal
 
+import DNS.SEC.Flags
 import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
@@ -194,7 +195,7 @@ rd_nsec a b = toRData $ RD_NSEC a b
 
 -- | DNSKEY (RFC4034)
 data RD_DNSKEY = RD_DNSKEY {
-    dnskey_flags      :: Word16
+    dnskey_flags      :: [DNSKEY_Flag]
   , dnskey_protocol   :: Word8
   , dnskey_pubalg     :: PubAlg
   , dnskey_public_key :: Opaque
@@ -203,19 +204,19 @@ data RD_DNSKEY = RD_DNSKEY {
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
     putResourceData _ RD_DNSKEY{..} =
-        mconcat [ put16 dnskey_flags
+        mconcat [ putDNSKEYflags dnskey_flags
                 , put8  dnskey_protocol
                 , putPubAlg dnskey_pubalg
                 , putOpaque dnskey_public_key
                 ]
     getResourceData _ len =
-        RD_DNSKEY <$> get16
+        RD_DNSKEY <$> getDNSKEYflags
                   <*> get8
                   <*> getPubAlg
                   <*> getOpaque (len - 4)
 
 -- | Smart constructor.
-rd_dnskey :: Word16 -> Word8 -> PubAlg -> Opaque -> RData
+rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> Opaque -> RData
 rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
@@ -311,7 +312,7 @@ instance ResourceData RD_CDNSKEY where
     getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
 
 -- | Smart constructor.
-rd_cdnskey :: Word16 -> Word8 -> PubAlg -> Opaque -> RData
+rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> Opaque -> RData
 rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
