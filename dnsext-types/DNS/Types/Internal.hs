@@ -3,6 +3,7 @@ module DNS.Types.Internal (
     TYPE(..)
   , OptCode(..)
   , RCODE(..)
+  , CanonicalFlag (..)
   -- * Classes
   , ResourceData(..)
   , OptData(..)

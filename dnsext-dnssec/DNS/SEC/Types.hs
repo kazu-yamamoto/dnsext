@@ -103,7 +103,7 @@ data RD_RRSIG = RD_RRSIG {
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    putResourceData RD_RRSIG{..} =
+    putResourceData cf RD_RRSIG{..} =
       mconcat [ put16 $ fromTYPE rrsig_type
               , put8    rrsig_key_alg
               , put8    rrsig_num_labels
@@ -111,7 +111,7 @@ instance ResourceData RD_RRSIG where
               , putDnsTime rrsig_expiration
               , putDnsTime rrsig_inception
               , put16   rrsig_key_tag
-              , putDomain rrsig_zone
+              , putDomain cf rrsig_zone
               , putOpaque rrsig_value
               ]
     getResourceData _ lim = do
@@ -150,7 +150,7 @@ data RD_DS = RD_DS {
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
-    putResourceData RD_DS{..} =
+    putResourceData _ RD_DS{..} =
         mconcat [ put16 ds_key_tag
                 , put8 ds_algorithm
                 , put8 ds_digest_type
@@ -176,8 +176,8 @@ data RD_NSEC = RD_NSEC {
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    putResourceData RD_NSEC{..} =
-        putDomain nsecNextDomain <> putNsecTypes nsecTypes
+    putResourceData cf RD_NSEC{..} =
+        putDomain cf nsecNextDomain <> putNsecTypes nsecTypes
     getResourceData _ len = do
         end <- rdataEnd len
         dom <- getDomain
@@ -200,7 +200,7 @@ data RD_DNSKEY = RD_DNSKEY {
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
-    putResourceData RD_DNSKEY{..} =
+    putResourceData _ RD_DNSKEY{..} =
         mconcat [ put16 dnskey_flags
                 , put8  dnskey_protocol
                 , put8  dnskey_algorithm
@@ -230,7 +230,7 @@ data RD_NSEC3 = RD_NSEC3 {
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
-    putResourceData RD_NSEC3{..} =
+    putResourceData _ RD_NSEC3{..} =
         mconcat [ put8 nsec3_hash_algorithm
                 , put8 nsec3_flags
                 , put16 nsec3_iterations
@@ -264,7 +264,7 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM {
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
-    putResourceData RD_NSEC3PARAM{..} =
+    putResourceData _ RD_NSEC3PARAM{..} =
         mconcat [ put8  nsec3param_hash_algorithm
                 , put8  nsec3param_flags
                 , put16 nsec3param_iterations
@@ -289,7 +289,7 @@ newtype RD_CDS = RD_CDS {
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
-    putResourceData (RD_CDS ds) = putResourceData ds
+    putResourceData cf (RD_CDS ds) = putResourceData cf ds
     getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
 
 -- | Smart constructor.
@@ -305,7 +305,7 @@ newtype RD_CDNSKEY = RD_CDNSKEY {
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
-    putResourceData (RD_CDNSKEY dnskey) = putResourceData dnskey
+    putResourceData cf (RD_CDNSKEY dnskey) = putResourceData cf dnskey
     getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
 
 -- | Smart constructor.

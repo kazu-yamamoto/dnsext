@@ -101,15 +101,16 @@ putDNSMessage :: DNSMessage -> SPut
 putDNSMessage msg = putHeader hd
                     <> putNums
                     <> mconcat (map putQuestion qs)
-                    <> mconcat (map putResourceRecord an)
-                    <> mconcat (map putResourceRecord au)
-                    <> mconcat (map putResourceRecord ad)
+                    <> mconcat (map putRR an)
+                    <> mconcat (map putRR au)
+                    <> mconcat (map putRR ad)
   where
     putNums = mconcat $ fmap putInt16 [ length qs
                                       , length an
                                       , length au
                                       , length ad
                                       ]
+    putRR = putResourceRecord Compression
     hm = header msg
     fl = flags hm
     eh = ednsHeader msg
@@ -552,7 +553,7 @@ data Question = Question {
   } deriving (Eq, Show)
 
 putQuestion :: Question -> SPut
-putQuestion Question{..} = putDomain qname
+putQuestion Question{..} = putDomain Compression qname
                         <> put16 (fromTYPE qtype)
                         <> putCLASS qclass
 
@@ -592,9 +593,9 @@ type AuthorityRecords = [ResourceRecord]
 -- | Type for resource records in the additional section.
 type AdditionalRecords = [ResourceRecord]
 
-putResourceRecord :: ResourceRecord -> SPut
-putResourceRecord ResourceRecord{..} = mconcat [
-    putDomain rrname
+putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut
+putResourceRecord cf ResourceRecord{..} = mconcat [
+    putDomain cf rrname
   , putTYPE rrtype
   , putCLASS rrclass
   , put32 rrttl
@@ -604,7 +605,7 @@ putResourceRecord ResourceRecord{..} = mconcat [
     putResourceRData :: RData -> SPut
     putResourceRData (RData rd) = do
         addBuilderPosition 2 -- "simulate" putInt16
-        rDataBuilder <- putResourceData rd
+        rDataBuilder <- putResourceData cf rd
         let rdataLength = fromIntegral . LC8.length . BB.toLazyByteString $ rDataBuilder
         let rlenBuilder = BB.int16BE rdataLength
         return $ rlenBuilder <> rDataBuilder
