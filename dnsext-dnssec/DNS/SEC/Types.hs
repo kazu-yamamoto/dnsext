@@ -37,6 +37,7 @@ import GHC.Exts (the, groupWith)
 import DNS.Types
 import DNS.Types.Internal
 
+import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
 import DNS.SEC.Time
@@ -143,10 +144,10 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 -- | Delegation Signer (RFC4034)
 data RD_DS = RD_DS {
-    ds_key_tag     :: Word16
-  , ds_pubalg      :: PubAlg
-  , ds_digest_type :: Word8
-  , ds_digest      :: Opaque
+    ds_key_tag :: Word16
+  , ds_pubalg  :: PubAlg
+  , ds_hashalg :: HashAlg
+  , ds_digest  :: Opaque
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_DS where
@@ -154,17 +155,17 @@ instance ResourceData RD_DS where
     putResourceData _ RD_DS{..} =
         mconcat [ put16 ds_key_tag
                 , putPubAlg ds_pubalg
-                , put8 ds_digest_type
+                , putHashAlg ds_hashalg
                 , putOpaque ds_digest
                 ]
     getResourceData _ lim =
         RD_DS <$> get16
               <*> getPubAlg
-              <*> get8
+              <*> getHashAlg
               <*> getOpaque (lim - 4)
 
 -- | Smart constructor.
-rd_ds :: Word16 -> PubAlg -> Word8 -> Opaque -> RData
+rd_ds :: Word16 -> PubAlg -> HashAlg -> Opaque -> RData
 rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -221,7 +222,7 @@ rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 -- | DNSSEC hashed denial of existence (RFC5155)
 data RD_NSEC3 = RD_NSEC3 {
-    nsec3_hash_algorithm         :: Word8
+    nsec3_hashalg                :: HashAlg
   , nsec3_flags                  :: Word8
   , nsec3_iterations             :: Word16
   , nsec3_salt                   :: Opaque
@@ -232,7 +233,7 @@ data RD_NSEC3 = RD_NSEC3 {
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
     putResourceData _ RD_NSEC3{..} =
-        mconcat [ put8 nsec3_hash_algorithm
+        mconcat [ putHashAlg nsec3_hashalg
                 , put8 nsec3_flags
                 , put16 nsec3_iterations
                 , putLenOpaque nsec3_salt
@@ -241,7 +242,7 @@ instance ResourceData RD_NSEC3 where
                 ]
     getResourceData _ len = do
         dend <- rdataEnd len
-        halg <- get8
+        halg <- getHashAlg
         flgs <- get8
         iter <- get16
         salt <- getLenOpaque
@@ -250,35 +251,35 @@ instance ResourceData RD_NSEC3 where
         RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
 
 -- | Smart constructor.
-rd_nsec3 :: Word8 -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
+rd_nsec3 :: HashAlg -> Word8 -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
 rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 ----------------------------------------------------------------
 
 -- | NSEC3 zone parameters (RFC5155)
 data RD_NSEC3PARAM = RD_NSEC3PARAM {
-    nsec3param_hash_algorithm :: Word8
-  , nsec3param_flags          :: Word8
-  , nsec3param_iterations     :: Word16
-  , nsec3param_salt           :: Opaque
+    nsec3param_hashalg    :: HashAlg
+  , nsec3param_flags      :: Word8
+  , nsec3param_iterations :: Word16
+  , nsec3param_salt       :: Opaque
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
     putResourceData _ RD_NSEC3PARAM{..} =
-        mconcat [ put8  nsec3param_hash_algorithm
+        mconcat [ putHashAlg nsec3param_hashalg
                 , put8  nsec3param_flags
                 , put16 nsec3param_iterations
                 , putLenOpaque nsec3param_salt
                 ]
     getResourceData _ _ =
-        RD_NSEC3PARAM <$> get8
+        RD_NSEC3PARAM <$> getHashAlg
                       <*> get8
                       <*> get16
                       <*> getLenOpaque
 
 -- | Smart constructor.
-rd_nsec3param :: Word8 -> Word8 -> Word16 -> Opaque -> RData
+rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
 rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 
 ----------------------------------------------------------------
@@ -294,7 +295,7 @@ instance ResourceData RD_CDS where
     getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
 
 -- | Smart constructor.
-rd_cds :: Word16 -> PubAlg -> Word8 -> Opaque -> RData
+rd_cds :: Word16 -> PubAlg -> HashAlg -> Opaque -> RData
 rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 
 ----------------------------------------------------------------
