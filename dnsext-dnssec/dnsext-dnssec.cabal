@@ -20,6 +20,7 @@ library
     exposed-modules:  DNS.SEC
     other-modules:
         DNS.SEC.Imports
+        DNS.SEC.PubAlg
         DNS.SEC.Time
         DNS.SEC.Types
 

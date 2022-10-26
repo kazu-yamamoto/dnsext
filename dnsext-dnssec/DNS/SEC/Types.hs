@@ -38,6 +38,7 @@ import DNS.Types
 import DNS.Types.Internal
 
 import DNS.SEC.Imports
+import DNS.SEC.PubAlg
 import DNS.SEC.Time
 
 pattern DS :: TYPE
@@ -91,7 +92,7 @@ pattern CDNSKEY    = TYPE  60 -- RFC 7344
 --
 data RD_RRSIG = RD_RRSIG {
     rrsig_type       :: TYPE   -- ^ RRtype of RRset signed
-  , rrsig_key_alg    :: Word8  -- ^ DNSKEY algorithm
+  , rrsig_pubalg     :: PubAlg -- ^ DNSKEY algorithm
   , rrsig_num_labels :: Word8  -- ^ Number of labels signed
   , rrsig_ttl        :: TTL    -- ^ Maximum origin TTL
   , rrsig_expiration :: Int64  -- ^ Time last valid
@@ -105,7 +106,7 @@ instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
     putResourceData cf RD_RRSIG{..} =
       mconcat [ put16 $ fromTYPE rrsig_type
-              , put8       rrsig_key_alg
+              , putPubAlg  rrsig_pubalg
               , put8       rrsig_num_labels
               , putSeconds rrsig_ttl
               , putDnsTime rrsig_expiration
@@ -123,7 +124,7 @@ instance ResourceData RD_RRSIG where
         --
         end <- rdataEnd lim
         typ <- getTYPE
-        alg <- get8
+        alg <- getPubAlg
         cnt <- get8
         ttl <- getSeconds
         tex <- getDnsTime
@@ -135,7 +136,7 @@ instance ResourceData RD_RRSIG where
         return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
-rd_rrsig :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
+rd_rrsig :: TYPE -> PubAlg -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------
@@ -143,7 +144,7 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 -- | Delegation Signer (RFC4034)
 data RD_DS = RD_DS {
     ds_key_tag     :: Word16
-  , ds_algorithm   :: Word8
+  , ds_pubalg      :: PubAlg
   , ds_digest_type :: Word8
   , ds_digest      :: Opaque
   } deriving (Eq, Ord, Show)
@@ -152,18 +153,18 @@ instance ResourceData RD_DS where
     resourceDataType _ = DS
     putResourceData _ RD_DS{..} =
         mconcat [ put16 ds_key_tag
-                , put8 ds_algorithm
+                , putPubAlg ds_pubalg
                 , put8 ds_digest_type
                 , putOpaque ds_digest
                 ]
     getResourceData _ lim =
         RD_DS <$> get16
-              <*> get8
+              <*> getPubAlg
               <*> get8
               <*> getOpaque (lim - 4)
 
 -- | Smart constructor.
-rd_ds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
+rd_ds :: Word16 -> PubAlg -> Word8 -> Opaque -> RData
 rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -194,7 +195,7 @@ rd_nsec a b = toRData $ RD_NSEC a b
 data RD_DNSKEY = RD_DNSKEY {
     dnskey_flags      :: Word16
   , dnskey_protocol   :: Word8
-  , dnskey_algorithm  :: Word8
+  , dnskey_pubalg     :: PubAlg
   , dnskey_public_key :: Opaque
   } deriving (Eq, Ord, Show)
 
@@ -203,17 +204,17 @@ instance ResourceData RD_DNSKEY where
     putResourceData _ RD_DNSKEY{..} =
         mconcat [ put16 dnskey_flags
                 , put8  dnskey_protocol
-                , put8  dnskey_algorithm
+                , putPubAlg dnskey_pubalg
                 , putOpaque dnskey_public_key
                 ]
     getResourceData _ len =
         RD_DNSKEY <$> get16
                   <*> get8
-                  <*> get8
+                  <*> getPubAlg
                   <*> getOpaque (len - 4)
 
 -- | Smart constructor.
-rd_dnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
+rd_dnskey :: Word16 -> Word8 -> PubAlg -> Opaque -> RData
 rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
@@ -293,7 +294,7 @@ instance ResourceData RD_CDS where
     getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
 
 -- | Smart constructor.
-rd_cds :: Word16 -> Word8 -> Word8 -> Opaque -> RData
+rd_cds :: Word16 -> PubAlg -> Word8 -> Opaque -> RData
 rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -309,7 +310,7 @@ instance ResourceData RD_CDNSKEY where
     getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
 
 -- | Smart constructor.
-rd_cdnskey :: Word16 -> Word8 -> Word8 -> Opaque -> RData
+rd_cdnskey :: Word16 -> Word8 -> PubAlg -> Opaque -> RData
 rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
