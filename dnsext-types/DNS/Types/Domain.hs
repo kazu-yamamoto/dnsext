@@ -190,7 +190,7 @@ modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 data CanonicalFlag
   = Compression
   | Canonical
-  deriving Show
+  deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
@@ -209,7 +209,7 @@ putDomain' sep cf dom
         mpos <- popPointer dom
         cur <- builderPosition
         case mpos of
-            Just pos | Compression <- cf  -> putPointer pos
+            Just pos | cf == Compression  -> putPointer pos
             _                             -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
