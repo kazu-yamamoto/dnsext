@@ -1,17 +1,142 @@
-module Output where
+{-# LANGUAGE RecordWildCards #-}
 
-import Data.Monoid (Endo (..))
+module Output (pprResult) where
+
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
+import Data.Maybe (catMaybes)
+import Data.Monoid (Endo (..))
 
-import DNS.Types (DNSMessage, ResourceRecord (..))
-import qualified DNS.Types as DNS
+import DNS.Types
 
+----------------------------------------------------------------
 
 type Print = Writer (Endo String)
 type Printer a = a -> Print ()
 
+----------------------------------------------------------------
+
+pprResult :: DNSMessage -> String
+pprResult = runPrinter result
+
 runPrinter :: Printer a -> a -> String
 runPrinter p = ($ "") . appEndo . execWriter . p
+
+----------------------------------------------------------------
+
+result :: Printer DNSMessage
+result DNSMessage{..} = do
+  putHeader header
+  nl
+  putEDNSHeader ednsHeader
+  putQS question
+  putRRS answers     answer
+  putRRS authoritys  authority
+  putRRS additionals additional
+
+----------------------------------------------------------------
+
+putHeader :: Printer DNSHeader
+putHeader DNSHeader{..} = do
+  dsemi *> sp *> string "HEADER SECTION:"
+  nl
+  semi *> string (opcd opcode)              *> string ", "
+  string (show rcode)                       *> string ", "
+  string "id: " *> string (show identifier)
+  nl
+  semi *> string "Flags:" *> sp *> putFlags flags
+  nl
+  where
+    DNSFlags{..} = flags
+
+putFlags :: Printer DNSFlags
+putFlags DNSFlags{..} = sepBy string (string ", ") $ catMaybes xs
+  where
+    jst x str = if x then Just str else Nothing
+    xs :: [Maybe String]
+    xs = [ jst authAnswer   "Authoritative Answer"
+         , jst trunCation   "Truncated Caution"
+         , jst recDesired   "Recursion Desired"
+         , jst recAvailable "Recursion Available"
+         , jst authenData   "Authenticated Data"
+         , jst chkDisable   "Checking Disabled"
+         ]
+
+opcd :: OPCODE -> String
+opcd OP_STD    = "Standard query"
+opcd OP_INV    = "Inverse query"
+opcd OP_SSR    = "Server status request"
+opcd OP_NOTIFY = "Change notification"
+opcd OP_UPDATE = "Update request"
+opcd x         = show x
+
+----------------------------------------------------------------
+
+putEDNSHeader :: Printer EDNSheader
+putEDNSHeader (EDNSheader EDNS{..})= do
+  nl
+  dsemi *> sp *> string "OPTIONAL PSEUDO SECTION:" *> nl
+  semi *> string "UDP: " *> string (show ednsUdpSize) *> string ", "
+  string "Data:" *> string (show ednsOptions) *> nl
+  -- fixme: ednsDnssecOk
+putEDNSHeader _ = pure ()
+
+----------------------------------------------------------------
+
+putQS :: [Question] -> Print ()
+putQS qs = do
+  nl
+  dsemi *> sp *> string "QUESTION SECTION:" *> nl
+  mapM_ qq qs
+
+qq :: Printer Question
+qq Question{..} = do
+  semi *> string (origName qname)
+  tab
+  tab
+  string $ cls qclass
+  tab
+  string $ show qtype
+  nl
+
+----------------------------------------------------------------
+
+putRRS :: Printer [ResourceRecord] -> [ResourceRecord] -> Print ()
+putRRS ppr rs = nl *> ppr rs
+
+answers :: Printer Answers
+answers = rrs "ANSWER SECTION:"
+
+authoritys :: Printer AuthorityRecords
+authoritys = rrs "AUTHORITY SECTION:"
+
+additionals :: Printer AdditionalRecords
+additionals = rrs "ADDITIONAL SECTION:"
+
+rrs :: String -> Printer [ResourceRecord]
+rrs name rs = do
+  dsemi *> sp *> string name *> nl
+  mapM_ rr rs
+
+rr :: Printer ResourceRecord
+rr ResourceRecord{..} = do
+  string $ origName rrname
+  tab
+  string $ show rrttl
+  tab
+  string $ cls rrclass
+  tab
+  string $ show rrtype
+  tab
+  string $ show rdata
+  nl
+
+----------------------------------------------------------------
+
+cls :: CLASS -> String
+cls c | c == classIN = "IN"
+      | otherwise    = "#<" ++ show c ++ ">"
+
+----------------------------------------------------------------
 
 char :: Printer Char
 char = tell . Endo . (:)
@@ -37,53 +162,3 @@ tab = char '\t'
 
 nl :: Print ()
 nl = char '\n'
-
-banner :: Printer [String]
-banner args = do
-  semi
-  sp *> string "<<>>" *> sp *> string "dug" *> sp *> string "<<>>"
-  sp *> (string `sepBy` sp) args
-  nl
-
-rr :: Printer ResourceRecord
-rr r = do
-  string $ DNS.origName $ rrname r
-  tab
-  string $ show $ rrttl r
-  tab
-  let cls
-        | rrclass r == DNS.classIN = "IN"
-        | otherwise                = "#<" ++ show (rrclass r) ++ ">"
-  string cls
-  tab
-  string $ show $ rrtype r
-  tab
-  string $ show $ rdata r
-  nl
-
-rrs :: String -> Printer DNS.Answers
-rrs name rs = do
-  dsemi *> sp *> string name *> nl
-  mapM_ rr rs
-
-answers :: Printer DNS.Answers
-answers = rrs "ANSWER SECTION:"
-
-authoritys :: Printer DNS.AuthorityRecords
-authoritys = rrs "AUTHORITY SECTION:"
-
-additionals :: Printer DNS.AdditionalRecords
-additionals = rrs "ADDITIONAL SECTION:"
-
-result :: Printer ([String], DNSMessage)
-result (args, msg) = do
-  banner args
-  let putRRS _   [] = pure ()
-      putRRS ppr rs = nl *> ppr rs
-
-  putRRS answers $ DNS.answer msg
-  putRRS authoritys $ DNS.authority msg
-  putRRS additionals $ DNS.additional msg
-
-pprResult :: [String] -> DNSMessage -> String
-pprResult = curry $ runPrinter result

@@ -66,7 +66,6 @@ executable dug
     main-is:          dug.hs
     hs-source-dirs:   dug
     other-modules:
-        CommandArgs
         Operation
         Output
 
@@ -77,6 +76,7 @@ executable dug
         dnsext-full-resolver,
         dnsext-types,
         dnsext-io,
+        dnsext-dnssec,
         iproute,
         transformers,
         bytestring,
