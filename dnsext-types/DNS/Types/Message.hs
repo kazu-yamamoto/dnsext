@@ -110,7 +110,7 @@ putDNSMessage msg = putHeader hd
                                       , length au
                                       , length ad
                                       ]
-    putRR = putResourceRecord NoCanonical
+    putRR = putResourceRecord Compression
     hm = header msg
     fl = flags hm
     eh = ednsHeader msg
@@ -553,7 +553,7 @@ data Question = Question {
   } deriving (Eq, Show)
 
 putQuestion :: Question -> SPut
-putQuestion Question{..} = putDomain NoCanonical qname
+putQuestion Question{..} = putDomain Compression qname
                         <> put16 (fromTYPE qtype)
                         <> putCLASS qclass
 

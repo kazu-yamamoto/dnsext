@@ -188,18 +188,18 @@ modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = NoCanonical
+  = Compression
   | Canonical
   deriving Show
 
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut
-putDomain NoCanonical (Domain o _) = putDomain' _period True  o
+putDomain Compression (Domain o _) = putDomain' _period True  o
 putDomain Canonical   (Domain _ l) = putDomain' _period False l {- canonical form is lowercase and no name-compression. -}
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut
-putMailbox NoCanonical (Mailbox o _) = putDomain' _at True  o
+putMailbox Compression (Mailbox o _) = putDomain' _at True  o
 putMailbox Canonical   (Mailbox _ l) = putDomain' _at False l {- canonical form is lowercase and no name-compression. -}
 
 putDomain' :: Word8 -> Bool -> RawDomain -> SPut
