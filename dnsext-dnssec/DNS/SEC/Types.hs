@@ -204,7 +204,7 @@ instance ResourceData RD_DNSKEY where
         mconcat [ put16 dnskey_flags
                 , put8  dnskey_protocol
                 , put8  dnskey_algorithm
-                , putShortByteString (opaqueToShortByteString dnskey_public_key)
+                , putOpaque dnskey_public_key
                 ]
     getResourceData _ len =
         RD_DNSKEY <$> get16
