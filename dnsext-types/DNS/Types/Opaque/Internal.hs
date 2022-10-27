@@ -30,17 +30,17 @@ showOpaque (Opaque o) = "\\# "
 
 ----------------------------------------------------------------
 
-opaqueToByteString :: Opaque -> ByteString
-opaqueToByteString (Opaque o) = Short.fromShort o
+toByteString :: Opaque -> ByteString
+toByteString (Opaque o) = Short.fromShort o
 
-byteStringToOpaque :: ByteString -> Opaque
-byteStringToOpaque = Opaque . Short.toShort
+fromByteString :: ByteString -> Opaque
+fromByteString = Opaque . Short.toShort
 
-opaqueToShortByteString :: Opaque -> ShortByteString
-opaqueToShortByteString (Opaque o) = o
+toShortByteString :: Opaque -> ShortByteString
+toShortByteString (Opaque o) = o
 
-shortByteStringToOpaque :: ShortByteString -> Opaque
-shortByteStringToOpaque = Opaque
+fromShortByteString :: ShortByteString -> Opaque
+fromShortByteString = Opaque
 
 ----------------------------------------------------------------
 

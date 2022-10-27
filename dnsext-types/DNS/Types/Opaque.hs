@@ -1,9 +1,9 @@
 module DNS.Types.Opaque (
     Opaque
-  , opaqueToByteString
-  , byteStringToOpaque
-  , opaqueToShortByteString
-  , shortByteStringToOpaque
+  , toByteString
+  , fromByteString
+  , toShortByteString
+  , fromShortByteString
   ) where
 
 import DNS.Types.Opaque.Internal
