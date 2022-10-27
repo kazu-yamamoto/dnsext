@@ -23,6 +23,7 @@ library
         DNS.SEC.HashAlg
         DNS.SEC.Imports
         DNS.SEC.PubAlg
+        DNS.SEC.PubKey
         DNS.SEC.Time
         DNS.SEC.Types
 

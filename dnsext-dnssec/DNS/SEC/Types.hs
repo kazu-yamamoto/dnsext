@@ -41,6 +41,7 @@ import DNS.SEC.Flags
 import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
+import DNS.SEC.PubKey
 import DNS.SEC.Time
 
 pattern DS :: TYPE
@@ -198,25 +199,26 @@ data RD_DNSKEY = RD_DNSKEY {
     dnskey_flags      :: [DNSKEY_Flag]
   , dnskey_protocol   :: Word8
   , dnskey_pubalg     :: PubAlg
-  , dnskey_public_key :: Opaque
+  , dnskey_public_key :: PubKey
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
     putResourceData _ RD_DNSKEY{..} =
         mconcat [ putDNSKEYflags dnskey_flags
-                , put8  dnskey_protocol
-                , putPubAlg dnskey_pubalg
-                , putOpaque dnskey_public_key
+                , put8           dnskey_protocol
+                , putPubAlg      dnskey_pubalg
+                , putPubKey      dnskey_public_key
                 ]
-    getResourceData _ len =
-        RD_DNSKEY <$> getDNSKEYflags
-                  <*> get8
-                  <*> getPubAlg
-                  <*> getOpaque (len - 4)
+    getResourceData _ len = do
+        flags  <- getDNSKEYflags
+        proto  <- get8
+        pubalg <- getPubAlg
+        pubkey <- getPubKey pubalg (len - 4)
+        return $ RD_DNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
-rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> Opaque -> RData
+rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
 rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
@@ -312,7 +314,7 @@ instance ResourceData RD_CDNSKEY where
     getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
 
 -- | Smart constructor.
-rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> Opaque -> RData
+rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
 rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
