@@ -14,7 +14,7 @@ module DNS.IO.Lookup (
   , fromDNSMessage
   ) where
 
-import DNS.Types
+import DNS.Types hiding (Seconds)
 import Data.Hourglass (timeAdd, Seconds)
 import Network.Socket (Socket)
 import Prelude hiding (lookup)

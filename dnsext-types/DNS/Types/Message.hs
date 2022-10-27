@@ -13,6 +13,7 @@ import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.RData
+import DNS.Types.Seconds
 import DNS.Types.Type
 
 -- $setup
@@ -573,7 +574,7 @@ getCLASS :: SGet CLASS
 getCLASS = get16
 
 -- | Time to live in second.
-type TTL = Word32
+type TTL = Seconds
 
 -- | Raw data format for resource records.
 data ResourceRecord = ResourceRecord {
@@ -596,9 +597,9 @@ type AdditionalRecords = [ResourceRecord]
 putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut
 putResourceRecord cf ResourceRecord{..} = mconcat [
     putDomain cf rrname
-  , putTYPE rrtype
-  , putCLASS rrclass
-  , put32 rrttl
+  , putTYPE      rrtype
+  , putCLASS     rrclass
+  , putSeconds   rrttl
   , putResourceRData rdata
   ]
   where
@@ -618,7 +619,7 @@ getResourceRecord = do
     dom <- getDomain
     typ <- getTYPE
     cls <- getCLASS
-    ttl <- get32
+    ttl <- getSeconds
     len <- getInt16
     dat <- getRData typ len
     return $ ResourceRecord dom typ cls ttl dat

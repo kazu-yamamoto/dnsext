@@ -15,7 +15,7 @@ module DNS.IO.IO (
   ) where
 
 import qualified Control.Exception as E
-import DNS.Types
+import DNS.Types hiding (Seconds)
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB

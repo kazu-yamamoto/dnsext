@@ -97,7 +97,7 @@ genResourceRecord = frequency
     genRR = do
       dom <- genDomain
       t <- elements [A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, TLSA]
-      ResourceRecord dom t classIN <$> genWord32 <*> mkRData dom t
+      ResourceRecord dom t classIN <$> genSeconds <*> mkRData dom t
 
 mkRData :: Domain -> TYPE -> Gen RData
 mkRData dom typ =
@@ -108,7 +108,7 @@ mkRData dom typ =
         TXT   -> rd_txt  <$> genTextString
         MX    -> rd_mx   <$> genWord16 <*> genDomain
         CNAME -> pure $ rd_cname dom
-        SOA   -> rd_soa dom <$> genMailbox <*> genWord32 <*> genWord32 <*> genWord32 <*> genWord32 <*> genWord32
+        SOA   -> rd_soa dom <$> genMailbox <*> genWord32 <*> genSeconds <*> genSeconds <*> genSeconds <*> genSeconds
         PTR   -> rd_ptr  <$> genDomain
         SRV   -> rd_srv  <$> genWord16 <*> genWord16 <*> genWord16 <*> genDomain
         DNAME -> rd_dname <$> genDomain
@@ -156,6 +156,9 @@ genWord16 = arbitrary
 
 genWord32 :: Gen Word32
 genWord32 = arbitrary
+
+genSeconds :: Gen Seconds
+genSeconds = Seconds <$> genWord32
 
 genWord8 :: Gen Word8
 genWord8 = arbitrary

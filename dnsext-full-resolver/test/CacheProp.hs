@@ -12,7 +12,7 @@ import Control.Monad (unless)
 import Data.Maybe (mapMaybe)
 import Data.List (sort)
 import Data.Char (toUpper, toLower)
-import DNS.Types (TYPE (..), TTL, Domain)
+import DNS.Types (TYPE (..), TTL, Domain, Seconds(..))
 import qualified DNS.Types as DNS
 import System.IO.Unsafe (unsafePerformIO)
 import System.Exit (exitFailure)
@@ -152,13 +152,13 @@ genCRPair = do
   pure (key, crs)
 
 genTTL :: Gen TTL
-genTTL = choose (1, 7200000)
+genTTL = Seconds <$> choose (1, 7200000)
 
 genRanking :: Gen Ranking
 genRanking = elements rankings
 
 genTimestamp :: Gen Timestamp
-genTimestamp = (ts0 <+) <$> choose (1, 21600000)
+genTimestamp = (ts0 <+) . Seconds <$> choose (1, 21600000)
 
 genUpdate :: Gen Update
 genUpdate =

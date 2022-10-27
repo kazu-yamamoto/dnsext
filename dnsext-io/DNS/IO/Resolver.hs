@@ -122,7 +122,7 @@ data CacheConf = CacheConf {
 -- | Default cache configuration.
 --
 -- >>> defaultCacheConf
--- CacheConf {maximumTTL = 300, minimumTTL = 0, pruningDelay = 10}
+-- CacheConf {maximumTTL = 300(5 mins), minimumTTL = 0(secs), pruningDelay = 10}
 defaultCacheConf :: CacheConf
 defaultCacheConf = CacheConf 300 0 10
 
