@@ -86,21 +86,21 @@ instance Show QueryControls where
 
 ----------------------------------------------------------------
 
--- | Generator of 'QueryControls' that adjusts the RD bit.
+-- | Generator of 'QueryControls' that adjusts the RD (Recursion Desired) bit.
 --
 -- >>> rdFlag FlagClear
 -- rd:0
 rdFlag :: FlagOp -> QueryControls
 rdFlag rd = mempty { qctlHeader = mempty { rdBit = rd } }
 
--- | Generator of 'QueryControls' that adjusts the AD bit.
+-- | Generator of 'QueryControls' that adjusts the AD (Authentic Data) bit.
 --
 -- >>> adFlag FlagSet
 -- ad:1
 adFlag :: FlagOp -> QueryControls
 adFlag ad = mempty { qctlHeader = mempty { adBit = ad } }
 
--- | Generator of 'QueryControls' that adjusts the CD bit.
+-- | Generator of 'QueryControls' that adjusts the CD (Checking Disabled) bit.
 --
 -- >>> cdFlag FlagSet
 -- cd:1
@@ -133,7 +133,7 @@ ednsSetVersion vn = mempty { qctlEdns = mempty { extVn = vn } }
 ednsSetUdpSize :: Maybe Word16 -> QueryControls
 ednsSetUdpSize sz = mempty { qctlEdns = mempty { extSz = sz } }
 
--- | Generator of 'QueryControls' that adjusts the 'EDNS' DnssecOk (DO) bit.
+-- | Generator of 'QueryControls' that adjusts the 'EDNS' DO (DNSSEC OK) bit.
 --
 -- >>> doFlag FlagSet
 -- edns.dobit:1
