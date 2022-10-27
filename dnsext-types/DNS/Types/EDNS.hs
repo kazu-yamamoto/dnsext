@@ -52,7 +52,8 @@ import Text.Read
 
 import DNS.StateBinary
 import DNS.Types.Imports
-import DNS.Types.Opaque
+import DNS.Types.Opaque.Internal (Opaque, getOpaque, putOpaque)
+import qualified DNS.Types.Opaque.Internal as Opaque
 
 ----------------------------------------------------------------
 -- EDNS (RFC 6891, EDNS(0))
@@ -261,7 +262,7 @@ instance Show OD_NSID where
 instance OptData OD_NSID where
     optDataCode _ = NSID
     encodeOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
-    decodeOptData _ len = OD_NSID . shortByteStringToOpaque <$> getNShortByteString len
+    decodeOptData _ len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
 
 od_nsid :: Opaque -> OData
 od_nsid = toOData . OD_NSID
@@ -334,7 +335,7 @@ data OD_ClientSubnet =
 instance Show OD_ClientSubnet where
     show (OD_ClientSubnet b1 b2 ip@(IPv4 _)) = _showECS 1 b1 b2 $ show ip
     show (OD_ClientSubnet b1 b2 ip@(IPv6 _)) = _showECS 2 b1 b2 $ show ip
-    show (OD_ECSgeneric fam b1 b2 a) = _showECS fam b1 b2 $ b16encode $ opaqueToByteString a
+    show (OD_ECSgeneric fam b1 b2 a) = _showECS fam b1 b2 $ b16encode $ Opaque.toByteString a
 
 instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
@@ -378,7 +379,7 @@ encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) =
             , putShortByteString sbs
             ]
   where
-     sbs = opaqueToShortByteString addr
+     sbs = Opaque.toShortByteString addr
      len = Short.length sbs
 
 decodeClientSubnet :: Int -> SGet OD_ClientSubnet
@@ -409,7 +410,7 @@ decodeClientSubnet len = do
         -- or too short), the OD_ECSgeneric data contains the verbatim input
         -- from the peer.
         --
-        let addrbs = opaqueToShortByteString addr
+        let addrbs = Opaque.toShortByteString addr
         case Short.length addrbs == (fromIntegral srcBits + 7) `div` 8 of
             True | Just ip <- bstoip family addrbs srcBits scpBits
                 -> pure $ OD_ClientSubnet srcBits scpBits ip
@@ -465,7 +466,7 @@ _showNSID (OD_NSID nsid) = "NSID "
                         ++ ";"
                         ++ printable bs
   where
-    bs = opaqueToByteString nsid
+    bs = Opaque.toByteString nsid
     printable = map (\c -> if c < ' ' || c > '~' then '?' else c) . C8.unpack
 
 _showECS :: Word16 -> Word8 -> Word8 -> String -> String
@@ -487,9 +488,6 @@ putODWords code ws =
 putODBytes :: Word16 -> Opaque -> SPut
 putODBytes code o =
     mconcat [ put16 code
-            , putInt16 len
-            , putShortByteString sbs
+            , putInt16 $ Opaque.length o
+            , putOpaque o
             ]
-  where
-    sbs = opaqueToShortByteString o
-    len = Short.length sbs

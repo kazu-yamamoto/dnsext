@@ -18,7 +18,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import DNS.StateBinary
 import DNS.Types.EDNS
 import DNS.Types.Imports
-import DNS.Types.Opaque
+import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Type
 
