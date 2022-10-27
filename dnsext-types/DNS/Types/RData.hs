@@ -14,7 +14,8 @@ import DNS.StateBinary
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
-import DNS.Types.Opaque.Internal
+import DNS.Types.Opaque.Internal (Opaque, putOpaque, putLenOpaque, getOpaque, getLenOpaque)
+import qualified DNS.Types.Opaque.Internal as Opaque
 import DNS.Types.Seconds
 import DNS.Types.Type
 
@@ -230,23 +231,20 @@ newtype RD_TXT = RD_TXT {
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
-    putResourceData _ (RD_TXT o) = putTXT sbs
+    putResourceData _ (RD_TXT o) = putTXT o
       where
-        sbs = toShortByteString o
-        putTXT txt = let (h, t) = Short.splitAt 255 txt
-                         next | Short.null t = mempty
-                              | otherwise    = putTXT t
-                     in putLenShortByteString h <> next
+        putTXT txt = let (h, t) = Opaque.splitAt 255 txt
+                         next | Opaque.null t = mempty
+                              | otherwise     = putTXT t
+                     in putLenOpaque h <> next
     getResourceData _ len =
-      RD_TXT . fromShortByteString . Short.concat <$> sGetMany "TXT RR string" len getstring
-        where
-          getstring = getInt8 >>= getNShortByteString
+      RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
 
 instance Show RD_TXT where
     show (RD_TXT o) = '"' : conv sbs '"'
       where
         conv x c = Short.foldr escape [c] x
-        sbs = toShortByteString o
+        sbs = Opaque.toShortByteString o
         escape :: Word8 -> [Char] -> [Char]
         escape w s
           | w == _quotedbl             = '\\' : c : s

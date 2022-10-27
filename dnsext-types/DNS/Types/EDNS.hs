@@ -372,15 +372,12 @@ encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
                 ]
 encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) =
     mconcat [ put16 $ fromOptCode ClientSubnet
-            , putInt16 $ 4 + len
+            , putInt16 $ 4 + Opaque.length addr
             , put16 family
             , put8 srcBits
             , put8 scpBits
-            , putShortByteString sbs
+            , putOpaque addr
             ]
-  where
-     sbs = Opaque.toShortByteString addr
-     len = Short.length sbs
 
 decodeClientSubnet :: Int -> SGet OD_ClientSubnet
 decodeClientSubnet len = do

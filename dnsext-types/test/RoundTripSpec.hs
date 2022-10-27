@@ -18,6 +18,7 @@ import Test.QuickCheck (Gen, arbitrary, elements, forAll, frequency, listOf, one
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
+import qualified DNS.Types.Opaque as Opaque
 
 spec :: Spec
 spec = do
@@ -114,11 +115,11 @@ mkRData dom typ =
         DNAME -> rd_dname <$> genDomain
         TLSA  -> rd_tlsa <$> genWord8 <*> genWord8 <*> genWord8 <*> genOpaque
 
-        _ -> pure . rd_txt $ byteStringToOpaque ("Unhandled type " <> C8.pack (show typ))
+        _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))
   where
     genTextString = do
         len <- elements [0, 1, 63, 255, 256, 511, 512, 1023, 1024]
-        shortByteStringToOpaque . Short.pack <$> replicateM len genWord8
+        Opaque.fromShortByteString . Short.pack <$> replicateM len genWord8
 
 genIPv4 :: Gen IPv4
 genIPv4 = toIPv4 <$> replicateM 4 (fromIntegral <$> genWord8)
@@ -127,7 +128,7 @@ genIPv6 :: Gen IPv6
 genIPv6 = toIPv6 <$> replicateM 8 (fromIntegral <$> genWord16)
 
 genOpaque :: Gen Opaque
-genOpaque = byteStringToOpaque <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
+genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
 genDomain = ciName . (<> ".") <$>  genDomainString
@@ -233,10 +234,10 @@ genOData = oneof
             if srcBits == bits1
             then if scpBits == bits2
                  then pure $ od_clientSubnet bits1 scpBits $ toIP addr
-                 else pure $ od_ecsGeneric fam bits1 scpBits $ byteStringToOpaque $ BS.pack bytes
+                 else pure $ od_ecsGeneric fam bits1 scpBits $ Opaque.fromByteString $ BS.pack bytes
             else if srcBits < bits1
-                 then pure $ od_ecsGeneric fam srcBits scpBits $ byteStringToOpaque $ BS.pack more
-                 else pure $ od_ecsGeneric fam srcBits scpBits $ byteStringToOpaque $ BS.pack less
+                 then pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString $ BS.pack more
+                 else pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString$ BS.pack less
 
 genEDNSHeader :: Gen (EDNS, DNSHeader)
 genEDNSHeader = do
