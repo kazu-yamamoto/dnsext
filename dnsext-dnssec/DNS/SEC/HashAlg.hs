@@ -8,7 +8,7 @@ import DNS.SEC.Imports
 
 -- https://www.iana.org/assignments/ds-rr-types/ds-rr-types.xhtml
 
-data DigestAlg = DigestAlg {
+newtype DigestAlg = DigestAlg {
     fromDigestAlg :: Word8
   } deriving (Eq, Ord)
 
@@ -42,7 +42,7 @@ getDigestAlg = toDigestAlg <$> get8
 
 -- https://www.iana.org/assignments/dnssec-nsec3-parameters/dnssec-nsec3-parameters.xhtml
 
-data HashAlg = HashAlg {
+newtype HashAlg = HashAlg {
     fromHashAlg :: Word8
   } deriving (Eq, Ord)
 

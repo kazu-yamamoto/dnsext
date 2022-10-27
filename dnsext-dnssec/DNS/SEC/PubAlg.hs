@@ -7,7 +7,7 @@ import DNS.Types.Internal
 import DNS.SEC.Imports
 
 -- https://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xhtml
-data PubAlg = PubAlg {
+newtype PubAlg = PubAlg {
     fromPubAlg :: Word8
   } deriving (Eq, Ord)
 
