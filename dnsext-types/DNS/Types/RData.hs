@@ -15,6 +15,7 @@ import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.Opaque
+import DNS.Types.Seconds
 import DNS.Types.Type
 
 ---------------------------------------------------------------
@@ -126,13 +127,13 @@ data RD_SOA = RD_SOA {
     -- | Setter/getter for serial
   , soa_serial  :: Word32
     -- | Setter/getter for refresh
-  , soa_refresh :: Word32
+  , soa_refresh :: Seconds
     -- | Setter/getter for retry
-  , soa_retry   :: Word32
+  , soa_retry   :: Seconds
     -- | Setter/getter for expire
-  , soa_expire  :: Word32
+  , soa_expire  :: Seconds
     -- | Setter/getter for minimum
-  , soa_minimum :: Word32
+  , soa_minimum :: Seconds
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_SOA where
@@ -140,22 +141,22 @@ instance ResourceData RD_SOA where
     putResourceData cf RD_SOA{..} =
       mconcat [ putDomain  cf soa_mname
               , putMailbox cf soa_rname
-              , put32 soa_serial
-              , put32 soa_refresh
-              , put32 soa_retry
-              , put32 soa_expire
-              , put32 soa_minimum
+              , put32      soa_serial
+              , putSeconds soa_refresh
+              , putSeconds soa_retry
+              , putSeconds soa_expire
+              , putSeconds soa_minimum
               ]
     getResourceData _ _ = RD_SOA <$> getDomain
                                     <*> getMailbox
                                     <*> get32
-                                    <*> get32
-                                    <*> get32
-                                    <*> get32
-                                    <*> get32
+                                    <*> getSeconds
+                                    <*> getSeconds
+                                    <*> getSeconds
+                                    <*> getSeconds
 
 -- | Smart constructor.
-rd_soa :: Domain -> Mailbox -> Word32 -> Word32 -> Word32 -> Word32 -> Word32 -> RData
+rd_soa :: Domain -> Mailbox -> Word32 -> Seconds -> Seconds -> Seconds -> Seconds -> RData
 rd_soa a b c d e f g = toRData $ RD_SOA a b c d e f g
 
 ----------------------------------------------------------------

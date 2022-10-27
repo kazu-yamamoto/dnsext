@@ -33,7 +33,7 @@ genResourceRecord = frequency
     genRR = do
       dom <- genDomain
       t <- elements [DS, NSEC, NSEC3]
-      ResourceRecord dom t classIN <$> genWord32 <*> mkRData t
+      ResourceRecord dom t classIN <$> genTTL <*> mkRData t
 
 mkRData :: TYPE -> Gen RData
 mkRData typ =
@@ -71,8 +71,8 @@ genDomain = ciName . (<> ".") <$> genDomainString
 genWord16 :: Gen Word16
 genWord16 = arbitrary
 
-genWord32 :: Gen Word32
-genWord32 = arbitrary
+genTTL :: Gen TTL
+genTTL = Seconds <$> arbitrary
 
 genWord8 :: Gen Word8
 genWord8 = arbitrary

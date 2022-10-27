@@ -93,7 +93,7 @@ data RD_RRSIG = RD_RRSIG {
     rrsig_type       :: TYPE   -- ^ RRtype of RRset signed
   , rrsig_key_alg    :: Word8  -- ^ DNSKEY algorithm
   , rrsig_num_labels :: Word8  -- ^ Number of labels signed
-  , rrsig_ttl        :: Word32 -- ^ Maximum origin TTL
+  , rrsig_ttl        :: TTL    -- ^ Maximum origin TTL
   , rrsig_expiration :: Int64  -- ^ Time last valid
   , rrsig_inception  :: Int64  -- ^ Time first valid
   , rrsig_key_tag    :: Word16 -- ^ Signing key tag
@@ -105,14 +105,14 @@ instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
     putResourceData cf RD_RRSIG{..} =
       mconcat [ put16 $ fromTYPE rrsig_type
-              , put8    rrsig_key_alg
-              , put8    rrsig_num_labels
-              , put32   rrsig_ttl
+              , put8       rrsig_key_alg
+              , put8       rrsig_num_labels
+              , putSeconds rrsig_ttl
               , putDnsTime rrsig_expiration
               , putDnsTime rrsig_inception
-              , put16   rrsig_key_tag
-              , putDomain cf rrsig_zone
-              , putOpaque rrsig_value
+              , put16      rrsig_key_tag
+              , putDomain  cf rrsig_zone
+              , putOpaque  rrsig_value
               ]
     getResourceData _ lim = do
         -- The signature follows a variable length zone name
@@ -125,7 +125,7 @@ instance ResourceData RD_RRSIG where
         typ <- getTYPE
         alg <- get8
         cnt <- get8
-        ttl <- get32
+        ttl <- getSeconds
         tex <- getDnsTime
         tin <- getDnsTime
         tag <- get16
@@ -135,7 +135,7 @@ instance ResourceData RD_RRSIG where
         return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
-rd_rrsig :: TYPE -> Word8 -> Word8 -> Word32 -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
+rd_rrsig :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------

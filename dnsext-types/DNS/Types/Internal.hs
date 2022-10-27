@@ -34,6 +34,8 @@ module DNS.Types.Internal (
   , getLenOpaque
   , putTYPE
   , getTYPE
+  , putSeconds
+  , getSeconds
   -- * Low level
   , module DNS.StateBinary
   ) where
@@ -45,4 +47,5 @@ import DNS.Types.EDNS
 import DNS.Types.Message
 import DNS.Types.Opaque
 import DNS.Types.RData
+import DNS.Types.Seconds
 import DNS.Types.Type

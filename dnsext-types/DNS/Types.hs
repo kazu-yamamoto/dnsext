@@ -217,6 +217,8 @@ module DNS.Types (
   , toRCODE
   -- ** Errors
   , DNSError(..)
+  -- ** Seconds
+  , Seconds(..)
   -- * Extension
   , InitIO
   , runInitIO
@@ -229,6 +231,7 @@ import DNS.Types.Error
 import DNS.Types.Message
 import DNS.Types.Opaque
 import DNS.Types.RData
+import DNS.Types.Seconds
 import DNS.Types.Type
 
 ----------------------------------------------------------------
