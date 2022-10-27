@@ -8,6 +8,40 @@ import DNS.SEC.Imports
 
 -- https://www.iana.org/assignments/ds-rr-types/ds-rr-types.xhtml
 
+data DigestAlg = DigestAlg {
+    fromDigestAlg :: Word8
+  } deriving (Eq, Ord)
+
+toDigestAlg :: Word8 -> DigestAlg
+toDigestAlg = DigestAlg
+
+pattern SHA1   :: DigestAlg
+pattern SHA1    = DigestAlg 1
+
+pattern SHA256 :: DigestAlg
+pattern SHA256  = DigestAlg 2
+
+pattern GOST   :: DigestAlg
+pattern GOST    = DigestAlg 3
+
+pattern SHA384 :: DigestAlg
+pattern SHA384  = DigestAlg 4
+
+instance Show DigestAlg where
+    show SHA1          = "SHA1"
+    show SHA256        = "SHA256"
+    show GOST          = "GOST"
+    show SHA384        = "SHA384"
+    show (DigestAlg n) = "DigestAlg " ++ show n
+
+putDigestAlg :: DigestAlg -> SPut
+putDigestAlg = put8 . fromDigestAlg
+
+getDigestAlg :: SGet DigestAlg
+getDigestAlg = toDigestAlg <$> get8
+
+-- https://www.iana.org/assignments/dnssec-nsec3-parameters/dnssec-nsec3-parameters.xhtml
+
 data HashAlg = HashAlg {
     fromHashAlg :: Word8
   } deriving (Eq, Ord)
@@ -15,23 +49,11 @@ data HashAlg = HashAlg {
 toHashAlg :: Word8 -> HashAlg
 toHashAlg = HashAlg
 
-pattern SHA1   :: HashAlg
-pattern SHA1    = HashAlg 1
-
-pattern SHA256 :: HashAlg
-pattern SHA256  = HashAlg 2
-
-pattern GOST   :: HashAlg
-pattern GOST    = HashAlg 3
-
-pattern SHA384 :: HashAlg
-pattern SHA384  = HashAlg 4
+pattern Hash_SHA1 :: HashAlg
+pattern Hash_SHA1  = HashAlg 1
 
 instance Show HashAlg where
-    show SHA1        = "SHA1"
-    show SHA256      = "SHA256"
-    show GOST        = "GOST"
-    show SHA384      = "SHA384"
+    show Hash_SHA1   = "SHA1"
     show (HashAlg n) = "HashAlg " ++ show n
 
 putHashAlg :: HashAlg -> SPut

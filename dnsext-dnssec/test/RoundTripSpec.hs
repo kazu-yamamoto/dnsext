@@ -39,7 +39,7 @@ genResourceRecord = frequency
 mkRData :: TYPE -> Gen RData
 mkRData typ =
     case typ of
-        DS    -> rd_ds   <$> genWord16 <*> (toPubAlg <$> genWord8) <*> (toHashAlg <$> genWord8) <*> genOpaque
+        DS    -> rd_ds   <$> genWord16 <*> (toPubAlg <$> genWord8) <*> (toDigestAlg <$> genWord8) <*> genOpaque
         NSEC  -> rd_nsec <$> genDomain <*> genNsecTypes
         NSEC3 -> genNSEC3
         _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))

@@ -147,7 +147,7 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 data RD_DS = RD_DS {
     ds_key_tag :: Word16
   , ds_pubalg  :: PubAlg
-  , ds_hashalg :: HashAlg
+  , ds_hashalg :: DigestAlg
   , ds_digest  :: Opaque
   } deriving (Eq, Ord, Show)
 
@@ -156,17 +156,17 @@ instance ResourceData RD_DS where
     putResourceData _ RD_DS{..} =
         mconcat [ put16 ds_key_tag
                 , putPubAlg ds_pubalg
-                , putHashAlg ds_hashalg
+                , putDigestAlg ds_hashalg
                 , putOpaque ds_digest
                 ]
     getResourceData _ lim =
         RD_DS <$> get16
               <*> getPubAlg
-              <*> getHashAlg
+              <*> getDigestAlg
               <*> getOpaque (lim - 4)
 
 -- | Smart constructor.
-rd_ds :: Word16 -> PubAlg -> HashAlg -> Opaque -> RData
+rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
 rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
@@ -296,7 +296,7 @@ instance ResourceData RD_CDS where
     getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
 
 -- | Smart constructor.
-rd_cds :: Word16 -> PubAlg -> HashAlg -> Opaque -> RData
+rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
 rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
 
 ----------------------------------------------------------------
