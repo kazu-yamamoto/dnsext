@@ -57,7 +57,7 @@ putFlags DNSFlags{..} = sepBy string (string ", ") $ catMaybes xs
          , jst trunCation   "Truncated Caution"
          , jst recDesired   "Recursion Desired"
          , jst recAvailable "Recursion Available"
-         , jst authenData   "Authenticated Data"
+         , jst authenData   "Authentic Data"
          , jst chkDisable   "Checking Disabled"
          ]
 
