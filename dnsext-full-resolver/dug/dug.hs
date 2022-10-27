@@ -1,6 +1,6 @@
 module Main (main) where
 
-import DNS.IO (rdFlag, QueryControls, FlagOp(..))
+import DNS.IO (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf)
@@ -48,6 +48,8 @@ toFlag "+rec"       = rdFlag FlagSet
 toFlag "+recurse"   = rdFlag FlagSet
 toFlag "+norec"     = rdFlag FlagClear
 toFlag "+norecurse" = rdFlag FlagClear
+toFlag "+dnssec"    = doFlag FlagSet
+toFlag "+nodnssec"  = doFlag FlagClear
 toFlag _            = mempty -- fixme
 
 help :: String
