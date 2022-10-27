@@ -155,10 +155,6 @@ module DNS.Types (
   , getMailbox
   -- ** Opaque
   , Opaque
-  , opaqueToByteString
-  , byteStringToOpaque
-  , opaqueToShortByteString
-  , shortByteStringToOpaque
   -- ** TYPE
   , TYPE (
     A

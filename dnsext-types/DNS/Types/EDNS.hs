@@ -52,7 +52,7 @@ import Text.Read
 
 import DNS.StateBinary
 import DNS.Types.Imports
-import DNS.Types.Opaque
+import DNS.Types.Opaque.Internal
 
 ----------------------------------------------------------------
 -- EDNS (RFC 6891, EDNS(0))

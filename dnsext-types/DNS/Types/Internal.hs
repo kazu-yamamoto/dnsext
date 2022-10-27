@@ -45,7 +45,7 @@ import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Message
-import DNS.Types.Opaque
+import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Seconds
 import DNS.Types.Type

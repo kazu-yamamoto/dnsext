@@ -25,6 +25,7 @@ library
         DNS.Types.Decode
         DNS.Types.Encode
         DNS.Types.Internal
+        DNS.Types.Opaque
 
     other-modules:
         DNS.StateBinary
@@ -38,7 +39,7 @@ library
         DNS.Types.Error
         DNS.Types.Imports
         DNS.Types.Message
-        DNS.Types.Opaque
+        DNS.Types.Opaque.Internal
         DNS.Types.Parser
         DNS.Types.RData
         DNS.Types.Seconds

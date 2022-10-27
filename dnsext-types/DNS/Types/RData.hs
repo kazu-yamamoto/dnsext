@@ -14,7 +14,7 @@ import DNS.StateBinary
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
-import DNS.Types.Opaque
+import DNS.Types.Opaque.Internal
 import DNS.Types.Seconds
 import DNS.Types.Type
 
