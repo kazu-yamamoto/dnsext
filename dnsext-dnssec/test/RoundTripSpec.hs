@@ -39,18 +39,18 @@ genResourceRecord = frequency
 mkRData :: TYPE -> Gen RData
 mkRData typ =
     case typ of
-        DS    -> rd_ds   <$> genWord16 <*> genWord8 <*> genWord8 <*> genOpaque
+        DS    -> rd_ds   <$> genWord16 <*> (toPubAlg <$> genWord8) <*> (toDigestAlg <$> genWord8) <*> genOpaque
         NSEC  -> rd_nsec <$> genDomain <*> genNsecTypes
         NSEC3 -> genNSEC3
         _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))
   where
     genNSEC3 = do
         (alg, hlen)  <- elements [(1,32),(2,64)]
-        flgs <- elements [0,1]
+        flgs <- toNSEC3flags <$> elements [0,1]
         iter <- elements [0..100]
         salt <- elements ["", "AB"]
         hash <- Opaque.fromByteString . BS.pack <$> replicateM hlen genWord8
-        rd_nsec3 alg flgs iter salt hash <$> genNsecTypes
+        rd_nsec3 (toHashAlg alg) flgs iter salt hash <$> genNsecTypes
     genNsecTypes = do
         ntypes <- elements [0..15]
         types <- sequence $ replicate ntypes $ toTYPE <$> elements [1..1024]
