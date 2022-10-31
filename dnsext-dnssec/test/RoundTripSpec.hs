@@ -7,6 +7,7 @@ import Control.Monad (replicateM)
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
+import qualified DNS.Types.Opaque as Opaque
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import Data.Word
@@ -41,14 +42,14 @@ mkRData typ =
         DS    -> rd_ds   <$> genWord16 <*> genWord8 <*> genWord8 <*> genOpaque
         NSEC  -> rd_nsec <$> genDomain <*> genNsecTypes
         NSEC3 -> genNSEC3
-        _ -> pure . rd_txt $ byteStringToOpaque ("Unhandled type " <> C8.pack (show typ))
+        _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))
   where
     genNSEC3 = do
         (alg, hlen)  <- elements [(1,32),(2,64)]
         flgs <- elements [0,1]
         iter <- elements [0..100]
         salt <- elements ["", "AB"]
-        hash <- byteStringToOpaque . BS.pack <$> replicateM hlen genWord8
+        hash <- Opaque.fromByteString . BS.pack <$> replicateM hlen genWord8
         rd_nsec3 alg flgs iter salt hash <$> genNsecTypes
     genNsecTypes = do
         ntypes <- elements [0..15]
@@ -59,7 +60,7 @@ mkRData typ =
                         using groupWith ]
 
 genOpaque :: Gen Opaque
-genOpaque = byteStringToOpaque <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
+genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
 genDomain = ciName . (<> ".") <$> genDomainString
