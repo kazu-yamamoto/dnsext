@@ -8,7 +8,7 @@ import DNS.SEC.Imports
 import DNS.SEC.PubAlg
 
 data PubKey = PubKey_RSA { rsa_size :: Int, rsa_e :: Opaque, rsa_n :: Opaque }
-            | PubKey_ECDSA { dsa_x :: Opaque, dsa_y :: Opaque }
+            | PubKey_ECDSA { ecdsa_x :: Opaque, ecdsa_y :: Opaque }
             | PubKey_Opaque { pubkey_opaque :: Opaque }
             deriving (Eq, Ord, Show)
 
