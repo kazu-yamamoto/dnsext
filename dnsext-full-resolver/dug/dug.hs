@@ -6,7 +6,10 @@ import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf)
 import System.Environment (getArgs)
 
+import qualified DNS.Cache.Log as Log
+
 import Operation (operate)
+import FullResolve (fullResolve)
 import Output (pprResult)
 
 main :: IO ()
@@ -25,13 +28,21 @@ main = do
               h:t:[] -> Just (h, read t)
               _      -> Nothing
             ctl = mconcat $ map toFlag plus
+            full = "--full" `elem` minus
+            disableV6NS = "-4" `elem` minus
         case mHostTyp of
           Nothing -> putStr help
-          Just (host,typ) -> do
-              ex <- operate mserver host typ ctl
-              case ex of
-                Left err -> fail $ show err
-                Right rs -> putStr $ pprResult rs
+          Just (host,typ)
+            | full      -> do
+                ex <- fullResolve disableV6NS Log.Stdout Log.INFO host typ
+                case ex of
+                  Left err -> fail $ show err
+                  Right rs -> putStr $ pprResult rs
+            | otherwise -> do
+                ex <- operate mserver host typ ctl
+                case ex of
+                  Left err -> fail $ show err
+                  Right rs -> putStr $ pprResult rs
 
 divide :: [String] -> ([String],[String],[String],[String])
 divide ls = loop ls (id,id,id,id)
