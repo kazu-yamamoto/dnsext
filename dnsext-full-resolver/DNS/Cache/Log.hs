@@ -8,7 +8,8 @@ module DNS.Cache.Log (
   ) where
 
 -- GHC packages
-import Control.Monad (forever, when)
+import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
+import Control.Monad (when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
 
 -- other packages
@@ -48,15 +49,21 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int))
+new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int), IO ())
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8
-  let body = either (const $ return ()) return =<< tryAny (hPutStr outFh . unlines =<< readQueue inQ)
-      logLines lv = when (level <= lv) . writeQueue inQ
+  quitMutex <- newEmptyMVar
+  let loop = do
+        let next xs = do
+              either (const $ return ()) return =<< tryAny (hPutStr outFh $ unlines xs)
+              loop
+        maybe (putMVar quitMutex ()) next =<< readQueue inQ
+      logLines lv = when (level <= lv) . writeQueue inQ . Just
+      waitQuit = writeQueue inQ Nothing *> takeMVar quitMutex
 
-  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+  return (loop, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), waitQuit)
 
 -- no logging
 none :: Level -> [String] -> IO ()
