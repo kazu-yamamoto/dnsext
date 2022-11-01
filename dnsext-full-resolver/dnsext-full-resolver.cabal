@@ -67,6 +67,7 @@ executable dug
     hs-source-dirs:   dug
     other-modules:
         Operation
+        FullResolve
         Output
 
     default-language: Haskell2010
