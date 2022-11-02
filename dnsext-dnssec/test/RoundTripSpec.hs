@@ -9,7 +9,7 @@ import DNS.Types.Decode
 import DNS.Types.Encode
 import qualified DNS.Types.Opaque as Opaque
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
+import Data.String (fromString)
 import Data.Word
 import GHC.Exts (the, groupWith)
 import Test.Hspec
@@ -42,7 +42,7 @@ mkRData typ =
         DS    -> rd_ds   <$> genWord16 <*> (toPubAlg <$> genWord8) <*> (toDigestAlg <$> genWord8) <*> genOpaque
         NSEC  -> rd_nsec <$> genDomain <*> genNsecTypes
         NSEC3 -> genNSEC3
-        _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))
+        _ -> pure . rd_txt $ fromString ("Unhandled type " <> show typ)
   where
     genNSEC3 = do
         (alg, hlen)  <- elements [(1,32),(2,64)]

@@ -2,7 +2,7 @@
 
 module DecodeSpec (spec) where
 
-import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString as BS
 import Data.ByteString.Internal (ByteString(..), unsafeCreate)
 import Data.Word8
 import Foreign.ForeignPtr (withForeignPtr)
@@ -80,7 +80,7 @@ spec = do
                 Left (DecodeError {}) -> True
                 _ -> error "Excess input not detected"
         it "detect truncation" $
-            case decode (C8.init $ encode defaultQuery) of
+            case decode (BS.init $ encode defaultQuery) of
                 Left (DecodeError {}) -> True
                 _ -> error "Excess input not detected"
         it "soa mailbox presentation form" $

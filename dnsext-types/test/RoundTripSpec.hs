@@ -5,11 +5,11 @@ module RoundTripSpec (spec) where
 
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.Either
 import qualified Data.IP
 import Data.IP (Addr, IP(..), IPv4, IPv6, toIPv4, toIPv6, makeAddrRange)
+import Data.String (fromString)
 import Data.Word
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -115,7 +115,7 @@ mkRData dom typ =
         DNAME -> rd_dname <$> genDomain
         TLSA  -> rd_tlsa <$> genWord8 <*> genWord8 <*> genWord8 <*> genOpaque
 
-        _ -> pure . rd_txt $ Opaque.fromByteString ("Unhandled type " <> C8.pack (show typ))
+        _ -> pure . rd_txt $ fromString ("Unhandled type " <> show typ)
   where
     genTextString = do
         len <- elements [0, 1, 63, 255, 256, 511, 512, 1023, 1024]
