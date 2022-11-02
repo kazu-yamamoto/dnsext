@@ -19,7 +19,6 @@ import DNS.Types hiding (Seconds)
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import Network.Socket (Socket, SockAddr)
 import Network.Socket.ByteString (recv, recvFrom)
@@ -83,15 +82,15 @@ recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
   where
     recv1 = do
         bs1 <- recvCore len
-        if C8.length bs1 == len then
+        if BS.length bs1 == len then
             return bs1
           else do
             loop bs1
     loop bs0 = do
-        let left = len - C8.length bs0
+        let left = len - BS.length bs0
         bs1 <- recvCore left
-        let bs = bs0 `C8.append` bs1
-        if C8.length bs == len then
+        let bs = bs0 <> bs1
+        if BS.length bs == len then
             return bs
           else
             loop bs
@@ -149,6 +148,6 @@ sendAll = Socket.sendAll
 --
 encodeVC :: ByteString -> ByteString
 encodeVC legacyQuery =
-    let len = LC8.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ C8.length legacyQuery
+    let len = LC8.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ BS.length legacyQuery
     in len <> legacyQuery
 {-# INLINE encodeVC #-}
