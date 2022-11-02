@@ -1,6 +1,10 @@
 module DNS.Cache.Log (
   Level (..),
   Output (..),
+  ThreadLoop,
+  PutLines,
+  GetQueueSize,
+  Flush,
   newFastLogger,
   outputHandle,
   new,
@@ -8,6 +12,7 @@ module DNS.Cache.Log (
   ) where
 
 -- GHC packages
+import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
 import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
 
@@ -32,7 +37,12 @@ data Output
   | Stderr
   deriving Show
 
-newFastLogger :: Output -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
+type ThreadLoop = IO ()
+type PutLines = Level -> [String] -> IO ()
+type GetQueueSize = IO (Int, Int)
+type Flush = IO ()
+
+newFastLogger :: Output -> Level -> IO (PutLines, GetQueueSize, Flush)
 newFastLogger out level = do
   loggerSet <- newLoggerSet bufsize
   let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
@@ -48,15 +58,19 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int))
+new :: Handle -> Level -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8
-  let body = either (const $ return ()) return =<< tryAny (hPutStr outFh . unlines =<< readQueue inQ)
-      logLines lv = when (level <= lv) . writeQueue inQ
+  flushMutex <- newEmptyMVar
+  let body = do
+        let action = maybe (putMVar flushMutex ()) (hPutStr outFh . unlines)
+        either (const $ return ()) return =<< tryAny (action =<< readQueue inQ)
+      logLines lv = when (level <= lv) . writeQueue inQ . Just
+      flush = writeQueue inQ Nothing *> takeMVar flushMutex
 
-  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), flush)
 
 -- no logging
 none :: Level -> [String] -> IO ()
