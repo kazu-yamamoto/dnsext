@@ -1,8 +1,6 @@
 module DNS.Types.Opaque.Internal where
 
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
-import Data.String
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -16,7 +14,7 @@ newtype Opaque = Opaque ShortByteString deriving (Eq, Ord)
 ----------------------------------------------------------------
 
 instance IsString Opaque where
-    fromString = Opaque . Short.toShort . C8.pack
+    fromString = Opaque . fromString
 
 instance Show Opaque where
     show = showOpaque

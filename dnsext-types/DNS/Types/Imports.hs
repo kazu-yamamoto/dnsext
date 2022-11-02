@@ -11,6 +11,7 @@ module DNS.Types.Imports (
   , module Data.Maybe
   , module Data.Monoid
   , module Data.Ord
+  , module Data.String
   , module Data.Typeable
   , module Data.Word
   , module Numeric
@@ -34,6 +35,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
+import Data.String
 import Data.Typeable
 import Data.Word
 import Numeric

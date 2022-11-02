@@ -25,7 +25,6 @@ import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.Functor (($>))
-import Data.String
 import Data.Word8
 
 import DNS.StateBinary
@@ -104,7 +103,7 @@ instance CaseInsensitiveName Domain ByteString where
     lowerName (Domain _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Domain String where
-    ciName o = let o' = Short.toShort $ C8.pack o
+    ciName o = let o' = fromString o
                    n' = Short.map toLower o'
                in Domain { origDomain = o', lowerDomain = n' }
     origName  (Domain o _) = C8.unpack $ Short.fromShort o
