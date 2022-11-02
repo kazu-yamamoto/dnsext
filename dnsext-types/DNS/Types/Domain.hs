@@ -255,12 +255,14 @@ putDomain' sep cf dom
                                 , putDomain' _period cf tl
                                 ]
   where
-    -- Try with the preferred separator if present, else fall back to '.'.
-    (hd, tl) = loop sep
+    (hd, tl) = go sep
       where
-        loop w = case parseLabel w dom of
-            Just p | w /= _period && Short.null (snd p) -> loop _period
-                   | otherwise -> p
+        go w = case parseLabel w dom of
+            Just p
+              -- Try with the preferred separator if present,
+              -- else fall back to '.'.
+              | w /= _period && Short.null (snd p) -> go _period
+              | otherwise -> p
             Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
 
 putPointer :: Int -> SPut
@@ -385,8 +387,15 @@ getDomain' sep1 ptrLimit = do
 
 -- | Decode a domain name in A-label form to a leading label and a tail with
 -- the remaining labels, unescaping backlashed chars and decimal triples along
--- the way. Any  U-label conversion belongs at the layer above this code.
+-- the way. Any U-label conversion belongs at the layer above this code.
+-- 'Nothing' means that the input domain illegal.
 --
+-- >>> parseLabel _period "abc.def.xyz"
+-- Just ("abc","def.xyz")
+-- >>> parseLabel _period "abc.def.xyz."
+-- Just ("abc","def.xyz.")
+-- >>> parseLabel _period "xyz."
+-- Just ("xyz","")
 -- >>> parseLabel _period "abc\\.def.xyz"
 -- Just ("abc.def","xyz")
 -- >>> parseLabel _period "\\097.xyz"
@@ -399,15 +408,14 @@ getDomain' sep1 ptrLimit = do
 -- Nothing
 parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
 parseLabel sep dom
-  | hasBackslash dom = toResult $ P.parse (labelParser sep mempty) dom
-  | otherwise        = check $ safeTail <$> Short.break (== sep) dom
+  | hasBackslash dom = case P.parse (labelParser sep mempty) dom of
+      (Just hd, tl) -> check (hd, tl)
+      _             -> Nothing
+  | otherwise        = case Short.break (== sep) dom of
+      r@(_,"")      -> Just r
+      (hd,tl)       -> check (hd, Short.drop 1 tl)
   where
     hasBackslash = Short.any (== _backslash)
-    toResult (Just hd, tl) = check (hd, tl)
-    toResult _             = Nothing
-    safeTail bs = case Short.uncons bs of
-      Nothing      -> mempty
-      Just (_,bs') -> bs'
     check r@(hd, tl) | not (Short.null hd) || Short.null tl = Just r
                      | otherwise = Nothing
 
