@@ -142,6 +142,8 @@ module DNS.Types (
   , dropRoot
   , hasRoot
   , isIllegal
+  , subDomains
+  , isSubDomainOf
   -- ** Mailbox
   , Mailbox
   , checkMailbox

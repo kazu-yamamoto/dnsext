@@ -15,6 +15,8 @@ module DNS.Types.Domain (
   , dropRoot
   , hasRoot
   , isIllegal
+  , subDomains
+  , isSubDomainOf
   , Mailbox
   , checkMailbox
   , modifyMailbox
@@ -527,3 +529,42 @@ isPlain sep w | w >= _del                  = False -- <DEL> + non-ASCII
 
 shortToString :: ShortByteString -> String
 shortToString = C8.unpack . Short.fromShort
+
+----------------------------------------------------------------
+
+-- |
+--
+-- >>> subDomains "www.example.com"
+-- ["www.example.com","example.com","com"]
+-- >>> subDomains "www.example.com."
+-- ["www.example.com.","example.com.","com."]
+subDomains :: Domain -> [Domain]
+subDomains (Domain o _) = map ciName ds
+  where
+    ds = domains o
+
+domains :: ShortByteString -> [ShortByteString]
+domains ""  = []
+domains "." = []
+domains dom = loop dom
+  where
+    loop d = case parseLabel _period d of
+      Nothing     -> []
+      Just (_,"") -> [d]
+      Just (_,xs) -> d : loop xs
+
+-- |
+--
+-- >>> "www.example.com." `isSubDomainOf` "."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "example.com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "www.example.com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "foo-www.example.com."
+-- False
+isSubDomainOf :: Domain -> Domain -> Bool
+_ `isSubDomainOf` "." = True
+x `isSubDomainOf` y   = y `elem` subDomains x

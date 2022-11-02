@@ -37,7 +37,7 @@ import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
-import Data.List (unfoldr, uncons, groupBy, sortOn, sort, intercalate)
+import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import Data.Word8
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -86,36 +86,6 @@ normalize s
   | otherwise   = Nothing  -- not valid
   where
     (rn, nn) = (DNS.dropRoot s, DNS.addRoot s)
-
--- get parent name for valid name
-parent :: Domain -> Domain
-parent n
-  | DNS.checkDomain Short.null dp = error "parent: empty name is not valid."
-  | dp == "."                     = "."  -- parent of "." is "."
-  | otherwise                     = DNS.modifyDomain (Short.drop 1) dp
-  where
-    dp = DNS.modifyDomain (Short.dropWhile (/= _period)) n
-
--- | get domain list for normalized name
---
--- >>> domains "."
--- []
--- >>> domains "foo.bar.baz."
--- ["foo.bar.baz.","bar.baz.","baz."]
-domains :: Domain -> [Domain]
-domains name
-  | name == "."      =  []
-  | DNS.hasRoot name =  name : unfoldr parent_ name
-  | otherwise        =  error "domains: normalized name is required."
- where
-    parent_ n
-      | p == "."  = Nothing
-      | otherwise = Just (p, p)
-      where
-        p = parent n
-
-isSubDomainOf :: Domain -> Domain -> Bool
-x `isSubDomainOf` y =  y `elem` (domains x ++ ["."])
 
 -----
 
@@ -607,7 +577,7 @@ resolveJustDC dc n typ
                  *> throwDnsError DNS.ServerFailure
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
-  nss <- iterative_ dc rootNS $ reverse $ domains n
+  nss <- iterative_ dc rootNS $ reverse $ DNS.subDomains n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
   (,) <$> norec sa n typ <*> pure nss
@@ -652,7 +622,7 @@ rootNS =
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 iterative :: Delegation -> Domain -> DNSQuery Delegation
-iterative sa n = iterative_ 0 sa $ reverse $ domains n
+iterative sa n = iterative_ 0 sa $ reverse $ DNS.subDomains n
 
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _  nss []     = return nss
@@ -700,7 +670,7 @@ lookupDelegation dom = do
         lk6 <- lookupAxList AAAA takeAAAA
         return $ case lk4 <> lk6 of
           Nothing
-            | ns `isSubDomainOf` dom  ->  []             {- miss-hit with sub-domain case cause iterative loop, so return null to skip this NS -}
+            | ns `DNS.isSubDomainOf` dom  ->  []             {- miss-hit with sub-domain case cause iterative loop, so return null to skip this NS -}
             | otherwise               ->  [DEonlyNS ns]  {- the case both A and AAAA are miss-hit -}
           Just as                     ->  as             {- just return address records. null case is wrong cache, so return null to skip this NS -}
       noCachedV4NS es = disableV6NS && null (v4DEntryList dom es)
@@ -984,7 +954,7 @@ cacheEmptySection srcDom dom typ getRanked msg =
       where
         refinesSOA srrs = (single ps, take 1 rrs)  where (ps, rrs) = unzip $ foldr takeSOA [] srrs
         takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
-          | rrname rr `isSubDomainOf` srcDom,
+          | rrname rr `DNS.isSubDomainOf` srcDom,
             Just soa <- DNS.fromRData rd   =  (fromSOA soa rr, rr) : xs
           | otherwise                      =  xs
         takeSOA _         xs     =  xs
