@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Simple, high-level DNS lookup functions for clients.
@@ -74,9 +75,10 @@ module DNS.IO.Utils (
   ) where
 
 import DNS.Types
-import qualified Data.ByteString.Char8 as C8
+import qualified Data.ByteString.Short as Short
+import Data.IP
+import Data.String (fromString)
 
-import DNS.IO.Imports
 import DNS.IO.Lookup as DNS
 import DNS.IO.Resolver as DNS
 
@@ -303,16 +305,12 @@ lookupPTR = lookup' PTR
 --   >>> withResolver rs $ \resolver -> lookupRDNS resolver "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
 --
-lookupRDNS :: Resolver -> ByteString -> IO (Either DNSError [RD_PTR])
+lookupRDNS :: Resolver -> IPv4 -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
-    -- ByteString constants.
-    dot = C8.pack "."
-    suffix = C8.pack ".in-addr.arpa"
-
-    octets = C8.split '.' ip
-    reverse_ip = C8.intercalate dot (reverse octets)
-    dom = ciName (reverse_ip `C8.append` suffix)
+    octets = map (fromString . show ) $ fromIPv4 ip
+    reverse_ip = Short.intercalate "." (reverse octets)
+    dom = ciName (reverse_ip <> ".in-addr.arpa")
 
 ----------------------------------------------------------------
 
