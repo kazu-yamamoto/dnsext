@@ -1,6 +1,9 @@
 module DNS.Cache.Log (
   Level (..),
   Output (..),
+  ThreadLoop,
+  PutLines,
+  GetQueueSize,
   Flush,
   newFastLogger,
   outputHandle,
@@ -34,9 +37,12 @@ data Output
   | Stderr
   deriving Show
 
+type ThreadLoop = IO ()
+type PutLines = Level -> [String] -> IO ()
+type GetQueueSize = IO (Int, Int)
 type Flush = IO ()
 
-newFastLogger :: Output -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), Flush)
+newFastLogger :: Output -> Level -> IO (PutLines, GetQueueSize, Flush)
 newFastLogger out level = do
   loggerSet <- newLoggerSet bufsize
   let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
@@ -52,7 +58,7 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int), Flush)
+new :: Handle -> Level -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
