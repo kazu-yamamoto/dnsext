@@ -108,8 +108,8 @@ instance CaseInsensitiveName Domain String where
     ciName o = let o' = fromString o
                    n' = Short.map toLower o'
                in Domain { origDomain = o', lowerDomain = n' }
-    origName  (Domain o _) = C8.unpack $ Short.fromShort o
-    lowerName (Domain _ n) = C8.unpack $ Short.fromShort n
+    origName  (Domain o _) = shortToString o
+    lowerName (Domain _ n) = shortToString n
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _) = f o
@@ -207,11 +207,11 @@ instance CaseInsensitiveName Mailbox ByteString where
     lowerName (Mailbox _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Mailbox String where
-    ciName o = let o' = Short.toShort $ C8.pack o
+    ciName o = let o' = fromString o
                    n' = Short.map toLower o'
                in Mailbox { origMailbox = o', lowerMailbox = n' }
-    origName  (Mailbox o _) = C8.unpack $ Short.fromShort o
-    lowerName (Mailbox _ n) = C8.unpack $ Short.fromShort n
+    origName  (Mailbox o _) = shortToString o
+    lowerName (Mailbox _ n) = shortToString n
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox o _) = f o
