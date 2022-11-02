@@ -97,6 +97,10 @@ parent n
     dp = DNS.modifyDomain (Short.dropWhile (/= _period)) n
 
 -- get domain list for normalized name
+-- >>> domains "."
+-- []
+-- >>> domains "foo.bar.baz."
+-- ["foo.bar.baz.","bar.baz.","baz."]
 domains :: Domain -> [Domain]
 domains name
   | name == "."      =  []
