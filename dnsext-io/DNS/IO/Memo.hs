@@ -9,8 +9,6 @@ import Time.System (timeCurrent)
 
 import DNS.IO.Imports
 
-data Section = Answer | Authority deriving (Eq, Ord, Show)
-
 type Key = (Domain, TYPE)
 type Prio = Elapsed
 
