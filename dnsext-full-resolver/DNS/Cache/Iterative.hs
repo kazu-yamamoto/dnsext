@@ -33,7 +33,6 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import qualified Data.ByteString.Char8 as B8
-import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Int (Int64)
@@ -81,20 +80,18 @@ normalizeName = normalize
 -- nomalize (domain) name to absolute name
 normalize :: Domain -> Maybe Domain
 normalize s
-  | DNS.checkDomain (== ".") s = Just "."
+  | s == "."    = Just "."
   -- empty part is not valid, empty name is not valid
-  | validate rn   = Just nn
-  | otherwise     = Nothing  -- not valid
+  | validate rn = Just nn
+  | otherwise   = Nothing  -- not valid
   where
-    (rn, nn) | DNS.checkDomain ("." `Short.isSuffixOf`) s =
-               (DNS.modifyDomain Short.init s, s)
-             | otherwise                                  = (s, s <> ".")
+    (rn, nn) = (DNS.dropRoot s, DNS.addRoot s)
 
 -- get parent name for valid name
 parent :: Domain -> Domain
 parent n
   | DNS.checkDomain Short.null dp = error "parent: empty name is not valid."
-  | DNS.checkDomain (== ".") dp   = "."  -- parent of "." is "."
+  | dp == "."                     = "."  -- parent of "." is "."
   | otherwise                     = DNS.modifyDomain (Short.drop 1) dp
   where
     dp = DNS.modifyDomain (Short.dropWhile (/= _period)) n
@@ -102,14 +99,13 @@ parent n
 -- get domain list for normalized name
 domains :: Domain -> [Domain]
 domains name
-  | DNS.checkDomain (== dot) name =  []
-  | DNS.checkDomain (dot `Short.isSuffixOf`) name  =  name : unfoldr parent_ name
-  | otherwise                 =  error "domains: normalized name is required."
+  | name == "."      =  []
+  | DNS.hasRoot name =  name : unfoldr parent_ name
+  | otherwise        =  error "domains: normalized name is required."
  where
-    dot = "." :: ShortByteString
     parent_ n
-      | DNS.checkDomain (== dot) p = Nothing
-      | otherwise                  = Just (p, p)
+      | p == "."  = Nothing
+      | otherwise = Just (p, p)
       where
         p = parent n
 
