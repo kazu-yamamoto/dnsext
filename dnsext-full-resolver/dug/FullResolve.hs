@@ -19,21 +19,21 @@ fullResolve :: Bool
             -> TYPE
             -> IO (Either QueryError DNSMessage)
 fullResolve disableV6NS logOutput logLevel n ty = do
-  (putLines, waitQuitLog, loops, cxt) <- setup disableV6NS logOutput logLevel
+  (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel
   mapM_ forkIO $ loops
   out <- resolve cxt n ty
   putLines Log.INFO ["--------------------"]
-  waitQuitLog
+  flushLog
   return out
 
 setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Context)
 setup disableV6NS logOutput logLevel = do
-  (logLoop, putLines, _, waitQuit) <- Log.new (Log.outputHandle logOutput) logLevel
+  (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
   tcache <- TimeCache.new
   (loops, insert, getCache, _, _) <- UCache.new putLines tcache $ 4 * 1024
   let ucache = (insert, getCache)
   cxt <- Iterative.newContext putLines disableV6NS ucache tcache
-  return (putLines, waitQuit, logLoop : loops, cxt)
+  return (putLines, flush, logLoop : loops, cxt)
 
 resolve :: Context -> String -> TYPE -> IO (Either QueryError DNSMessage)
 resolve cxt n ty = do

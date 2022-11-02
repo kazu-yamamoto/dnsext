@@ -1,6 +1,7 @@
 module DNS.Cache.Log (
   Level (..),
   Output (..),
+  Flush,
   newFastLogger,
   outputHandle,
   new,
@@ -9,7 +10,7 @@ module DNS.Cache.Log (
 
 -- GHC packages
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
-import Control.Monad (when)
+import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
 
 -- other packages
@@ -33,7 +34,9 @@ data Output
   | Stderr
   deriving Show
 
-newFastLogger :: Output -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), IO ())
+type Flush = IO ()
+
+newFastLogger :: Output -> Level -> IO (Level -> [String] -> IO (), IO (Int, Int), Flush)
 newFastLogger out level = do
   loggerSet <- newLoggerSet bufsize
   let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
@@ -49,21 +52,19 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int), IO ())
+new :: Handle -> Level -> IO (IO (), Level -> [String] -> IO (), IO (Int, Int), Flush)
 new outFh level = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8
-  quitMutex <- newEmptyMVar
-  let loop = do
-        let next xs = do
-              either (const $ return ()) return =<< tryAny (hPutStr outFh $ unlines xs)
-              loop
-        maybe (putMVar quitMutex ()) next =<< readQueue inQ
+  flushMutex <- newEmptyMVar
+  let body = do
+        let action = maybe (putMVar flushMutex ()) (hPutStr outFh . unlines)
+        either (const $ return ()) return =<< tryAny (action =<< readQueue inQ)
       logLines lv = when (level <= lv) . writeQueue inQ . Just
-      waitQuit = writeQueue inQ Nothing *> takeMVar quitMutex
+      flush = writeQueue inQ Nothing *> takeMVar flushMutex
 
-  return (loop, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), waitQuit)
+  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), flush)
 
 -- no logging
 none :: Level -> [String] -> IO ()
