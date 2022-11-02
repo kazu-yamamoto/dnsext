@@ -242,13 +242,13 @@ putMailbox cf@Canonical   (Mailbox _ l) = putDomain' _at cf l {- canonical form 
 
 putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut
 putDomain' sep cf dom
-    | Short.null dom || dom == rootDomain = put8 0
+    | Short.null dom || dom == "." = put8 0
     | otherwise = do
         mpos <- popPointer dom
-        cur <- builderPosition
+        cur  <- builderPosition
         case mpos of
-            Just pos | cf == Compression  -> putPointer pos
-            _                             -> do
+            Just pos | cf == Compression -> putPointer pos
+            _                            -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
@@ -260,11 +260,8 @@ putDomain' sep cf dom
       where
         loop w = case parseLabel w dom of
             Just p | w /= _period && Short.null (snd p) -> loop _period
-                    | otherwise -> p
+                   | otherwise -> p
             Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
-
-rootDomain :: RawDomain
-rootDomain = "."
 
 putPointer :: Int -> SPut
 putPointer pos = putInt16 (pos .|. 0xc000)
@@ -401,11 +398,11 @@ getDomain' sep1 ptrLimit = do
 -- >>> parseLabel _period "\\513.xyz"
 -- Nothing
 parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
-parseLabel sep dom =
-    if Short.any (== _backslash) dom
-    then toResult $ P.parse (labelParser sep mempty) dom
-    else check $ safeTail <$> Short.break (== sep) dom
+parseLabel sep dom
+  | hasBackslash dom = toResult $ P.parse (labelParser sep mempty) dom
+  | otherwise        = check $ safeTail <$> Short.break (== sep) dom
   where
+    hasBackslash = Short.any (== _backslash)
     toResult (Just hd, tl) = check (hd, tl)
     toResult _             = Nothing
     safeTail bs = case Short.uncons bs of
