@@ -96,7 +96,8 @@ parent n
   where
     dp = DNS.modifyDomain (Short.dropWhile (/= _period)) n
 
--- get domain list for normalized name
+-- | get domain list for normalized name
+--
 -- >>> domains "."
 -- []
 -- >>> domains "foo.bar.baz."
