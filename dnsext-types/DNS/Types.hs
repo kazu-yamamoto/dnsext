@@ -115,9 +115,6 @@ module DNS.Types (
   -- ** OptCode
   , OptCode (
     NSID
-  , DAU
-  , DHU
-  , N3U
   , ClientSubnet
   )
   , fromOptCode
@@ -129,12 +126,6 @@ module DNS.Types (
   -- ** Optional data
   , OD_NSID(..)
   , od_nsid
-  , OD_DAU(..)
-  , od_dau
-  , OD_DHU(..)
-  , od_dhu
-  , OD_N3U(..)
-  , od_n3u
   , OD_ClientSubnet(..)
   , od_clientSubnet
   , od_ecsGeneric
