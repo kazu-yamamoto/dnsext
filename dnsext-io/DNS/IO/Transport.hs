@@ -8,7 +8,6 @@ module DNS.IO.Transport (
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
-import qualified Data.ByteString.Char8 as C8
 import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfo(..), SockAddr(..), Family(AF_INET, AF_INET6), Socket, SocketType(Stream), close, socket, connect, defaultProtocol)
 import System.IO.Error (annotateIOError)
@@ -80,16 +79,13 @@ type UdpRslv = Int -- Retry
 --
 resolve :: Resolver -> Domain -> TYPE -> Rslv0
 resolve rlv dom typ qctls rcv
-  | isIllegal dom' = return $ Left IllegalDomain
+  | isIllegal dom = return $ Left IllegalDomain
   | typ == AXFR   = return $ Left InvalidAXFRLookup
   | onlyOne       = resolveOne        (head nss) (head gens) q tm retry ctls rcv
   | concurrent    = resolveConcurrent nss        gens        q tm retry ctls rcv
   | otherwise     = resolveSequential nss        gens        q tm retry ctls rcv
   where
-    dom' = origName dom
-    q = case C8.last dom' of
-          '.' -> Question dom typ classIN
-          _   -> Question (dom <> ".") typ classIN
+    q = Question (addRoot dom) typ classIN
 
     gens = NE.toList $ genIds rlv
 
@@ -226,21 +222,3 @@ tcpLookup gen ai q tm ctls =
         case mres of
             Nothing  -> E.throwIO TimeoutExpired
             Just res -> maybe (return res) E.throwIO (checkRespM q ident res)
-
-----------------------------------------------------------------
-
-badLength :: ByteString -> Bool
-badLength dom
-    | C8.null dom        = True
-    | C8.last dom == '.' = C8.length dom > 254
-    | otherwise          = C8.length dom > 253
-
-isIllegal :: ByteString -> Bool
-isIllegal dom
-  | badLength dom               = True
-  | '.' `C8.notElem` dom        = True
-  | ':' `C8.elem` dom           = True
-  | '/' `C8.elem` dom           = True
-  | any (\x -> C8.length x > 63)
-        (C8.split '.' dom)      = True
-  | otherwise                   = False

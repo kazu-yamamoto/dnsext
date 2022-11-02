@@ -11,6 +11,8 @@ module DNS.Types.Domain (
   , getDomain
   , checkDomain
   , modifyDomain
+  , addRoot
+  , isIllegal
   , Mailbox
   , checkMailbox
   , modifyMailbox
@@ -113,6 +115,30 @@ checkDomain f (Domain o _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
 modifyDomain f (Domain o l) = Domain (f o) (f l)
+
+addRoot :: Domain -> Domain
+addRoot d@(Domain o l)
+  | Short.null o            = Domain "." "."
+  | Short.last o == _period = d
+  | otherwise               = Domain (o <> ".") (l <> ".")
+
+----------------------------------------------------------------
+
+badLength :: ShortByteString -> Bool
+badLength o
+    | Short.null o            = True
+    | Short.last o == _period = Short.length o > 254
+    | otherwise               = Short.length o > 253
+
+isIllegal :: Domain -> Bool
+isIllegal (Domain o _)
+  | badLength o                  = True
+  | not (_period `Short.elem` o) = True
+  | _colon `Short.elem` o        = True
+  | _slash `Short.elem` o        = True
+  | any (\x -> Short.length x > 63)
+        (Short.split _period o)  = True
+  | otherwise                    = False
 
 ----------------------------------------------------------------
 

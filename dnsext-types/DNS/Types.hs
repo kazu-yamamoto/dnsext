@@ -147,6 +147,8 @@ module DNS.Types (
   , getDomain
   , checkDomain
   , modifyDomain
+  , addRoot
+  , isIllegal
   -- ** Mailbox
   , Mailbox
   , checkMailbox
