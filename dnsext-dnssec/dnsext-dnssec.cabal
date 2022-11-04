@@ -22,6 +22,7 @@ library
         DNS.SEC.Flags
         DNS.SEC.HashAlg
         DNS.SEC.Imports
+        DNS.SEC.Opts
         DNS.SEC.PubAlg
         DNS.SEC.PubKey
         DNS.SEC.Time
