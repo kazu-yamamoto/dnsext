@@ -5,7 +5,6 @@
 
 module DNS.Types.RData where
 
-import qualified Data.ByteString.Short as Short
 import Data.Char (chr)
 import Data.IP (IPv4, IPv6, fromIPv4, toIPv4, fromIPv6b, toIPv6b)
 import Data.Word8
@@ -241,10 +240,9 @@ instance ResourceData RD_TXT where
       RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
 
 instance Show RD_TXT where
-    show (RD_TXT o) = '"' : conv sbs '"'
+    show (RD_TXT o) = '"' : conv o '"'
       where
-        conv x c = Short.foldr escape [c] x
-        sbs = Opaque.toShortByteString o
+        conv t c = Opaque.foldr escape [c] t
         escape :: Word8 -> [Char] -> [Char]
         escape w s
           | w == _quotedbl             = '\\' : c : s

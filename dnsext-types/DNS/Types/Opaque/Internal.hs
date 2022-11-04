@@ -67,6 +67,9 @@ uncons (Opaque sbs) = case Short.uncons sbs of
 length :: Opaque -> Int
 length (Opaque sbs) = Short.length sbs
 
+foldr :: (Word8 -> b -> b) -> b -> Opaque -> b
+foldr f ini (Opaque sbs) = Short.foldr f ini sbs
+
 ----------------------------------------------------------------
 
 putOpaque :: Opaque -> SPut
