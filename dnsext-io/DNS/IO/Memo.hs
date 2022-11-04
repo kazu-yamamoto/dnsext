@@ -1,4 +1,11 @@
-module DNS.IO.Memo where
+module DNS.IO.Memo (
+    Cache
+  , Key
+  , Entry
+  , newCache
+  , insertCache
+  , lookupCache
+  ) where
 
 import qualified Control.Reaper as R
 import DNS.Types
@@ -8,8 +15,6 @@ import qualified Data.OrdPSQ as PSQ
 import Time.System (timeCurrent)
 
 import DNS.IO.Imports
-
-data Section = Answer | Authority deriving (Eq, Ord, Show)
 
 type Key = (Domain, TYPE)
 type Prio = Elapsed
@@ -30,12 +35,14 @@ newCache delay = R.mkReaper R.defaultReaperSettings {
   }
 
 lookupCache :: Key -> Cache -> IO (Maybe (Prio, Entry))
-lookupCache key reaper = PSQ.lookup key <$> R.reaperRead reaper
+lookupCache (dom,typ) reaper = PSQ.lookup key <$> R.reaperRead reaper
+  where
+    key = (addRoot dom, typ)
 
 insertCache :: Key -> Prio -> Entry -> Cache -> IO ()
 insertCache (dom,typ) tim ent reaper = R.reaperAdd reaper (key,tim,ent)
   where
-    key = (dom, typ)
+    key = (addRoot dom, typ)
 
 -- Theoretically speaking, atMostView itself is good enough for pruning.
 -- But auto-update assumes a list based db which does not provide atMost

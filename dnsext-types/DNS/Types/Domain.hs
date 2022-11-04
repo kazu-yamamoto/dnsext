@@ -12,7 +12,11 @@ module DNS.Types.Domain (
   , checkDomain
   , modifyDomain
   , addRoot
+  , dropRoot
+  , hasRoot
   , isIllegal
+  , subDomains
+  , isSubDomainOf
   , Mailbox
   , checkMailbox
   , modifyMailbox
@@ -106,8 +110,8 @@ instance CaseInsensitiveName Domain String where
     ciName o = let o' = fromString o
                    n' = Short.map toLower o'
                in Domain { origDomain = o', lowerDomain = n' }
-    origName  (Domain o _) = C8.unpack $ Short.fromShort o
-    lowerName (Domain _ n) = C8.unpack $ Short.fromShort n
+    origName  (Domain o _) = shortToString o
+    lowerName (Domain _ n) = shortToString n
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _) = f o
@@ -115,11 +119,22 @@ checkDomain f (Domain o _) = f o
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
 modifyDomain f (Domain o l) = Domain (f o) (f l)
 
+hasRoot :: Domain -> Bool
+hasRoot (Domain o _)
+  | Short.null o = False
+  | otherwise    = Short.last o == _period
+
 addRoot :: Domain -> Domain
 addRoot d@(Domain o l)
   | Short.null o            = Domain "." "."
   | Short.last o == _period = d
   | otherwise               = Domain (o <> ".") (l <> ".")
+
+dropRoot :: Domain -> Domain
+dropRoot d@(Domain o l)
+  | Short.null o            = d
+  | Short.last o == _period = Domain (Short.init o) (Short.init l)
+  | otherwise               = d
 
 ----------------------------------------------------------------
 
@@ -194,11 +209,11 @@ instance CaseInsensitiveName Mailbox ByteString where
     lowerName (Mailbox _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Mailbox String where
-    ciName o = let o' = Short.toShort $ C8.pack o
+    ciName o = let o' = fromString o
                    n' = Short.map toLower o'
                in Mailbox { origMailbox = o', lowerMailbox = n' }
-    origName  (Mailbox o _) = C8.unpack $ Short.fromShort o
-    lowerName (Mailbox _ n) = C8.unpack $ Short.fromShort n
+    origName  (Mailbox o _) = shortToString o
+    lowerName (Mailbox _ n) = shortToString n
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox o _) = f o
@@ -229,29 +244,28 @@ putMailbox cf@Canonical   (Mailbox _ l) = putDomain' _at cf l {- canonical form 
 
 putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut
 putDomain' sep cf dom
-    | Short.null dom || dom == rootDomain = put8 0
+    | Short.null dom || dom == "." = put8 0
     | otherwise = do
         mpos <- popPointer dom
-        cur <- builderPosition
+        cur  <- builderPosition
         case mpos of
-            Just pos | cf == Compression  -> putPointer pos
-            _                             -> do
+            Just pos | cf == Compression -> putPointer pos
+            _                            -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
                         mconcat [ putPartialDomain hd
                                 , putDomain' _period cf tl
                                 ]
   where
-    -- Try with the preferred separator if present, else fall back to '.'.
-    (hd, tl) = loop sep
+    (hd, tl) = go sep
       where
-        loop w = case parseLabel w dom of
-            Just p | w /= _period && Short.null (snd p) -> loop _period
-                    | otherwise -> p
+        go w = case parseLabel w dom of
+            Just p
+              -- Try with the preferred separator if present,
+              -- else fall back to '.'.
+              | w /= _period && Short.null (snd p) -> go _period
+              | otherwise -> p
             Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
-
-rootDomain :: RawDomain
-rootDomain = "."
 
 putPointer :: Int -> SPut
 putPointer pos = putInt16 (pos .|. 0xc000)
@@ -375,8 +389,15 @@ getDomain' sep1 ptrLimit = do
 
 -- | Decode a domain name in A-label form to a leading label and a tail with
 -- the remaining labels, unescaping backlashed chars and decimal triples along
--- the way. Any  U-label conversion belongs at the layer above this code.
+-- the way. Any U-label conversion belongs at the layer above this code.
+-- 'Nothing' means that the input domain illegal.
 --
+-- >>> parseLabel _period "abc.def.xyz"
+-- Just ("abc","def.xyz")
+-- >>> parseLabel _period "abc.def.xyz."
+-- Just ("abc","def.xyz.")
+-- >>> parseLabel _period "xyz."
+-- Just ("xyz","")
 -- >>> parseLabel _period "abc\\.def.xyz"
 -- Just ("abc.def","xyz")
 -- >>> parseLabel _period "\\097.xyz"
@@ -388,16 +409,15 @@ getDomain' sep1 ptrLimit = do
 -- >>> parseLabel _period "\\513.xyz"
 -- Nothing
 parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
-parseLabel sep dom =
-    if Short.any (== _backslash) dom
-    then toResult $ P.parse (labelParser sep mempty) dom
-    else check $ safeTail <$> Short.break (== sep) dom
+parseLabel sep dom
+  | hasBackslash dom = case P.parse (labelParser sep mempty) dom of
+      (Just hd, tl) -> check (hd, tl)
+      _             -> Nothing
+  | otherwise        = case Short.break (== sep) dom of
+      r@(_,"")      -> Just r
+      (hd,tl)       -> check (hd, Short.drop 1 tl)
   where
-    toResult (Just hd, tl) = check (hd, tl)
-    toResult _             = Nothing
-    safeTail bs = case Short.uncons bs of
-      Nothing      -> mempty
-      Just (_,bs') -> bs'
+    hasBackslash = Short.any (== _backslash)
     check r@(hd, tl) | not (Short.null hd) || Short.null tl = Just r
                      | otherwise = Nothing
 
@@ -509,3 +529,42 @@ isPlain sep w | w >= _del                  = False -- <DEL> + non-ASCII
 
 shortToString :: ShortByteString -> String
 shortToString = C8.unpack . Short.fromShort
+
+----------------------------------------------------------------
+
+-- |
+--
+-- >>> subDomains "www.example.com"
+-- ["www.example.com","example.com","com"]
+-- >>> subDomains "www.example.com."
+-- ["www.example.com.","example.com.","com."]
+subDomains :: Domain -> [Domain]
+subDomains (Domain o _) = map ciName ds
+  where
+    ds = domains o
+
+domains :: ShortByteString -> [ShortByteString]
+domains ""  = []
+domains "." = []
+domains dom = loop dom
+  where
+    loop d = case parseLabel _period d of
+      Nothing     -> []
+      Just (_,"") -> [d]
+      Just (_,xs) -> d : loop xs
+
+-- |
+--
+-- >>> "www.example.com." `isSubDomainOf` "."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "example.com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "www.example.com."
+-- True
+-- >>> "www.example.com." `isSubDomainOf` "foo-www.example.com."
+-- False
+isSubDomainOf :: Domain -> Domain -> Bool
+_ `isSubDomainOf` "." = True
+x `isSubDomainOf` y   = y `elem` subDomains x

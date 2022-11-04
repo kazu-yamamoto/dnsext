@@ -139,7 +139,11 @@ module DNS.Types (
   , checkDomain
   , modifyDomain
   , addRoot
+  , dropRoot
+  , hasRoot
   , isIllegal
+  , subDomains
+  , isSubDomainOf
   -- ** Mailbox
   , Mailbox
   , checkMailbox

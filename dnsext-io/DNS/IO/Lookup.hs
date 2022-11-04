@@ -27,6 +27,8 @@ import DNS.IO.Query
 import DNS.IO.Resolver
 import DNS.IO.Transport
 
+data Section = Answer | Authority deriving (Eq, Ord, Show)
+
 ----------------------------------------------------------------
 
 -- | Look up resource records of a specified type for a domain,
