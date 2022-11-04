@@ -207,13 +207,9 @@ _odataDedup op =
 -- >>> let cs1 = od_clientSubnet 8 0 ip1
 -- >>> let cs2 = od_clientSubnet 24 0 ip2
 -- >>> let cs3 = od_ecsGeneric 0 24 0 "foo"
--- >>> let dau1 = od_dau [3,5,7,8]
--- >>> let dau2 = od_dau [13,14]
--- >>> let dhu1 = od_dhu [1,2]
--- >>> let dhu2 = od_dhu [3,4]
 -- >>> let nsid = od_nsid ""
--- >>> let ops1 = [ODataAdd [dau1, dau2, cs1], ODataAdd [dau2, cs2, dhu1]]
--- >>> let ops2 = [ODataSet [], ODataSet [dhu2, cs3], ODataSet [nsid]]
+-- >>> let ops1 = [ODataAdd [cs1], ODataAdd [cs2]]
+-- >>> let ops2 = [ODataSet [], ODataSet [cs3], ODataSet [nsid]]
 -- >>> let ops = ops1 ++ ops2
 -- >>> foldl (&&) True [(a<>b)<>c == a<>(b<>c) | a <- ops, b <- ops, c <- ops]
 -- True
