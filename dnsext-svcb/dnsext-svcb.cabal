@@ -1,0 +1,38 @@
+cabal-version:      3.0
+name:               dnsext-svcb
+version:            0.0.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
+author:             Kazu Yamamoto <kazu@iij.ad.jp>
+tested-with:        ghc ==8.6.5 ghc ==8.8.4 ghc ==9.0.2 ghc ==9.2.4
+synopsis:           SVCB for Extensible DNS libraries
+description:
+    SVCB and HTTPS RR for Extensible DNS libraries which are written
+    purely in Haskell
+
+category:           Network
+build-type:         Simple
+extra-source-files: Changelog.md
+
+source-repository head
+    type:     git
+    location: https://github.com/kazu-yamamoto/dnsext
+
+library
+    exposed-modules:
+        DNS.SVCB
+
+    other-modules:
+        DNS.SVCB.Imports
+
+    default-language: Haskell2010
+    ghc-options:      -Wall
+    build-depends:
+        base >=4 && <5,
+        bytestring,
+        containers,
+        dnsext-types
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData
