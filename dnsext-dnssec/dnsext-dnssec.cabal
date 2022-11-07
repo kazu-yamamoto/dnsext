@@ -68,7 +68,9 @@ test-suite spec
     main-is:            Spec.hs
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
-    other-modules:      RoundTripSpec
+    other-modules:
+        RoundTripSpec
+        VerifySpec
     default-language:   Haskell2010
     ghc-options:        -Wall
     build-depends:
@@ -78,5 +80,6 @@ test-suite spec
         base,
         bytestring,
         hspec,
+        memory,
         iproute >=1.3.2,
         word8
