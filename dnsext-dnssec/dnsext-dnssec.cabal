@@ -17,7 +17,9 @@ source-repository head
     location: https://github.com/kazu-yamamoto/dnsext
 
 library
-    exposed-modules:  DNS.SEC
+    exposed-modules:
+        DNS.SEC
+        DNS.SEC.Verify
     other-modules:
         DNS.SEC.Flags
         DNS.SEC.HashAlg
@@ -27,6 +29,11 @@ library
         DNS.SEC.PubKey
         DNS.SEC.Time
         DNS.SEC.Types
+        DNS.SEC.Verify.ECDSA
+        DNS.SEC.Verify.EdDSA
+        DNS.SEC.Verify.RSA
+        DNS.SEC.Verify.Types
+        DNS.SEC.Verify.Verify
 
     default-language: Haskell2010
     ghc-options:      -Wall
