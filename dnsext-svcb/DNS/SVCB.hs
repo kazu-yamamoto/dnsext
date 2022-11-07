@@ -1,7 +1,29 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.SVCB where
+module DNS.SVCB (
+    TYPE (
+    SVCB
+  , HTTPS
+  )
+  , RD_SVCB(..)
+  , RD_HTTPS(..)
+  , SvcParams
+  , SvcParamKey (
+    SPK_Mandatory
+  , SPK_ALPN
+  , SPK_NoDefaultALPN
+  , SPK_Port
+  , SPK_IPv4Hint
+  , SPK_ECH
+  , SPK_IPv6Hint
+  )
+  , fromSvcParamKey
+  , toSvcParamKey
+  , SvcParamValue
+  , lookupSvcParams
+  , addResourceDataForSVCB
+  ) where
 
 import DNS.Types
 import DNS.Types.Internal
@@ -9,7 +31,9 @@ import qualified DNS.Types.Opaque as Opaque
 import qualified Data.IntMap as M
 
 import DNS.SVCB.Imports
+import DNS.SVCB.Key
 import DNS.SVCB.Params
+import DNS.SVCB.Value
 
 ----------------------------------------------------------------
 
