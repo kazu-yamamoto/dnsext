@@ -395,7 +395,10 @@ rd_tlsa a b c d = toRData $ RD_TLSA a b c d
 ----------------------------------------------------------------
 
 -- | Unknown resource data
-data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Ord, Show)
+data RD_Unknown = RD_Unknown TYPE Opaque deriving (Eq, Ord)
+
+instance Show RD_Unknown where
+    show (RD_Unknown typ o) = "RD_Unknown(" ++ show (fromTYPE typ) ++ ") " ++ show o
 
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
