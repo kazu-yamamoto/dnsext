@@ -170,7 +170,9 @@ instance Read TYPE where
             dict = unsafePerformIO $ readIORef globalTypeReadDict
         case M.lookup str dict of
           Just t -> return t
-          _      -> fail "Read TYPE"
+          Nothing
+            | "TYPE" `isPrefixOf` str -> return $ toTYPE $ read $ drop 4 str
+            | otherwise               -> fail "Read TYPE"
 
 type TypeReadDict = Map String TYPE
 
