@@ -117,7 +117,7 @@ pattern CAA        = TYPE 257 -- RFC 6844
 
 instance Show TYPE where
     show (TYPE w) = case IM.lookup i dict of
-      Nothing   -> "TYPE " ++ show w
+      Nothing   -> "TYPE" ++ show w
       Just name -> name
       where
         i = fromIntegral w
