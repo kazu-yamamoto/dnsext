@@ -4,6 +4,7 @@ module DNS.SEC (
   , module DNS.SEC.Opts
   , module DNS.SEC.Time
   , module DNS.SEC.PubAlg
+  , module DNS.SEC.PubKey
   , module DNS.SEC.HashAlg
   , module DNS.SEC.Flags
   ) where
@@ -15,6 +16,7 @@ import DNS.SEC.Flags
 import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
+import DNS.SEC.PubKey
 import DNS.SEC.Time
 import DNS.SEC.Types
 import DNS.SEC.Opts
