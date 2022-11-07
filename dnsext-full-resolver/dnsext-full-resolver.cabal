@@ -78,6 +78,7 @@ executable dug
         dnsext-types,
         dnsext-io,
         dnsext-dnssec,
+        dnsext-svcb,
         iproute,
         transformers,
         bytestring,
