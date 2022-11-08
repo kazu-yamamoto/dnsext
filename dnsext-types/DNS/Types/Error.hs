@@ -50,8 +50,9 @@ data DNSError =
   | BadConfiguration
     -- | Network failure.
   | NetworkFailure IOException
-    -- | Error is unknown
+    -- | Wire format cannot be decoded.
   | DecodeError String
+    -- | Error is unknown
   | UnknownDNSError
   deriving (Eq, Show, Typeable)
 
