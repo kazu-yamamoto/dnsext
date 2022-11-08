@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DNS.SEC.Verify.RSA (
     rsaSHA1
   , rsaSHA256
@@ -66,9 +68,9 @@ rsaVerify (alg, pkcs1) pubkey sig msg = do
   where
     unpadPKCS1Prefix :: ByteString -> Either String ByteString
     unpadPKCS1Prefix  s0 = do
-      s1 <- stripP (B8.pack "\x00\x01") s0
+      s1 <- stripP "\x00\x01" s0
       let s2 = B8.dropWhile (== '\xff') s1
-      s3 <- stripP (B8.pack "\x00") s2
+      s3 <- stripP "\x00" s2
       stripP pkcs1 s3
         where
           stripP prefix = maybe (Left $ "RSASHA.rsaVerify: expected prefix: " ++ show prefix) Right . B8.stripPrefix prefix
@@ -86,10 +88,10 @@ rsaVerify (alg, pkcs1) pubkey sig msg = do
      SHA-512:     (0x)30 51 30 0d 06 09 60 86 48 01 65 03 04 02 03 05 00 04 40 || H.
  -}
 sha1   :: (SHA1,   ByteString)
-sha1    = (SHA1,   B8.pack "\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14")
+sha1    = (SHA1,   "\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14")
 
 sha256 :: (SHA256, ByteString)
-sha256  = (SHA256, B8.pack "\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20")
+sha256  = (SHA256, "\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20")
 
 sha512 :: (SHA512, ByteString)
-sha512  = (SHA512, B8.pack "\x30\x51\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03\x05\x00\x04\x40")
+sha512  = (SHA512, "\x30\x51\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03\x05\x00\x04\x40")
