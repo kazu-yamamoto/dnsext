@@ -160,5 +160,8 @@ decodeResourceRecordAt :: Int64      -- ^ current epoch time
                        -> Either DNSError ResourceRecord
 decodeResourceRecordAt t bs = fst <$> runSGetAt t getResourceRecord bs
 
-decodeRData :: TYPE -> Int -> ByteString -> Either DNSError RData
-decodeRData typ len bs = fst <$> runSGet (getRData typ len) bs
+-- | Decode a resource data.
+decodeRData :: TYPE -> ByteString -> Either DNSError RData
+decodeRData typ bs = fst <$> runSGet (getRData typ len) bs
+  where
+    len = BS.length bs
