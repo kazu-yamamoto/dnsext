@@ -15,7 +15,7 @@ module DNS.StateBinary.SPut (
   , putLenShortByteString
   , putReplicate
   -- ** Lower utilities
-  , unexpectedSized
+  , with16Length
   -- ** Builder state
   , BState
   , builderPosition
@@ -32,13 +32,17 @@ module DNS.StateBinary.SPut (
 import Control.Monad.State.Strict (State)
 import qualified Control.Monad.State.Strict as ST
 import Data.ByteString.Builder (Builder)
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
+import Data.ByteString.Internal (ByteString(..))
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Lazy.Char8 as LC8
 import qualified Data.ByteString.Short as Short
 import Data.Map (Map)
 import qualified Data.Map as M
+import Foreign.ForeignPtr (withForeignPtr)
+import Foreign.Ptr (plusPtr)
+import Foreign.Storable (poke)
+import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.StateBinary.Types
 import DNS.Types.Imports
@@ -49,52 +53,74 @@ import DNS.Types.Imports
 type SPut a = State BState a
 
 runSPut :: SPut () -> ByteString
-runSPut sput = toBS $ bstBuilder $ run sput
+runSPut sput = let st = run sput
+                   builder = bstBuilder st
+                   fixLens = bstFixLen st
+               in unsafeFixLen fixLens $ toBS builder
   where
     run x = ST.execState x initialBState
     toBS = LC8.toStrict . BB.toLazyByteString
+    unsafeFixLen fls bs@(PS fptr off _) = unsafePerformIO $ do
+        withForeignPtr fptr $ \p0 -> do
+            let p = p0 `plusPtr` off
+            mapM_ (fixL p) fls
+        return bs
+    fixL beg (pos,len) = do
+        let (u0,l0) = len `divMod` 256
+            u = fromIntegral u0 :: Word8
+            l = fromIntegral l0 :: Word8
+        poke (beg `plusPtr` pos) u
+        poke (beg `plusPtr` (pos + 1)) l
 
 ----------------------------------------------------------------
+
+type Position = Int
 
 -- | Builder state
 data BState = BState {
     bstDomain   :: Map RawDomain Int
-  , bstPosition :: Int
+  , bstPosition :: Position
   , bstBuilder  :: Builder
+  , bstFixLen   :: [(Position, Int)]
 }
 
 initialBState :: BState
-initialBState = BState M.empty 0 mempty
+initialBState = BState M.empty 0 mempty []
 
 ----------------------------------------------------------------
 
-builderPosition :: State BState Int
+builderPosition :: State BState Position
 builderPosition = ST.gets bstPosition
 
 addBuilderPosition :: Int -> State BState ()
 addBuilderPosition n = do
-    BState m cur b <- ST.get
-    ST.put $ BState m (cur+n) b
+    BState m cur b fl <- ST.get
+    ST.put $ BState m (cur+n) b fl
 
 popPointer :: RawDomain -> State BState (Maybe Int)
 popPointer dom = ST.gets (M.lookup dom . bstDomain)
 
 pushPointer :: RawDomain -> Int -> State BState ()
 pushPointer dom pos = do
-    BState m cur b <- ST.get
-    ST.put $ BState (M.insert dom pos m) cur b
+    BState m cur b fl <- ST.get
+    ST.put $ BState (M.insert dom pos m) cur b fl
 
 appendBuilder :: Builder -> State BState ()
 appendBuilder bb = do
-    BState m cur b <- ST.get
-    ST.put $ BState m cur (b <> bb)
+    BState m cur b fl <- ST.get
+    ST.put $ BState m cur (b <> bb) fl
+
+pushFixLen :: Position -> Int -> State BState ()
+pushFixLen pos len = do
+    BState m cur b fl <- ST.get
+    ST.put $ BState m cur b $ (pos,len) : fl
 
 ----------------------------------------------------------------
 
 fixedSized :: Int -> (a -> Builder) -> a -> SPut ()
 fixedSized n f v = do
-    addBuilderPosition n
     appendBuilder $ f v
+    addBuilderPosition n
 
 put8 :: Word8 -> SPut ()
 put8 = fixedSized 1 BB.word8
@@ -121,9 +147,7 @@ putReplicate n w =
 ----------------------------------------------------------------
 
 expectedSized :: (a -> Int) -> (a -> Builder) -> a -> SPut ()
-expectedSized n f v = do
-    addBuilderPosition $ n v
-    appendBuilder $ f v
+expectedSized getLen f v = fixedSized (getLen v) f v
 
 putShortByteString :: ShortByteString -> SPut ()
 putShortByteString = expectedSized Short.length BB.shortByteString
@@ -138,9 +162,12 @@ putLenShortByteString txt = do
 
 ----------------------------------------------------------------
 
-unexpectedSized :: (Int -> SPut ()) -> SPut () -> SPut ()
-unexpectedSized p s = do
-    let bs = runSPut s
-    p $ BS.length bs
+with16Length :: SPut () -> SPut ()
+with16Length s = do
+    pos <- builderPosition
+    putInt16 0 -- fixed later
+    beg <- builderPosition
     s
-
+    end <- builderPosition
+    let len = end - beg
+    pushFixLen pos len

@@ -603,7 +603,7 @@ putResourceRecord cf ResourceRecord{..} = do
     putResourceRData rdata
   where
     putResourceRData :: RData -> SPut ()
-    putResourceRData (RData rd) = unexpectedSized putInt16 $ putResourceData cf rd
+    putResourceRData (RData rd) = with16Length $ putResourceData cf rd
 
 getResourceRecords :: Int -> SGet [ResourceRecord]
 getResourceRecords n = replicateM n getResourceRecord
