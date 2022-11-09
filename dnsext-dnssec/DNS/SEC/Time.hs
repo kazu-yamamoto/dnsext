@@ -25,5 +25,5 @@ getDnsTime   = do
     tdns <- get32
     return $ dnsTime tdns tnow
 
-putDnsTime :: Int64 -> SPut
+putDnsTime :: Int64 -> SPut ()
 putDnsTime = put32 . fromIntegral

@@ -22,17 +22,16 @@ data RRSIGImpl =
   , rrsigIVerify :: pubkey -> sig -> ByteString -> Either String Bool
   }
 
-putRRSIGHeader :: RD_RRSIG -> SPut
-putRRSIGHeader RD_RRSIG{..} =
-  mconcat [ put16    $ fromTYPE rrsig_type
-          , putPubAlg  rrsig_pubalg
-          , put8       rrsig_num_labels
-          , putSeconds rrsig_ttl
-          , putDnsTime rrsig_expiration
-          , putDnsTime rrsig_inception
-          , put16      rrsig_key_tag
-          , putDomain Canonical rrsig_zone
-          ]
+putRRSIGHeader :: RD_RRSIG -> SPut ()
+putRRSIGHeader RD_RRSIG{..} = do
+    put16    $ fromTYPE rrsig_type
+    putPubAlg  rrsig_pubalg
+    put8       rrsig_num_labels
+    putSeconds rrsig_ttl
+    putDnsTime rrsig_expiration
+    putDnsTime rrsig_inception
+    put16      rrsig_key_tag
+    putDomain Canonical rrsig_zone
 
 verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
 verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
@@ -41,6 +40,6 @@ verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
   {- TODO: check DNSKEY with keytag -}
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
-  let str = runSPut $ putRRSIGHeader rrsig <> putResourceRecord Canonical rr
+  let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
   good <- rrsigIVerify pubkey sig str
   unless good $ Left "verifyRRSIG: rejected on verification"

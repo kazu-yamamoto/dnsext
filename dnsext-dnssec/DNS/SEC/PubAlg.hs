@@ -85,7 +85,7 @@ instance Show PubAlg where
     show PRIVATEOID         = "PRIVATEOID"
     show (PubAlg n)        = "PubAlg " ++ show n
 
-putPubAlg :: PubAlg -> SPut
+putPubAlg :: PubAlg -> SPut ()
 putPubAlg = put8 . fromPubAlg
 
 getPubAlg :: SGet PubAlg
