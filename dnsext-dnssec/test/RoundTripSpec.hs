@@ -25,6 +25,10 @@ spec = do
         let bs = encodeResourceRecord rr
         decodeResourceRecord bs `shouldBe` Right rr
         fmap encodeResourceRecord (decodeResourceRecord bs) `shouldBe` Right bs
+    prop "PubKey_RSA" . forAll genPubKey_RSA $ \ pubkey -> do
+        let o = fromPubKey pubkey
+        toPubKey_RSA o `shouldSatisfy` (== pubkey)
+        -- fromPubKey (toPubKey_RSA o) `shouldSatisfy` (== o)
 
 genResourceRecord :: Gen ResourceRecord
 genResourceRecord = frequency
@@ -58,6 +62,13 @@ mkRData typ =
                    t <- types,
                    then group by (fromTYPE t)
                         using groupWith ]
+
+genPubKey_RSA :: Gen PubKey
+genPubKey_RSA = pubKey_RSA <$> genBSize <*> genE
+  where
+    pubKey_RSA bsize e = PubKey_RSA (bsize * 8) e (fromString $ replicate bsize '\xff')
+    genBSize = elements [64, 128, 256]
+    genE = elements ["\x01\x00\x01", fromString $ "\x01" <> replicate 255 '\x00' <> "\x01"]
 
 genOpaque :: Gen Opaque
 genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
