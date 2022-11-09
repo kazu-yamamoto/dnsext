@@ -6,25 +6,35 @@ import qualified DNS.Types.Opaque as Opaque
 
 import DNS.SVCB.Key
 
+----------------------------------------------------------------
+
 type SvcParamValue = Opaque
+
+----------------------------------------------------------------
 
 class SPV a where
     encodeSvcParamValue :: a -> Opaque
     decodeSvcParamValue :: Opaque -> Maybe a
 
+encodeSPV :: SPut () -> Opaque
+encodeSPV = Opaque.fromByteString . runSPut
+
+decodeSPV :: SGet a -> Opaque -> Maybe a
+decodeSPV parser o = case runSGet parser bs of
+    Right (r,_) -> Just r
+    _           -> Nothing
+  where
+    bs = Opaque.toByteString o
+
+----------------------------------------------------------------
+
 newtype SPV_Mandatory = SPV_Moandatory [SvcParamKey] deriving (Eq,Ord,Show)
 
 instance SPV SPV_Mandatory where
-    encodeSvcParamValue (SPV_Moandatory ks) =
-        Opaque.fromByteString $ runSPut $ do
-            put16 (fromSvcParamKey SPK_Mandatory)
-            putInt16 (length ks * 2)
-            mapM_ (put16 . fromSvcParamKey) ks
-    decodeSvcParamValue o = case runSGet parser bs of
-       Right (r,_) -> Just r
-       _           -> Nothing
-       where
-         bs = Opaque.toByteString o
-         parser = do
-             len <- getInt16
-             SPV_Moandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
+    encodeSvcParamValue (SPV_Moandatory ks) = encodeSPV $ do
+        put16 (fromSvcParamKey SPK_Mandatory)
+        putInt16 (length ks * 2)
+        mapM_ (put16 . fromSvcParamKey) ks
+    decodeSvcParamValue = decodeSPV $ do
+        len <- getInt16
+        SPV_Moandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
