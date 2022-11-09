@@ -53,17 +53,17 @@ data RD_SVCB = RD_SVCB {
 
 instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
-    putResourceData _ RD_SVCB{..} =
-        mconcat ( put16 svcb_priority :
-                  putDomain Canonical svcb_target :
-                  putSvcParams svcb_params
-                  )
-          where
-            putSvcParams (SvcParams m) = M.foldrWithKey f [] m
-            f k v xs = encodekv k v : xs
-            encodekv k v = mconcat [ putInt16 k
-                                   , putInt16 (Opaque.length v)
-                                   , putOpaque v ]
+    putResourceData _ RD_SVCB{..} = do
+        put16 svcb_priority
+        putDomain Canonical svcb_target
+        let SvcParams m = svcb_params
+        void $ M.foldrWithKey f (return ())  m
+      where
+        f k v x = encodekv k v >> x
+        encodekv k v = do
+            putInt16 k
+            putInt16 $ Opaque.length v
+            putOpaque v
     getResourceData _ lim = do
         end      <- (+) lim <$> parserPosition
         priority <- get16
