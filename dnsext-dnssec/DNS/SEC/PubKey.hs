@@ -48,18 +48,19 @@ toPubKey_ECDSA len o
     blen = Opaque.length o
 
 fromPubKey :: PubKey -> Opaque
-fromPubKey (PubKey_RSA len e n)
-    | len >= 256 = let (x,y) = len `divMod` 256
+fromPubKey (PubKey_RSA _len e n)
+    | elen > 1   = let (x,y) = elen `divMod` 256
                    in Opaque.concat [ Opaque.singleton 0
                                     , Opaque.singleton $ fromIntegral x
                                     , Opaque.singleton $ fromIntegral y
                                     , e
                                     , n
                                            ]
-    | otherwise  = Opaque.concat [ Opaque.singleton $ fromIntegral len
+    | otherwise  = Opaque.concat [ Opaque.singleton $ fromIntegral elen
                                  , e
                                  , n
                                  ]
+  where elen = Opaque.length e
 fromPubKey (PubKey_ECDSA x y) = x <> y
 fromPubKey (PubKey_Opaque o)    = o
 
