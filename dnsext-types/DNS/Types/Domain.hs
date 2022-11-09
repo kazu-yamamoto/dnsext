@@ -234,15 +234,15 @@ data CanonicalFlag
 
 ----------------------------------------------------------------
 
-putDomain :: CanonicalFlag -> Domain -> SPut
+putDomain :: CanonicalFlag -> Domain -> SPut ()
 putDomain cf@Compression (Domain o _) = putDomain' _period cf o
 putDomain cf@Canonical   (Domain _ l) = putDomain' _period cf l {- canonical form is lowercase and no name-compression. -}
 
-putMailbox :: CanonicalFlag -> Mailbox -> SPut
+putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
 putMailbox cf@Compression (Mailbox o _) = putDomain' _at cf o
 putMailbox cf@Canonical   (Mailbox _ l) = putDomain' _at cf l {- canonical form is lowercase and no name-compression. -}
 
-putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut
+putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut ()
 putDomain' sep cf dom
     | Short.null dom || dom == "." = put8 0
     | otherwise = do
@@ -253,9 +253,8 @@ putDomain' sep cf dom
             _                            -> do
                         -- Pointers are limited to 14-bits!
                         when (cur <= 0x3fff) $ pushPointer dom cur
-                        mconcat [ putPartialDomain hd
-                                , putDomain' _period cf tl
-                                ]
+                        putPartialDomain hd
+                        putDomain' _period cf tl
   where
     (hd, tl) = go sep
       where
@@ -267,10 +266,10 @@ putDomain' sep cf dom
               | otherwise -> p
             Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
 
-putPointer :: Int -> SPut
+putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)
 
-putPartialDomain :: RawDomain -> SPut
+putPartialDomain :: RawDomain -> SPut ()
 putPartialDomain = putLenShortByteString
 
 ----------------------------------------------------------------

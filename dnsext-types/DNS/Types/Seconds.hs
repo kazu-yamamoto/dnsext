@@ -20,9 +20,8 @@ instance Show Seconds where
                          in show j ++ mul " min" j
           | otherwise  =              mul  "sec" i
 
-putSeconds :: Seconds -> SPut
+putSeconds :: Seconds -> SPut ()
 putSeconds (Seconds n) = put32 n
 
 getSeconds :: SGet Seconds
 getSeconds = Seconds <$> get32
-

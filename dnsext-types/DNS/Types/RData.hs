@@ -22,7 +22,7 @@ import DNS.Types.Type
 
 class (Typeable a, Eq a, Show a) => ResourceData a where
     resourceDataType :: a -> TYPE
-    putResourceData  :: CanonicalFlag -> a -> SPut
+    putResourceData  :: CanonicalFlag -> a -> SPut ()
     getResourceData  :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
@@ -48,7 +48,7 @@ instance Eq RData where
 rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
 
-putRData :: CanonicalFlag -> RData -> SPut
+putRData :: CanonicalFlag -> RData -> SPut ()
 putRData cf (RData x) = putResourceData cf x
 
 rdataField :: forall a b . Typeable a => RData -> (a -> b) -> Maybe b
@@ -66,7 +66,7 @@ newtype RD_A = RD_A {
 
 instance ResourceData RD_A where
     resourceDataType _ = A
-    putResourceData _ (RD_A ipv4) = mconcat $ map putInt8 (fromIPv4 ipv4)
+    putResourceData _ (RD_A ipv4) = mapM_ putInt8 $ fromIPv4 ipv4
     getResourceData _ _ = RD_A . toIPv4 <$> getNBytes 4
 
 instance Show RD_A where
@@ -138,22 +138,21 @@ data RD_SOA = RD_SOA {
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
-    putResourceData cf RD_SOA{..} =
-      mconcat [ putDomain  cf soa_mname
-              , putMailbox cf soa_rname
-              , put32      soa_serial
-              , putSeconds soa_refresh
-              , putSeconds soa_retry
-              , putSeconds soa_expire
-              , putSeconds soa_minimum
-              ]
+    putResourceData cf RD_SOA{..} = do
+        putDomain  cf soa_mname
+        putMailbox cf soa_rname
+        put32      soa_serial
+        putSeconds soa_refresh
+        putSeconds soa_retry
+        putSeconds soa_expire
+        putSeconds soa_minimum
     getResourceData _ _ = RD_SOA <$> getDomain
-                                    <*> getMailbox
-                                    <*> get32
-                                    <*> getSeconds
-                                    <*> getSeconds
-                                    <*> getSeconds
-                                    <*> getSeconds
+                                 <*> getMailbox
+                                 <*> get32
+                                 <*> getSeconds
+                                 <*> getSeconds
+                                 <*> getSeconds
+                                 <*> getSeconds
 
 -- | Smart constructor.
 rd_soa :: Domain -> Mailbox -> Word32 -> Seconds -> Seconds -> Seconds -> Seconds -> RData
@@ -210,10 +209,9 @@ data RD_MX = RD_MX {
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
-    putResourceData cf RD_MX{..} =
-      mconcat [ put16 mx_preference
-              , putDomain cf mx_exchange
-              ]
+    putResourceData cf RD_MX{..} = do
+        put16 mx_preference
+        putDomain cf mx_exchange
     getResourceData _ _ = RD_MX <$> get16 <*> getDomain
 
 -- | Smart constructor.
@@ -232,10 +230,10 @@ instance ResourceData RD_TXT where
     resourceDataType _ = TXT
     putResourceData _ (RD_TXT o) = putTXT o
       where
-        putTXT txt = let (h, t) = Opaque.splitAt 255 txt
-                         next | Opaque.null t = mempty
-                              | otherwise     = putTXT t
-                     in putLenOpaque h <> next
+        putTXT txt = do let (h, t) = Opaque.splitAt 255 txt
+                            next | Opaque.null t = return ()
+                                 | otherwise     = putTXT t
+                        putLenOpaque h >> next
     getResourceData _ len =
       RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
 
@@ -272,7 +270,7 @@ data RD_RP = RD_RP {
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
-    putResourceData cf (RD_RP mbox d) = putMailbox cf mbox <> putDomain cf d
+    putResourceData cf (RD_RP mbox d) = putMailbox cf mbox >> putDomain cf d
     getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
 
 -- | Smart constructor.
@@ -289,7 +287,7 @@ newtype RD_AAAA = RD_AAAA {
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
-    putResourceData _ (RD_AAAA ipv6) = mconcat $ map putInt8 (fromIPv6b ipv6)
+    putResourceData _ (RD_AAAA ipv6) = mapM_ putInt8 $ fromIPv6b ipv6
     getResourceData _ _ = RD_AAAA . toIPv6b <$> getNBytes 16
 
 instance Show RD_AAAA where
@@ -311,16 +309,15 @@ data RD_SRV = RD_SRV {
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    putResourceData cf RD_SRV{..} =
-      mconcat [ put16 srv_priority
-              , put16 srv_weight
-              , put16 srv_port
-              , putDomain cf srv_target
-              ]
+    putResourceData cf RD_SRV{..} = do
+        put16 srv_priority
+        put16 srv_weight
+        put16 srv_port
+        putDomain cf srv_target
     getResourceData _ _ = RD_SRV <$> get16
-                                    <*> get16
-                                    <*> get16
-                                    <*> getDomain
+                                 <*> get16
+                                 <*> get16
+                                 <*> getDomain
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -354,7 +351,7 @@ newtype RD_OPT = RD_OPT {
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    putResourceData _ (RD_OPT options) = mconcat $ fmap encodeOData options
+    putResourceData _ (RD_OPT options) = mapM_ encodeOData options
     getResourceData = undefined -- never used
 
 instance Show RD_OPT where
@@ -376,12 +373,11 @@ data RD_TLSA = RD_TLSA {
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
-    putResourceData _ RD_TLSA{..} =
-      mconcat [ put8 tlsa_usage
-              , put8 tlsa_selector
-              , put8 tlsa_matching_type
-              , putOpaque tlsa_assoc_data
-              ]
+    putResourceData _ RD_TLSA{..} = do
+        put8 tlsa_usage
+        put8 tlsa_selector
+        put8 tlsa_matching_type
+        putOpaque tlsa_assoc_data
     getResourceData _ len =
       RD_TLSA <$> get8
               <*> get8

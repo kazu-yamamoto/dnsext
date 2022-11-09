@@ -197,7 +197,7 @@ addOpt code name = do
 
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode   :: a -> OptCode
-    encodeOptData :: a -> SPut
+    encodeOptData :: a -> SPut ()
     decodeOptData :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
@@ -223,7 +223,7 @@ instance Eq OData where
 odataToOptCode :: OData -> OptCode
 odataToOptCode (OData x) = optDataCode x
 
-encodeOData :: OData -> SPut
+encodeOData :: OData -> SPut ()
 encodeOData (OData x) = encodeOptData x
 
 ---------------------------------------------------------------
@@ -268,7 +268,7 @@ instance OptData OD_ClientSubnet where
     encodeOptData = encodeClientSubnet
     decodeOptData _ len = decodeClientSubnet len
 
-encodeClientSubnet :: OD_ClientSubnet -> SPut
+encodeClientSubnet :: OD_ClientSubnet -> SPut ()
 encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
@@ -289,21 +289,19 @@ encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
                         IPv4 ip4 -> (1, take octets $ fromIPv4  $ prefix ip4)
                         IPv6 ip6 -> (2, take octets $ fromIPv6b $ prefix ip6)
         dataLen = 2 + 2 + octets
-     in mconcat [ put16 $ fromOptCode ClientSubnet
-                , putInt16 dataLen
-                , put16 family
-                , put8 srcBits
-                , put8 scpBits
-                , mconcat $ fmap putInt8 raw
-                ]
-encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) =
-    mconcat [ put16 $ fromOptCode ClientSubnet
-            , putInt16 $ 4 + Opaque.length addr
-            , put16 family
-            , put8 srcBits
-            , put8 scpBits
-            , putOpaque addr
-            ]
+     in do put16 $ fromOptCode ClientSubnet
+           putInt16 dataLen
+           put16 family
+           put8 srcBits
+           put8 scpBits
+           mapM_ putInt8 raw
+encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
+    put16 $ fromOptCode ClientSubnet
+    putInt16 $ 4 + Opaque.length addr
+    put16 family
+    put8 srcBits
+    put8 scpBits
+    putOpaque addr
 
 decodeClientSubnet :: Int -> SGet OD_ClientSubnet
 decodeClientSubnet len = do
@@ -397,9 +395,8 @@ _showECS family srcBits scpBits address =
 ---------------------------------------------------------------
 
 -- | Encode an EDNS OPTION byte string.
-putODBytes :: Word16 -> Opaque -> SPut
-putODBytes code o =
-    mconcat [ put16 code
-            , putInt16 $ Opaque.length o
-            , putOpaque o
-            ]
+putODBytes :: Word16 -> Opaque -> SPut ()
+putODBytes code o = do
+    put16 code
+    putInt16 $ Opaque.length o
+    putOpaque o
