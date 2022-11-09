@@ -72,17 +72,17 @@ foldr f ini (Opaque sbs) = Short.foldr f ini sbs
 
 ----------------------------------------------------------------
 
-putOpaque :: Opaque -> SPut
+putOpaque :: Opaque -> SPut ()
 putOpaque (Opaque o) = putShortByteString o
 
 getOpaque :: Int -> SGet Opaque
 getOpaque len = Opaque <$> getNShortByteString len
 
-putLenOpaque :: Opaque -> SPut
-putLenOpaque (Opaque o) =
+putLenOpaque :: Opaque -> SPut ()
+putLenOpaque (Opaque o) = do
     -- put the length of the given string
     putInt8 (fromIntegral $ Short.length o)
- <> putShortByteString o
+    putShortByteString o
 
 getLenOpaque :: SGet Opaque
 getLenOpaque = Opaque <$> (getInt8 >>= getNShortByteString)

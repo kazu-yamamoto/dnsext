@@ -63,7 +63,7 @@ fromPubKey (PubKey_RSA len e n)
 fromPubKey (PubKey_ECDSA x y) = x <> y
 fromPubKey (PubKey_Opaque o)    = o
 
-putPubKey :: PubKey -> SPut
+putPubKey :: PubKey -> SPut ()
 putPubKey pub = putOpaque $ fromPubKey pub
 
 getPubKey :: PubAlg -> Int -> SGet PubKey

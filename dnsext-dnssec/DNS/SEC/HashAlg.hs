@@ -34,7 +34,7 @@ instance Show DigestAlg where
     show SHA384        = "SHA384"
     show (DigestAlg n) = "DigestAlg " ++ show n
 
-putDigestAlg :: DigestAlg -> SPut
+putDigestAlg :: DigestAlg -> SPut ()
 putDigestAlg = put8 . fromDigestAlg
 
 getDigestAlg :: SGet DigestAlg
@@ -56,7 +56,7 @@ instance Show HashAlg where
     show Hash_SHA1   = "SHA1"
     show (HashAlg n) = "HashAlg " ++ show n
 
-putHashAlg :: HashAlg -> SPut
+putHashAlg :: HashAlg -> SPut ()
 putHashAlg = put8 . fromHashAlg
 
 getHashAlg :: SGet HashAlg

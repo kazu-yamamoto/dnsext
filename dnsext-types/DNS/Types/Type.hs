@@ -220,5 +220,5 @@ addType typ name = do
 getTYPE :: SGet TYPE
 getTYPE = toTYPE <$> get16
 
-putTYPE :: TYPE -> SPut
+putTYPE :: TYPE -> SPut ()
 putTYPE x = put16 $ fromTYPE x

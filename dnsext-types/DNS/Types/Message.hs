@@ -4,9 +4,6 @@
 
 module DNS.Types.Message where
 
-import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Lazy.Char8 as LC8
-
 import DNS.StateBinary
 import DNS.Types.Dict
 import DNS.Types.Domain
@@ -98,19 +95,20 @@ data DNSMessage = DNSMessage {
 --   generates any kind of query.
 type Identifier = Word16
 
-putDNSMessage :: DNSMessage -> SPut
-putDNSMessage msg = putHeader hd
-                    <> putNums
-                    <> mconcat (map putQuestion qs)
-                    <> mconcat (map putRR an)
-                    <> mconcat (map putRR au)
-                    <> mconcat (map putRR ad)
+putDNSMessage :: DNSMessage -> SPut ()
+putDNSMessage msg = do
+    putHeader hd
+    putNums
+    mapM_ putQuestion qs
+    mapM_ putRR an
+    mapM_ putRR au
+    mapM_ putRR ad
   where
-    putNums = mconcat $ fmap putInt16 [ length qs
-                                      , length an
-                                      , length au
-                                      , length ad
-                                      ]
+    putNums = mapM_ putInt16 [ length qs
+                             , length an
+                             , length au
+                             , length ad
+                             ]
     putRR = putResourceRecord Compression
     hm = header msg
     fl = flags hm
@@ -295,9 +293,10 @@ data DNSFlags = DNSFlags {
   , chkDisable   :: Bool   -- ^ CD (Checking Disabled) bit - (RFC4035, Section 3.2.2).
   } deriving (Eq, Show)
 
-putHeader :: DNSHeader -> SPut
-putHeader hdr = putIdentifier (identifier hdr)
-             <> putDNSFlags (flags hdr)
+putHeader :: DNSHeader -> SPut ()
+putHeader hdr = do
+    putIdentifier $ identifier hdr
+    putDNSFlags $ flags hdr
   where
     putIdentifier = put16
 
@@ -325,7 +324,7 @@ defaultDNSFlags = DNSFlags
          , rcode        = NoErr
          }
 
-putDNSFlags :: DNSFlags -> SPut
+putDNSFlags :: DNSFlags -> SPut ()
 putDNSFlags DNSFlags{..} = put16 word
   where
     set :: Word16 -> State Word16 ()
@@ -553,10 +552,11 @@ data Question = Question {
   , qclass :: CLASS
   } deriving (Eq, Show)
 
-putQuestion :: Question -> SPut
-putQuestion Question{..} = putDomain Compression qname
-                        <> put16 (fromTYPE qtype)
-                        <> putCLASS qclass
+putQuestion :: Question -> SPut ()
+putQuestion Question{..} = do
+    putDomain Compression qname
+    put16 (fromTYPE qtype)
+    putCLASS qclass
 
 ----------------------------------------------------------------
 
@@ -567,7 +567,7 @@ type CLASS = Word16
 classIN :: CLASS
 classIN = 1
 
-putCLASS :: CLASS -> SPut
+putCLASS :: CLASS -> SPut ()
 putCLASS = put16
 
 getCLASS :: SGet CLASS
@@ -594,22 +594,16 @@ type AuthorityRecords = [ResourceRecord]
 -- | Type for resource records in the additional section.
 type AdditionalRecords = [ResourceRecord]
 
-putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut
-putResourceRecord cf ResourceRecord{..} = mconcat [
+putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut ()
+putResourceRecord cf ResourceRecord{..} = do
     putDomain cf rrname
-  , putTYPE      rrtype
-  , putCLASS     rrclass
-  , putSeconds   rrttl
-  , putResourceRData rdata
-  ]
+    putTYPE      rrtype
+    putCLASS     rrclass
+    putSeconds   rrttl
+    putResourceRData rdata
   where
-    putResourceRData :: RData -> SPut
-    putResourceRData (RData rd) = do
-        addBuilderPosition 2 -- "simulate" putInt16
-        rDataBuilder <- putResourceData cf rd
-        let rdataLength = fromIntegral . LC8.length . BB.toLazyByteString $ rDataBuilder
-        let rlenBuilder = BB.int16BE rdataLength
-        return $ rlenBuilder <> rDataBuilder
+    putResourceRData :: RData -> SPut ()
+    putResourceRData (RData rd) = with16Length $ putResourceData cf rd
 
 getResourceRecords :: Int -> SGet [ResourceRecord]
 getResourceRecords n = replicateM n getResourceRecord

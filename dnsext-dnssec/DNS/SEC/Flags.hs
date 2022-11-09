@@ -24,7 +24,7 @@ fromDNSKEYflags flags = foldl' (.|.) 0 $ map toW flags
     toW REVOKE           = 0b0000000010000000
     toW SecureEntryPoint = 0b0000000000000001
 
-putDNSKEYflags :: [DNSKEY_Flag] -> SPut
+putDNSKEYflags :: [DNSKEY_Flag] -> SPut ()
 putDNSKEYflags = put16 . fromDNSKEYflags
 
 getDNSKEYflags :: SGet [DNSKEY_Flag]
@@ -45,7 +45,7 @@ fromNSEC3flags flags = foldl' (.|.) 0 $ map toW flags
   where
     toW OptOut = 0b00000001
 
-putNSEC3flags :: [NSEC3_Flag] -> SPut
+putNSEC3flags :: [NSEC3_Flag] -> SPut ()
 putNSEC3flags = put8 . fromNSEC3flags
 
 getNSEC3flags :: SGet [NSEC3_Flag]

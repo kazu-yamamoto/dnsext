@@ -106,17 +106,16 @@ data RD_RRSIG = RD_RRSIG {
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    putResourceData cf RD_RRSIG{..} =
-      mconcat [ putTYPE    rrsig_type
-              , putPubAlg  rrsig_pubalg
-              , put8       rrsig_num_labels
-              , putSeconds rrsig_ttl
-              , putDnsTime rrsig_expiration
-              , putDnsTime rrsig_inception
-              , put16      rrsig_key_tag
-              , putDomain  cf rrsig_zone
-              , putOpaque  rrsig_signature
-              ]
+    putResourceData cf RD_RRSIG{..} = do
+        putTYPE    rrsig_type
+        putPubAlg  rrsig_pubalg
+        put8       rrsig_num_labels
+        putSeconds rrsig_ttl
+        putDnsTime rrsig_expiration
+        putDnsTime rrsig_inception
+        put16      rrsig_key_tag
+        putDomain  cf rrsig_zone
+        putOpaque  rrsig_signature
     getResourceData _ lim = do
         -- The signature follows a variable length zone name
         -- and occupies the rest of the RData.  Simplest to
@@ -153,12 +152,11 @@ data RD_DS = RD_DS {
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
-    putResourceData _ RD_DS{..} =
-        mconcat [ put16 ds_key_tag
-                , putPubAlg ds_pubalg
-                , putDigestAlg ds_hashalg
-                , putOpaque ds_digest
-                ]
+    putResourceData _ RD_DS{..} = do
+        put16 ds_key_tag
+        putPubAlg ds_pubalg
+        putDigestAlg ds_hashalg
+        putOpaque ds_digest
     getResourceData _ lim =
         RD_DS <$> get16
               <*> getPubAlg
@@ -179,8 +177,9 @@ data RD_NSEC = RD_NSEC {
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    putResourceData cf RD_NSEC{..} =
-        putDomain cf nsecNextDomain <> putNsecTypes nsecTypes
+    putResourceData cf RD_NSEC{..} = do
+        putDomain cf nsecNextDomain
+        putNsecTypes nsecTypes
     getResourceData _ len = do
         end <- rdataEnd len
         dom <- getDomain
@@ -203,12 +202,11 @@ data RD_DNSKEY = RD_DNSKEY {
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
-    putResourceData _ RD_DNSKEY{..} =
-        mconcat [ putDNSKEYflags dnskey_flags
-                , put8           dnskey_protocol
-                , putPubAlg      dnskey_pubalg
-                , putPubKey      dnskey_public_key
-                ]
+    putResourceData _ RD_DNSKEY{..} = do
+        putDNSKEYflags dnskey_flags
+        put8           dnskey_protocol
+        putPubAlg      dnskey_pubalg
+        putPubKey      dnskey_public_key
     getResourceData _ len = do
         flags  <- getDNSKEYflags
         proto  <- get8
@@ -234,14 +232,13 @@ data RD_NSEC3 = RD_NSEC3 {
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
-    putResourceData _ RD_NSEC3{..} =
-        mconcat [ putHashAlg    nsec3_hashalg
-                , putNSEC3flags nsec3_flags
-                , put16         nsec3_iterations
-                , putLenOpaque  nsec3_salt
-                , putLenOpaque  nsec3_next_hashed_owner_name
-                , putNsecTypes  nsec3_types
-                ]
+    putResourceData _ RD_NSEC3{..} = do
+        putHashAlg    nsec3_hashalg
+        putNSEC3flags nsec3_flags
+        put16         nsec3_iterations
+        putLenOpaque  nsec3_salt
+        putLenOpaque  nsec3_next_hashed_owner_name
+        putNsecTypes  nsec3_types
     getResourceData _ len = do
         dend <- rdataEnd len
         halg <- getHashAlg
@@ -268,12 +265,11 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM {
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
-    putResourceData _ RD_NSEC3PARAM{..} =
-        mconcat [ putHashAlg nsec3param_hashalg
-                , put8  nsec3param_flags
-                , put16 nsec3param_iterations
-                , putLenOpaque nsec3param_salt
-                ]
+    putResourceData _ RD_NSEC3PARAM{..} = do
+        putHashAlg   nsec3param_hashalg
+        put8         nsec3param_flags
+        put16        nsec3param_iterations
+        putLenOpaque nsec3param_salt
     getResourceData _ _ =
         RD_NSEC3PARAM <$> getHashAlg
                       <*> get8
@@ -325,38 +321,38 @@ rdataEnd lim = (+) lim <$> parserPosition
 ----------------------------------------------------------------
 
 -- | Encode DNSSEC NSEC type bits
-putNsecTypes :: [TYPE] -> SPut
+putNsecTypes :: [TYPE] -> SPut ()
 putNsecTypes types = putTypeList $ map fromTYPE types
   where
-    putTypeList :: [Word16] -> SPut
-    putTypeList ts =
-        mconcat [ putWindow (the top8) bot8 |
+    putTypeList :: [Word16] -> SPut ()
+    putTypeList ts = sequence_
+                [ putWindow (the top8) bot8 |
                   t <- ts,
                   let top8 = fromIntegral t `shiftR` 8,
                   let bot8 = fromIntegral t .&. 0xff,
                   then group by top8
                        using groupWith ]
 
-    putWindow :: Int -> [Int] -> SPut
-    putWindow top8 bot8s =
+    putWindow :: Int -> [Int] -> SPut ()
+    putWindow top8 bot8s = do
         let blks = maximum bot8s `shiftR` 3
-         in putInt8 top8
-            <> put8 (1 + fromIntegral blks)
-            <> putBits 0 [ (the block, foldl' mergeBits 0 bot8) |
-                           bot8 <- bot8s,
-                           let block = bot8 `shiftR` 3,
-                           then group by block
-                                using groupWith ]
+        putInt8 top8
+        put8 (1 + fromIntegral blks)
+        putBits 0 [ (the block, foldl' mergeBits 0 bot8) |
+                    bot8 <- bot8s,
+                    let block = bot8 `shiftR` 3,
+                    then group by block
+                         using groupWith ]
       where
         -- | Combine type bits in network bit order, i.e. bit 0 first.
         mergeBits acc b = setBit acc (7 - b.&.0x07)
 
-    putBits :: Int -> [(Int, Word8)] -> SPut
-    putBits _ [] = pure mempty
-    putBits n ((block, octet) : rest) =
+    putBits :: Int -> [(Int, Word8)] -> SPut ()
+    putBits _ [] = return ()
+    putBits n ((block, octet) : rest) = do
         putReplicate (block-n) 0
-        <> put8 octet
-        <> putBits (block + 1) rest
+        put8 octet
+        putBits (block + 1) rest
 
 -- <https://tools.ietf.org/html/rfc4034#section-4.1>
 -- Parse a list of NSEC type bitmaps
