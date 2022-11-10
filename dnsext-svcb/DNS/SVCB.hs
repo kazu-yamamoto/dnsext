@@ -93,12 +93,18 @@ instance ResourceData RD_SVCB where
 
 ----------------------------------------------------------------
 
-newtype RD_HTTPS = RD_HTTPS RD_SVCB deriving (Eq,Ord,Show)
+data RD_HTTPS = RD_HTTPS {
+    https_priority :: Word16
+  , https_target   :: Domain
+  , https_params   :: SvcParams
+  } deriving (Eq,Ord,Show)
 
 instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
-    putResourceData cf (RD_HTTPS r) = putResourceData cf r
-    getResourceData _ lim = RD_HTTPS <$> getResourceData (Proxy :: Proxy RD_SVCB) lim
+    putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
+    getResourceData _ lim = do
+        RD_SVCB x y z <- getResourceData (Proxy :: Proxy RD_SVCB) lim
+        return $ RD_HTTPS x y z
 
 ----------------------------------------------------------------
 

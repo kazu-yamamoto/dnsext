@@ -41,8 +41,8 @@ check vector key value =
           encodeRData rd `shouldBe` vector
           case fromRData rd of
             Nothing -> error "this is not HTTPS RR"
-            Just (RD_HTTPS https) -> do
-                case lookupSvcParams key $ svcb_params https of
+            Just https -> do
+                case lookupSvcParams key $ https_params https of
                   Nothing -> error "no such parameter"
                   Just o -> case decodeSvcParamValue o of
                     Nothing -> error "value cannot be decoded"
