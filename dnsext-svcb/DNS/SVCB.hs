@@ -1,14 +1,20 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- | This module provides Service Binding (SVCB) RR and HTTPS RR.
 module DNS.SVCB (
+  -- * Extended DNS types
     TYPE (
     SVCB
   , HTTPS
   )
+  -- * Extended resource data
   , RD_SVCB(..)
   , RD_HTTPS(..)
+  -- * Service parameters
   , SvcParams
+  , lookupSvcParams
+  -- ** Service parameter keys
   , SvcParamKey (
     SPK_Mandatory
   , SPK_ALPN
@@ -20,8 +26,10 @@ module DNS.SVCB (
   )
   , fromSvcParamKey
   , toSvcParamKey
+  -- ** Service parameter values
   , SvcParamValue
-  , lookupSvcParams
+  , SPV(..)
+  -- * Extension
   , addResourceDataForSVCB
   ) where
 
