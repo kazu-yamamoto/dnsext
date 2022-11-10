@@ -35,7 +35,10 @@ decodeSPV parser o = case runSGet (parser len) bs of
 
 ----------------------------------------------------------------
 
-newtype SPV_Mandatory = SPV_Mandatory [SvcParamKey] deriving (Eq,Ord,Show)
+newtype SPV_Mandatory = SPV_Mandatory [SvcParamKey] deriving (Eq,Ord)
+
+instance Show SPV_Mandatory where
+    show (SPV_Mandatory ks) = show ks
 
 instance SPV SPV_Mandatory where
     encodeSvcParamValue (SPV_Mandatory ks) = encodeSPV $
@@ -45,7 +48,10 @@ instance SPV SPV_Mandatory where
 
 ----------------------------------------------------------------
 
-newtype SPV_Port = SPV_Port Word16 deriving (Eq,Ord,Show)
+newtype SPV_Port = SPV_Port Word16 deriving (Eq,Ord)
+
+instance Show SPV_Port where
+    show (SPV_Port p) = show p
 
 instance SPV SPV_Port where
     encodeSvcParamValue (SPV_Port p) = encodeSPV $ put16 p
@@ -53,7 +59,10 @@ instance SPV SPV_Port where
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv4Hint = SPV_IPv4Hint [IPv4] deriving (Eq,Ord,Show)
+newtype SPV_IPv4Hint = SPV_IPv4Hint [IPv4] deriving (Eq,Ord)
+
+instance Show SPV_IPv4Hint where
+    show (SPV_IPv4Hint is) = show is
 
 instance SPV SPV_IPv4Hint where
     encodeSvcParamValue (SPV_IPv4Hint is) = encodeSPV $ do
@@ -63,7 +72,10 @@ instance SPV SPV_IPv4Hint where
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv6Hint = SPV_IPv6Hint [IPv6] deriving (Eq,Ord,Show)
+newtype SPV_IPv6Hint = SPV_IPv6Hint [IPv6] deriving (Eq,Ord)
+
+instance Show SPV_IPv6Hint where
+    show (SPV_IPv6Hint is) = show is
 
 instance SPV SPV_IPv6Hint where
     encodeSvcParamValue (SPV_IPv6Hint is) = encodeSPV $ do
@@ -76,7 +88,7 @@ instance SPV SPV_IPv6Hint where
 newtype SPV_ALPN = SPV_ALPN [ShortByteString] deriving (Eq,Ord)
 
 instance Show SPV_ALPN where
-    show (SPV_ALPN as) = C8.unpack $ Short.fromShort $ Short.intercalate "," as
+    show (SPV_ALPN as) = show $ map (C8.unpack . Short.fromShort) as
 
 instance SPV SPV_ALPN where
     encodeSvcParamValue (SPV_ALPN as) = encodeSPV $ mapM_ alpn as
