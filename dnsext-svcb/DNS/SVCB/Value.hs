@@ -3,6 +3,7 @@ module DNS.SVCB.Value where
 import DNS.Types
 import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
+import qualified Data.ByteString.Short as Short
 import Data.IP
 
 import DNS.SVCB.Imports
@@ -66,6 +67,23 @@ instance SPV SPV_IPv6Hint where
         mapM_ (mapM_ putInt8 . fromIPv6b) is
     decodeSvcParamValue = decodeSPV $ \len -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
+
+----------------------------------------------------------------
+
+newtype SPV_ALPN = SPV_ALPN [ShortByteString] deriving (Eq,Ord,Show)
+
+instance SPV SPV_ALPN where
+    encodeSvcParamValue (SPV_ALPN as) = encodeSPV $ mapM_ alpn as
+      where
+        alpn bs = do
+            putInt8 $ Short.length bs
+            putShortByteString bs
+    decodeSvcParamValue = decodeSPV $ \len -> do
+        SPV_ALPN <$> sGetMany "ALPN" len alpn
+      where
+        alpn = do
+            len <- getInt8
+            getNShortByteString len
 
 ----------------------------------------------------------------
 
