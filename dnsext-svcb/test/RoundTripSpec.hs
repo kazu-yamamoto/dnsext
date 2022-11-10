@@ -22,6 +22,8 @@ spec = do
     describe "encode/decodeRData" $ do
         it "treats port" $
             check vectorPort SPK_Port $ SPV_Port 53
+        it "treats generic key" $
+            check vectorGenericKey (toSvcParamKey 667) $ SPV_Opaque "hello"
         it "treats IPv6Hint" $
             check vector2IPv6 SPK_IPv6Hint $ SPV_IPv6Hint ["2001:db8::1","2001:db8::53:1"]
         it "treats IPv6Hint" $

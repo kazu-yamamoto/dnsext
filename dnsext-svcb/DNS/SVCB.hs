@@ -35,6 +35,7 @@ module DNS.SVCB (
   , SPV_Port(..)
   , SPV_IPv4Hint(..)
   , SPV_IPv6Hint(..)
+  , SPV_Opaque(..)
   ) where
 
 import DNS.Types

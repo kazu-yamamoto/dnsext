@@ -66,3 +66,11 @@ instance SPV SPV_IPv6Hint where
         mapM_ (mapM_ putInt8 . fromIPv6b) is
     decodeSvcParamValue = decodeSPV $ \len -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
+
+----------------------------------------------------------------
+
+newtype SPV_Opaque = SPV_Opaque Opaque deriving (Eq,Ord,Show)
+
+instance SPV SPV_Opaque where
+    encodeSvcParamValue (SPV_Opaque o) = o
+    decodeSvcParamValue o = Just $ SPV_Opaque o
