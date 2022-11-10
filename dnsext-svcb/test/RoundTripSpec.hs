@@ -21,13 +21,15 @@ spec = do
                   Left  _  -> error "decodeRData"
     describe "encode/decodeRData" $ do
         it "treats port" $
-            check vectorPort SPK_Port (SPV_Port 53)
+            check vectorPort SPK_Port $ SPV_Port 53
         it "treats IPv6Hint" $
-            check vector2IPv6 SPK_IPv6Hint (SPV_IPv6Hint ["2001:db8::1","2001:db8::53:1"])
+            check vector2IPv6 SPK_IPv6Hint $ SPV_IPv6Hint ["2001:db8::1","2001:db8::53:1"]
         it "treats IPv6Hint" $
-            check vectorIPv4EmbeddedIPv6 SPK_IPv6Hint (SPV_IPv6Hint ["2001:db8:122:344::192.0.2.33"])
+            check vectorIPv4EmbeddedIPv6 SPK_IPv6Hint $ SPV_IPv6Hint ["2001:db8:122:344::192.0.2.33"]
         it "treats mandatory" $
-            check vectorArbitrary SPK_Mandatory (SPV_Mandatory [SPK_ALPN,SPK_IPv4Hint])
+            check vectorArbitrary SPK_Mandatory $ SPV_Mandatory [SPK_ALPN,SPK_IPv4Hint]
+        it "treats IPv4Hint" $
+            check vectorArbitrary SPK_IPv4Hint $ SPV_IPv4Hint ["192.0.2.1"]
 
 check :: (SPV a, Show a, Eq a) => ByteString -> SvcParamKey -> a -> IO ()
 check vector key value =
