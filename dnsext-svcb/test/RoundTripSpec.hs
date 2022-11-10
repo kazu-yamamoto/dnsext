@@ -20,19 +20,31 @@ spec = do
                   Right rd -> encodeRData rd `shouldBe` bs
                   Left  _  -> error "decodeRData"
     describe "encode/decodeRData" $ do
-        it "treats port" $ do
-            case decodeRData HTTPS vectorPort of
-              Left _   -> error "cannot decode HTTPS RR"
-              Right rd -> case fromRData rd of
-                Nothing -> error "this is not HTTPS RR"
-                Just (RD_HTTPS https) -> do
-                    case lookupSvcParams SPK_Port $ svcb_params https of
-                      Nothing -> error "no such parameter"
-                      Just o -> case decodeSvcParamValue o of
-                        Nothing -> error "value cannot be decoded"
-                        Just v  -> do
-                            v `shouldBe` SPV_Port 53
-                            encodeRData rd `shouldBe` vectorPort
+        it "treats port" $
+            check vectorPort SPK_Port (SPV_Port 53)
+        it "treats IPv6Hint" $
+            check vector2IPv6 SPK_IPv6Hint (SPV_IPv6Hint ["2001:db8::1","2001:db8::53:1"])
+        it "treats IPv6Hint" $
+            check vectorIPv4EmbeddedIPv6 SPK_IPv6Hint (SPV_IPv6Hint ["2001:db8:122:344::192.0.2.33"])
+        it "treats mandatory" $
+            check vectorArbitrary SPK_Mandatory (SPV_Mandatory [SPK_ALPN,SPK_IPv4Hint])
+
+check :: (SPV a, Show a, Eq a) => ByteString -> SvcParamKey -> a -> IO ()
+check vector key value =
+    case decodeRData HTTPS vector of
+      Left _   -> error "cannot decode HTTPS RR"
+      Right rd -> do
+          encodeRData rd `shouldBe` vector
+          case fromRData rd of
+            Nothing -> error "this is not HTTPS RR"
+            Just (RD_HTTPS https) -> do
+                case lookupSvcParams key $ svcb_params https of
+                  Nothing -> error "no such parameter"
+                  Just o -> case decodeSvcParamValue o of
+                    Nothing -> error "value cannot be decoded"
+                    Just v  -> do
+                        v `shouldBe` value
+                        encodeSvcParamValue v `shouldBe` o
 
 testVectors :: [ByteString]
 testVectors = [ vectorAliasMode
