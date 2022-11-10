@@ -1,5 +1,6 @@
 module DNS.SVCB.Params where
 
+import DNS.Types
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as M
 
@@ -12,8 +13,14 @@ newtype SvcParams = SvcParams (IntMap SvcParamValue) deriving (Eq, Ord)
 instance Show SvcParams where
     show (SvcParams m) = "[" ++ intercalate ", " (M.foldrWithKey f [] m) ++ "]"
       where
-        showkv k v = show (toSvcParamKey $ fromIntegral k) ++ "=" ++ show v
+        showkv k v = show (toSvcParamKey $ fromIntegral k) ++ "=" ++ showValue (toSvcParamKey $ fromIntegral k) v
         f k v xs = showkv k v : xs
+
+showValue :: SvcParamKey -> Opaque -> String
+showValue SPK_ALPN v = case decodeSvcParamValue v of
+  Nothing -> ""
+  Just x@(SPV_ALPN _) -> show x
+showValue _ v = show v
 
 lookupSvcParams :: SvcParamKey -> SvcParams -> Maybe SvcParamValue
 lookupSvcParams key (SvcParams m) = M.lookup k m

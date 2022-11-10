@@ -1,8 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DNS.SVCB.Value where
 
 import DNS.Types
 import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.IP
 
@@ -70,7 +73,10 @@ instance SPV SPV_IPv6Hint where
 
 ----------------------------------------------------------------
 
-newtype SPV_ALPN = SPV_ALPN [ShortByteString] deriving (Eq,Ord,Show)
+newtype SPV_ALPN = SPV_ALPN [ShortByteString] deriving (Eq,Ord)
+
+instance Show SPV_ALPN where
+    show (SPV_ALPN as) = C8.unpack $ Short.fromShort $ Short.intercalate "," as
 
 instance SPV SPV_ALPN where
     encodeSvcParamValue (SPV_ALPN as) = encodeSPV $ mapM_ alpn as
