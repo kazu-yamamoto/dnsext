@@ -3,12 +3,14 @@
 
 -- | This module provides Service Binding (SVCB) RR and HTTPS RR.
 module DNS.SVCB (
-  -- * Extended DNS types
-    TYPE (
+  -- * Extension
+    addResourceDataForSVCB
+  -- ** DNS types
+  , TYPE (
     SVCB
   , HTTPS
   )
-  -- * Extended resource data
+  -- ** Resource data
   , RD_SVCB(..)
   , RD_HTTPS(..)
   -- * Service parameters
@@ -33,8 +35,6 @@ module DNS.SVCB (
   , SPV_Port(..)
   , SPV_IPv4Hint(..)
   , SPV_IPv6Hint(..)
-  -- * Extension
-  , addResourceDataForSVCB
   ) where
 
 import DNS.Types
