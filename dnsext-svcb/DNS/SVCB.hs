@@ -29,6 +29,10 @@ module DNS.SVCB (
   -- ** Service parameter values
   , SvcParamValue
   , SPV(..)
+  , SPV_Mandatory(..)
+  , SPV_Port(..)
+  , SPV_IPv4Hint(..)
+  , SPV_IPv6Hint(..)
   -- * Extension
   , addResourceDataForSVCB
   ) where
