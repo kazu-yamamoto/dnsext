@@ -2,6 +2,7 @@ module Main (main) where
 
 import DNS.IO (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
+import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf)
 import System.Environment (getArgs)
@@ -14,7 +15,9 @@ import Output (pprResult)
 
 main :: IO ()
 main = do
-    runInitIO addResourceDataForDNSSEC
+    runInitIO $ do
+        addResourceDataForDNSSEC
+        addResourceDataForSVCB
     args <- getArgs
     let (at, plus, minus, targets) = divide args
     if "-h" `elem` minus || "--help" `elem` minus then
