@@ -34,7 +34,7 @@ checkVerify (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pur
   rrsig  <- getRData "RRSIG"  rrsigRR
   verifyRRSIG dnskey rrsig target
 
--- example from RFC 5702
+-- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256 :: RRSIG_CASE
 rsaSHA256 =
   ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
@@ -51,7 +51,7 @@ rsaSHA256 =
              \ l1sLncJcOKFLJ7GhiUOibu4teYp5VE9RncriShZNz85mwlMgNEa \
              \ cFYK/lPtPiVYP4bwg== "
 
--- example from RFC 5702
+-- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.2
 rsaSHA512 :: RRSIG_CASE
 rsaSHA512 =
   ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
@@ -71,7 +71,7 @@ rsaSHA512 =
              \ DiNa8iP5g9vMhpuv6OPlvpXwm9Sa9ZXIbNl1MBGk0fthPgxdDLw \
              \ = "
 
--- example from RFC 6605
+-- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.1
 ecdsaP256 :: RRSIG_CASE
 ecdsaP256 =
   ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
@@ -86,7 +86,7 @@ ecdsaP256 =
              " qx6wLYqmh+l9oCKTN6qIc+bw6ya+KJ8oMz0YP107epXA \
              \ yGmt+3SNruPFKG7tZoLBLlUzGGus7ZwmwWep666VCw== "
 
--- example from RFC 6605
+-- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.2
 ecdsaP384 :: RRSIG_CASE
 ecdsaP384 =
   ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
@@ -103,7 +103,7 @@ ecdsaP384 =
              \ 95hxQouuroGCeZOvzFaxsT8Glr74hbavRKayJNuydCuz \
              \ WTSSPdz7wnqXL5bdcJzusdnI0RSMROxxwGipWcJm "
 
--- example from RFC 8080
+-- example from https://datatracker.ietf.org/doc/html/rfc8080#section-6.1
 ed25519 :: RRSIG_CASE
 ed25519 =
   ( ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
@@ -117,7 +117,7 @@ ed25519 =
              " Edk+IB9KNNWg0HAjm7FazXyrd5m3Rk8zNZbvNpAcM+eysqcUOMIjWoevFkj \
              \ H5GaMWeG96GUVZu6ECKOQmemHDg== "
 
--- example from RFC 8080
+-- example from https://datatracker.ietf.org/doc/html/rfc8080#section-6.2
 ed448 :: RRSIG_CASE
 ed448 =
   ( ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
