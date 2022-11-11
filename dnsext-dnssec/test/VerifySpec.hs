@@ -7,7 +7,7 @@ import Data.Int
 import Data.Word
 import Data.ByteString (ByteString)
 
-import Data.ByteArray.Encoding (Base (Base64), convertFromBase)
+import Data.ByteArray.Encoding (Base (Base16, Base64), convertFromBase)
 
 import DNS.Types
 import qualified DNS.Types.Opaque as Opaque
@@ -17,6 +17,10 @@ import DNS.SEC.Verify
 
 spec :: Spec
 spec = do
+  describe "verify DS" $ do
+    it "SHA1"   $ caseDS dsSHA1
+    it "SHA256" $ caseDS dsSHA256
+    it "SHA384" $ caseDS dsSHA384
   describe "verify RRSIG" $ do
     it "RSA/SHA256" $ caseRRSIG rsaSHA256
     it "RSA/SHA512" $ caseRRSIG rsaSHA512
@@ -24,6 +28,69 @@ spec = do
     it "ECDSA/P384" $ caseRRSIG ecdsaP384
     it "Ed25519"    $ caseRRSIG ed25519
     it "Ed448"      $ caseRRSIG ed448
+
+-----
+-- DS cases
+
+type DS_CASE = (ResourceRecord, ResourceRecord)
+
+caseDS :: DS_CASE -> Expectation
+caseDS (dnskeyRR, dsRR) = either expectationFailure (const $ pure ()) $ do
+  dnskey <- takeRData "DNSKEY" dnskeyRR
+  ds     <- takeRData "DS"     dsRR
+  verifyDS (rrname dnskeyRR) dnskey ds
+  where
+    takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
+
+-- exampe from  https://datatracker.ietf.org/doc/html/rfc4034#section-5.4
+dsSHA1 :: DS_CASE
+dsSHA1 =
+  ( ResourceRecord { rrname = fromString "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = fromString "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  )
+  where
+    key_rd = rd_dnskey' 256 3 5
+             " AQOeiiR0GOMYkDshWoSKz9Xz \
+             \ fwJr1AYtsmx3TGkJaNXVbfi/ \
+             \ 2pHm822aJ5iI9BMzNXxeYCmZ \
+             \ DRD99WYwYqUSdjMmmAphXdvx \
+             \ egXd/M5+X7OrzKBaMbCVdFLU \
+             \ Uh6DhweJBjEVv5f2wwjM9Xzc \
+             \ nOf+EPbtG9DMBmADjFDc2w/r \
+             \ ljwvFw=="
+    ds_rd = rd_ds' 60485 5 1
+            " 2BB183AF5F22588179A53B0A \
+            \ 98631FAD1A292118 "
+
+-- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.1
+dsSHA256 :: DS_CASE
+dsSHA256 =
+  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  )
+  where
+    key_rd = rd_dnskey' 257 3 13
+             " GojIhhXUN/u4v54ZQqGSnyhWJwaubCvTmeexv7bR6edb \
+             \ krSqQpF64cYbcB7wNcP+e+MAnLr+Wi9xMWyQLc8NAA== "
+    ds_rd = rd_ds' 55648 13 2
+            " b4c8c1fe2e7477127b27115656ad6256f424625bf5c1 \
+            \ e2770ce6d6e37df61d17 "
+
+-- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.2
+dsSHA384 :: DS_CASE
+dsSHA384 =
+  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  )
+  where
+    key_rd = rd_dnskey' 257 3 14
+             " xKYaNhWdGOfJ+nPrL8/arkwf2EY3MDJ+SErKivBVSum1 \
+             \ w/egsXvSADtNJhyem5RCOpgQ6K8X1DRSEkrbYQ+OB+v8 \
+             \ /uX45NBwY8rp65F6Glur8I/mlVNgF6W/qTI37m40 "
+    ds_rd = rd_ds' 10771 14 4
+            " 72d7b62976ce06438e9c0bf319013cf801f09ecc84b8 \
+            \ d7e9495f27e305c6a9b0563a9b5f4d288405c3008a94 \
+            \ 6df983d6 "
 
 -----
 -- RRSIG cases
@@ -145,6 +212,9 @@ rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg
   where
     alg = toPubAlg walg
 
+rd_ds' :: Word16 -> Word8 -> Word8 -> String -> RData
+rd_ds' keytag pubalg digalg digest = rd_ds keytag (toPubAlg pubalg) (toDigestAlg digalg) (opaqueFromHex digest)
+
 rd_rrsig' :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> String -> String -> RData
 rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromString dom) . opaqueFromB64'
 
@@ -152,3 +222,8 @@ opaqueFromB64' :: String -> Opaque
 opaqueFromB64' =
   either (error "opaqueFromB64': fail to decode base64") Opaque.fromByteString .
   convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
+
+opaqueFromHex :: String -> Opaque
+opaqueFromHex =
+  either (error "opaqueFromHex: fail to decode hex") Opaque.fromByteString .
+  convertFromBase Base16 . (fromString :: String -> ByteString) . filter (/= ' ')
