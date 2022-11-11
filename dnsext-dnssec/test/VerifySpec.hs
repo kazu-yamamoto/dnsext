@@ -18,21 +18,25 @@ import DNS.SEC.Verify
 spec :: Spec
 spec = do
   describe "verify RRSIG" $ do
-    it "RSA/SHA256" $ checkVerify rsaSHA256
-    it "RSA/SHA512" $ checkVerify rsaSHA512
-    it "ECDSA/P256" $ checkVerify ecdsaP256
-    it "ECDSA/P384" $ checkVerify ecdsaP384
-    it "Ed25519"    $ checkVerify ed25519
-    it "Ed448"      $ checkVerify ed448
+    it "RSA/SHA256" $ caseRRSIG rsaSHA256
+    it "RSA/SHA512" $ caseRRSIG rsaSHA512
+    it "ECDSA/P256" $ caseRRSIG ecdsaP256
+    it "ECDSA/P384" $ caseRRSIG ecdsaP384
+    it "Ed25519"    $ caseRRSIG ed25519
+    it "Ed448"      $ caseRRSIG ed448
+
+-----
+-- RRSIG cases
 
 type RRSIG_CASE = (ResourceRecord, ResourceRecord, ResourceRecord)
 
-checkVerify :: RRSIG_CASE -> Expectation
-checkVerify (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pure ()) $ do
-  let getRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
-  dnskey <- getRData "DNSKEY" dnskeyRR
-  rrsig  <- getRData "RRSIG"  rrsigRR
+caseRRSIG :: RRSIG_CASE -> Expectation
+caseRRSIG (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pure ()) $ do
+  dnskey <- takeRData "DNSKEY" dnskeyRR
+  rrsig  <- takeRData "RRSIG"  rrsigRR
   verifyRRSIG dnskey rrsig target
+  where
+    takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256 :: RRSIG_CASE
@@ -133,10 +137,8 @@ ed448 =
              \ 9GPL+5tVzDPN3f9kAwiu8KCuPPjtl227ayaCZtRKZuJax7n9NuYlZJIusX0 \
              \ SOIOKBGzG+yWYtz1/jjbzl5GGkWvREUCUA "
 
-opaqueFromB64' :: String -> Opaque
-opaqueFromB64' =
-  either (error "opaqueFromB64': fail to decode base64") Opaque.fromByteString .
-  convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
+-----
+-- helpers
 
 rd_dnskey' :: Word16 -> Word8 -> Word8 -> String -> RData
 rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg $ toPubKey alg $ opaqueFromB64' pubkey
@@ -145,3 +147,8 @@ rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg
 
 rd_rrsig' :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> String -> String -> RData
 rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromString dom) . opaqueFromB64'
+
+opaqueFromB64' :: String -> Opaque
+opaqueFromB64' =
+  either (error "opaqueFromB64': fail to decode base64") Opaque.fromByteString .
+  convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
