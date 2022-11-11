@@ -68,6 +68,8 @@ instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
     putResourceData _ RD_SVCB{..} = do
         put16 svcb_priority
+        -- https://datatracker.ietf.org/doc/html/draft-ietf-dnsop-svcb-https-11#section-2.2
+        -- "the uncompressed, fully-qualified TargetName"
         putDomain Canonical svcb_target
         let SvcParams m = svcb_params
         void $ M.foldrWithKey f (return ())  m
