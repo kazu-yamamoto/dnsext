@@ -120,18 +120,18 @@ resolveConcurrent nss gens q tm retry ctls rcv = do
 
 resolveOne :: AddrInfo -> IO Identifier -> Rslv1
 resolveOne ai gen q tm retry ctls rcv =
-    E.try $ udpTcpLookup gen retry rcv ai q tm ctls
+    E.try $ udpTcpResolve gen retry rcv ai q tm ctls
 
 ----------------------------------------------------------------
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpLookup :: IO Identifier -> UdpRslv
-udpTcpLookup gen retry rcv ai q tm ctls = do
+udpTcpResolve :: IO Identifier -> UdpRslv
+udpTcpResolve gen retry rcv ai q tm ctls = do
     ident <- gen
-    udpLookup ident retry rcv ai q tm ctls `E.catch`
-            \TCPFallback -> tcpLookup gen ai q tm ctls
+    udpResolve ident retry rcv ai q tm ctls `E.catch`
+            \TCPFallback -> tcpResolve gen ai q tm ctls
 
 ----------------------------------------------------------------
 
@@ -150,8 +150,8 @@ udpOpen ai = do
     return sock
 
 -- This throws DNSError or TCPFallback.
-udpLookup :: Identifier -> UdpRslv
-udpLookup ident retry rcv ai q tm ctls = do
+udpResolve :: Identifier -> UdpRslv
+udpResolve ident retry rcv ai q tm ctls = do
     let qry = encodeQuery ident q ctls
     E.handle (ioErrorToDNSError ai "udp") $
       bracket (udpOpen ai) close (loop qry ctls 0 RetryLimitExceeded)
@@ -199,8 +199,8 @@ tcpOpen peer = case peer of
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpLookup :: IO Identifier -> TcpRslv
-tcpLookup gen ai q tm ctls =
+tcpResolve :: IO Identifier -> TcpRslv
+tcpResolve gen ai q tm ctls =
     E.handle (ioErrorToDNSError ai "tcp") $ do
         res <- bracket (tcpOpen addr) close (perform ctls)
         let rc = rcode $ flags $ header res
