@@ -37,13 +37,13 @@ putRRSIGHeader RD_RRSIG{..} = do
 verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
 verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
   unless (dnskey_pubalg == rrsig_pubalg) $
-    Left $ "verifyRRSIG: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
+    Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
   {- TODO: check DNSKEY with keytag -}
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
   let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
   good <- rrsigIVerify pubkey sig str
-  unless good $ Left "verifyRRSIG: rejected on verification"
+  unless good $ Left "verifyRRSIGwith: rejected on verification"
 
 data DSImpl =
   forall digest .
