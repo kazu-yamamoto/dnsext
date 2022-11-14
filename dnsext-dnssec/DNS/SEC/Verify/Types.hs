@@ -50,10 +50,11 @@ putRRSIGHeader RD_RRSIG{..} = do
     putDomain Canonical rrsig_zone
 
 verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
+verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
   unless (dnskey_pubalg == rrsig_pubalg) $
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
-  {- TODO: check DNSKEY with keytag -}
+  unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: " ++ show (keyTag dnskey) ++ " =/= " ++ show rrsig_key_tag
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
   let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
