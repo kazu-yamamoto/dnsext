@@ -29,6 +29,7 @@ library
         DNS.SEC.PubKey
         DNS.SEC.Time
         DNS.SEC.Types
+        DNS.SEC.Verify.SHA
         DNS.SEC.Verify.ECDSA
         DNS.SEC.Verify.EdDSA
         DNS.SEC.Verify.RSA

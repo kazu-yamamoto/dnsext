@@ -6,13 +6,14 @@ module DNS.SEC.Verify.Types where
 -- dnsext-types
 import DNS.Types
 import DNS.Types.Internal
+import qualified DNS.Types.Opaque as Opaque
 
 -- this package
 import DNS.SEC.Imports
 import DNS.SEC.Time
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
-import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..))
+import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..))
 
 data RRSIGImpl =
   forall pubkey sig .
@@ -43,3 +44,20 @@ verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
   let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
   good <- rrsigIVerify pubkey sig str
   unless good $ Left "verifyRRSIG: rejected on verification"
+
+data DSImpl =
+  forall digest .
+  DSImpl
+  { dsIGetDigest :: ByteString -> digest
+  , dsIVerify :: digest -> ByteString -> Bool
+  }
+
+verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
+verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
+  unless (dnskey_pubalg == ds_pubalg) $
+    Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
+  {- TODO: check DNSKEY with keytag -}
+  let digest = dsIGetDigest $ runSPut $ putDomain Canonical owner >> putResourceData Canonical dnskey
+      ds_digest' = Opaque.toByteString ds_digest
+  unless (dsIVerify digest ds_digest') $
+    Left "verifyDSwith: rejected on verification"
