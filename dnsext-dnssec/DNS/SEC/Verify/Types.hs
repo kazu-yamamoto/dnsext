@@ -72,8 +72,10 @@ verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
 verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
   unless (dnskey_pubalg == ds_pubalg) $
     Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
-  {- TODO: check DNSKEY with keytag -}
-  let digest = dsIGetDigest $ runSPut $ putDomain Canonical owner >> putResourceData Canonical dnskey
+  let dnskeyBS = runSPut $ putResourceData Canonical dnskey
+  unless (dnskey_pubalg == RSAMD5 || keyTagFromBS dnskeyBS == ds_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and DS: " ++ show (keyTagFromBS dnskeyBS) ++ " =/= " ++ show ds_key_tag
+  let digest = dsIGetDigest $ runSPut (putDomain Canonical owner) <> dnskeyBS
       ds_digest' = Opaque.toByteString ds_digest
   unless (dsIVerify digest ds_digest') $
     Left "verifyDSwith: rejected on verification"
