@@ -55,9 +55,9 @@ data DSImpl =
 verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
 verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
   unless (dnskey_pubalg == ds_pubalg) $
-    Left $ "verifyDS: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
+    Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
   {- TODO: check DNSKEY with keytag -}
   let digest = dsIGetDigest $ runSPut $ putDomain Canonical owner >> putResourceData Canonical dnskey
       ds_digest' = Opaque.toByteString ds_digest
   unless (dsIVerify digest ds_digest') $
-    Left "verifyDS: rejected on verification"
+    Left "verifyDSwith: rejected on verification"
