@@ -3,6 +3,8 @@
 
 module DNS.SEC.Verify.Types where
 
+import qualified Data.ByteString as BS
+
 -- dnsext-types
 import DNS.Types
 import DNS.Types.Internal
@@ -14,6 +16,19 @@ import DNS.SEC.Time
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
 import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..))
+
+keyTag :: RD_DNSKEY -> Word16
+keyTag = keyTagFromBS . runSPut . putResourceData Canonical
+
+-- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
+keyTagFromBS :: ByteString -> Word16
+keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
+  where
+    addHigh w8 = (+ (fromIntegral w8 `shiftL` 8))
+    addLow  w8 = (+  fromIntegral w8)
+    loopOps = zipWith ($) (cycle [addHigh, addLow]) (BS.unpack bs)
+    sumK :: Int
+    sumK = foldr ($) 0 loopOps
 
 data RRSIGImpl =
   forall pubkey sig .
@@ -35,10 +50,11 @@ putRRSIGHeader RD_RRSIG{..} = do
     putDomain Canonical rrsig_zone
 
 verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
+verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
   unless (dnskey_pubalg == rrsig_pubalg) $
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
-  {- TODO: check DNSKEY with keytag -}
+  unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: " ++ show (keyTag dnskey) ++ " =/= " ++ show rrsig_key_tag
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
   let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
@@ -56,8 +72,10 @@ verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
 verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
   unless (dnskey_pubalg == ds_pubalg) $
     Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
-  {- TODO: check DNSKEY with keytag -}
-  let digest = dsIGetDigest $ runSPut $ putDomain Canonical owner >> putResourceData Canonical dnskey
+  let dnskeyBS = runSPut $ putResourceData Canonical dnskey
+  unless (dnskey_pubalg == RSAMD5 || keyTagFromBS dnskeyBS == ds_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and DS: " ++ show (keyTagFromBS dnskeyBS) ++ " =/= " ++ show ds_key_tag
+  let digest = dsIGetDigest $ runSPut (putDomain Canonical owner) <> dnskeyBS
       ds_digest' = Opaque.toByteString ds_digest
   unless (dsIVerify digest ds_digest') $
     Left "verifyDSwith: rejected on verification"

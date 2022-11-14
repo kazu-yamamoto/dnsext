@@ -2,6 +2,7 @@ module VerifySpec (spec) where
 
 import Test.Hspec
 
+import Control.Monad (unless)
 import Data.String (fromString)
 import Data.Int
 import Data.Word
@@ -17,6 +18,8 @@ import DNS.SEC.Verify
 
 spec :: Spec
 spec = do
+  describe "KeyTag" $ do
+    it "example 1" $ caseKeyTag keyTag1
   describe "verify DS" $ do
     it "SHA1"   $ caseDS dsSHA1
     it "SHA256" $ caseDS dsSHA256
@@ -28,6 +31,28 @@ spec = do
     it "ECDSA/P384" $ caseRRSIG ecdsaP384
     it "Ed25519"    $ caseRRSIG ed25519
     it "Ed448"      $ caseRRSIG ed448
+
+-----
+-- KeyTag cases
+
+type KeyTag_Case = (ResourceRecord, Word16)
+
+caseKeyTag :: KeyTag_Case -> Expectation
+caseKeyTag (dnskeyRR, tag) = either expectationFailure (const $ pure ()) $ do
+  dnskey <- takeRData "DNSKEY" dnskeyRR
+  unless (keyTag dnskey == tag) $
+    Left $ "caseKeyTag: keytag does not match: " ++ show (keyTag dnskey) ++ " =/= " ++ show tag
+  where
+    takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
+
+-- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
+keyTag1 :: KeyTag_Case
+keyTag1 = (ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }, 9033)
+  where
+    key_rd = rd_dnskey' 256 3 8
+             " AwEAAcFcGsaxxdgiuuGmCkVI \
+             \ my4h99CqT7jwY3pexPGcnUFtR2Fh36BponcwtkZ4cAgtvd4Qs8P \
+             \ kxUdp6p/DlUmObdk= "
 
 -----
 -- DS cases
