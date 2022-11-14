@@ -29,6 +29,9 @@ showValue SPK_IPv6Hint v = case decodeSvcParamValue v of
 showValue SPK_ALPN v = case decodeSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_ALPN _) -> show x
+showValue SPK_DoHPath v = case decodeSvcParamValue v of
+  Nothing -> ""
+  Just x@(SPV_DoHPath _) -> show x
 showValue _ v = show v
 
 lookupSvcParams :: SvcParamKey -> SvcParams -> Maybe SvcParamValue

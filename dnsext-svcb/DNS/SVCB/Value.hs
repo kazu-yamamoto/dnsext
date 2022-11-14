@@ -110,3 +110,14 @@ newtype SPV_Opaque = SPV_Opaque Opaque deriving (Eq,Ord,Show)
 instance SPV SPV_Opaque where
     encodeSvcParamValue (SPV_Opaque o) = o
     decodeSvcParamValue o = Just $ SPV_Opaque o
+
+----------------------------------------------------------------
+
+newtype SPV_DoHPath = SPV_DoHPath ShortByteString deriving (Eq,Ord)
+
+instance Show SPV_DoHPath where
+    show (SPV_DoHPath p) = show $ C8.unpack $ Short.fromShort p
+
+instance SPV SPV_DoHPath where
+    encodeSvcParamValue (SPV_DoHPath p) = encodeSPV $ putShortByteString p
+    decodeSvcParamValue = decodeSPV $ \len -> SPV_DoHPath <$> getNShortByteString len

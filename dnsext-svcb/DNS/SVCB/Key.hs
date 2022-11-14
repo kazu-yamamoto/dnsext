@@ -16,6 +16,7 @@ instance Show SvcParamKey where
     show SPK_IPv4Hint      = "ipv4hint"
     show SPK_ECH           = "ech"
     show SPK_IPv6Hint      = "ipv6hint"
+    show SPK_DoHPath       = "dohpath"
     show (SvcParamKey n)   = "SvcParamKey" ++ show n -- no space
 
 toSvcParamKey :: Word16 -> SvcParamKey
@@ -41,3 +42,6 @@ pattern SPK_ECH            = SvcParamKey 5
 
 pattern SPK_IPv6Hint      :: SvcParamKey
 pattern SPK_IPv6Hint       = SvcParamKey 6
+
+pattern SPK_DoHPath       :: SvcParamKey
+pattern SPK_DoHPath        = SvcParamKey 7
