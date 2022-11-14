@@ -3,6 +3,8 @@
 
 module DNS.SEC.Verify.Types where
 
+import qualified Data.ByteString as BS
+
 -- dnsext-types
 import DNS.Types
 import DNS.Types.Internal
@@ -14,6 +16,19 @@ import DNS.SEC.Time
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
 import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..))
+
+keyTag :: RD_DNSKEY -> Word16
+keyTag = keyTagFromBS . runSPut . putResourceData Canonical
+
+-- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
+keyTagFromBS :: ByteString -> Word16
+keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
+  where
+    addHigh w8 = (+ (fromIntegral w8 `shiftL` 8))
+    addLow  w8 = (+  fromIntegral w8)
+    loopOps = zipWith ($) (cycle [addHigh, addLow]) (BS.unpack bs)
+    sumK :: Int
+    sumK = foldr ($) 0 loopOps
 
 data RRSIGImpl =
   forall pubkey sig .
