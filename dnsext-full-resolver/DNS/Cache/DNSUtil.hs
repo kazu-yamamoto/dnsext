@@ -56,7 +56,7 @@ mkRecvBS _      =  withRecv recvFrom
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
       return (bs, (peer, []))
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 1500 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 -- return tuples that can be reused in request and response queues
 mkRecv :: Bool -> Int64 -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg]))
@@ -84,7 +84,7 @@ mkRecv _        now =  recvDNS recvFrom
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
       return (bs, (peer, []))
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 1500 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 mkSendBS :: Bool -> Socket -> ByteString -> SockAddr -> [Cmsg] -> IO ()
 #if MIN_VERSION_network(3,1,2)
@@ -139,7 +139,7 @@ lookupRaw now rslv dom typ = DNS.lookupRawCtlRecv rslv dom typ mempty rcv
       case DNS.decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return msg
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 1500 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
 
 isExtendedLookup = True
 #else
