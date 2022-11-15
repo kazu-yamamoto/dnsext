@@ -38,7 +38,6 @@ import DNS.Cache.Iterative (Context (..))
 data Params =
   Params
   { isRecvSendMsg :: Bool
-  , isExtendedLookup :: Bool
   , numCapabilities :: Int
   , logOutput :: Log.Output
   , logLevel :: Log.Level
@@ -57,7 +56,6 @@ makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> In
 makeParams capabilities output level maxSize disableV6 workers sharedQueue perWorker port hosts =
   Params
   { isRecvSendMsg = Config.isRecvSendMsg
-  , isExtendedLookup = Config.isExtendedLookup
   , numCapabilities = capabilities
   , logOutput = output
   , logLevel = level
@@ -74,7 +72,6 @@ makeParams capabilities output level maxSize disableV6 workers sharedQueue perWo
 showParams :: Params -> [String]
 showParams params =
   [ field  "recvmsg / sendmsg" isRecvSendMsg
-  , field  "extended lookup" isExtendedLookup
   , field  "capabilities" numCapabilities
   , field_ "log output" (showOut . logOutput)
   , field  "log level" logLevel
