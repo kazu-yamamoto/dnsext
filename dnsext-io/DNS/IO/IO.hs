@@ -10,16 +10,12 @@ module DNS.IO.IO (
   , sendTo
   , sendVC
   , sendAll
-    -- ** Encoding queries for transmission
-  , encodeVC
   ) where
 
 import qualified Control.Exception as E
 import DNS.Types hiding (Seconds)
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Builder as BB
-import qualified Data.ByteString.Lazy.Char8 as LC8
 import Network.Socket (Socket, SockAddr)
 import Network.Socket.ByteString (recv, recvFrom)
 import qualified Network.Socket.ByteString as Socket
@@ -131,7 +127,9 @@ sendTo sock bs addr = void $ Socket.sendTo sock bs addr
 -- a concatenated batch of the resulting encapsulated messages.
 --
 sendVC :: Socket -> ByteString -> IO ()
-sendVC sock bs = sendAll sock $ encodeVC bs
+sendVC sock bs = do
+    let lb = getLength bs
+    Socket.sendMany sock [lb,bs]
 {-# INLINE sendVC #-}
 
 -- | Send one or more encoded 'DNSMessage' buffers over TCP, each allready
@@ -146,8 +144,8 @@ sendAll = Socket.sendAll
 -- virtual circuit.  With TCP the buffer needs to start with an explicit
 -- length (the length is implicit with UDP).
 --
-encodeVC :: ByteString -> ByteString
-encodeVC legacyQuery =
-    let len = LC8.toStrict . BB.toLazyByteString $ BB.int16BE $ fromIntegral $ BS.length legacyQuery
-    in len <> legacyQuery
-{-# INLINE encodeVC #-}
+getLength :: ByteString -> ByteString
+getLength q = BS.pack [fromIntegral u, fromIntegral l]
+    where
+      len = BS.length q
+      (u,l) = len `divMod` 256

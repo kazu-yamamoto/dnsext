@@ -9,8 +9,6 @@ module DNS.IO.Internal (
   , sendTo
   , sendVC
   , sendAll
-    -- ** Encoding queries for transmission
-  , encodeVC
   ) where
 
 import DNS.IO.Query
