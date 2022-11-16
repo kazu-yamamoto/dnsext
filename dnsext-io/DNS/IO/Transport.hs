@@ -153,31 +153,30 @@ udpOpen ai = do
 udpResolve :: UdpRslv
 udpResolve retry rcv gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
-      bracket (udpOpen ai) close $ go ctls0 retry
+      bracket (udpOpen ai) close $ go ctls0
   where
-    go _ 0 _ = E.throwIO RetryLimitExceeded
-    go ctls cnt sock
-      | otherwise    = do
-          mres <- perform ctls sock
-          case mres of
-              Nothing  -> go ctls (cnt - 1) sock
-              Just res -> do
-                      let fl = flags $ header res
-                          tc = trunCation fl
-                          rc = rcode fl
-                          eh = ednsHeader res
-                          cs = ednsEnabled FlagClear <> ctls
-                      if tc then E.throwIO TCPFallback
-                      else if rc == FormatErr && eh == NoEDNS && cs /= ctls
-                      then  go cs cnt sock
-                      else return res
+    go ctls sock = do
+      res <- perform ctls sock retry
+      let fl = flags $ header res
+          tc = trunCation fl
+          rc = rcode fl
+          eh = ednsHeader res
+          cs = ednsEnabled FlagClear <> ctls
+      if tc then E.throwIO TCPFallback
+      else if rc == FormatErr && eh == NoEDNS && cs /= ctls
+      then perform cs sock retry
+      else return res
 
-    perform cs sock = do
+    perform _ _ 0 =  E.throwIO RetryLimitExceeded
+    perform cs sock cnt = do
         ident <- gen
         let qry = encodeQuery ident q cs
-        timeout tm $ do
+        mres <- timeout tm $ do
             send sock qry
             getAns sock ident
+        case mres of
+           Nothing  -> perform cs sock (cnt - 1)
+           Just res -> return res
 
     -- | Closed UDP ports are occasionally re-used for a new query, with
     -- the nameserver returning an unexpected answer to the wrong socket.
@@ -187,9 +186,9 @@ udpResolve retry rcv gen ai q tm ctls0 =
     -- instead we'll time out if no matching answer arrives.
     --
     getAns sock ident = do
-        resp <- rcv sock
-        if checkResp q ident resp
-        then return resp
+        res <- rcv sock
+        if checkResp q ident res
+        then return res
         else getAns sock ident
 
 ----------------------------------------------------------------
@@ -216,7 +215,8 @@ tcpResolve gen ai q tm ctls0 =
   where
     go ctls vc = do
         res <- perform ctls vc
-        let rc = rcode $ flags $ header res
+        let fl = flags $ header res
+            rc = rcode fl
             eh = ednsHeader res
             cs = ednsEnabled FlagClear <> ctls
         -- If we first tried with EDNS, retry without on FormatErr.
@@ -229,7 +229,13 @@ tcpResolve gen ai q tm ctls0 =
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
             sendVC sock qry
-            receiveVC sock
+            getAns sock ident
         case mres of
             Nothing  -> E.throwIO TimeoutExpired
-            Just res -> maybe (return res) E.throwIO (checkRespM q ident res)
+            Just res -> return res
+
+    getAns sock ident = do
+        res <- receiveVC sock
+        case checkRespM q ident res of
+            Nothing  -> return res
+            Just err -> E.throwIO err
