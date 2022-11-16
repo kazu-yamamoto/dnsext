@@ -128,9 +128,8 @@ resolveOne ai gen q tm retry ctls rcv =
 -- but we use a fresh ID for each TCP lookup.
 --
 udpTcpResolve :: IO Identifier -> UdpRslv
-udpTcpResolve gen retry rcv ai q tm ctls = do
-    ident <- gen
-    udpResolve ident retry rcv ai q tm ctls `E.catch`
+udpTcpResolve gen retry rcv ai q tm ctls =
+    udpResolve gen retry rcv ai q tm ctls `E.catch`
             \TCPFallback -> tcpResolve gen ai q tm ctls
 
 ----------------------------------------------------------------
@@ -150,29 +149,34 @@ udpOpen ai = do
     return sock
 
 -- This throws DNSError or TCPFallback.
-udpResolve :: Identifier -> UdpRslv
-udpResolve ident retry rcv ai q tm ctls = do
-    let qry = encodeQuery ident q ctls
+udpResolve :: IO Identifier -> UdpRslv
+udpResolve gen retry rcv ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
-      bracket (udpOpen ai) close $ loop qry ctls 0
+      bracket (udpOpen ai) close $ go ctls0 retry
   where
-    loop qry lctls cnt sock
-      | cnt == retry = E.throwIO RetryLimitExceeded
+    go _ 0 _ = E.throwIO RetryLimitExceeded
+    go ctls cnt sock
       | otherwise    = do
-          mres <- timeout tm (send sock qry >> getAns sock)
+          mres <- perform ctls sock
           case mres of
-              Nothing  -> loop qry lctls (cnt + 1) sock
+              Nothing  -> go ctls (cnt - 1) sock
               Just res -> do
                       let fl = flags $ header res
                           tc = trunCation fl
                           rc = rcode fl
                           eh = ednsHeader res
-                          cs = ednsEnabled FlagClear <> lctls
+                          cs = ednsEnabled FlagClear <> ctls
                       if tc then E.throwIO TCPFallback
-                      else if rc == FormatErr && eh == NoEDNS && cs /= lctls
-                      then let qry' = encodeQuery ident q cs
-                            in loop qry' cs cnt sock
+                      else if rc == FormatErr && eh == NoEDNS && cs /= ctls
+                      then  go cs cnt sock
                       else return res
+
+    perform cs sock = do
+        ident <- gen
+        let qry = encodeQuery ident q cs
+        timeout tm $ do
+            send sock qry
+            getAns sock ident
 
     -- | Closed UDP ports are occasionally re-used for a new query, with
     -- the nameserver returning an unexpected answer to the wrong socket.
@@ -181,11 +185,11 @@ udpResolve ident retry rcv ai q tm ctls = do
     -- Note, this eliminates sequence mismatch as a UDP error condition,
     -- instead we'll time out if no matching answer arrives.
     --
-    getAns sock = do
+    getAns sock ident = do
         resp <- rcv sock
         if checkResp q ident resp
         then return resp
-        else getAns sock
+        else getAns sock ident
 
 ----------------------------------------------------------------
 
@@ -205,24 +209,26 @@ tcpOpen ai = do
 -- the TCP socket.
 -- This throws DNSError only.
 tcpResolve :: IO Identifier -> TcpRslv
-tcpResolve gen ai q tm ctls =
+tcpResolve gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "tcp") $ do
-        bracket (tcpOpen ai) close $ \vc -> do
-            res <- perform ctls vc
-            let rc = rcode $ flags $ header res
-                eh = ednsHeader res
-                cs = ednsEnabled FlagClear <> ctls
-            -- If we first tried with EDNS, retry without on FormatErr.
-            if rc == FormatErr && eh == NoEDNS && cs /= ctls
-            then perform cs vc
-            else return res
+        bracket (tcpOpen ai) close $ go ctls0
   where
-    perform cs vc = do
+    go ctls vc = do
+        res <- perform ctls vc
+        let rc = rcode $ flags $ header res
+            eh = ednsHeader res
+            cs = ednsEnabled FlagClear <> ctls
+        -- If we first tried with EDNS, retry without on FormatErr.
+        if rc == FormatErr && eh == NoEDNS && cs /= ctls
+        then perform cs vc
+        else return res
+
+    perform cs sock = do
         ident <- gen
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
-            sendVC vc qry
-            receiveVC vc
+            sendVC sock qry
+            receiveVC sock
         case mres of
             Nothing  -> E.throwIO TimeoutExpired
             Just res -> maybe (return res) E.throwIO (checkRespM q ident res)
