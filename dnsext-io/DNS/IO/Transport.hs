@@ -154,14 +154,14 @@ udpResolve :: Identifier -> UdpRslv
 udpResolve ident retry rcv ai q tm ctls = do
     let qry = encodeQuery ident q ctls
     E.handle (ioErrorToDNSError ai "udp") $
-      bracket (udpOpen ai) close (loop qry ctls 0 RetryLimitExceeded)
+      bracket (udpOpen ai) close $ loop qry ctls 0
   where
-    loop qry lctls cnt err sock
-      | cnt == retry = E.throwIO err
+    loop qry lctls cnt sock
+      | cnt == retry = E.throwIO RetryLimitExceeded
       | otherwise    = do
           mres <- timeout tm (send sock qry >> getAns sock)
           case mres of
-              Nothing  -> loop qry lctls (cnt + 1) RetryLimitExceeded sock
+              Nothing  -> loop qry lctls (cnt + 1) sock
               Just res -> do
                       let fl = flags $ header res
                           tc = trunCation fl
@@ -171,7 +171,7 @@ udpResolve ident retry rcv ai q tm ctls = do
                       if tc then E.throwIO TCPFallback
                       else if rc == FormatErr && eh == NoEDNS && cs /= lctls
                       then let qry' = encodeQuery ident q cs
-                            in loop qry' cs cnt RetryLimitExceeded sock
+                            in loop qry' cs cnt sock
                       else return res
 
     -- | Closed UDP ports are occasionally re-used for a new query, with
