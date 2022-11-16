@@ -202,14 +202,15 @@ tcpOpen peer = case peer of
 tcpResolve :: IO Identifier -> TcpRslv
 tcpResolve gen ai q tm ctls =
     E.handle (ioErrorToDNSError ai "tcp") $ do
-        res <- bracket (tcpOpen addr) close (perform ctls)
-        let rc = rcode $ flags $ header res
-            eh = ednsHeader res
-            cs = ednsEnabled FlagClear <> ctls
-        -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && cs /= ctls
-        then bracket (tcpOpen addr) close (perform cs)
-        else return res
+        bracket (tcpOpen addr) close $ \vc -> do
+            res <- perform ctls vc
+            let rc = rcode $ flags $ header res
+                eh = ednsHeader res
+                cs = ednsEnabled FlagClear <> ctls
+            -- If we first tried with EDNS, retry without on FormatErr.
+            if rc == FormatErr && eh == NoEDNS && cs /= ctls
+            then perform cs vc
+            else return res
   where
     addr = addrAddress ai
     perform cs vc = do
