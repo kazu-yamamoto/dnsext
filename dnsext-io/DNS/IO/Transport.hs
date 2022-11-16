@@ -49,7 +49,8 @@ type Rslv1 = Question
           -> Int -- Retry
           -> Rslv0
 
-type TcpRslv = AddrInfo
+type TcpRslv = IO Identifier
+            -> AddrInfo
             -> Question
             -> Int -- Timeout
             -> QueryControls
@@ -120,16 +121,16 @@ resolveConcurrent nss gens q tm retry ctls rcv = do
 
 resolveOne :: AddrInfo -> IO Identifier -> Rslv1
 resolveOne ai gen q tm retry ctls rcv =
-    E.try $ udpTcpResolve gen retry rcv ai q tm ctls
+    E.try $ udpTcpResolve retry rcv gen ai q tm ctls
 
 ----------------------------------------------------------------
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpResolve :: IO Identifier -> UdpRslv
-udpTcpResolve gen retry rcv ai q tm ctls =
-    udpResolve gen retry rcv ai q tm ctls `E.catch`
+udpTcpResolve :: UdpRslv
+udpTcpResolve retry rcv gen ai q tm ctls =
+    udpResolve retry rcv gen ai q tm ctls `E.catch`
             \TCPFallback -> tcpResolve gen ai q tm ctls
 
 ----------------------------------------------------------------
@@ -149,8 +150,8 @@ udpOpen ai = do
     return sock
 
 -- This throws DNSError or TCPFallback.
-udpResolve :: IO Identifier -> UdpRslv
-udpResolve gen retry rcv ai q tm ctls0 =
+udpResolve :: UdpRslv
+udpResolve retry rcv gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
       bracket (udpOpen ai) close $ go ctls0 retry
   where
@@ -208,7 +209,7 @@ tcpOpen ai = do
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpResolve :: IO Identifier -> TcpRslv
+tcpResolve :: TcpRslv
 tcpResolve gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "tcp") $ do
         bracket (tcpOpen ai) close $ go ctls0
