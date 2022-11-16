@@ -9,7 +9,7 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 import qualified Data.List.NonEmpty as NE
-import Network.Socket (AddrInfo(..), SockAddr(..), Family(AF_INET, AF_INET6), Socket, SocketType(Stream), close, socket, connect, defaultProtocol)
+import Network.Socket (AddrInfo(..), Socket, SocketType(Stream), close, openSocket, connect)
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
@@ -131,7 +131,7 @@ resolveOne ai gen q tm retry ctls rcv =
 udpTcpResolve :: UdpRslv
 udpTcpResolve retry rcv gen ai q tm ctls =
     udpResolve retry rcv gen ai q tm ctls `E.catch`
-            \TCPFallback -> tcpResolve gen ai q tm ctls
+        \TCPFallback -> tcpResolve gen ai { addrSocketType = Stream } q tm ctls
 
 ----------------------------------------------------------------
 
@@ -143,17 +143,19 @@ ioErrorToDNSError ai protoName ioe = throwIO $ NetworkFailure aioe
 
 ----------------------------------------------------------------
 
-udpOpen :: AddrInfo -> IO Socket
-udpOpen ai = do
-    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
+open :: AddrInfo -> IO Socket
+open ai = do
+    sock <- openSocket ai
     connect sock $ addrAddress ai
     return sock
+
+----------------------------------------------------------------
 
 -- This throws DNSError or TCPFallback.
 udpResolve :: UdpRslv
 udpResolve retry rcv gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
-      bracket (udpOpen ai) close $ go ctls0
+      bracket (open ai) close $ go ctls0
   where
     go ctls sock = do
       res <- perform ctls sock retry
@@ -193,25 +195,13 @@ udpResolve retry rcv gen ai q tm ctls0 =
 
 ----------------------------------------------------------------
 
-tcpOpen :: AddrInfo -> IO Socket
-tcpOpen ai = do
-    let addr = addrAddress ai
-    sock <- mkSocket addr
-    connect sock addr
-    return sock
-   where
-    mkSocket peer = case peer of
-      SockAddrInet{}  -> socket AF_INET  Stream defaultProtocol
-      SockAddrInet6{} -> socket AF_INET6 Stream defaultProtocol
-      _               -> E.throwIO ServerFailure
-
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
 tcpResolve :: TcpRslv
 tcpResolve gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "tcp") $ do
-        bracket (tcpOpen ai) close $ go ctls0
+        bracket (open ai) close $ go ctls0
   where
     go ctls vc = do
         res <- perform ctls vc
