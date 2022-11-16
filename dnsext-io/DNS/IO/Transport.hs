@@ -146,7 +146,7 @@ ioErrorToDNSError ai protoName ioe = throwIO $ NetworkFailure aioe
 udpOpen :: AddrInfo -> IO Socket
 udpOpen ai = do
     sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
-    connect sock (addrAddress ai)
+    connect sock $ addrAddress ai
     return sock
 
 -- This throws DNSError or TCPFallback.
@@ -189,12 +189,17 @@ udpResolve ident retry rcv ai q tm ctls = do
 
 ----------------------------------------------------------------
 
--- Create a TCP socket with the given socket address.
-tcpOpen :: SockAddr -> IO Socket
-tcpOpen peer = case peer of
-    SockAddrInet{}  -> socket AF_INET  Stream defaultProtocol
-    SockAddrInet6{} -> socket AF_INET6 Stream defaultProtocol
-    _               -> E.throwIO ServerFailure
+tcpOpen :: AddrInfo -> IO Socket
+tcpOpen ai = do
+    let addr = addrAddress ai
+    sock <- mkSocket addr
+    connect sock addr
+    return sock
+   where
+    mkSocket peer = case peer of
+      SockAddrInet{}  -> socket AF_INET  Stream defaultProtocol
+      SockAddrInet6{} -> socket AF_INET6 Stream defaultProtocol
+      _               -> E.throwIO ServerFailure
 
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
@@ -202,7 +207,7 @@ tcpOpen peer = case peer of
 tcpResolve :: IO Identifier -> TcpRslv
 tcpResolve gen ai q tm ctls =
     E.handle (ioErrorToDNSError ai "tcp") $ do
-        bracket (tcpOpen addr) close $ \vc -> do
+        bracket (tcpOpen ai) close $ \vc -> do
             res <- perform ctls vc
             let rc = rcode $ flags $ header res
                 eh = ednsHeader res
@@ -212,12 +217,10 @@ tcpResolve gen ai q tm ctls =
             then perform cs vc
             else return res
   where
-    addr = addrAddress ai
     perform cs vc = do
         ident <- gen
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
-            connect vc addr
             sendVC vc qry
             receiveVC vc
         case mres of
