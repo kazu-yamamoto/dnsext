@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNS.Do53.Transport (
+module DNS.Do53.Do53 (
     resolve
   ) where
 

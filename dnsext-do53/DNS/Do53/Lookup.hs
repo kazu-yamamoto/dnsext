@@ -20,12 +20,12 @@ import Network.Socket (Socket)
 import Prelude hiding (lookup)
 import Time.System (timeCurrent)
 
+import DNS.Do53.Do53
 import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
 import DNS.Do53.Resolver
-import DNS.Do53.Transport
 
 data Section = Answer | Authority deriving (Eq, Ord, Show)
 

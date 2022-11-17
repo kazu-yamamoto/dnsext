@@ -21,8 +21,7 @@ modules =
   , "-XPatternSynonyms"
   , "-i","-i."
   , "-threaded"
-  , "DNS.Do53.hs"
-  , "DNS.Do53/Utils.hs"
+  , "DNS/Do53/Client.hs"
   ]
 
 main :: IO ()

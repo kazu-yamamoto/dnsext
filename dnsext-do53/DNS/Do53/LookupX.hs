@@ -62,9 +62,12 @@
 --   All lookup functions eventually call 'lookupRaw'. See its documentation
 --   to understand the concrete lookup behavior.
 
-module DNS.Do53.Utils (
-    lookupA, lookupAAAA
-  , lookupMX, lookupAviaMX, lookupAAAAviaMX
+module DNS.Do53.LookupX (
+    lookupA
+  , lookupAAAA
+  , lookupMX
+  , lookupAviaMX
+  , lookupAAAAviaMX
   , lookupNS
   , lookupNSAuth
   , lookupTXT

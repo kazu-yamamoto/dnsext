@@ -1,7 +1,6 @@
-module DNS.Do53.Internal (
-    encodeQuery
+module DNS.Do53.Server (
     -- * Receiving DNS messages
-  , receive
+    receive
   , receiveFrom
   , receiveVC
     -- * Sending pre-encoded messages
@@ -11,5 +10,4 @@ module DNS.Do53.Internal (
   , sendAll
   ) where
 
-import DNS.Do53.Query
 import DNS.Do53.IO
