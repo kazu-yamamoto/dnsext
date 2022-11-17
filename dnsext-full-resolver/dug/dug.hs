@@ -1,6 +1,6 @@
 module Main (main) where
 
-import DNS.IO (rdFlag, doFlag, QueryControls, FlagOp(..))
+import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)

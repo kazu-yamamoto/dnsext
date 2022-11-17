@@ -55,9 +55,9 @@ import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
-import DNS.IO (ResolvConf (..), FlagOp (FlagClear))
+import DNS.Do53.Client (ResolvConf (..), FlagOp (FlagClear))
 import qualified DNS.Types as DNS
-import qualified DNS.IO as DNS
+import qualified DNS.Do53.Client as DNS
 
 -- this package
 import DNS.Cache.RootServers (rootServers)

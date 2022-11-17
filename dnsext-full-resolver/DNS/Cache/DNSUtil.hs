@@ -21,7 +21,7 @@ import DNS.Types (DNSMessage)
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import qualified DNS.IO as DNS
+import qualified DNS.Do53.Client as DNS
 
 ---
 
