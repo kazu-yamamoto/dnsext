@@ -41,7 +41,7 @@ library
         psqueues,
         iproute,
         dnsext-dnssec,
-        dnsext-io,
+        dnsext-do53,
         dnsext-types,
         random,
         fast-logger,
@@ -76,7 +76,7 @@ executable dug
         base,
         dnsext-full-resolver,
         dnsext-types,
-        dnsext-io,
+        dnsext-do53,
         dnsext-dnssec,
         dnsext-svcb,
         iproute,
@@ -110,7 +110,7 @@ test-suite cache-test
         base,
         bytestring,
         dnsext-types,
-        dnsext-io,
+        dnsext-do53,
         dnsext-full-resolver,
         QuickCheck
 
@@ -128,7 +128,7 @@ test-suite query-test
         base,
         hspec,
         dnsext-types,
-        dnsext-io,
+        dnsext-do53,
         dnsext-full-resolver
 
     if impl(ghc >=8)

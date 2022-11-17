@@ -1,12 +1,12 @@
 cabal-version:      3.0
-name:               dnsext-io
+name:               dnsext-do53
 version:            0.0.0
 license:            BSD-3-Clause
 license-file:       LICENSE
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
 author:             Kazu Yamamoto <kazu@iij.ad.jp>
 tested-with:        ghc ==8.6.5 ghc ==8.8.4 ghc ==9.0.2 ghc ==9.2.4
-synopsis:           Extensible DNS library in Haskell
+synopsis:           DNS over 53 port based on dnsext
 description:
     A thread-safe DNS library for both clients and servers written
     purely in  Haskell.
@@ -71,7 +71,7 @@ test-suite spec
     default-language:   Haskell2010
     ghc-options:        -Wall
     build-depends:
-        dnsext-io,
+        dnsext-do53,
         dnsext-types,
         base,
         hspec,
