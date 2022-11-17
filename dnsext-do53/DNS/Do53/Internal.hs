@@ -1,4 +1,4 @@
-module DNS.IO.Internal (
+module DNS.Do53.Internal (
     encodeQuery
     -- * Receiving DNS messages
   , receive
@@ -11,5 +11,5 @@ module DNS.IO.Internal (
   , sendAll
   ) where
 
-import DNS.IO.Query
-import DNS.IO.IO
+import DNS.Do53.Query
+import DNS.Do53.IO

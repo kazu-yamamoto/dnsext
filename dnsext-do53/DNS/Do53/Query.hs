@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module DNS.IO.Query (
+module DNS.Do53.Query (
     QueryControls(..)
   , FlagOp(..)
   , rdFlag
@@ -20,7 +20,7 @@ import DNS.Types
 import DNS.Types.Encode
 import qualified Data.Semigroup as Sem
 
-import DNS.IO.Imports
+import DNS.Do53.Imports
 
 ----------------------------------------------------------------
 
@@ -382,15 +382,15 @@ modifyQuery ctls query = query {
     -- | Apply all the query flag, returning the
     -- resulting 'DNSFlags' suitable for making queries with the requested flag
     -- settings.  This is only needed if you're creating your own 'DNSMessage',
-    -- the 'DNS.IO.lookupRawCtl' function takes a 'QueryControls'
+    -- the 'DNS.Do53.lookupRawCtl' function takes a 'QueryControls'
     -- argument and handles this conversion internally.
     --
     -- Default overrides can be specified in the resolver configuration by setting
-    -- the 'DNS.IO.resolvQueryControls' field of the
-    -- 'DNS.IO.ResolvConf' argument to
-    -- 'DNS.IO.makeResolvSeed'.  These then apply to lookups via
+    -- the 'DNS.Do53.resolvQueryControls' field of the
+    -- 'DNS.Do53.ResolvConf' argument to
+    -- 'DNS.Do53.makeResolvSeed'.  These then apply to lookups via
     -- resolvers based on the resulting configuration, with the exception of
-    -- 'DNS.IO.lookupRawCtl' which takes an additional
+    -- 'DNS.Do53.lookupRawCtl' which takes an additional
     -- 'QueryControls' argument to augment the default overrides.
     --
     queryDNSFlags :: HeaderControls -> DNSFlags

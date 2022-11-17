@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.IO.Lookup (
+module DNS.Do53.Lookup (
   -- * Lookups returning requested RData
     lookup
   , lookupAuth
@@ -20,12 +20,12 @@ import Network.Socket (Socket)
 import Prelude hiding (lookup)
 import Time.System (timeCurrent)
 
-import DNS.IO.IO
-import DNS.IO.Imports
-import DNS.IO.Memo
-import DNS.IO.Query
-import DNS.IO.Resolver
-import DNS.IO.Transport
+import DNS.Do53.IO
+import DNS.Do53.Imports
+import DNS.Do53.Memo
+import DNS.Do53.Query
+import DNS.Do53.Resolver
+import DNS.Do53.Transport
 
 data Section = Answer | Authority deriving (Eq, Ord, Show)
 
@@ -276,10 +276,10 @@ lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
 lookupRawCtl rslv dom typ ctls = resolve rslv dom typ ctls receive
 
 -- | Similar to 'lookupRawCtl', but the recv action can be replaced with
--- something other than `DNS.IO.Internal.receive`.
+-- something other than `DNS.Do53.Internal.receive`.
 -- For example, in an environment where frequent retrieval of the current time
 -- is a performance issue, you can pass the time from outside instead of
--- having `DNS.IO.Internal.receive` retrieve the current time.
+-- having `DNS.Do53.Internal.receive` retrieve the current time.
 lookupRawCtlRecv :: Resolver                  -- ^ Resolver obtained via 'withResolver'
                  -> Domain                    -- ^ Query domain
                  -> TYPE                      -- ^ Query RRtype

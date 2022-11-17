@@ -1,4 +1,4 @@
-module DNS.IO (
+module DNS.Do53 (
   -- * Lookups returning requested RData
     lookup
   , lookupAuth
@@ -47,7 +47,7 @@ module DNS.IO (
 
 import Prelude hiding (lookup)
 
-import DNS.IO.Lookup
-import DNS.IO.Query
-import DNS.IO.Resolver
+import DNS.Do53.Lookup
+import DNS.Do53.Query
+import DNS.Do53.Resolver
 

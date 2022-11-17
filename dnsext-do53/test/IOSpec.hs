@@ -6,8 +6,8 @@ import DNS.Types
 import Network.Socket
 import Test.Hspec
 
-import DNS.IO as DNS
-import DNS.IO.Internal as DNS
+import DNS.Do53 as DNS
+import DNS.Do53.Internal as DNS
 
 spec :: Spec
 spec = describe "send/receive" $ do

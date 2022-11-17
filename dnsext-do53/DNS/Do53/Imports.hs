@@ -1,4 +1,4 @@
-module DNS.IO.Imports (
+module DNS.Do53.Imports (
     ByteString
   , ShortByteString
   , Int64

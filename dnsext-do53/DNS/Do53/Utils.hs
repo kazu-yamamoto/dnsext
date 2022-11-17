@@ -62,7 +62,7 @@
 --   All lookup functions eventually call 'lookupRaw'. See its documentation
 --   to understand the concrete lookup behavior.
 
-module DNS.IO.Utils (
+module DNS.Do53.Utils (
     lookupA, lookupAAAA
   , lookupMX, lookupAviaMX, lookupAAAAviaMX
   , lookupNS
@@ -79,8 +79,8 @@ import qualified Data.ByteString.Short as Short
 import Data.IP
 import Data.String (fromString)
 
-import DNS.IO.Lookup as DNS
-import DNS.IO.Resolver as DNS
+import DNS.Do53.Lookup as DNS
+import DNS.Do53.Resolver as DNS
 
 ----------------------------------------------------------------
 
