@@ -113,11 +113,13 @@ resolveSequential nss gs q tm retry ctls rcv = loop nss gs
     loop _  _     = error "resolveSequential:loop"
 
 resolveConcurrent :: [AddrInfo] -> [IO Identifier] -> Rslv1
-resolveConcurrent nss gens q tm retry ctls rcv = do
-    asyncs <- mapM mkAsync $ zip nss gens
-    snd <$> waitAnyCancel asyncs
+resolveConcurrent nss gens q tm retry ctls rcv =
+    raceAny $ zipWith run nss gens
   where
-    mkAsync (ai,gen) = async $ resolveOne ai gen q tm retry ctls rcv
+    raceAny ios = do
+        asyncs <- mapM async ios
+        snd <$> waitAnyCancel asyncs
+    run ai gen = resolveOne ai gen q tm retry ctls rcv
 
 resolveOne :: AddrInfo -> IO Identifier -> Rslv1
 resolveOne ai gen q tm retry ctls rcv =
