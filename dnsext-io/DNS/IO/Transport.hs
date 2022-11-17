@@ -9,7 +9,7 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 import qualified Data.List.NonEmpty as NE
-import Network.Socket (AddrInfo(..), SockAddr(..), Family(AF_INET, AF_INET6), Socket, SocketType(Stream), close, socket, connect, defaultProtocol)
+import Network.Socket (AddrInfo(..), Socket, SocketType(Stream), close, openSocket, connect)
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
@@ -49,7 +49,8 @@ type Rslv1 = Question
           -> Int -- Retry
           -> Rslv0
 
-type TcpRslv = AddrInfo
+type TcpRslv = IO Identifier
+            -> AddrInfo
             -> Question
             -> Int -- Timeout
             -> QueryControls
@@ -112,26 +113,27 @@ resolveSequential nss gs q tm retry ctls rcv = loop nss gs
     loop _  _     = error "resolveSequential:loop"
 
 resolveConcurrent :: [AddrInfo] -> [IO Identifier] -> Rslv1
-resolveConcurrent nss gens q tm retry ctls rcv = do
-    asyncs <- mapM mkAsync $ zip nss gens
-    snd <$> waitAnyCancel asyncs
+resolveConcurrent nss gens q tm retry ctls rcv =
+    raceAny $ zipWith run nss gens
   where
-    mkAsync (ai,gen) = async $ resolveOne ai gen q tm retry ctls rcv
+    raceAny ios = do
+        asyncs <- mapM async ios
+        snd <$> waitAnyCancel asyncs
+    run ai gen = resolveOne ai gen q tm retry ctls rcv
 
 resolveOne :: AddrInfo -> IO Identifier -> Rslv1
 resolveOne ai gen q tm retry ctls rcv =
-    E.try $ udpTcpResolve gen retry rcv ai q tm ctls
+    E.try $ udpTcpResolve retry rcv gen ai q tm ctls
 
 ----------------------------------------------------------------
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpResolve :: IO Identifier -> UdpRslv
-udpTcpResolve gen retry rcv ai q tm ctls = do
-    ident <- gen
-    udpResolve ident retry rcv ai q tm ctls `E.catch`
-            \TCPFallback -> tcpResolve gen ai q tm ctls
+udpTcpResolve :: UdpRslv
+udpTcpResolve retry rcv gen ai q tm ctls =
+    udpResolve retry rcv gen ai q tm ctls `E.catch`
+        \TCPFallback -> tcpResolve gen ai { addrSocketType = Stream } q tm ctls
 
 ----------------------------------------------------------------
 
@@ -143,36 +145,42 @@ ioErrorToDNSError ai protoName ioe = throwIO $ NetworkFailure aioe
 
 ----------------------------------------------------------------
 
-udpOpen :: AddrInfo -> IO Socket
-udpOpen ai = do
-    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
-    connect sock (addrAddress ai)
+open :: AddrInfo -> IO Socket
+open ai = do
+    sock <- openSocket ai
+    connect sock $ addrAddress ai
     return sock
 
+----------------------------------------------------------------
+
 -- This throws DNSError or TCPFallback.
-udpResolve :: Identifier -> UdpRslv
-udpResolve ident retry rcv ai q tm ctls = do
-    let qry = encodeQuery ident q ctls
+udpResolve :: UdpRslv
+udpResolve retry rcv gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
-      bracket (udpOpen ai) close (loop qry ctls 0 RetryLimitExceeded)
+      bracket (open ai) close $ go ctls0
   where
-    loop qry lctls cnt err sock
-      | cnt == retry = E.throwIO err
-      | otherwise    = do
-          mres <- timeout tm (send sock qry >> getAns sock)
-          case mres of
-              Nothing  -> loop qry lctls (cnt + 1) RetryLimitExceeded sock
-              Just res -> do
-                      let fl = flags $ header res
-                          tc = trunCation fl
-                          rc = rcode fl
-                          eh = ednsHeader res
-                          cs = ednsEnabled FlagClear <> lctls
-                      if tc then E.throwIO TCPFallback
-                      else if rc == FormatErr && eh == NoEDNS && cs /= lctls
-                      then let qry' = encodeQuery ident q cs
-                            in loop qry' cs cnt RetryLimitExceeded sock
-                      else return res
+    go ctls sock = do
+      res <- perform ctls sock retry
+      let fl = flags $ header res
+          tc = trunCation fl
+          rc = rcode fl
+          eh = ednsHeader res
+          cs = ednsEnabled FlagClear <> ctls
+      if tc then E.throwIO TCPFallback
+      else if rc == FormatErr && eh == NoEDNS && cs /= ctls
+      then perform cs sock retry
+      else return res
+
+    perform _ _ 0 =  E.throwIO RetryLimitExceeded
+    perform cs sock cnt = do
+        ident <- gen
+        let qry = encodeQuery ident q cs
+        mres <- timeout tm $ do
+            send sock qry
+            getAns sock ident
+        case mres of
+           Nothing  -> perform cs sock (cnt - 1)
+           Just res -> return res
 
     -- | Closed UDP ports are occasionally re-used for a new query, with
     -- the nameserver returning an unexpected answer to the wrong socket.
@@ -181,44 +189,45 @@ udpResolve ident retry rcv ai q tm ctls = do
     -- Note, this eliminates sequence mismatch as a UDP error condition,
     -- instead we'll time out if no matching answer arrives.
     --
-    getAns sock = do
-        resp <- rcv sock
-        if checkResp q ident resp
-        then return resp
-        else getAns sock
+    getAns sock ident = do
+        res <- rcv sock
+        if checkResp q ident res
+        then return res
+        else getAns sock ident
 
 ----------------------------------------------------------------
-
--- Create a TCP socket with the given socket address.
-tcpOpen :: SockAddr -> IO Socket
-tcpOpen peer = case peer of
-    SockAddrInet{}  -> socket AF_INET  Stream defaultProtocol
-    SockAddrInet6{} -> socket AF_INET6 Stream defaultProtocol
-    _               -> E.throwIO ServerFailure
 
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpResolve :: IO Identifier -> TcpRslv
-tcpResolve gen ai q tm ctls =
+tcpResolve :: TcpRslv
+tcpResolve gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "tcp") $ do
-        res <- bracket (tcpOpen addr) close (perform ctls)
-        let rc = rcode $ flags $ header res
+        bracket (open ai) close $ go ctls0
+  where
+    go ctls vc = do
+        res <- perform ctls vc
+        let fl = flags $ header res
+            rc = rcode fl
             eh = ednsHeader res
             cs = ednsEnabled FlagClear <> ctls
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && cs /= ctls
-        then bracket (tcpOpen addr) close (perform cs)
+        then perform cs vc
         else return res
-  where
-    addr = addrAddress ai
-    perform cs vc = do
+
+    perform cs sock = do
         ident <- gen
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
-            connect vc addr
-            sendVC vc qry
-            receiveVC vc
+            sendVC sock qry
+            getAns sock ident
         case mres of
             Nothing  -> E.throwIO TimeoutExpired
-            Just res -> maybe (return res) E.throwIO (checkRespM q ident res)
+            Just res -> return res
+
+    getAns sock ident = do
+        res <- receiveVC sock
+        case checkRespM q ident res of
+            Nothing  -> return res
+            Just err -> E.throwIO err
