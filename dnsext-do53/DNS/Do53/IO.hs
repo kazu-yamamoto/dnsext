@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNS.IO.IO (
+module DNS.Do53.IO (
     -- * Receiving DNS messages
     receive
   , receiveFrom
@@ -23,7 +23,7 @@ import System.IO.Error
 import Time.System (timeCurrent)
 import Time.Types (Elapsed(..), Seconds(..))
 
-import DNS.IO.Imports
+import DNS.Do53.Imports
 
 ----------------------------------------------------------------
 

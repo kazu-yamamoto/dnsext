@@ -1,6 +1,19 @@
-module DNS.IO (
+module DNS.Do53.Client (
+  -- * Lookups returning each type
+    lookupA
+  , lookupAAAA
+  , lookupMX
+  , lookupAviaMX
+  , lookupAAAAviaMX
+  , lookupNS
+  , lookupNSAuth
+  , lookupTXT
+  , lookupSOA
+  , lookupPTR
+  , lookupRDNS
+  , lookupSRV
   -- * Lookups returning requested RData
-    lookup
+  , lookup
   , lookupAuth
   , lookup'
   , lookupAuth'
@@ -43,11 +56,13 @@ module DNS.IO (
   , ednsSetUdpSize
   , ednsSetOptions
   , ODataOp(..)
+  , encodeQuery
   ) where
 
 import Prelude hiding (lookup)
 
-import DNS.IO.Lookup
-import DNS.IO.Query
-import DNS.IO.Resolver
+import DNS.Do53.Lookup
+import DNS.Do53.LookupX
+import DNS.Do53.Query
+import DNS.Do53.Resolver
 

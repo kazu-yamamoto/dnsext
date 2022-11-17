@@ -2,7 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 -- | Resolver related data types.
-module DNS.IO.Resolver (
+module DNS.Do53.Resolver (
   -- * Configuration for resolver
     ResolvConf(..)
   , defaultResolvConf
@@ -29,10 +29,10 @@ import Network.Socket (AddrInfoFlag(..), AddrInfo(..), PortNumber, HostName, Soc
 import Prelude
 import DNS.Types
 
-import DNS.IO.Imports
-import DNS.IO.Memo
-import DNS.IO.Query
-import DNS.IO.System
+import DNS.Do53.Imports
+import DNS.Do53.Memo
+import DNS.Do53.Query
+import DNS.Do53.System
 
 ----------------------------------------------------------------
 

@@ -1,10 +1,10 @@
 {-# LANGUAGE CPP #-}
 
-module DNS.IO.System (
+module DNS.Do53.System (
       getDefaultDnsServers
     ) where
 
-import DNS.IO.Imports
+import DNS.Do53.Imports
 
 #if !defined(mingw32_HOST_OS)
 #define POSIX

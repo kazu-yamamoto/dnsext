@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNS.IO.Transport (
+module DNS.Do53.Do53 (
     resolve
   ) where
 
@@ -13,10 +13,10 @@ import Network.Socket (AddrInfo(..), Socket, SocketType(Stream), close, openSock
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
-import DNS.IO.IO
-import DNS.IO.Imports
-import DNS.IO.Resolver
-import DNS.IO.Query
+import DNS.Do53.IO
+import DNS.Do53.Imports
+import DNS.Do53.Resolver
+import DNS.Do53.Query
 
 -- | Check response for a matching identifier and question.  If we ever do
 -- pipelined TCP, we'll need to handle out of order responses.  See:

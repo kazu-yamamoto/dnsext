@@ -4,8 +4,7 @@ module LookupSpec where
 
 import Test.Hspec
 
-import DNS.IO as DNS
-import DNS.IO.Utils as DNS
+import DNS.Do53.Client as DNS
 
 spec :: Spec
 spec = describe "lookup" $ do

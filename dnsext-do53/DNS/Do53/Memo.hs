@@ -1,4 +1,4 @@
-module DNS.IO.Memo (
+module DNS.Do53.Memo (
     Cache
   , Key
   , Entry
@@ -14,7 +14,7 @@ import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 import Time.System (timeCurrent)
 
-import DNS.IO.Imports
+import DNS.Do53.Imports
 
 type Key = (Domain, TYPE)
 type Prio = Elapsed

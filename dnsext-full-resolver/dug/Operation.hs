@@ -4,11 +4,10 @@ import Text.Read (readMaybe)
 
 import Data.IP (IP (..))
 import DNS.Types (TYPE, DNSError, DNSMessage)
-import DNS.IO (QueryControls,
+import DNS.Do53.Client (QueryControls,
                ResolvConf (resolvInfo, resolvTimeout, resolvRetry, resolvQueryControls))
+import qualified DNS.Do53.Client as DNS
 import qualified DNS.Types as DNS
-import qualified DNS.IO as DNS
-import qualified DNS.IO.Utils as DNS
 import System.Random (randomRIO)
 
 
