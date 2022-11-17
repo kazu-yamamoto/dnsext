@@ -101,7 +101,8 @@ toKeyO = fromIntegral . fromOptCode
 defaultODataDict :: ODataDict
 defaultODataDict =
     M.insert (toKeyO NSID) (ODataDecode (Proxy :: Proxy OD_NSID)) $
-    M.insert (toKeyO ClientSubnet)  (ODataDecode (Proxy :: Proxy OD_ClientSubnet))
+    M.insert (toKeyO ClientSubnet) (ODataDecode (Proxy :: Proxy OD_ClientSubnet)) $
+    M.insert (toKeyO Padding) (ODataDecode (Proxy :: Proxy OD_Padding))
     M.empty
 
 ----------------------------------------------------------------

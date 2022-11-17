@@ -10,6 +10,7 @@ module DNS.Types.EDNS (
     OptCode
   , NSID
   , ClientSubnet
+  , Padding
   )
   , fromOptCode
   , toOptCode
@@ -21,9 +22,11 @@ module DNS.Types.EDNS (
   , OData(..)
   , OD_NSID(..)
   , OD_ClientSubnet(..)
+  , OD_Padding(..)
   , od_nsid
   , od_clientSubnet
   , od_ecsGeneric
+  , od_padding
   , od_unknown
   , addOpt
   ) where
@@ -128,6 +131,10 @@ pattern NSID  = OptCode 3
 -- | Client subnet (RFC7871)
 pattern ClientSubnet :: OptCode
 pattern ClientSubnet = OptCode 8
+
+-- | Padding (RFC7830)
+pattern Padding :: OptCode
+pattern Padding = OptCode 12
 
 ----------------------------------------------------------------
 
@@ -357,6 +364,22 @@ od_clientSubnet a b c = toOData $ OD_ClientSubnet a b c
 
 od_ecsGeneric :: Word16 -> Word8 -> Word8 -> Opaque -> OData
 od_ecsGeneric a b c d = toOData $ OD_ECSgeneric a b c d
+
+---------------------------------------------------------------
+
+-- | The EDNS(0) Padding Option (RFC7830)
+newtype OD_Padding = OD_Padding Opaque deriving (Eq)
+
+instance Show OD_Padding where
+    show (OD_Padding o) = "Padding(" ++ show (Opaque.length o) ++ ")"
+
+instance OptData OD_Padding where
+    optDataCode _ = Padding
+    encodeOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
+    decodeOptData _ len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
+
+od_padding :: Opaque -> OData
+od_padding = toOData . OD_Padding
 
 ---------------------------------------------------------------
 
