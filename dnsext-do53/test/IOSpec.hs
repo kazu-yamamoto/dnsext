@@ -6,8 +6,8 @@ import DNS.Types
 import Network.Socket
 import Test.Hspec
 
-import DNS.Do53.Client as DNS
-import DNS.Do53.Server as DNS
+import DNS.Do53.Client
+import DNS.Do53.Internal
 
 spec :: Spec
 spec = describe "send/receive" $ do
@@ -17,16 +17,16 @@ spec = describe "send/receive" $ do
         -- Google's resolvers support the AD and CD bits
         let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
                   adFlag FlagSet <> ednsEnabled FlagClear
-        send sock qry
-        ans <- receive sock
+        sendUDP sock qry
+        ans <- recvUDP sock
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
         sock <- connectedSocket Stream
         let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
                   adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-        sendVC sock qry
-        ans <- receiveVC sock
+        sendVC (sendTCP sock) qry
+        ans <- recvVC (recvTCP sock)
         identifier (header ans) `shouldBe` 1
 
 connectedSocket :: SocketType -> IO Socket

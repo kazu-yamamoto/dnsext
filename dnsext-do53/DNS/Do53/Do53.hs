@@ -176,7 +176,7 @@ udpResolve retry rcv gen ai q tm ctls0 =
         ident <- gen
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
-            send sock qry
+            sendUDP sock qry
             getAns sock ident
         case mres of
            Nothing  -> perform cs sock (cnt - 1)
@@ -205,29 +205,31 @@ tcpResolve gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "tcp") $ do
         bracket (open ai) close $ go ctls0
   where
-    go ctls vc = do
-        res <- perform ctls vc
+    go ctls sock = do
+        let send = sendVC (sendTCP sock)
+            recv = recvVC (recvTCP sock)
+        res <- perform ctls send recv
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
             cs = ednsEnabled FlagClear <> ctls
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && cs /= ctls
-        then perform cs vc
+        then perform cs send recv
         else return res
 
-    perform cs sock = do
+    perform cs send recv = do
         ident <- gen
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
-            sendVC sock qry
-            getAns sock ident
+            _ <- send qry
+            getAns recv ident
         case mres of
             Nothing  -> E.throwIO TimeoutExpired
             Just res -> return res
 
-    getAns sock ident = do
-        res <- receiveVC sock
+    getAns recv ident = do
+        res <- recv
         case checkRespM q ident res of
             Nothing  -> return res
             Just err -> E.throwIO err

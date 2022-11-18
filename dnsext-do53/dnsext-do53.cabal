@@ -25,7 +25,7 @@ source-repository head
 library
     exposed-modules:
         DNS.Do53.Client
-        DNS.Do53.Server
+        DNS.Do53.Internal
 
     other-modules:
         DNS.Do53.Do53

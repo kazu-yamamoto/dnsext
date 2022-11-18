@@ -2,22 +2,23 @@
 
 module DNS.Do53.IO (
     -- * Receiving DNS messages
-    receive
-  , receiveFrom
-  , receiveVC
+    recvUDP
+  , recvTCP
+  , recvVC
+  , decodeVCLength
     -- * Sending pre-encoded messages
-  , send
-  , sendTo
+  , sendUDP
+  , sendTCP
   , sendVC
-  , sendAll
+  , encodeVCLength
   ) where
 
 import qualified Control.Exception as E
 import DNS.Types hiding (Seconds)
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
-import Network.Socket (Socket, SockAddr)
-import Network.Socket.ByteString (recv, recvFrom)
+import Network.Socket (Socket)
+import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as Socket
 import System.IO.Error
 import Time.System (timeCurrent)
@@ -33,48 +34,31 @@ import DNS.Do53.Imports
 -- EDNS UDP buffer size limit at the same value.  A 'DNSError' is raised if I/O
 -- or message decoding fails.
 --
-receive :: Socket -> IO DNSMessage
-receive sock = do
-    let bufsiz = fromIntegral maxUdpSize
+recvUDP :: Socket -> IO DNSMessage
+recvUDP sock = do
+    let bufsiz = 2048
     bs <- recv sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
     Elapsed (Seconds now) <- timeCurrent
     case decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return msg
 
--- | Receive and decode a single 'DNSMessage' from a UDP 'Socket'.  Messages
--- longer than 'maxUdpSize' are silently truncated, but this should not occur
--- in practice, since we cap the advertised EDNS UDP buffer size limit at the
--- same value.  A 'DNSError' is raised if I/O or message decoding fails.
---
-receiveFrom :: Socket -> IO (DNSMessage, SockAddr)
-receiveFrom sock = do
-    let bufsiz = fromIntegral maxUdpSize
-    (bs, client) <- recvFrom sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
-    Elapsed (Seconds now) <- timeCurrent
-    case decodeAt now bs of
-        Left  e   -> E.throwIO e
-        Right msg -> return (msg, client)
-
--- | Receive and decode a single 'DNSMesage' from a virtual-circuit (TCP).  It
--- is up to the caller to implement any desired timeout. An 'DNSError' is
--- raised if I/O or message decoding fails.
---
-receiveVC :: Socket -> IO DNSMessage
-receiveVC sock = do
-    len <- toLen <$> recvDNS sock 2
-    bs <- recvDNS sock len
+recvVC :: (Int -> IO ByteString) -> IO DNSMessage
+recvVC rcv = do
+    len <- decodeVCLength <$> rcv 2
+    bs <- rcv len
     Elapsed (Seconds now) <- timeCurrent
     case decodeAt now bs of
         Left e    -> E.throwIO e
         Right msg -> return msg
-  where
-    toLen bs = case BS.unpack bs of
-        [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
-        _        -> 0              -- never reached
 
-recvDNS :: Socket -> Int -> IO ByteString
-recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
+decodeVCLength :: ByteString -> Int
+decodeVCLength bs = case BS.unpack bs of
+  [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
+  _        -> 0              -- never reached
+
+recvTCP :: Socket -> Int -> IO ByteString
+recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
   where
     recv1 = do
         bs1 <- recvCore len
@@ -106,46 +90,29 @@ recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
 -- prepended with an explicit length.  The socket must be explicitly connected
 -- to the destination nameserver.
 --
-send :: Socket -> ByteString -> IO ()
-send sock bs = void $ Socket.send sock bs
-{-# INLINE send #-}
+sendUDP :: Socket -> ByteString -> IO ()
+sendUDP sock bs = void $ Socket.send sock bs
 
--- | Send an encoded 'DNSMessage' datagram over UDP to a given address.  The
--- message length is implicit in the size of the UDP datagram.  With TCP you
--- must use 'sendVC', because TCP does not have message boundaries, and each
--- message needs to be prepended with an explicit length.
---
-sendTo :: Socket -> ByteString -> SockAddr -> IO ()
-sendTo sock bs addr = void $ Socket.sendTo sock bs addr
-{-# INLINE sendTo #-}
-
--- | Send a single encoded 'DNSMessage' over TCP.  An explicit length is
+-- | Send a single encoded 'DNSMessage' over VC.  An explicit length is
 -- prepended to the encoded buffer before transmission.  If you want to
 -- send a batch of multiple encoded messages back-to-back over a single
--- TCP connection, and then loop to collect the results, use 'encodeVC'
+-- VC connection, and then loop to collect the results, use 'encodeVC'
 -- to prefix each message with a length, and then use 'sendAll' to send
 -- a concatenated batch of the resulting encapsulated messages.
 --
-sendVC :: Socket -> ByteString -> IO ()
-sendVC sock bs = do
-    let lb = getLength bs
-    Socket.sendMany sock [lb,bs]
-{-# INLINE sendVC #-}
+sendVC :: ([ByteString] -> IO ()) -> ByteString -> IO ()
+sendVC writev bs = do
+    let lb = encodeVCLength $ BS.length bs
+    writev [lb,bs]
 
--- | Send one or more encoded 'DNSMessage' buffers over TCP, each allready
--- encapsulated with an explicit length prefix (perhaps via 'encodeVC') and
--- then concatenated into a single buffer.  DO NOT use 'sendAll' with UDP.
---
-sendAll :: Socket -> ByteString -> IO ()
-sendAll = Socket.sendAll
-{-# INLINE sendAll #-}
+sendTCP :: Socket -> [ByteString] -> IO ()
+sendTCP = Socket.sendMany
 
--- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a TCP
--- virtual circuit.  With TCP the buffer needs to start with an explicit
+-- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a VC
+-- virtual circuit.  With VC the buffer needs to start with an explicit
 -- length (the length is implicit with UDP).
 --
-getLength :: ByteString -> ByteString
-getLength q = BS.pack [fromIntegral u, fromIntegral l]
+encodeVCLength :: Int -> ByteString
+encodeVCLength len = BS.pack [fromIntegral u, fromIntegral l]
     where
-      len = BS.length q
       (u,l) = len `divMod` 256
