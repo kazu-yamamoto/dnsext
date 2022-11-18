@@ -34,7 +34,7 @@ import DNS.Do53.Imports
 --
 receive :: Socket -> IO DNSMessage
 receive sock = do
-    let bufsiz = fromIntegral maxUdpSize
+    let bufsiz = 2048
     bs <- recv sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
     Elapsed (Seconds now) <- timeCurrent
     case decodeAt now bs of
