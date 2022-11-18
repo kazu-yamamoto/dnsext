@@ -1,10 +1,12 @@
 module DNS.Do53.Internal (
     -- * Receiving DNS messages
-    receive
-  , receiveVC
+    recvUDP
+  , recvTCP
+  , recvVC
   , decodeVCLength
     -- * Sending pre-encoded messages
-  , send
+  , sendUDP
+  , sendTCP
   , sendVC
   , encodeVCLength
   ) where
