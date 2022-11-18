@@ -87,7 +87,7 @@ data EDNS = EDNS {
 defaultEDNS :: EDNS
 defaultEDNS = EDNS
     { ednsVersion = 0      -- The default EDNS version is 0
-    , ednsUdpSize = 1232   -- IPv6-safe UDP MTU
+    , ednsUdpSize = 1232   -- IPv6-safe UDP MTU (1280 - 40 - 8)
     , ednsDnssecOk = False -- We don't do DNSSEC validation
     , ednsOptions = []     -- No EDNS options by default
     }
