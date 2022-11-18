@@ -41,7 +41,7 @@ mkRecvBS wildcard
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
       return (bs, (peer, []))
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 2048 -- large enough, no locking
 
 -- return tuples that can be reused in request and response queues
 mkRecv :: Bool -> Int64 -> Socket -> IO (DNSMessage, (SockAddr, [Cmsg]))
@@ -63,7 +63,7 @@ mkRecv wildcard now
     recvFrom sock = do
       (bs, peer) <- Socket.recvFrom sock bufsiz
       return (bs, (peer, []))
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 2048 -- large enough, no locking
 
 mkSendBS :: Bool -> Socket -> ByteString -> SockAddr -> [Cmsg] -> IO ()
 mkSendBS wildcard
@@ -100,4 +100,4 @@ lookupRaw now rslv dom typ = DNS.lookupRawCtlRecv rslv dom typ mempty rcv
       case DNS.decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return msg
-    bufsiz = 16384 -- maxUdpSize in dns package, internal/Network/DNS/Types/Internal.hs
+    bufsiz = 2048 -- large enough, no locking
