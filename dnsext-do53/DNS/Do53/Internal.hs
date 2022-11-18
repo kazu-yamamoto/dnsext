@@ -8,7 +8,6 @@ module DNS.Do53.Internal (
   , send
   , sendTo
   , sendVC
-  , sendAll
   , encodeVCLength
   ) where
 

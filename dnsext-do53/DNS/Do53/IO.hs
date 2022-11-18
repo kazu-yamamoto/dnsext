@@ -10,7 +10,6 @@ module DNS.Do53.IO (
   , send
   , sendTo
   , sendVC
-  , sendAll
   , encodeVCLength
   ) where
 
@@ -134,14 +133,6 @@ sendVC sock bs = do
     let lb = encodeVCLength $ BS.length bs
     Socket.sendMany sock [lb,bs]
 {-# INLINE sendVC #-}
-
--- | Send one or more encoded 'DNSMessage' buffers over TCP, each allready
--- encapsulated with an explicit length prefix (perhaps via 'encodeVC') and
--- then concatenated into a single buffer.  DO NOT use 'sendAll' with UDP.
---
-sendAll :: Socket -> ByteString -> IO ()
-sendAll = Socket.sendAll
-{-# INLINE sendAll #-}
 
 -- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a TCP
 -- virtual circuit.  With TCP the buffer needs to start with an explicit
