@@ -5,11 +5,13 @@ module DNS.Do53.IO (
     receive
   , receiveFrom
   , receiveVC
+  , decodeVCLength
     -- * Sending pre-encoded messages
   , send
   , sendTo
   , sendVC
   , sendAll
+  , encodeVCLength
   ) where
 
 import qualified Control.Exception as E
@@ -62,16 +64,17 @@ receiveFrom sock = do
 --
 receiveVC :: Socket -> IO DNSMessage
 receiveVC sock = do
-    len <- toLen <$> recvDNS sock 2
+    len <- decodeVCLength <$> recvDNS sock 2
     bs <- recvDNS sock len
     Elapsed (Seconds now) <- timeCurrent
     case decodeAt now bs of
         Left e    -> E.throwIO e
         Right msg -> return msg
-  where
-    toLen bs = case BS.unpack bs of
-        [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
-        _        -> 0              -- never reached
+
+decodeVCLength :: ByteString -> Int
+decodeVCLength bs = case BS.unpack bs of
+  [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
+  _        -> 0              -- never reached
 
 recvDNS :: Socket -> Int -> IO ByteString
 recvDNS sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
@@ -128,7 +131,7 @@ sendTo sock bs addr = void $ Socket.sendTo sock bs addr
 --
 sendVC :: Socket -> ByteString -> IO ()
 sendVC sock bs = do
-    let lb = getLength bs
+    let lb = encodeVCLength $ BS.length bs
     Socket.sendMany sock [lb,bs]
 {-# INLINE sendVC #-}
 
@@ -144,8 +147,7 @@ sendAll = Socket.sendAll
 -- virtual circuit.  With TCP the buffer needs to start with an explicit
 -- length (the length is implicit with UDP).
 --
-getLength :: ByteString -> ByteString
-getLength q = BS.pack [fromIntegral u, fromIntegral l]
+encodeVCLength :: Int -> ByteString
+encodeVCLength len = BS.pack [fromIntegral u, fromIntegral l]
     where
-      len = BS.length q
       (u,l) = len `divMod` 256
