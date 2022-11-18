@@ -4,8 +4,6 @@
 module DNS.Types.EDNS (
     EDNS(..)
   , defaultEDNS
-  , maxUdpSize
-  , minUdpSize
   , OptCode (
     OptCode
   , NSID
@@ -93,24 +91,6 @@ defaultEDNS = EDNS
     , ednsDnssecOk = False -- We don't do DNSSEC validation
     , ednsOptions = []     -- No EDNS options by default
     }
-
--- | Maximum UDP size that can be advertised.  If the 'ednsUdpSize' of 'EDNS'
---   is larger, then this value is sent instead.  This value is likely to work
---   only for local nameservers on the loopback network.  Servers may enforce
---   a smaller limit.
---
--- >>> maxUdpSize
--- 16384
-maxUdpSize :: Word16
-maxUdpSize = 16384
-
--- | Minimum UDP size to advertise. If 'ednsUdpSize' of 'EDNS' is smaller,
---   then this value is sent instead.
---
--- >>> minUdpSize
--- 512
-minUdpSize :: Word16
-minUdpSize = 512
 
 ----------------------------------------------------------------
 

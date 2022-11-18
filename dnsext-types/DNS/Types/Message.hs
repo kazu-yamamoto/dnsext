@@ -184,6 +184,26 @@ getDNSMessage = do
 
 ----------------------------------------------------------------
 
+-- | Maximum UDP size that can be advertised.  If the 'ednsUdpSize' of 'EDNS'
+--   is larger, then this value is sent instead.  This value is likely to work
+--   only for local nameservers on the loopback network.  Servers may enforce
+--   a smaller limit.
+--
+-- >>> maxUdpSize
+-- 16384
+maxUdpSize :: Word16
+maxUdpSize = 16384
+
+-- | Minimum UDP size to advertise. If 'ednsUdpSize' of 'EDNS' is smaller,
+--   then this value is sent instead.
+--
+-- >>> minUdpSize
+-- 512
+minUdpSize :: Word16
+minUdpSize = 512
+
+----------------------------------------------------------------
+
 -- | A 'DNSMessage' template for queries with default settings for
 -- the message 'DNSHeader' and 'EDNSheader'.  This is the initial
 -- query message state, before customization via 'QueryControls'.
