@@ -16,8 +16,7 @@ import Network.QUIC.Internal
 import Network.Socket hiding (recvBuf)
 import qualified UnliftIO.Exception as E
 
-mew :: Question
-mew = Question "www.mew.org" A classIN
+import DNS.DoX.Common
 
 doh3 :: HostName -> PortNumber -> Question -> IO ()
 doh3 hostname port q = run cc $ \conn -> client conn hostname qry
@@ -35,12 +34,7 @@ doh3 hostname port q = run cc $ \conn -> client conn hostname qry
 client :: Connection -> HostName -> ByteString -> IO ()
 client conn hostname msg = E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> H3.run conn cliconf conf cli
   where
-    req = H3.requestBuilder methodPost "/dns-query" [
-        ("User-Agent", "HaskellQuic/0.0.0")
-      , ("Content-Type", "application/dns-message")
-      , ("Accept", "application/dns-message")
-      ]
-      $ BB.byteString msg
+    req = H3.requestBuilder methodPost "/dns-query" clientDoHHeaders $ BB.byteString msg
     cliconf = H3.ClientConfig {
         H3.scheme = "https"
       , H3.authority = C8.pack hostname

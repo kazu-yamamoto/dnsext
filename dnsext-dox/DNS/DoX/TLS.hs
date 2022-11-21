@@ -19,8 +19,7 @@ import UnliftIO.Exception (throwIO, handle, fromException)
 
 import Network.Socket.BufferPool
 
-iij :: Question
-iij = Question "www.iij.ad.jp" A classIN
+import DNS.DoX.Common
 
 dot :: HostName -> PortNumber -> Question -> IO ()
 dot hostname port q = do
