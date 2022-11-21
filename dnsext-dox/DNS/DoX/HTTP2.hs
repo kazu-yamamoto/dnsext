@@ -2,39 +2,30 @@
 
 module DNS.DoX.HTTP2 where
 
-import Foreign.Marshal.Alloc (mallocBytes, free)
-import qualified System.TimeManager as T
-import DNS.Do53.Client
-import DNS.Types
 import DNS.Types.Decode
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy as LBS
-import Data.Default.Class (def)
+import Foreign.Marshal.Alloc (mallocBytes, free)
 import Network.HTTP.Types
 import qualified Network.HTTP2.Client as H2
 import Network.Socket hiding (recvBuf)
-import qualified Network.TLS as TLS
-import Network.TLS hiding (HostName)
-import Network.TLS.Extra
-import System.IO.Error (isEOFError)
-import qualified UnliftIO.Exception as E
-
 import Network.Socket.BufferPool
+import Network.TLS hiding (HostName)
+import qualified System.TimeManager as T
+import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-doh :: HostName -> PortNumber -> Question -> IO ()
-doh hostname port q = do
+doh :: HostName -> PortNumber -> WireFormat -> IO ()
+doh hostname port qry = do
     E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         client ctx hostname qry
   where
-    qry = encodeQuery 100 q mempty
-    params = getDefaultParams hostname False
+    params = getTLSParams hostname "h2" False
     open = do
         ai <- makeAddrInfo (Just hostname) port
         sock <- openSocket ai
@@ -42,58 +33,6 @@ doh hostname port q = do
         let sockaddr = addrAddress ai
         connect sock sockaddr
         return sock
-
-makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
-makeAddrInfo maddr port = do
-    let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
-        hints = defaultHints {
-            addrFlags = flgs
-          , addrSocketType = Stream
-          }
-    head <$> getAddrInfo (Just hints) maddr (Just $ show port)
-
-getDefaultParams :: HostName -> Bool -> ClientParams
-getDefaultParams serverName validate
-    = (defaultParamsClient serverName "") {
-    clientSupported = supported
-  , clientWantSessionResume = Nothing
-  , clientUseServerNameIndication = True
-  , clientShared = shared
-  , clientHooks = hooks
-  }
-  where
-    shared = def {
-        sharedValidationCache = validateCache
-      }
-    supported = def { -- TLS.Supported
-        supportedVersions       = [TLS13,TLS12]
-      , supportedCiphers        = ciphersuite_strong
-      , supportedCompressions   = [nullCompression]
-      , supportedSecureRenegotiation = True
-      , supportedClientInitiatedRenegotiation = False
-      , supportedSession             = True
-      , supportedFallbackScsv        = True
-      , supportedGroups              = [X25519,P256,P384]
-      }
-    hooks = def {
-        onSuggestALPN = return $ Just ["h2"]
-      }
-    validateCache
-      | validate = def
-      | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
-                                       (\_ _ _ -> return ())
-
-sendTLS :: Context -> ByteString -> IO ()
-sendTLS ctx = sendData ctx . LBS.fromStrict
-
--- TLS version of recv (decrypting) without a cache.
-recvTLS :: TLS.Context -> Recv
-recvTLS ctx = E.handle onEOF $ TLS.recvData ctx
-  where
-    onEOF e
-      | Just TLS.Error_EOF <- E.fromException e       = return ""
-      | Just ioe <- E.fromException e, isEOFError ioe = return ""
-      | otherwise                                     = E.throwIO e
 
 client :: Context -> HostName -> ByteString -> IO ()
 client ctx hostname msg =

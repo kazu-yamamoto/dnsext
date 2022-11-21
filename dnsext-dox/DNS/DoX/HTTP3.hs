@@ -2,8 +2,6 @@
 
 module DNS.DoX.HTTP3 where
 
-import DNS.Do53.Client
-import DNS.Types
 import DNS.Types.Decode
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
@@ -12,24 +10,15 @@ import Network.HTTP.Types
 import qualified Network.HTTP3.Client as H3
 import Network.QUIC
 import Network.QUIC.Client
-import Network.QUIC.Internal
 import Network.Socket hiding (recvBuf)
 import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-doh3 :: HostName -> PortNumber -> Question -> IO ()
-doh3 hostname port q = run cc $ \conn -> client conn hostname qry
+doh3 :: HostName -> PortNumber -> WireFormat -> IO ()
+doh3 hostname port qry = run cc $ \conn -> client conn hostname qry
   where
-    qry = encodeQuery 100 q mempty
-    cc = defaultClientConfig {
-        ccServerName = hostname
-      , ccPortName   = show port
-      , ccALPN       = \_ -> return $ Just ["h3"]
-      , ccDebugLog   = True
-      , ccValidate   = False
-      , ccVersions   = [Version1]
-      }
+    cc = getQUICParams hostname port "h3"
 
 client :: Connection -> HostName -> ByteString -> IO ()
 client conn hostname msg = E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> H3.run conn cliconf conf cli
