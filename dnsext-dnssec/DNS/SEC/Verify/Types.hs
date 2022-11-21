@@ -62,6 +62,9 @@ verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
      "Once the resolver sees the REVOKE bit, it MUST NOT use this key as a trust anchor or for any other purpose except
       to validate the RRSIG it signed over the DNSKEY RRSet specifically for the purpose of validating the revocation." -}
     Left   "verifyRRSIGwith: REVOKE flag is set for DNSKEY flags"
+  unless (dnskey_protocol == 3) $
+    {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.2  "The Protocol Field MUST have value 3" -}
+    Left $ "verifyRRSIGwith: protocol number of DNSKEY is not 3: " ++ show dnskey_protocol
   unless (dnskey_pubalg == rrsig_pubalg) $
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
   unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
