@@ -24,8 +24,7 @@ import qualified UnliftIO.Exception as E
 
 import Network.Socket.BufferPool
 
-iij :: Question
-iij = Question "www.iij.ad.jp" A classIN
+import DNS.DoX.Common
 
 doh :: HostName -> PortNumber -> Question -> IO ()
 doh hostname port q = do
@@ -100,12 +99,7 @@ client :: Context -> HostName -> ByteString -> IO ()
 client ctx hostname msg =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> H2.run cliconf conf cli
   where
-    req = H2.requestBuilder methodPost "/dns-query" [
-        ("User-Agent", "HaskellQuic/0.0.0")
-      , ("Content-Type", "application/dns-message")
-      , ("Accept", "application/dns-message")
-      ]
-        $ BB.byteString msg
+    req = H2.requestBuilder methodPost "/dns-query" clientDoHHeaders $ BB.byteString msg
     cliconf = H2.ClientConfig {
         H2.scheme = "https"
       , H2.authority = C8.pack hostname

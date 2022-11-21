@@ -10,9 +10,6 @@ import Network.QUIC
 import Network.QUIC.Client
 import Network.QUIC.Internal
 
-mew :: Question
-mew = Question "www.mew.org" A classIN
-
 doq :: HostName -> PortNumber -> Question -> IO ()
 doq hostname port q = run cc $ \conn -> do
     strm <- stream conn
