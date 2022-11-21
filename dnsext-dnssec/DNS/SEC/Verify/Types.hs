@@ -72,6 +72,8 @@ data DSImpl =
 verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
 verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
   unless (ZONE `elem` dnskey_flags) $
+    {- https://datatracker.ietf.org/doc/html/rfc4034#section-5.2
+       "The DNSKEY RR referred  to in the DS RR MUST be a DNSSEC zone key." -}
     Left   "verifyDSwith: ZONE flag is not set for DNSKEY flags"
   unless (dnskey_pubalg == ds_pubalg) $
     Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
