@@ -13,7 +13,7 @@ import qualified DNS.Types.Opaque as Opaque
 -- this package
 import DNS.SEC.Imports
 import DNS.SEC.Time
-import DNS.SEC.Flags (DNSKEY_Flag (ZONE))
+import DNS.SEC.Flags (DNSKEY_Flag (ZONE, REVOKE))
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
 import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..))
@@ -57,6 +57,11 @@ verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
        "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
         and MUST NOT be used to verify RRSIGs that cover RRsets." -}
     Left   "verifyRRSIGwith: ZONE flag is not set for DNSKEY flags"
+  unless (REVOKE `notElem` dnskey_flags) $
+    {- https://datatracker.ietf.org/doc/html/rfc5011#section-2.1
+     "Once the resolver sees the REVOKE bit, it MUST NOT use this key as a trust anchor or for any other purpose except
+      to validate the RRSIG it signed over the DNSKEY RRSet specifically for the purpose of validating the revocation." -}
+    Left   "verifyRRSIGwith: REVOKE flag is set for DNSKEY flags"
   unless (dnskey_pubalg == rrsig_pubalg) $
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
   unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
