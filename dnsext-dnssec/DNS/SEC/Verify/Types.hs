@@ -13,6 +13,7 @@ import qualified DNS.Types.Opaque as Opaque
 -- this package
 import DNS.SEC.Imports
 import DNS.SEC.Time
+import DNS.SEC.Flags (DNSKEY_Flag (ZONE))
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
 import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..))
@@ -70,6 +71,8 @@ data DSImpl =
 
 verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
 verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
+  unless (ZONE `elem` dnskey_flags) $
+    Left   "verifyDSwith: ZONE flag is not set for DNSKEY flags"
   unless (dnskey_pubalg == ds_pubalg) $
     Left $ "verifyDSwith: pubkey algorithm mismatch between DNSKEY and DS: " ++ show dnskey_pubalg ++ " =/= " ++ show ds_pubalg
   let dnskeyBS = runSPut $ putResourceData Canonical dnskey
