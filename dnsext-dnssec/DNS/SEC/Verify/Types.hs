@@ -52,6 +52,11 @@ putRRSIGHeader RD_RRSIG{..} = do
 
 verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
 verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
+  unless (ZONE `elem` dnskey_flags) $
+    {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
+       "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
+        and MUST NOT be used to verify RRSIGs that cover RRsets." -}
+    Left   "verifyRRSIGwith: ZONE flag is not set for DNSKEY flags"
   unless (dnskey_pubalg == rrsig_pubalg) $
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
   unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
