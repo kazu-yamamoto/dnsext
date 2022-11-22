@@ -1,0 +1,53 @@
+cabal-version:      3.0
+name:               dnsext-dox
+version:            0.0.0
+license:            BSD-3-Clause
+license-file:       LICENSE
+maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
+author:             Kazu Yamamoto <kazu@iij.ad.jp>
+tested-with:        ghc ==8.6.5 ghc ==8.8.4 ghc ==9.0.2 ghc ==9.2.4
+synopsis:           DNS over X based on dnsext
+description:
+    A thread-safe DNS library for both clients and servers written
+    purely in Haskell.
+
+category:           Network
+build-type:         Simple
+extra-source-files:
+    Changelog.md
+
+source-repository head
+    type:     git
+    location: https://github.com/kazu-yamamoto/dnsext
+
+library
+    exposed-modules:
+        DNS.DoX
+
+    other-modules:
+        DNS.DoX.Common
+        DNS.DoX.HTTP2
+        DNS.DoX.HTTP3
+        DNS.DoX.QUIC
+        DNS.DoX.TLS
+
+    default-language: Haskell2010
+    ghc-options:      -Wall
+    build-depends:
+        base >=4 && <5,
+        bytestring,
+        data-default-class,
+        dnsext-do53,
+        dnsext-types,
+        http-types,
+        http2,
+        http3,
+        network >=2.3,
+        quic,
+        recv,
+        time-manager,
+        tls,
+        unliftio,
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData
