@@ -13,7 +13,6 @@ module DNS.DoX (
   ) where
 
 import Network.Socket
-import Data.ByteString (ByteString)
 import DNS.Do53.Client
 import DNS.Types
 
@@ -54,12 +53,12 @@ adguard = "94.140.14.140"
 iijQ :: Question
 iijQ = Question "www.iij.ad.jp" A classIN
 
-iij :: ByteString
+iij :: WireFormat
 iij = encodeQuery 100 iijQ mempty
 --iij = encodeQuery 100 iijQ (ednsEnabled FlagClear)
 
 mewQ :: Question
 mewQ = Question "www.mew.org" A classIN
 
-mew :: ByteString
+mew :: WireFormat
 mew = encodeQuery 100 mewQ mempty
