@@ -23,7 +23,8 @@ doh3 hostname port qry = QUIC.run cc $ \conn -> client conn hostname qry
 client :: Connection -> HostName -> ByteString -> IO ()
 client conn hostname msg = E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> run conn cliconf conf cli
   where
-    req = requestBuilder methodPost "/dns-query" clientDoHHeaders $ BB.byteString msg
+    hdr = clientDoHHeaders msg
+    req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString msg
     cliconf = ClientConfig {
         scheme = "https"
       , authority = C8.pack hostname
