@@ -45,6 +45,7 @@ client ctx hostname msg =
       , cacheLimit = 20
       }
     cli sendRequest = sendRequest req $ \rsp -> do
+        -- print $ responseStatus rsp
         bs <- loop rsp ""
         print $ decode bs
       where

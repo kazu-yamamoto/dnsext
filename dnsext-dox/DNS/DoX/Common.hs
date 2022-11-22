@@ -2,14 +2,12 @@
 
 module DNS.DoX.Common where
 
-import DNS.Do53.Client
-import DNS.Types
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Default.Class (def)
 import Network.HTTP.Types
 import Network.QUIC.Client
-import Network.QUIC.Internal hiding (Recv)
+import Network.QUIC.Internal hiding (Recv, shared)
 import Network.Socket
 import Network.Socket.BufferPool
 import Network.TLS hiding (HostName)
@@ -20,20 +18,6 @@ import qualified UnliftIO.Exception as E
 ----------------------------------------------------------------
 
 type WireFormat = ByteString
-
-----------------------------------------------------------------
-
-iijQ :: Question
-iijQ = Question "www.iij.ad.jp" A classIN
-
-iij :: ByteString
-iij = encodeQuery 100 iijQ mempty
-
-mewQ :: Question
-mewQ = Question "www.mew.org" A classIN
-
-mew :: ByteString
-mew = encodeQuery 100 mewQ mempty
 
 ----------------------------------------------------------------
 
