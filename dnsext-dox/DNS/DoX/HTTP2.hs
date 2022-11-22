@@ -38,7 +38,8 @@ client :: Context -> HostName -> ByteString -> IO ()
 client ctx hostname msg =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
-    req = requestBuilder methodPost "/dns-query" clientDoHHeaders $ BB.byteString msg
+    hdr = clientDoHHeaders msg
+    req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString msg
     cliconf = ClientConfig {
         scheme = "https"
       , authority = C8.pack hostname

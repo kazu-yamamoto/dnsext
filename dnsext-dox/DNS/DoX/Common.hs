@@ -3,6 +3,7 @@
 module DNS.DoX.Common where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
 import Data.Default.Class (def)
 import Network.HTTP.Types
@@ -21,12 +22,15 @@ type WireFormat = ByteString
 
 ----------------------------------------------------------------
 
-clientDoHHeaders :: RequestHeaders
-clientDoHHeaders = [
-    (hUserAgent,   "HaskellQuic/0.0.0")
-  , (hContentType, "application/dns-message")
-  , (hAccept,      "application/dns-message")
+clientDoHHeaders :: WireFormat -> RequestHeaders
+clientDoHHeaders bs = [
+    (hUserAgent,     "HaskellQuic/0.0.0")
+  , (hContentType,   "application/dns-message")
+  , (hAccept,        "application/dns-message")
+  , (hContentLength, C8.pack $ show len)
   ]
+  where
+    len = C8.length bs
 
 ----------------------------------------------------------------
 
