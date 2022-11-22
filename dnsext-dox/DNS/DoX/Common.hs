@@ -53,6 +53,7 @@ getTLSParams serverName alpn validate
   , clientUseServerNameIndication = True
   , clientShared = shared
   , clientHooks = hooks
+  , clientDebug = debug
   }
   where
     shared = def {
@@ -75,6 +76,9 @@ getTLSParams serverName alpn validate
       | validate = def
       | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                        (\_ _ _ -> return ())
+    debug = def {
+        debugKeyLogger = \msg -> appendFile "/Users/kazu/tls_key.log" (msg ++ "\n")
+      }
 
 ----------------------------------------------------------------
 
@@ -103,4 +107,5 @@ getQUICParams hostname port alpn = defaultClientConfig {
   , ccDebugLog   = True
   , ccValidate   = False
   , ccVersions   = [Version1]
+  , ccKeyLog     = \msg -> appendFile "/Users/kazu/tls_key.log" (msg ++ "\n")
   }
