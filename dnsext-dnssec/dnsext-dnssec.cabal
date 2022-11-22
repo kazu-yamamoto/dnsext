@@ -45,6 +45,7 @@ library
         dnsext-types,
         bytestring,
         containers,
+        base32,
         memory,
         cryptonite,
         iproute >=1.3.2,
