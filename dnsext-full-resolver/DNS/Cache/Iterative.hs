@@ -577,7 +577,7 @@ resolveJustDC dc n typ
                  *> throwDnsError DNS.ServerFailure
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
-  nss <- iterative_ dc rootNS $ reverse $ DNS.subDomains n
+  nss <- iterative_ dc rootNS $ reverse $ DNS.superDomains n
   sa <- selectDelegation dc nss
   lift $ logLn Log.DEBUG $ "resolve-just: norec: " ++ show (sa, n, typ)
   (,) <$> norec sa n typ <*> pure nss
@@ -622,7 +622,7 @@ rootNS =
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 iterative :: Delegation -> Domain -> DNSQuery Delegation
-iterative sa n = iterative_ 0 sa $ reverse $ DNS.subDomains n
+iterative sa n = iterative_ 0 sa $ reverse $ DNS.superDomains n
 
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _  nss []     = return nss
