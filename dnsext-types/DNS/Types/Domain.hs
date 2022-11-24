@@ -15,7 +15,7 @@ module DNS.Types.Domain (
   , dropRoot
   , hasRoot
   , isIllegal
-  , subDomains
+  , superDomains
   , isSubDomainOf
   , Mailbox
   , checkMailbox
@@ -533,12 +533,12 @@ shortToString = C8.unpack . Short.fromShort
 
 -- |
 --
--- >>> subDomains "www.example.com"
+-- >>> superDomains "www.example.com"
 -- ["www.example.com","example.com","com"]
--- >>> subDomains "www.example.com."
+-- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
-subDomains :: Domain -> [Domain]
-subDomains (Domain o _) = map ciName ds
+superDomains :: Domain -> [Domain]
+superDomains (Domain o _) = map ciName ds
   where
     ds = domains o
 
@@ -566,4 +566,4 @@ domains dom = loop dom
 -- False
 isSubDomainOf :: Domain -> Domain -> Bool
 _ `isSubDomainOf` "." = True
-x `isSubDomainOf` y   = y `elem` subDomains x
+x `isSubDomainOf` y   = y `elem` superDomains x

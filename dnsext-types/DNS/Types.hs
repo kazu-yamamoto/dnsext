@@ -142,7 +142,7 @@ module DNS.Types (
   , dropRoot
   , hasRoot
   , isIllegal
-  , subDomains
+  , superDomains
   , isSubDomainOf
   -- ** Mailbox
   , Mailbox
