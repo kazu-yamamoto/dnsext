@@ -20,14 +20,11 @@ module DNS.Do53.Resolver (
   ) where
 
 import Control.Exception as E
-import qualified Crypto.Random as C
-import qualified Data.ByteString as BS
-import Data.IORef (IORef)
-import qualified Data.IORef as I
+import DNS.Types
 import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfoFlag(..), AddrInfo(..), PortNumber, HostName, SocketType(Datagram), getAddrInfo, defaultHints)
 import Prelude
-import DNS.Types
+import qualified System.Random.Stateful as R
 
 import DNS.Do53.Imports
 import DNS.Do53.Memo
@@ -74,22 +71,13 @@ withResolver seed f = makeResolver seed >>= f
 makeResolver :: ResolvSeed -> IO Resolver
 makeResolver seed = do
   let n = NE.length $ nameservers seed
-  refs <- replicateM n (C.drgNew >>= I.newIORef)
-  let gens = NE.fromList $ map getRandom refs
+  gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
+  let gens = NE.fromList $ map R.uniformWord16 gs
   case resolvCache $ resolvconf seed of
     Just cacheconf -> do
         c <- newCache $ pruningDelay cacheconf
         return $ Resolver seed gens $ Just c
     Nothing -> return $ Resolver seed gens Nothing
-
-getRandom :: IORef C.ChaChaDRG -> IO Word16
-getRandom ref = I.atomicModifyIORef' ref $ \gen ->
-  let (bs, gen') = C.randomBytesGenerate 2 gen
-      (u,l) = case map fromIntegral $ BS.unpack bs of
-        [u',l'] -> (u',l')
-        _       -> error "getRandom"
-      !seqno = u * 256 + l
-  in (gen', seqno)
 
 ----------------------------------------------------------------
 
