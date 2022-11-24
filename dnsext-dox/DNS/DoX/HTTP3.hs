@@ -30,5 +30,11 @@ client conn hostname msg = E.bracket allocSimpleConfig freeSimpleConfig $ \conf 
       , authority = C8.pack hostname
       }
     cli sendRequest = sendRequest req $ \rsp -> do
-        bs <- getResponseBodyChunk rsp
+        --- print $ responseStatus rsp
+        bs <- loop rsp ""
         print $ decode bs
+      where
+        loop rsp bs0 = do
+            bs <- getResponseBodyChunk rsp
+            if bs == "" then return bs0
+                        else loop rsp (bs0 <> bs)
