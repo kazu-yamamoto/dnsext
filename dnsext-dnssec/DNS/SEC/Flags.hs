@@ -31,14 +31,14 @@ getDNSKEYflags :: SGet [DNSKEY_Flag]
 getDNSKEYflags = toDNSKEYflags <$> get16
 
 
-data NSEC3_Flag = OptOut | UnknownFlags Word8 deriving (Eq, Ord, Show)
+data NSEC3_Flag = OptOut | NSEC3_Flag_Unknown Word8 deriving (Eq, Ord, Show)
 
 toNSEC3flags :: Word8 -> [NSEC3_Flag]
 toNSEC3flags w
   {- https://datatracker.ietf.org/doc/html/rfc5155#section-8.2
      "A validator MUST ignore NSEC3 RRs with a Flag fields value other than zero or one." -}
   | w `elem` [0, 1] = catMaybes flags
-  | otherwise       = [UnknownFlags w]
+  | otherwise       = [NSEC3_Flag_Unknown w]
   where
     jst c v = if c then Just v else Nothing
     flags = [ jst (w `testBit` 0) OptOut
@@ -48,7 +48,7 @@ fromNSEC3flags :: [NSEC3_Flag] -> Word8
 fromNSEC3flags flags = foldl' (.|.) 0 $ map toW flags
   where
     toW OptOut            = 0b00000001
-    toW (UnknownFlags w)  = w
+    toW (NSEC3_Flag_Unknown w)  = w
 
 putNSEC3flags :: [NSEC3_Flag] -> SPut ()
 putNSEC3flags = put8 . fromNSEC3flags
