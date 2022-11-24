@@ -15,10 +15,8 @@ module DNS.Do53.Lookup (
   ) where
 
 import DNS.Types hiding (Seconds)
-import Data.Hourglass (timeAdd, Seconds)
 import Network.Socket (Socket)
 import Prelude hiding (lookup)
-import Time.System (timeCurrent)
 
 import DNS.Do53.Do53
 import DNS.Do53.IO
@@ -155,11 +153,11 @@ cachePositive cconf c key rss
 
 insertPositive :: CacheConf -> Cache -> Key -> Entry -> TTL -> IO ()
 insertPositive CacheConf{..} c k v ttl = when (ttl /= 0) $ do
-    ctime <- timeCurrent
-    let tim = ctime `timeAdd` life
+    ctime <- getEpochTime
+    let tim = ctime + life
     insertCache k tim v c
   where
-    life :: Seconds
+    life :: EpochTime
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
 cacheNegative :: CacheConf -> Cache -> Key -> Entry -> DNSMessage -> IO ()
@@ -171,11 +169,11 @@ cacheNegative cconf c key v ans = case soas of
 
 insertNegative :: CacheConf -> Cache -> Key -> Entry -> TTL -> IO ()
 insertNegative _ c k v ttl = when (ttl /= 0) $ do
-    ctime <- timeCurrent
-    let tim = ctime `timeAdd` life
+    ctime <- getEpochTime
+    let tim = ctime + life
     insertCache k tim v c
   where
-    life :: Seconds
+    life :: EpochTime
     life = fromIntegral ttl
 
 isTypeOf :: TYPE -> ResourceRecord -> Bool

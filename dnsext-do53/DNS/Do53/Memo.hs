@@ -9,15 +9,13 @@ module DNS.Do53.Memo (
 
 import qualified Control.Reaper as R
 import DNS.Types
-import Data.Hourglass (Elapsed)
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
-import Time.System (timeCurrent)
 
 import DNS.Do53.Imports
 
 type Key = (Domain, TYPE)
-type Prio = Elapsed
+type Prio = EpochTime
 
 type Entry = Either DNSError [RData]
 
@@ -49,7 +47,7 @@ insertCache (dom,typ) tim ent reaper = R.reaperAdd reaper (key,tim,ent)
 -- functions. So, we need to do this redundant way.
 prune :: DB -> IO (DB -> DB)
 prune oldpsq = do
-    tim <- timeCurrent
+    tim <- getEpochTime
     let (_, pruned) = PSQ.atMostView tim oldpsq
     return $ \newpsq -> foldl' ins pruned $ PSQ.toList newpsq
   where

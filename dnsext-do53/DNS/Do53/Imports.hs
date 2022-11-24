@@ -14,6 +14,8 @@ module DNS.Do53.Imports (
   , module Data.Typeable
   , module Data.Word
   , module Numeric
+  , EpochTime
+  , getEpochTime
   ) where
 
 import Control.Applicative
@@ -31,3 +33,13 @@ import Data.Ord
 import Data.Typeable
 import Data.Word
 import Numeric
+
+import Data.UnixTime (getUnixTime, UnixTime(..))
+import Foreign.C.Types (CTime(..))
+
+type EpochTime = Int64
+
+getEpochTime :: IO Int64
+getEpochTime = do
+    UnixTime (CTime tim) _ <- getUnixTime
+    return tim
