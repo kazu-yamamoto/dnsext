@@ -153,10 +153,10 @@ data RD_DS = RD_DS {
 instance ResourceData RD_DS where
     resourceDataType _ = DS
     putResourceData _ RD_DS{..} = do
-        put16 ds_key_tag
-        putPubAlg ds_pubalg
+        put16        ds_key_tag
+        putPubAlg    ds_pubalg
         putDigestAlg ds_hashalg
-        putOpaque ds_digest
+        putOpaque    ds_digest
     getResourceData _ lim =
         RD_DS <$> get16
               <*> getPubAlg
@@ -283,34 +283,57 @@ rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 ----------------------------------------------------------------
 
 -- | Child DS (RFC7344)
-newtype RD_CDS = RD_CDS {
-    cds_ds :: RD_DS
+data RD_CDS = RD_CDS {
+    cds_key_tag :: Word16
+  , cds_pubalg  :: PubAlg
+  , cds_hashalg :: DigestAlg
+  , cds_digest  :: Opaque
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
-    putResourceData cf (RD_CDS ds) = putResourceData cf ds
-    getResourceData _ len = RD_CDS <$> getResourceData (Proxy :: Proxy RD_DS) len
+    putResourceData _ RD_CDS{..} = do
+        put16        cds_key_tag
+        putPubAlg    cds_pubalg
+        putDigestAlg cds_hashalg
+        putOpaque    cds_digest
+    getResourceData _ lim =
+        RD_CDS <$> get16
+               <*> getPubAlg
+               <*> getDigestAlg
+               <*> getOpaque (lim - 4)
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
-rd_cds a b c d = toRData $ RD_CDS $ RD_DS a b c d
+rd_cds a b c d = toRData $ RD_CDS a b c d
 
 ----------------------------------------------------------------
 
 -- | Child DNSKEY (RFC7344)
-newtype RD_CDNSKEY = RD_CDNSKEY {
-    cdnskey_dnskey :: RD_DNSKEY
+data RD_CDNSKEY = RD_CDNSKEY {
+    cdnskey_flags      :: [DNSKEY_Flag]
+  , cdnskey_protocol   :: Word8
+  , cdnskey_pubalg     :: PubAlg
+  , cdnskey_public_key :: PubKey
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
-    putResourceData cf (RD_CDNSKEY dnskey) = putResourceData cf dnskey
-    getResourceData _ len =RD_CDNSKEY <$> getResourceData (Proxy :: Proxy RD_DNSKEY) len
+    putResourceData _ RD_CDNSKEY{..} = do
+        putDNSKEYflags cdnskey_flags
+        put8           cdnskey_protocol
+        putPubAlg      cdnskey_pubalg
+        putPubKey      cdnskey_public_key
+    getResourceData _ len = do
+        flags  <- getDNSKEYflags
+        proto  <- get8
+        pubalg <- getPubAlg
+        pubkey <- getPubKey pubalg (len - 4)
+        return $ RD_CDNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
 rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
-rd_cdnskey a b c d = toRData $ RD_CDNSKEY $ RD_DNSKEY a b c d
+rd_cdnskey a b c d = toRData $ RD_CDNSKEY a b c d
 
 ----------------------------------------------------------------
 
