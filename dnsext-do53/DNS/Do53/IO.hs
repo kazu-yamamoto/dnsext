@@ -21,8 +21,6 @@ import Network.Socket (Socket)
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as Socket
 import System.IO.Error
-import Time.System (timeCurrent)
-import Time.Types (Elapsed(..), Seconds(..))
 
 import DNS.Do53.Imports
 
@@ -38,7 +36,7 @@ recvUDP :: Socket -> IO DNSMessage
 recvUDP sock = do
     let bufsiz = 2048
     bs <- recv sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
-    Elapsed (Seconds now) <- timeCurrent
+    now <- getEpochTime
     case decodeAt now bs of
         Left  e   -> E.throwIO e
         Right msg -> return msg
@@ -47,7 +45,7 @@ recvVC :: (Int -> IO ByteString) -> IO DNSMessage
 recvVC rcv = do
     len <- decodeVCLength <$> rcv 2
     bs <- rcv len
-    Elapsed (Seconds now) <- timeCurrent
+    now <- getEpochTime
     case decodeAt now bs of
         Left e    -> E.throwIO e
         Right msg -> return msg
