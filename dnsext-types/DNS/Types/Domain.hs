@@ -95,7 +95,7 @@ instance Eq Domain where
     Domain _ l0 _ == Domain _ l1 _ = l0 == l1
 
 instance Ord Domain where
-    Domain _ l0 _ <= Domain _ l1 _ = l0 <= l1
+    Domain _ _ cs0 <= Domain _ _ cs1 = cs0 <= cs1
 
 instance Show Domain where
     show d = "\"" ++ origName d ++ "\""
