@@ -94,25 +94,25 @@ instance IsString Domain where
     fromString = ciName
 
 instance Semigroup Domain where
-   Domain o0 l0 <> Domain o1 l1 = Domain (o0 <> o1) (l0 <> l1)
+   Domain o0 l0 <> Domain o1 l1 = domain (o0 <> o1) (l0 <> l1)
 
 instance CaseInsensitiveName Domain ShortByteString where
     ciName o = let n = Short.map toLower o
-               in Domain { origDomain = o, lowerDomain = n }
+               in domain o n
     origName  (Domain o _) = o
     lowerName (Domain _ n) = n
 
 instance CaseInsensitiveName Domain ByteString where
     ciName o = let o' = Short.toShort o
                    n' = Short.map toLower o'
-               in Domain { origDomain = o', lowerDomain = n' }
+               in domain o' n'
     origName  (Domain o _) = Short.fromShort o
     lowerName (Domain _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Domain String where
     ciName o = let o' = fromString o
                    n' = Short.map toLower o'
-               in Domain { origDomain = o', lowerDomain = n' }
+               in domain o' n'
     origName  (Domain o _) = shortToString o
     lowerName (Domain _ n) = shortToString n
 
@@ -120,7 +120,7 @@ checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f (Domain o l) = Domain (f o) (f l)
+modifyDomain f (Domain o l) = domain (f o) (f l)
 
 hasRoot :: Domain -> Bool
 hasRoot (Domain o _)
@@ -129,14 +129,14 @@ hasRoot (Domain o _)
 
 addRoot :: Domain -> Domain
 addRoot d@(Domain o l)
-  | Short.null o            = Domain "." "."
+  | Short.null o            = domain "." "."
   | Short.last o == _period = d
-  | otherwise               = Domain (o <> ".") (l <> ".")
+  | otherwise               = domain (o <> ".") (l <> ".")
 
 dropRoot :: Domain -> Domain
 dropRoot d@(Domain o l)
   | Short.null o            = d
-  | Short.last o == _period = Domain (Short.init o) (Short.init l)
+  | Short.last o == _period = domain (Short.init o) (Short.init l)
   | otherwise               = d
 
 ----------------------------------------------------------------
