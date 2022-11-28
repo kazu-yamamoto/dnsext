@@ -78,6 +78,9 @@ data Domain = Domain {
   , lowerDomain :: ShortByteString
   }
 
+domain :: ShortByteString -> ShortByteString -> Domain
+domain = Domain
+
 instance Eq Domain where
     Domain _ l0 == Domain _ l1 = l0 == l1
 
