@@ -24,9 +24,6 @@ module DNS.Do53.Client (
   -- * Type and function for resolver
   , Resolver
   , withResolver
-  -- * Intermediate data type for resolver
-  , ResolvSeed
-  , makeResolvSeed
   -- * Configuration for resolver
   , ResolvConf
   , defaultResolvConf
