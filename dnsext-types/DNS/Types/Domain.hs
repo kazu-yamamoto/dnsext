@@ -74,15 +74,28 @@ class CaseInsensitiveName a b where
 --
 
 data Domain = Domain {
-    origDomain  :: ShortByteString
-  , lowerDomain :: ShortByteString
+    origDomain      :: ShortByteString
+  , lowerDomain     :: ShortByteString
+  , canonicalLabels :: ~[ShortByteString]
+    {- Ord key for Canonical DNS Name Order
+       https://datatracker.ietf.org/doc/html/rfc4034#section-6.1 -}
   }
 
+domain :: ShortByteString -> ShortByteString -> Domain
+domain o n = Domain o n (reverse $ labels n)
+  where
+    labels = unfoldr step
+    step x = case parseLabel _period x of
+      Nothing        -> Nothing
+      just@(Just (p, _))
+        | p == ""    -> Nothing
+        | otherwise  -> just
+
 instance Eq Domain where
-    Domain _ l0 == Domain _ l1 = l0 == l1
+    Domain _ l0 _ == Domain _ l1 _ = l0 == l1
 
 instance Ord Domain where
-    Domain _ l0 <= Domain _ l1 = l0 <= l1
+    Domain _ _ cs0 <= Domain _ _ cs1 = cs0 <= cs1
 
 instance Show Domain where
     show d = "\"" ++ origName d ++ "\""
@@ -91,49 +104,49 @@ instance IsString Domain where
     fromString = ciName
 
 instance Semigroup Domain where
-   Domain o0 l0 <> Domain o1 l1 = Domain (o0 <> o1) (l0 <> l1)
+   Domain o0 l0 _ <> Domain o1 l1 _ = domain (o0 <> o1) (l0 <> l1)
 
 instance CaseInsensitiveName Domain ShortByteString where
     ciName o = let n = Short.map toLower o
-               in Domain { origDomain = o, lowerDomain = n }
-    origName  (Domain o _) = o
-    lowerName (Domain _ n) = n
+               in domain o n
+    origName  (Domain o _ _) = o
+    lowerName (Domain _ n _) = n
 
 instance CaseInsensitiveName Domain ByteString where
     ciName o = let o' = Short.toShort o
                    n' = Short.map toLower o'
-               in Domain { origDomain = o', lowerDomain = n' }
-    origName  (Domain o _) = Short.fromShort o
-    lowerName (Domain _ n) = Short.fromShort n
+               in domain o' n'
+    origName  (Domain o _ _) = Short.fromShort o
+    lowerName (Domain _ n _) = Short.fromShort n
 
 instance CaseInsensitiveName Domain String where
     ciName o = let o' = fromString o
                    n' = Short.map toLower o'
-               in Domain { origDomain = o', lowerDomain = n' }
-    origName  (Domain o _) = shortToString o
-    lowerName (Domain _ n) = shortToString n
+               in domain o' n'
+    origName  (Domain o _ _) = shortToString o
+    lowerName (Domain _ n _) = shortToString n
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
-checkDomain f (Domain o _) = f o
+checkDomain f (Domain o _ _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f (Domain o l) = Domain (f o) (f l)
+modifyDomain f (Domain o l _) = domain (f o) (f l)
 
 hasRoot :: Domain -> Bool
-hasRoot (Domain o _)
+hasRoot (Domain o _ _)
   | Short.null o = False
   | otherwise    = Short.last o == _period
 
 addRoot :: Domain -> Domain
-addRoot d@(Domain o l)
-  | Short.null o            = Domain "." "."
+addRoot d@(Domain o l _)
+  | Short.null o            = domain "." "."
   | Short.last o == _period = d
-  | otherwise               = Domain (o <> ".") (l <> ".")
+  | otherwise               = domain (o <> ".") (l <> ".")
 
 dropRoot :: Domain -> Domain
-dropRoot d@(Domain o l)
+dropRoot d@(Domain o l _)
   | Short.null o            = d
-  | Short.last o == _period = Domain (Short.init o) (Short.init l)
+  | Short.last o == _period = domain (Short.init o) (Short.init l)
   | otherwise               = d
 
 ----------------------------------------------------------------
@@ -145,7 +158,7 @@ badLength o
     | otherwise               = Short.length o > 253
 
 isIllegal :: Domain -> Bool
-isIllegal (Domain o _)
+isIllegal (Domain o _ _)
   | badLength o                  = True
   | not (_period `Short.elem` o) = True
   | _colon `Short.elem` o        = True
@@ -235,8 +248,8 @@ data CanonicalFlag
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain cf@Compression (Domain o _) = putDomain' _period cf o
-putDomain cf@Canonical   (Domain _ l) = putDomain' _period cf l {- canonical form is lowercase and no name-compression. -}
+putDomain cf@Compression (Domain o _ _) = putDomain' _period cf o
+putDomain cf@Canonical   (Domain _ l _) = putDomain' _period cf l {- canonical form is lowercase and no name-compression. -}
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
 putMailbox cf@Compression (Mailbox o _) = putDomain' _at cf o
@@ -538,7 +551,7 @@ shortToString = C8.unpack . Short.fromShort
 -- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
 superDomains :: Domain -> [Domain]
-superDomains (Domain o _) = map ciName ds
+superDomains (Domain o _ _) = map ciName ds
   where
     ds = domains o
 
