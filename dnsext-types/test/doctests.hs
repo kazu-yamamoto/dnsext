@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 import Test.DocTest
 import System.Environment
 
@@ -5,6 +7,10 @@ import System.Environment
 modules :: [String]
 modules =
   [ "-XOverloadedStrings"
+#if MIN_TOOL_VERSION_ghc(8,0,0)
+  , "-XStrict"
+  , "-XStrictData"
+#endif
   , "DNS/Types.hs"
   ]
 

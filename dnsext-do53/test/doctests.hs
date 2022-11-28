@@ -19,6 +19,8 @@ modules =
   , "-XCPP"
   , "-XLambdaCase"
   , "-XPatternSynonyms"
+  , "-XStrict"
+  , "-XStrictData"
   , "-i","-i."
   , "-threaded"
   , "DNS/Do53/Client.hs"
