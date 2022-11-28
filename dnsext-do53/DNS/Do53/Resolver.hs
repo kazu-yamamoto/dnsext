@@ -11,9 +11,6 @@ module DNS.Do53.Resolver (
   -- ** Configuring cache
   , CacheConf(..)
   , defaultCacheConf
-  -- * Intermediate data type for resolver
-  , ResolvSeed(..)
-  , makeResolvSeed
   -- * Type and function for resolver
   , Resolver(..)
   , withResolver
@@ -33,21 +30,13 @@ import DNS.Do53.System
 
 ----------------------------------------------------------------
 
--- |  Make a 'ResolvSeed' from a 'ResolvConf'.
---
---    Examples:
---
---    >>> rs <- makeResolvSeed defaultResolvConf
---
-makeResolvSeed :: ResolvConf -> IO ResolvSeed
-makeResolvSeed conf = ResolvSeed conf <$> findAddresses
+findAddresses :: ResolvConf -> IO (NonEmpty AddrInfo)
+findAddresses conf = case resolvInfo conf of
+    RCHostName numhost       -> (:| []) <$> makeAddrInfo numhost Nothing
+    RCHostPort numhost mport -> (:| []) <$> makeAddrInfo numhost (Just mport)
+    RCHostNames nss          -> mkAddrs nss
+    RCFilePath file          -> getDefaultDnsServers file >>= mkAddrs
   where
-    findAddresses :: IO (NonEmpty AddrInfo)
-    findAddresses = case resolvInfo conf of
-        RCHostName numhost       -> (:| []) <$> makeAddrInfo numhost Nothing
-        RCHostPort numhost mport -> (:| []) <$> makeAddrInfo numhost (Just mport)
-        RCHostNames nss          -> mkAddrs nss
-        RCFilePath file          -> getDefaultDnsServers file >>= mkAddrs
     mkAddrs []     = E.throwIO BadConfiguration
     mkAddrs (l:ls) = (:|) <$> makeAddrInfo l Nothing <*> forM ls (`makeAddrInfo` Nothing)
 
@@ -65,19 +54,17 @@ makeAddrInfo addr mport = do
 
 -- | Giving a thread-safe 'Resolver' to the function of the second
 --   argument.
-withResolver :: ResolvSeed -> (Resolver -> IO a) -> IO a
-withResolver seed f = makeResolver seed >>= f
-
-makeResolver :: ResolvSeed -> IO Resolver
-makeResolver seed = do
-  let n = NE.length $ nameservers seed
-  gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
-  let gens = NE.fromList $ map R.uniformWord16 gs
-  case resolvCache $ resolvconf seed of
-    Just cacheconf -> do
-        c <- newCache $ pruningDelay cacheconf
-        return $ Resolver seed gens $ Just c
-    Nothing -> return $ Resolver seed gens Nothing
+withResolver :: ResolvConf -> (Resolver -> IO a) -> IO a
+withResolver conf f = do
+    addrs <- findAddresses conf
+    let n = NE.length addrs
+    gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
+    let gens = NE.fromList $ map R.uniformWord16 gs
+    mcache <- case resolvCache conf of
+      Just cacheconf -> Just <$> newCache (pruningDelay cacheconf)
+      Nothing -> return Nothing
+    let resolver = Resolver conf addrs gens mcache
+    f resolver
 
 ----------------------------------------------------------------
 
@@ -188,24 +175,12 @@ defaultResolvConf = ResolvConf {
 
 ----------------------------------------------------------------
 
--- | Intermediate abstract data type for resolvers.
---   IP address information of DNS servers is generated
---   according to 'resolvInfo' internally.
---   This value can be safely reused for 'withResolver'.
---
---   The naming is confusing for historical reasons.
-data ResolvSeed = ResolvSeed {
-    resolvconf  :: ResolvConf
-  , nameservers :: NonEmpty AddrInfo
-}
-
-----------------------------------------------------------------
-
 -- | Abstract data type of DNS Resolver.
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
 data Resolver = Resolver {
-    resolvseed :: ResolvSeed
-  , genIds     :: NonEmpty (IO Word16)
-  , cache      :: Maybe Cache
+    resolvConf  :: ResolvConf
+  , serverAddrs :: NonEmpty AddrInfo
+  , genIds      :: NonEmpty (IO Word16)
+  , cache       :: Maybe Cache
 }
