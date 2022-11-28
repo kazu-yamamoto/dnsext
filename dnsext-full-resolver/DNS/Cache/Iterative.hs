@@ -770,9 +770,8 @@ cnameList dom h = foldr takeCNAME []
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
 norec aserver name typ = dnsQueryT $ \cxt -> do
   now <- currentSeconds_ cxt
-  rs <- DNS.makeResolvSeed conf
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolver rs ( \resolver -> lookupRaw now resolver name typ )
+    DNS.withResolver conf ( \resolver -> lookupRaw now resolver name typ )
   where
     conf = DNS.defaultResolvConf
            { resolvInfo = DNS.RCHostName $ show aserver

@@ -90,12 +90,10 @@ resolve rlv dom typ qctls rcv
 
     gens = NE.toList $ genIds rlv
 
-    seed    = resolvseed rlv
-    nss     = NE.toList $ nameservers seed
+    nss     = NE.toList $ serverAddrs rlv
     onlyOne = length nss == 1
-    ctls    = qctls <> resolvQueryControls (resolvconf $ resolvseed rlv)
-
-    conf       = resolvconf seed
+    conf = resolvConf rlv
+    ctls    = qctls <> resolvQueryControls conf
     concurrent = resolvConcurrent conf
     tm         = resolvTimeout conf
     retry      = resolvRetry conf

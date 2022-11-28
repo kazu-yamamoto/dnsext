@@ -38,8 +38,7 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> rs <- makeResolvSeed defaultResolvConf
---   >>> withResolver rs $ \resolver -> lookup resolver "www.example.com" A
+--   >>> withResolver defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
 --   Right [93.184.216.34]
 --
 lookup :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
@@ -88,7 +87,7 @@ lookupSection section rlv dom typ
       Nothing           -> lookupFreshSection rlv dom typ section
       Just cacheconf    -> lookupCacheSection rlv dom typ cacheconf
   where
-    mcacheConf = resolvCache $ resolvconf $ resolvseed rlv
+    mcacheConf = resolvCache $ resolvConf rlv
 
 lookupFreshSection :: Resolver
                    -> Domain
@@ -218,8 +217,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   rs <- makeResolvSeed defaultResolvConf
---   withResolver rs $ \\resolver -> lookupRaw resolver \"www.example.com\" A
+--   withResolver defaultResolvConf $ \\resolver -> lookupRaw resolver \"www.example.com\" A
 --   @
 --
 --   And the (formatted) expected output:
@@ -252,8 +250,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> rs <- makeResolvSeed defaultResolvConf
---   >>> withResolver rs $ \resolver -> lookupRaw resolver "mew.org" AXFR
+--   >>> withResolver defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
 --   Left InvalidAXFRLookup
 --
 lookupRaw :: Resolver   -- ^ Resolver obtained via 'withResolver'
