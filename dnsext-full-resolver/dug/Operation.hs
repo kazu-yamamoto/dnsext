@@ -19,9 +19,8 @@ operate server domain type_ controls = do
   operate_ conf domain type_
 
 operate_ :: ResolvConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
-operate_ conf name typ = do
-  rs <- DNS.makeResolvSeed conf
-  DNS.withResolver rs $ \resolver -> DNS.lookupRaw resolver (DNS.ciName name) typ
+operate_ conf name typ = DNS.withResolver conf $ \resolver ->
+  DNS.lookupRaw resolver (DNS.ciName name) typ
 
 getCustomConf :: Maybe HostName -> QueryControls -> IO ResolvConf
 getCustomConf mayServer controls = do
@@ -43,8 +42,7 @@ getCustomConf mayServer controls = do
 
     queryName :: String -> IO IP
     queryName sname = do
-      rs <- DNS.makeResolvSeed DNS.defaultResolvConf
-      as <- DNS.withResolver rs $ \resolver -> do
+      as <- DNS.withResolver DNS.defaultResolvConf $ \resolver -> do
         let dom = DNS.ciName sname
         eA  <- DNS.lookupA    resolver dom
         eQA <- DNS.lookupAAAA resolver dom
