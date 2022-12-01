@@ -81,13 +81,14 @@ data Domain = Domain {
        https://datatracker.ietf.org/doc/html/rfc4034#section-6.1 -}
   }
 
-domain :: ShortByteString -> ShortByteString -> Domain
-domain o n = Domain {
+domain :: ShortByteString -> Domain
+domain o = Domain {
     origDomain = o
   , lowerDomain = n
   , canonicalLabels = reverse $ labels n
   }
   where
+    n = Short.map toLower o
     labels = unfoldr step
     step x = case parseLabel _period x of
       Nothing        -> Nothing
@@ -108,25 +109,20 @@ instance IsString Domain where
     fromString = ciName
 
 instance Semigroup Domain where
-   Domain o0 l0 _ <> Domain o1 l1 _ = domain (o0 <> o1) (l0 <> l1)
+   Domain o0 _ _ <> Domain o1 _ _ = domain (o0 <> o1)
 
 instance CaseInsensitiveName Domain ShortByteString where
-    ciName o = let n = Short.map toLower o
-               in domain o n
+    ciName o = domain o
     origName  (Domain o _ _) = o
     lowerName (Domain _ n _) = n
 
 instance CaseInsensitiveName Domain ByteString where
-    ciName o = let o' = Short.toShort o
-                   n' = Short.map toLower o'
-               in domain o' n'
+    ciName o = domain $ Short.toShort o
     origName  (Domain o _ _) = Short.fromShort o
     lowerName (Domain _ n _) = Short.fromShort n
 
 instance CaseInsensitiveName Domain String where
-    ciName o = let o' = fromString o
-                   n' = Short.map toLower o'
-               in domain o' n'
+    ciName o = domain $ fromString o
     origName  (Domain o _ _) = shortToString o
     lowerName (Domain _ n _) = shortToString n
 
@@ -134,7 +130,7 @@ checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _ _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f (Domain o l _) = domain (f o) (f l)
+modifyDomain f (Domain o _ _) = domain (f o)
 
 hasRoot :: Domain -> Bool
 hasRoot (Domain o _ _)
@@ -142,15 +138,15 @@ hasRoot (Domain o _ _)
   | otherwise    = Short.last o == _period
 
 addRoot :: Domain -> Domain
-addRoot d@(Domain o l _)
-  | Short.null o            = domain "." "."
+addRoot d@(Domain o _ _)
+  | Short.null o            = domain "."
   | Short.last o == _period = d
-  | otherwise               = domain (o <> ".") (l <> ".")
+  | otherwise               = domain (o <> ".")
 
 dropRoot :: Domain -> Domain
-dropRoot d@(Domain o l _)
+dropRoot d@(Domain o _ _)
   | Short.null o            = d
-  | Short.last o == _period = domain (Short.init o) (Short.init l)
+  | Short.last o == _period = domain $ Short.init o
   | otherwise               = d
 
 ----------------------------------------------------------------
