@@ -270,7 +270,9 @@ data RD_RP = RD_RP {
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
-    putResourceData cf (RD_RP mbox d) = putMailbox cf mbox >> putDomain cf d
+    putResourceData _ (RD_RP mbox d) = do
+        putMailbox Canonical mbox
+        putDomain  Canonical d
     getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
 
 -- | Smart constructor.
@@ -309,11 +311,11 @@ data RD_SRV = RD_SRV {
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    putResourceData cf RD_SRV{..} = do
+    putResourceData _ RD_SRV{..} = do
         put16 srv_priority
         put16 srv_weight
         put16 srv_port
-        putDomain cf srv_target
+        putDomain Canonical srv_target
     getResourceData _ _ = RD_SRV <$> get16
                                  <*> get16
                                  <*> get16
@@ -332,7 +334,7 @@ newtype RD_DNAME = RD_DNAME {
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
-    putResourceData cf (RD_DNAME d) = putDomain cf d
+    putResourceData _ (RD_DNAME d) = putDomain Canonical d
     getResourceData _ _ = RD_DNAME <$> getDomain
 
 instance Show RD_DNAME where

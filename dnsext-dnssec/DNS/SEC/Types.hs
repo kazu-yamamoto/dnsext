@@ -106,7 +106,7 @@ data RD_RRSIG = RD_RRSIG {
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    putResourceData cf RD_RRSIG{..} = do
+    putResourceData _ RD_RRSIG{..} = do
         putTYPE    rrsig_type
         putPubAlg  rrsig_pubalg
         put8       rrsig_num_labels
@@ -114,7 +114,7 @@ instance ResourceData RD_RRSIG where
         putDnsTime rrsig_expiration
         putDnsTime rrsig_inception
         put16      rrsig_key_tag
-        putDomain  cf rrsig_zone
+        putDomain  Canonical rrsig_zone
         putOpaque  rrsig_signature
     getResourceData _ lim = do
         -- The signature follows a variable length zone name
@@ -177,8 +177,8 @@ data RD_NSEC = RD_NSEC {
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    putResourceData cf RD_NSEC{..} = do
-        putDomain cf nsecNextDomain
+    putResourceData _ RD_NSEC{..} = do
+        putDomain Canonical nsecNextDomain
         putNsecTypes nsecTypes
     getResourceData _ len = do
         end <- rdataEnd len
