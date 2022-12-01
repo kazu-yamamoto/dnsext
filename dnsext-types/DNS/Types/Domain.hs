@@ -356,6 +356,7 @@ getDomain' sep1 ptrLimit = do
     -- Reprocess the same ShortByteString starting at the pointer
     -- target (offset).
     getPtr pos offset = do
+        -- getInput takes the original entire input
         msg <- getInput
         let parser = skipNBytes offset >> getDomain' sep1 offset
         case runSGet parser msg of
