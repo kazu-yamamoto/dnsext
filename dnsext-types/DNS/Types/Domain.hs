@@ -394,6 +394,7 @@ getDomain' sep1 ptrLimit = do
                   _   -> hs <> Short.singleton sep1 <> ds
           pushDomain pos dom
           return dom
+    -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
     isExtLabel c = not (testBit c 7) && testBit c 6
