@@ -211,6 +211,8 @@ instance Semigroup Mailbox where
    Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
 
 mailbox :: ShortByteString -> Mailbox
+mailbox o
+  | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = Mailbox { origMailbox = o, lowerMailbox = n }
   where
     n = Short.map toLower o
