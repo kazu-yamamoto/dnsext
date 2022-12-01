@@ -208,23 +208,23 @@ instance IsString Mailbox where
 instance Semigroup Mailbox where
    Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
 
+mailbox :: ShortByteString -> Mailbox
+mailbox o = Mailbox { origMailbox = o, lowerMailbox = n }
+  where
+    n = Short.map toLower o
+
 instance CaseInsensitiveName Mailbox ShortByteString where
-    ciName o = let n = Short.map toLower o
-               in Mailbox { origMailbox = o, lowerMailbox = n }
+    ciName o = mailbox o
     origName  (Mailbox o _) = o
     lowerName (Mailbox _ n) = n
 
 instance CaseInsensitiveName Mailbox ByteString where
-    ciName o = let o' = Short.toShort o
-                   n' = Short.map toLower o'
-               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    ciName o = mailbox $ Short.toShort o
     origName  (Mailbox o _) = Short.fromShort o
     lowerName (Mailbox _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Mailbox String where
-    ciName o = let o' = fromString o
-                   n' = Short.map toLower o'
-               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    ciName o = mailbox $ fromString o
     origName  (Mailbox o _) = shortToString o
     lowerName (Mailbox _ n) = shortToString n
 
