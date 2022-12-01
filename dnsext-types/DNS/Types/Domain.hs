@@ -82,6 +82,8 @@ data Domain = Domain {
   }
 
 domain :: ShortByteString -> Domain
+domain o
+  | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
     origDomain = o
   , lowerDomain = n
