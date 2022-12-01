@@ -9,6 +9,7 @@ module DNS.Types.Domain (
   , Domain
   , putDomain
   , getDomain
+  , (<.>)
   , checkDomain
   , modifyDomain
   , addRoot
@@ -127,6 +128,18 @@ instance CaseInsensitiveName Domain String where
     ciName o = domain $ fromString o
     origName  (Domain o _ _) = shortToString o
     lowerName (Domain _ n _) = shortToString n
+
+-- | append operator using '.'
+--
+-- >>> "www" <.> "example.com"
+-- "www.example.com"
+-- >>> "com" <.> "."
+-- "com."
+(<.>) :: Domain -> Domain -> Domain
+x <.> "." = x <> "."
+x <.> y   = x <> "." <> y
+
+infixr 6 <.>
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _ _) = f o
