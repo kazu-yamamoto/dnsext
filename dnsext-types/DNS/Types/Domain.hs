@@ -82,7 +82,11 @@ data Domain = Domain {
   }
 
 domain :: ShortByteString -> ShortByteString -> Domain
-domain o n = Domain o n (reverse $ labels n)
+domain o n = Domain {
+    origDomain = o
+  , lowerDomain = n
+  , canonicalLabels = reverse $ labels n
+  }
   where
     labels = unfoldr step
     step x = case parseLabel _period x of
