@@ -136,6 +136,7 @@ module DNS.Types (
   , Domain
   , putDomain
   , getDomain
+  , (<.>)
   , checkDomain
   , modifyDomain
   , addRoot
