@@ -76,14 +76,21 @@ class CaseInsensitiveName a b where
 data Domain = Domain {
     origDomain      :: ShortByteString
   , lowerDomain     :: ShortByteString
+  -- | Ord key for Canonical DNS Name Order
+  --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
-    {- Ord key for Canonical DNS Name Order
-       https://datatracker.ietf.org/doc/html/rfc4034#section-6.1 -}
   }
 
-domain :: ShortByteString -> ShortByteString -> Domain
-domain o n = Domain o n (reverse $ labels n)
+domain :: ShortByteString -> Domain
+domain o
+  | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
+domain o = Domain {
+    origDomain = o
+  , lowerDomain = n
+  , canonicalLabels = reverse $ labels n
+  }
   where
+    n = Short.map toLower o
     labels = unfoldr step
     step x = case parseLabel _period x of
       Nothing        -> Nothing
@@ -104,25 +111,20 @@ instance IsString Domain where
     fromString = ciName
 
 instance Semigroup Domain where
-   Domain o0 l0 _ <> Domain o1 l1 _ = domain (o0 <> o1) (l0 <> l1)
+   Domain o0 _ _ <> Domain o1 _ _ = domain (o0 <> o1)
 
 instance CaseInsensitiveName Domain ShortByteString where
-    ciName o = let n = Short.map toLower o
-               in domain o n
+    ciName o = domain o
     origName  (Domain o _ _) = o
     lowerName (Domain _ n _) = n
 
 instance CaseInsensitiveName Domain ByteString where
-    ciName o = let o' = Short.toShort o
-                   n' = Short.map toLower o'
-               in domain o' n'
+    ciName o = domain $ Short.toShort o
     origName  (Domain o _ _) = Short.fromShort o
     lowerName (Domain _ n _) = Short.fromShort n
 
 instance CaseInsensitiveName Domain String where
-    ciName o = let o' = fromString o
-                   n' = Short.map toLower o'
-               in domain o' n'
+    ciName o = domain $ fromString o
     origName  (Domain o _ _) = shortToString o
     lowerName (Domain _ n _) = shortToString n
 
@@ -130,7 +132,7 @@ checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f (Domain o _ _) = f o
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f (Domain o l _) = domain (f o) (f l)
+modifyDomain f (Domain o _ _) = domain (f o)
 
 hasRoot :: Domain -> Bool
 hasRoot (Domain o _ _)
@@ -138,15 +140,15 @@ hasRoot (Domain o _ _)
   | otherwise    = Short.last o == _period
 
 addRoot :: Domain -> Domain
-addRoot d@(Domain o l _)
-  | Short.null o            = domain "." "."
+addRoot d@(Domain o _ _)
+  | Short.null o            = domain "."
   | Short.last o == _period = d
-  | otherwise               = domain (o <> ".") (l <> ".")
+  | otherwise               = domain (o <> ".")
 
 dropRoot :: Domain -> Domain
-dropRoot d@(Domain o l _)
+dropRoot d@(Domain o _ _)
   | Short.null o            = d
-  | Short.last o == _period = domain (Short.init o) (Short.init l)
+  | Short.last o == _period = domain $ Short.init o
   | otherwise               = d
 
 ----------------------------------------------------------------
@@ -208,23 +210,25 @@ instance IsString Mailbox where
 instance Semigroup Mailbox where
    Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
 
+mailbox :: ShortByteString -> Mailbox
+mailbox o
+  | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
+mailbox o = Mailbox { origMailbox = o, lowerMailbox = n }
+  where
+    n = Short.map toLower o
+
 instance CaseInsensitiveName Mailbox ShortByteString where
-    ciName o = let n = Short.map toLower o
-               in Mailbox { origMailbox = o, lowerMailbox = n }
+    ciName o = mailbox o
     origName  (Mailbox o _) = o
     lowerName (Mailbox _ n) = n
 
 instance CaseInsensitiveName Mailbox ByteString where
-    ciName o = let o' = Short.toShort o
-                   n' = Short.map toLower o'
-               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    ciName o = mailbox $ Short.toShort o
     origName  (Mailbox o _) = Short.fromShort o
     lowerName (Mailbox _ n) = Short.fromShort n
 
 instance CaseInsensitiveName Mailbox String where
-    ciName o = let o' = fromString o
-                   n' = Short.map toLower o'
-               in Mailbox { origMailbox = o', lowerMailbox = n' }
+    ciName o = mailbox $ fromString o
     origName  (Mailbox o _) = shortToString o
     lowerName (Mailbox _ n) = shortToString n
 
@@ -356,6 +360,7 @@ getDomain' sep1 ptrLimit = do
     -- Reprocess the same ShortByteString starting at the pointer
     -- target (offset).
     getPtr pos offset = do
+        -- getInput takes the original entire input
         msg <- getInput
         let parser = skipNBytes offset >> getDomain' sep1 offset
         case runSGet parser msg of
@@ -393,6 +398,7 @@ getDomain' sep1 ptrLimit = do
                   _   -> hs <> Short.singleton sep1 <> ds
           pushDomain pos dom
           return dom
+    -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
     isExtLabel c = not (testBit c 7) && testBit c 6
