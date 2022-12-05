@@ -65,19 +65,19 @@ toKey = fromIntegral . fromTYPE
 
 defaultRDataDict :: M.IntMap (Int -> SGet RData)
 defaultRDataDict =
-    M.insert (toKey A)     (\len -> toRData <$> getRD_A     len)
-  $ M.insert (toKey NS)    (\len -> toRData <$> getRD_NS    len)
-  $ M.insert (toKey CNAME) (\len -> toRData <$> getRD_CNAME len)
-  $ M.insert (toKey SOA)   (\len -> toRData <$> getRD_SOA   len)
-  $ M.insert (toKey NULL)  (\len -> toRData <$> getRD_NULL  len)
-  $ M.insert (toKey PTR)   (\len -> toRData <$> getRD_PTR   len)
-  $ M.insert (toKey MX)    (\len -> toRData <$> getRD_MX    len)
-  $ M.insert (toKey TXT)   (\len -> toRData <$> getRD_TXT   len)
-  $ M.insert (toKey RP)    (\len -> toRData <$> getRD_RP    len)
-  $ M.insert (toKey AAAA)  (\len -> toRData <$> getRD_AAAA  len)
-  $ M.insert (toKey SRV)   (\len -> toRData <$> getRD_SRV   len)
-  $ M.insert (toKey DNAME) (\len -> toRData <$> getRD_DNAME len)
-  $ M.insert (toKey TLSA)  (\len -> toRData <$> getRD_TLSA  len)
+    M.insert (toKey A)     (\len -> toRData <$> get_a     len)
+  $ M.insert (toKey NS)    (\len -> toRData <$> get_ns    len)
+  $ M.insert (toKey CNAME) (\len -> toRData <$> get_cname len)
+  $ M.insert (toKey SOA)   (\len -> toRData <$> get_soa   len)
+  $ M.insert (toKey NULL)  (\len -> toRData <$> get_null  len)
+  $ M.insert (toKey PTR)   (\len -> toRData <$> get_ptr   len)
+  $ M.insert (toKey MX)    (\len -> toRData <$> get_mx    len)
+  $ M.insert (toKey TXT)   (\len -> toRData <$> get_txt   len)
+  $ M.insert (toKey RP)    (\len -> toRData <$> get_rp    len)
+  $ M.insert (toKey AAAA)  (\len -> toRData <$> get_aaaa  len)
+  $ M.insert (toKey SRV)   (\len -> toRData <$> get_srv   len)
+  $ M.insert (toKey DNAME) (\len -> toRData <$> get_dname len)
+  $ M.insert (toKey TLSA)  (\len -> toRData <$> get_tlsa  len)
     M.empty
 
 ----------------------------------------------------------------

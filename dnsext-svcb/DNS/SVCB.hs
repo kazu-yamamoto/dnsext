@@ -13,6 +13,8 @@ module DNS.SVCB (
   -- ** Resource data
   , RD_SVCB(..)
   , RD_HTTPS(..)
+  , get_svcb
+  , get_https
   -- * Service parameters
   , SvcParams
   , lookupSvcParams
@@ -80,8 +82,8 @@ instance ResourceData RD_SVCB where
             putInt16 $ Opaque.length v
             putOpaque v
 
-getRD_SVCB :: Int -> SGet RD_SVCB
-getRD_SVCB len = do
+get_svcb :: Int -> SGet RD_SVCB
+get_svcb len = do
     end      <- (+) len <$> parserPosition
     priority <- get16
     target   <- getDomain
@@ -107,14 +109,14 @@ instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
 
-getRD_HTTPS :: Int -> SGet RD_HTTPS
-getRD_HTTPS len = do
-    RD_SVCB x y z <- getRD_SVCB len
+get_https :: Int -> SGet RD_HTTPS
+get_https len = do
+    RD_SVCB x y z <- get_svcb len
     return $ RD_HTTPS x y z
 
 ----------------------------------------------------------------
 
 addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
-  extendRR SVCB  "SVCB"  (\len -> toRData <$> getRD_SVCB  len)
-  extendRR HTTPS "HTTPS" (\len -> toRData <$> getRD_HTTPS len)
+  extendRR SVCB  "SVCB"  (\len -> toRData <$> get_svcb  len)
+  extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)

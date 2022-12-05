@@ -30,14 +30,14 @@ module DNS.SEC.Types (
   , rd_nsec3param
   , rd_cds
   , rd_cdnskey
-  , getRD_RRSIG
-  , getRD_DS
-  , getRD_NSEC
-  , getRD_DNSKEY
-  , getRD_NSEC3
-  , getRD_NSEC3PARAM
-  , getRD_CDS
-  , getRD_CDNSKEY
+  , get_rrsig
+  , get_ds
+  , get_nsec
+  , get_dnskey
+  , get_nsec3
+  , get_nsec3param
+  , get_cds
+  , get_cdnskey
   ) where
 
 import GHC.Exts (the, groupWith)
@@ -125,8 +125,8 @@ instance ResourceData RD_RRSIG where
         putDomain  Canonical rrsig_zone
         putOpaque  rrsig_signature
 
-getRD_RRSIG :: Int -> SGet RD_RRSIG
-getRD_RRSIG lim = do
+get_rrsig :: Int -> SGet RD_RRSIG
+get_rrsig lim = do
     -- The signature follows a variable length zone name
     -- and occupies the rest of the RData.  Simplest to
     -- checkpoint the position at the start of the RData,
@@ -168,11 +168,11 @@ instance ResourceData RD_DS where
         putDigestAlg ds_hashalg
         putOpaque    ds_digest
 
-getRD_DS :: Int -> SGet RD_DS
-getRD_DS len = RD_DS <$> get16
-                     <*> getPubAlg
-                     <*> getDigestAlg
-                     <*> getOpaque (len - 4)
+get_ds :: Int -> SGet RD_DS
+get_ds len = RD_DS <$> get16
+                   <*> getPubAlg
+                   <*> getDigestAlg
+                   <*> getOpaque (len - 4)
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -192,8 +192,8 @@ instance ResourceData RD_NSEC where
         putDomain Canonical nsecNextDomain
         putNsecTypes nsecTypes
 
-getRD_NSEC :: Int -> SGet RD_NSEC
-getRD_NSEC len = do
+get_nsec :: Int -> SGet RD_NSEC
+get_nsec len = do
     end <- rdataEnd len
     dom <- getDomain
     pos <- parserPosition
@@ -221,8 +221,8 @@ instance ResourceData RD_DNSKEY where
         putPubAlg      dnskey_pubalg
         putPubKey      dnskey_public_key
 
-getRD_DNSKEY :: Int -> SGet RD_DNSKEY
-getRD_DNSKEY len = do
+get_dnskey :: Int -> SGet RD_DNSKEY
+get_dnskey len = do
     flags  <- getDNSKEYflags
     proto  <- get8
     pubalg <- getPubAlg
@@ -255,8 +255,8 @@ instance ResourceData RD_NSEC3 where
         putLenOpaque  nsec3_next_hashed_owner_name
         putNsecTypes  nsec3_types
 
-getRD_NSEC3 :: Int -> SGet RD_NSEC3
-getRD_NSEC3 len = do
+get_nsec3 :: Int -> SGet RD_NSEC3
+get_nsec3 len = do
     dend <- rdataEnd len
     halg <- getHashAlg
     flgs <- getNSEC3flags
@@ -288,11 +288,11 @@ instance ResourceData RD_NSEC3PARAM where
         put16        nsec3param_iterations
         putLenOpaque nsec3param_salt
 
-getRD_NSEC3PARAM :: Int -> SGet RD_NSEC3PARAM
-getRD_NSEC3PARAM _ = RD_NSEC3PARAM <$> getHashAlg
-                                   <*> get8
-                                   <*> get16
-                                   <*> getLenOpaque
+get_nsec3param :: Int -> SGet RD_NSEC3PARAM
+get_nsec3param _ = RD_NSEC3PARAM <$> getHashAlg
+                                 <*> get8
+                                 <*> get16
+                                 <*> getLenOpaque
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
@@ -316,11 +316,11 @@ instance ResourceData RD_CDS where
         putDigestAlg cds_hashalg
         putOpaque    cds_digest
 
-getRD_CDS :: Int -> SGet RD_CDS
-getRD_CDS len = RD_CDS <$> get16
-                       <*> getPubAlg
-                       <*> getDigestAlg
-                       <*> getOpaque (len - 4)
+get_cds :: Int -> SGet RD_CDS
+get_cds len = RD_CDS <$> get16
+                     <*> getPubAlg
+                     <*> getDigestAlg
+                     <*> getOpaque (len - 4)
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -344,8 +344,8 @@ instance ResourceData RD_CDNSKEY where
         putPubAlg      cdnskey_pubalg
         putPubKey      cdnskey_public_key
 
-getRD_CDNSKEY :: Int -> SGet RD_CDNSKEY
-getRD_CDNSKEY len = do
+get_cdnskey :: Int -> SGet RD_CDNSKEY
+get_cdnskey len = do
     flags  <- getDNSKEYflags
     proto  <- get8
     pubalg <- getPubAlg
