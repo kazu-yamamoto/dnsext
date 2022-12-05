@@ -79,19 +79,21 @@ instance ResourceData RD_SVCB where
             putInt16 k
             putInt16 $ Opaque.length v
             putOpaque v
-    getResourceData _ lim = do
-        end      <- (+) lim <$> parserPosition
-        priority <- get16
-        target   <- getDomain
-        pos      <- parserPosition
-        params   <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
-        return $ RD_SVCB priority target params
-      where
-        svcparam = do
-            key <- getInt16 -- intestinally parsing as Int
-            len <- getInt16
-            val <- getOpaque len
-            return (key, val)
+
+getRD_SVCB :: Int -> SGet RD_SVCB
+getRD_SVCB len = do
+    end      <- (+) len <$> parserPosition
+    priority <- get16
+    target   <- getDomain
+    pos      <- parserPosition
+    params   <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
+    return $ RD_SVCB priority target params
+  where
+    svcparam = do
+        key <- getInt16 -- intestinally parsing as Int
+        lng <- getInt16
+        val <- getOpaque lng
+        return (key, val)
 
 ----------------------------------------------------------------
 
@@ -104,13 +106,15 @@ data RD_HTTPS = RD_HTTPS {
 instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
-    getResourceData _ lim = do
-        RD_SVCB x y z <- getResourceData (Proxy :: Proxy RD_SVCB) lim
-        return $ RD_HTTPS x y z
+
+getRD_HTTPS :: Int -> SGet RD_HTTPS
+getRD_HTTPS len = do
+    RD_SVCB x y z <- getRD_SVCB len
+    return $ RD_HTTPS x y z
 
 ----------------------------------------------------------------
 
 addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
-  extendRR SVCB  "SVCB"  (Proxy :: Proxy RD_SVCB)
-  extendRR HTTPS "HTTPS" (Proxy :: Proxy RD_HTTPS)
+  extendRR SVCB  "SVCB"  (\len -> toRData <$> getRD_SVCB  len)
+  extendRR HTTPS "HTTPS" (\len -> toRData <$> getRD_HTTPS len)
