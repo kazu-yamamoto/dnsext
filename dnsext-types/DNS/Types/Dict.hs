@@ -1,4 +1,3 @@
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveFunctor #-}
 
 module DNS.Types.Dict (
@@ -17,7 +16,6 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.StateBinary
 import DNS.Types.EDNS
-import DNS.Types.Imports
 import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Type
@@ -37,10 +35,10 @@ addRData typ dec = atomicModifyIORef' globalRDataDict f
   where
     f dict = (M.insert (toKey typ) dec dict, ())
 
-addOData :: OptData a => OptCode -> Proxy a -> IO ()
-addOData code proxy = atomicModifyIORef' globalODataDict f
+addOData :: OptCode -> (Int -> SGet OData) -> IO ()
+addOData code dec = atomicModifyIORef' globalODataDict f
   where
-    f dict = (M.insert (toKeyO code) (ODataDecode proxy) dict, ())
+    f dict = (M.insert (toKeyO code) dec dict, ())
 
 ----------------------------------------------------------------
 
@@ -84,23 +82,21 @@ defaultRDataDict =
 
 ----------------------------------------------------------------
 
-type ODataDict = M.IntMap ODataDecode
-
-data ODataDecode = forall a . (OptData a) => ODataDecode (Proxy a)
+type ODataDict = M.IntMap (Int -> SGet OData)
 
 getOData :: ODataDict -> OptCode -> Int -> SGet OData
 getOData dict code len = case M.lookup (toKeyO code) dict of
-    Nothing                  -> od_unknown (fromOptCode code) <$> getOpaque len
-    Just (ODataDecode proxy) -> toOData <$> decodeOptData proxy len
+    Nothing  -> od_unknown (fromOptCode code) <$> getOpaque len
+    Just dec -> dec len
 
 toKeyO :: OptCode -> M.Key
 toKeyO = fromIntegral . fromOptCode
 
 defaultODataDict :: ODataDict
 defaultODataDict =
-    M.insert (toKeyO NSID) (ODataDecode (Proxy :: Proxy OD_NSID)) $
-    M.insert (toKeyO ClientSubnet) (ODataDecode (Proxy :: Proxy OD_ClientSubnet)) $
-    M.insert (toKeyO Padding) (ODataDecode (Proxy :: Proxy OD_Padding))
+    M.insert (toKeyO NSID)         (\len -> toOData <$> decodeOD_NSID len)
+  $ M.insert (toKeyO ClientSubnet) (\len -> toOData <$> decodeOD_ClientSubnet len)
+  $ M.insert (toKeyO Padding)      (\len -> toOData <$> decodeOD_Padding len)
     M.empty
 
 ----------------------------------------------------------------
@@ -110,7 +106,7 @@ extendRR typ name proxy = InitIO $ do
     addRData typ proxy
     addType typ name
 
-extendOpt :: OptData a => OptCode -> String -> Proxy a -> InitIO ()
+extendOpt :: OptCode -> String -> (Int -> SGet OData) -> InitIO ()
 extendOpt code name proxy = InitIO $ do
     addOData code proxy
     addOpt code name

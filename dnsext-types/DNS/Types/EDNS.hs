@@ -21,6 +21,9 @@ module DNS.Types.EDNS (
   , OD_NSID(..)
   , OD_ClientSubnet(..)
   , OD_Padding(..)
+  , decodeOD_NSID
+  , decodeOD_ClientSubnet
+  , decodeOD_Padding
   , od_nsid
   , od_clientSubnet
   , od_ecsGeneric
@@ -185,7 +188,6 @@ addOpt code name = do
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode   :: a -> OptCode
     encodeOptData :: a -> SPut ()
-    decodeOptData :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
 
@@ -226,7 +228,9 @@ instance Show OD_NSID where
 instance OptData OD_NSID where
     optDataCode _ = NSID
     encodeOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
-    decodeOptData _ len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
+
+decodeOD_NSID :: Int -> SGet OD_NSID
+decodeOD_NSID len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
 
 od_nsid :: Opaque -> OData
 od_nsid = toOData . OD_NSID
@@ -253,7 +257,9 @@ instance Show OD_ClientSubnet where
 instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
     encodeOptData = encodeClientSubnet
-    decodeOptData _ len = decodeClientSubnet len
+
+decodeOD_ClientSubnet :: Int -> SGet OD_ClientSubnet
+decodeOD_ClientSubnet len = decodeClientSubnet len
 
 encodeClientSubnet :: OD_ClientSubnet -> SPut ()
 encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
@@ -356,7 +362,9 @@ instance Show OD_Padding where
 instance OptData OD_Padding where
     optDataCode _ = Padding
     encodeOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
-    decodeOptData _ len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
+
+decodeOD_Padding :: Int -> SGet OD_Padding
+decodeOD_Padding len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
 
 od_padding :: Opaque -> OData
 od_padding = toOData . OD_Padding
@@ -374,7 +382,6 @@ instance Show OD_Unknown where
 instance OptData OD_Unknown where
     optDataCode (OD_Unknown n _) = toOptCode n
     encodeOptData (OD_Unknown code bs) = putODBytes code bs
-    decodeOptData = undefined -- never used
 
 od_unknown :: Word16 -> Opaque -> OData
 od_unknown code o = toOData $ OD_Unknown code o
