@@ -12,6 +12,9 @@ module DNS.SEC.Opts (
   , od_dau
   , od_dhu
   , od_n3u
+  , decodeOD_DAU
+  , decodeOD_DHU
+  , decodeOD_N3U
   ) where
 
 import DNS.Types
@@ -41,7 +44,9 @@ instance Show OD_DAU where
 instance OptData OD_DAU where
     optDataCode _ = DAU
     encodeOptData (OD_DAU as) = putODWords (fromOptCode DAU) $ map fromPubAlg as
-    decodeOptData _ len = OD_DAU . map toPubAlg <$> getNOctets len
+
+decodeOD_DAU :: Int -> SGet OD_DAU
+decodeOD_DAU len = OD_DAU . map toPubAlg <$> getNOctets len
 
 od_dau :: [PubAlg] -> OData
 od_dau a = toOData $ OD_DAU a
@@ -58,7 +63,9 @@ instance Show OD_DHU where
 instance OptData OD_DHU where
     optDataCode _ = DHU
     encodeOptData (OD_DHU hs) = putODWords (fromOptCode DHU) $ map fromHashAlg hs
-    decodeOptData _ len = OD_DHU . map toHashAlg <$> getNOctets len
+
+decodeOD_DHU :: Int -> SGet OD_DHU
+decodeOD_DHU len = OD_DHU . map toHashAlg <$> getNOctets len
 
 od_dhu :: [HashAlg] -> OData
 od_dhu a = toOData $ OD_DHU a
@@ -75,7 +82,9 @@ instance Show OD_N3U where
 instance OptData OD_N3U where
     optDataCode _ = N3U
     encodeOptData (OD_N3U hs) = putODWords (fromOptCode N3U) $ map fromHashAlg hs
-    decodeOptData _ len = OD_N3U . map toHashAlg <$> getNOctets len
+
+decodeOD_N3U :: Int -> SGet OD_N3U
+decodeOD_N3U len = OD_N3U . map toHashAlg <$> getNOctets len
 
 od_n3u :: [HashAlg] -> OData
 od_n3u a = toOData $ OD_N3U a
