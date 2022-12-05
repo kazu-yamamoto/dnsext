@@ -94,9 +94,9 @@ toKeyO = fromIntegral . fromOptCode
 
 defaultODataDict :: ODataDict
 defaultODataDict =
-    M.insert (toKeyO NSID)         (\len -> toOData <$> decodeOD_NSID len)
-  $ M.insert (toKeyO ClientSubnet) (\len -> toOData <$> decodeOD_ClientSubnet len)
-  $ M.insert (toKeyO Padding)      (\len -> toOData <$> decodeOD_Padding len)
+    M.insert (toKeyO NSID)         (\len -> toOData <$> get_nsid len)
+  $ M.insert (toKeyO ClientSubnet) (\len -> toOData <$> get_clientSubnet len)
+  $ M.insert (toKeyO Padding)      (\len -> toOData <$> get_padding len)
     M.empty
 
 ----------------------------------------------------------------

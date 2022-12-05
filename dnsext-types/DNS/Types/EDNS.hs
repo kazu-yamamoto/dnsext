@@ -16,14 +16,14 @@ module DNS.Types.EDNS (
   , OptData(..)
   , fromOData
   , toOData
-  , encodeOData
+  , putOData
   , OData(..)
   , OD_NSID(..)
   , OD_ClientSubnet(..)
   , OD_Padding(..)
-  , decodeOD_NSID
-  , decodeOD_ClientSubnet
-  , decodeOD_Padding
+  , get_nsid
+  , get_clientSubnet
+  , get_padding
   , od_nsid
   , od_clientSubnet
   , od_ecsGeneric
@@ -187,7 +187,7 @@ addOpt code name = do
 
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode   :: a -> OptCode
-    encodeOptData :: a -> SPut ()
+    putOptData :: a -> SPut ()
 
 ---------------------------------------------------------------
 
@@ -212,8 +212,8 @@ instance Eq OData where
 odataToOptCode :: OData -> OptCode
 odataToOptCode (OData x) = optDataCode x
 
-encodeOData :: OData -> SPut ()
-encodeOData (OData x) = encodeOptData x
+putOData :: OData -> SPut ()
+putOData (OData x) = putOptData x
 
 ---------------------------------------------------------------
 
@@ -227,10 +227,10 @@ instance Show OD_NSID where
 
 instance OptData OD_NSID where
     optDataCode _ = NSID
-    encodeOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
+    putOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
 
-decodeOD_NSID :: Int -> SGet OD_NSID
-decodeOD_NSID len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
+get_nsid :: Int -> SGet OD_NSID
+get_nsid len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
 
 od_nsid :: Opaque -> OData
 od_nsid = toOData . OD_NSID
@@ -256,13 +256,10 @@ instance Show OD_ClientSubnet where
 
 instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
-    encodeOptData = encodeClientSubnet
+    putOptData = put_clientSubnet
 
-decodeOD_ClientSubnet :: Int -> SGet OD_ClientSubnet
-decodeOD_ClientSubnet len = decodeClientSubnet len
-
-encodeClientSubnet :: OD_ClientSubnet -> SPut ()
-encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
+put_clientSubnet :: OD_ClientSubnet -> SPut ()
+put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
     -- o  ADDRESS, variable number of octets, contains either an IPv4 or
@@ -288,7 +285,7 @@ encodeClientSubnet (OD_ClientSubnet srcBits scpBits ip) =
            put8 srcBits
            put8 scpBits
            mapM_ putInt8 raw
-encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
+put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
     put16 $ fromOptCode ClientSubnet
     putInt16 $ 4 + Opaque.length addr
     put16 family
@@ -296,8 +293,8 @@ encodeClientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
     put8 scpBits
     putOpaque addr
 
-decodeClientSubnet :: Int -> SGet OD_ClientSubnet
-decodeClientSubnet len = do
+get_clientSubnet :: Int -> SGet OD_ClientSubnet
+get_clientSubnet len = do
         family  <- get16
         srcBits <- get8
         scpBits <- get8
@@ -361,10 +358,10 @@ instance Show OD_Padding where
 
 instance OptData OD_Padding where
     optDataCode _ = Padding
-    encodeOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
+    putOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
 
-decodeOD_Padding :: Int -> SGet OD_Padding
-decodeOD_Padding len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
+get_padding :: Int -> SGet OD_Padding
+get_padding len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
 
 od_padding :: Opaque -> OData
 od_padding = toOData . OD_Padding
@@ -381,7 +378,7 @@ instance Show OD_Unknown where
 
 instance OptData OD_Unknown where
     optDataCode (OD_Unknown n _) = toOptCode n
-    encodeOptData (OD_Unknown code bs) = putODBytes code bs
+    putOptData (OD_Unknown code bs) = putODBytes code bs
 
 od_unknown :: Word16 -> Opaque -> OData
 od_unknown code o = toOData $ OD_Unknown code o

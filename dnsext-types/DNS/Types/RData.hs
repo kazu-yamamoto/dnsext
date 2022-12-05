@@ -375,7 +375,7 @@ newtype RD_OPT = RD_OPT {
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    putResourceData _ (RD_OPT options) = mapM_ encodeOData options
+    putResourceData _ (RD_OPT options) = mapM_ putOData options
 
 instance Show RD_OPT where
     show (RD_OPT options) = show options
