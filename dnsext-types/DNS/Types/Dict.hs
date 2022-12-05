@@ -32,10 +32,10 @@ globalRDataDict = unsafePerformIO $ newIORef defaultRDataDict
 globalODataDict :: IORef ODataDict
 globalODataDict = unsafePerformIO $ newIORef defaultODataDict
 
-addRData :: ResourceData a => TYPE -> Proxy a -> IO ()
-addRData typ proxy = atomicModifyIORef' globalRDataDict f
+addRData :: TYPE -> (Int -> SGet RData) -> IO ()
+addRData typ dec = atomicModifyIORef' globalRDataDict f
   where
-    f dict = (M.insert (toKey typ) (RDataDecode proxy) dict, ())
+    f dict = (M.insert (toKey typ) dec dict, ())
 
 addOData :: OptData a => OptCode -> Proxy a -> IO ()
 addOData code proxy = atomicModifyIORef' globalODataDict f
@@ -53,35 +53,33 @@ getRData OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
         olen <- getInt16
         getOData dict code olen
 getRData typ len = case M.lookup (toKey typ) dict of
-    Nothing                  -> rd_unknown typ <$> getOpaque len
-    Just (RDataDecode proxy) -> toRData <$> getResourceData proxy len
+    Nothing  -> rd_unknown typ <$> getOpaque len
+    Just dec -> dec len
   where
     dict = unsafePerformIO $ readIORef globalRDataDict
 
 ----------------------------------------------------------------
 
-type RDataDict = M.IntMap RDataDecode
-
-data RDataDecode = forall a . (ResourceData a) => RDataDecode (Proxy a)
+type RDataDict = M.IntMap (Int -> SGet RData)
 
 toKey :: TYPE -> M.Key
 toKey = fromIntegral . fromTYPE
 
-defaultRDataDict :: RDataDict
+defaultRDataDict :: M.IntMap (Int -> SGet RData)
 defaultRDataDict =
-    M.insert (toKey A)     (RDataDecode (Proxy :: Proxy RD_A)) $
-    M.insert (toKey NS)    (RDataDecode (Proxy :: Proxy RD_NS)) $
-    M.insert (toKey CNAME) (RDataDecode (Proxy :: Proxy RD_CNAME)) $
-    M.insert (toKey SOA)   (RDataDecode (Proxy :: Proxy RD_SOA)) $
-    M.insert (toKey NULL)  (RDataDecode (Proxy :: Proxy RD_NULL)) $
-    M.insert (toKey PTR)   (RDataDecode (Proxy :: Proxy RD_PTR)) $
-    M.insert (toKey MX)    (RDataDecode (Proxy :: Proxy RD_MX)) $
-    M.insert (toKey TXT)   (RDataDecode (Proxy :: Proxy RD_TXT)) $
-    M.insert (toKey RP)    (RDataDecode (Proxy :: Proxy RD_RP)) $
-    M.insert (toKey AAAA)  (RDataDecode (Proxy :: Proxy RD_AAAA)) $
-    M.insert (toKey SRV)   (RDataDecode (Proxy :: Proxy RD_SRV)) $
-    M.insert (toKey DNAME) (RDataDecode (Proxy :: Proxy RD_DNAME)) $
-    M.insert (toKey TLSA)  (RDataDecode (Proxy :: Proxy RD_TLSA))
+    M.insert (toKey A)     (\len -> toRData <$> getRD_A     len)
+  $ M.insert (toKey NS)    (\len -> toRData <$> getRD_NS    len)
+  $ M.insert (toKey CNAME) (\len -> toRData <$> getRD_CNAME len)
+  $ M.insert (toKey SOA)   (\len -> toRData <$> getRD_SOA   len)
+  $ M.insert (toKey NULL)  (\len -> toRData <$> getRD_NULL  len)
+  $ M.insert (toKey PTR)   (\len -> toRData <$> getRD_PTR   len)
+  $ M.insert (toKey MX)    (\len -> toRData <$> getRD_MX    len)
+  $ M.insert (toKey TXT)   (\len -> toRData <$> getRD_TXT   len)
+  $ M.insert (toKey RP)    (\len -> toRData <$> getRD_RP    len)
+  $ M.insert (toKey AAAA)  (\len -> toRData <$> getRD_AAAA  len)
+  $ M.insert (toKey SRV)   (\len -> toRData <$> getRD_SRV   len)
+  $ M.insert (toKey DNAME) (\len -> toRData <$> getRD_DNAME len)
+  $ M.insert (toKey TLSA)  (\len -> toRData <$> getRD_TLSA  len)
     M.empty
 
 ----------------------------------------------------------------
@@ -107,7 +105,7 @@ defaultODataDict =
 
 ----------------------------------------------------------------
 
-extendRR :: ResourceData a => TYPE -> String -> Proxy a -> InitIO ()
+extendRR :: TYPE -> String -> (Int -> SGet RData) -> InitIO ()
 extendRR typ name proxy = InitIO $ do
     addRData typ proxy
     addType typ name
