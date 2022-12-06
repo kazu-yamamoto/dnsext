@@ -89,14 +89,13 @@ domain o
   | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
     origDomain  = o
-  , lowerDomain = n
+  , lowerDomain = l
   , origLabels  = ls
   , canonicalLabels = reverse ls
   }
   where
-    ~n = Short.map toLower o
-    ~ls = labels n
-    ~labels = unfoldr step
+    ~l = Short.map toLower o
+    ~ls = unfoldr step l
     step x = case parseLabel _period x of
       Nothing        -> Nothing
       just@(Just (p, _))
@@ -215,53 +214,64 @@ isIllegal d
 -- @
 --
 
-data Mailbox = Mailbox {
-    origMailbox  :: ShortByteString
-  , lowerMailbox :: ShortByteString
-  }
+newtype Mailbox = Mailbox Domain
 
 instance Eq Mailbox where
-    Mailbox _ l0 == Mailbox _ l1 = l0 == l1
+    Mailbox d0 == Mailbox d1 = d0 == d1
 
 instance Ord Mailbox where
-    Mailbox _ l0 <= Mailbox _ l1 = l0 <= l1
+    Mailbox d0 <= Mailbox d1 = d0 <= d1
 
 instance Show Mailbox where
-    show d = "\"" ++ origName d ++ "\""
+    show (Mailbox d) = show d
 
 instance IsString Mailbox where
     fromString = ciName
 
 instance Semigroup Mailbox where
-   Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
+   Mailbox d0 <> Mailbox d1 = Mailbox (d0 <> d1)
 
 mailbox :: ShortByteString -> Mailbox
 mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
-mailbox o = Mailbox { origMailbox = o, lowerMailbox = n }
+mailbox o = Mailbox $ Domain {
+    origDomain  = o
+  , lowerDomain = l
+  , origLabels  = ls
+  , canonicalLabels = reverse ls
+  }
   where
-    n = Short.map toLower o
+    ~l = Short.map toLower o
+    ~ls = unfoldr step (l,0::Int)
+    step (x,n) = case parseLabel sep x of
+      Nothing        -> Nothing
+      Just (p', x')
+        | p' == ""    -> Nothing
+        | otherwise   -> Just (p', (x', n+1))
+      where
+        sep | n == 0    = _at
+            | otherwise = _period
 
 instance CaseInsensitiveName Mailbox ShortByteString where
     ciName o = mailbox o
-    origName  (Mailbox o _) = o
-    lowerName (Mailbox _ n) = n
+    origName  (Mailbox d) = origName d
+    lowerName (Mailbox d) = lowerName d
 
 instance CaseInsensitiveName Mailbox ByteString where
     ciName o = mailbox $ Short.toShort o
-    origName  (Mailbox o _) = Short.fromShort o
-    lowerName (Mailbox _ n) = Short.fromShort n
+    origName  (Mailbox d) = origName d
+    lowerName (Mailbox d) = lowerName d
 
 instance CaseInsensitiveName Mailbox String where
     ciName o = mailbox $ fromString o
-    origName  (Mailbox o _) = shortToString o
-    lowerName (Mailbox _ n) = shortToString n
+    origName  (Mailbox d) = origName d
+    lowerName (Mailbox d) = lowerName d
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
-checkMailbox f (Mailbox o _) = f o
+checkMailbox f (Mailbox d) = checkDomain f d
 
 modifyMailbox :: (ShortByteString -> ShortByteString) -> Mailbox -> Mailbox
-modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
+modifyMailbox f (Mailbox d) = Mailbox $ modifyDomain f d
 
 ----------------------------------------------------------------
 
@@ -270,43 +280,33 @@ modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = Compression
-  | Canonical
+  = Compression   -- ^ Original name with compression
+  | NoCompression -- ^ Original name without compressoin
+  | Canonical     -- ^ Lower name without compressoin
   deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain cf@Compression Domain{..} = putDomain' _period cf origDomain
-putDomain cf@Canonical   Domain{..} = putDomain' _period cf lowerDomain {- canonical form is lowercase and no name-compression. -}
+putDomain Compression   Domain{..} = putDomain' True  origLabels
+putDomain NoCompression Domain{..} = putDomain' False origLabels
+putDomain Canonical     Domain{..} = putDomain' False (reverse canonicalLabels)
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
-putMailbox cf@Compression Mailbox{..} = putDomain' _at cf origMailbox
-putMailbox cf@Canonical   Mailbox{..} = putDomain' _at cf lowerMailbox {- canonical form is lowercase and no name-compression. -}
+putMailbox cf (Mailbox d) = putDomain cf d
 
-putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut ()
-putDomain' sep cf dom
-    | Short.null dom || dom == "." = put8 0
-    | otherwise = do
-        mpos <- popPointer dom
-        cur  <- builderPosition
-        case mpos of
-            Just pos | cf == Compression -> putPointer pos
-            _                            -> do
-                        -- Pointers are limited to 14-bits!
-                        when (cur <= 0x3fff) $ pushPointer dom cur
-                        putPartialDomain hd
-                        putDomain' _period cf tl
-  where
-    (hd, tl) = go sep
-      where
-        go w = case parseLabel w dom of
-            Just p
-              -- Try with the preferred separator if present,
-              -- else fall back to '.'.
-              | w /= _period && Short.null (snd p) -> go _period
-              | otherwise -> p
-            Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
+putDomain' :: Bool -> [RawDomain] -> SPut ()
+putDomain' _ [] = put8 0
+putDomain' compress dom@(d:ds) = do
+    mpos <- popPointer dom
+    cur  <- builderPosition
+    case mpos of
+        Just pos | compress -> putPointer pos
+        _                   -> do
+            -- Pointers are limited to 14-bits!
+            when (cur <= 0x3fff) $ pushPointer dom cur
+            putPartialDomain d
+            putDomain' compress ds
 
 putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)

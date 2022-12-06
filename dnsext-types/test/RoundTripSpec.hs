@@ -142,7 +142,7 @@ genMailbox = ciName . (<> ".") <$> genMboxString
   where
     genMboxString :: Gen String
     genMboxString = elements
-        ["", "a", "a@b", "abc", "a@b.c", "first.last@example.org"]
+        ["a@b", "a@b.c", "first.last@example.org"]
 
 genDNSHeader :: Word16 -> Gen DNSHeader
 genDNSHeader maxrc = DNSHeader <$> genWord16 <*> genDNSFlags maxrc

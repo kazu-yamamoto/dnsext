@@ -78,7 +78,7 @@ type Position = Int
 
 -- | Builder state
 data BState = BState {
-    bstDomain   :: Map RawDomain Int
+    bstDomain   :: Map [RawDomain] Int
   , bstPosition :: Position
   , bstBuilder  :: Builder
   , bstFixLen   :: [(Position, Int)]
@@ -97,10 +97,10 @@ addBuilderPosition n = do
     BState m cur b fl <- ST.get
     ST.put $ BState m (cur+n) b fl
 
-popPointer :: RawDomain -> State BState (Maybe Int)
+popPointer :: [RawDomain] -> State BState (Maybe Int)
 popPointer dom = ST.gets (M.lookup dom . bstDomain)
 
-pushPointer :: RawDomain -> Int -> State BState ()
+pushPointer :: [RawDomain] -> Int -> State BState ()
 pushPointer dom pos = do
     BState m cur b fl <- ST.get
     ST.put $ BState (M.insert dom pos m) cur b fl

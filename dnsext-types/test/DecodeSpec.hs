@@ -47,7 +47,7 @@ test_soa_in :: DNSMessage
 test_soa_in =
     -- Using "hostmaster.example.com." instead of "hostmaster@example.com."
     -- for full compression.
-    let soard = rd_soa "ns1.example.com." "hostmaster.example.com." 0 0 0 0 0
+    let soard = rd_soa "ns1.example.com." "hostmaster@example.com." 0 0 0 0 0
         soarr = ResourceRecord "example.com." SOA 1 3600 soard
      in defaultResponse { question = [Question "hostmaster.example.com." A classIN]
                         , authority = [soarr] }
