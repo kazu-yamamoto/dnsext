@@ -78,7 +78,7 @@ class CaseInsensitiveName a b where
 data Domain = Domain {
     origDomain      :: ShortByteString
   , lowerDomain     :: ShortByteString
-  -- | Ord key for Canonical DNS Name Order
+  -- | Eq and Ord key for Canonical DNS Name Order
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
   }
@@ -101,7 +101,7 @@ domain o = Domain {
         | otherwise  -> just
 
 instance Eq Domain where
-    d0 == d1 = lowerDomain d0 == lowerDomain d1
+    d0 == d1 = canonicalLabels d0 == canonicalLabels d1
 
 instance Ord Domain where
     d0 <= d1 = canonicalLabels d0 <= canonicalLabels d1
