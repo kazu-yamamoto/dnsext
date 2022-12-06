@@ -17,13 +17,15 @@ import DNS.SEC.Time (putDnsTime)
 import DNS.SEC.Flags (DNSKEY_Flag (ZONE, REVOKE))
 import DNS.SEC.PubAlg
 import DNS.SEC.HashAlg
-import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS (..))
+import DNS.SEC.Types (RD_RRSIG(..), RD_DNSKEY(..), RD_DS(..), RD_NSEC3(..), RD_NSEC3PARAM(..))
 
 import DNS.SEC.Verify.Types
 import DNS.SEC.Verify.RSA (rsaSHA1, rsaSHA256, rsaSHA512)
 import DNS.SEC.Verify.ECDSA (ecdsaP256SHA, ecdsaP384SHA)
 import DNS.SEC.Verify.EdDSA (ed25519, ed448)
 import qualified DNS.SEC.Verify.SHA as DS
+import qualified DNS.SEC.Verify.NSEC3 as NSEC3
+import qualified DNS.SEC.Verify.N3SHA as NSEC3
 
 
 keyTag :: RD_DNSKEY -> Word16
@@ -130,3 +132,61 @@ verifyDS owner dnskey ds =
   where
     alg = ds_hashalg ds
     verify impl = verifyDSwith impl owner dnskey ds
+
+---
+
+hashNSEC3with' :: NSEC3Impl -> Word16 -> Opaque -> Domain -> Opaque
+hashNSEC3with' NSEC3Impl{..} iter osalt domain =
+  Opaque.fromByteString $ recurse iter
+  where
+    recurse i
+      | i <= 0     =  step $ runSPut $ putDomain Canonical domain
+      | otherwise  =  step $ recurse $ i-1
+    step = nsec3IGetBytes . nsec3IGetHash . (<> salt)
+    salt = Opaque.toByteString osalt
+
+hashNSEC3with :: NSEC3Impl -> RD_NSEC3 -> Domain -> Opaque
+hashNSEC3with impl RD_NSEC3{..} domain =
+  hashNSEC3with' impl nsec3_iterations nsec3_salt domain
+
+hashNSEC3PARAMwith :: NSEC3Impl -> RD_NSEC3PARAM -> Domain -> Opaque
+hashNSEC3PARAMwith impl RD_NSEC3PARAM{..} domain =
+  hashNSEC3with' impl nsec3param_iterations nsec3param_salt domain
+{- `nsec3param_flags` should be checked outside.
+   https://datatracker.ietf.org/doc/html/rfc5155#section-4.1.2
+   "NSEC3PARAM RRs with a Flags field value other than zero MUST be ignored." -}
+
+verifyNSEC3with :: [(NSEC3Impl, NSEC3_Range)] -> Domain -> TYPE -> Either String NSEC3_Result
+verifyNSEC3with ps = NSEC3.verify [ (c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps ]
+
+nsec3Dicts :: Map HashAlg NSEC3Impl
+nsec3Dicts =
+  Map.fromList
+  [ (Hash_SHA1, NSEC3.n3sha1)
+  ]
+
+hashNSEC3 :: RD_NSEC3 -> Domain -> Either String Opaque
+hashNSEC3 nsec3 domain =
+  maybe (Left $ "hashNSEC3: unsupported algorithm: " ++ show alg) (Right . hash) $
+  Map.lookup alg nsec3Dicts
+  where
+    alg = nsec3_hashalg nsec3
+    hash impl = hashNSEC3with impl nsec3 domain
+
+hashNSEC3PARAM :: RD_NSEC3PARAM -> Domain -> Either String Opaque
+hashNSEC3PARAM nsec3p domain =
+  maybe (Left $ "hashNSEC3PARAM: unsupported algorithm: " ++ show alg) (Right . hash) $
+  Map.lookup alg nsec3Dicts
+  where
+    alg = nsec3param_hashalg nsec3p
+    hash impl = hashNSEC3PARAMwith impl nsec3p domain
+
+verifyNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+verifyNSEC3 cs domain qtype = do
+  ps <- mapM addImpl cs
+  verifyNSEC3with ps domain qtype
+  where
+    addImpl r@(_, nsec3) = do
+      let alg = nsec3_hashalg nsec3
+      impl <- maybe (Left $ "verifyNSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
+      return (impl, r)
