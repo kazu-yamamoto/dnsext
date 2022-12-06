@@ -23,7 +23,6 @@ import DNS.Types.Type
 class (Typeable a, Eq a, Show a) => ResourceData a where
     resourceDataType :: a -> TYPE
     putResourceData  :: CanonicalFlag -> a -> SPut ()
-    getResourceData  :: proxy a -> Int -> SGet a
 
 ---------------------------------------------------------------
 
@@ -67,7 +66,9 @@ newtype RD_A = RD_A {
 instance ResourceData RD_A where
     resourceDataType _ = A
     putResourceData _ (RD_A ipv4) = mapM_ putInt8 $ fromIPv4 ipv4
-    getResourceData _ _ = RD_A . toIPv4 <$> getNBytes 4
+
+get_a :: Int -> SGet RD_A
+get_a _ = RD_A . toIPv4 <$> getNBytes 4
 
 instance Show RD_A where
     show (RD_A ipv4) = show ipv4
@@ -87,7 +88,9 @@ newtype RD_NS = RD_NS {
 instance ResourceData RD_NS where
     resourceDataType _ = NS
     putResourceData cf (RD_NS d) = putDomain cf d
-    getResourceData _ _ = RD_NS <$> getDomain
+
+get_ns :: Int -> SGet RD_NS
+get_ns _ = RD_NS <$> getDomain
 
 instance Show RD_NS where
     show (RD_NS d) = show d
@@ -107,7 +110,9 @@ newtype RD_CNAME = RD_CNAME {
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
     putResourceData cf (RD_CNAME d) = putDomain cf d
-    getResourceData _ _ = RD_CNAME <$> getDomain
+
+get_cname :: Int -> SGet RD_CNAME
+get_cname _ = RD_CNAME <$> getDomain
 
 instance Show RD_CNAME where
     show (RD_CNAME d) = show d
@@ -146,13 +151,15 @@ instance ResourceData RD_SOA where
         putSeconds soa_retry
         putSeconds soa_expire
         putSeconds soa_minimum
-    getResourceData _ _ = RD_SOA <$> getDomain
-                                 <*> getMailbox
-                                 <*> get32
-                                 <*> getSeconds
-                                 <*> getSeconds
-                                 <*> getSeconds
-                                 <*> getSeconds
+
+get_soa :: Int -> SGet RD_SOA
+get_soa _ = RD_SOA <$> getDomain
+                   <*> getMailbox
+                   <*> get32
+                   <*> getSeconds
+                   <*> getSeconds
+                   <*> getSeconds
+                   <*> getSeconds
 
 -- | Smart constructor.
 rd_soa :: Domain -> Mailbox -> Word32 -> Seconds -> Seconds -> Seconds -> Seconds -> RData
@@ -169,7 +176,9 @@ newtype RD_NULL = RD_NULL {
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
     putResourceData _ (RD_NULL o) = putOpaque o
-    getResourceData _ len = RD_NULL <$> getOpaque len
+
+get_null :: Int -> SGet RD_NULL
+get_null len = RD_NULL <$> getOpaque len
 
 instance Show RD_NULL where
     show (RD_NULL o) = show o
@@ -188,7 +197,9 @@ newtype RD_PTR = RD_PTR {
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
     putResourceData cf (RD_PTR d) = putDomain cf d
-    getResourceData _ _ = RD_PTR <$> getDomain
+
+get_ptr :: Int -> SGet RD_PTR
+get_ptr _ = RD_PTR <$> getDomain
 
 instance Show RD_PTR where
     show (RD_PTR d) = show d
@@ -212,7 +223,9 @@ instance ResourceData RD_MX where
     putResourceData cf RD_MX{..} = do
         put16 mx_preference
         putDomain cf mx_exchange
-    getResourceData _ _ = RD_MX <$> get16 <*> getDomain
+
+get_mx :: Int -> SGet RD_MX
+get_mx _ = RD_MX <$> get16 <*> getDomain
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
@@ -234,8 +247,9 @@ instance ResourceData RD_TXT where
                             next | Opaque.null t = return ()
                                  | otherwise     = putTXT t
                         putLenOpaque h >> next
-    getResourceData _ len =
-      RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
+
+get_txt :: Int -> SGet RD_TXT
+get_txt len = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
 
 instance Show RD_TXT where
     show (RD_TXT o) = '"' : conv o '"'
@@ -273,7 +287,9 @@ instance ResourceData RD_RP where
     putResourceData _ (RD_RP mbox d) = do
         putMailbox Canonical mbox
         putDomain  Canonical d
-    getResourceData _ _ = RD_RP <$> getMailbox <*> getDomain
+
+get_rp :: Int -> SGet RD_RP
+get_rp _ = RD_RP <$> getMailbox <*> getDomain
 
 -- | Smart constructor.
 rd_rp :: Mailbox -> Domain -> RData
@@ -290,7 +306,9 @@ newtype RD_AAAA = RD_AAAA {
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
     putResourceData _ (RD_AAAA ipv6) = mapM_ putInt8 $ fromIPv6b ipv6
-    getResourceData _ _ = RD_AAAA . toIPv6b <$> getNBytes 16
+
+get_aaaa :: Int -> SGet RD_AAAA
+get_aaaa _ = RD_AAAA . toIPv6b <$> getNBytes 16
 
 instance Show RD_AAAA where
     show (RD_AAAA ipv6) = show ipv6
@@ -316,10 +334,12 @@ instance ResourceData RD_SRV where
         put16 srv_weight
         put16 srv_port
         putDomain Canonical srv_target
-    getResourceData _ _ = RD_SRV <$> get16
-                                 <*> get16
-                                 <*> get16
-                                 <*> getDomain
+
+get_srv :: Int -> SGet RD_SRV
+get_srv _ = RD_SRV <$> get16
+                   <*> get16
+                   <*> get16
+                   <*> getDomain
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -335,7 +355,9 @@ newtype RD_DNAME = RD_DNAME {
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
     putResourceData _ (RD_DNAME d) = putDomain Canonical d
-    getResourceData _ _ = RD_DNAME <$> getDomain
+
+get_dname :: Int -> SGet RD_DNAME
+get_dname _ = RD_DNAME <$> getDomain
 
 instance Show RD_DNAME where
     show (RD_DNAME d) = show d
@@ -353,8 +375,7 @@ newtype RD_OPT = RD_OPT {
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    putResourceData _ (RD_OPT options) = mapM_ encodeOData options
-    getResourceData = undefined -- never used
+    putResourceData _ (RD_OPT options) = mapM_ putOData options
 
 instance Show RD_OPT where
     show (RD_OPT options) = show options
@@ -380,11 +401,12 @@ instance ResourceData RD_TLSA where
         put8 tlsa_selector
         put8 tlsa_matching_type
         putOpaque tlsa_assoc_data
-    getResourceData _ len =
-      RD_TLSA <$> get8
-              <*> get8
-              <*> get8
-              <*> getOpaque (len - 3)
+
+get_tlsa :: Int -> SGet RD_TLSA
+get_tlsa len = RD_TLSA <$> get8
+                       <*> get8
+                       <*> get8
+                       <*> getOpaque (len - 3)
 
 -- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData
@@ -401,7 +423,6 @@ instance Show RD_Unknown where
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
     putResourceData _ (RD_Unknown _ o) = putOpaque o
-    getResourceData = undefined -- never used
 
 -- | Smart constructor.
 rd_unknown :: TYPE -> Opaque -> RData

@@ -30,6 +30,14 @@ module DNS.SEC.Types (
   , rd_nsec3param
   , rd_cds
   , rd_cdnskey
+  , get_rrsig
+  , get_ds
+  , get_nsec
+  , get_dnskey
+  , get_nsec3
+  , get_nsec3param
+  , get_cds
+  , get_cdnskey
   ) where
 
 import GHC.Exts (the, groupWith)
@@ -116,25 +124,27 @@ instance ResourceData RD_RRSIG where
         put16      rrsig_key_tag
         putDomain  Canonical rrsig_zone
         putOpaque  rrsig_signature
-    getResourceData _ lim = do
-        -- The signature follows a variable length zone name
-        -- and occupies the rest of the RData.  Simplest to
-        -- checkpoint the position at the start of the RData,
-        -- and after reading the zone name, and subtract that
-        -- from the RData length.
-        --
-        end <- rdataEnd lim
-        typ <- getTYPE
-        alg <- getPubAlg
-        cnt <- get8
-        ttl <- getSeconds
-        tex <- getDnsTime
-        tin <- getDnsTime
-        tag <- get16
-        dom <- getDomain -- XXX: Enforce no compression?
-        pos <- parserPosition
-        val <- getOpaque $ end - pos
-        return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
+
+get_rrsig :: Int -> SGet RD_RRSIG
+get_rrsig lim = do
+    -- The signature follows a variable length zone name
+    -- and occupies the rest of the RData.  Simplest to
+    -- checkpoint the position at the start of the RData,
+    -- and after reading the zone name, and subtract that
+    -- from the RData length.
+    --
+    end <- rdataEnd lim
+    typ <- getTYPE
+    alg <- getPubAlg
+    cnt <- get8
+    ttl <- getSeconds
+    tex <- getDnsTime
+    tin <- getDnsTime
+    tag <- get16
+    dom <- getDomain -- XXX: Enforce no compression?
+    pos <- parserPosition
+    val <- getOpaque $ end - pos
+    return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
 rd_rrsig :: TYPE -> PubAlg -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
@@ -157,11 +167,12 @@ instance ResourceData RD_DS where
         putPubAlg    ds_pubalg
         putDigestAlg ds_hashalg
         putOpaque    ds_digest
-    getResourceData _ lim =
-        RD_DS <$> get16
-              <*> getPubAlg
-              <*> getDigestAlg
-              <*> getOpaque (lim - 4)
+
+get_ds :: Int -> SGet RD_DS
+get_ds len = RD_DS <$> get16
+                   <*> getPubAlg
+                   <*> getDigestAlg
+                   <*> getOpaque (len - 4)
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -180,11 +191,13 @@ instance ResourceData RD_NSEC where
     putResourceData _ RD_NSEC{..} = do
         putDomain Canonical nsecNextDomain
         putNsecTypes nsecTypes
-    getResourceData _ len = do
-        end <- rdataEnd len
-        dom <- getDomain
-        pos <- parserPosition
-        RD_NSEC dom <$> getNsecTypes (end - pos)
+
+get_nsec :: Int -> SGet RD_NSEC
+get_nsec len = do
+    end <- rdataEnd len
+    dom <- getDomain
+    pos <- parserPosition
+    RD_NSEC dom <$> getNsecTypes (end - pos)
 
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
@@ -207,12 +220,14 @@ instance ResourceData RD_DNSKEY where
         put8           dnskey_protocol
         putPubAlg      dnskey_pubalg
         putPubKey      dnskey_public_key
-    getResourceData _ len = do
-        flags  <- getDNSKEYflags
-        proto  <- get8
-        pubalg <- getPubAlg
-        pubkey <- getPubKey pubalg (len - 4)
-        return $ RD_DNSKEY flags proto pubalg pubkey
+
+get_dnskey :: Int -> SGet RD_DNSKEY
+get_dnskey len = do
+    flags  <- getDNSKEYflags
+    proto  <- get8
+    pubalg <- getPubAlg
+    pubkey <- getPubKey pubalg (len - 4)
+    return $ RD_DNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
 rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
@@ -239,15 +254,17 @@ instance ResourceData RD_NSEC3 where
         putLenOpaque  nsec3_salt
         putLenOpaque  nsec3_next_hashed_owner_name
         putNsecTypes  nsec3_types
-    getResourceData _ len = do
-        dend <- rdataEnd len
-        halg <- getHashAlg
-        flgs <- getNSEC3flags
-        iter <- get16
-        salt <- getLenOpaque
-        hash <- getLenOpaque
-        tpos <- parserPosition
-        RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
+
+get_nsec3 :: Int -> SGet RD_NSEC3
+get_nsec3 len = do
+    dend <- rdataEnd len
+    halg <- getHashAlg
+    flgs <- getNSEC3flags
+    iter <- get16
+    salt <- getLenOpaque
+    hash <- getLenOpaque
+    tpos <- parserPosition
+    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
 
 -- | Smart constructor.
 rd_nsec3 :: HashAlg -> [NSEC3_Flag] -> Word16 -> Opaque -> Opaque -> [TYPE] -> RData
@@ -270,11 +287,12 @@ instance ResourceData RD_NSEC3PARAM where
         put8         nsec3param_flags
         put16        nsec3param_iterations
         putLenOpaque nsec3param_salt
-    getResourceData _ _ =
-        RD_NSEC3PARAM <$> getHashAlg
-                      <*> get8
-                      <*> get16
-                      <*> getLenOpaque
+
+get_nsec3param :: Int -> SGet RD_NSEC3PARAM
+get_nsec3param _ = RD_NSEC3PARAM <$> getHashAlg
+                                 <*> get8
+                                 <*> get16
+                                 <*> getLenOpaque
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
@@ -297,11 +315,12 @@ instance ResourceData RD_CDS where
         putPubAlg    cds_pubalg
         putDigestAlg cds_hashalg
         putOpaque    cds_digest
-    getResourceData _ lim =
-        RD_CDS <$> get16
-               <*> getPubAlg
-               <*> getDigestAlg
-               <*> getOpaque (lim - 4)
+
+get_cds :: Int -> SGet RD_CDS
+get_cds len = RD_CDS <$> get16
+                     <*> getPubAlg
+                     <*> getDigestAlg
+                     <*> getOpaque (len - 4)
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -324,12 +343,14 @@ instance ResourceData RD_CDNSKEY where
         put8           cdnskey_protocol
         putPubAlg      cdnskey_pubalg
         putPubKey      cdnskey_public_key
-    getResourceData _ len = do
-        flags  <- getDNSKEYflags
-        proto  <- get8
-        pubalg <- getPubAlg
-        pubkey <- getPubKey pubalg (len - 4)
-        return $ RD_CDNSKEY flags proto pubalg pubkey
+
+get_cdnskey :: Int -> SGet RD_CDNSKEY
+get_cdnskey len = do
+    flags  <- getDNSKEYflags
+    proto  <- get8
+    pubalg <- getPubAlg
+    pubkey <- getPubKey pubalg (len - 4)
+    return $ RD_CDNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
 rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
