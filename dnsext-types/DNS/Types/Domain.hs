@@ -560,13 +560,13 @@ isSpecial sep w = w == sep || elem w escSpecials
 -- Note: the separator is assumed to be either '.' or '@' and so not matched by
 -- any of the first three fast-path 'True' cases.
 isPlain :: Word8 -> Word8 -> Bool
-isPlain sep w | w >= _del                  = False -- <DEL> + non-ASCII
-              | w >  _backslash            = True  -- ']'..'_'..'a'..'z'..'~'
-              | w >= _0  && w < _semicolon = True  -- '0'..'9'..':'
-              | w >  _at && w < _backslash = True  -- 'A'..'Z'..'['
-              | w <= _space                = False -- non-printables
-              | isSpecial sep       w      = False -- one of the specials
-              | otherwise                  = True  -- plain punctuation
+isPlain sep w | w >= _del                    = False -- <DEL> + non-ASCII
+              | w >= _bracketright           = True  -- ']'..'_'..'a'..'z'..'~'
+              | w >= _A && w <= _bracketleft = True  -- 'A'..'Z'..'['
+              | w >= _0 && w <= _colon       = True  -- '0'..'9'..':'
+              | w <= _space                  = False -- non-printables
+              | isSpecial sep w              = False -- one of the specials
+              | otherwise                    = True  -- plain punctuation
 
 ----------------------------------------------------------------
 
