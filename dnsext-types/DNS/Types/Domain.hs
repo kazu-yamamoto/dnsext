@@ -78,6 +78,7 @@ class CaseInsensitiveName a b where
 data Domain = Domain {
     origDomain      :: ShortByteString
   , lowerDomain     :: ShortByteString
+  , origLabels      :: ~[ShortByteString]
   -- | Eq and Ord key for Canonical DNS Name Order
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
@@ -87,13 +88,15 @@ domain :: ShortByteString -> Domain
 domain o
   | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
-    origDomain = o
+    origDomain  = o
   , lowerDomain = n
-  , canonicalLabels = reverse $ labels n
+  , origLabels  = ls
+  , canonicalLabels = reverse ls
   }
   where
-    n = Short.map toLower o
-    labels = unfoldr step
+    ~n = Short.map toLower o
+    ~ls = labels n
+    ~labels = unfoldr step
     step x = case parseLabel _period x of
       Nothing        -> Nothing
       just@(Just (p, _))
