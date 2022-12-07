@@ -137,7 +137,6 @@ module DNS.Types (
   , (<.>)
   , checkDomain
   , modifyDomain
-  , isIllegal
   , superDomains
   , isSubDomainOf
   -- ** Mailbox

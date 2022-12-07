@@ -13,7 +13,6 @@ module DNS.Types.Domain (
   , (<.>)
   , checkDomain
   , modifyDomain
-  , isIllegal
   , superDomains
   , isSubDomainOf
   , Mailbox
@@ -60,7 +59,7 @@ class IsRepresentation a b where
 -- default to U-label format should ideally give the user a choice to
 -- see the A-label format.  Examples:
 --
--- A 'DecodeError' may be thrown when creating from the representation
+-- A 'IllegalDomain' may be thrown when creating from the representation
 -- format or decoding the wire format.
 --
 -- @
@@ -75,7 +74,7 @@ data Domain = Domain {
     -- The representation format. Case-sensitive, escaped.
     representation  :: ShortByteString
     -- Labels in wire format. Case-sensitive, not escaped.
-  , wireLabels      :: ~[ShortByteString]
+  , wireLabels      :: [ShortByteString]
   -- | Eq and Ord key for Canonical DNS Name Order.
   --   Lower cases, not escaped.
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
@@ -83,9 +82,7 @@ data Domain = Domain {
   }
 
 domain :: ShortByteString -> Domain
-domain o
-  | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
-domain o = Domain {
+domain o = validateDomain $ Domain {
     representation  = addRoot o
   , wireLabels      = ls
   , canonicalLabels = reverse ls
@@ -105,7 +102,7 @@ domainFromWireLabels [] = Domain {
   , wireLabels      = []
   , canonicalLabels = []
   }
-domainFromWireLabels ls = Domain {
+domainFromWireLabels ls = validateDomain $ Domain {
     representation  = rep
   , wireLabels      = ls
   , canonicalLabels = map (Short.map toLower) $ reverse ls
@@ -166,23 +163,20 @@ addRoot o
 
 ----------------------------------------------------------------
 
-badLength :: ShortByteString -> Bool
-badLength o
-    | Short.null o            = True
-    | Short.last o == _period = Short.length o > 254
-    | otherwise               = Short.length o > 253
+validateDomain :: Domain -> Domain
+validateDomain d
+  | isIllegal (wireLabels d) = E.throw IllegalDomain
+  | otherwise                = d
 
-isIllegal :: Domain -> Bool
-isIllegal d
-  | badLength o                  = True
-  | not (_period `Short.elem` o) = True
-  | _colon `Short.elem` o        = True
-  | _slash `Short.elem` o        = True
-  | any (\x -> Short.length x > 63)
-        (Short.split _period o)  = True
-  | otherwise                    = False
+validateMailbox :: Mailbox -> Mailbox
+validateMailbox m@(Mailbox d)
+  | isIllegal (wireLabels d) = E.throw IllegalDomain
+  | otherwise                = m
+
+isIllegal :: [ShortByteString] -> Bool
+isIllegal ls = sum is > 255 || any (> 63) is
   where
-    o = representation d
+    is = map Short.length ls
 
 ----------------------------------------------------------------
 
@@ -216,7 +210,7 @@ instance Semigroup Mailbox where
 mailbox :: ShortByteString -> Mailbox
 mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
-mailbox o = Mailbox $ Domain {
+mailbox o = validateMailbox $ Mailbox $ Domain {
     representation  = addRoot o
   , wireLabels      = ls
   , canonicalLabels = reverse ls
@@ -235,7 +229,7 @@ mailbox o = Mailbox $ Domain {
 
 mailboxFromWireLabels :: [ShortByteString] -> Mailbox
 mailboxFromWireLabels [] = E.throw $ DecodeError "Broken mailbox"
-mailboxFromWireLabels lls@(l:ls) = Mailbox $ Domain {
+mailboxFromWireLabels lls@(l:ls) = validateMailbox $ Mailbox $ Domain {
     representation  = rep
   , wireLabels      = lls
   , canonicalLabels = map (Short.map toLower) $ reverse lls
