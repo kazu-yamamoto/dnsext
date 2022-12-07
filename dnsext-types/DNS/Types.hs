@@ -131,7 +131,7 @@ module DNS.Types (
   , od_ecsGeneric
   , od_unknown
   -- * Basic types
-  , CaseInsensitiveName(..)
+  , IsRepresentation(..)
   -- ** Domain
   , Domain
   , putDomain

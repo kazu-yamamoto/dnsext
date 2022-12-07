@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module DNS.Types.Domain (
-    CaseInsensitiveName(..)
+    IsRepresentation(..)
   , Domain
   , putDomain
   , getDomain
@@ -39,9 +39,9 @@ import DNS.Types.Imports
 import DNS.Types.Parser (Parser, Builder)
 import qualified DNS.Types.Parser as P
 
-class CaseInsensitiveName a b where
-    ciName    :: b -> a
-    origName  :: a -> b
+class IsRepresentation a b where
+    fromRepresentation :: b -> a
+    toRepresentation   :: a -> b
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -106,25 +106,25 @@ instance Ord Domain where
     d0 <= d1 = canonicalLabels d0 <= canonicalLabels d1
 
 instance Show Domain where
-    show d = "\"" ++ origName d ++ "\""
+    show d = "\"" ++ toRepresentation d ++ "\""
 
 instance IsString Domain where
-    fromString = ciName
+    fromString = fromRepresentation
 
 instance Semigroup Domain where
     d0 <> d1 = domain (representation d0 <> representation d1)
 
-instance CaseInsensitiveName Domain ShortByteString where
-    ciName o = domain o
-    origName  d = representation d
+instance IsRepresentation Domain ShortByteString where
+    fromRepresentation o = domain o
+    toRepresentation  d = representation d
 
-instance CaseInsensitiveName Domain ByteString where
-    ciName o = domain $ Short.toShort o
-    origName  d = Short.fromShort $ representation d
+instance IsRepresentation Domain ByteString where
+    fromRepresentation o = domain $ Short.toShort o
+    toRepresentation  d = Short.fromShort $ representation d
 
-instance CaseInsensitiveName Domain String where
-    ciName o = domain $ fromString o
-    origName  d = shortToString $ representation d
+instance IsRepresentation Domain String where
+    fromRepresentation o = domain $ fromString o
+    toRepresentation  d = shortToString $ representation d
 
 -- | append operator using '.'
 --
@@ -220,7 +220,7 @@ instance Show Mailbox where
     show (Mailbox d) = show d
 
 instance IsString Mailbox where
-    fromString = ciName
+    fromString = fromRepresentation
 
 instance Semigroup Mailbox where
    Mailbox d0 <> Mailbox d1 = Mailbox (d0 <> d1)
@@ -230,7 +230,7 @@ mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = Mailbox $ Domain {
     representation  = o
-  , wireLabels  = ls
+  , wireLabels      = ls
   , canonicalLabels = reverse ls
   }
   where
@@ -245,17 +245,17 @@ mailbox o = Mailbox $ Domain {
         sep | n == 0    = _at
             | otherwise = _period
 
-instance CaseInsensitiveName Mailbox ShortByteString where
-    ciName o = mailbox o
-    origName  (Mailbox d) = origName d
+instance IsRepresentation Mailbox ShortByteString where
+    fromRepresentation o = mailbox o
+    toRepresentation  (Mailbox d) = toRepresentation d
 
-instance CaseInsensitiveName Mailbox ByteString where
-    ciName o = mailbox $ Short.toShort o
-    origName  (Mailbox d) = origName d
+instance IsRepresentation Mailbox ByteString where
+    fromRepresentation o = mailbox $ Short.toShort o
+    toRepresentation  (Mailbox d) = toRepresentation d
 
-instance CaseInsensitiveName Mailbox String where
-    ciName o = mailbox $ fromString o
-    origName  (Mailbox d) = origName d
+instance IsRepresentation Mailbox String where
+    fromRepresentation o = mailbox $ fromString o
+    toRepresentation  (Mailbox d) = toRepresentation d
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox d) = checkDomain f d
@@ -323,10 +323,10 @@ putPartialDomain = putLenShortByteString
 --
 
 getDomain :: SGet Domain
-getDomain = ciName <$> (parserPosition >>= getDomain' _period)
+getDomain = fromRepresentation <$> (parserPosition >>= getDomain' _period)
 
 getMailbox :: SGet Mailbox
-getMailbox = ciName <$> (parserPosition >>= getDomain' _at)
+getMailbox = fromRepresentation <$> (parserPosition >>= getDomain' _at)
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points
@@ -572,7 +572,7 @@ shortToString = C8.unpack . Short.fromShort
 -- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
 superDomains :: Domain -> [Domain]
-superDomains Domain{..} = map ciName ds
+superDomains Domain{..} = map fromRepresentation ds
   where
     ds = domains representation
 

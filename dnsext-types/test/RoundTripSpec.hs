@@ -138,7 +138,7 @@ genDomain = addRoot <$> genDomainString
         ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
 
 genMailbox :: Gen Mailbox
-genMailbox = ciName . (<> ".") <$> genMboxString
+genMailbox = fromRepresentation . (<> ".") <$> genMboxString
   where
     genMboxString :: Gen String
     genMboxString = elements
