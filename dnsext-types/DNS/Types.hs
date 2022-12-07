@@ -134,8 +134,6 @@ module DNS.Types (
   , IsRepresentation(..)
   -- ** Domain
   , Domain
-  , putDomain
-  , getDomain
   , (<.>)
   , checkDomain
   , modifyDomain
@@ -146,8 +144,6 @@ module DNS.Types (
   , Mailbox
   , checkMailbox
   , modifyMailbox
-  , putMailbox
-  , getMailbox
   -- ** Opaque
   , Opaque
   -- ** TYPE
