@@ -12,12 +12,10 @@ module DNS.Types.Domain (
   , getDomain
   , (<.>)
   , checkDomain
-  , modifyDomain
   , superDomains
   , isSubDomainOf
   , Mailbox
   , checkMailbox
-  , modifyMailbox
   , putMailbox
   , getMailbox
   , CanonicalFlag (..)
@@ -152,9 +150,6 @@ infixr 6 <.>
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f Domain{..} = f representation
 
-modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f Domain{..} = domain $ f representation
-
 addRoot :: RawDomain -> RawDomain
 addRoot o
   | Short.null o            = "."
@@ -251,9 +246,6 @@ instance IsRepresentation Mailbox String where
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox d) = checkDomain f d
-
-modifyMailbox :: (ShortByteString -> ShortByteString) -> Mailbox -> Mailbox
-modifyMailbox f (Mailbox d) = Mailbox $ modifyDomain f d
 
 ----------------------------------------------------------------
 
