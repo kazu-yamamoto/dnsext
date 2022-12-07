@@ -36,6 +36,8 @@ import qualified DNS.Types.Parser as P
 class IsRepresentation a b where
     fromRepresentation :: b -> a
     toRepresentation   :: a -> b
+    fromWireLabels     :: [b] -> a
+    toWireLabels       :: a -> [b]
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -124,16 +126,22 @@ instance Semigroup Domain where
     d0 <> d1 = domainFromWireLabels (wireLabels d0 <> wireLabels d1)
 
 instance IsRepresentation Domain ShortByteString where
-    fromRepresentation o = domain o
-    toRepresentation  d = representation d
+    fromRepresentation = domain
+    toRepresentation   = representation
+    fromWireLabels     = domainFromWireLabels
+    toWireLabels       = wireLabels
 
 instance IsRepresentation Domain ByteString where
-    fromRepresentation o = domain $ Short.toShort o
-    toRepresentation  d = Short.fromShort $ representation d
+    fromRepresentation = domain . Short.toShort
+    toRepresentation   = Short.fromShort . representation
+    fromWireLabels     = domainFromWireLabels . map Short.toShort
+    toWireLabels       = map Short.fromShort . wireLabels
 
 instance IsRepresentation Domain String where
-    fromRepresentation o = domain $ fromString o
-    toRepresentation  d = shortToString $ representation d
+    fromRepresentation = domain . fromString
+    toRepresentation   = shortToString . representation
+    fromWireLabels     = domainFromWireLabels . map fromString
+    toWireLabels       = map shortToString . wireLabels
 
 -- | append operator using '.'
 --
@@ -185,7 +193,10 @@ isIllegal ls = sum is > 255 || any (> 63) is
 -- @
 --
 
-newtype Mailbox = Mailbox Domain
+newtype Mailbox = Mailbox { fromMailbox :: Domain }
+
+toMailbox :: Domain -> Mailbox
+toMailbox = Mailbox
 
 instance Eq Mailbox where
     Mailbox d0 == Mailbox d1 = d0 == d1
@@ -233,16 +244,22 @@ mailboxFromWireLabels lls@(l:ls) = validateMailbox $ Mailbox $ Domain {
     rep = l <> "@" <> foldr (\x y -> escapeLabel _period x <> "." <> y) "" ls
 
 instance IsRepresentation Mailbox ShortByteString where
-    fromRepresentation o = mailbox o
-    toRepresentation  (Mailbox d) = toRepresentation d
+    fromRepresentation = mailbox
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels
+    toWireLabels       = wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox ByteString where
-    fromRepresentation o = mailbox $ Short.toShort o
-    toRepresentation  (Mailbox d) = toRepresentation d
+    fromRepresentation = mailbox . Short.toShort
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels . map Short.toShort
+    toWireLabels       = map Short.fromShort . wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox String where
-    fromRepresentation o = mailbox $ fromString o
-    toRepresentation  (Mailbox d) = toRepresentation d
+    fromRepresentation = mailbox . fromString
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels . map fromString
+    toWireLabels       = map shortToString . wireLabels . fromMailbox
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox d) = checkDomain f d
