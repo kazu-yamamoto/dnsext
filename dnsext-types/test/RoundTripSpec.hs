@@ -131,18 +131,10 @@ genOpaque :: Gen Opaque
 genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
-genDomain = addRoot <$> genDomainString
-  where
-    genDomainString :: Gen Domain
-    genDomainString = elements
-        ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
+genDomain = elements [".", "a.", "a.b.", "abc.", "a.b.c.", "a\\.b.c.", "\\001.a.b.", "\\$.a.b."]
 
 genMailbox :: Gen Mailbox
-genMailbox = fromRepresentation . (<> ".") <$> genMboxString
-  where
-    genMboxString :: Gen String
-    genMboxString = elements
-        ["a@b", "a@b.c", "first.last@example.org"]
+genMailbox = elements ["a@b.", "a@b.c.", "first.last@example.org."]
 
 genDNSHeader :: Word16 -> Gen DNSHeader
 genDNSHeader maxrc = DNSHeader <$> genWord16 <*> genDNSFlags maxrc

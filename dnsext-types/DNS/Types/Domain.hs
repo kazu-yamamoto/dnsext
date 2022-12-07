@@ -13,7 +13,6 @@ module DNS.Types.Domain (
   , (<.>)
   , checkDomain
   , modifyDomain
-  , addRoot
   , dropRoot
   , hasRoot
   , isIllegal
@@ -89,7 +88,7 @@ domain :: ShortByteString -> Domain
 domain o
   | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
-    representation  = o
+    representation  = addRoot o
   , wireLabels      = ls
   , canonicalLabels = reverse ls
   }
@@ -129,7 +128,7 @@ instance IsString Domain where
     fromString = fromRepresentation
 
 instance Semigroup Domain where
-    d0 <> d1 = domain (representation d0 <> representation d1)
+    d0 <> d1 = domainFromWireLabels (wireLabels d0 <> wireLabels d1)
 
 instance IsRepresentation Domain ShortByteString where
     fromRepresentation o = domain o
@@ -146,11 +145,11 @@ instance IsRepresentation Domain String where
 -- | append operator using '.'
 --
 -- >>> "www" <.> "example.com"
--- "www.example.com"
+-- "www.example.com."
 -- >>> "com" <.> "."
 -- "com."
 (<.>) :: Domain -> Domain -> Domain
-x <.> "." = x <> "."
+x <.> "." = x
 x <.> y   = x <> "." <> y
 
 infixr 6 <.>
@@ -168,13 +167,11 @@ hasRoot d
   where
     o = representation d
 
-addRoot :: Domain -> Domain
-addRoot d
-  | Short.null o            = domain "."
-  | Short.last o == _period = d
-  | otherwise               = domain (o <> ".")
-  where
-   o = representation d
+addRoot :: RawDomain -> RawDomain
+addRoot o
+  | Short.null o            = "."
+  | Short.last o == _period = o
+  | otherwise               = o <> "."
 
 dropRoot :: Domain -> Domain
 dropRoot d
@@ -246,7 +243,7 @@ mailbox :: ShortByteString -> Mailbox
 mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = Mailbox $ Domain {
-    representation  = o
+    representation  = addRoot o
   , wireLabels      = ls
   , canonicalLabels = reverse ls
   }
@@ -593,23 +590,14 @@ shortToString = C8.unpack . Short.fromShort
 -- |
 --
 -- >>> superDomains "www.example.com"
--- ["www.example.com","example.com","com"]
+-- ["www.example.com.","example.com.","com."]
 -- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
 superDomains :: Domain -> [Domain]
-superDomains Domain{..} = map fromRepresentation ds
-  where
-    ds = domains representation
-
-domains :: ShortByteString -> [ShortByteString]
-domains ""  = []
-domains "." = []
-domains dom = loop dom
-  where
-    loop d = case parseLabel _period d of
-      Nothing     -> []
-      Just (_,"") -> [d]
-      Just (_,xs) -> d : loop xs
+superDomains d = case wireLabels d of
+  []   -> [d]
+  [_]  -> [d]
+  _:ls -> d : map domainFromWireLabels (init $ tails ls)
 
 -- |
 --
