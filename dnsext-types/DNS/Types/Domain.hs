@@ -42,7 +42,6 @@ import qualified DNS.Types.Parser as P
 class CaseInsensitiveName a b where
     ciName    :: b -> a
     origName  :: a -> b
-    lowerName :: a -> b
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -77,7 +76,6 @@ class CaseInsensitiveName a b where
 
 data Domain = Domain {
     representation  :: ShortByteString
-  , lowerDomain     :: ShortByteString
   , wireLabels      :: ~[ShortByteString]
   -- | Eq and Ord key for Canonical DNS Name Order
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
@@ -89,7 +87,6 @@ domain o
   | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
     representation  = o
-  , lowerDomain     = l
   , wireLabels      = ls
   , canonicalLabels = reverse ls
   }
@@ -120,17 +117,14 @@ instance Semigroup Domain where
 instance CaseInsensitiveName Domain ShortByteString where
     ciName o = domain o
     origName  d = representation d
-    lowerName d = lowerDomain d
 
 instance CaseInsensitiveName Domain ByteString where
     ciName o = domain $ Short.toShort o
     origName  d = Short.fromShort $ representation d
-    lowerName d = Short.fromShort $ lowerDomain d
 
 instance CaseInsensitiveName Domain String where
     ciName o = domain $ fromString o
     origName  d = shortToString $ representation d
-    lowerName d = shortToString $ lowerDomain d
 
 -- | append operator using '.'
 --
@@ -236,7 +230,6 @@ mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = Mailbox $ Domain {
     representation  = o
-  , lowerDomain = l
   , wireLabels  = ls
   , canonicalLabels = reverse ls
   }
@@ -255,17 +248,14 @@ mailbox o = Mailbox $ Domain {
 instance CaseInsensitiveName Mailbox ShortByteString where
     ciName o = mailbox o
     origName  (Mailbox d) = origName d
-    lowerName (Mailbox d) = lowerName d
 
 instance CaseInsensitiveName Mailbox ByteString where
     ciName o = mailbox $ Short.toShort o
     origName  (Mailbox d) = origName d
-    lowerName (Mailbox d) = lowerName d
 
 instance CaseInsensitiveName Mailbox String where
     ciName o = mailbox $ fromString o
     origName  (Mailbox d) = origName d
-    lowerName (Mailbox d) = lowerName d
 
 checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
 checkMailbox f (Mailbox d) = checkDomain f d
