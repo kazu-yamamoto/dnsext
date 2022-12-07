@@ -99,6 +99,20 @@ domain o = Domain {
         | p == ""    -> Nothing
         | otherwise  -> just
 
+domainFromWireLabels :: [ShortByteString] -> Domain
+domainFromWireLabels [] = Domain {
+    representation  = "."
+  , wireLabels      = []
+  , canonicalLabels = []
+  }
+domainFromWireLabels ls = Domain {
+    representation  = rep
+  , wireLabels      = ls
+  , canonicalLabels = map (Short.map toLower) $ reverse ls
+  }
+  where
+    rep = foldr (\l r -> escapeLabel _period l <> "." <> r) "" ls
+
 instance Eq Domain where
     d0 == d1 = canonicalLabels d0 == canonicalLabels d1
 
@@ -245,6 +259,16 @@ mailbox o = Mailbox $ Domain {
         sep | n == 0    = _at
             | otherwise = _period
 
+mailboxFromWireLabels :: [ShortByteString] -> Mailbox
+mailboxFromWireLabels [] = E.throw $ DecodeError "Broken mailbox"
+mailboxFromWireLabels lls@(l:ls) = Mailbox $ Domain {
+    representation  = rep
+  , wireLabels      = lls
+  , canonicalLabels = map (Short.map toLower) $ reverse lls
+  }
+  where
+    rep = l <> "@" <> foldr (\x y -> escapeLabel _period x <> "." <> y) "" ls
+
 instance IsRepresentation Mailbox ShortByteString where
     fromRepresentation o = mailbox o
     toRepresentation  (Mailbox d) = toRepresentation d
@@ -319,14 +343,14 @@ putPartialDomain = putLenShortByteString
 -- or mailbox.
 --
 -- Note: the separator passed to 'getDomain'' is required to be either \'.\' or
--- \'\@\', or else 'unparseLabel' needs to be modified to handle the new value.
+-- \'\@\', or else 'escapeLabel' needs to be modified to handle the new value.
 --
 
 getDomain :: SGet Domain
-getDomain = fromRepresentation <$> (parserPosition >>= getDomain' _period)
+getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' _period)
 
 getMailbox :: SGet Mailbox
-getMailbox = fromRepresentation <$> (parserPosition >>= getDomain' _at)
+getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' _at)
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points
@@ -336,10 +360,10 @@ getMailbox = fromRepresentation <$> (parserPosition >>= getDomain' _at)
 -- "works" the same in Perl's Net::DNS and reportedly in ISC's BIND.
 --
 -- >>> :{
--- let input = "\6\3foo\192\0\3bar\0"
+-- let input = "\6\3foo\192\0\3bar\x00"
 --     parser = skipNBytes 1 >> getDomain' _period 1
 --     Right (output, _) = runSGet parser input
---  in output == "foo.\\003foo\\192\\000.bar."
+--  in output == ["foo","\3foo\192\0","bar"]
 -- :}
 -- True
 --
@@ -359,13 +383,13 @@ getMailbox = fromRepresentation <$> (parserPosition >>= getDomain' _at)
 -- with a ".".
 --
 -- Note: the separator is required to be either \'.\' or \'\@\', or else
--- 'unparseLabel' needs to be modified to handle the new value.
+-- 'escapeLabel' needs to be modified to handle the new value.
 --
 -- Domain name compression pointers must always refer to a position that
 -- precedes the start of the current domain name.  The starting offsets form a
 -- strictly decreasing sequence, which prevents pointer loops.
 --
-getDomain' :: Word8 -> Int -> SGet ShortByteString
+getDomain' :: Word8 -> Int -> SGet [ShortByteString]
 getDomain' sep1 ptrLimit = do
     pos <- parserPosition
     c <- getInt8
@@ -391,7 +415,7 @@ getDomain' sep1 ptrLimit = do
                 return (fst o)
 
     getdomain pos c n
-      | c == 0 = return "." -- Perhaps the root domain?
+      | c == 0 = return []
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
@@ -404,15 +428,13 @@ getDomain' sep1 ptrLimit = do
                   Just dm -> return dm
       -- As for now, extended labels have no use.
       -- This may change some time in the future.
-      | isExtLabel c = return ""
+      | isExtLabel c = return [""]
       | otherwise = do
-          hs <- unparseLabel sep1 <$> getNShortByteString n
-          ds <- getDomain' _period ptrLimit
-          let dom = case ds of -- avoid trailing ".."
-                  "." -> hs <> "."
-                  _   -> hs <> Short.singleton sep1 <> ds
-          pushDomain pos dom
-          return dom
+          l  <- getNShortByteString n
+          ls <- getDomain' _period ptrLimit
+          let lls = l:ls
+          pushDomain pos lls
+          return lls
     -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
@@ -490,27 +512,27 @@ labelParser sep bld =
 -- Note: the separator is required to be either \'.\' or \'\@\', but this
 -- constraint is the caller's responsibility and is not checked here.
 --
--- >>> unparseLabel _period "foo"
+-- >>> escapeLabel _period "foo"
 -- "foo"
--- >>> unparseLabel _period "foo.bar"
+-- >>> escapeLabel _period "foo.bar"
 -- "foo\\.bar"
--- >>> unparseLabel _period "\x0aoo"
+-- >>> escapeLabel _period "\x0aoo"
 -- "\\010oo"
--- >>> unparseLabel _period "f\x7fo"
+-- >>> escapeLabel _period "f\x7fo"
 -- "f\\127o"
-unparseLabel :: Word8 -> ShortByteString -> ShortByteString
-unparseLabel sep label
+escapeLabel :: Word8 -> ShortByteString -> ShortByteString
+escapeLabel sep label
   | isAllPlain label = label
-  | otherwise        = toResult $ P.parse (labelUnparser sep mempty) label
+  | otherwise        = toResult $ P.parse (labelEscaper sep mempty) label
   where
     isAllPlain = Short.all (isPlain sep)
     toResult (Just r, _) = r
     toResult _ = E.throw UnknownDNSError -- can't happen
 
-labelUnparser :: Word8 -> Builder -> Parser Builder
-labelUnparser sep bld0 = (P.eof $> bld0)
-                     <|> (asis >>= \b -> labelUnparser sep (bld0 <> b))
-                     <|> (esc  >>= \b -> labelUnparser sep (bld0 <> b))
+labelEscaper :: Word8 -> Builder -> Parser Builder
+labelEscaper sep bld0 = (P.eof $> bld0)
+                     <|> (asis >>= \b -> labelEscaper sep (bld0 <> b))
+                     <|> (esc  >>= \b -> labelEscaper sep (bld0 <> b))
   where
     -- Non-printables are escaped as decimal trigraphs, while printable
     -- specials just get a backslash prefix.
