@@ -76,9 +76,9 @@ class CaseInsensitiveName a b where
 --
 
 data Domain = Domain {
-    origDomain      :: ShortByteString
+    representation  :: ShortByteString
   , lowerDomain     :: ShortByteString
-  , origLabels      :: ~[ShortByteString]
+  , wireLabels      :: ~[ShortByteString]
   -- | Eq and Ord key for Canonical DNS Name Order
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
@@ -88,9 +88,9 @@ domain :: ShortByteString -> Domain
 domain o
   | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
 domain o = Domain {
-    origDomain  = o
-  , lowerDomain = l
-  , origLabels  = ls
+    representation  = o
+  , lowerDomain     = l
+  , wireLabels      = ls
   , canonicalLabels = reverse ls
   }
   where
@@ -115,21 +115,21 @@ instance IsString Domain where
     fromString = ciName
 
 instance Semigroup Domain where
-    d0 <> d1 = domain (origDomain d0 <> origDomain d1)
+    d0 <> d1 = domain (representation d0 <> representation d1)
 
 instance CaseInsensitiveName Domain ShortByteString where
     ciName o = domain o
-    origName  d = origDomain d
+    origName  d = representation d
     lowerName d = lowerDomain d
 
 instance CaseInsensitiveName Domain ByteString where
     ciName o = domain $ Short.toShort o
-    origName  d = Short.fromShort $ origDomain d
+    origName  d = Short.fromShort $ representation d
     lowerName d = Short.fromShort $ lowerDomain d
 
 instance CaseInsensitiveName Domain String where
     ciName o = domain $ fromString o
-    origName  d = shortToString $ origDomain d
+    origName  d = shortToString $ representation d
     lowerName d = shortToString $ lowerDomain d
 
 -- | append operator using '.'
@@ -145,17 +145,17 @@ x <.> y   = x <> "." <> y
 infixr 6 <.>
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
-checkDomain f Domain{..} = f origDomain
+checkDomain f Domain{..} = f representation
 
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f Domain{..} = domain $ f origDomain
+modifyDomain f Domain{..} = domain $ f representation
 
 hasRoot :: Domain -> Bool
 hasRoot d
   | Short.null o = False
   | otherwise    = Short.last o == _period
   where
-    o = origDomain d
+    o = representation d
 
 addRoot :: Domain -> Domain
 addRoot d
@@ -163,7 +163,7 @@ addRoot d
   | Short.last o == _period = d
   | otherwise               = domain (o <> ".")
   where
-   o = origDomain d
+   o = representation d
 
 dropRoot :: Domain -> Domain
 dropRoot d
@@ -171,7 +171,7 @@ dropRoot d
   | Short.last o == _period = domain $ Short.init o
   | otherwise               = d
   where
-   o = origDomain d
+   o = representation d
 
 ----------------------------------------------------------------
 
@@ -191,7 +191,7 @@ isIllegal d
         (Short.split _period o)  = True
   | otherwise                    = False
   where
-    o = origDomain d
+    o = representation d
 
 ----------------------------------------------------------------
 
@@ -235,9 +235,9 @@ mailbox :: ShortByteString -> Mailbox
 mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = Mailbox $ Domain {
-    origDomain  = o
+    representation  = o
   , lowerDomain = l
-  , origLabels  = ls
+  , wireLabels  = ls
   , canonicalLabels = reverse ls
   }
   where
@@ -288,8 +288,8 @@ data CanonicalFlag
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain Compression   Domain{..} = putDomain' True  origLabels
-putDomain NoCompression Domain{..} = putDomain' False origLabels
+putDomain Compression   Domain{..} = putDomain' True  wireLabels
+putDomain NoCompression Domain{..} = putDomain' False wireLabels
 putDomain Canonical     Domain{..} = putDomain' False (reverse canonicalLabels)
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
@@ -584,7 +584,7 @@ shortToString = C8.unpack . Short.fromShort
 superDomains :: Domain -> [Domain]
 superDomains Domain{..} = map ciName ds
   where
-    ds = domains origDomain
+    ds = domains representation
 
 domains :: ShortByteString -> [ShortByteString]
 domains ""  = []
