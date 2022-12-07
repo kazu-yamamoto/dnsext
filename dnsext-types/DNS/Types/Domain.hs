@@ -67,17 +67,20 @@ class IsRepresentation a b where
 -- Examples:
 --
 -- @
--- www.example.org.           -- Ordinary DNS name.
--- \_25.\_tcp.mx1.example.net.  -- TLSA RR initial labels have \_ prefixes.
+-- www.example.org.            -- Ordinary DNS name.
+-- \_25.\_tcp.mx1.example.net. -- TLSA RR initial labels have \_ prefixes.
 -- \\001.exotic.example.       -- First label is Ctrl-A!
--- just\\.one\\.label.example.  -- First label is \"just.one.label\"
+-- just\\.one\\.label.example. -- First label is \"just.one.label\"
 -- @
 --
 
 data Domain = Domain {
+    -- The representation format. Case-sensitive, escaped.
     representation  :: ShortByteString
+    -- Labels in wire format. Case-sensitive, not escaped.
   , wireLabels      :: ~[ShortByteString]
-  -- | Eq and Ord key for Canonical DNS Name Order
+  -- | Eq and Ord key for Canonical DNS Name Order.
+  --   Lower cases, not escaped.
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
   }
