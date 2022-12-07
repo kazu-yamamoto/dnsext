@@ -38,6 +38,7 @@ import Data.Function (on)
 import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
+import qualified Data.List as L
 import Data.Word8
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -200,15 +201,17 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 -----
 
--- parse IPv4 8bit-parts from reverse-lookup domain
+-- | parse IPv4 8bit-parts from reverse-lookup domain
+--
+-- >>> > parseV4RevDomain "1.2.3.4.in-addr.arpa."
+-- Right [4,3,2,1]
 parseV4RevDomain :: Domain -> Either String [Int]
 parseV4RevDomain dom = do
-  rstr <- maybe (throw "suffix does not match") Right $ DNS.checkDomain (Short.stripSuffix sufV4) dom
-  let rparts = Short.split _period rstr
-      plen = length rparts
-  maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
+  rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV4 $ reverse $ DNS.toWireLabels dom
+  let plen = length rparts
+  maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right
     $ guard (1 <= plen && plen <= 4)
-  mapM getByte $ reverse rparts
+  mapM getByte rparts
   where
     throw = Left . ("v4Rev: " ++)
     getByte s = do
@@ -219,15 +222,17 @@ parseV4RevDomain dom = do
       maybe (throw $ "decimal part '" ++ show byte ++ "' is out of range") Right
         $ guard (0 <= byte && byte < 256)
       return byte
-    sufV4 = ".in-addr.arpa."
+    sufV4 = ["arpa","in-addr"]
 
--- parse IPv6 4bit-parts from reverse-lookup domain
+-- | parse IPv6 4bit-parts from reverse-lookup domain
+--
+-- >>> parseV6RevDomain "a.9.8.7.6.5.e.f.f.f.4.3.2.1.0.0.0.0.0.0.0.0.f.0.8.b.d.0.1.0.0.2.ip6.arpa"
+-- Right [2,0,0,1,0,13,11,8,0,15,0,0,0,0,0,0,0,0,1,2,3,4,15,15,15,14,5,6,7,8,9,10]
 parseV6RevDomain :: Domain -> Either String [Int]
 parseV6RevDomain dom = do
-  rstr <- maybe (throw "suffix does not match") Right $ DNS.checkDomain (Short.stripSuffix sufV6) dom
-  let rparts = Short.split _period rstr
-      plen = length rparts
-  maybe (throw $ "invalid number of parts split by dot: " ++ show rstr) Right
+  rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV6 $ reverse $ DNS.toWireLabels dom
+  let plen = length rparts
+  maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right
     $ guard (1 <= plen && plen <= 32)
   mapM getHexDigit $ reverse rparts
   where
@@ -240,7 +245,7 @@ parseV6RevDomain dom = do
       maybe (throw $ "hexadecimal part '" ++ showHex h "" ++ "' is out of range") Right
         $ guard (0 <= h && h < 0x10)
       return h
-    sufV6 = ".ip6.arpa."
+    sufV6 = ["arpa", "ip6"]
 
 -- show IPv4 reverse-lookup domain from 8bit-parts
 showV4RevDomain :: [Int] -> Domain
