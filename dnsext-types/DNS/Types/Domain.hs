@@ -553,9 +553,13 @@ shortToString = C8.unpack . Short.fromShort
 -- ["www.example.com.","example.com.","com."]
 -- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
+-- >>> superDomains "com."
+-- ["com."]
+-- >>> superDomains "."
+-- []
 superDomains :: Domain -> [Domain]
 superDomains d = case wireLabels d of
-  []   -> [d]
+  []   -> []
   [_]  -> [d]
   _:ls -> d : map domainFromWireLabels (init $ tails ls)
 
