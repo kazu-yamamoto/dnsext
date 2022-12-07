@@ -74,11 +74,7 @@ genOpaque :: Gen Opaque
 genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
 
 genDomain :: Gen Domain
-genDomain = addRoot <$> genDomainString
-  where
-    genDomainString :: Gen Domain
-    genDomainString = elements
-        ["", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b"]
+genDomain = elements [".", "a.", "a.b.", "abc.", "a.b.c.", "a\\.b.c.", "\\001.a.b.", "\\$.a.b."]
 
 genWord16 :: Gen Word16
 genWord16 = arbitrary

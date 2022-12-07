@@ -298,7 +298,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
   where
     octets = map (fromString . show ) $ fromIPv4 ip
     reverse_ip = Short.intercalate "." (reverse octets)
-    dom = ciName (reverse_ip <> ".in-addr.arpa")
+    dom = fromRepresentation (reverse_ip <> ".in-addr.arpa")
 
 ----------------------------------------------------------------
 

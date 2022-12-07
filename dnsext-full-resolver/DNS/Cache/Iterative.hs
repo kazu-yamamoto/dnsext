@@ -80,12 +80,10 @@ normalizeName = normalize
 -- nomalize (domain) name to absolute name
 normalize :: Domain -> Maybe Domain
 normalize s
-  | s == "."    = Just "."
+  | s == "."   = Just "."
   -- empty part is not valid, empty name is not valid
-  | validate rn = Just nn
-  | otherwise   = Nothing  -- not valid
-  where
-    (rn, nn) = (DNS.dropRoot s, DNS.addRoot s)
+  | validate s = Just s
+  | otherwise  = Nothing  -- not valid
 
 -----
 
@@ -246,11 +244,11 @@ parseV6RevDomain dom = do
 
 -- show IPv4 reverse-lookup domain from 8bit-parts
 showV4RevDomain :: [Int] -> Domain
-showV4RevDomain parts = DNS.ciName $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
+showV4RevDomain parts = DNS.fromRepresentation $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
 
 -- parse IPv6 reverse-lookup domain from 4bit-parts
 showV6RevDomain :: [Int] -> Domain
-showV6RevDomain parts = DNS.ciName $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
+showV6RevDomain parts = DNS.fromRepresentation $ intercalate "." (map (`showHex` "") $ reverse parts) ++ ".ip6.arpa."
 
 -- make IPv4-address and mask-length from prefix 8bit-parts
 withMaskLenV4 :: [Int] -> (IPv4, Int)

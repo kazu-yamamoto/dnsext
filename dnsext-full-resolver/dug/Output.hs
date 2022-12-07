@@ -90,7 +90,7 @@ putQS qs = do
 
 qq :: Printer Question
 qq Question{..} = do
-  semi *> string (origName qname)
+  semi *> string (toRepresentation qname)
   tab
   tab
   string $ cls qclass
@@ -119,7 +119,7 @@ rrs name rs = do
 
 rr :: Printer ResourceRecord
 rr ResourceRecord{..} = do
-  string $ origName rrname
+  string $ toRepresentation rrname
   tab
   string $ show rrttl
   tab

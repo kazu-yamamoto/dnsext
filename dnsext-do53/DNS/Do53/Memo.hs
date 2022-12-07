@@ -33,14 +33,10 @@ newCache delay = R.mkReaper R.defaultReaperSettings {
   }
 
 lookupCache :: Key -> Cache -> IO (Maybe (Prio, Entry))
-lookupCache (dom,typ) reaper = PSQ.lookup key <$> R.reaperRead reaper
-  where
-    key = (addRoot dom, typ)
+lookupCache key reaper = PSQ.lookup key <$> R.reaperRead reaper
 
 insertCache :: Key -> Prio -> Entry -> Cache -> IO ()
-insertCache (dom,typ) tim ent reaper = R.reaperAdd reaper (key,tim,ent)
-  where
-    key = (addRoot dom, typ)
+insertCache key tim ent reaper = R.reaperAdd reaper (key,tim,ent)
 
 -- Theoretically speaking, atMostView itself is good enough for pruning.
 -- But auto-update assumes a list based db which does not provide atMost

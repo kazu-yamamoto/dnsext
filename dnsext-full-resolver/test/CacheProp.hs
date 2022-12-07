@@ -48,7 +48,7 @@ nameList =
   ]
 
 sbsDomainList :: [Domain]
-sbsDomainList = map DNS.ciName domainList
+sbsDomainList = map DNS.fromRepresentation domainList
 
 v4List :: Read a => [a]
 v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
@@ -58,7 +58,7 @@ v6List = map read [ "fe80::000a:0001", "fe80::000a:0002", "fe80::000a:0003", "fe
 
 nsList :: [Domain]
 nsList =
-  map DNS.ciName
+  map DNS.fromRepresentation
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
@@ -139,8 +139,8 @@ genCRsRec = do
         | typ `elem` [NS, SOA, MX]  =  domainList
         | otherwise                 =  nameList
   lbl <- elements labelList
-  (,) (Key (DNS.ciName lbl) typ DNS.classIN, genCrs)
-    <$> (DNS.ciName <$> toULString lbl)
+  (,) (Key (DNS.fromRepresentation lbl) typ DNS.classIN, genCrs)
+    <$> (DNS.fromRepresentation <$> toULString lbl)
 
 genCRsPair :: Gen (Key, Gen CRSet)
 genCRsPair = fst <$> genCRsRec

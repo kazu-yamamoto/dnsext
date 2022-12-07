@@ -139,8 +139,6 @@ module DNS.Types (
   , (<.>)
   , checkDomain
   , modifyDomain
-  , dropRoot
-  , hasRoot
   , isIllegal
   , superDomains
   , isSubDomainOf

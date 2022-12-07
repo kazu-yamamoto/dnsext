@@ -178,7 +178,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
     parseCmd ws  =  case ws of
       "param" : _ ->  Just Param
       "find" : s : _      ->  Just $ Find s
-      ["lookup", n, typ]  ->  Lookup (DNS.ciName n) <$> parseTYPE typ
+      ["lookup", n, typ]  ->  Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
       "status" : _  ->  Just Status
       "expire" : args -> case args of
         []     ->  Just $ Expire 0

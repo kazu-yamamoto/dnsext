@@ -13,8 +13,6 @@ module DNS.Types.Domain (
   , (<.>)
   , checkDomain
   , modifyDomain
-  , dropRoot
-  , hasRoot
   , isIllegal
   , superDomains
   , isSubDomainOf
@@ -160,26 +158,11 @@ checkDomain f Domain{..} = f representation
 modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
 modifyDomain f Domain{..} = domain $ f representation
 
-hasRoot :: Domain -> Bool
-hasRoot d
-  | Short.null o = False
-  | otherwise    = Short.last o == _period
-  where
-    o = representation d
-
 addRoot :: RawDomain -> RawDomain
 addRoot o
   | Short.null o            = "."
   | Short.last o == _period = o
   | otherwise               = o <> "."
-
-dropRoot :: Domain -> Domain
-dropRoot d
-  | Short.null o            = d
-  | Short.last o == _period = domain $ Short.init o
-  | otherwise               = d
-  where
-   o = representation d
 
 ----------------------------------------------------------------
 
