@@ -10,7 +10,6 @@ module DNS.Types.Domain (
   , Domain
   , putDomain
   , getDomain
-  , checkDomain
   , superDomains
   , isSubDomainOf
   , Mailbox
@@ -154,9 +153,6 @@ instance IsRepresentation Domain String where
     toRepresentation   = shortToString . representation
     fromWireLabels     = domainFromWireLabels . map fromString
     toWireLabels       = map shortToString . wireLabels
-
-checkDomain :: (ShortByteString -> a) -> Domain -> a
-checkDomain f Domain{..} = f representation
 
 addRoot :: RawDomain -> RawDomain
 addRoot o

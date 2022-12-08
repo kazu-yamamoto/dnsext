@@ -37,8 +37,6 @@ import Data.Maybe (isJust)
 import Data.Either (partitionEithers)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Int (Int64)
-import qualified Data.ByteString.Short as Short
-import Data.Word8 (isAscii)
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
@@ -261,10 +259,8 @@ fromRDatas rds = rds `listseq` Just (Right rds)
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    DNS.rdataType rd == rrtype &&
-    DNS.checkDomain (Short.all isAscii) rrname
-      =  Just (Key rrname rrtype rrclass, rrttl)
-  | otherwise                 =  Nothing
+    DNS.rdataType rd == rrtype = Just (Key rrname rrtype rrclass, rrttl)
+  | otherwise                  = Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
 takeRRSet []        =    Nothing

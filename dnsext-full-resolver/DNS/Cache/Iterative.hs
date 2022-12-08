@@ -21,7 +21,6 @@ module DNS.Cache.Iterative (
   replyMessage, replyResult, replyResultCached,
   resolve, resolveJust, iterative,
   Context (..),
-  normalizeName,
   ) where
 
 -- GHC packages
@@ -39,7 +38,6 @@ import Data.Int (Int64)
 import Data.Maybe (listToMaybe, isJust)
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import qualified Data.List as L
-import Data.Word8
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -69,22 +67,6 @@ import DNS.Cache.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
    insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
 import qualified DNS.Cache.Cache as Cache
-
-
-validate :: Domain -> Bool
-validate n = not (DNS.checkDomain Short.null n)
-          && DNS.checkDomain (Short.all isAscii) n
-
-normalizeName :: Domain -> Maybe Domain
-normalizeName = normalize
-
--- nomalize (domain) name to absolute name
-normalize :: Domain -> Maybe Domain
-normalize s
-  | s == "."   = Just "."
-  -- empty part is not valid, empty name is not valid
-  | validate s = Just s
-  | otherwise  = Nothing  -- not valid
 
 -----
 
@@ -156,9 +138,7 @@ handleResponseError e f msg
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
 withNormalized :: Domain -> (Domain -> DNSQuery a) -> Context -> IO (Either QueryError a)
-withNormalized n action =
-  runDNSQuery $
-  action =<< maybe (throwDnsError DNS.IllegalDomain) return (normalize n)
+withNormalized n action = runDNSQuery $ action n
 
 -- 返答メッセージを作る
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)

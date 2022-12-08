@@ -134,7 +134,6 @@ module DNS.Types (
   , IsRepresentation(..)
   -- ** Domain
   , Domain
-  , checkDomain
   , superDomains
   , isSubDomainOf
   -- ** Mailbox
