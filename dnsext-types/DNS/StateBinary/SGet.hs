@@ -53,7 +53,7 @@ type SGet = StateT PState (AT.Parser ByteString)
 
 -- | Parser state
 data PState = PState {
-    pstDomain :: IntMap RawDomain
+    pstDomain :: IntMap [RawDomain]
   , pstPosition :: Int
   , pstInput :: ByteString
   , pstAtTime  :: Int64
@@ -79,12 +79,12 @@ addPosition n | n < 0 = failSGet "internal error: negative position increment"
         failSGet "malformed or truncated input"
     ST.put $ PState dom pos' inp t
 
-pushDomain :: Int -> RawDomain -> SGet ()
+pushDomain :: Int -> [RawDomain] -> SGet ()
 pushDomain n d = do
     PState dom pos inp t <- ST.get
     ST.put $ PState (IM.insert n d dom) pos inp t
 
-popDomain :: Int -> SGet (Maybe RawDomain)
+popDomain :: Int -> SGet (Maybe [RawDomain])
 popDomain n = ST.gets (IM.lookup n . pstDomain)
 
 ----------------------------------------------------------------

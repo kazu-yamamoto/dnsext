@@ -80,13 +80,12 @@ type UdpRslv = Int -- Retry
 --
 resolve :: Resolver -> Domain -> TYPE -> Rslv0
 resolve rlv dom typ qctls rcv
-  | isIllegal dom = return $ Left IllegalDomain
   | typ == AXFR   = return $ Left InvalidAXFRLookup
   | onlyOne       = resolveOne        (head nss) (head gens) q tm retry ctls rcv
   | concurrent    = resolveConcurrent nss        gens        q tm retry ctls rcv
   | otherwise     = resolveSequential nss        gens        q tm retry ctls rcv
   where
-    q = Question (addRoot dom) typ classIN
+    q = Question dom typ classIN
 
     gens = NE.toList $ genIds rlv
 

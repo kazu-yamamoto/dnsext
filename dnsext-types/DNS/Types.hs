@@ -131,26 +131,13 @@ module DNS.Types (
   , od_ecsGeneric
   , od_unknown
   -- * Basic types
-  , CaseInsensitiveName(..)
+  , IsRepresentation(..)
   -- ** Domain
   , Domain
-  , putDomain
-  , getDomain
-  , (<.>)
-  , checkDomain
-  , modifyDomain
-  , addRoot
-  , dropRoot
-  , hasRoot
-  , isIllegal
   , superDomains
   , isSubDomainOf
   -- ** Mailbox
   , Mailbox
-  , checkMailbox
-  , modifyMailbox
-  , putMailbox
-  , getMailbox
   -- ** Opaque
   , Opaque
   -- ** TYPE

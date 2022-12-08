@@ -6,22 +6,13 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module DNS.Types.Domain (
-    CaseInsensitiveName(..)
+    IsRepresentation(..)
   , Domain
   , putDomain
   , getDomain
-  , (<.>)
-  , checkDomain
-  , modifyDomain
-  , addRoot
-  , dropRoot
-  , hasRoot
-  , isIllegal
   , superDomains
   , isSubDomainOf
   , Mailbox
-  , checkMailbox
-  , modifyMailbox
   , putMailbox
   , getMailbox
   , CanonicalFlag (..)
@@ -39,172 +30,158 @@ import DNS.Types.Imports
 import DNS.Types.Parser (Parser, Builder)
 import qualified DNS.Types.Parser as P
 
-class CaseInsensitiveName a b where
-    ciName    :: b -> a
-    origName  :: a -> b
-    lowerName :: a -> b
+class IsRepresentation a b where
+    fromRepresentation :: b -> a
+    toRepresentation   :: a -> b
+    fromWireLabels     :: [b] -> a
+    toWireLabels       :: a -> [b]
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 
--- | This type holds the /presentation form/ of fully-qualified DNS domain
--- names encoded as ASCII A-labels, with \'.\' separators between labels.
--- Non-printing characters are escaped as @\\DDD@ (a backslash, followed by
--- three decimal digits). The special characters: @ \", \$, (, ), ;, \@,@ and
--- @\\@ are escaped by prepending a backslash.  The trailing \'.\' is optional
--- on input, but is recommended, and is always added when decoding from
--- /wire form/.
+-- | The type for domain names. This holds both the
+-- /presentation format/ and the /wire format/ internally.
 --
--- The encoding of domain names to /wire form/, e.g. for transmission in a
--- query, requires the input encodings to be valid, otherwise a 'DecodeError'
--- may be thrown. Domain names received in wire form in DNS messages are
--- escaped to this presentation form as part of decoding the 'DNSMessage'.
+-- The representation format is fully-qualified DNS domain names encoded
+-- as ASCII A-labels, with \'.\' separators between labels.
+-- The trailing \'.\' is added if missing.
+-- Non-printing characters are escaped as @\\DDD@ (a backslash,
+-- followed by three decimal digits). The special characters: @ \",
+-- \$, (, ), ;, \@,@ and @\\@ are escaped by prepending a backslash.
 --
--- This form is ASCII-only. Any conversion between A-label 'Text's,
--- and U-label 'Text' happens at whatever layer maps user input to DNS
--- names, or presents /friendly/ DNS names to the user.  Not all users
--- can read all scripts, and applications that default to U-label form
--- should ideally give the user a choice to see the A-label form.
--- Examples:
+-- The representation format is ASCII-only. Any conversion between
+-- A-label 'Text's, and U-label 'Text' happens at whatever layer maps
+-- user input to DNS names, or presents /friendly/ DNS names to the
+-- user.  Not all users can read all scripts, and applications that
+-- default to U-label format should ideally give the user a choice to
+-- see the A-label format.  Examples:
+--
+-- A 'IllegalDomain' may be thrown when creating from the representation
+-- format or decoding the wire format.
 --
 -- @
--- www.example.org.           -- Ordinary DNS name.
--- \_25.\_tcp.mx1.example.net.  -- TLSA RR initial labels have \_ prefixes.
+-- www.example.org.            -- Ordinary DNS name.
+-- \_25.\_tcp.mx1.example.net. -- TLSA RR initial labels have \_ prefixes.
 -- \\001.exotic.example.       -- First label is Ctrl-A!
--- just\\.one\\.label.example.  -- First label is \"just.one.label\"
+-- just\\.one\\.label.example. -- First label is \"just.one.label\"
 -- @
 --
 
 data Domain = Domain {
-    origDomain      :: ShortByteString
-  , lowerDomain     :: ShortByteString
-  -- | Ord key for Canonical DNS Name Order
+    -- The representation format. Case-sensitive, escaped.
+    representation  :: ShortByteString
+    -- Labels in wire format. Case-sensitive, not escaped.
+  , wireLabels      :: [ShortByteString]
+  -- | Eq and Ord key for Canonical DNS Name Order.
+  --   Lower cases, not escaped.
   --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
   , canonicalLabels :: ~[ShortByteString]
   }
 
 domain :: ShortByteString -> Domain
-domain o
-  | Short.length o > 255 = E.throw $ DecodeError "The domain length is over 255"
-domain o = Domain {
-    origDomain = o
-  , lowerDomain = n
-  , canonicalLabels = reverse $ labels n
+domain o = validateDomain $ Domain {
+    representation  = addRoot o
+  , wireLabels      = ls
+  , canonicalLabels = reverse ls
   }
   where
-    n = Short.map toLower o
-    labels = unfoldr step
+    ~l = Short.map toLower o
+    ~ls = unfoldr step l
     step x = case parseLabel _period x of
       Nothing        -> Nothing
       just@(Just (p, _))
         | p == ""    -> Nothing
         | otherwise  -> just
 
-instance Eq Domain where
-    d0 == d1 = lowerDomain d0 == lowerDomain d1
+domainFromWireLabels :: [ShortByteString] -> Domain
+domainFromWireLabels [] = Domain {
+    representation  = "."
+  , wireLabels      = []
+  , canonicalLabels = []
+  }
+domainFromWireLabels ls = validateDomain $ Domain {
+    representation  = rep
+  , wireLabels      = ls
+  , canonicalLabels = map (Short.map toLower) $ reverse ls
+  }
+  where
+    rep = foldr (\l r -> escapeLabel _period l <> "." <> r) "" ls
 
+instance Eq Domain where
+    d0 == d1 = canonicalLabels d0 == canonicalLabels d1
+
+-- | Ordering according to the DNSSEC definition.
+--
+-- >>> ("www.example.jp" :: Domain) >= "example.jp"
+-- True
+-- >>> ("example8.jp" :: Domain) >= "example.jp"
+-- True
+-- >>> ("example.jp" :: Domain) >= "example.com"
+-- True
 instance Ord Domain where
     d0 <= d1 = canonicalLabels d0 <= canonicalLabels d1
 
 instance Show Domain where
-    show d = "\"" ++ origName d ++ "\""
+    show d = "\"" ++ toRepresentation d ++ "\""
 
 instance IsString Domain where
-    fromString = ciName
+    fromString = fromRepresentation
 
-instance Semigroup Domain where
-    d0 <> d1 = domain (origDomain d0 <> origDomain d1)
-
-instance CaseInsensitiveName Domain ShortByteString where
-    ciName o = domain o
-    origName  d = origDomain d
-    lowerName d = lowerDomain d
-
-instance CaseInsensitiveName Domain ByteString where
-    ciName o = domain $ Short.toShort o
-    origName  d = Short.fromShort $ origDomain d
-    lowerName d = Short.fromShort $ lowerDomain d
-
-instance CaseInsensitiveName Domain String where
-    ciName o = domain $ fromString o
-    origName  d = shortToString $ origDomain d
-    lowerName d = shortToString $ lowerDomain d
-
--- | append operator using '.'
+-- | Appending two domains.
 --
--- >>> "www" <.> "example.com"
--- "www.example.com"
--- >>> "com" <.> "."
--- "com."
-(<.>) :: Domain -> Domain -> Domain
-x <.> "." = x <> "."
-x <.> y   = x <> "." <> y
+-- >>> ("www" :: Domain) <> "example.com"
+-- "www.example.com."
+-- >>> ("www." :: Domain) <> "example.com."
+-- "www.example.com."
+instance Semigroup Domain where
+    d0 <> d1 = domainFromWireLabels (wireLabels d0 <> wireLabels d1)
 
-infixr 6 <.>
+instance IsRepresentation Domain ShortByteString where
+    fromRepresentation = domain
+    toRepresentation   = representation
+    fromWireLabels     = domainFromWireLabels
+    toWireLabels       = wireLabels
 
-checkDomain :: (ShortByteString -> a) -> Domain -> a
-checkDomain f Domain{..} = f origDomain
+instance IsRepresentation Domain ByteString where
+    fromRepresentation = domain . Short.toShort
+    toRepresentation   = Short.fromShort . representation
+    fromWireLabels     = domainFromWireLabels . map Short.toShort
+    toWireLabels       = map Short.fromShort . wireLabels
 
-modifyDomain :: (ShortByteString -> ShortByteString) -> Domain -> Domain
-modifyDomain f Domain{..} = domain $ f origDomain
+instance IsRepresentation Domain String where
+    fromRepresentation = domain . fromString
+    toRepresentation   = shortToString . representation
+    fromWireLabels     = domainFromWireLabels . map fromString
+    toWireLabels       = map shortToString . wireLabels
 
-hasRoot :: Domain -> Bool
-hasRoot d
-  | Short.null o = False
-  | otherwise    = Short.last o == _period
-  where
-    o = origDomain d
-
-addRoot :: Domain -> Domain
-addRoot d
-  | Short.null o            = domain "."
-  | Short.last o == _period = d
-  | otherwise               = domain (o <> ".")
-  where
-   o = origDomain d
-
-dropRoot :: Domain -> Domain
-dropRoot d
-  | Short.null o            = d
-  | Short.last o == _period = domain $ Short.init o
-  | otherwise               = d
-  where
-   o = origDomain d
+addRoot :: RawDomain -> RawDomain
+addRoot o
+  | Short.null o            = "."
+  | Short.last o == _period = o
+  | otherwise               = o <> "."
 
 ----------------------------------------------------------------
 
-badLength :: ShortByteString -> Bool
-badLength o
-    | Short.null o            = True
-    | Short.last o == _period = Short.length o > 254
-    | otherwise               = Short.length o > 253
+validateDomain :: Domain -> Domain
+validateDomain d
+  | isIllegal (wireLabels d) = E.throw IllegalDomain
+  | otherwise                = d
 
-isIllegal :: Domain -> Bool
-isIllegal d
-  | badLength o                  = True
-  | not (_period `Short.elem` o) = True
-  | _colon `Short.elem` o        = True
-  | _slash `Short.elem` o        = True
-  | any (\x -> Short.length x > 63)
-        (Short.split _period o)  = True
-  | otherwise                    = False
+validateMailbox :: Mailbox -> Mailbox
+validateMailbox m@(Mailbox d)
+  | isIllegal (wireLabels d) = E.throw IllegalDomain
+  | otherwise                = m
+
+isIllegal :: [ShortByteString] -> Bool
+isIllegal ls = sum is > 255 || any (> 63) is
   where
-    o = origDomain d
+    is = map Short.length ls
 
 ----------------------------------------------------------------
 
--- | Type for a mailbox encoded on the wire as a DNS name, but the first label
--- is conceptually the local part of an email address, and may contain internal
--- periods that are not label separators. Therefore, in mailboxes \@ is used as
--- the separator between the first and second labels, and any \'.\' characters
--- in the first label are not escaped.  The encoding is otherwise the same as
--- 'Domain' above. This is most commonly seen in the /rname/ of @SOA@ records,
--- and is also employed in the @mbox-dname@ field of @RP@ records.
--- On input, if there is no unescaped \@ character in the 'Mailbox', it is
--- reparsed with \'.\' as the first label separator. Thus the traditional
--- format with all labels separated by dots is also accepted, but decoding from
--- wire form always uses \@ between the first label and the domain-part of the
--- address.  Examples:
+-- | The type for mailbox whose internal is just 'Domain'.
+--   The representation format must include \'@\'.
+-- Examples:
 --
 -- @
 -- hostmaster\@example.org.  -- First label is simply @hostmaster@
@@ -212,53 +189,73 @@ isIllegal d
 -- @
 --
 
-data Mailbox = Mailbox {
-    origMailbox  :: ShortByteString
-  , lowerMailbox :: ShortByteString
-  }
+newtype Mailbox = Mailbox { fromMailbox :: Domain }
+
+toMailbox :: Domain -> Mailbox
+toMailbox = Mailbox
 
 instance Eq Mailbox where
-    Mailbox _ l0 == Mailbox _ l1 = l0 == l1
+    Mailbox d0 == Mailbox d1 = d0 == d1
 
 instance Ord Mailbox where
-    Mailbox _ l0 <= Mailbox _ l1 = l0 <= l1
+    Mailbox d0 <= Mailbox d1 = d0 <= d1
 
 instance Show Mailbox where
-    show d = "\"" ++ origName d ++ "\""
+    show (Mailbox d) = show d
 
 instance IsString Mailbox where
-    fromString = ciName
+    fromString = fromRepresentation
 
 instance Semigroup Mailbox where
-   Mailbox o0 l0 <> Mailbox o1 l1 = Mailbox (o0 <> o1) (l0 <> l1)
+   Mailbox d0 <> Mailbox d1 = Mailbox (d0 <> d1)
 
 mailbox :: ShortByteString -> Mailbox
 mailbox o
   | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
-mailbox o = Mailbox { origMailbox = o, lowerMailbox = n }
+mailbox o = validateMailbox $ Mailbox $ Domain {
+    representation  = addRoot o
+  , wireLabels      = ls
+  , canonicalLabels = reverse ls
+  }
   where
-    n = Short.map toLower o
+    ~l = Short.map toLower o
+    ~ls = unfoldr step (l,0::Int)
+    step (x,n) = case parseLabel sep x of
+      Nothing        -> Nothing
+      Just (p', x')
+        | p' == ""    -> Nothing
+        | otherwise   -> Just (p', (x', n+1))
+      where
+        sep | n == 0    = _at
+            | otherwise = _period
 
-instance CaseInsensitiveName Mailbox ShortByteString where
-    ciName o = mailbox o
-    origName  (Mailbox o _) = o
-    lowerName (Mailbox _ n) = n
+mailboxFromWireLabels :: [ShortByteString] -> Mailbox
+mailboxFromWireLabels [] = E.throw $ DecodeError "Broken mailbox"
+mailboxFromWireLabels lls@(l:ls) = validateMailbox $ Mailbox $ Domain {
+    representation  = rep
+  , wireLabels      = lls
+  , canonicalLabels = map (Short.map toLower) $ reverse lls
+  }
+  where
+    rep = l <> "@" <> foldr (\x y -> escapeLabel _period x <> "." <> y) "" ls
 
-instance CaseInsensitiveName Mailbox ByteString where
-    ciName o = mailbox $ Short.toShort o
-    origName  (Mailbox o _) = Short.fromShort o
-    lowerName (Mailbox _ n) = Short.fromShort n
+instance IsRepresentation Mailbox ShortByteString where
+    fromRepresentation = mailbox
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels
+    toWireLabels       = wireLabels . fromMailbox
 
-instance CaseInsensitiveName Mailbox String where
-    ciName o = mailbox $ fromString o
-    origName  (Mailbox o _) = shortToString o
-    lowerName (Mailbox _ n) = shortToString n
+instance IsRepresentation Mailbox ByteString where
+    fromRepresentation = mailbox . Short.toShort
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels . map Short.toShort
+    toWireLabels       = map Short.fromShort . wireLabels . fromMailbox
 
-checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
-checkMailbox f (Mailbox o _) = f o
-
-modifyMailbox :: (ShortByteString -> ShortByteString) -> Mailbox -> Mailbox
-modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
+instance IsRepresentation Mailbox String where
+    fromRepresentation = mailbox . fromString
+    toRepresentation   = toRepresentation . fromMailbox
+    fromWireLabels     = toMailbox . domainFromWireLabels . map fromString
+    toWireLabels       = map shortToString . wireLabels . fromMailbox
 
 ----------------------------------------------------------------
 
@@ -267,43 +264,33 @@ modifyMailbox f (Mailbox o l) = Mailbox (f o) (f l)
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = Compression
-  | Canonical
+  = Compression   -- ^ Original name with compression
+  | NoCompression -- ^ Original name without compressoin
+  | Canonical     -- ^ Lower name without compressoin
   deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain cf@Compression Domain{..} = putDomain' _period cf origDomain
-putDomain cf@Canonical   Domain{..} = putDomain' _period cf lowerDomain {- canonical form is lowercase and no name-compression. -}
+putDomain Compression   Domain{..} = putDomain' True  wireLabels
+putDomain NoCompression Domain{..} = putDomain' False wireLabels
+putDomain Canonical     Domain{..} = putDomain' False (reverse canonicalLabels)
 
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
-putMailbox cf@Compression Mailbox{..} = putDomain' _at cf origMailbox
-putMailbox cf@Canonical   Mailbox{..} = putDomain' _at cf lowerMailbox {- canonical form is lowercase and no name-compression. -}
+putMailbox cf (Mailbox d) = putDomain cf d
 
-putDomain' :: Word8 -> CanonicalFlag -> RawDomain -> SPut ()
-putDomain' sep cf dom
-    | Short.null dom || dom == "." = put8 0
-    | otherwise = do
-        mpos <- popPointer dom
-        cur  <- builderPosition
-        case mpos of
-            Just pos | cf == Compression -> putPointer pos
-            _                            -> do
-                        -- Pointers are limited to 14-bits!
-                        when (cur <= 0x3fff) $ pushPointer dom cur
-                        putPartialDomain hd
-                        putDomain' _period cf tl
-  where
-    (hd, tl) = go sep
-      where
-        go w = case parseLabel w dom of
-            Just p
-              -- Try with the preferred separator if present,
-              -- else fall back to '.'.
-              | w /= _period && Short.null (snd p) -> go _period
-              | otherwise -> p
-            Nothing -> E.throw $ DecodeError $ "invalid domain: " ++ shortToString dom
+putDomain' :: Bool -> [RawDomain] -> SPut ()
+putDomain' _ [] = put8 0
+putDomain' compress dom@(d:ds) = do
+    mpos <- popPointer dom
+    cur  <- builderPosition
+    case mpos of
+        Just pos | compress -> putPointer pos
+        _                   -> do
+            -- Pointers are limited to 14-bits!
+            when (cur <= 0x3fff) $ pushPointer dom cur
+            putPartialDomain d
+            putDomain' compress ds
 
 putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)
@@ -326,14 +313,14 @@ putPartialDomain = putLenShortByteString
 -- or mailbox.
 --
 -- Note: the separator passed to 'getDomain'' is required to be either \'.\' or
--- \'\@\', or else 'unparseLabel' needs to be modified to handle the new value.
+-- \'\@\', or else 'escapeLabel' needs to be modified to handle the new value.
 --
 
 getDomain :: SGet Domain
-getDomain = ciName <$> (parserPosition >>= getDomain' _period)
+getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' _period)
 
 getMailbox :: SGet Mailbox
-getMailbox = ciName <$> (parserPosition >>= getDomain' _at)
+getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' _at)
 
 -- $
 -- Pathological case: pointer embedded inside a label!  The pointer points
@@ -343,10 +330,10 @@ getMailbox = ciName <$> (parserPosition >>= getDomain' _at)
 -- "works" the same in Perl's Net::DNS and reportedly in ISC's BIND.
 --
 -- >>> :{
--- let input = "\6\3foo\192\0\3bar\0"
+-- let input = "\6\3foo\192\0\3bar\x00"
 --     parser = skipNBytes 1 >> getDomain' _period 1
 --     Right (output, _) = runSGet parser input
---  in output == "foo.\\003foo\\192\\000.bar."
+--  in output == ["foo","\3foo\192\0","bar"]
 -- :}
 -- True
 --
@@ -366,13 +353,13 @@ getMailbox = ciName <$> (parserPosition >>= getDomain' _at)
 -- with a ".".
 --
 -- Note: the separator is required to be either \'.\' or \'\@\', or else
--- 'unparseLabel' needs to be modified to handle the new value.
+-- 'escapeLabel' needs to be modified to handle the new value.
 --
 -- Domain name compression pointers must always refer to a position that
 -- precedes the start of the current domain name.  The starting offsets form a
 -- strictly decreasing sequence, which prevents pointer loops.
 --
-getDomain' :: Word8 -> Int -> SGet ShortByteString
+getDomain' :: Word8 -> Int -> SGet [ShortByteString]
 getDomain' sep1 ptrLimit = do
     pos <- parserPosition
     c <- getInt8
@@ -398,7 +385,7 @@ getDomain' sep1 ptrLimit = do
                 return (fst o)
 
     getdomain pos c n
-      | c == 0 = return "." -- Perhaps the root domain?
+      | c == 0 = return []
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
@@ -411,15 +398,13 @@ getDomain' sep1 ptrLimit = do
                   Just dm -> return dm
       -- As for now, extended labels have no use.
       -- This may change some time in the future.
-      | isExtLabel c = return ""
+      | isExtLabel c = return [""]
       | otherwise = do
-          hs <- unparseLabel sep1 <$> getNShortByteString n
-          ds <- getDomain' _period ptrLimit
-          let dom = case ds of -- avoid trailing ".."
-                  "." -> hs <> "."
-                  _   -> hs <> Short.singleton sep1 <> ds
-          pushDomain pos dom
-          return dom
+          l  <- getNShortByteString n
+          ls <- getDomain' _period ptrLimit
+          let lls = l:ls
+          pushDomain pos lls
+          return lls
     -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
@@ -497,27 +482,27 @@ labelParser sep bld =
 -- Note: the separator is required to be either \'.\' or \'\@\', but this
 -- constraint is the caller's responsibility and is not checked here.
 --
--- >>> unparseLabel _period "foo"
+-- >>> escapeLabel _period "foo"
 -- "foo"
--- >>> unparseLabel _period "foo.bar"
+-- >>> escapeLabel _period "foo.bar"
 -- "foo\\.bar"
--- >>> unparseLabel _period "\x0aoo"
+-- >>> escapeLabel _period "\x0aoo"
 -- "\\010oo"
--- >>> unparseLabel _period "f\x7fo"
+-- >>> escapeLabel _period "f\x7fo"
 -- "f\\127o"
-unparseLabel :: Word8 -> ShortByteString -> ShortByteString
-unparseLabel sep label
+escapeLabel :: Word8 -> ShortByteString -> ShortByteString
+escapeLabel sep label
   | isAllPlain label = label
-  | otherwise        = toResult $ P.parse (labelUnparser sep mempty) label
+  | otherwise        = toResult $ P.parse (labelEscaper sep mempty) label
   where
     isAllPlain = Short.all (isPlain sep)
     toResult (Just r, _) = r
     toResult _ = E.throw UnknownDNSError -- can't happen
 
-labelUnparser :: Word8 -> Builder -> Parser Builder
-labelUnparser sep bld0 = (P.eof $> bld0)
-                     <|> (asis >>= \b -> labelUnparser sep (bld0 <> b))
-                     <|> (esc  >>= \b -> labelUnparser sep (bld0 <> b))
+labelEscaper :: Word8 -> Builder -> Parser Builder
+labelEscaper sep bld0 = (P.eof $> bld0)
+                     <|> (asis >>= \b -> labelEscaper sep (bld0 <> b))
+                     <|> (esc  >>= \b -> labelEscaper sep (bld0 <> b))
   where
     -- Non-printables are escaped as decimal trigraphs, while printable
     -- specials just get a backslash prefix.
@@ -557,13 +542,13 @@ isSpecial sep w = w == sep || elem w escSpecials
 -- Note: the separator is assumed to be either '.' or '@' and so not matched by
 -- any of the first three fast-path 'True' cases.
 isPlain :: Word8 -> Word8 -> Bool
-isPlain sep w | w >= _del                  = False -- <DEL> + non-ASCII
-              | w >  _backslash            = True  -- ']'..'_'..'a'..'z'..'~'
-              | w >= _0  && w < _semicolon = True  -- '0'..'9'..':'
-              | w >  _at && w < _backslash = True  -- 'A'..'Z'..'['
-              | w <= _space                = False -- non-printables
-              | isSpecial sep       w      = False -- one of the specials
-              | otherwise                  = True  -- plain punctuation
+isPlain sep w | w >= _del                    = False -- <DEL> + non-ASCII
+              | w >= _bracketright           = True  -- ']'..'_'..'a'..'z'..'~'
+              | w >= _A && w <= _bracketleft = True  -- 'A'..'Z'..'['
+              | w >= _0 && w <= _colon       = True  -- '0'..'9'..':'
+              | w <= _space                  = False -- non-printables
+              | isSpecial sep w              = False -- one of the specials
+              | otherwise                    = True  -- plain punctuation
 
 ----------------------------------------------------------------
 
@@ -572,28 +557,23 @@ shortToString = C8.unpack . Short.fromShort
 
 ----------------------------------------------------------------
 
--- |
+-- | Creating super domains.
 --
 -- >>> superDomains "www.example.com"
--- ["www.example.com","example.com","com"]
+-- ["www.example.com.","example.com.","com."]
 -- >>> superDomains "www.example.com."
 -- ["www.example.com.","example.com.","com."]
+-- >>> superDomains "com."
+-- ["com."]
+-- >>> superDomains "."
+-- []
 superDomains :: Domain -> [Domain]
-superDomains Domain{..} = map ciName ds
-  where
-    ds = domains origDomain
+superDomains d = case wireLabels d of
+  []   -> []
+  [_]  -> [d]
+  _:ls -> d : map domainFromWireLabels (init $ tails ls)
 
-domains :: ShortByteString -> [ShortByteString]
-domains ""  = []
-domains "." = []
-domains dom = loop dom
-  where
-    loop d = case parseLabel _period d of
-      Nothing     -> []
-      Just (_,"") -> [d]
-      Just (_,xs) -> d : loop xs
-
--- |
+-- | Sub-domain or not.
 --
 -- >>> "www.example.com." `isSubDomainOf` "."
 -- True
