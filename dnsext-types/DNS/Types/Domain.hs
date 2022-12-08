@@ -14,7 +14,6 @@ module DNS.Types.Domain (
   , superDomains
   , isSubDomainOf
   , Mailbox
-  , checkMailbox
   , putMailbox
   , getMailbox
   , CanonicalFlag (..)
@@ -261,9 +260,6 @@ instance IsRepresentation Mailbox String where
     toRepresentation   = toRepresentation . fromMailbox
     fromWireLabels     = toMailbox . domainFromWireLabels . map fromString
     toWireLabels       = map shortToString . wireLabels . fromMailbox
-
-checkMailbox :: (ShortByteString -> a) -> Mailbox -> a
-checkMailbox f (Mailbox d) = checkDomain f d
 
 ----------------------------------------------------------------
 

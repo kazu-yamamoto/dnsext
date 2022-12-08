@@ -139,7 +139,6 @@ module DNS.Types (
   , isSubDomainOf
   -- ** Mailbox
   , Mailbox
-  , checkMailbox
   -- ** Opaque
   , Opaque
   -- ** TYPE
