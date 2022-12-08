@@ -2,7 +2,6 @@ module DNS.Types.Encode (
   -- * Main encoder
     encode
   -- * Encoders for parts
-  , encodeDNSMessage
   , encodeDNSHeader
   , encodeDNSFlags
   , encodeQuestion
@@ -18,37 +17,34 @@ import DNS.Types.Imports
 import DNS.Types.Message
 import DNS.Types.RData
 
+-- | Encode DNS message.
 encode :: DNSMessage -> ByteString
-encode = encodeDNSMessage
-
-encodeDNSMessage :: DNSMessage -> ByteString
-encodeDNSMessage = runSPut . putDNSMessage
-
--- | Encode DNS flags.
-encodeDNSFlags :: DNSFlags -> ByteString
-encodeDNSFlags = runSPut . putDNSFlags
-
-encodeQuestion :: Question -> ByteString
-encodeQuestion = runSPut . putQuestion
-
-encodeRData :: RData -> ByteString
-encodeRData = runSPut . putRData Compression
+encode = runSPut . putDNSMessage
 
 -- | Encode DNS header.
 encodeDNSHeader :: DNSHeader -> ByteString
 encodeDNSHeader = runSPut . putHeader
 
--- | Encode a domain.
+-- | Encode DNS flags.
+encodeDNSFlags :: DNSFlags -> ByteString
+encodeDNSFlags = runSPut . putDNSFlags
+
+-- | Encode a question.
+encodeQuestion :: Question -> ByteString
+encodeQuestion = runSPut . putQuestion
+
+-- | Encode a resource record.
+encodeResourceRecord :: ResourceRecord -> ByteString
+encodeResourceRecord rr = runSPut $ putResourceRecord Compression rr
+
+-- | Encode a resource data.
+encodeRData :: RData -> ByteString
+encodeRData = runSPut . putRData Compression
+
+-- | Encode a domain with name compression.
 encodeDomain :: Domain -> ByteString
 encodeDomain = runSPut . putDomain Compression
 
--- | Encode a mailbox name.  The first label is separated from the remaining
--- labels by an @'\@'@ rather than a @.@.  This is used for the contact
--- address in the @SOA@ and @RP@ records.
---
+-- | Encode a mailbox name with name compression.
 encodeMailbox :: Mailbox -> ByteString
 encodeMailbox = runSPut . putMailbox Compression
-
--- | Encode a ResourceRecord.
-encodeResourceRecord :: ResourceRecord -> ByteString
-encodeResourceRecord rr = runSPut $ putResourceRecord Compression rr

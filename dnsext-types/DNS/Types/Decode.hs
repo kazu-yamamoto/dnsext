@@ -24,6 +24,7 @@ module DNS.Types.Decode (
     -- * Decoders for parts
   , decodeDNSHeader
   , decodeDNSFlags
+  , decodeQuestion
   , decodeResourceRecordAt
   , decodeResourceRecord
   , decodeRData
@@ -114,33 +115,20 @@ decodeMParse decoder bs = do
     lengthEncoded :: SGet [ByteString]
     lengthEncoded = many $ getInt16 >>= getNByteString
 
--- | Decode the 'DNSFlags' field of 'DNSHeader'.  This is an internal function
--- exposed only for testing.
---
-decodeDNSFlags :: ByteString -> Either DNSError DNSFlags
-decodeDNSFlags bs = fst <$> runSGet getDNSFlags bs
-
--- | Decode the 'DNSHeader' of a message.  This is an internal function.
--- exposed only for testing.
---
+-- | Decode DNS header.
 decodeDNSHeader :: ByteString -> Either DNSError DNSHeader
 decodeDNSHeader bs = fst <$> runSGet getHeader bs
 
--- | Decode a domain name.  Since DNS names may use name compression, it is not
--- generally possible to decode the names separately from the enclosing DNS
--- message.  This is an internal function exposed only for testing.
---
-decodeDomain :: ByteString -> Either DNSError Domain
-decodeDomain bs = fst <$> runSGet getDomain bs
+-- | Decode DNS flags.
+decodeDNSFlags :: ByteString -> Either DNSError DNSFlags
+decodeDNSFlags bs = fst <$> runSGet getDNSFlags bs
 
--- | Decode a mailbox name (e.g. the SOA record /rname/ field).  Since DNS names
--- may use name compression, it is not generally possible to decode the names
--- separately from the enclosing DNS message.  This is an internal function.
---
-decodeMailbox :: ByteString -> Either DNSError Mailbox
-decodeMailbox bs = fst <$> runSGet getMailbox bs
 
--- | Decoding resource records.
+-- | Decode a question.
+decodeQuestion :: ByteString -> Either DNSError Question
+decodeQuestion bs = fst <$> runSGet getQuestion bs
+
+-- | Decoding a resource record.
 
 -- | Decode a resource record (RR) with any DNS timestamps interpreted at the
 -- nominal epoch time (see 'decodeAt').  Since RRs may use name compression,
@@ -150,7 +138,7 @@ decodeMailbox bs = fst <$> runSGet getMailbox bs
 decodeResourceRecord :: ByteString -> Either DNSError ResourceRecord
 decodeResourceRecord bs = fst <$> runSGet getResourceRecord bs
 
--- | Decode a resource record (RR) with DNS timestamps interpreted at the
+-- | Decode a resource record with DNS timestamps interpreted at the
 -- supplied epoch time.  Since RRs may use DNS name compression, it is not
 -- generally possible to decode resource record separately from the enclosing
 -- DNS message.  This is an internal function.
@@ -165,3 +153,17 @@ decodeRData :: TYPE -> ByteString -> Either DNSError RData
 decodeRData typ bs = fst <$> runSGet (getRData typ len) bs
   where
     len = BS.length bs
+
+-- | Decode a domain name.  Since DNS names may use name compression, it is not
+-- generally possible to decode the names separately from the enclosing DNS
+-- message.  This is an internal function exposed only for testing.
+--
+decodeDomain :: ByteString -> Either DNSError Domain
+decodeDomain bs = fst <$> runSGet getDomain bs
+
+-- | Decode a mailbox name (e.g. the SOA record /rname/ field).  Since DNS names
+-- may use name compression, it is not generally possible to decode the names
+-- separately from the enclosing DNS message.  This is an internal function.
+--
+decodeMailbox :: ByteString -> Either DNSError Mailbox
+decodeMailbox bs = fst <$> runSGet getMailbox bs
