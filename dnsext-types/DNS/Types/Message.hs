@@ -620,10 +620,7 @@ putResourceRecord cf ResourceRecord{..} = do
     putTYPE      rrtype
     putCLASS     rrclass
     putSeconds   rrttl
-    putResourceRData rdata
-  where
-    putResourceRData :: RData -> SPut ()
-    putResourceRData (RData rd) = with16Length $ putResourceData cf rd
+    with16Length $ putRData cf rdata
 
 getResourceRecords :: Int -> SGet [ResourceRecord]
 getResourceRecords n = replicateM n getResourceRecord
