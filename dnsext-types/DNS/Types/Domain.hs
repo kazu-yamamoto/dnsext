@@ -272,7 +272,7 @@ data CanonicalFlag
 
 ----------------------------------------------------------------
 
--- No name compression for new RRs.
+-- | No name compression for new RRs.
 putDomain :: CanonicalFlag -> Domain -> SPut ()
 putDomain Original  Domain{..} = do
     mapM_ putPartialDomain wireLabels
@@ -308,6 +308,7 @@ putPointer pos = putInt16 (pos .|. 0xc000)
 
 ----------------------------------------------------------------
 
+-- | No name compression for new RRs.
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
 putMailbox cf (Mailbox d) = putDomain cf d
 
