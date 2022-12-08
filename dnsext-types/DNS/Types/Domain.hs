@@ -10,7 +10,6 @@ module DNS.Types.Domain (
   , Domain
   , putDomain
   , getDomain
-  , (<.>)
   , checkDomain
   , superDomains
   , isSubDomainOf
@@ -122,6 +121,12 @@ instance Show Domain where
 instance IsString Domain where
     fromString = fromRepresentation
 
+-- | Appending two domains.
+--
+-- >>> ("www" :: Domain) <> "example.com"
+-- "www.example.com."
+-- >>> ("www." :: Domain) <> "example.com."
+-- "www.example.com."
 instance Semigroup Domain where
     d0 <> d1 = domainFromWireLabels (wireLabels d0 <> wireLabels d1)
 
@@ -142,18 +147,6 @@ instance IsRepresentation Domain String where
     toRepresentation   = shortToString . representation
     fromWireLabels     = domainFromWireLabels . map fromString
     toWireLabels       = map shortToString . wireLabels
-
--- | append operator using '.'
---
--- >>> "www" <.> "example.com"
--- "www.example.com."
--- >>> "com" <.> "."
--- "com."
-(<.>) :: Domain -> Domain -> Domain
-x <.> "." = x
-x <.> y   = x <> "." <> y
-
-infixr 6 <.>
 
 checkDomain :: (ShortByteString -> a) -> Domain -> a
 checkDomain f Domain{..} = f representation
