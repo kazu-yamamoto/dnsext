@@ -564,7 +564,7 @@ shortToString = C8.unpack . Short.fromShort
 
 ----------------------------------------------------------------
 
--- |
+-- | Creating super domains.
 --
 -- >>> superDomains "www.example.com"
 -- ["www.example.com.","example.com.","com."]
@@ -580,7 +580,7 @@ superDomains d = case wireLabels d of
   [_]  -> [d]
   _:ls -> d : map domainFromWireLabels (init $ tails ls)
 
--- |
+-- | Sub-domain or not.
 --
 -- >>> "www.example.com." `isSubDomainOf` "."
 -- True
