@@ -87,7 +87,8 @@ newtype RD_NS = RD_NS {
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
-    putResourceData cf (RD_NS d) = putDomain cf d
+    putResourceData Original  (RD_NS d) = putCompressedDomain d
+    putResourceData Canonical (RD_NS d) = putDomain Canonical d
 
 get_ns :: Int -> SGet RD_NS
 get_ns _ = RD_NS <$> getDomain
@@ -109,7 +110,8 @@ newtype RD_CNAME = RD_CNAME {
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
-    putResourceData cf (RD_CNAME d) = putDomain cf d
+    putResourceData Original  (RD_CNAME d) = putCompressedDomain d
+    putResourceData Canonical (RD_CNAME d) = putDomain Canonical d
 
 get_cname :: Int -> SGet RD_CNAME
 get_cname _ = RD_CNAME <$> getDomain
@@ -144,8 +146,12 @@ data RD_SOA = RD_SOA {
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
     putResourceData cf RD_SOA{..} = do
-        putDomain  cf soa_mname
-        putMailbox cf soa_rname
+        if cf == Original then do
+            putCompressedDomain  soa_mname
+            putCompressedMailbox soa_rname
+          else do
+            putDomain  Canonical soa_mname
+            putMailbox Canonical soa_rname
         put32      soa_serial
         putSeconds soa_refresh
         putSeconds soa_retry
@@ -196,7 +202,8 @@ newtype RD_PTR = RD_PTR {
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
-    putResourceData cf (RD_PTR d) = putDomain cf d
+    putResourceData Original  (RD_PTR d) = putCompressedDomain d
+    putResourceData Canonical (RD_PTR d) = putDomain Canonical d
 
 get_ptr :: Int -> SGet RD_PTR
 get_ptr _ = RD_PTR <$> getDomain
@@ -222,7 +229,10 @@ instance ResourceData RD_MX where
     resourceDataType _ = MX
     putResourceData cf RD_MX{..} = do
         put16 mx_preference
-        putDomain cf mx_exchange
+        if cf == Original then
+            putCompressedDomain mx_exchange
+          else
+            putDomain Canonical mx_exchange
 
 get_mx :: Int -> SGet RD_MX
 get_mx _ = RD_MX <$> get16 <*> getDomain
@@ -284,9 +294,9 @@ data RD_RP = RD_RP {
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
-    putResourceData _ (RD_RP mbox d) = do
-        putMailbox Canonical mbox
-        putDomain  Canonical d
+    putResourceData cf (RD_RP mbox d) = do
+        putMailbox cf mbox
+        putDomain  cf d
 
 get_rp :: Int -> SGet RD_RP
 get_rp _ = RD_RP <$> getMailbox <*> getDomain
@@ -329,11 +339,11 @@ data RD_SRV = RD_SRV {
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    putResourceData _ RD_SRV{..} = do
+    putResourceData cf RD_SRV{..} = do
         put16 srv_priority
         put16 srv_weight
         put16 srv_port
-        putDomain Canonical srv_target
+        putDomain cf srv_target
 
 get_srv :: Int -> SGet RD_SRV
 get_srv _ = RD_SRV <$> get16
@@ -354,7 +364,7 @@ newtype RD_DNAME = RD_DNAME {
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
-    putResourceData _ (RD_DNAME d) = putDomain Canonical d
+    putResourceData cf (RD_DNAME d) = putDomain cf d
 
 get_dname :: Int -> SGet RD_DNAME
 get_dname _ = RD_DNAME <$> getDomain

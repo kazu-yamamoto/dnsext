@@ -8,14 +8,16 @@
 module DNS.Types.Domain (
     IsRepresentation(..)
   , Domain
-  , putDomain
-  , getDomain
   , superDomains
   , isSubDomainOf
   , Mailbox
+  , getDomain
+  , putDomain
   , putMailbox
   , getMailbox
   , CanonicalFlag (..)
+  , putCompressedDomain
+  , putCompressedMailbox
   ) where
 
 import qualified Control.Exception as E
@@ -264,39 +266,54 @@ instance IsRepresentation Mailbox String where
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = Compression   -- ^ Original name with compression
-  | NoCompression -- ^ Original name without compressoin
-  | Canonical     -- ^ Lower name without compressoin
+  = Original  -- ^ Original name without compressoin
+  | Canonical -- ^ Lower name without compressoin
   deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
+-- | No name compression for new RRs.
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain Compression   Domain{..} = putDomain' True  wireLabels
-putDomain NoCompression Domain{..} = putDomain' False wireLabels
-putDomain Canonical     Domain{..} = putDomain' False (reverse canonicalLabels)
+putDomain Original  Domain{..} = do
+    mapM_ putPartialDomain wireLabels
+    put8 0
+putDomain Canonical Domain{..} = do
+    mapM_ putPartialDomain $ reverse canonicalLabels
+    put8 0
 
-putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
-putMailbox cf (Mailbox d) = putDomain cf d
+putPartialDomain :: RawDomain -> SPut ()
+putPartialDomain = putLenShortByteString
 
-putDomain' :: Bool -> [RawDomain] -> SPut ()
-putDomain' _ [] = put8 0
-putDomain' compress dom@(d:ds) = do
+----------------------------------------------------------------
+
+-- Name compression is used only for CNAME, MX, NS, PTR and SOA.
+putCompressedDomain :: Domain -> SPut ()
+putCompressedDomain Domain{..} = putCompress wireLabels
+
+putCompress :: [RawDomain] -> SPut ()
+putCompress [] = put8 0
+putCompress dom@(d:ds) = do
     mpos <- popPointer dom
     cur  <- builderPosition
     case mpos of
-        Just pos | compress -> putPointer pos
-        _                   -> do
+        Just pos -> putPointer pos
+        _        -> do
             -- Pointers are limited to 14-bits!
             when (cur <= 0x3fff) $ pushPointer dom cur
             putPartialDomain d
-            putDomain' compress ds
+            putCompress ds
 
 putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)
 
-putPartialDomain :: RawDomain -> SPut ()
-putPartialDomain = putLenShortByteString
+----------------------------------------------------------------
+
+-- | No name compression for new RRs.
+putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
+putMailbox cf (Mailbox d) = putDomain cf d
+
+putCompressedMailbox :: Mailbox -> SPut ()
+putCompressedMailbox (Mailbox d) = putCompressedDomain d
 
 ----------------------------------------------------------------
 

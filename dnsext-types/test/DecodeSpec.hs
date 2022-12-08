@@ -45,9 +45,10 @@ test_mx = "f03681800001000100000001036d6577036f726700000f0001c00c000f000100000df
 -- as a pointer to the question domain.
 test_soa :: DNSMessage
 test_soa =
-    let soard = rd_soa "ns1.example.com." "hostmaster@example.com." 0 0 0 0 0
+    let q = [Question "hostmaster.example.com." A classIN]
+        soard = rd_soa "ns1.example.com." "hostmaster@example.com." 0 0 0 0 0
         soarr = ResourceRecord "example.com." SOA 1 3600 soard
-     in defaultResponse { question = [Question "hostmaster.example.com." A classIN]
+     in defaultResponse { question = q
                         , authority = [soarr] }
 
 -- Expected compressed encoding of the 'test_soa' message
