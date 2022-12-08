@@ -183,7 +183,7 @@ runIterative cxt sa n = withNormalized n (iterative sa) cxt
 
 -- | parse IPv4 8bit-parts from reverse-lookup domain
 --
--- >>> > parseV4RevDomain "1.2.3.4.in-addr.arpa."
+-- >>> parseV4RevDomain "1.2.3.4.in-addr.arpa."
 -- Right [4,3,2,1]
 parseV4RevDomain :: Domain -> Either String [Int]
 parseV4RevDomain dom = do
