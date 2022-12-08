@@ -114,7 +114,7 @@ data RD_RRSIG = RD_RRSIG {
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    putResourceData _ RD_RRSIG{..} = do
+    putResourceData cf RD_RRSIG{..} = do
         putTYPE    rrsig_type
         putPubAlg  rrsig_pubalg
         put8       rrsig_num_labels
@@ -122,7 +122,7 @@ instance ResourceData RD_RRSIG where
         putDnsTime rrsig_expiration
         putDnsTime rrsig_inception
         put16      rrsig_key_tag
-        putDomain  Canonical rrsig_zone
+        putDomain  cf rrsig_zone
         putOpaque  rrsig_signature
 
 get_rrsig :: Int -> SGet RD_RRSIG
@@ -188,8 +188,8 @@ data RD_NSEC = RD_NSEC {
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    putResourceData _ RD_NSEC{..} = do
-        putDomain Canonical nsecNextDomain
+    putResourceData cf RD_NSEC{..} = do
+        putDomain cf nsecNextDomain
         putNsecTypes nsecTypes
 
 get_nsec :: Int -> SGet RD_NSEC

@@ -109,7 +109,7 @@ putDNSMessage msg = do
                              , length au
                              , length ad
                              ]
-    putRR = putResourceRecord Compression
+    putRR = putResourceRecord Original
     hm = header msg
     fl = flags hm
     eh = ednsHeader msg
@@ -574,7 +574,7 @@ data Question = Question {
 
 putQuestion :: Question -> SPut ()
 putQuestion Question{..} = do
-    putDomain Compression qname
+    putCompressedDomain qname
     put16 (fromTYPE qtype)
     putCLASS qclass
 
@@ -616,7 +616,10 @@ type AdditionalRecords = [ResourceRecord]
 
 putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut ()
 putResourceRecord cf ResourceRecord{..} = do
-    putDomain cf rrname
+    if cf == Original then
+        putCompressedDomain rrname
+      else
+        putDomain Canonical rrname
     putTYPE      rrtype
     putCLASS     rrclass
     putSeconds   rrttl

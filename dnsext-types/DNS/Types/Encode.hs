@@ -35,16 +35,16 @@ encodeQuestion = runSPut . putQuestion
 
 -- | Encode a resource record.
 encodeResourceRecord :: ResourceRecord -> ByteString
-encodeResourceRecord rr = runSPut $ putResourceRecord Compression rr
+encodeResourceRecord rr = runSPut $ putResourceRecord Original rr
 
 -- | Encode a resource data.
 encodeRData :: RData -> ByteString
-encodeRData = runSPut . putRData Compression
+encodeRData = runSPut . putRData Original
 
 -- | Encode a domain with name compression.
 encodeDomain :: Domain -> ByteString
-encodeDomain = runSPut . putDomain Compression
+encodeDomain = runSPut . putCompressedDomain
 
 -- | Encode a mailbox name with name compression.
 encodeMailbox :: Mailbox -> ByteString
-encodeMailbox = runSPut . putMailbox Compression
+encodeMailbox = runSPut . putCompressedMailbox
