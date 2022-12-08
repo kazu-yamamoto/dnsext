@@ -112,6 +112,14 @@ domainFromWireLabels ls = validateDomain $ Domain {
 instance Eq Domain where
     d0 == d1 = canonicalLabels d0 == canonicalLabels d1
 
+-- | Ordering according to the DNSSEC definition.
+--
+-- >>> ("www.example.jp" :: Domain) >= "example.jp"
+-- True
+-- >>> ("example8.jp" :: Domain) >= "example.jp"
+-- True
+-- >>> ("example.jp" :: Domain) >= "example.com"
+-- True
 instance Ord Domain where
     d0 <= d1 = canonicalLabels d0 <= canonicalLabels d1
 
