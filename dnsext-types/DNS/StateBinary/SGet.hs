@@ -29,7 +29,6 @@ module DNS.StateBinary.SGet (
   , parserPosition
   , pushDomain
   , popDomain
-  , getInput
   , getAtTime
   ) where
 
@@ -55,17 +54,16 @@ type SGet = StateT PState (AT.Parser ByteString)
 data PState = PState {
     pstDomain :: IntMap [RawDomain]
   , pstPosition :: Int
-  , pstInput :: ByteString
   , pstAtTime  :: Int64
   }
+
+initialState :: Int64 -> PState
+initialState t = PState IM.empty 0 t
 
 ----------------------------------------------------------------
 
 parserPosition :: SGet Int
 parserPosition = ST.gets pstPosition
-
-getInput :: SGet ByteString
-getInput = ST.gets pstInput
 
 getAtTime :: SGet Int64
 getAtTime = ST.gets pstAtTime
@@ -73,16 +71,14 @@ getAtTime = ST.gets pstAtTime
 addPosition :: Int -> SGet ()
 addPosition n | n < 0 = failSGet "internal error: negative position increment"
               | otherwise = do
-    PState dom pos inp t <- ST.get
+    PState dom pos t <- ST.get
     let pos' = pos + n
-    when (pos' > BS.length inp) $
-        failSGet "malformed or truncated input"
-    ST.put $ PState dom pos' inp t
+    ST.put $ PState dom pos' t
 
 pushDomain :: Int -> [RawDomain] -> SGet ()
 pushDomain n d = do
-    PState dom pos inp t <- ST.get
-    ST.put $ PState (IM.insert n d dom) pos inp t
+    PState dom pos t <- ST.get
+    ST.put $ PState (IM.insert n d dom) pos t
 
 popDomain :: Int -> SGet (Maybe [RawDomain])
 popDomain n = ST.gets (IM.lookup n . pstDomain)
@@ -194,9 +190,6 @@ sGetMany elemname len parser | len < 0   = overrun
 dnsTimeMid :: Int64
 dnsTimeMid = 3426660848
 
-initialState :: Int64 -> ByteString -> PState
-initialState t inp = PState IM.empty 0 inp t
-
 -- Construct our own error message, without the unhelpful AttoParsec
 -- \"Failed reading: \" prefix.
 --
@@ -205,7 +198,7 @@ failSGet msg = ST.lift (fail "" A.<?> msg)
 
 runSGetAt :: Int64 -> SGet a -> ByteString -> Either DNSError (a, PState)
 runSGetAt t parser inp =
-    toResult $ A.parse (ST.runStateT parser $ initialState t inp) inp
+    toResult $ A.parse (ST.runStateT parser $ initialState t) inp
   where
     toResult :: A.Result r -> Either DNSError r
     toResult (A.Done _ r)        = Right r
@@ -220,7 +213,7 @@ runSGetWithLeftoversAt :: Int64      -- ^ Reference time for DNS clock arithmeti
                        -> ByteString -- ^ Encoded message
                        -> Either DNSError ((a, PState), ByteString)
 runSGetWithLeftoversAt t parser inp =
-    toResult $ A.parse (ST.runStateT parser $ initialState t inp) inp
+    toResult $ A.parse (ST.runStateT parser $ initialState t) inp
   where
     toResult :: A.Result r -> Either DNSError (r, ByteString)
     toResult (A.Done     i r) = Right (r, i)
