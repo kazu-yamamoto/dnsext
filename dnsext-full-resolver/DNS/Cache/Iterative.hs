@@ -214,7 +214,7 @@ parseV6RevDomain dom = do
   let plen = length rparts
   maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right
     $ guard (1 <= plen && plen <= 32)
-  mapM getHexDigit $ reverse rparts
+  mapM getHexDigit rparts
   where
     throw = Left . ("v6Rev: " ++)
     getHexDigit s = do
