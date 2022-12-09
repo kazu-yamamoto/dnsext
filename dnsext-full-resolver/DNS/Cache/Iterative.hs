@@ -722,7 +722,7 @@ takeDelegation nsps adds = do
       | otherwise {- d >  an  -}  =            nsPairs ds  gs  -- unknown additional RRs. just skip
       where
         an = rrname a
-        (a:_) = g
+        a = head g
     dentries d     []     =  [DEonlyNS d]
     dentries d as@(_:_)   =  foldr takeAxDE [] as
       where
