@@ -344,12 +344,12 @@ getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
 -- prevention code-path.
 --
 -- >>> :{
--- let input = "\6\3foo\192\1\3bar\0"
---     parser = skipNBytes 1 >> getDomain' 1
+-- let input = "\3foo\192\0\3bar\0"
+--     parser = getDomain' 0
 --     Left (DecodeError err) = runSGet parser input
 --  in err
 -- :}
--- "invalid pointer (1)"
+-- "invalid pointer: self pointing"
 
 -- | Get a domain name.
 --
@@ -373,11 +373,13 @@ getDomain' ptrLimit = do
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
-          when (offset >= ptrLimit) $
-              failSGet "invalid pointer (1)"
+          when (offset == ptrLimit) $
+              failSGet "invalid pointer: self pointing"
+          when (offset > ptrLimit) $
+              failSGet "invalid pointer: forward pointing"
           mx <- popDomain offset
           case mx of
-            Nothing -> failSGet "invalid pointer (2)"
+            Nothing -> failSGet "invalid pointer: invalid area"
             Just lls -> do
                 -- Supporting double pointers.
                 pushDomain pos lls
