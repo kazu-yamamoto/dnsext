@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -334,91 +333,59 @@ putCompressedMailbox (Mailbox d) = putCompressedDomain d
 --
 
 getDomain :: SGet Domain
-getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' _period)
+getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain')
 
 getMailbox :: SGet Mailbox
-getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' _at)
+getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
 
 -- $
--- Pathological case: pointer embedded inside a label!  The pointer points
--- behind the start of the domain and is then absorbed into the initial label!
--- Though we don't IMHO have to support this, it is not manifestly illegal, and
--- does exercise the code in an interesting way.  Ugly as this is, it also
--- "works" the same in Perl's Net::DNS and reportedly in ISC's BIND.
---
--- >>> :{
--- let input = "\6\3foo\192\0\3bar\x00"
---     parser = skipNBytes 1 >> getDomain' _period 1
---     Right (output, _) = runSGet parser input
---  in output == ["foo","\3foo\192\0","bar"]
--- :}
--- True
 --
 -- The case below fails to point far enough back, and triggers the loop
 -- prevention code-path.
 --
 -- >>> :{
 -- let input = "\6\3foo\192\1\3bar\0"
---     parser = skipNBytes 1 >> getDomain' _period 1
+--     parser = skipNBytes 1 >> getDomain' 1
 --     Left (DecodeError err) = runSGet parser input
 --  in err
 -- :}
--- "invalid name compression pointer"
+-- "invalid pointer (1)"
 
--- | Get a domain name, using sep1 as the separator between the 1st and 2nd
--- label.  Subsequent labels (and always the trailing label) are terminated
--- with a ".".
+-- | Get a domain name.
 --
--- Note: the separator is required to be either \'.\' or \'\@\', or else
--- 'escapeLabel' needs to be modified to handle the new value.
+-- Domain name compression pointers must always refer to a position
+-- that precedes the start of the current domain name.  The starting
+-- offsets form a strictly decreasing sequence, which prevents pointer
+-- loops.
 --
--- Domain name compression pointers must always refer to a position that
--- precedes the start of the current domain name.  The starting offsets form a
--- strictly decreasing sequence, which prevents pointer loops.
---
-getDomain' :: Word8 -> Int -> SGet [ShortByteString]
-getDomain' sep1 ptrLimit = do
+getDomain' :: Int -> SGet [ShortByteString]
+getDomain' ptrLimit = do
     pos <- parserPosition
     c <- getInt8
     let n = getValue c
     getdomain pos c n
   where
-    -- Reprocess the same ShortByteString starting at the pointer
-    -- target (offset).
-    getPtr pos offset = do
-        -- getInput takes the original entire input
-        msg <- getInput
-        let parser = skipNBytes offset >> getDomain' sep1 offset
-        case runSGet parser msg of
-            Left (DecodeError err) -> failSGet err
-            Left err               -> fail $ show err
-            Right o                -> do
-                -- Cache only the presentation form decoding of domain names,
-                -- mailboxes (e.g. SOA rname) are less frequently reused, and
-                -- have a different presentation form, so must not share the
-                -- same cache.
-                when (sep1 == _period) $
-                    pushDomain pos $ fst o
-                return (fst o)
-
     getdomain pos c n
       | c == 0 = return []
+      -- As for now, extended labels have no use.
+      -- This may change some time in the future.
+      | isExtLabel c = return []
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
           when (offset >= ptrLimit) $
-              failSGet "invalid name compression pointer"
-          if sep1 /= _period
-              then getPtr pos offset
-              else popDomain offset >>= \case
-                  Nothing -> getPtr pos offset
-                  Just dm -> return dm
-      -- As for now, extended labels have no use.
-      -- This may change some time in the future.
-      | isExtLabel c = return [""]
+              failSGet "invalid pointer (1)"
+          mx <- popDomain offset
+          case mx of
+            Nothing -> failSGet "invalid pointer (2)"
+            Just lls -> do
+                -- Supporting double pointers.
+                pushDomain pos lls
+                return lls
       | otherwise = do
-          l  <- getNShortByteString n
-          ls <- getDomain' _period ptrLimit
+          l <- getNShortByteString n
+          -- Registering super domains
+          ls <- getDomain' ptrLimit
           let lls = l:ls
           pushDomain pos lls
           return lls
