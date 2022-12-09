@@ -214,7 +214,7 @@ parseV6RevDomain dom = do
   let plen = length rparts
   maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right
     $ guard (1 <= plen && plen <= 32)
-  mapM getHexDigit $ reverse rparts
+  mapM getHexDigit rparts
   where
     throw = Left . ("v6Rev: " ++)
     getHexDigit s = do
@@ -722,7 +722,7 @@ takeDelegation nsps adds = do
       | otherwise {- d >  an  -}  =            nsPairs ds  gs  -- unknown additional RRs. just skip
       where
         an = rrname a
-        (a:_) = g
+        a = head g
     dentries d     []     =  [DEonlyNS d]
     dentries d as@(_:_)   =  foldr takeAxDE [] as
       where
