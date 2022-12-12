@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module VerifySpec (spec) where
 
 import Test.Hspec
@@ -19,7 +21,7 @@ import DNS.SEC.Verify
 spec :: Spec
 spec = do
   describe "KeyTag" $ do
-    it "example 1" $ caseKeyTag keyTag1
+    it "RFC5702 section6.1" $ caseKeyTag keyTagRFC5702
   describe "verify DS" $ do
     it "SHA1"   $ caseDS dsSHA1
     it "SHA256" $ caseDS dsSHA256
@@ -46,8 +48,8 @@ caseKeyTag (dnskeyRR, tag) = either expectationFailure (const $ pure ()) $ do
     takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
-keyTag1 :: KeyTag_Case
-keyTag1 = (ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }, 9033)
+keyTagRFC5702 :: KeyTag_Case
+keyTagRFC5702 = (ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }, 9033)
   where
     key_rd = rd_dnskey' 256 3 8
              " AwEAAcFcGsaxxdgiuuGmCkVI \
@@ -70,8 +72,8 @@ caseDS (dnskeyRR, dsRR) = either expectationFailure (const $ pure ()) $ do
 -- exampe from  https://datatracker.ietf.org/doc/html/rfc4034#section-5.4
 dsSHA1 :: DS_CASE
 dsSHA1 =
-  ( ResourceRecord { rrname = fromString "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  ( ResourceRecord { rrname = "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "dskey.example.com.", rrttl = 86400, rrclass = classIN, rrtype = DS, rdata = ds_rd }
   )
   where
     key_rd = rd_dnskey' 256 3 5
@@ -90,8 +92,8 @@ dsSHA1 =
 -- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.1
 dsSHA256 :: DS_CASE
 dsSHA256 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 13
@@ -104,8 +106,8 @@ dsSHA256 =
 -- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.2
 dsSHA384 :: DS_CASE
 dsSHA384 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DS, rdata = ds_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 14
@@ -133,9 +135,9 @@ caseRRSIG (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pure 
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256 :: RRSIG_CASE
 rsaSHA256 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 256 3 8
@@ -150,9 +152,9 @@ rsaSHA256 =
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.2
 rsaSHA512 :: RRSIG_CASE
 rsaSHA512 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 256 3 10
@@ -170,9 +172,9 @@ rsaSHA512 =
 -- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.1
 ecdsaP256 :: RRSIG_CASE
 ecdsaP256 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 13
@@ -185,9 +187,9 @@ ecdsaP256 =
 -- example from https://datatracker.ietf.org/doc/html/rfc6605#section-6.2
 ecdsaP384 :: RRSIG_CASE
 ecdsaP384 =
-  ( ResourceRecord { rrname = fromString "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
-  , ResourceRecord { rrname = fromString "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
+  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 14
@@ -202,9 +204,9 @@ ecdsaP384 =
 -- example from https://datatracker.ietf.org/doc/html/rfc8080#section-6.1
 ed25519 :: RRSIG_CASE
 ed25519 =
-  ( ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 (fromString "mail.example.com.") }
-  , ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }
+  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 15
@@ -216,9 +218,9 @@ ed25519 =
 -- example from https://datatracker.ietf.org/doc/html/rfc8080#section-6.2
 ed448 :: RRSIG_CASE
 ed448 =
-  ( ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 (fromString "mail.example.com.") }
-  , ResourceRecord { rrname = fromString "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
+  ( ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }
+  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
     key_rd = rd_dnskey' 257 3 16
@@ -233,22 +235,22 @@ ed448 =
 -- helpers
 
 rd_dnskey' :: Word16 -> Word8 -> Word8 -> String -> RData
-rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg $ toPubKey alg $ opaqueFromB64' pubkey
+rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg $ toPubKey alg $ opaqueFromB64 pubkey
   where
     alg = toPubAlg walg
 
 rd_ds' :: Word16 -> Word8 -> Word8 -> String -> RData
-rd_ds' keytag pubalg digalg digest = rd_ds keytag (toPubAlg pubalg) (toDigestAlg digalg) (opaqueFromHex digest)
+rd_ds' keytag pubalg digalg digest = rd_ds keytag (toPubAlg pubalg) (toDigestAlg digalg) (opaqueFromB16Hex digest)
 
 rd_rrsig' :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> String -> String -> RData
-rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromString dom) . opaqueFromB64'
+rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromString dom) . opaqueFromB64
 
-opaqueFromB64' :: String -> Opaque
-opaqueFromB64' =
-  either (error "opaqueFromB64': fail to decode base64") Opaque.fromByteString .
-  convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
-
-opaqueFromHex :: String -> Opaque
-opaqueFromHex =
-  either (error "opaqueFromHex: fail to decode hex") Opaque.fromByteString .
+opaqueFromB16Hex :: String -> Opaque
+opaqueFromB16Hex =
+  either (error "opaqueFromB16Hex: fail to decode hex") Opaque.fromByteString .
   convertFromBase Base16 . (fromString :: String -> ByteString) . filter (/= ' ')
+
+opaqueFromB64 :: String -> Opaque
+opaqueFromB64 =
+  either (error "opaqueFromB64: fail to decode base64") Opaque.fromByteString .
+  convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
