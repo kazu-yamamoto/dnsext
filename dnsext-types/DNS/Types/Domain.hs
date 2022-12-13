@@ -271,7 +271,8 @@ data CanonicalFlag
 
 ----------------------------------------------------------------
 
--- | No name compression for new RRs.
+-- | Putting a domain name.
+--   No name compression for new RRs.
 putDomain :: CanonicalFlag -> Domain -> SPut ()
 putDomain Original  Domain{..} = do
     mapM_ putPartialDomain wireLabels
@@ -304,24 +305,30 @@ putCompress dom@(d:ds) = do
 putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)
 
--- This should be used only for CNAME, MX, NS, PTR and SOA.
+-- | Putting a domain name.
+--   Names are compressed if possible.
+--   This should be used only for CNAME, MX, NS, PTR and SOA.
 putDomainRFC1035 :: CanonicalFlag -> Domain -> SPut ()
 putDomainRFC1035 Original  dom = putCompressedDomain dom
 putDomainRFC1035 Canonical dom = putDomain Canonical dom
 
 ----------------------------------------------------------------
 
--- | No name compression for new RRs.
+-- | Putting a mailbox.
+--   No name compression for new RRs.
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
 putMailbox cf (Mailbox d) = putDomain cf d
 
--- This should be used only for SOA.
+-- | Putting a mailbox.
+--   Names are compressed if possible.
+--   This should be used only for SOA.
 putMailboxRFC1035 :: CanonicalFlag -> Mailbox -> SPut ()
 putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 
 ----------------------------------------------------------------
 
--- | Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
+-- | Getting a domain name.
+-- Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
 -- is further interpreted by the DNS community (from a discussion on the IETF
 -- DNSOP mailing list) to mean that they don't point back into the same domain.
 -- Therefore, when starting to parse a domain, the current offset is also a
@@ -329,17 +336,11 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 -- the domain.  When following a pointer, the target again becomes a stict upper
 -- bound for any subsequent pointers.  This results in a simple loop-prevention
 -- algorithm, each sequence of valid pointer values is necessarily strictly
--- decreasing!  The third argument to 'getDomain'' is a strict pointer upper
--- bound, and is set here to the position at the start of parsing the domain
--- or mailbox.
---
--- Note: the separator passed to 'getDomain'' is required to be either \'.\' or
--- \'\@\', or else 'escapeLabel' needs to be modified to handle the new value.
---
-
+-- decreasing!
 getDomain :: SGet Domain
 getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain')
 
+-- | Getting a mailbox.
 getMailbox :: SGet Mailbox
 getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
 
