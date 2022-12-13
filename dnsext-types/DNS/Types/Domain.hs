@@ -15,8 +15,8 @@ module DNS.Types.Domain (
   , putMailbox
   , getMailbox
   , CanonicalFlag (..)
-  , putCompressedDomain
-  , putCompressedMailbox
+  , putDomainRFC1035
+  , putMailboxRFC1035
   ) where
 
 import qualified Control.Exception as E
@@ -265,7 +265,7 @@ instance IsRepresentation Mailbox String where
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = Original  -- ^ Original name without compressoin
+  = Original  -- ^ Original name
   | Canonical -- ^ Lower name without compressoin
   deriving (Eq, Show)
 
@@ -285,7 +285,6 @@ putPartialDomain = putLenShortByteString
 
 ----------------------------------------------------------------
 
--- Name compression is used only for CNAME, MX, NS, PTR and SOA.
 putCompressedDomain :: Domain -> SPut ()
 putCompressedDomain Domain{..} = putCompress wireLabels
 
@@ -305,14 +304,20 @@ putCompress dom@(d:ds) = do
 putPointer :: Int -> SPut ()
 putPointer pos = putInt16 (pos .|. 0xc000)
 
+-- This should be used only for CNAME, MX, NS, PTR and SOA.
+putDomainRFC1035 :: CanonicalFlag -> Domain -> SPut ()
+putDomainRFC1035 Original  dom = putCompressedDomain dom
+putDomainRFC1035 Canonical dom = putDomain Canonical dom
+
 ----------------------------------------------------------------
 
 -- | No name compression for new RRs.
 putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
 putMailbox cf (Mailbox d) = putDomain cf d
 
-putCompressedMailbox :: Mailbox -> SPut ()
-putCompressedMailbox (Mailbox d) = putCompressedDomain d
+-- This should be used only for SOA.
+putMailboxRFC1035 :: CanonicalFlag -> Mailbox -> SPut ()
+putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 
 ----------------------------------------------------------------
 

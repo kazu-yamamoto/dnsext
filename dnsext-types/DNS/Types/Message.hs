@@ -99,7 +99,7 @@ putDNSMessage :: DNSMessage -> SPut ()
 putDNSMessage msg = do
     putHeader hd
     putNums
-    mapM_ putQuestion qs
+    mapM_ putQ qs
     mapM_ putRR an
     mapM_ putRR au
     mapM_ putRR ad
@@ -109,6 +109,7 @@ putDNSMessage msg = do
                              , length au
                              , length ad
                              ]
+    putQ = putQuestion Original
     putRR = putResourceRecord Original
     hm = header msg
     fl = flags hm
@@ -572,9 +573,9 @@ data Question = Question {
   , qclass :: CLASS
   } deriving (Eq, Show)
 
-putQuestion :: Question -> SPut ()
-putQuestion Question{..} = do
-    putCompressedDomain qname
+putQuestion :: CanonicalFlag -> Question -> SPut ()
+putQuestion cf Question{..} = do
+    putDomainRFC1035 cf qname
     put16 (fromTYPE qtype)
     putCLASS qclass
 
@@ -616,10 +617,7 @@ type AdditionalRecords = [ResourceRecord]
 
 putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut ()
 putResourceRecord cf ResourceRecord{..} = do
-    if cf == Original then
-        putCompressedDomain rrname
-      else
-        putDomain Canonical rrname
+    putDomainRFC1035 cf rrname
     putTYPE      rrtype
     putCLASS     rrclass
     putSeconds   rrttl

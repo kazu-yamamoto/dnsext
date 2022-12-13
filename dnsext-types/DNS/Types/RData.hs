@@ -87,8 +87,7 @@ newtype RD_NS = RD_NS {
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
-    putResourceData Original  (RD_NS d) = putCompressedDomain d
-    putResourceData Canonical (RD_NS d) = putDomain Canonical d
+    putResourceData cf (RD_NS d) = putDomainRFC1035 cf d
 
 get_ns :: Int -> SGet RD_NS
 get_ns _ = RD_NS <$> getDomain
@@ -110,8 +109,7 @@ newtype RD_CNAME = RD_CNAME {
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
-    putResourceData Original  (RD_CNAME d) = putCompressedDomain d
-    putResourceData Canonical (RD_CNAME d) = putDomain Canonical d
+    putResourceData cf (RD_CNAME d) = putDomainRFC1035 cf d
 
 get_cname :: Int -> SGet RD_CNAME
 get_cname _ = RD_CNAME <$> getDomain
@@ -146,12 +144,8 @@ data RD_SOA = RD_SOA {
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
     putResourceData cf RD_SOA{..} = do
-        if cf == Original then do
-            putCompressedDomain  soa_mname
-            putCompressedMailbox soa_rname
-          else do
-            putDomain  Canonical soa_mname
-            putMailbox Canonical soa_rname
+        putDomainRFC1035  cf soa_mname
+        putMailboxRFC1035 cf soa_rname
         put32      soa_serial
         putSeconds soa_refresh
         putSeconds soa_retry
@@ -202,8 +196,7 @@ newtype RD_PTR = RD_PTR {
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
-    putResourceData Original  (RD_PTR d) = putCompressedDomain d
-    putResourceData Canonical (RD_PTR d) = putDomain Canonical d
+    putResourceData cf (RD_PTR d) = putDomainRFC1035 cf d
 
 get_ptr :: Int -> SGet RD_PTR
 get_ptr _ = RD_PTR <$> getDomain
@@ -229,10 +222,7 @@ instance ResourceData RD_MX where
     resourceDataType _ = MX
     putResourceData cf RD_MX{..} = do
         put16 mx_preference
-        if cf == Original then
-            putCompressedDomain mx_exchange
-          else
-            putDomain Canonical mx_exchange
+        putDomainRFC1035 cf mx_exchange
 
 get_mx :: Int -> SGet RD_MX
 get_mx _ = RD_MX <$> get16 <*> getDomain

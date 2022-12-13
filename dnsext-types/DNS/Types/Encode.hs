@@ -31,7 +31,7 @@ encodeDNSFlags = runSPut . putDNSFlags
 
 -- | Encode a question.
 encodeQuestion :: Question -> ByteString
-encodeQuestion = runSPut . putQuestion
+encodeQuestion = runSPut . putQuestion Original
 
 -- | Encode a resource record.
 encodeResourceRecord :: ResourceRecord -> ByteString
@@ -43,8 +43,8 @@ encodeRData = runSPut . putRData Original
 
 -- | Encode a domain with name compression.
 encodeDomain :: Domain -> ByteString
-encodeDomain = runSPut . putCompressedDomain
+encodeDomain = runSPut . putDomainRFC1035 Original
 
 -- | Encode a mailbox name with name compression.
 encodeMailbox :: Mailbox -> ByteString
-encodeMailbox = runSPut . putCompressedMailbox
+encodeMailbox = runSPut . putMailboxRFC1035 Original
