@@ -74,8 +74,6 @@ runSPut sput = let st = run sput
 
 ----------------------------------------------------------------
 
-type Position = Int
-
 -- | Builder state
 data BState = BState {
     bstDomain   :: Map [RawDomain] Int
