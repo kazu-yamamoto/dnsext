@@ -22,9 +22,16 @@ import DNS.SEC.Verify.Types
 {- find NSEC3 records which covers or matches with qname or super names of qname,
    to recognize non-existence of domain or non-existence of RRset -}
 verify :: [(NSEC3_Range, Domain -> Opaque)] -> Domain -> TYPE -> Either String NSEC3_Result
-verify n3s domain qtype = n3RangeRefines n3s >>= findEncloser
+verify n3s domain qtype = do
+  (zone, refines) <- n3RangeRefines n3s
+  supers <- zoneSuperDomains zone
+  findEncloser supers refines
   where
-    findEncloser refines =
+    zoneSuperDomains zone
+      | domain `isSubDomainOf` zone  = Right $ takeWhile (/= zone) (superDomains domain ++ [fromString "."]) ++ [zone]
+      | otherwise                    = Left "NSEC3.verify: qname is not under zone"
+
+    findEncloser supers refines =
       maybe (Left "NSEC3.verify: no NSEC3 encloser") id $
       getNoData props
       <|>
@@ -36,7 +43,8 @@ verify n3s domain qtype = n3RangeRefines n3s >>= findEncloser
       where
         {- reuse computed range-props for closest-name and next-closer-name -}
         ppairs = zip props (tail props)
-        props = map rangePropSet $ superDomains domain ++ [fromString "."]
+        props = map rangePropSet supers
+
 
         {- return first result or continue -}
         loop :: (a -> Maybe b)
@@ -135,7 +143,7 @@ n3CoversR lower upper qv = qv < upper || lower < qv
       owner name of the first NSEC3 RR in the zone in hash order." -}
 
 {- get funcs to compute 'match' or 'cover' with ranges from NSEC3 record-set -}
-n3RangeRefines :: [(NSEC3_Range, Domain -> Opaque)] -> Either String [(Domain -> Maybe (RangeProp_ NSEC3_Witness))]
+n3RangeRefines :: [(NSEC3_Range, Domain -> Opaque)] -> Either String (Domain, [(Domain -> Maybe (RangeProp_ NSEC3_Witness))])
 n3RangeRefines ranges0 = do
   (((owner1,_),_), _)  <- maybe (Left "NSEC3.n3RangeRefines: no NSEC3 records") Right $ uncons ranges0
   (_, zname)           <- maybe (Left "NSEC3.n3RangeRefines: no zone name")     Right $ unconsName owner1
@@ -149,7 +157,7 @@ n3RangeRefines ranges0 = do
            , parent == zname
            , ownerBytes <- decodeBase32 owner32h
            ]
-  takeRefines rs
+  (,) zname <$> takeRefines rs
 
   where
     unconsName :: Domain -> Maybe (ShortByteString, Domain)
