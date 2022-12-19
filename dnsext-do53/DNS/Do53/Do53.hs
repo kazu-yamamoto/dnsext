@@ -8,7 +8,7 @@ module DNS.Do53.Do53 (
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
-import Network.Socket (AddrInfo(..), Socket, SocketType(Stream), close, openSocket, connect)
+import Network.Socket (Socket, close, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
@@ -86,9 +86,9 @@ resolve rlv dom typ qctls rcv
   where
     q = Question dom typ classIN
 
+    nss = serverAddrs rlv
     gens = genIds rlv
 
-    nss     = serverAddrs rlv
     onlyOne = length nss == 1
     conf = resolvConf rlv
     ctls    = qctls <> resolvQueryControls conf
@@ -97,7 +97,7 @@ resolve rlv dom typ qctls rcv
     retry      = resolvRetry conf
 
 
-resolveSequential :: [AddrInfo] -> [IO Identifier] -> Rslv1
+resolveSequential :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
 resolveSequential nss gs q tm retry ctls rcv = loop nss gs
   where
     loop [ai]     [gen] = resolveOne ai gen q tm retry ctls rcv
@@ -108,7 +108,7 @@ resolveSequential nss gs q tm retry ctls rcv = loop nss gs
           res     -> return res
     loop _  _     = error "resolveSequential:loop"
 
-resolveConcurrent :: [AddrInfo] -> [IO Identifier] -> Rslv1
+resolveConcurrent :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
 resolveConcurrent nss gens q tm retry ctls rcv =
     raceAny $ zipWith run nss gens
   where
@@ -117,8 +117,9 @@ resolveConcurrent nss gens q tm retry ctls rcv =
         snd <$> waitAnyCancel asyncs
     run ai gen = resolveOne ai gen q tm retry ctls rcv
 
-resolveOne :: AddrInfo -> IO Identifier -> Rslv1
-resolveOne ai gen q tm retry ctls rcv =
+resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
+resolveOne hp gen q tm retry ctls rcv = do
+    ai <- makeAddrInfo hp
     E.try $ udpTcpResolve retry rcv gen ai q tm ctls
 
 ----------------------------------------------------------------
@@ -229,3 +230,15 @@ tcpResolve gen ai q tm ctls0 =
         case checkRespM q ident res of
             Nothing  -> return res
             Just err -> E.throwIO err
+
+----------------------------------------------------------------
+
+makeAddrInfo :: (HostName,PortNumber) -> IO AddrInfo
+makeAddrInfo (nh,p) = do
+    let hints = defaultHints {
+            -- fixme passive
+            addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV, AI_PASSIVE]
+          , addrSocketType = Datagram
+          }
+    let np = show p
+    head <$> getAddrInfo (Just hints) (Just nh) (Just np)

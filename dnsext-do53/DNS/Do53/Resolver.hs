@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TupleSections #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Resolver (
@@ -16,9 +17,8 @@ module DNS.Do53.Resolver (
   , withResolver
   ) where
 
-import Control.Exception as E
 import DNS.Types
-import Network.Socket (AddrInfoFlag(..), AddrInfo(..), PortNumber, HostName, SocketType(Datagram), getAddrInfo, defaultHints)
+import Network.Socket (HostName, PortNumber)
 import Prelude
 import qualified System.Random.Stateful as R
 
@@ -29,25 +29,15 @@ import DNS.Do53.System
 
 ----------------------------------------------------------------
 
-findAddresses :: ResolvConf -> IO [AddrInfo]
-findAddresses conf = case resolvInfo conf of
-    RCHostName numhost       -> (:[]) <$> makeAddrInfo numhost Nothing
-    RCHostPort numhost mport -> (:[]) <$> makeAddrInfo numhost (Just mport)
-    RCHostNames nss          -> mkAddrs nss
-    RCFilePath file          -> getDefaultDnsServers file >>= mkAddrs
-  where
-    mkAddrs [] = E.throwIO BadConfiguration
-    mkAddrs ls = forM ls (`makeAddrInfo` Nothing)
+-- 53 is the standard port number for domain name servers as assigned by IANA
+dnsPort :: PortNumber
+dnsPort = 53
 
-makeAddrInfo :: HostName -> Maybe PortNumber -> IO AddrInfo
-makeAddrInfo addr mport = do
-    let hints = defaultHints {
-            addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV, AI_PASSIVE]
-          , addrSocketType = Datagram
-          }
-        -- 53 is the standard port number for domain name servers as assigned by IANA
-        serv = maybe "53" show mport
-    head <$> getAddrInfo (Just hints) (Just addr) (Just serv)
+findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
+findAddrPorts (RCHostName   nh)  = return $ [(nh, dnsPort)]
+findAddrPorts (RCHostPort  nh p) = return $ [(nh, p)]
+findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
@@ -55,7 +45,7 @@ makeAddrInfo addr mport = do
 --   argument.
 withResolver :: ResolvConf -> (Resolver -> IO a) -> IO a
 withResolver conf f = do
-    addrs <- findAddresses conf
+    addrs <- findAddrPorts $ resolvInfo conf
     let n = length addrs
     gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
     let gens = map R.uniformWord16 gs
@@ -179,7 +169,7 @@ defaultResolvConf = ResolvConf {
 --   specified DNS servers and a cache database.
 data Resolver = Resolver {
     resolvConf  :: ResolvConf
-  , serverAddrs :: [AddrInfo]
+  , serverAddrs :: [(HostName,PortNumber)]
   , genIds      :: [IO Word16]
   , cache       :: Maybe Cache
 }
