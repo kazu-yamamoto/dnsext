@@ -19,6 +19,7 @@ import qualified UnliftIO.Exception as E
 ----------------------------------------------------------------
 
 type WireFormat = ByteString
+type ALPN = ByteString
 
 ----------------------------------------------------------------
 
@@ -45,7 +46,7 @@ makeAddrInfo maddr port = do
 
 ----------------------------------------------------------------
 
-getTLSParams :: HostName -> ByteString -> Bool -> ClientParams
+getTLSParams :: HostName -> ALPN -> Bool -> ClientParams
 getTLSParams serverName alpn validate
     = (defaultParamsClient serverName "") {
     clientSupported = supported
@@ -78,10 +79,10 @@ getTLSParams serverName alpn validate
 
 ----------------------------------------------------------------
 
-sendTLS :: Context -> ByteString -> IO ()
+sendTLS :: Context -> WireFormat -> IO ()
 sendTLS ctx = sendData ctx . LBS.fromStrict
 
-sendManyTLS :: Context -> [ByteString] -> IO ()
+sendManyTLS :: Context -> [WireFormat] -> IO ()
 sendManyTLS ctx = sendData ctx . LBS.fromChunks
 
 -- TLS version of recv (decrypting) without a cache.
@@ -95,7 +96,7 @@ recvTLS ctx = E.handle onEOF $ recvData ctx
 
 ----------------------------------------------------------------
 
-getQUICParams :: HostName -> PortNumber -> ByteString -> ClientConfig
+getQUICParams :: HostName -> PortNumber -> ALPN -> ClientConfig
 getQUICParams hostname port alpn = defaultClientConfig {
     ccServerName = hostname
   , ccPortName   = show port

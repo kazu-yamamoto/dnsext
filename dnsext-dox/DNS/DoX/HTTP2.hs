@@ -3,7 +3,6 @@
 module DNS.DoX.HTTP2 where
 
 import DNS.Types.Decode
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Char8 as C8
@@ -34,7 +33,7 @@ doh hostname port qry = do
         connect sock sockaddr
         return sock
 
-client :: Context -> HostName -> ByteString -> IO ()
+client :: Context -> HostName -> WireFormat -> IO ()
 client ctx hostname msg =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
