@@ -8,7 +8,6 @@ module DNS.Do53.Do53 (
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
-import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfo(..), Socket, SocketType(Stream), close, openSocket, connect)
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
@@ -87,9 +86,9 @@ resolve rlv dom typ qctls rcv
   where
     q = Question dom typ classIN
 
-    gens = NE.toList $ genIds rlv
+    gens = genIds rlv
 
-    nss     = NE.toList $ serverAddrs rlv
+    nss     = serverAddrs rlv
     onlyOne = length nss == 1
     conf = resolvConf rlv
     ctls    = qctls <> resolvQueryControls conf

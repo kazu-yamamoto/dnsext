@@ -18,7 +18,6 @@ module DNS.Do53.Resolver (
 
 import Control.Exception as E
 import DNS.Types
-import qualified Data.List.NonEmpty as NE
 import Network.Socket (AddrInfoFlag(..), AddrInfo(..), PortNumber, HostName, SocketType(Datagram), getAddrInfo, defaultHints)
 import Prelude
 import qualified System.Random.Stateful as R
@@ -30,15 +29,15 @@ import DNS.Do53.System
 
 ----------------------------------------------------------------
 
-findAddresses :: ResolvConf -> IO (NonEmpty AddrInfo)
+findAddresses :: ResolvConf -> IO [AddrInfo]
 findAddresses conf = case resolvInfo conf of
-    RCHostName numhost       -> (:| []) <$> makeAddrInfo numhost Nothing
-    RCHostPort numhost mport -> (:| []) <$> makeAddrInfo numhost (Just mport)
+    RCHostName numhost       -> (:[]) <$> makeAddrInfo numhost Nothing
+    RCHostPort numhost mport -> (:[]) <$> makeAddrInfo numhost (Just mport)
     RCHostNames nss          -> mkAddrs nss
     RCFilePath file          -> getDefaultDnsServers file >>= mkAddrs
   where
-    mkAddrs []     = E.throwIO BadConfiguration
-    mkAddrs (l:ls) = (:|) <$> makeAddrInfo l Nothing <*> forM ls (`makeAddrInfo` Nothing)
+    mkAddrs [] = E.throwIO BadConfiguration
+    mkAddrs ls = forM ls (`makeAddrInfo` Nothing)
 
 makeAddrInfo :: HostName -> Maybe PortNumber -> IO AddrInfo
 makeAddrInfo addr mport = do
@@ -57,9 +56,9 @@ makeAddrInfo addr mport = do
 withResolver :: ResolvConf -> (Resolver -> IO a) -> IO a
 withResolver conf f = do
     addrs <- findAddresses conf
-    let n = NE.length addrs
+    let n = length addrs
     gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
-    let gens = NE.fromList $ map R.uniformWord16 gs
+    let gens = map R.uniformWord16 gs
     mcache <- case resolvCache conf of
       Just cacheconf -> Just <$> newCache (pruningDelay cacheconf)
       Nothing -> return Nothing
@@ -180,7 +179,7 @@ defaultResolvConf = ResolvConf {
 --   specified DNS servers and a cache database.
 data Resolver = Resolver {
     resolvConf  :: ResolvConf
-  , serverAddrs :: NonEmpty AddrInfo
-  , genIds      :: NonEmpty (IO Word16)
+  , serverAddrs :: [AddrInfo]
+  , genIds      :: [IO Word16]
   , cache       :: Maybe Cache
 }
