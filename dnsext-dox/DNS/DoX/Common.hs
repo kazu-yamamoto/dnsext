@@ -35,14 +35,15 @@ clientDoHHeaders bs = [
 
 ----------------------------------------------------------------
 
-makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
-makeAddrInfo maddr port = do
+makeAddrInfo :: HostName -> PortNumber -> IO AddrInfo
+makeAddrInfo addr port = do
     let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
         hints = defaultHints {
             addrFlags = flgs
           , addrSocketType = Stream
           }
-    head <$> getAddrInfo (Just hints) maddr (Just $ show port)
+        port' = show port
+    head <$> getAddrInfo (Just hints) (Just addr) (Just port')
 
 ----------------------------------------------------------------
 
