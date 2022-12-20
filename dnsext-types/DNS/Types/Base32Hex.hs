@@ -59,7 +59,11 @@ encode bs =
 
 decode :: ByteString -> Either String ByteString
 decode bs = do
-  let len = (5 * BS.length bs) `div` 8
+  let ilen = BS.length bs
+      len = (5 * ilen) `div` 8
+      r = ilen `mod` 8
+  when (r `notElem` [0, 2, 4, 5, 7]) $
+    Left $ "Base32Hex.decode: invalid length of base32hex: " ++ show ilen
   cs <- fmap chunks8 . mapM fromHex32 $ BS.unpack bs
   return $ BS.pack $ A.elems $ A.runSTUArray $ do
     a <- A.newArray (0 :: Int, len-1) 0
