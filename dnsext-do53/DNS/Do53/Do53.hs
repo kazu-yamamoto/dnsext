@@ -203,8 +203,8 @@ tcpResolve gen ai q tm ctls0 =
         bracket (open ai) close $ go ctls0
   where
     go ctls sock = do
-        let send = sendVC (sendTCP sock)
-            recv = recvVC (recvTCP sock)
+        let send = sendVC $ sendTCP sock
+            recv = recvVC $ recvTCP sock
         res <- perform ctls send recv
         let fl = flags $ header res
             rc = rcode fl

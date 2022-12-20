@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TupleSections #-}
 
 -- | Resolver related data types.
@@ -34,8 +33,8 @@ dnsPort :: PortNumber
 dnsPort = 53
 
 findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
-findAddrPorts (RCHostName   nh)  = return $ [(nh, dnsPort)]
-findAddrPorts (RCHostPort  nh p) = return $ [(nh, p)]
+findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
 findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
 findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
