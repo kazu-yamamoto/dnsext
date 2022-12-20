@@ -252,7 +252,7 @@ data OD_ClientSubnet =
 instance Show OD_ClientSubnet where
     show (OD_ClientSubnet b1 b2 ip@(IPv4 _)) = _showECS 1 b1 b2 $ show ip
     show (OD_ClientSubnet b1 b2 ip@(IPv6 _)) = _showECS 2 b1 b2 $ show ip
-    show (OD_ECSgeneric fam b1 b2 a) = _showECS fam b1 b2 $ b16encode $ Opaque.toByteString a
+    show (OD_ECSgeneric fam b1 b2 a) = _showECS fam b1 b2 $ C8.unpack $ Opaque.toBase16 a
 
 instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
@@ -387,7 +387,7 @@ od_unknown code o = toOData $ OD_Unknown code o
 
 _showNSID :: OD_NSID -> String
 _showNSID (OD_NSID nsid) = "NSID "
-                        ++ b16encode bs
+                        ++ C8.unpack (Opaque.toBase16 nsid)
                         ++ ";"
                         ++ printable bs
   where
