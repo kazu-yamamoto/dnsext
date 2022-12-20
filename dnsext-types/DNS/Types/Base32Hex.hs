@@ -13,6 +13,7 @@ import Control.Monad
 import Data.Bits
 import Data.ByteString (ByteString)
 import qualified Data.List as L
+import Data.Word8 (_0, _9, _A, _V, _a, _v)
 
 -- | Encode ByteString using the
 -- <https://tools.ietf.org/html/rfc4648#section-7 RFC4648 base32hex>
@@ -65,12 +66,9 @@ decode bs = do
     go cs a 0
   where
     fromHex32 w
-      {- '0' <= w <= '9' -}
-      | 48 <= w && w <= 57   =  Right $ w - 48
-      {- 'A' <= w <= 'V' -}
-      | 65 <= w && w <= 86   =  Right $ w - 55
-      {- 'a' <= w <= 'v' -}
-      | 97 <= w && w <= 118  =  Right $ w - 87
+      | _0 <= w && w <= _9   =  Right $ w - 48
+      | _A <= w && w <= _V   =  Right $ w - 55
+      | _a <= w && w <= _v   =  Right $ w - 87
       | otherwise            =  Left "Base32Hex.decode: not base32hex format"
 
     chunks8 = L.unfoldr chunk
