@@ -81,6 +81,5 @@ test-suite spec
         base,
         bytestring,
         hspec,
-        memory,
         iproute >=1.3.2,
         word8

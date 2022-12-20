@@ -10,8 +10,6 @@ import Data.Int
 import Data.Word
 import Data.ByteString (ByteString)
 
-import Data.ByteArray.Encoding (Base (Base16, Base64), convertFromBase)
-
 import DNS.Types
 import qualified DNS.Types.Opaque as Opaque
 
@@ -247,10 +245,10 @@ rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromStr
 
 opaqueFromB16Hex :: String -> Opaque
 opaqueFromB16Hex =
-  either (error "opaqueFromB16Hex: fail to decode hex") Opaque.fromByteString .
-  convertFromBase Base16 . (fromString :: String -> ByteString) . filter (/= ' ')
+  either (error "opaqueFromB16Hex: fail to decode hex") id .
+  Opaque.fromBase16 . (fromString :: String -> ByteString) . filter (/= ' ')
 
 opaqueFromB64 :: String -> Opaque
 opaqueFromB64 =
-  either (error "opaqueFromB64: fail to decode base64") Opaque.fromByteString .
-  convertFromBase Base64 . (fromString :: String -> ByteString) . filter (/= ' ')
+  either (error "opaqueFromB64: fail to decode base64") id .
+  Opaque.fromBase64 . (fromString :: String -> ByteString) . filter (/= ' ')
