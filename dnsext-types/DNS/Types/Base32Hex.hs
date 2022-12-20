@@ -81,11 +81,11 @@ decode bs = do
     store8 a i v = A.writeArray a i v
 
     stores ss a n f0 f1 f2 f3 f4 f5 f6 f7 = do
-      let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-          w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
-          w2 = f3 `shiftL` 4 .|. f4 `shiftR` 1
-          w3 = f4 `shiftL` 7 .|. f5 `shiftL` 2 .|. f6 `shiftR` 3
-          w4 = f6 `shiftL` 5 .|. f7
+      let w0 = f0 `unsafeShiftL` 3 .|. f1 `unsafeShiftR` 2
+          w1 = f1 `unsafeShiftL` 6 .|. f2 `unsafeShiftL` 1 .|. f3 `unsafeShiftR` 4
+          w2 = f3 `unsafeShiftL` 4 .|. f4 `unsafeShiftR` 1
+          w3 = f4 `unsafeShiftL` 7 .|. f5 `unsafeShiftL` 2 .|. f6 `unsafeShiftR` 3
+          w4 = f6 `unsafeShiftL` 5 .|. f7
       sequence_ $
         take ss
         [ store8 a  n      w0,
