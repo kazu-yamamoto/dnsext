@@ -1,6 +1,11 @@
 module DNS.Types.Opaque.Internal where
 
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
+
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Base64 as B64
+import qualified DNS.Types.Base32Hex as B32H
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -24,7 +29,7 @@ showOpaque :: Opaque -> String
 showOpaque (Opaque o) = "\\# "
                      ++ show (Short.length o)
                      ++ " "
-                     ++ b16encode (Short.fromShort o)
+                     ++ C8.unpack (B16.encode $ Short.fromShort o)
 
 ----------------------------------------------------------------
 
@@ -39,6 +44,24 @@ toShortByteString (Opaque o) = o
 
 fromShortByteString :: ShortByteString -> Opaque
 fromShortByteString = Opaque
+
+toBase16 :: Opaque -> ByteString
+toBase16 (Opaque o) = B16.encode $ Short.fromShort o
+
+fromBase16 :: ByteString -> Either String Opaque
+fromBase16 = (Opaque . Short.toShort <$>) . B16.decode
+
+toBase32Hex :: Opaque -> ByteString
+toBase32Hex (Opaque o) = B32H.encode $ Short.fromShort o
+
+fromBase32Hex :: ByteString -> Either String Opaque
+fromBase32Hex = (Opaque . Short.toShort <$>) . B32H.decode
+
+toBase64 :: Opaque -> ByteString
+toBase64 (Opaque o) = B64.encode $ Short.fromShort o
+
+fromBase64 :: ByteString -> Either String Opaque
+fromBase64 = (Opaque . Short.toShort <$>) . B64.decode
 
 ----------------------------------------------------------------
 

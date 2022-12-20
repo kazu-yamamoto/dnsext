@@ -11,6 +11,12 @@ module DNS.Types.Opaque (
   , fromByteString
   , toShortByteString
   , fromShortByteString
+  , toBase16
+  , fromBase16
+  , toBase32Hex
+  , fromBase32Hex
+  , toBase64
+  , fromBase64
   ) where
 
 import Prelude hiding (null, concat, splitAt, length, foldr)
