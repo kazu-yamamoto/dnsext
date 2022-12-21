@@ -8,7 +8,7 @@ import DNS.Types
 -- this package
 import DNS.SEC.Imports
 import DNS.SEC.PubKey
-import DNS.SEC.Types (RD_NSEC3)
+import DNS.SEC.Types (RD_NSEC3, RD_NSEC)
 
 data RRSIGImpl =
   forall pubkey sig .
@@ -31,6 +31,8 @@ data NSEC3Impl =
   { nsec3IGetHash :: ByteString -> hash
   , nsec3IGetBytes :: hash -> ByteString
   }
+
+---
 
 {- | owner name and NSEC3 rdata express hashed domain-name range -}
 type NSEC3_Range = (Domain, RD_NSEC3)
@@ -64,4 +66,32 @@ data NSEC3_Result
     , nsec3_wildcard_match    :: NSEC3_Witness
     }
     {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.5 -}
+  deriving Show
+
+---
+
+type NSEC_Range = (Domain, RD_NSEC)
+
+type NSEC_Witness = (NSEC_Range, Domain)
+
+data NSEC_Result
+  = NSECResult_NameError
+    { nsec_qname_cover       :: NSEC_Witness
+    , nsec_wildcard_cover    :: NSEC_Witness
+    }
+    {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2 -}
+  | NSECResult_NoData
+    { nsec_qname_match       :: NSEC_Witness }
+    {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.3 -}
+  | NSECResult_UnsignedDelegation
+    { nsec_ns_qname_cover    :: NSEC_Witness }
+    {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.5 -}
+  | NSECResult_WildcardExpansion
+    { nsec_qname_cover       :: NSEC_Witness }
+    {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.6 -}
+  | NSECResult_WildcardNoData
+    { nsec_qname_cover       :: NSEC_Witness
+    , nsec_wildcard_match    :: NSEC_Witness
+    }
+    {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.7 -}
   deriving Show
