@@ -30,10 +30,14 @@ verify n3s domain qtype = do
 
     findEncloser supers refines =
       maybe (Left "NSEC3.verify: no NSEC3 encloser") id $
-      getNoData props
-      <|>
       {- find non-existence of RRset -}
       loop stepNE ppairs
+      {- `loop stepNE` detects OutOutDelegation case.
+         Run this loop before `getNoData` to apply delegation
+         for both OptOutDelegation and NoData properties -}
+      <|>
+      {- find just qname matches -}
+      getNoData props
       <|>
       {- find wildcard-expansion result -}
       loop stepWE props
