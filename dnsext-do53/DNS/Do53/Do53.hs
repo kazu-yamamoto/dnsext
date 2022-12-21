@@ -236,8 +236,7 @@ tcpResolve gen ai q tm ctls0 =
 makeAddrInfo :: (HostName,PortNumber) -> IO AddrInfo
 makeAddrInfo (nh,p) = do
     let hints = defaultHints {
-            -- fixme passive
-            addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV, AI_PASSIVE]
+            addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV]
           , addrSocketType = Datagram
           }
     let np = show p
