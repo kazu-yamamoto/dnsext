@@ -40,7 +40,7 @@ spec = do
     it "NoData 1" $ caseNSEC3 nsec3RFC5155NoData1
     it "NoData 2" $ caseNSEC3 nsec3RFC5155NoData2
     it "NoData 3" $ caseNSEC3 nsec3RFC5155NoData3
-    it "opt-out delegation" $ caseNSEC3 nsec3RFC5155OptOut
+    it "unsigned delegation" $ caseNSEC3 nsec3RFC5155UnsignedDelegation
     it "wildcard expansion" $ caseNSEC3 nsec3RFC5155WildcardExpansion
     it "wildcard NoData" $ caseNSEC3 nsec3RFC5155WildcardNoData
 
@@ -273,7 +273,7 @@ type NSEC3_EW = (Domain, Domain) {- expect witness, owner and qname -}
 data NSEC3_Expect
   = N3Expect_NameError NSEC3_EW NSEC3_EW NSEC3_EW
   | N3Expect_NoData NSEC3_EW
-  | N3Expect_OptOutDelegation NSEC3_EW NSEC3_EW
+  | N3Expect_UnsignedDelegation NSEC3_EW NSEC3_EW
   | N3Expect_WildcardExpansion NSEC3_EW
   | N3Expect_WildcardNoData NSEC3_EW NSEC3_EW NSEC3_EW
   deriving (Eq, Show)
@@ -281,22 +281,22 @@ type NSEC3_CASE = (([(Domain, RData)], Domain, TYPE), NSEC3_Expect)
 
 nsec3CheckResult :: NSEC3_Result -> NSEC3_Expect -> Either String ()
 nsec3CheckResult result expect = case (result, expect) of
-  (N3Result_NameError {..}, N3Expect_NameError ec en ew)               -> do
+  (N3Result_NameError {..}, N3Expect_NameError ec en ew)                 -> do
     check "name-error: closest"         (w2e nsec3_closest_match) ec
     check "name-error: next"            (w2e nsec3_next_closer_cover) en
     check "name-error: wildcard"        (w2e nsec3_wildcard_cover) ew
-  (N3Result_NoData {..},    N3Expect_NoData ec)                        -> do
+  (N3Result_NoData {..},    N3Expect_NoData ec)                          -> do
     check "no-data: closest"            (w2e nsec3_closest_match) ec
-  (N3Result_OptOutDelegation {..}, N3Expect_OptOutDelegation ec en)    -> do
-    check "opt-out: closest"            (w2e nsec3_closest_match) ec
-    check "opt-out: next"               (w2e nsec3_next_closer_cover) en
-  (N3Result_WildcardExpansion {..}, N3Expect_WildcardExpansion en)     -> do
+  (N3Result_UnsignedDelegation {..}, N3Expect_UnsignedDelegation ec en)  -> do
+    check "unsigned: closest"           (w2e nsec3_closest_match) ec
+    check "unsigned: next"              (w2e nsec3_next_closer_cover) en
+  (N3Result_WildcardExpansion {..}, N3Expect_WildcardExpansion en)       -> do
     check "wildcard-expansion: next"    (w2e nsec3_next_closer_cover) en
-  (N3Result_WildcardNoData {..},    N3Expect_WildcardNoData ec en ew)  -> do
+  (N3Result_WildcardNoData {..},    N3Expect_WildcardNoData ec en ew)    -> do
     check "wildcard-no-data: closest"   (w2e nsec3_closest_match) ec
     check "wildcard-no-data: next"      (w2e nsec3_next_closer_cover) en
     check "wildcard-no-data: wildcard"  (w2e nsec3_wildcard_match) ew
-  _                                                               ->
+  _                                                                      ->
     Left $ unlines ["result data mismatch:", show result, show expect]
 
   where
@@ -385,8 +385,8 @@ nsec3RFC5155NoData3 = ((rdatas, "example.", DS), expect)
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3
 -- Referral to an Opt-Out Unsigned Zone
-nsec3RFC5155OptOut :: NSEC3_CASE
-nsec3RFC5155OptOut = ((rdatas, "mc.c.example.", MX), expect)
+nsec3RFC5155UnsignedDelegation :: NSEC3_CASE
+nsec3RFC5155UnsignedDelegation = ((rdatas, "mc.c.example.", MX), expect)
   where
     rdatas =
       [ ("35mthgpgcu1qg68fab165klnsnk3dpvl.example.",
@@ -395,7 +395,7 @@ nsec3RFC5155OptOut = ((rdatas, "mc.c.example.", MX), expect)
          rd_nsec3' 1 1 12 "aabbccdd" "2t7b4g4vsa5smi47k61mv5bv1a22bojr" [MX, DNSKEY, NS, SOA, NSEC3PARAM, RRSIG])
       ]
     expect =
-      N3Expect_OptOutDelegation
+      N3Expect_UnsignedDelegation
       ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.", "example.")
       ("35mthgpgcu1qg68fab165klnsnk3dpvl.example.", "c.example.")
 

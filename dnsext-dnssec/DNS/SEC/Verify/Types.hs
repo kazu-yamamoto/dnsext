@@ -50,7 +50,7 @@ data NSEC3_Result
     { nsec3_closest_match     :: NSEC3_Witness }
     {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2
        https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.6 -}
-  | N3Result_OptOutDelegation
+  | N3Result_UnsignedDelegation
     { nsec3_closest_match     :: NSEC3_Witness
     , nsec3_next_closer_cover :: NSEC3_Witness
     }

@@ -32,9 +32,9 @@ verify n3s domain qtype = do
       maybe (Left "NSEC3.verify: no NSEC3 encloser") id $
       {- find non-existence of RRset -}
       loop stepNE ppairs
-      {- `loop stepNE` detects OutOutDelegation case.
+      {- `loop stepNE` detects UnsignedDelegation case.
          Run this loop before `getNoData` to apply delegation
-         for both OptOutDelegation and NoData properties -}
+         for both UnsignedDelegation and NoData properties -}
       <|>
       {- find just qname matches -}
       getNoData props
@@ -76,12 +76,12 @@ verify n3s domain qtype = do
                   notElemBitmap m@( Matches ((_, RD_NSEC3 {..}), _) )
                     | qtype `elem` nsec3_types  =  Left $ "NSEC3.verify: WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
                     | otherwise                 =  Right $ n3r_wildcardNoData closest nextCloser m
-              optOutDelegation
-                | OptOut `elem` nsec3_flags nextN3  =  Right $ n3r_optOutDelegation closest nextCloser
+              unsignedDelegation
+                | OptOut `elem` nsec3_flags nextN3  =  Right $ n3r_unsignedDelegation closest nextCloser
                 | otherwise                         =  Left $ "NSEC3.verify: wildcard name is not matched or covered."
           ( Right . n3r_nameError closest nextCloser <$> takeWildcardCover  <|>
             takeWildcardNoData                                              <|>
-            pure optOutDelegation )
+            pure unsignedDelegation )
 
         stepWE :: [RangeProp] -> Maybe (Either String NSEC3_Result)
         stepWE nexts = Right . n3r_wildcardExpansion <$> just1 (covers nexts)
@@ -111,9 +111,9 @@ n3r_noData :: Matches NSEC3_Witness -> NSEC3_Result
 n3r_noData (Matches closest) =
   N3Result_NoData closest
 
-n3r_optOutDelegation :: Matches NSEC3_Witness -> Covers NSEC3_Witness -> NSEC3_Result
-n3r_optOutDelegation (Matches closest) (Covers next) =
-  N3Result_OptOutDelegation closest next
+n3r_unsignedDelegation :: Matches NSEC3_Witness -> Covers NSEC3_Witness -> NSEC3_Result
+n3r_unsignedDelegation (Matches closest) (Covers next) =
+  N3Result_UnsignedDelegation closest next
 
 n3r_wildcardExpansion :: Covers NSEC3_Witness -> NSEC3_Result
 n3r_wildcardExpansion (Covers next) =
