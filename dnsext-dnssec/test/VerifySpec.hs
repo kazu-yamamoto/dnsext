@@ -269,30 +269,30 @@ nsec3HashRFC7129 =
 -----
 -- NSEC3 cases
 
-type NSEC3_ExpectW = (Domain, Domain) {- expect owner and qname -}
+type NSEC3_EW = (Domain, Domain) {- expect witness, owner and qname -}
 data NSEC3_Expect
-  = N3W_NameError NSEC3_ExpectW NSEC3_ExpectW NSEC3_ExpectW
-  | N3W_NoData NSEC3_ExpectW
-  | N3W_OptOutDelegation NSEC3_ExpectW NSEC3_ExpectW
-  | N3W_WildcardExpansion NSEC3_ExpectW
-  | N3W_WildcardNoData NSEC3_ExpectW NSEC3_ExpectW NSEC3_ExpectW
+  = N3Expect_NameError NSEC3_EW NSEC3_EW NSEC3_EW
+  | N3Expect_NoData NSEC3_EW
+  | N3Expect_OptOutDelegation NSEC3_EW NSEC3_EW
+  | N3Expect_WildcardExpansion NSEC3_EW
+  | N3Expect_WildcardNoData NSEC3_EW NSEC3_EW NSEC3_EW
   deriving (Eq, Show)
 type NSEC3_CASE = (([(Domain, RData)], Domain, TYPE), NSEC3_Expect)
 
 nsec3CheckResult :: NSEC3_Result -> NSEC3_Expect -> Either String ()
 nsec3CheckResult result expect = case (result, expect) of
-  (N3Result_NameError {..}, N3W_NameError ec en ew)               -> do
+  (N3Result_NameError {..}, N3Expect_NameError ec en ew)               -> do
     check "name-error: closest"         (w2e nsec3_closest_match) ec
     check "name-error: next"            (w2e nsec3_next_closer_cover) en
     check "name-error: wildcard"        (w2e nsec3_wildcard_cover) ew
-  (N3Result_NoData {..},    N3W_NoData ec)                        -> do
+  (N3Result_NoData {..},    N3Expect_NoData ec)                        -> do
     check "no-data: closest"            (w2e nsec3_closest_match) ec
-  (N3Result_OptOutDelegation {..}, N3W_OptOutDelegation ec en)    -> do
+  (N3Result_OptOutDelegation {..}, N3Expect_OptOutDelegation ec en)    -> do
     check "opt-out: closest"            (w2e nsec3_closest_match) ec
     check "opt-out: next"               (w2e nsec3_next_closer_cover) en
-  (N3Result_WildcardExpansion {..}, N3W_WildcardExpansion en)     -> do
+  (N3Result_WildcardExpansion {..}, N3Expect_WildcardExpansion en)     -> do
     check "wildcard-expansion: next"    (w2e nsec3_next_closer_cover) en
-  (N3Result_WildcardNoData {..},    N3W_WildcardNoData ec en ew)  -> do
+  (N3Result_WildcardNoData {..},    N3Expect_WildcardNoData ec en ew)  -> do
     check "wildcard-no-data: closest"   (w2e nsec3_closest_match) ec
     check "wildcard-no-data: next"      (w2e nsec3_next_closer_cover) en
     check "wildcard-no-data: wildcard"  (w2e nsec3_wildcard_match) ew
@@ -300,7 +300,7 @@ nsec3CheckResult result expect = case (result, expect) of
     Left $ unlines ["result data mismatch:", show result, show expect]
 
   where
-    w2e :: NSEC3_Witness -> NSEC3_ExpectW
+    w2e :: NSEC3_Witness -> NSEC3_EW
     w2e ((owner, _range), qname) = (owner, qname)
     check tag r e
       | r == e     =  Right ()
@@ -326,7 +326,7 @@ nsec3RFC7129NameError = ((rdatas, fromString "x.2.example.org.", TXT), expect)
          rd_nsec3' 1 0 2 "DEAD" "8555T7QEGAU7PJTKSNBCHG4TD2M0JNPJ" [TXT, RRSIG])
       ]
     expect =
-      N3W_NameError
+      N3Expect_NameError
       ("15bg9l6359f5ch23e34ddua6n1rihl9h.example.org.", "example.org.")
       ("75b9id679qqov6ldfhd8ocshsssb6jvq.example.org.", "2.example.org.")
       ("1avvqn74sg75ukfvf25dgcethgq638ek.example.org.", "*.example.org.")
@@ -345,7 +345,7 @@ nsec3RFC5155NameError = ((rdatas, "a.c.x.w.example.", A), expect)
          rd_nsec3' 1 1 12 "aabbccdd" "b4um86eghhds6nea196smvmlo4ors995" [NS, DS, RRSIG])
       ]
     expect =
-      N3W_NameError
+      N3Expect_NameError
       ("b4um86eghhds6nea196smvmlo4ors995.example.", "x.w.example.")
       ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.", "c.x.w.example.")
       ("35mthgpgcu1qg68fab165klnsnk3dpvl.example.", "*.x.w.example")
@@ -359,7 +359,7 @@ nsec3RFC5155NoData1 = ((rdatas, "ns1.example.", MX), expect)
       [ ("2t7b4g4vsa5smi47k61mv5bv1a22bojr.example.",
          rd_nsec3' 1 1 12 "aabbccdd" "2vptu5timamqttgl4luu9kg21e0aor3s" [A, RRSIG])
       ]
-    expect = N3W_NoData ("2t7b4g4vsa5smi47k61mv5bv1a22bojr.example.", "ns1.example.")
+    expect = N3Expect_NoData ("2t7b4g4vsa5smi47k61mv5bv1a22bojr.example.", "ns1.example.")
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2.1
 -- No Data Error, Empty Non-Terminal
@@ -370,7 +370,7 @@ nsec3RFC5155NoData2 = ((rdatas, "y.w.example.", A), expect)
       [ ("ji6neoaepv8b5o6k4ev33abha8ht9fgc.example.",
         rd_nsec3' 1 1 12 "aabbccdd" "k8udemvp1j2f7eg6jebps17vp3n8i58h" [])
       ]
-    expect = N3W_NoData ("ji6neoaepv8b5o6k4ev33abha8ht9fgc.example.", "y.w.example.")
+    expect = N3Expect_NoData ("ji6neoaepv8b5o6k4ev33abha8ht9fgc.example.", "y.w.example.")
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.6
 -- DS Child Zone No Data Error
@@ -381,7 +381,7 @@ nsec3RFC5155NoData3 = ((rdatas, "example.", DS), expect)
       [ ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.",
          rd_nsec3' 1 1 12 "aabbccdd" "2t7b4g4vsa5smi47k61mv5bv1a22bojr" [MX, DNSKEY, NS])
       ]
-    expect = N3W_NoData ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.", "example.")
+    expect = N3Expect_NoData ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.", "example.")
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3
 -- Referral to an Opt-Out Unsigned Zone
@@ -395,7 +395,7 @@ nsec3RFC5155OptOut = ((rdatas, "mc.c.example.", MX), expect)
          rd_nsec3' 1 1 12 "aabbccdd" "2t7b4g4vsa5smi47k61mv5bv1a22bojr" [MX, DNSKEY, NS, SOA, NSEC3PARAM, RRSIG])
       ]
     expect =
-      N3W_OptOutDelegation
+      N3Expect_OptOutDelegation
       ("0p9mhaveqvm6t7vbl5lop2u3t2rp3tom.example.", "example.")
       ("35mthgpgcu1qg68fab165klnsnk3dpvl.example.", "c.example.")
 
@@ -408,7 +408,7 @@ nsec3RFC5155WildcardExpansion = ((rdatas, "a.z.w.example.", MX), expect)
       [ ("q04jkcevqvmu85r014c7dkba38o0ji5r.example.",
          rd_nsec3' 1 1 12 "aabbccdd" "r53bq7cc2uvmubfu5ocmm6pers9tk9en" [A, RRSIG])
       ]
-    expect = N3W_WildcardExpansion ("q04jkcevqvmu85r014c7dkba38o0ji5r.example.", "z.w.example.")
+    expect = N3Expect_WildcardExpansion ("q04jkcevqvmu85r014c7dkba38o0ji5r.example.", "z.w.example.")
 
 
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.5
@@ -425,7 +425,7 @@ nsec3RFC5155WildcardNoData = ((rdatas, "a.z.w.example.", AAAA), expect)
          rd_nsec3' 1 1 12 "aabbccdd" "t644ebqk9bibcna874givr6joj62mlhv" [MX, RRSIG])
       ]
     expect =
-      N3W_WildcardNoData
+      N3Expect_WildcardNoData
       ("k8udemvp1j2f7eg6jebps17vp3n8i58h.example.", "w.example.")
       ("q04jkcevqvmu85r014c7dkba38o0ji5r.example.", "z.w.example.")
       ("r53bq7cc2uvmubfu5ocmm6pers9tk9en.example.", "*.w.example")
