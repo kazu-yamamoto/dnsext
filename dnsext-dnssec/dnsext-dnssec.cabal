@@ -34,6 +34,7 @@ library
         DNS.SEC.Verify.EdDSA
         DNS.SEC.Verify.RSA
         DNS.SEC.Verify.N3SHA
+        DNS.SEC.Verify.NSEC
         DNS.SEC.Verify.NSEC3
         DNS.SEC.Verify.Types
         DNS.SEC.Verify.Verify
