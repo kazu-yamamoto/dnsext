@@ -43,6 +43,12 @@ spec = do
     it "unsigned delegation" $ caseNSEC3 nsec3RFC5155UnsignedDelegation
     it "wildcard expansion" $ caseNSEC3 nsec3RFC5155WildcardExpansion
     it "wildcard NoData" $ caseNSEC3 nsec3RFC5155WildcardNoData
+  describe "verify NSEC" $ do
+    it "NameError" $ caseNSEC nsecRFC4035NameError
+    it "NoData" $ caseNSEC nsecRFC4035NoData
+    it "unsigned delegation" $ caseNSEC nsecRFC4035UnsignedDelegation
+    it "wildcard expansion" $ caseNSEC nsecRFC4035WildcardExpansion
+    it "wildcard NoData" $ caseNSEC nsecRFC4035WildcardNoData
 
 -----
 -- KeyTag cases
@@ -429,6 +435,125 @@ nsec3RFC5155WildcardNoData = ((rdatas, "a.z.w.example.", AAAA), expect)
       ("k8udemvp1j2f7eg6jebps17vp3n8i58h.example.", "w.example.")
       ("q04jkcevqvmu85r014c7dkba38o0ji5r.example.", "z.w.example.")
       ("r53bq7cc2uvmubfu5ocmm6pers9tk9en.example.", "*.w.example")
+
+-----
+
+type NSEC_EW = (Domain, Domain) {- expect witness, owner and qname -}
+data NSEC_Expect
+  = NSEC_Expect_NameError NSEC_EW NSEC_EW
+  | NSEC_Expect_NoData NSEC_EW
+  | NSEC_Expect_UnsignedDelegation NSEC_EW
+  | NSEC_Expect_WildcardExpansion NSEC_EW
+  | NSEC_Expect_WildcardNoData NSEC_EW NSEC_EW
+  deriving (Eq, Show)
+
+nsecCheckResult :: NSEC_Result -> NSEC_Expect -> Either String ()
+nsecCheckResult result expect = case (result, expect) of
+  (NSECResult_NameError {..},           NSEC_Expect_NameError eq ew)        -> do
+    check "name-error: qname_cover"           (w2e nsec_qname_cover) eq
+    check "name-error: wildcard_cover"        (w2e nsec_wildcard_cover) ew
+  (NSECResult_NoData {..},              NSEC_Expect_NoData eq)              -> do
+    check "no-data: qname_match"              (w2e nsec_qname_match) eq
+  (NSECResult_UnsignedDelegation {..},  NSEC_Expect_UnsignedDelegation eq)  -> do
+    check "unsigned: ns_qname_cover"          (w2e nsec_ns_qname_cover) eq
+  (NSECResult_WildcardExpansion {..},   NSEC_Expect_WildcardExpansion eq)   -> do
+    check "wildcard-expansion: qname_cover"   (w2e nsec_qname_cover) eq
+  (NSECResult_WildcardNoData {..},      NSEC_Expect_WildcardNoData eq ew)   -> do
+    check "wildcard-no-data: qname_cover"     (w2e nsec_qname_cover) eq
+    check "wildcard-no-data: wildcard_match"  (w2e nsec_wildcard_match) ew
+  _                                                                         ->
+    Left $ unlines ["result data mismatch:", show result, show expect]
+
+  where
+    w2e :: NSEC_Witness -> NSEC_EW
+    w2e ((owner, _range), qname) = (owner, qname)
+    check tag r e
+      | r == e     =  Right ()
+      | otherwise  =  Left $ tag ++ ": " ++ show r ++ " =/= " ++ show e
+
+type NSEC_CASE = ((Domain, [(Domain, RData)], Domain, TYPE), NSEC_Expect)
+
+caseNSEC :: NSEC_CASE -> Expectation
+caseNSEC ((zone, rds, qn, qtype), expect) = either expectationFailure (const $ pure ()) $ do
+  result <- verifyNSEC zone ranges qn qtype
+  nsecCheckResult result expect
+  where
+    ranges = [ (owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd] ]
+
+-- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2
+-- Name Error
+nsecRFC4035NameError :: NSEC_CASE
+nsecRFC4035NameError = (("example.", rdatas, "ml.example.", A), expect)
+  where
+    rdatas =
+      [ ("b.example.",
+         rd_nsec "ns1.example." [NS, RRSIG, NSEC])
+      , ("example.",
+         rd_nsec "a.example." [NS, SOA, MX, RRSIG, NSEC, DNSKEY])
+      ]
+    expect =
+      NSEC_Expect_NameError
+      ("b.example.", "ml.example.")
+      ("example.", "*.example.")
+
+-- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.3
+-- No Data Error
+nsecRFC4035NoData :: NSEC_CASE
+nsecRFC4035NoData = (("example.", rdatas, "ns1.example.", MX), expect)
+  where
+    rdatas =
+      [ ("ns1.example.",
+         rd_nsec "ns2.example." [A, RRSIG, NSEC])
+      ]
+    expect =
+      NSEC_Expect_NoData
+      ("ns1.example.", "ns1.example.")
+
+-- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.5
+-- Referral to Unsigned Zone
+nsecRFC4035UnsignedDelegation :: NSEC_CASE
+nsecRFC4035UnsignedDelegation = (("example.", rdatas, "mc.b.example.", MX), expect)
+  where
+    rdatas =
+      [ ("b.example.",
+         rd_nsec "ns1.example." [NS, RRSIG, NSEC])
+      ]
+    expect =
+      NSEC_Expect_UnsignedDelegation
+      ("b.example.", "mc.b.example.")
+
+-- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.6
+-- Wildcard Expansion
+nsecRFC4035WildcardExpansion :: NSEC_CASE
+nsecRFC4035WildcardExpansion = (("example.", rdatas, "a.z.w.example.", MX), expect)
+  where
+    rdatas =
+      [ ("x.y.w.example.",
+         rd_nsec "xx.example." [MX, RRSIG, NSEC])
+      ]
+    expect =
+      NSEC_Expect_WildcardExpansion
+      ("x.y.w.example.", "a.z.w.example.")
+
+-- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.7
+-- Wildcard No Data Error
+nsecRFC4035WildcardNoData :: NSEC_CASE
+nsecRFC4035WildcardNoData = (("example.", rdatas, "a.z.w.example.", AAAA), expect)
+  where
+    rdatas =
+      [ ("x.y.w.example.",
+         rd_nsec "xx.example." [MX, RRSIG, NSEC])
+      , ("*.w.example",
+         rd_nsec "x.w.example." [MX, RRSIG, NSEC])
+      ]
+    expect =
+      NSEC_Expect_WildcardNoData
+      ("x.y.w.example.", "a.z.w.example.")
+      ("*.w.example.", "*.w.example.")
+
+-- a.z.w.example.      IN AAAA
+{-- x.y.w.example. 3600 NSEC   xx.example. MX RRSIG NSEC -}
+{-- *.w.example.   3600 NSEC   x.w.example. MX RRSIG NSEC -}
 
 -----
 -- helpers

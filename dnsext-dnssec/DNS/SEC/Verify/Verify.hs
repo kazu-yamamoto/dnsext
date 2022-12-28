@@ -26,6 +26,7 @@ import DNS.SEC.Verify.EdDSA (ed25519, ed448)
 import qualified DNS.SEC.Verify.SHA as DS
 import qualified DNS.SEC.Verify.NSEC3 as NSEC3
 import qualified DNS.SEC.Verify.N3SHA as NSEC3
+import qualified DNS.SEC.Verify.NSEC as NSEC
 
 
 keyTag :: RD_DNSKEY -> Word16
@@ -190,3 +191,8 @@ verifyNSEC3 cs domain qtype = do
       let alg = nsec3_hashalg nsec3
       impl <- maybe (Left $ "verifyNSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
       return (impl, r)
+
+---
+
+verifyNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+verifyNSEC = NSEC.verify
