@@ -37,7 +37,7 @@ import Foreign.C.Types (CTime(..))
 
 type EpochTime = Int64
 
-getEpochTime :: IO Int64
+getEpochTime :: IO EpochTime
 getEpochTime = do
     UnixTime (CTime tim) _ <- getUnixTime
     return tim
