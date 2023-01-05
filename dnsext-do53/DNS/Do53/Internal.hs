@@ -8,6 +8,12 @@ module DNS.Do53.Internal (
   , sendTCP
   , sendVC
   , encodeVCLength
+    --
+  , udpResolve
+  , tcpResolve
+  , getEpochTime
   ) where
 
+import DNS.Do53.Do53
 import DNS.Do53.IO
+import DNS.Do53.Imports

@@ -3,6 +3,8 @@
 
 module DNS.Do53.Do53 (
     resolve
+  , udpResolve
+  , tcpResolve
   ) where
 
 import Control.Concurrent.Async (async, waitAnyCancel)
