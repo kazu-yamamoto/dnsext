@@ -15,11 +15,9 @@ module DNS.Do53.Lookup (
   ) where
 
 import DNS.Types hiding (Seconds)
-import Network.Socket (Socket)
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53
-import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
@@ -268,7 +266,7 @@ lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
              -> TYPE          -- ^ Query RRtype
              -> QueryControls -- ^ Query flag and EDNS overrides
              -> IO (Either DNSError DNSMessage)
-lookupRawCtl rslv dom typ ctls = resolve rslv dom typ ctls recvUDP
+lookupRawCtl rslv dom typ ctls = resolve rslv dom typ ctls getEpochTime
 
 -- | Similar to 'lookupRawCtl', but the recv action can be replaced with
 -- something other than `DNS.Do53.Internal.receive`.
@@ -279,6 +277,6 @@ lookupRawCtlRecv :: Resolver                  -- ^ Resolver obtained via 'withRe
                  -> Domain                    -- ^ Query domain
                  -> TYPE                      -- ^ Query RRtype
                  -> QueryControls             -- ^ Query flag and EDNS overrides
-                 -> (Socket -> IO DNSMessage) -- ^ Action to receive message from socket
+                 -> IO EpochTime               -- ^ Action to get an epoch time
                  -> IO (Either DNSError DNSMessage)
 lookupRawCtlRecv = resolve

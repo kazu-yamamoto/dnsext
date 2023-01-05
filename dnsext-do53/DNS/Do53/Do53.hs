@@ -8,7 +8,9 @@ module DNS.Do53.Do53 (
 import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
+import DNS.Types.Decode
 import Network.Socket (Socket, close, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
+import Network.Socket.ByteString (recv)
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
@@ -40,7 +42,7 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
-type Rslv0 = QueryControls -> (Socket -> IO DNSMessage)
+type Rslv0 = QueryControls -> IO EpochTime
            -> IO (Either DNSError DNSMessage)
 
 type Rslv1 = Question
@@ -56,7 +58,7 @@ type TcpRslv = IO Identifier
             -> IO DNSMessage
 
 type UdpRslv = Int -- Retry
-            -> (Socket -> IO DNSMessage)
+            -> IO EpochTime
             -> TcpRslv
 
 -- In lookup loop, we try UDP until we get a response.  If the response
@@ -118,9 +120,9 @@ resolveConcurrent nss gens q tm retry ctls rcv =
     run ai gen = resolveOne ai gen q tm retry ctls rcv
 
 resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
-resolveOne hp gen q tm retry ctls rcv = do
+resolveOne hp gen q tm retry ctls getTime = do
     ai <- makeAddrInfo hp
-    E.try $ udpTcpResolve retry rcv gen ai q tm ctls
+    E.try $ udpTcpResolve retry getTime gen ai q tm ctls
 
 ----------------------------------------------------------------
 
@@ -128,8 +130,8 @@ resolveOne hp gen q tm retry ctls rcv = do
 -- but we use a fresh ID for each TCP lookup.
 --
 udpTcpResolve :: UdpRslv
-udpTcpResolve retry rcv gen ai q tm ctls =
-    udpResolve retry rcv gen ai q tm ctls `E.catch`
+udpTcpResolve retry getTime gen ai q tm ctls =
+    udpResolve retry getTime gen ai q tm ctls `E.catch`
         \TCPFallback -> tcpResolve gen ai { addrSocketType = Stream } q tm ctls
 
 ----------------------------------------------------------------
@@ -152,7 +154,7 @@ open ai = do
 
 -- This throws DNSError or TCPFallback.
 udpResolve :: UdpRslv
-udpResolve retry rcv gen ai q tm ctls0 =
+udpResolve retry getTime gen ai q tm ctls0 =
     E.handle (ioErrorToDNSError ai "udp") $
       bracket (open ai) close $ go ctls0
   where
@@ -187,10 +189,13 @@ udpResolve retry rcv gen ai q tm ctls0 =
     -- instead we'll time out if no matching answer arrives.
     --
     getAns sock ident = do
-        res <- rcv sock
-        if checkResp q ident res
-        then return res
-        else getAns sock ident
+        now <- getTime
+        bs <- recv sock 2048 `E.catch` \e -> E.throwIO $ NetworkFailure e
+        case decodeAt now bs of
+            Left  e   -> E.throwIO e
+            Right msg
+              | checkResp q ident msg -> return msg
+              | otherwise             -> getAns sock ident
 
 ----------------------------------------------------------------
 

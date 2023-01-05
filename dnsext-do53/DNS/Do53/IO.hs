@@ -2,8 +2,7 @@
 
 module DNS.Do53.IO (
     -- * Receiving DNS messages
-    recvUDP
-  , recvTCP
+    recvTCP
   , recvVC
   , decodeVCLength
     -- * Sending pre-encoded messages
@@ -25,21 +24,6 @@ import System.IO.Error
 import DNS.Do53.Imports
 
 ----------------------------------------------------------------
-
--- | Receive and decode a single 'DNSMessage' from a UDP 'Socket', throwing away
--- the client address.  Messages longer than 'maxUdpSize' are silently
--- truncated, but this should not occur in practice, since we cap the advertised
--- EDNS UDP buffer size limit at the same value.  A 'DNSError' is raised if I/O
--- or message decoding fails.
---
-recvUDP :: Socket -> IO DNSMessage
-recvUDP sock = do
-    let bufsiz = 2048
-    bs <- recv sock bufsiz `E.catch` \e -> E.throwIO $ NetworkFailure e
-    now <- getEpochTime
-    case decodeAt now bs of
-        Left  e   -> E.throwIO e
-        Right msg -> return msg
 
 recvVC :: (Int -> IO ByteString) -> IO DNSMessage
 recvVC rcv = do
