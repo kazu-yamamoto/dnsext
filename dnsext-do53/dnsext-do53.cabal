@@ -77,7 +77,6 @@ test-suite spec
         base,
         hspec,
         network,
-        network-udp,
 
 test-suite doctests
     type:             exitcode-stdio-1.0

@@ -93,11 +93,4 @@ isRecvSendMsg = True
 ---
 
 lookupRaw :: Int64 -> DNS.Resolver -> DNS.Domain -> DNS.TYPE -> IO (Either DNS.DNSError DNSMessage)
-lookupRaw now rslv dom typ = DNS.lookupRawCtlRecv rslv dom typ mempty rcv
-  where
-    rcv sock = do
-      bs <- Socket.recv sock bufsiz
-      case DNS.decodeAt now bs of
-        Left  e   -> E.throwIO e
-        Right msg -> return msg
-    bufsiz = 2048 -- large enough, no locking
+lookupRaw now rslv dom typ = DNS.lookupRawCtlTime rslv dom typ mempty (return now)
