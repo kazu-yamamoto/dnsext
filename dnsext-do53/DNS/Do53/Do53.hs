@@ -52,13 +52,13 @@ type Rslv1 = Question
           -> Int -- Retry
           -> Rslv0
 
-type Rslv = Question
+type Rslv =  (HostName,PortNumber)
+          -> IO Identifier
+          -> Question
           -> Int -- Timeout
           -> Int -- Retry
           -> QueryControls
           -> IO EpochTime
-          -> IO Identifier
-          -> (HostName,PortNumber)
           -> IO DNSMessage
 
 -- In lookup loop, we try UDP until we get a response.  If the response
@@ -120,7 +120,7 @@ resolveConcurrent nss gens q tm retry ctls getTime =
 
 resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
 resolveOne hp gen q tm retry ctls getTime = do
-    E.try $ udpTcpResolve q tm retry ctls getTime gen hp
+    E.try $ udpTcpResolve hp gen q tm retry ctls getTime
 
 ----------------------------------------------------------------
 
@@ -128,9 +128,9 @@ resolveOne hp gen q tm retry ctls getTime = do
 -- but we use a fresh ID for each TCP lookup.
 --
 udpTcpResolve :: Rslv
-udpTcpResolve q tm retry ctls getTime gen hp =
-    udpResolve q tm retry ctls getTime gen hp `E.catch`
-        \TCPFallback -> tcpResolve q tm retry ctls getTime gen hp
+udpTcpResolve hp gen q tm retry ctls getTime =
+    udpResolve hp gen q tm retry ctls getTime `E.catch`
+        \TCPFallback -> tcpResolve hp gen q tm retry ctls getTime
 
 ----------------------------------------------------------------
 
@@ -144,12 +144,12 @@ ioErrorToDNSError (h,_) protoName ioe = throwIO $ NetworkFailure aioe
 
 -- This throws DNSError or TCPFallback.
 udpResolve :: Rslv
-udpResolve q tm retry ctls0 getTime gen hp =
+udpResolve hp gen q tm retry ctls0 getTime =
     E.handle (ioErrorToDNSError hp "udp") $
       bracket (open hp) UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        res <- perform q gen ctls0 send recv getTime tm retry
+        res <- solve send recv gen q tm retry ctls0 getTime
         let fl = flags $ header res
             tc = trunCation fl
             rc = rcode fl
@@ -157,7 +157,7 @@ udpResolve q tm retry ctls0 getTime gen hp =
             cs = ednsEnabled FlagClear <> ctls0
         if tc then E.throwIO TCPFallback
         else if rc == FormatErr && eh == NoEDNS && cs /= ctls0
-        then perform q gen cs send recv getTime tm retry
+        then solve send recv gen q tm retry cs getTime
         else return res
 
   where
@@ -169,33 +169,33 @@ udpResolve q tm retry ctls0 getTime gen hp =
 -- the TCP socket.
 -- This throws DNSError only.
 tcpResolve :: Rslv
-tcpResolve q tm _retry ctls0 getTime gen hp@(h,p) =
+tcpResolve hp@(h,p) gen q tm _retry ctls0 getTime =
     E.handle (ioErrorToDNSError hp "tcp") $ do
       bracket (openTCP h p) close $ \sock -> do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- perform q gen ctls0 send recv getEpochTime tm 1
+        res <- solve send recv gen q tm 1 ctls0 getTime
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
             cs = ednsEnabled FlagClear <> ctls0
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && cs /= ctls0
-        then perform q gen cs send recv getTime tm 1
+        then solve send recv gen q tm 1 cs getTime
         else return res
 
 ----------------------------------------------------------------
 
-perform :: Question
-        -> IO Identifier
-        -> QueryControls
-        -> (ByteString -> IO ())
-        -> IO ByteString
-        -> IO EpochTime
-        -> Int
-        -> Int
-        -> IO DNSMessage
-perform q gen cs send recv getTime tm cnt0 = go cnt0
+solve :: (ByteString -> IO ())
+      -> IO ByteString
+      -> IO Identifier
+      -> Question
+      -> Int -- Timeout
+      -> Int -- Retry
+      -> QueryControls
+      -> IO EpochTime
+      -> IO DNSMessage
+solve send recv gen q tm cnt0 cs getTime = go cnt0
   where
     go 0 = E.throwIO RetryLimitExceeded
     go cnt = do
@@ -203,13 +203,13 @@ perform q gen cs send recv getTime tm cnt0 = go cnt0
         let qry = encodeQuery ident q cs
         mres <- timeout tm $ do
             send qry
-            getAns q recv ident  getTime
+            getAnswer q ident recv getTime
         case mres of
            Nothing  -> go (cnt - 1)
            Just res -> return res
 
-getAns :: Question -> IO ByteString -> Word16 -> IO EpochTime -> IO DNSMessage
-getAns q recv ident getTime = go
+getAnswer :: Question -> Identifier -> IO ByteString -> IO EpochTime -> IO DNSMessage
+getAnswer q ident recv getTime = go
   where
     go = do
         now <- getTime
