@@ -43,24 +43,23 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
-type Rslv0 = QueryControls -> IO EpochTime
-           -> IO (Either DNSError DNSMessage)
+type Rslv0 = QueryControls
+          -> IO EpochTime
+          -> IO (Either DNSError DNSMessage)
 
 type Rslv1 = Question
           -> Int -- Timeout
           -> Int -- Retry
           -> Rslv0
 
-type TcpRslv = IO EpochTime
-            -> IO Identifier
-            -> (HostName,PortNumber)
-            -> Question
-            -> Int -- Timeout
-            -> QueryControls
-            -> IO DNSMessage
-
-type UdpRslv = Int -- Retry
-            -> TcpRslv
+type Rslv = Question
+          -> Int -- Timeout
+          -> Int -- Retry
+          -> QueryControls
+          -> IO EpochTime
+          -> IO Identifier
+          -> (HostName,PortNumber)
+          -> IO DNSMessage
 
 -- In lookup loop, we try UDP until we get a response.  If the response
 -- is truncated, we try TCP once, with no further UDP retries.
@@ -81,11 +80,11 @@ type UdpRslv = Int -- Retry
 -- configuration with any additional overrides from the caller.
 --
 resolve :: Resolver -> Domain -> TYPE -> Rslv0
-resolve rlv dom typ qctls rcv
+resolve rlv dom typ qctls getTime
   | typ == AXFR   = return $ Left InvalidAXFRLookup
-  | onlyOne       = resolveOne        (head nss) (head gens) q tm retry ctls rcv
-  | concurrent    = resolveConcurrent nss        gens        q tm retry ctls rcv
-  | otherwise     = resolveSequential nss        gens        q tm retry ctls rcv
+  | onlyOne       = resolveOne        (head nss) (head gens) q tm retry ctls getTime
+  | concurrent    = resolveConcurrent nss        gens        q tm retry ctls getTime
+  | otherwise     = resolveSequential nss        gens        q tm retry ctls getTime
   where
     q = Question dom typ classIN
 
@@ -99,40 +98,39 @@ resolve rlv dom typ qctls rcv
     tm         = resolvTimeout conf
     retry      = resolvRetry conf
 
-
 resolveSequential :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
-resolveSequential nss gs q tm retry ctls rcv = loop nss gs
+resolveSequential nss gs q tm retry ctls getTime = loop nss gs
   where
-    loop [ai]     [gen] = resolveOne ai gen q tm retry ctls rcv
+    loop [ai]     [gen] = resolveOne ai gen q tm retry ctls getTime
     loop (ai:ais) (gen:gens) = do
-        eres <- resolveOne ai gen q tm retry ctls rcv
+        eres <- resolveOne ai gen q tm retry ctls getTime
         case eres of
           Left  _ -> loop ais gens
           res     -> return res
     loop _  _     = error "resolveSequential:loop"
 
 resolveConcurrent :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
-resolveConcurrent nss gens q tm retry ctls rcv =
+resolveConcurrent nss gens q tm retry ctls getTime =
     raceAny $ zipWith run nss gens
   where
     raceAny ios = do
         asyncs <- mapM async ios
         snd <$> waitAnyCancel asyncs
-    run ai gen = resolveOne ai gen q tm retry ctls rcv
+    run ai gen = resolveOne ai gen q tm retry ctls getTime
 
 resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
 resolveOne hp gen q tm retry ctls getTime = do
-    E.try $ udpTcpResolve retry getTime gen hp q tm ctls
+    E.try $ udpTcpResolve q tm retry ctls getTime gen hp
 
 ----------------------------------------------------------------
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpResolve :: UdpRslv
-udpTcpResolve retry getTime gen hp q tm ctls =
-    udpResolve retry getTime gen hp q tm ctls `E.catch`
-        \TCPFallback -> tcpResolve getTime gen hp q tm ctls
+udpTcpResolve :: Rslv
+udpTcpResolve q tm retry ctls getTime gen hp =
+    udpResolve q tm retry ctls getTime gen hp `E.catch`
+        \TCPFallback -> tcpResolve q tm retry ctls getTime gen hp
 
 ----------------------------------------------------------------
 
@@ -145,46 +143,44 @@ ioErrorToDNSError (h,_) protoName ioe = throwIO $ NetworkFailure aioe
 ----------------------------------------------------------------
 
 -- This throws DNSError or TCPFallback.
-udpResolve :: UdpRslv
-udpResolve retry getTime gen hp q tm ctls0 =
+udpResolve :: Rslv
+udpResolve q tm retry ctls0 getTime gen hp =
     E.handle (ioErrorToDNSError hp "udp") $
-      bracket (open hp) UDP.close $ go ctls0
-  where
-    open (h,p) = UDP.clientSocket h (show p) True -- connected
-    go ctls sock = do
+      bracket (open hp) UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        res <- perform q gen ctls send recv getTime tm retry
+        res <- perform q gen ctls0 send recv getTime tm retry
         let fl = flags $ header res
             tc = trunCation fl
             rc = rcode fl
             eh = ednsHeader res
-            cs = ednsEnabled FlagClear <> ctls
+            cs = ednsEnabled FlagClear <> ctls0
         if tc then E.throwIO TCPFallback
-        else if rc == FormatErr && eh == NoEDNS && cs /= ctls
+        else if rc == FormatErr && eh == NoEDNS && cs /= ctls0
         then perform q gen cs send recv getTime tm retry
         else return res
+
+  where
+    open (h,p) = UDP.clientSocket h (show p) True -- connected
 
 ----------------------------------------------------------------
 
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpResolve :: TcpRslv
-tcpResolve getTime gen hp@(h,p) q tm ctls0 =
+tcpResolve :: Rslv
+tcpResolve q tm _retry ctls0 getTime gen hp@(h,p) =
     E.handle (ioErrorToDNSError hp "tcp") $ do
-        bracket (openTCP h p) close $ go ctls0
-  where
-    go ctls sock = do
+      bracket (openTCP h p) close $ \sock -> do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- perform q gen ctls send recv getEpochTime tm 1
+        res <- perform q gen ctls0 send recv getEpochTime tm 1
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
-            cs = ednsEnabled FlagClear <> ctls
+            cs = ednsEnabled FlagClear <> ctls0
         -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && cs /= ctls
+        if rc == FormatErr && eh == NoEDNS && cs /= ctls0
         then perform q gen cs send recv getTime tm 1
         else return res
 
