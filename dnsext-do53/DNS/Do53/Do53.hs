@@ -9,8 +9,9 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 import DNS.Types.Decode
-import Network.Socket (Socket, close, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
-import Network.Socket.ByteString (recv)
+-- import Network.Socket (close, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
+import Network.Socket (HostName, PortNumber, close)
+import qualified Network.UDP as UDP
 import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
@@ -50,15 +51,15 @@ type Rslv1 = Question
           -> Int -- Retry
           -> Rslv0
 
-type TcpRslv = IO Identifier
-            -> AddrInfo
+type TcpRslv = IO EpochTime
+            -> IO Identifier
+            -> (HostName,PortNumber)
             -> Question
             -> Int -- Timeout
             -> QueryControls
             -> IO DNSMessage
 
 type UdpRslv = Int -- Retry
-            -> IO EpochTime
             -> TcpRslv
 
 -- In lookup loop, we try UDP until we get a response.  If the response
@@ -121,8 +122,7 @@ resolveConcurrent nss gens q tm retry ctls rcv =
 
 resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
 resolveOne hp gen q tm retry ctls getTime = do
-    ai <- makeAddrInfo hp
-    E.try $ udpTcpResolve retry getTime gen ai q tm ctls
+    E.try $ udpTcpResolve retry getTime gen hp q tm ctls
 
 ----------------------------------------------------------------
 
@@ -130,72 +130,40 @@ resolveOne hp gen q tm retry ctls getTime = do
 -- but we use a fresh ID for each TCP lookup.
 --
 udpTcpResolve :: UdpRslv
-udpTcpResolve retry getTime gen ai q tm ctls =
-    udpResolve retry getTime gen ai q tm ctls `E.catch`
-        \TCPFallback -> tcpResolve gen ai { addrSocketType = Stream } q tm ctls
+udpTcpResolve retry getTime gen hp q tm ctls =
+    udpResolve retry getTime gen hp q tm ctls `E.catch`
+        \TCPFallback -> tcpResolve getTime gen hp q tm ctls
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: AddrInfo -> String -> IOError -> IO DNSMessage
-ioErrorToDNSError ai protoName ioe = throwIO $ NetworkFailure aioe
+ioErrorToDNSError :: (HostName,PortNumber) -> String -> IOError -> IO DNSMessage
+ioErrorToDNSError (h,_) protoName ioe = throwIO $ NetworkFailure aioe
   where
-    loc = protoName ++ "@" ++ show (addrAddress ai)
+    loc = protoName ++ "@" ++ h
     aioe = annotateIOError ioe loc Nothing Nothing
-
-----------------------------------------------------------------
-
-open :: AddrInfo -> IO Socket
-open ai = do
-    sock <- openSocket ai
-    connect sock $ addrAddress ai
-    return sock
 
 ----------------------------------------------------------------
 
 -- This throws DNSError or TCPFallback.
 udpResolve :: UdpRslv
-udpResolve retry getTime gen ai q tm ctls0 =
-    E.handle (ioErrorToDNSError ai "udp") $
-      bracket (open ai) close $ go ctls0
+udpResolve retry getTime gen hp q tm ctls0 =
+    E.handle (ioErrorToDNSError hp "udp") $
+      bracket (open hp) UDP.close $ go ctls0
   where
+    open (h,p) = UDP.clientSocket h (show p) True -- connected
     go ctls sock = do
-      res <- perform ctls sock retry
-      let fl = flags $ header res
-          tc = trunCation fl
-          rc = rcode fl
-          eh = ednsHeader res
-          cs = ednsEnabled FlagClear <> ctls
-      if tc then E.throwIO TCPFallback
-      else if rc == FormatErr && eh == NoEDNS && cs /= ctls
-      then perform cs sock retry
-      else return res
-
-    perform _ _ 0 =  E.throwIO RetryLimitExceeded
-    perform cs sock cnt = do
-        ident <- gen
-        let qry = encodeQuery ident q cs
-        mres <- timeout tm $ do
-            sendUDP sock qry
-            getAns sock ident
-        case mres of
-           Nothing  -> perform cs sock (cnt - 1)
-           Just res -> return res
-
-    -- | Closed UDP ports are occasionally re-used for a new query, with
-    -- the nameserver returning an unexpected answer to the wrong socket.
-    -- Such answers should be simply dropped, with the client continuing
-    -- to wait for the right answer, without resending the question.
-    -- Note, this eliminates sequence mismatch as a UDP error condition,
-    -- instead we'll time out if no matching answer arrives.
-    --
-    getAns sock ident = do
-        now <- getTime
-        bs <- recv sock 2048 `E.catch` \e -> E.throwIO $ NetworkFailure e
-        case decodeAt now bs of
-            Left  e   -> E.throwIO e
-            Right msg
-              | checkResp q ident msg -> return msg
-              | otherwise             -> getAns sock ident
+        let send = UDP.send sock
+            recv = UDP.recv sock
+        res <- perform q gen ctls send recv getTime tm retry
+        let fl = flags $ header res
+            tc = trunCation fl
+            rc = rcode fl
+            eh = ednsHeader res
+            cs = ednsEnabled FlagClear <> ctls
+        if tc then E.throwIO TCPFallback
+        else if rc == FormatErr && eh == NoEDNS && cs /= ctls
+        then perform q gen cs send recv getTime tm retry
+        else return res
 
 ----------------------------------------------------------------
 
@@ -203,46 +171,55 @@ udpResolve retry getTime gen ai q tm ctls0 =
 -- the TCP socket.
 -- This throws DNSError only.
 tcpResolve :: TcpRslv
-tcpResolve gen ai q tm ctls0 =
-    E.handle (ioErrorToDNSError ai "tcp") $ do
-        bracket (open ai) close $ go ctls0
+tcpResolve getTime gen hp@(h,p) q tm ctls0 =
+    E.handle (ioErrorToDNSError hp "tcp") $ do
+        bracket (openTCP h p) close $ go ctls0
   where
     go ctls sock = do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- perform ctls send recv
+        res <- perform q gen ctls send recv getEpochTime tm 1
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
             cs = ednsEnabled FlagClear <> ctls
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && cs /= ctls
-        then perform cs send recv
+        then perform q gen cs send recv getTime tm 1
         else return res
-
-    perform cs send recv = do
-        ident <- gen
-        let qry = encodeQuery ident q cs
-        mres <- timeout tm $ do
-            _ <- send qry
-            getAns recv ident
-        case mres of
-            Nothing  -> E.throwIO TimeoutExpired
-            Just res -> return res
-
-    getAns recv ident = do
-        res <- recv
-        case checkRespM q ident res of
-            Nothing  -> return res
-            Just err -> E.throwIO err
 
 ----------------------------------------------------------------
 
-makeAddrInfo :: (HostName,PortNumber) -> IO AddrInfo
-makeAddrInfo (nh,p) = do
-    let hints = defaultHints {
-            addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV]
-          , addrSocketType = Datagram
-          }
-    let np = show p
-    head <$> getAddrInfo (Just hints) (Just nh) (Just np)
+perform :: Question
+        -> IO Identifier
+        -> QueryControls
+        -> (ByteString -> IO ())
+        -> IO ByteString
+        -> IO EpochTime
+        -> Int
+        -> Int
+        -> IO DNSMessage
+perform q gen cs send recv getTime tm cnt0 = go cnt0
+  where
+    go 0 = E.throwIO RetryLimitExceeded
+    go cnt = do
+        ident <- gen
+        let qry = encodeQuery ident q cs
+        mres <- timeout tm $ do
+            send qry
+            getAns q recv ident  getTime
+        case mres of
+           Nothing  -> go (cnt - 1)
+           Just res -> return res
+
+getAns :: Question -> IO ByteString -> Word16 -> IO EpochTime -> IO DNSMessage
+getAns q recv ident getTime = go
+  where
+    go = do
+        now <- getTime
+        bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        case decodeAt now bs of
+            Left  e   -> E.throwIO e
+            Right msg
+              | checkResp q ident msg -> return msg
+              | otherwise             -> go
