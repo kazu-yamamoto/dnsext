@@ -1,7 +1,6 @@
 module DNS.Do53.Imports (
     ByteString
   , ShortByteString
-  , Int64
   , module Control.Applicative
   , module Control.Monad
   , module Data.Bits
@@ -23,7 +22,6 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (ShortByteString)
 import Data.Function
-import Data.Int (Int64)
 import Data.List hiding (lookup)
 import Data.Maybe
 import Data.Monoid
@@ -32,10 +30,9 @@ import Data.Typeable
 import Data.Word
 import Numeric
 
+import DNS.Types.Decode (EpochTime)
 import Data.UnixTime (getUnixTime, UnixTime(..))
 import Foreign.C.Types (CTime(..))
-
-type EpochTime = Int64
 
 getEpochTime :: IO EpochTime
 getEpochTime = do

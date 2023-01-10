@@ -101,15 +101,15 @@ pattern CDNSKEY    = TYPE  60 -- RFC 7344
 -- The 'dnsTime' function performs the requisite conversion.
 --
 data RD_RRSIG = RD_RRSIG {
-    rrsig_type       :: TYPE   -- ^ RRtype of RRset signed
-  , rrsig_pubalg     :: PubAlg -- ^ DNSKEY algorithm
-  , rrsig_num_labels :: Word8  -- ^ Number of labels signed
-  , rrsig_ttl        :: TTL    -- ^ Maximum origin TTL
-  , rrsig_expiration :: Int64  -- ^ Time last valid
-  , rrsig_inception  :: Int64  -- ^ Time first valid
-  , rrsig_key_tag    :: Word16 -- ^ Signing key tag
-  , rrsig_zone       :: Domain -- ^ Signing domain
-  , rrsig_signature  :: Opaque -- ^ Opaque signature
+    rrsig_type       :: TYPE    -- ^ RRtype of RRset signed
+  , rrsig_pubalg     :: PubAlg  -- ^ DNSKEY algorithm
+  , rrsig_num_labels :: Word8   -- ^ Number of labels signed
+  , rrsig_ttl        :: TTL     -- ^ Maximum origin TTL
+  , rrsig_expiration :: DNSTime -- ^ Time last valid
+  , rrsig_inception  :: DNSTime -- ^ Time first valid
+  , rrsig_key_tag    :: Word16  -- ^ Signing key tag
+  , rrsig_zone       :: Domain  -- ^ Signing domain
+  , rrsig_signature  :: Opaque  -- ^ Opaque signature
   } deriving (Eq, Ord, Show)
 
 instance ResourceData RD_RRSIG where
@@ -147,7 +147,7 @@ get_rrsig lim = do
     return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
-rd_rrsig :: TYPE -> PubAlg -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> Domain -> Opaque -> RData
+rd_rrsig :: TYPE -> PubAlg -> Word8 -> TTL -> DNSTime -> DNSTime -> Word16 -> Domain -> Opaque -> RData
 rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------

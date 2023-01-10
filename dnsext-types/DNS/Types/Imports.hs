@@ -1,7 +1,6 @@
 module DNS.Types.Imports (
     ByteString
   , ShortByteString
-  , Int64
   , NonEmpty(..)
   , module Control.Applicative
   , module Control.Monad
@@ -15,6 +14,7 @@ module DNS.Types.Imports (
   , module Data.Typeable
   , module Data.Word
   , module Numeric
+  , EpochTime
   ) where
 
 import Control.Applicative
@@ -33,3 +33,5 @@ import Data.String
 import Data.Typeable
 import Data.Word
 import Numeric
+
+type EpochTime = Int64
