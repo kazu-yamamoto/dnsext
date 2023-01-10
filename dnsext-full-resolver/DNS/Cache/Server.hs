@@ -16,14 +16,14 @@ import Data.ByteString (ByteString)
 import Data.IORef (newIORef, readIORef, atomicModifyIORef')
 import Data.String (fromString)
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
+import qualified Network.UDP as UDP
 
 -- dns packages
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.SEC as DNS
-import Network.Socket (AddrInfo (..), SocketType (Datagram), HostName, PortNumber, Socket, SockAddr)
-import qualified Network.Socket as S
+import Network.Socket (HostName, PortNumber)
 
 -- other packages
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
@@ -31,8 +31,6 @@ import UnliftIO (SomeException, tryAny, concurrently_, race_)
 -- this package
 import DNS.Cache.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue, writeQueue, QueueSize)
 import qualified DNS.Cache.Queue as Queue
-import DNS.Cache.SocketUtil (addrInfo, isAnySockAddr)
-import DNS.Cache.DNSUtil (mkRecvBS, mkSendBS)
 import DNS.Cache.ServerMonitor (monitor, PLStatus)
 import qualified DNS.Cache.ServerMonitor as Mon
 import DNS.Cache.Types (Timestamp, NE)
@@ -47,24 +45,18 @@ type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSHeader, NE DNS.Question, a)
 type Response a = (ByteString, a)
 
-udpSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
-udpSockets port = mapM aiSocket . filter ((== Datagram) . addrSocketType) <=< addrInfo port
-  where
-    aiSocket ai = (,) <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai) <*> pure (addrAddress ai)
-
 run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
   DNS.runInitIO $ DNS.addResourceDataForDNSSEC
-  (serverLoops, sas, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
-  mapM_ (uncurry S.bind) sas
+  (serverLoops, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
 setup :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
      -> PortNumber -> [HostName] -> Bool
-     -> IO ([IO ()], [(Socket, SockAddr)], [IO ()])
+     -> IO ([IO ()], [IO ()])
 setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
   let getLogger
         | fastLogger = do
@@ -78,10 +70,8 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
   (ucacheLoops, insert, getCache, expires, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
-  sas <- udpSockets port hosts
-
   (pLoops, qsizes) <- do
-    (loopsList, qsizes) <- unzip <$> mapM (uncurry $ getPipeline workers workerSharedQueue qsizePerWorker getSec cxt) sas
+    (loopsList, qsizes) <- unzip <$> mapM (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port) hosts
     return (concat loopsList, qsizes)
 
   caps <- getNumCapabilities
@@ -90,24 +80,22 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
 
   monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
 
-  return (logLoops ++ ucacheLoops ++ pLoops, sas, monLoops)
+  return (logLoops ++ ucacheLoops ++ pLoops, monLoops)
 
-getPipeline :: Int -> Bool -> Int -> IO Timestamp -> Context -> Socket -> SockAddr
+getPipeline :: Int -> Bool -> Int -> IO Timestamp -> Context -> PortNumber -> HostName
             -> IO ([IO ()], PLStatus)
-getPipeline workers sharedQueue perWorker getSec cxt sock_ addr_ = do
+getPipeline workers sharedQueue perWorker getSec cxt port host = do
+  sock <- UDP.serverSocket (fromString host, port)
   let putLn lv = logLines_ cxt lv . (:[])
-      wildcard = isAnySockAddr addr_
-      send bs (peer, cmsgs) = mkSendBS wildcard sock_ bs peer cmsgs
-      recv = mkRecvBS wildcard sock_
 
   (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers sharedQueue perWorker getSec cxt
   (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
   let reqLoop = handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show)
-                $ recvRequest recv cxt enqueueReq
+                $ recvRequest (UDP.recvFrom sock) cxt enqueueReq
 
   let respLoop = readLoop dequeueResp (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show)
-                 $ sendResponse send cxt
+                 $ sendResponse (UDP.sendTo sock) cxt
 
   return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
 

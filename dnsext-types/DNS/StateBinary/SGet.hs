@@ -54,10 +54,10 @@ type SGet = StateT PState (AT.Parser ByteString)
 data PState = PState {
     pstDomain   :: IntMap [RawDomain]
   , pstPosition :: Position
-  , pstAtTime   :: Int64
+  , pstAtTime   :: EpochTime
   }
 
-initialState :: Int64 -> PState
+initialState :: EpochTime -> PState
 initialState t = PState IM.empty 0 t
 
 ----------------------------------------------------------------
@@ -65,7 +65,7 @@ initialState t = PState IM.empty 0 t
 parserPosition :: SGet Position
 parserPosition = ST.gets pstPosition
 
-getAtTime :: SGet Int64
+getAtTime :: SGet EpochTime
 getAtTime = ST.gets pstAtTime
 
 addPosition :: Position -> SGet ()
@@ -187,7 +187,7 @@ sGetMany elemname len parser | len < 0   = overrun
 -- current time while parsing.  Outside this date range the output is off by
 -- some non-zero multiple 2\^32 seconds.
 --
-dnsTimeMid :: Int64
+dnsTimeMid :: EpochTime
 dnsTimeMid = 3426660848
 
 -- Construct our own error message, without the unhelpful AttoParsec
@@ -196,7 +196,7 @@ dnsTimeMid = 3426660848
 failSGet :: String -> SGet a
 failSGet msg = ST.lift (fail "" A.<?> msg)
 
-runSGetAt :: Int64 -> SGet a -> ByteString -> Either DNSError (a, PState)
+runSGetAt :: EpochTime -> SGet a -> ByteString -> Either DNSError (a, PState)
 runSGetAt t parser inp =
     toResult $ A.parse (ST.runStateT parser $ initialState t) inp
   where
@@ -208,7 +208,7 @@ runSGetAt t parser inp =
 runSGet :: SGet a -> ByteString -> Either DNSError (a, PState)
 runSGet = runSGetAt dnsTimeMid
 
-runSGetWithLeftoversAt :: Int64      -- ^ Reference time for DNS clock arithmetic
+runSGetWithLeftoversAt :: EpochTime  -- ^ Reference time for DNS clock arithmetic
                        -> SGet a     -- ^ Parser
                        -> ByteString -- ^ Encoded message
                        -> Either DNSError ((a, PState), ByteString)

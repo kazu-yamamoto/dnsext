@@ -26,7 +26,7 @@ dot hostname port qry = do
   where
     params = getTLSParams hostname "dot" False
     open = do
-        ai <- makeAddrInfo (Just hostname) port
+        ai <- makeAddrInfo hostname port
         sock <- openSocket ai
 
         let sockaddr = addrAddress ai

@@ -15,7 +15,8 @@
 --
 module DNS.Types.Decode (
     -- * Decoding a single DNS message
-    decodeAt
+    EpochTime
+  , decodeAt
   , decode
     -- * Decoding multple length-encoded DNS messages,
     -- e.g., from TCP traffic.
@@ -50,7 +51,7 @@ import DNS.Types.Type
 -- returned.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG records) are
 -- interpreted at the supplied epoch time.
 --
-decodeAt :: Int64                      -- ^ current epoch time
+decodeAt :: EpochTime                  -- ^ current epoch time
          -> ByteString                 -- ^ encoded input buffer
          -> Either DNSError DNSMessage -- ^ decoded message or error
 decodeAt t bs = fst <$> runSGetAt t (fitSGet (BS.length bs) getDNSMessage) bs
@@ -73,7 +74,7 @@ decode bs = fst <$> runSGet (fitSGet (BS.length bs) getDNSMessage) bs
 -- of the result tuple.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG
 -- records) are interpreted at the supplied epoch time.
 --
-decodeManyAt :: Int64      -- ^ current epoch time
+decodeManyAt :: EpochTime  -- ^ current epoch time
              -> ByteString -- ^ encoded input buffer
              -> Either DNSError ([DNSMessage], ByteString)
                            -- ^ decoded messages and left-over partial message
@@ -143,7 +144,7 @@ decodeResourceRecord bs = fst <$> runSGet getResourceRecord bs
 -- generally possible to decode resource record separately from the enclosing
 -- DNS message.  This is an internal function.
 --
-decodeResourceRecordAt :: Int64      -- ^ current epoch time
+decodeResourceRecordAt :: EpochTime  -- ^ current epoch time
                        -> ByteString -- ^ encoded resource record
                        -> Either DNSError ResourceRecord
 decodeResourceRecordAt t bs = fst <$> runSGetAt t getResourceRecord bs
