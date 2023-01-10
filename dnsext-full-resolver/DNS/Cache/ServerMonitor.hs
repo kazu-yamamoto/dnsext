@@ -28,7 +28,6 @@ import qualified DNS.Types as DNS
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import qualified DNS.Cache.DNSUtil as Config
 import DNS.Cache.SocketUtil (addrInfo)
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.Cache as Cache
@@ -37,8 +36,7 @@ import DNS.Cache.Iterative (Context (..))
 
 data Params =
   Params
-  { isRecvSendMsg :: Bool
-  , numCapabilities :: Int
+  { numCapabilities :: Int
   , logOutput :: Log.Output
   , logLevel :: Log.Level
   , maxCacheSize :: Int
@@ -55,8 +53,7 @@ makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> In
            -> Params
 makeParams capabilities output level maxSize disableV6 workers sharedQueue perWorker port hosts =
   Params
-  { isRecvSendMsg = Config.isRecvSendMsg
-  , numCapabilities = capabilities
+  { numCapabilities = capabilities
   , logOutput = output
   , logLevel = level
   , maxCacheSize = maxSize
@@ -71,8 +68,7 @@ makeParams capabilities output level maxSize disableV6 workers sharedQueue perWo
 
 showParams :: Params -> [String]
 showParams params =
-  [ field  "recvmsg / sendmsg" isRecvSendMsg
-  , field  "capabilities" numCapabilities
+  [ field  "capabilities" numCapabilities
   , field_ "log output" (showOut . logOutput)
   , field  "log level" logLevel
   , field  "max cache size" maxCacheSize
