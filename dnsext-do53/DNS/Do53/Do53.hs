@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Do53 (
     resolve
@@ -47,7 +48,7 @@ instance Exception TCPFallback
 
 type Rslv0 = QueryControls
           -> IO EpochTime
-          -> IO (Either DNSError DNSMessage)
+          -> IO DNSMessage
 
 type Rslv1 = Question
           -> Int -- Timeout
@@ -56,12 +57,7 @@ type Rslv1 = Question
 
 type Rslv =  (HostName,PortNumber)
           -> IO Identifier
-          -> Question
-          -> Int -- Timeout
-          -> Int -- Retry
-          -> QueryControls
-          -> IO EpochTime
-          -> IO DNSMessage
+          -> Rslv1
 
 -- In lookup loop, we try UDP until we get a response.  If the response
 -- is truncated, we try TCP once, with no further UDP retries.
@@ -83,7 +79,7 @@ type Rslv =  (HostName,PortNumber)
 --
 resolve :: Resolver -> Domain -> TYPE -> Rslv0
 resolve rlv dom typ qctl0 getTime
-  | typ == AXFR   = return $ Left InvalidAXFRLookup
+  | typ == AXFR   = E.throwIO InvalidAXFRLookup
   | onlyOne       = resolveOne        (head nss) (head gens) q tm retry qctl getTime
   | concurrent    = resolveConcurrent nss        gens        q tm retry qctl getTime
   | otherwise     = resolveSequential nss        gens        q tm retry qctl getTime
@@ -105,10 +101,10 @@ resolveSequential nss gs q tm retry qctl getTime = loop nss gs
   where
     loop [ai]     [gen] = resolveOne ai gen q tm retry qctl getTime
     loop (ai:ais) (gen:gens) = do
-        eres <- resolveOne ai gen q tm retry qctl getTime
+        eres <- E.try $ resolveOne ai gen q tm retry qctl getTime
         case eres of
-          Left  _ -> loop ais gens
-          res     -> return res
+          Left (_ :: DNSError) -> loop ais gens
+          Right res -> return res
     loop _  _     = error "resolveSequential:loop"
 
 resolveConcurrent :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
@@ -121,8 +117,8 @@ resolveConcurrent nss gens q tm retry qctl getTime =
     run ai gen = resolveOne ai gen q tm retry qctl getTime
 
 resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
-resolveOne hp gen q tm retry qctl getTime = do
-    E.try $ udpTcpResolve hp gen q tm retry qctl getTime
+resolveOne hp gen q tm retry qctl getTime =
+    udpTcpResolve hp gen q tm retry qctl getTime
 
 ----------------------------------------------------------------
 
