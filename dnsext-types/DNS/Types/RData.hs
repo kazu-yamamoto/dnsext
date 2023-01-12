@@ -90,7 +90,7 @@ instance ResourceData RD_NS where
     putResourceData cf (RD_NS d) = putDomainRFC1035 cf d
 
 get_ns :: Int -> SGet RD_NS
-get_ns _ = RD_NS <$> getDomain
+get_ns _ = RD_NS <$> getDomainRFC1035
 
 instance Show RD_NS where
     show (RD_NS d) = show d
@@ -112,7 +112,7 @@ instance ResourceData RD_CNAME where
     putResourceData cf (RD_CNAME d) = putDomainRFC1035 cf d
 
 get_cname :: Int -> SGet RD_CNAME
-get_cname _ = RD_CNAME <$> getDomain
+get_cname _ = RD_CNAME <$> getDomainRFC1035
 
 instance Show RD_CNAME where
     show (RD_CNAME d) = show d
@@ -153,8 +153,8 @@ instance ResourceData RD_SOA where
         putSeconds soa_minimum
 
 get_soa :: Int -> SGet RD_SOA
-get_soa _ = RD_SOA <$> getDomain
-                   <*> getMailbox
+get_soa _ = RD_SOA <$> getDomainRFC1035
+                   <*> getMailboxRFC1035
                    <*> get32
                    <*> getSeconds
                    <*> getSeconds
@@ -199,7 +199,7 @@ instance ResourceData RD_PTR where
     putResourceData cf (RD_PTR d) = putDomainRFC1035 cf d
 
 get_ptr :: Int -> SGet RD_PTR
-get_ptr _ = RD_PTR <$> getDomain
+get_ptr _ = RD_PTR <$> getDomainRFC1035
 
 instance Show RD_PTR where
     show (RD_PTR d) = show d
@@ -225,7 +225,7 @@ instance ResourceData RD_MX where
         putDomainRFC1035 cf mx_exchange
 
 get_mx :: Int -> SGet RD_MX
-get_mx _ = RD_MX <$> get16 <*> getDomain
+get_mx _ = RD_MX <$> get16 <*> getDomainRFC1035
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData

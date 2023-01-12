@@ -11,12 +11,14 @@ module DNS.Types.Domain (
   , isSubDomainOf
   , Mailbox
   , getDomain
+  , getDomainRFC1035
   , putDomain
-  , putMailbox
-  , getMailbox
-  , CanonicalFlag (..)
   , putDomainRFC1035
+  , putMailbox
   , putMailboxRFC1035
+  , getMailbox
+  , getMailboxRFC1035
+  , CanonicalFlag (..)
   ) where
 
 import qualified Control.Exception as E
@@ -328,6 +330,11 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 ----------------------------------------------------------------
 
 -- | Getting a domain name.
+--   An error is thrown if name compression is used.
+getDomain :: SGet Domain
+getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' False)
+
+-- | Getting a domain name.
 -- Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
 -- is further interpreted by the DNS community (from a discussion on the IETF
 -- DNSOP mailing list) to mean that they don't point back into the same domain.
@@ -337,12 +344,17 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 -- bound for any subsequent pointers.  This results in a simple loop-prevention
 -- algorithm, each sequence of valid pointer values is necessarily strictly
 -- decreasing!
-getDomain :: SGet Domain
-getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain')
+getDomainRFC1035 :: SGet Domain
+getDomainRFC1035 = domainFromWireLabels <$> (parserPosition >>= getDomain' True)
 
 -- | Getting a mailbox.
+--   An error is thrown if name compression is used.
 getMailbox :: SGet Mailbox
-getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
+getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' False)
+
+-- | Getting a mailbox.
+getMailboxRFC1035 :: SGet Mailbox
+getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' True)
 
 -- $
 --
@@ -351,7 +363,7 @@ getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
 --
 -- >>> :{
 -- let input = "\3foo\192\0\3bar\0"
---     parser = getDomain' 0
+--     parser = getDomain' True 0
 --     Left (DecodeError err) = runSGet parser input
 --  in err
 -- :}
@@ -364,8 +376,8 @@ getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain')
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
 --
-getDomain' :: Int -> SGet [ShortByteString]
-getDomain' ptrLimit = do
+getDomain' :: Bool -> Int -> SGet [ShortByteString]
+getDomain' allowCompression ptrLimit = do
     pos <- parserPosition
     c <- getInt8
     let n = getValue c
@@ -376,6 +388,7 @@ getDomain' ptrLimit = do
       -- As for now, extended labels have no use.
       -- This may change some time in the future.
       | isExtLabel c = return []
+      | isPointer c && not allowCompression = failSGet "name compression is not allowed"
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
@@ -393,7 +406,7 @@ getDomain' ptrLimit = do
       | otherwise = do
           l <- getNShortByteString n
           -- Registering super domains
-          ls <- getDomain' ptrLimit
+          ls <- getDomain' allowCompression ptrLimit
           let lls = l:ls
           pushDomain pos lls
           return lls
