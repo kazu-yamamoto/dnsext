@@ -27,9 +27,11 @@ module DNS.Types.Internal (
   , putDomain
   , putDomainRFC1035
   , getDomain
+  , getDomainRFC1035
   , putMailbox
   , putMailboxRFC1035
   , getMailbox
+  , getMailboxRFC1035
   , putOpaque
   , putLenOpaque
   , getOpaque

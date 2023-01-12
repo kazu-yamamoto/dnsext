@@ -579,6 +579,13 @@ putQuestion cf Question{..} = do
     put16 (fromTYPE qtype)
     putCLASS qclass
 
+getQuestions :: Int -> SGet [Question]
+getQuestions n = replicateM n getQuestion
+
+getQuestion :: SGet Question
+getQuestion = Question <$> getDomainRFC1035
+                       <*> getTYPE
+                       <*> getCLASS
 ----------------------------------------------------------------
 
 -- | Resource record class.
@@ -628,18 +635,10 @@ getResourceRecords n = replicateM n getResourceRecord
 
 getResourceRecord :: SGet ResourceRecord
 getResourceRecord = do
-    dom <- getDomain
+    dom <- getDomainRFC1035
     typ <- getTYPE
     cls <- getCLASS
     ttl <- getSeconds
     len <- getInt16
     dat <- getRData typ len
     return $ ResourceRecord dom typ cls ttl dat
-
-getQuestions :: Int -> SGet [Question]
-getQuestions n = replicateM n getQuestion
-
-getQuestion :: SGet Question
-getQuestion = Question <$> getDomain
-                       <*> getTYPE
-                       <*> getCLASS
