@@ -1,11 +1,13 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Do53 (
     resolve
   , udpResolve
   , tcpResolve
+  , Do(..)
   ) where
 
 import Control.Concurrent.Async (async, waitAnyCancel)
@@ -46,18 +48,16 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
-type Rslv0 = QueryControls
-          -> IO EpochTime
-          -> IO DNSMessage
-
-type Rslv1 = Question
-          -> Int -- Timeout
-          -> Int -- Retry
-          -> Rslv0
-
-type Rslv =  (HostName,PortNumber)
-          -> IO Identifier
-          -> Rslv1
+data Do = Do {
+    doQuestion      :: Question
+  , doHostName      :: HostName
+  , doPortNumber    :: PortNumber
+  , doTimeout       :: Int
+  , doRetry         :: Int
+  , doGenId         :: IO Identifier
+  , doGetTime       :: IO EpochTime
+  , doQueryControls :: QueryControls
+  }
 
 -- In lookup loop, we try UDP until we get a response.  If the response
 -- is truncated, we try TCP once, with no further UDP retries.
@@ -77,63 +77,69 @@ type Rslv =  (HostName,PortNumber)
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Resolver -> Domain -> TYPE -> Rslv0
+resolve :: Resolver -> Domain -> TYPE -> QueryControls -> IO EpochTime
+        -> IO DNSMessage
 resolve rlv dom typ qctl0 getTime
   | typ == AXFR   = E.throwIO InvalidAXFRLookup
-  | onlyOne       = resolveOne        (head nss) (head gens) q tm retry qctl getTime
-  | concurrent    = resolveConcurrent nss        gens        q tm retry qctl getTime
-  | otherwise     = resolveSequential nss        gens        q tm retry qctl getTime
+  | concurrent    = resolveConcurrent dos
+  | otherwise     = resolveSequential dos
   where
-    q = Question dom typ classIN
+    concurrent = resolvConcurrent $ resolvConf rlv
+    dos = makeDos rlv dom typ qctl0 getTime
 
-    nss = serverAddrs rlv
-    gens = genIds rlv
-
-    onlyOne = length nss == 1
+makeDos :: Resolver -> Domain -> TYPE -> QueryControls -> IO EpochTime -> [Do]
+makeDos rlv dom typ qctl0 getTime = go hps0 gens0
+  where
     conf = resolvConf rlv
-    qctl    = qctl0 <> resolvQueryControls conf
-    concurrent = resolvConcurrent conf
-    tm         = resolvTimeout conf
-    retry      = resolvRetry conf
+    defaultDo = Do {
+        doQuestion      = Question dom typ classIN
+      , doHostName      = "127.0.0.1" -- to be overwitten
+      , doPortNumber    = 53          -- to be overwitten
+      , doTimeout       = resolvTimeout conf
+      , doRetry         = resolvRetry conf
+      , doGenId         = return 0    -- to be overwitten
+      , doGetTime       = getTime
+      , doQueryControls = qctl0 <> resolvQueryControls conf
+      }
+    hps0 = serverAddrs rlv
+    gens0 = genIds rlv
+    go ((h,p):hps) (gen:gens) = defaultDo { doHostName = h, doPortNumber = p, doGenId = gen } : go hps gens
+    go _ _ = []
 
-resolveSequential :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
-resolveSequential nss gs q tm retry qctl getTime = loop nss gs
+resolveSequential :: [Do] -> IO DNSMessage
+resolveSequential dos0 = loop dos0
   where
-    loop [ai]     [gen] = resolveOne ai gen q tm retry qctl getTime
-    loop (ai:ais) (gen:gens) = do
-        eres <- E.try $ resolveOne ai gen q tm retry qctl getTime
+    loop []       = error "resolveSequential:loop"
+    loop [di]     = resolveOne di
+    loop (di:dos) = do
+        eres <- E.try $ resolveOne di
         case eres of
-          Left (_ :: DNSError) -> loop ais gens
+          Left (_ :: DNSError) -> loop dos
           Right res -> return res
-    loop _  _     = error "resolveSequential:loop"
 
-resolveConcurrent :: [(HostName,PortNumber)] -> [IO Identifier] -> Rslv1
-resolveConcurrent nss gens q tm retry qctl getTime =
-    raceAny $ zipWith run nss gens
+resolveConcurrent :: [Do] -> IO DNSMessage
+resolveConcurrent dos =
+    raceAny $ map resolveOne dos
   where
     raceAny ios = do
         asyncs <- mapM async ios
         snd <$> waitAnyCancel asyncs
-    run ai gen = resolveOne ai gen q tm retry qctl getTime
 
-resolveOne :: (HostName,PortNumber) -> IO Identifier -> Rslv1
-resolveOne hp gen q tm retry qctl getTime =
-    udpTcpResolve hp gen q tm retry qctl getTime
+resolveOne :: Do -> IO DNSMessage
+resolveOne = udpTcpResolve
 
 ----------------------------------------------------------------
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpResolve :: Rslv
-udpTcpResolve hp gen q tm retry qctl getTime =
-    udpResolve hp gen q tm retry qctl getTime `E.catch`
-        \TCPFallback -> tcpResolve hp gen q tm retry qctl getTime
+udpTcpResolve :: Do -> IO DNSMessage
+udpTcpResolve di = udpResolve di `E.catch` \TCPFallback -> tcpResolve di
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: (HostName,PortNumber) -> String -> IOError -> IO DNSMessage
-ioErrorToDNSError (h,_) protoName ioe = throwIO $ NetworkFailure aioe
+ioErrorToDNSError :: HostName -> String -> IOError -> IO DNSMessage
+ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
   where
     loc = protoName ++ "@" ++ h
     aioe = annotateIOError ioe loc Nothing Nothing
@@ -141,67 +147,62 @@ ioErrorToDNSError (h,_) protoName ioe = throwIO $ NetworkFailure aioe
 ----------------------------------------------------------------
 
 -- This throws DNSError or TCPFallback.
-udpResolve :: Rslv
-udpResolve hp gen q tm retry qctl0 getTime =
-    E.handle (ioErrorToDNSError hp "udp") $
-      bracket (open hp) UDP.close $ \sock -> do
+udpResolve :: Do -> IO DNSMessage
+udpResolve di@Do{..} =
+    E.handle (ioErrorToDNSError doHostName "udp") $
+      bracket open UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        res <- solve send recv gen q tm retry qctl0 getTime
+        res <- solve send recv di
         let fl = flags $ header res
             tc = trunCation fl
             rc = rcode fl
             eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> qctl0
+            qctl = ednsEnabled FlagClear <> doQueryControls
         if tc then E.throwIO TCPFallback
-        else if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-        then solve send recv gen q tm retry qctl getTime
+        else if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
+        then solve send recv di
         else return res
 
   where
-    open (h,p) = UDP.clientSocket h (show p) True -- connected
+    open = UDP.clientSocket doHostName (show doPortNumber) True -- connected
 
 ----------------------------------------------------------------
 
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpResolve :: Rslv
-tcpResolve hp@(h,p) gen q tm _retry qctl0 getTime =
-    E.handle (ioErrorToDNSError hp "tcp") $ do
-      bracket (openTCP h p) close $ \sock -> do
+tcpResolve :: Do -> IO DNSMessage
+tcpResolve di@Do{..} =
+    E.handle (ioErrorToDNSError doHostName "tcp") $ do
+      bracket (openTCP doHostName doPortNumber) close $ \sock -> do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- solve send recv gen q tm 1 qctl0 getTime
+        res <- solve send recv di
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> qctl0
+            qctl = ednsEnabled FlagClear <> doQueryControls
         -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-        then solve send recv gen q tm 1 qctl getTime
+        if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
+        then solve send recv di
         else return res
 
 ----------------------------------------------------------------
 
 solve :: (ByteString -> IO ())
       -> IO ByteString
-      -> IO Identifier
-      -> Question
-      -> Int -- Timeout
-      -> Int -- Retry
-      -> QueryControls
-      -> IO EpochTime
+      -> Do
       -> IO DNSMessage
-solve send recv gen q tm cnt0 qctl getTime = go cnt0
+solve send recv Do{..} = go doRetry
   where
     go 0 = E.throwIO RetryLimitExceeded
     go cnt = do
-        ident <- gen
-        let qry = encodeQuery ident q qctl
-        mres <- timeout tm $ do
+        ident <- doGenId
+        let qry = encodeQuery ident doQuestion doQueryControls
+        mres <- timeout doTimeout $ do
             send qry
-            getAnswer q ident recv getTime
+            getAnswer doQuestion ident recv doGetTime
         case mres of
            Nothing  -> go (cnt - 1)
            Just res -> return res

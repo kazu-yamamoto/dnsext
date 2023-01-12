@@ -11,6 +11,7 @@ module DNS.Do53.Internal (
     --
   , udpResolve
   , tcpResolve
+  , Do(..)
   , getEpochTime
   ) where
 

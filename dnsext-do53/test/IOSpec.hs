@@ -12,14 +12,32 @@ spec :: Spec
 spec = describe "send/receive" $ do
 
     it "resolves well with UDP" $ do
-        let q =Question "www.mew.org" A classIN
-            -- Google's resolvers support the AD and CD bits
-            cs = adFlag FlagSet <> ednsEnabled FlagClear
-        ans <- udpResolve ("8.8.8.8",53) (return 1) q 3000000 1 cs getEpochTime
+        let di = Do {
+                doQuestion      = Question "www.mew.org" A classIN
+              , doHostName      = "8.8.8.8"
+              , doPortNumber    = 53
+              , doTimeout       = 3000000
+              , doRetry         = 1
+              , doGenId         = return 1
+              , doGetTime       = getEpochTime
+              -- Google's resolvers support the AD and CD bits
+              , doQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
+              }
+
+        ans <- udpResolve di
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
-        let q = Question "www.mew.org" A classIN
-            cs = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-        ans <- tcpResolve ("8.8.8.8",53) (return 1) q 3000000 1 cs getEpochTime
+        let di = Do {
+                doQuestion      = Question "www.mew.org" A classIN
+              , doHostName      = "8.8.8.8"
+              , doPortNumber    = 53
+              , doTimeout       = 3000000
+              , doRetry         = 1
+              , doGenId         = return 1
+              , doGetTime       = getEpochTime
+              -- Google's resolvers support the AD and CD bits
+              , doQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+              }
+        ans <- tcpResolve di
         identifier (header ans) `shouldBe` 1
