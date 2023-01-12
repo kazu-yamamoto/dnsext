@@ -24,24 +24,24 @@ module DNS.Cache.Iterative (
   ) where
 
 -- GHC packages
-import Control.Arrow ((&&&), first)
 import Control.Applicative ((<|>))
+import Control.Arrow ((&&&), first)
 import Control.Monad (when, unless, join, guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import DNS.Types.Decode (EpochTime)
+import Data.Bits ((.|.), shiftL)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
-import Data.Int (Int64)
-import Data.Maybe (listToMaybe, isJust)
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import qualified Data.List as L
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (listToMaybe, isJust)
 import qualified Data.Set as Set
-import Data.Bits ((.|.), shiftL)
 import Numeric (readDec, readHex, showHex)
 
 -- other packages
@@ -105,7 +105,7 @@ additional セクションにその名前に対するアドレス (A および A
 type UpdateCache =
   (Key -> TTL -> CRSet -> Ranking -> IO (),
    IO Cache)
-type TimeCache = (IO Int64, IO ShowS)
+type TimeCache = (IO EpochTime, IO ShowS)
 
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context

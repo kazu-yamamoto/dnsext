@@ -12,12 +12,12 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkIO, forkFinally, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
 import Control.Monad ((<=<), guard, when, unless, void)
+import DNS.Types.Decode (EpochTime)
+import Data.Char (toUpper)
 import Data.Functor (($>))
 import Data.List (isInfixOf, find)
-import Data.Char (toUpper)
-import Data.Int (Int64)
-import Text.Read (readMaybe)
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
+import Text.Read (readMaybe)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
@@ -101,7 +101,7 @@ data Command
   | Find String
   | Lookup DNS.Domain DNS.TYPE
   | Status
-  | Expire Int64
+  | Expire EpochTime
   | Noop
   | Exit
   | Quit
@@ -109,7 +109,7 @@ data Command
 
 monitor :: Bool -> Params -> Context
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-        -> (Int64 -> IO ()) -> IO () -> IO [IO ()]
+        -> (EpochTime -> IO ()) -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo expires flushLog = do
   ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
   let ss = map fst ps
@@ -140,7 +140,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
       loop
 
 console :: Params -> Context -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-           -> (Int64 -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
+           -> (EpochTime -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
 console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH

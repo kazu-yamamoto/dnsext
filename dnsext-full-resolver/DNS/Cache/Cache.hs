@@ -29,14 +29,14 @@ module DNS.Cache.Cache (
   ) where
 
 -- GHC packages
-import Prelude hiding (lookup)
 import Control.DeepSeq (liftRnf)
 import Control.Monad (guard)
-import Data.Function (on)
-import Data.Maybe (isJust)
+import DNS.Types.Decode (EpochTime)
 import Data.Either (partitionEithers)
+import Data.Function (on)
 import Data.List (group, groupBy, sortOn, uncons)
-import Data.Int (Int64)
+import Data.Maybe (isJust)
+import Prelude hiding (lookup)
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
@@ -206,7 +206,7 @@ expires now (Cache c xsz) =
 alive :: Timestamp -> Timestamp -> Maybe TTL
 alive now eol = do
   let ttl' = eol - now
-      safeToTTL :: Int64 -> Maybe TTL
+      safeToTTL :: EpochTime -> Maybe TTL
       safeToTTL sec = do
         let y = fromIntegral sec
         guard $ toInteger y == toInteger sec
