@@ -3,7 +3,6 @@
 module IOSpec where
 
 import DNS.Types
-import Network.Socket
 import Test.Hspec
 
 import DNS.Do53.Client
@@ -13,26 +12,14 @@ spec :: Spec
 spec = describe "send/receive" $ do
 
     it "resolves well with UDP" $ do
-        sock <- connectedSocket Datagram
-        -- Google's resolvers support the AD and CD bits
-        let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
-                  adFlag FlagSet <> ednsEnabled FlagClear
-        sendUDP sock qry
-        ans <- recvUDP sock
+        let q =Question "www.mew.org" A classIN
+            -- Google's resolvers support the AD and CD bits
+            cs = adFlag FlagSet <> ednsEnabled FlagClear
+        ans <- udpResolve ("8.8.8.8",53) (return 1) q 3000000 1 cs getEpochTime
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
-        sock <- connectedSocket Stream
-        let qry = encodeQuery 1 (Question "www.mew.org" A classIN) $
-                  adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-        sendVC (sendTCP sock) qry
-        ans <- recvVC (recvTCP sock)
+        let q = Question "www.mew.org" A classIN
+            cs = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+        ans <- tcpResolve ("8.8.8.8",53) (return 1) q 3000000 1 cs getEpochTime
         identifier (header ans) `shouldBe` 1
-
-connectedSocket :: SocketType -> IO Socket
-connectedSocket typ = do
-    let hints = defaultHints { addrFamily = AF_INET, addrSocketType = typ, addrFlags = [AI_NUMERICHOST]}
-    addr:_ <- getAddrInfo (Just hints) (Just "8.8.8.8") (Just "domain")
-    sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
-    connect sock $ addrAddress addr
-    return sock

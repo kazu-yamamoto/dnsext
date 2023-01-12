@@ -12,12 +12,12 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkIO, forkFinally, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
 import Control.Monad ((<=<), guard, when, unless, void)
+import DNS.Types.Decode (EpochTime)
+import Data.Char (toUpper)
 import Data.Functor (($>))
 import Data.List (isInfixOf, find)
-import Data.Char (toUpper)
-import Data.Int (Int64)
-import Text.Read (readMaybe)
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
+import Text.Read (readMaybe)
 
 -- dns packages
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
@@ -28,7 +28,6 @@ import qualified DNS.Types as DNS
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import qualified DNS.Cache.DNSUtil as Config
 import DNS.Cache.SocketUtil (addrInfo)
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.Cache as Cache
@@ -37,8 +36,7 @@ import DNS.Cache.Iterative (Context (..))
 
 data Params =
   Params
-  { isRecvSendMsg :: Bool
-  , numCapabilities :: Int
+  { numCapabilities :: Int
   , logOutput :: Log.Output
   , logLevel :: Log.Level
   , maxCacheSize :: Int
@@ -55,8 +53,7 @@ makeParams :: Int -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> In
            -> Params
 makeParams capabilities output level maxSize disableV6 workers sharedQueue perWorker port hosts =
   Params
-  { isRecvSendMsg = Config.isRecvSendMsg
-  , numCapabilities = capabilities
+  { numCapabilities = capabilities
   , logOutput = output
   , logLevel = level
   , maxCacheSize = maxSize
@@ -71,8 +68,7 @@ makeParams capabilities output level maxSize disableV6 workers sharedQueue perWo
 
 showParams :: Params -> [String]
 showParams params =
-  [ field  "recvmsg / sendmsg" isRecvSendMsg
-  , field  "capabilities" numCapabilities
+  [ field  "capabilities" numCapabilities
   , field_ "log output" (showOut . logOutput)
   , field  "log level" logLevel
   , field  "max cache size" maxCacheSize
@@ -105,7 +101,7 @@ data Command
   | Find String
   | Lookup DNS.Domain DNS.TYPE
   | Status
-  | Expire Int64
+  | Expire EpochTime
   | Noop
   | Exit
   | Quit
@@ -113,7 +109,7 @@ data Command
 
 monitor :: Bool -> Params -> Context
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-        -> (Int64 -> IO ()) -> IO () -> IO [IO ()]
+        -> (EpochTime -> IO ()) -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo expires flushLog = do
   ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
   let ss = map fst ps
@@ -144,7 +140,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
       loop
 
 console :: Params -> Context -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-           -> (Int64 -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
+           -> (EpochTime -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
 console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH

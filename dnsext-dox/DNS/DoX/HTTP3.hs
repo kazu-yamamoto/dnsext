@@ -3,7 +3,6 @@
 module DNS.DoX.HTTP3 where
 
 import DNS.Types.Decode
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as C8
 import Network.HTTP.Types
@@ -20,7 +19,7 @@ doh3 hostname port qry = QUIC.run cc $ \conn -> client conn hostname qry
   where
     cc = getQUICParams hostname port "h3"
 
-client :: Connection -> HostName -> ByteString -> IO ()
+client :: Connection -> HostName -> WireFormat -> IO ()
 client conn hostname msg = E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> run conn cliconf conf cli
   where
     hdr = clientDoHHeaders msg

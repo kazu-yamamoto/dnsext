@@ -38,6 +38,7 @@ library
         async,
         auto-update,
         network,
+        network-udp,
         psqueues,
         iproute,
         dnsext-dnssec,
