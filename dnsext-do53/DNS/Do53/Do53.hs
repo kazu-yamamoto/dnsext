@@ -45,9 +45,6 @@ checkRespM q seqno resp
 
 ----------------------------------------------------------------
 
-data TCPFallback = TCPFallback deriving (Show, Typeable)
-instance Exception TCPFallback
-
 data Do = Do {
     doQuestion      :: Question
   , doHostName      :: HostName
@@ -129,6 +126,9 @@ resolveOne :: Do -> IO DNSMessage
 resolveOne = udpTcpResolve
 
 ----------------------------------------------------------------
+
+data TCPFallback = TCPFallback deriving (Show, Typeable)
+instance Exception TCPFallback
 
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
