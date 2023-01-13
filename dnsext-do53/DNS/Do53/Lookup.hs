@@ -17,11 +17,14 @@ import Control.Exception as E
 import DNS.Types hiding (Seconds)
 import Prelude hiding (lookup)
 
-import DNS.Do53.Do53
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
-import DNS.Do53.Resolver
+import DNS.Do53.Resolve
+import DNS.Do53.Types
+
+-- $setup
+-- >>> import DNS.Do53.Do53
 
 data Section = Answer | Authority deriving (Eq, Ord, Show)
 

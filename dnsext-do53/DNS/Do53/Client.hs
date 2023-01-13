@@ -26,6 +26,8 @@ module DNS.Do53.Client (
   -- * Configuration for resolver
   , ResolvConf
   , defaultResolvConf
+  , Do(..)
+  , DoX
   -- ** Accessors
   , resolvInfo
   , resolvTimeout
@@ -33,6 +35,8 @@ module DNS.Do53.Client (
   , resolvConcurrent
   , resolvCache
   , resolvQueryControls
+  , resolvGetTime
+  , resolvDoX
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
   -- ** Configuring cache
@@ -57,8 +61,8 @@ module DNS.Do53.Client (
 
 import Prelude hiding (lookup)
 
+import DNS.Do53.Do53
 import DNS.Do53.Lookup
 import DNS.Do53.LookupX
 import DNS.Do53.Query
-import DNS.Do53.Resolver
-
+import DNS.Do53.Types

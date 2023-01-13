@@ -24,6 +24,7 @@ spec = describe "send/receive" $ do
               , doGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
               , doQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
+              , doX             = udpResolve -- dummy
               }
 
         ans <- udpResolve di
@@ -40,6 +41,7 @@ spec = describe "send/receive" $ do
               , doGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
               , doQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+              , doX             = tcpResolve -- dummy
               }
         ans <- tcpResolve di
         identifier (header ans) `shouldBe` 1

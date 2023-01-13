@@ -81,7 +81,10 @@ import Data.IP
 import Data.String (fromString)
 
 import DNS.Do53.Lookup as DNS
-import DNS.Do53.Resolver as DNS
+import DNS.Do53.Types as DNS
+
+-- $setup
+-- >>> import DNS.Do53.Do53
 
 ----------------------------------------------------------------
 
