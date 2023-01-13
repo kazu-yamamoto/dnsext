@@ -4,9 +4,11 @@ module IOSpec where
 
 import DNS.Types
 import Test.Hspec
+import System.Timeout (timeout)
 
 import DNS.Do53.Client
 import DNS.Do53.Internal
+
 
 spec :: Spec
 spec = describe "send/receive" $ do
@@ -16,7 +18,7 @@ spec = describe "send/receive" $ do
                 doQuestion      = Question "www.mew.org" A classIN
               , doHostName      = "8.8.8.8"
               , doPortNumber    = 53
-              , doTimeout       = 3000000
+              , doTimeout       = timeout 3000000
               , doRetry         = 1
               , doGenId         = return 1
               , doGetTime       = getEpochTime
@@ -32,7 +34,7 @@ spec = describe "send/receive" $ do
                 doQuestion      = Question "www.mew.org" A classIN
               , doHostName      = "8.8.8.8"
               , doPortNumber    = 53
-              , doTimeout       = 3000000
+              , doTimeout       = timeout 3000000
               , doRetry         = 1
               , doGenId         = return 1
               , doGetTime       = getEpochTime

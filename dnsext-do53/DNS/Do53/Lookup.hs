@@ -9,7 +9,6 @@ module DNS.Do53.Lookup (
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl
-  , lookupRawCtlTime
   -- * DNS Message procesing
   , fromDNSMessage
   ) where
@@ -267,17 +266,4 @@ lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
              -> TYPE          -- ^ Query RRtype
              -> QueryControls -- ^ Query flag and EDNS overrides
              -> IO (Either DNSError DNSMessage)
-lookupRawCtl rslv dom typ ctls = E.try $ resolve rslv dom typ ctls getEpochTime
-
--- | Similar to 'lookupRawCtl', but the recv action can be replaced with
--- something other than `DNS.Do53.Internal.receive`.
--- For example, in an environment where frequent retrieval of the current time
--- is a performance issue, you can pass the time from outside instead of
--- having `DNS.Do53.Internal.receive` retrieve the current time.
-lookupRawCtlTime :: Resolver                  -- ^ Resolver obtained via 'withResolver'
-                 -> Domain                    -- ^ Query domain
-                 -> TYPE                      -- ^ Query RRtype
-                 -> QueryControls             -- ^ Query flag and EDNS overrides
-                 -> IO EpochTime              -- ^ Action to get an epoch time
-                 -> IO (Either DNSError DNSMessage)
-lookupRawCtlTime rslv dom typ ctls getTime = E.try $ resolve rslv dom typ ctls getTime
+lookupRawCtl rslv dom typ ctls = E.try $ resolve rslv dom typ ctls

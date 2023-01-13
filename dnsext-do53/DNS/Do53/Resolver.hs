@@ -20,6 +20,7 @@ import DNS.Types
 import Network.Socket (HostName, PortNumber)
 import Prelude
 import qualified System.Random.Stateful as R
+import System.Timeout
 
 import DNS.Do53.Imports
 import DNS.Do53.Memo
@@ -129,19 +130,21 @@ defaultCacheConf = CacheConf 300 0 10
 --
 data ResolvConf = ResolvConf {
    -- | Server information.
-    resolvInfo       :: FileOrNumericHost
+    resolvInfo          :: FileOrNumericHost
    -- | Timeout in micro seconds.
-  , resolvTimeout    :: Int
+  , resolvTimeout       :: Int
    -- | The number of retries including the first try.
-  , resolvRetry      :: Int
+  , resolvRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
-  , resolvConcurrent :: Bool
+  , resolvConcurrent    :: Bool
    -- | Cache configuration.
-  , resolvCache      :: Maybe CacheConf
+  , resolvCache         :: Maybe CacheConf
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , resolvQueryControls :: QueryControls
-} deriving Show
+  , resolvGetTime       :: IO EpochTime
+  , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
+}
 
 -- | Return a default 'ResolvConf':
 --
@@ -153,12 +156,14 @@ data ResolvConf = ResolvConf {
 -- * 'resolvQueryControls' is an empty set of overrides.
 defaultResolvConf :: ResolvConf
 defaultResolvConf = ResolvConf {
-    resolvInfo       = RCFilePath "/etc/resolv.conf"
-  , resolvTimeout    = 3 * 1000 * 1000
-  , resolvRetry      = 3
-  , resolvConcurrent = False
-  , resolvCache      = Nothing
+    resolvInfo          = RCFilePath "/etc/resolv.conf"
+  , resolvTimeout       = 3 * 1000 * 1000
+  , resolvRetry         = 3
+  , resolvConcurrent    = False
+  , resolvCache         = Nothing
   , resolvQueryControls = mempty
+  , resolvGetTime       = getEpochTime
+  , resolvTimeoutAction = timeout
 }
 
 ----------------------------------------------------------------

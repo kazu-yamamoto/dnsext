@@ -20,7 +20,6 @@ module DNS.Do53.Client (
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl
-  , lookupRawCtlTime
   -- * Type and function for resolver
   , Resolver
   , withResolver

@@ -14,11 +14,9 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 import DNS.Types.Decode
--- import Network.Socket (close, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
 import Network.Socket (HostName, PortNumber, close)
 import qualified Network.UDP as UDP
 import System.IO.Error (annotateIOError)
-import System.Timeout (timeout)
 
 import DNS.Do53.IO
 import DNS.Do53.Imports
@@ -49,7 +47,7 @@ data Do = Do {
     doQuestion      :: Question
   , doHostName      :: HostName
   , doPortNumber    :: PortNumber
-  , doTimeout       :: Int
+  , doTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
   , doRetry         :: Int
   , doGenId         :: IO Identifier
   , doGetTime       :: IO EpochTime
@@ -74,28 +72,27 @@ data Do = Do {
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Resolver -> Domain -> TYPE -> QueryControls -> IO EpochTime
-        -> IO DNSMessage
-resolve rlv dom typ qctl0 getTime
+resolve :: Resolver -> Domain -> TYPE -> QueryControls -> IO DNSMessage
+resolve rlv dom typ qctl0
   | typ == AXFR   = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent dos
   | otherwise     = resolveSequential dos
   where
     concurrent = resolvConcurrent $ resolvConf rlv
-    dos = makeDos rlv dom typ qctl0 getTime
+    dos = makeDos rlv dom typ qctl0
 
-makeDos :: Resolver -> Domain -> TYPE -> QueryControls -> IO EpochTime -> [Do]
-makeDos rlv dom typ qctl0 getTime = go hps0 gens0
+makeDos :: Resolver -> Domain -> TYPE -> QueryControls -> [Do]
+makeDos rlv dom typ qctl0 = go hps0 gens0
   where
     conf = resolvConf rlv
     defaultDo = Do {
         doQuestion      = Question dom typ classIN
       , doHostName      = "127.0.0.1" -- to be overwitten
       , doPortNumber    = 53          -- to be overwitten
-      , doTimeout       = resolvTimeout conf
+      , doTimeout       = resolvTimeoutAction conf (resolvTimeout conf)
       , doRetry         = resolvRetry conf
       , doGenId         = return 0    -- to be overwitten
-      , doGetTime       = getTime
+      , doGetTime       = resolvGetTime conf
       , doQueryControls = qctl0 <> resolvQueryControls conf
       }
     hps0 = serverAddrs rlv
@@ -200,7 +197,7 @@ solve send recv Do{..} = go doRetry
     go cnt = do
         ident <- doGenId
         let qry = encodeQuery ident doQuestion doQueryControls
-        mres <- timeout doTimeout $ do
+        mres <- doTimeout $ do
             send qry
             getAnswer doQuestion ident recv doGetTime
         case mres of
