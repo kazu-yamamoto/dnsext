@@ -8,6 +8,9 @@ module DNS.Do53.Do53 (
   , udpSolver
   , tcpSolver
   , defaultResolvConf
+  , vcSolver
+  , Send
+  , Recv
   ) where
 
 import Control.Exception as E
@@ -64,7 +67,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 --   UDP attempts must use the same ID and accept delayed answers.
 udpSolver :: Solver
 udpSolver SolvInfo{..} =
-    E.handle (ioErrorToDNSError solvHostName "udp") $ go solvQueryControls
+    E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
   where
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
@@ -112,25 +115,34 @@ udpSolver SolvInfo{..} =
 
 -- | A solver using TCP.
 tcpSolver :: Solver
-tcpSolver SolvInfo{..} =
-    E.handle (ioErrorToDNSError solvHostName "tcp") $ go solvQueryControls
+tcpSolver si@SolvInfo{..} = vcSolver "TCP" perform si
+  where
+    -- Using a fresh connection
+    perform solve = bracket open close $ \sock -> do
+        let send = sendVC $ sendTCP sock
+            recv = recvVC $ recvTCP sock
+        solve send recv
+
+    open = openTCP solvHostName solvPortNumber
+
+type Send = ByteString -> IO ()
+type Recv = IO ByteString
+
+-- | Generic solver for virtual circuit.
+vcSolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Solver
+vcSolver proto perform SolvInfo{..} =
+    E.handle (ioErrorToDNSError solvHostName proto) $ go solvQueryControls
   where
     go qctl0 = do
-        res <- perform qctl0
+        res <- perform $ solve qctl0
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-        then perform qctl
+        then perform $ solve qctl
         else return res
-
-    -- Using a fresh connection
-    perform qctl = bracket open close $ \sock -> do
-        let send = sendVC $ sendTCP sock
-            recv = recvVC $ recvTCP sock
-        solve qctl send recv
 
     solve qctl send recv = do
         -- Using a fresh identifier.
@@ -151,8 +163,6 @@ tcpSolver SolvInfo{..} =
             Right msg -> case checkRespM solvQuestion ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
-
-    open = openTCP solvHostName solvPortNumber
 
 -- | Return a default 'ResolvConf':
 --

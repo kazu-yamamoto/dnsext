@@ -15,8 +15,11 @@ module DNS.Do53.Internal (
   , Resolver(..)
   , Cache
     -- * Solver: DNS over X
+  , vcSolver
   , SolvInfo(..)
   , Solver
+  , Send
+  , Recv
   , udpTcpSolver
   , udpSolver
   , tcpSolver
