@@ -21,10 +21,11 @@ type Entry = Either DNSError [RData]
 
 type DB = OrdPSQ Key Prio Entry
 
-type Cache = R.Reaper DB (Key,Prio,Entry)
+-- | Cache for resource records.
+newtype Cache = Cache (R.Reaper DB (Key,Prio,Entry))
 
 newCache :: Int -> IO Cache
-newCache delay = R.mkReaper R.defaultReaperSettings {
+newCache delay = Cache <$> R.mkReaper R.defaultReaperSettings {
     R.reaperEmpty  = PSQ.empty
   , R.reaperCons   = \(k, tim, v) psq -> PSQ.insert k tim v psq
   , R.reaperAction = prune
@@ -33,10 +34,10 @@ newCache delay = R.mkReaper R.defaultReaperSettings {
   }
 
 lookupCache :: Key -> Cache -> IO (Maybe (Prio, Entry))
-lookupCache key reaper = PSQ.lookup key <$> R.reaperRead reaper
+lookupCache key (Cache reaper) = PSQ.lookup key <$> R.reaperRead reaper
 
 insertCache :: Key -> Prio -> Entry -> Cache -> IO ()
-insertCache key tim ent reaper = R.reaperAdd reaper (key,tim,ent)
+insertCache key tim ent (Cache reaper) = R.reaperAdd reaper (key,tim,ent)
 
 -- Theoretically speaking, atMostView itself is good enough for pruning.
 -- But auto-update assumes a list based db which does not provide atMost
