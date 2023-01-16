@@ -20,7 +20,6 @@ module DNS.Do53.Client (
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl
-  , lookupRawCtlTime
   -- * Type and function for resolver
   , Resolver
   , withResolver
@@ -58,8 +57,8 @@ module DNS.Do53.Client (
 
 import Prelude hiding (lookup)
 
+import DNS.Do53.Do53
 import DNS.Do53.Lookup
 import DNS.Do53.LookupX
 import DNS.Do53.Query
-import DNS.Do53.Resolver
-
+import DNS.Do53.Types

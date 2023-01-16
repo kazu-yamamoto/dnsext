@@ -35,8 +35,9 @@ library
         DNS.Do53.LookupX
         DNS.Do53.Memo
         DNS.Do53.Query
-        DNS.Do53.Resolver
+        DNS.Do53.Resolve
         DNS.Do53.System
+        DNS.Do53.Types
 
     default-language: Haskell2010
     ghc-options:      -Wall

@@ -54,13 +54,13 @@ import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage)
-import DNS.Do53.Client (ResolvConf (..), FlagOp (FlagClear))
-import qualified DNS.Types as DNS
+import DNS.Do53.Client (ResolvConf (..), FlagOp (FlagClear), lookupRaw)
 import qualified DNS.Do53.Client as DNS
+import DNS.Do53.Internal (resolvGetTime)
+import qualified DNS.Types as DNS
 
 -- this package
 import DNS.Cache.RootServers (rootServers)
-import DNS.Cache.DNSUtil (lookupRaw)
 import DNS.Cache.Types (NE, Timestamp)
 import qualified DNS.Cache.Log as Log
 import DNS.Cache.Cache
@@ -752,16 +752,15 @@ cnameList dom h = foldr takeCNAME []
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
 norec aserver name typ = dnsQueryT $ \cxt -> do
-  now <- currentSeconds_ cxt
+  let conf = DNS.defaultResolvConf
+             { resolvInfo = DNS.RCHostName $ show aserver
+             , resolvTimeout = 5 * 1000 * 1000
+             , resolvRetry = 1
+             , resolvQueryControls = DNS.rdFlag FlagClear
+             , resolvGetTime = currentSeconds_ cxt
+             }
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolver conf ( \resolver -> lookupRaw now resolver name typ )
-  where
-    conf = DNS.defaultResolvConf
-           { resolvInfo = DNS.RCHostName $ show aserver
-           , resolvTimeout = 5 * 1000 * 1000
-           , resolvRetry = 1
-           , resolvQueryControls = DNS.rdFlag FlagClear
-           }
+    DNS.withResolver conf ( \resolver -> lookupRaw resolver name typ )
 
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.
