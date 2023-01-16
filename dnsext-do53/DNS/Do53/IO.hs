@@ -58,6 +58,7 @@ decodeVCLength bs = case BS.unpack bs of
 -- | Receiving data from a TCP socket.
 --   'NetworkFailure' is thrown if necessary.
 recvTCP :: Socket -> Int -> IO ByteString
+-- fixme by setting limitation
 recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
   where
     recv1 = do
@@ -69,8 +70,8 @@ recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
     loop bs0 = do
         let left = len - BS.length bs0
         bs1 <- recvCore left
-        let bs = bs0 <> bs1
-        if BS.length bs == len then
+        let bs = bs0 <> bs1 -- fixme by attoparsec
+        if BS.length bs == len then -- fixme using >=
             return bs
           else
             loop bs
