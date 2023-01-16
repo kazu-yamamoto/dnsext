@@ -14,34 +14,34 @@ spec :: Spec
 spec = describe "send/receive" $ do
 
     it "resolves well with UDP" $ do
-        let di = Do {
-                doQuestion      = Question "www.mew.org" A classIN
-              , doHostName      = "8.8.8.8"
-              , doPortNumber    = 53
-              , doTimeout       = timeout 3000000
-              , doRetry         = 1
-              , doGenId         = return 1
-              , doGetTime       = getEpochTime
+        let si = SolvInfo {
+                solvQuestion      = Question "www.mew.org" A classIN
+              , solvHostName      = "8.8.8.8"
+              , solvPortNumber    = 53
+              , solvTimeout       = timeout 3000000
+              , solvRetry         = 1
+              , solvGenId         = return 1
+              , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
-              , doQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
-              , doX             = udpResolve -- dummy
+              , solvQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
+              , solvSolver        = udpSolver -- dummy
               }
 
-        ans <- udpResolve di
+        ans <- udpSolver si
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
-        let di = Do {
-                doQuestion      = Question "www.mew.org" A classIN
-              , doHostName      = "8.8.8.8"
-              , doPortNumber    = 53
-              , doTimeout       = timeout 3000000
-              , doRetry         = 1
-              , doGenId         = return 1
-              , doGetTime       = getEpochTime
+        let si = SolvInfo {
+                solvQuestion      = Question "www.mew.org" A classIN
+              , solvHostName      = "8.8.8.8"
+              , solvPortNumber    = 53
+              , solvTimeout       = timeout 3000000
+              , solvRetry         = 1
+              , solvGenId         = return 1
+              , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
-              , doQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-              , doX             = tcpResolve -- dummy
+              , solvQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+              , solvSolver        = tcpSolver -- dummy
               }
-        ans <- tcpResolve di
+        ans <- tcpSolver si
         identifier (header ans) `shouldBe` 1

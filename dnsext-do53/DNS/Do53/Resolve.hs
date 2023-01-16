@@ -41,46 +41,46 @@ resolve rlv dom typ qctl0
   | otherwise     = resolveSequential dos
   where
     concurrent = resolvConcurrent $ resolvConf rlv
-    dos = makeDos rlv dom typ qctl0
+    dos = makeInfo rlv dom typ qctl0
 
-makeDos :: Resolver -> Domain -> TYPE -> QueryControls -> [Do]
-makeDos rlv dom typ qctl0 = go hps0 gens0
+makeInfo :: Resolver -> Domain -> TYPE -> QueryControls -> [SolvInfo]
+makeInfo rlv dom typ qctl0 = go hps0 gens0
   where
     conf = resolvConf rlv
-    defaultDo = Do {
-        doQuestion      = Question dom typ classIN
-      , doHostName      = "127.0.0.1" -- to be overwitten
-      , doPortNumber    = 53          -- to be overwitten
-      , doTimeout       = resolvTimeoutAction conf (resolvTimeout conf)
-      , doRetry         = resolvRetry conf
-      , doGenId         = return 0    -- to be overwitten
-      , doGetTime       = resolvGetTime conf
-      , doQueryControls = qctl0 <> resolvQueryControls conf
-      , doX             = resolvDoX conf
+    defaultSolvInfo = SolvInfo {
+        solvQuestion      = Question dom typ classIN
+      , solvHostName      = "127.0.0.1" -- to be overwitten
+      , solvPortNumber    = 53          -- to be overwitten
+      , solvTimeout       = resolvTimeoutAction conf (resolvTimeout conf)
+      , solvRetry         = resolvRetry conf
+      , solvGenId         = return 0    -- to be overwitten
+      , solvGetTime       = resolvGetTime conf
+      , solvQueryControls = qctl0 <> resolvQueryControls conf
+      , solvSolver        = resolvSolver conf
       }
     hps0 = serverAddrs rlv
     gens0 = genIds rlv
-    go ((h,p):hps) (gen:gens) = defaultDo { doHostName = h, doPortNumber = p, doGenId = gen } : go hps gens
+    go ((h,p):hps) (gen:gens) = defaultSolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
     go _ _ = []
 
-resolveSequential :: [Do] -> IO DNSMessage
-resolveSequential dos0 = loop dos0
+resolveSequential :: [SolvInfo] -> IO DNSMessage
+resolveSequential sis0 = loop sis0
   where
     loop []       = error "resolveSequential:loop"
-    loop [di]     = resolveOne di
-    loop (di:dos) = do
-        eres <- E.try $ resolveOne di
+    loop [si]     = resolveOne si
+    loop (si:sis) = do
+        eres <- E.try $ resolveOne si
         case eres of
-          Left (_ :: DNSError) -> loop dos
+          Left (_ :: DNSError) -> loop sis
           Right res -> return res
 
-resolveConcurrent :: [Do] -> IO DNSMessage
-resolveConcurrent dos =
-    raceAny $ map resolveOne dos
+resolveConcurrent :: [SolvInfo] -> IO DNSMessage
+resolveConcurrent sis =
+    raceAny $ map resolveOne sis
   where
     raceAny ios = do
         asyncs <- mapM async ios
         snd <$> waitAnyCancel asyncs
 
-resolveOne :: DoX
-resolveOne di = (doX di) di
+resolveOne :: Solver
+resolveOne si = (solvSolver si) si

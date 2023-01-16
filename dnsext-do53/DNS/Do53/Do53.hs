@@ -4,9 +4,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Do53 (
-    udpTcpResolve
-  , udpResolve
-  , tcpResolve
+    udpTcpSolver
+  , udpSolver
+  , tcpSolver
   , defaultResolvConf
   ) where
 
@@ -49,8 +49,8 @@ instance Exception TCPFallback
 -- UDP attempts must use the same ID and accept delayed answers
 -- but we use a fresh ID for each TCP lookup.
 --
-udpTcpResolve :: DoX
-udpTcpResolve di = udpResolve di `E.catch` \TCPFallback -> tcpResolve di
+udpTcpSolver :: Solver
+udpTcpSolver si = udpSolver si `E.catch` \TCPFallback -> tcpSolver si
 
 ----------------------------------------------------------------
 
@@ -63,62 +63,62 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 ----------------------------------------------------------------
 
 -- This throws DNSError or TCPFallback.
-udpResolve :: DoX
-udpResolve di@Do{..} =
-    E.handle (ioErrorToDNSError doHostName "udp") $
+udpSolver :: Solver
+udpSolver si@SolvInfo{..} =
+    E.handle (ioErrorToDNSError solvHostName "udp") $
       bracket open UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        res <- solve send recv di
+        res <- solve send recv si
         let fl = flags $ header res
             tc = trunCation fl
             rc = rcode fl
             eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> doQueryControls
+            qctl = ednsEnabled FlagClear <> solvQueryControls
         if tc then E.throwIO TCPFallback
-        else if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
-        then solve send recv di
+        else if rc == FormatErr && eh == NoEDNS && qctl /= solvQueryControls
+        then solve send recv si
         else return res
 
   where
-    open = UDP.clientSocket doHostName (show doPortNumber) True -- connected
+    open = UDP.clientSocket solvHostName (show solvPortNumber) True -- connected
 
 ----------------------------------------------------------------
 
 -- Perform a DNS query over TCP, if we were successful in creating
 -- the TCP socket.
 -- This throws DNSError only.
-tcpResolve :: DoX
-tcpResolve di@Do{..} =
-    E.handle (ioErrorToDNSError doHostName "tcp") $ do
-      bracket (openTCP doHostName doPortNumber) close $ \sock -> do
+tcpSolver :: Solver
+tcpSolver si@SolvInfo{..} =
+    E.handle (ioErrorToDNSError solvHostName "tcp") $ do
+      bracket (openTCP solvHostName solvPortNumber) close $ \sock -> do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- solve send recv di
+        res <- solve send recv si
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> doQueryControls
+            qctl = ednsEnabled FlagClear <> solvQueryControls
         -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
-        then solve send recv di
+        if rc == FormatErr && eh == NoEDNS && qctl /= solvQueryControls
+        then solve send recv si
         else return res
 
 ----------------------------------------------------------------
 
 solve :: (ByteString -> IO ())
       -> IO ByteString
-      -> Do
+      -> SolvInfo
       -> IO DNSMessage
-solve send recv Do{..} = go doRetry
+solve send recv SolvInfo{..} = go solvRetry
   where
     go 0 = E.throwIO RetryLimitExceeded
     go cnt = do
-        ident <- doGenId
-        let qry = encodeQuery ident doQuestion doQueryControls
-        mres <- doTimeout $ do
+        ident <- solvGenId
+        let qry = encodeQuery ident solvQuestion solvQueryControls
+        mres <- solvTimeout $ do
             send qry
-            getAnswer doQuestion ident recv doGetTime
+            getAnswer solvQuestion ident recv solvGetTime
         case mres of
            Nothing  -> go (cnt - 1)
            Just res -> return res
@@ -153,5 +153,5 @@ defaultResolvConf = ResolvConf {
   , resolvQueryControls = mempty
   , resolvGetTime       = getEpochTime
   , resolvTimeoutAction = timeout
-  , resolvDoX           = udpTcpResolve
+  , resolvSolver        = udpTcpSolver
 }

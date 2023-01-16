@@ -8,16 +8,17 @@ module DNS.Do53.Internal (
   , sendTCP
   , sendVC
   , encodeVCLength
-    -- * DNS over X
-  , Do(..)
-  , DoX
-  , udpTcpResolve
-  , udpResolve
-  , tcpResolve
+    -- * Solver: DNS over X
+  , SolvInfo(..)
+  , Solver
+  , udpTcpSolver
+  , udpSolver
+  , tcpSolver
     -- * ResolvConf
-  , resolvDoX
-  , resolvGetTime
+  , ResolvConf(..)
   , getEpochTime
+    -- * Resolver
+  , Resolver(..)
   ) where
 
 import DNS.Do53.Do53

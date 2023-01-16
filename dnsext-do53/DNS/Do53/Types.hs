@@ -13,8 +13,8 @@ module DNS.Do53.Types (
   -- * Type and function for resolver
   , Resolver(..)
   , withResolver
-  , Do(..)
-  , DoX
+  , SolvInfo(..)
+  , Solver
   ) where
 
 import DNS.Types
@@ -145,7 +145,7 @@ data ResolvConf = ResolvConf {
   , resolvQueryControls :: QueryControls
   , resolvGetTime       :: IO EpochTime
   , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
-  , resolvDoX           :: DoX
+  , resolvSolver        :: Solver
 }
 
 ----------------------------------------------------------------
@@ -162,16 +162,16 @@ data Resolver = Resolver {
 
 ----------------------------------------------------------------
 
-data Do = Do {
-    doQuestion      :: Question
-  , doHostName      :: HostName
-  , doPortNumber    :: PortNumber
-  , doTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , doRetry         :: Int
-  , doGenId         :: IO Identifier
-  , doGetTime       :: IO EpochTime
-  , doQueryControls :: QueryControls
-  , doX             :: DoX
+data SolvInfo = SolvInfo {
+    solvQuestion      :: Question
+  , solvHostName      :: HostName
+  , solvPortNumber    :: PortNumber
+  , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , solvRetry         :: Int
+  , solvGenId         :: IO Identifier
+  , solvGetTime       :: IO EpochTime
+  , solvQueryControls :: QueryControls
+  , solvSolver        :: Solver
   }
 
-type DoX = Do -> IO DNSMessage
+type Solver = SolvInfo -> IO DNSMessage
