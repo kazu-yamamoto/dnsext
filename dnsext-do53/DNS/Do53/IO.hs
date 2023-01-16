@@ -24,6 +24,7 @@ import DNS.Do53.Imports
 
 ----------------------------------------------------------------
 
+-- | Opening a TCP socket.
 openTCP :: HostName -> PortNumber -> IO Socket
 openTCP h p = do
     ai <- makeAddrInfo h p
@@ -42,16 +43,20 @@ makeAddrInfo nh p = do
 
 ----------------------------------------------------------------
 
+-- | Receiving data from a virtual circuit.
 recvVC :: (Int -> IO ByteString) -> IO ByteString
 recvVC rcv = do
     len <- decodeVCLength <$> rcv 2
     rcv len
 
+-- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int
 decodeVCLength bs = case BS.unpack bs of
   [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
   _        -> 0              -- never reached
 
+-- | Receiving data from a TCP socket.
+--   'NetworkFailure' is thrown if necessary.
 recvTCP :: Socket -> Int -> IO ByteString
 recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
   where
@@ -91,6 +96,7 @@ sendVC writev bs = do
     let lb = encodeVCLength $ BS.length bs
     writev [lb,bs]
 
+-- | Sending data to a TCP socket.
 sendTCP :: Socket -> [ByteString] -> IO ()
 sendTCP = NSB.sendMany
 

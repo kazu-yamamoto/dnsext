@@ -162,6 +162,7 @@ data Resolver = Resolver {
 
 ----------------------------------------------------------------
 
+-- | Information for solvers.
 data SolvInfo = SolvInfo {
     solvQuestion      :: Question
   , solvHostName      :: HostName
@@ -174,4 +175,5 @@ data SolvInfo = SolvInfo {
   , solvSolver        :: Solver
   }
 
+-- | The type of solvers (DNS over X).
 type Solver = SolvInfo -> IO DNSMessage

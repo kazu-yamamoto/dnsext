@@ -46,9 +46,7 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
--- UDP attempts must use the same ID and accept delayed answers
--- but we use a fresh ID for each TCP lookup.
---
+-- | A solver using UDP and TCP.
 udpTcpSolver :: Solver
 udpTcpSolver si = udpSolver si `E.catch` \TCPFallback -> tcpSolver si
 
@@ -62,7 +60,8 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 ----------------------------------------------------------------
 
--- This throws DNSError or TCPFallback.
+-- | A solver using UDP.
+--   UDP attempts must use the same ID and accept delayed answers.
 udpSolver :: Solver
 udpSolver si@SolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName "udp") $
@@ -85,9 +84,7 @@ udpSolver si@SolvInfo{..} =
 
 ----------------------------------------------------------------
 
--- Perform a DNS query over TCP, if we were successful in creating
--- the TCP socket.
--- This throws DNSError only.
+-- | A solver using TCP.
 tcpSolver :: Solver
 tcpSolver si@SolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName "tcp") $ do

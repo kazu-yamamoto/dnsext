@@ -1,24 +1,24 @@
 module DNS.Do53.Internal (
+    -- * TCP related
     openTCP
-    -- * Receiving DNS messages
-  , recvTCP
-  , recvVC
-  , decodeVCLength
-    -- * Sending pre-encoded messages
   , sendTCP
+  , recvTCP
+    -- * Virtual circuit
   , sendVC
+  , recvVC
   , encodeVCLength
+  , decodeVCLength
+    -- * ResolvConf
+  , ResolvConf(..)
+  , getEpochTime
+    -- * Resolver
+  , Resolver(..)
     -- * Solver: DNS over X
   , SolvInfo(..)
   , Solver
   , udpTcpSolver
   , udpSolver
   , tcpSolver
-    -- * ResolvConf
-  , ResolvConf(..)
-  , getEpochTime
-    -- * Resolver
-  , Resolver(..)
   ) where
 
 import DNS.Do53.Do53
