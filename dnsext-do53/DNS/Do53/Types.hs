@@ -134,7 +134,7 @@ data ResolvConf = ResolvConf {
     resolvInfo          :: FileOrNumericHost
    -- | Timeout in micro seconds.
   , resolvTimeout       :: Int
-   -- | The number of retries including the first try.
+   -- | The number of UDP retries including the first try.
   , resolvRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
   , resolvConcurrent    :: Bool
@@ -143,8 +143,11 @@ data ResolvConf = ResolvConf {
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , resolvQueryControls :: QueryControls
+   -- | Action to get an epoch time.
   , resolvGetTime       :: IO EpochTime
+   -- | Action for timeout used with 'resolvTimeout'.
   , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
+   -- | Resolver engine aka DNS over X.
   , resolvSolver        :: Solver
 }
 
