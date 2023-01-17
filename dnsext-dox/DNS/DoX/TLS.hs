@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.DoX.TLS where
 
@@ -11,24 +12,18 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-dot :: HostName -> PortNumber -> WireFormat -> IO ()
-dot hostname port qry = do
-    E.bracket open close $ \sock ->
+tlsSolver :: Solver
+tlsSolver si@SolvInfo{..} = vcSolver "TLS" perform si
+  where
+    -- Using a fresh connection
+    perform solve = E.bracket open close $ \sock -> do
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         (recv, recvBuf) <- makeRecv $ recvTLS ctx
         recvN <- makeReceiveN "" recv recvBuf
         let sendDoT = sendVC (sendManyTLS ctx)
             recvDoT = recvVC recvN
-        sendDoT qry
-        res <- recvDoT
-        print res
-  where
-    params = getTLSParams hostname "dot" False
-    open = do
-        ai <- makeAddrInfo hostname port
-        sock <- openSocket ai
+        solve sendDoT recvDoT
 
-        let sockaddr = addrAddress ai
-        connect sock sockaddr
-        return sock
+    open = openTCP solvHostName solvPortNumber
+    params = getTLSParams solvHostName "dot" False
