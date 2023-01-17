@@ -11,6 +11,7 @@ module DNS.Do53.Do53 (
   , vcSolver
   , Send
   , Recv
+  , checkRespM
   ) where
 
 import Control.Exception as E

@@ -23,6 +23,7 @@ module DNS.Do53.Internal (
   , udpTcpSolver
   , udpSolver
   , tcpSolver
+  , checkRespM
   ) where
 
 import DNS.Do53.Do53
