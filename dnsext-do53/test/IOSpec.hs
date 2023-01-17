@@ -11,7 +11,7 @@ import DNS.Do53.Internal
 
 
 spec :: Spec
-spec = describe "send/receive" $ do
+spec = describe "solvers" $ do
 
     it "resolves well with UDP" $ do
         let si = SolvInfo {
