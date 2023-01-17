@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.DoX.HTTP2 where
 
+import DNS.Do53.Client
+import DNS.Do53.Internal
+import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
@@ -17,37 +21,37 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-doh :: HostName -> PortNumber -> WireFormat -> IO ()
-doh hostname port qry = do
-    E.bracket open close $ \sock ->
+http2Solver :: Solver
+http2Solver si@SolvInfo{..} = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
-        client ctx hostname qry
+        ident <- solvGenId
+        client ctx ident si
   where
-    params = getTLSParams hostname "h2" False
-    open = do
-        ai <- makeAddrInfo hostname port
-        sock <- openSocket ai
+    open = openTCP solvHostName solvPortNumber
+    params = getTLSParams solvHostName "h2" False
 
-        let sockaddr = addrAddress ai
-        connect sock sockaddr
-        return sock
 
-client :: Context -> HostName -> WireFormat -> IO ()
-client ctx hostname msg =
+client :: Context -> Identifier -> Solver
+client ctx ident SolvInfo{..} =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
-    hdr = clientDoHHeaders msg
-    req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString msg
+    wire = encodeQuery ident solvQuestion solvQueryControls
+    hdr = clientDoHHeaders wire
+    req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {
         scheme = "https"
-      , authority = C8.pack hostname
+      , authority = C8.pack solvHostName
       , cacheLimit = 20
       }
     cli sendRequest = sendRequest req $ \rsp -> do
-        -- print $ responseStatus rsp
         bs <- loop rsp ""
-        print $ decode bs
+        now <- solvGetTime
+        case decodeAt now bs of
+            Left  e   -> E.throwIO e
+            Right msg -> case checkRespM solvQuestion ident msg of
+                Nothing  -> return msg
+                Just err -> E.throwIO err
       where
         loop rsp bs0 = do
             bs <- getResponseBodyChunk rsp
