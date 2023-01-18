@@ -150,6 +150,7 @@ defaultResolvConf = ResolvConf {
 data Seeds = Seeds {
     -- Lookup level
     seedsCache       :: Maybe (Cache, CacheConf)
+  , seedsQueryControls :: QueryControls
     -- Resolve level
   , seedsResolver    :: Resolver
   , seedsConcurrent  :: Bool
@@ -166,7 +167,6 @@ data ResolvInfo = ResolvInfo {
   -- share part
   , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
   , solvGetTime       :: IO EpochTime
-  , solvQueryControls :: QueryControls
   }
 
 defaultResolvInfo :: ResolvInfo
@@ -176,8 +176,7 @@ defaultResolvInfo = ResolvInfo {
   , solvGenId         = return 0
   , solvTimeout       = timeout 3000000
   , solvGetTime       = getEpochTime
-  , solvQueryControls = mempty
   }
 
 -- | The type of solvers (DNS over X).
-type Resolver = Question -> ResolvInfo -> IO DNSMessage
+type Resolver = ResolvInfo -> Question -> QueryControls -> IO DNSMessage

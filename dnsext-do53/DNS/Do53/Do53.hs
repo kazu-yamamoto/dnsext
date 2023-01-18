@@ -50,7 +50,7 @@ instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
 udpTcpResolver :: Int -> Resolver
-udpTcpResolver retry q ri = udpResolver retry q ri `E.catch` \TCPFallback -> tcpResolver q ri
+udpTcpResolver retry ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver ri q qctl
 
 ----------------------------------------------------------------
 
@@ -65,8 +65,8 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: Int -> Resolver
-udpResolver retry q ResolvInfo{..} =
-    E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
+udpResolver retry ResolvInfo{..} q _qctl =
+    E.handle (ioErrorToDNSError solvHostName "UDP") $ go _qctl
   where
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
@@ -114,7 +114,7 @@ udpResolver retry q ResolvInfo{..} =
 
 -- | A resolver using TCP.
 tcpResolver :: Resolver
-tcpResolver q ri@ResolvInfo{..} = vcResolver "TCP" perform q ri
+tcpResolver ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
@@ -129,8 +129,8 @@ type Recv = IO ByteString
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Resolver
-vcResolver proto perform q ResolvInfo{..} =
-    E.handle (ioErrorToDNSError solvHostName proto) $ go solvQueryControls
+vcResolver proto perform ResolvInfo{..} q _qctl =
+    E.handle (ioErrorToDNSError solvHostName proto) $ go _qctl
   where
     go qctl0 = do
         res <- perform $ solve qctl0

@@ -13,7 +13,7 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.Common
 
 tlsResolver :: Resolver
-tlsResolver q si@ResolvInfo{..} = vcResolver "TLS" perform q si
+tlsResolver ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = E.bracket open close $ \sock -> do

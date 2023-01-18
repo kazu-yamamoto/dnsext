@@ -11,6 +11,7 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 
+import DNS.Do53.Query
 import DNS.Do53.Types
 
 ----------------------------------------------------------------
@@ -33,30 +34,30 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Seeds -> Question -> IO DNSMessage
-resolve Seeds{..} q@Question{..}
+resolve :: Seeds -> Question -> QueryControls -> IO DNSMessage
+resolve Seeds{..} q@Question{..} qctl
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
-  | concurrent    = resolveConcurrent resolver q ris
-  | otherwise     = resolveSequential resolver q ris
+  | concurrent    = resolveConcurrent ris resolver q qctl
+  | otherwise     = resolveSequential ris resolver q qctl
   where
     concurrent = seedsConcurrent
     resolver   = seedsResolver
     ris        = seedsResolvInfos
 
-resolveSequential :: Resolver -> Question -> [ResolvInfo] -> IO DNSMessage
-resolveSequential resolver q ris0 = loop ris0
+resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveSequential ris0 resolver q qctl = loop ris0
   where
     loop []       = error "resolveSequential:loop"
-    loop [ri]     = resolver q ri
+    loop [ri]     = resolver ri q qctl
     loop (ri:ris) = do
-        eres <- E.try $ resolver q ri
+        eres <- E.try $ resolver ri q qctl
         case eres of
           Left (_ :: DNSError) -> loop ris
           Right res -> return res
 
-resolveConcurrent :: Resolver -> Question -> [ResolvInfo] -> IO DNSMessage
-resolveConcurrent resolver q ris =
-    raceAny $ map (resolver q) ris
+resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveConcurrent ris resolver q qctl =
+    raceAny $ map (\ri -> resolver ri q qctl) ris
   where
     raceAny ios = do
         asyncs <- mapM async ios

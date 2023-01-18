@@ -10,7 +10,7 @@ import Network.QUIC.Client
 import DNS.DoX.Common
 
 quicResolver :: Resolver
-quicResolver q si@ResolvInfo{..} = vcResolver "QUIC" perform q si
+quicResolver ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
   where
     cc = getQUICParams solvHostName solvPortNumber "doq"
     perform solve = run cc $ \conn -> do

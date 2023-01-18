@@ -18,17 +18,17 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.Common
 
 http3Resolver :: Resolver
-http3Resolver q si@ResolvInfo{..} = QUIC.run cc $ \conn ->
+http3Resolver ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
         ident <- solvGenId
-        client conn conf ident q si
+        client conn conf ident ri q qctl
   where
     cc = getQUICParams solvHostName solvPortNumber "h3"
 
 client :: Connection -> Config -> Identifier -> Resolver
-client conn conf ident q ResolvInfo{..} = run conn cliconf conf cli
+client conn conf ident ResolvInfo{..} q qctl = run conn cliconf conf cli
   where
-    wire = encodeQuery ident q solvQueryControls
+    wire = encodeQuery ident q qctl
     hdr = clientDoHHeaders wire
     req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {

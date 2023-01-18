@@ -255,7 +255,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
           -> Question
           -> IO (Either DNSError DNSMessage)
-lookupRaw seeds q = E.try $ resolve seeds q
+lookupRaw seeds q = E.try $ resolve seeds q (seedsQueryControls seeds)
 
 ----------------------------------------------------------------
 
@@ -286,7 +286,7 @@ withResolvConf rc@ResolvConf{..} f = do
       Nothing -> return Nothing
     let ris = makeInfo rc addrs gens
         resolver = udpTcpResolver resolvRetry
-        seeds = Seeds mcache resolver resolvConcurrent ris
+        seeds = Seeds mcache resolvQueryControls resolver resolvConcurrent ris
     f seeds
 
 makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
@@ -300,6 +300,5 @@ makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
               , solvGenId         = gen
               , solvTimeout       = resolvTimeoutAction resolvTimeout
               , solvGetTime       = resolvGetTime
-              , solvQueryControls = resolvQueryControls
               }
     go _ _ = []

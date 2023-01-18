@@ -21,11 +21,11 @@ spec = describe "solvers" $ do
               , solvTimeout       = timeout 3000000
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
-              -- Google's resolvers support the AD and CD bits
-              , solvQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
               }
+            -- Google's resolvers support the AD and CD bits
+            qctl = adFlag FlagSet <> ednsEnabled FlagClear
 
-        ans <- udpResolver 1 q ri
+        ans <- udpResolver 1 ri q qctl
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
@@ -36,8 +36,9 @@ spec = describe "solvers" $ do
               , solvTimeout       = timeout 3000000
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
-              -- Google's resolvers support the AD and CD bits
-              , solvQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
               }
-        ans <- tcpResolver q ri
+            -- Google's resolvers support the AD and CD bits
+            qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+
+        ans <- tcpResolver ri q qctl
         identifier (header ans) `shouldBe` 1
