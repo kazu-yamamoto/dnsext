@@ -49,8 +49,8 @@ data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: Resolver
-udpTcpResolver q ri = udpResolver q ri `E.catch` \TCPFallback -> tcpResolver q ri
+udpTcpResolver :: Int -> Resolver
+udpTcpResolver retry q ri = udpResolver retry q ri `E.catch` \TCPFallback -> tcpResolver q ri
 
 ----------------------------------------------------------------
 
@@ -64,8 +64,8 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: Resolver
-udpResolver q ResolvInfo{..} =
+udpResolver :: Int -> Resolver
+udpResolver retry q ResolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
   where
     -- Using only one socket and the same identifier.
@@ -73,7 +73,7 @@ udpResolver q ResolvInfo{..} =
         let send = UDP.send sock
             recv = UDP.recv sock
         ident <- solvGenId
-        loop solvRetry ident qctl send recv
+        loop retry ident qctl send recv
 
     loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
     loop cnt ident qctl0 send recv = do

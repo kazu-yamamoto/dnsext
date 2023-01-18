@@ -285,7 +285,8 @@ withResolvConf rc@ResolvConf{..} f = do
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
     let ris = makeInfo rc addrs gens
-        seeds = Seeds mcache udpTcpResolver resolvConcurrent ris
+        resolver = udpTcpResolver resolvRetry
+        seeds = Seeds mcache resolver resolvConcurrent ris
     f seeds
 
 makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
@@ -300,6 +301,5 @@ makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
               , solvTimeout       = resolvTimeoutAction resolvTimeout
               , solvGetTime       = resolvGetTime
               , solvQueryControls = resolvQueryControls
-              , solvRetry         = resolvRetry
               }
     go _ _ = []

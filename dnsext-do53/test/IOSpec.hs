@@ -19,14 +19,13 @@ spec = describe "solvers" $ do
                 solvHostName      = "8.8.8.8"
               , solvPortNumber    = 53
               , solvTimeout       = timeout 3000000
-              , solvRetry         = 1
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
               , solvQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
               }
 
-        ans <- udpResolver q ri
+        ans <- udpResolver 1 q ri
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
@@ -35,7 +34,6 @@ spec = describe "solvers" $ do
                 solvHostName      = "8.8.8.8"
               , solvPortNumber    = 53
               , solvTimeout       = timeout 3000000
-              , solvRetry         = 1
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits

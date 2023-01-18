@@ -167,8 +167,6 @@ data ResolvInfo = ResolvInfo {
   , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
   , solvGetTime       :: IO EpochTime
   , solvQueryControls :: QueryControls
-  -- UDP only
-  , solvRetry         :: Int
   }
 
 defaultResolvInfo :: ResolvInfo
@@ -179,7 +177,6 @@ defaultResolvInfo = ResolvInfo {
   , solvTimeout       = timeout 3000000
   , solvGetTime       = getEpochTime
   , solvQueryControls = mempty
-  , solvRetry         = 3
   }
 
 -- | The type of solvers (DNS over X).
