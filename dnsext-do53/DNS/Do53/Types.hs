@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
 -- | Resolver related data types.
@@ -45,16 +46,34 @@ findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 -- | Giving a thread-safe 'Seeds' to the function of the second
 --   argument.
 withResolvConf :: ResolvConf -> (Seeds -> IO a) -> IO a
-withResolvConf conf f = do
-    addrs <- findAddrPorts $ resolvInfo conf
+withResolvConf rc@ResolvConf{..} f = do
+    addrs <- findAddrPorts resolvInfo
     let n = length addrs
     gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
     let gens = map R.uniformWord16 gs
-    mcache <- case resolvCache conf of
-      Just cacheconf -> Just <$> newCache (pruningDelay cacheconf)
+    mcache <- case resolvCacheConf of
+      Just cacheconf -> do
+          cache <- newCache (pruningDelay cacheconf)
+          return $ Just (cache, cacheconf)
       Nothing -> return Nothing
-    let resolver = Seeds conf addrs gens mcache
-    f resolver
+    let ris = makeInfo rc addrs gens
+        seeds = Seeds mcache resolvResolver resolvConcurrent ris
+    f seeds
+
+makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
+makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
+  where
+    defaultResolvInfo = ResolvInfo {
+        solvHostName      = "127.0.0.1" -- to be overwitten
+      , solvPortNumber    = 53          -- to be overwitten
+      , solvTimeout       = resolvTimeoutAction resolvTimeout
+      , solvRetry         = resolvRetry
+      , solvGenId         = return 0    -- to be overwitten
+      , solvGetTime       = resolvGetTime
+      , solvQueryControls = resolvQueryControls
+      }
+    go ((h,p):hps) (gen:gens) = defaultResolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
+    go _ _ = []
 
 ----------------------------------------------------------------
 
@@ -139,7 +158,7 @@ data ResolvConf = ResolvConf {
    -- | Concurrent queries if multiple DNS servers are specified.
   , resolvConcurrent    :: Bool
    -- | Cache configuration.
-  , resolvCache         :: Maybe CacheConf
+  , resolvCacheConf     :: Maybe CacheConf
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , resolvQueryControls :: QueryControls
@@ -157,10 +176,12 @@ data ResolvConf = ResolvConf {
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
 data Seeds = Seeds {
-    seedsResolvConf :: ResolvConf
-  , seedsAddrPorts  :: [(HostName,PortNumber)]
-  , seedsGenIds     :: [IO Word16]
-  , seedsCache      :: Maybe Cache
+    -- Lookup level
+    seedsCache       :: Maybe (Cache, CacheConf)
+    -- Resolve level
+  , seedsResolver    :: Resolver
+  , seedsConcurrent  :: Bool
+  , seedsResolvInfos :: [ResolvInfo]
 }
 
 ----------------------------------------------------------------
@@ -169,11 +190,13 @@ data Seeds = Seeds {
 data ResolvInfo = ResolvInfo {
     solvHostName      :: HostName
   , solvPortNumber    :: PortNumber
-  , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , solvRetry         :: Int
   , solvGenId         :: IO Identifier
+  -- share part
+  , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
   , solvGetTime       :: IO EpochTime
   , solvQueryControls :: QueryControls
+  -- UDP only
+  , solvRetry         :: Int
   }
 
 -- | The type of solvers (DNS over X).

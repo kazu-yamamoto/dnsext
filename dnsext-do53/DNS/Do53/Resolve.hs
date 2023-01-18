@@ -11,7 +11,6 @@ import Control.Concurrent.Async (async, waitAnyCancel)
 import Control.Exception as E
 import DNS.Types
 
-import DNS.Do53.Query
 import DNS.Do53.Types
 
 ----------------------------------------------------------------
@@ -34,33 +33,15 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Seeds -> Question -> QueryControls -> IO DNSMessage
-resolve seeds@Seeds{..} q@Question{..} qctl0
+resolve :: Seeds -> Question -> IO DNSMessage
+resolve Seeds{..} q@Question{..}
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
-  | concurrent    = resolveConcurrent resolver q dos
-  | otherwise     = resolveSequential resolver q dos
+  | concurrent    = resolveConcurrent resolver q ris
+  | otherwise     = resolveSequential resolver q ris
   where
-    resolver = resolvResolver seedsResolvConf
-    concurrent = resolvConcurrent seedsResolvConf
-    dos = makeInfo seeds qctl0
-
-makeInfo :: Seeds -> QueryControls -> [ResolvInfo]
-makeInfo Seeds{..} qctl0 = go hps0 gens0
-  where
-    ResolvConf{..} = seedsResolvConf
-    defaultResolvInfo = ResolvInfo {
-        solvHostName      = "127.0.0.1" -- to be overwitten
-      , solvPortNumber    = 53          -- to be overwitten
-      , solvTimeout       = resolvTimeoutAction resolvTimeout
-      , solvRetry         = resolvRetry
-      , solvGenId         = return 0    -- to be overwitten
-      , solvGetTime       = resolvGetTime
-      , solvQueryControls = qctl0 <> resolvQueryControls
-      }
-    hps0 = seedsAddrPorts
-    gens0 = seedsGenIds
-    go ((h,p):hps) (gen:gens) = defaultResolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
-    go _ _ = []
+    concurrent = seedsConcurrent
+    resolver   = seedsResolver
+    ris        = seedsResolvInfos
 
 resolveSequential :: Resolver -> Question -> [ResolvInfo] -> IO DNSMessage
 resolveSequential resolver q ris0 = loop ris0

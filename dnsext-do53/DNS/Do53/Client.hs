@@ -19,7 +19,6 @@ module DNS.Do53.Client (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  , lookupRawCtl
   -- * Configuration for sutf resolver
   , ResolvConf
   , defaultResolvConf
@@ -30,7 +29,7 @@ module DNS.Do53.Client (
   , resolvTimeout
   , resolvRetry
   , resolvConcurrent
-  , resolvCache
+  , resolvCacheConf
   , resolvQueryControls
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)

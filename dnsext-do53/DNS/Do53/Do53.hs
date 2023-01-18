@@ -171,7 +171,7 @@ vcResolver proto perform q ResolvInfo{..} =
 -- * 'resolvTimeout' is 3,000,000 micro seconds.
 -- * 'resolvRetry' is 3.
 -- * 'resolvConcurrent' is False.
--- * 'resolvCache' is Nothing.
+-- * 'resolvCacheConf' is Nothing.
 -- * 'resolvQueryControls' is an empty set of overrides.
 defaultResolvConf :: ResolvConf
 defaultResolvConf = ResolvConf {
@@ -179,7 +179,7 @@ defaultResolvConf = ResolvConf {
   , resolvTimeout       = 3 * 1000 * 1000
   , resolvRetry         = 3
   , resolvConcurrent    = False
-  , resolvCache         = Nothing
+  , resolvCacheConf     = Nothing
   , resolvQueryControls = mempty
   , resolvGetTime       = getEpochTime
   , resolvTimeoutAction = timeout

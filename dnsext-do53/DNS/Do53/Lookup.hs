@@ -8,7 +8,6 @@ module DNS.Do53.Lookup (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  , lookupRawCtl
   -- * DNS Message procesing
   , fromDNSMessage
   ) where
@@ -19,7 +18,6 @@ import Prelude hiding (lookup)
 
 import DNS.Do53.Imports
 import DNS.Do53.Memo
-import DNS.Do53.Query
 import DNS.Do53.Resolve
 import DNS.Do53.Types
 
@@ -87,11 +85,9 @@ lookupSection :: Section
               -> IO (Either DNSError [RData])
 lookupSection section seeds q
   | section == Authority = lookupFreshSection seeds q section
-  | otherwise = case mcacheConf of
-      Nothing           -> lookupFreshSection seeds q section
-      Just cacheconf    -> lookupCacheSection seeds q cacheconf
-  where
-    mcacheConf = resolvCache $ seedsResolvConf seeds
+  | otherwise = case seedsCache seeds of
+      Nothing -> lookupFreshSection seeds q section
+      Just _  -> lookupCacheSection seeds q
 
 lookupFreshSection :: Seeds
                    -> Question
@@ -111,9 +107,8 @@ lookupFreshSection seeds q@Question{..} section = do
 
 lookupCacheSection :: Seeds
                    -> Question
-                   -> CacheConf
                    -> IO (Either DNSError [RData])
-lookupCacheSection seeds q@Question{..} cconf = do
+lookupCacheSection seeds@Seeds{..} q@Question{..} = do
     mx <- lookupCache q c
     case mx of
       Nothing -> do
@@ -141,7 +136,7 @@ lookupCacheSection seeds q@Question{..} cconf = do
       Just (_,x) -> return x
   where
     toRR = filter (qtype `isTypeOf`) . answer
-    c = fromJust $ seedsCache seeds
+    (c, cconf) = fromJust seedsCache
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
 cachePositive cconf c key rss
@@ -257,14 +252,4 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
           -> Question
           -> IO (Either DNSError DNSMessage)
-lookupRaw seeds q = lookupRawCtl seeds q mempty
-
--- | Similar to 'lookupRaw', but the default values of the RD, AD, CD and DO
--- flag bits, as well as various EDNS features, can be adjusted via the
--- 'QueryControls' parameter.
---
-lookupRawCtl :: Seeds         -- ^ Seeds obtained via 'withResolvConf'
-             -> Question
-             -> QueryControls -- ^ Query flag and EDNS overrides
-             -> IO (Either DNSError DNSMessage)
-lookupRawCtl seeds q ctls = E.try $ resolve seeds q ctls
+lookupRaw seeds q = E.try $ resolve seeds q
