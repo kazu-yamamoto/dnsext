@@ -4,10 +4,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Do53 (
-    udpTcpResolve
-  , udpResolve
-  , tcpResolve
+    udpTcpSolver
+  , udpSolver
+  , tcpSolver
   , defaultResolvConf
+  , vcSolver
+  , Send
+  , Recv
+  , checkRespM
   ) where
 
 import Control.Exception as E
@@ -46,11 +50,9 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
--- UDP attempts must use the same ID and accept delayed answers
--- but we use a fresh ID for each TCP lookup.
---
-udpTcpResolve :: DoX
-udpTcpResolve di = udpResolve di `E.catch` \TCPFallback -> tcpResolve di
+-- | A solver using UDP and TCP.
+udpTcpSolver :: Solver
+udpTcpSolver si = udpSolver si `E.catch` \TCPFallback -> tcpSolver si
 
 ----------------------------------------------------------------
 
@@ -62,78 +64,106 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 ----------------------------------------------------------------
 
--- This throws DNSError or TCPFallback.
-udpResolve :: DoX
-udpResolve di@Do{..} =
-    E.handle (ioErrorToDNSError doHostName "udp") $
-      bracket open UDP.close $ \sock -> do
+-- | A solver using UDP.
+--   UDP attempts must use the same ID and accept delayed answers.
+udpSolver :: Solver
+udpSolver SolvInfo{..} =
+    E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
+  where
+    -- Using only one socket and the same identifier.
+    go qctl = bracket open UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        res <- solve send recv di
-        let fl = flags $ header res
-            tc = trunCation fl
-            rc = rcode fl
-            eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> doQueryControls
-        if tc then E.throwIO TCPFallback
-        else if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
-        then solve send recv di
-        else return res
+        ident <- solvGenId
+        loop solvRetry ident qctl send recv
 
-  where
-    open = UDP.clientSocket doHostName (show doPortNumber) True -- connected
+    loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
+    loop cnt ident qctl0 send recv = do
+        mres <- solve ident qctl0 send recv
+        case mres of
+          Nothing -> loop (cnt - 1) ident qctl0 send recv
+          Just res -> do
+              let fl = flags $ header res
+                  tc = trunCation fl
+                  rc = rcode fl
+                  eh = ednsHeader res
+                  qctl = ednsEnabled FlagClear <> qctl0
+              when tc $ E.throwIO TCPFallback
+              if rc == FormatErr && eh == NoEDNS && qctl /= qctl0 then
+                  loop cnt ident qctl send recv
+                else
+                  return res
+
+    solve ident qctl send recv = do
+        let qry = encodeQuery ident solvQuestion qctl
+        solvTimeout $ do
+            _ <- send qry
+            getAnswer ident recv
+
+    getAnswer ident recv = do
+        bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        now <- solvGetTime
+        case decodeAt now bs of
+            Left  e -> E.throwIO e
+            Right msg
+              | checkResp solvQuestion ident msg -> return msg
+              -- Just ignoring a wrong answer.
+              | otherwise                        -> getAnswer ident recv
+
+    open = UDP.clientSocket solvHostName (show solvPortNumber) True -- connected
 
 ----------------------------------------------------------------
 
--- Perform a DNS query over TCP, if we were successful in creating
--- the TCP socket.
--- This throws DNSError only.
-tcpResolve :: DoX
-tcpResolve di@Do{..} =
-    E.handle (ioErrorToDNSError doHostName "tcp") $ do
-      bracket (openTCP doHostName doPortNumber) close $ \sock -> do
+-- | A solver using TCP.
+tcpSolver :: Solver
+tcpSolver si@SolvInfo{..} = vcSolver "TCP" perform si
+  where
+    -- Using a fresh connection
+    perform solve = bracket open close $ \sock -> do
         let send = sendVC $ sendTCP sock
             recv = recvVC $ recvTCP sock
-        res <- solve send recv di
+        solve send recv
+
+    open = openTCP solvHostName solvPortNumber
+
+type Send = ByteString -> IO ()
+type Recv = IO ByteString
+
+-- | Generic solver for virtual circuit.
+vcSolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Solver
+vcSolver proto perform SolvInfo{..} =
+    E.handle (ioErrorToDNSError solvHostName proto) $ go solvQueryControls
+  where
+    go qctl0 = do
+        res <- perform $ solve qctl0
         let fl = flags $ header res
             rc = rcode fl
             eh = ednsHeader res
-            qctl = ednsEnabled FlagClear <> doQueryControls
+            qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= doQueryControls
-        then solve send recv di
+        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
+        then perform $ solve qctl
         else return res
 
-----------------------------------------------------------------
-
-solve :: (ByteString -> IO ())
-      -> IO ByteString
-      -> Do
-      -> IO DNSMessage
-solve send recv Do{..} = go doRetry
-  where
-    go 0 = E.throwIO RetryLimitExceeded
-    go cnt = do
-        ident <- doGenId
-        let qry = encodeQuery ident doQuestion doQueryControls
-        mres <- doTimeout $ do
-            send qry
-            getAnswer doQuestion ident recv doGetTime
+    solve qctl send recv = do
+        -- Using a fresh identifier.
+        ident <- solvGenId
+        let qry = encodeQuery ident solvQuestion qctl
+        mres <- solvTimeout $ do
+            _ <- send qry
+            getAnswer ident recv
         case mres of
-           Nothing  -> go (cnt - 1)
+           Nothing  -> E.throwIO TimeoutExpired
            Just res -> return res
 
-getAnswer :: Question -> Identifier -> IO ByteString -> IO EpochTime -> IO DNSMessage
-getAnswer q ident recv getTime = go
-  where
-    go = do
-        now <- getTime
+    getAnswer ident recv = do
         bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        now <- solvGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
-            Right msg
-              | checkResp q ident msg -> return msg
-              | otherwise             -> go
+            Right msg -> case checkRespM solvQuestion ident msg of
+                Nothing  -> return msg
+                Just err -> E.throwIO err
 
 -- | Return a default 'ResolvConf':
 --
@@ -153,5 +183,5 @@ defaultResolvConf = ResolvConf {
   , resolvQueryControls = mempty
   , resolvGetTime       = getEpochTime
   , resolvTimeoutAction = timeout
-  , resolvDoX           = udpTcpResolve
+  , resolvSolver        = udpTcpSolver
 }

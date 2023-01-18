@@ -34,6 +34,7 @@ import DNS.Types.Decode (EpochTime)
 import Data.UnixTime (getUnixTime, UnixTime(..))
 import Foreign.C.Types (CTime(..))
 
+-- | Getting the current epoch time.
 getEpochTime :: IO EpochTime
 getEpochTime = do
     UnixTime (CTime tim) _ <- getUnixTime

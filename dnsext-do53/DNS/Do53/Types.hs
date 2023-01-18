@@ -13,8 +13,8 @@ module DNS.Do53.Types (
   -- * Type and function for resolver
   , Resolver(..)
   , withResolver
-  , Do(..)
-  , DoX
+  , SolvInfo(..)
+  , Solver
   ) where
 
 import DNS.Types
@@ -134,7 +134,7 @@ data ResolvConf = ResolvConf {
     resolvInfo          :: FileOrNumericHost
    -- | Timeout in micro seconds.
   , resolvTimeout       :: Int
-   -- | The number of retries including the first try.
+   -- | The number of UDP retries including the first try.
   , resolvRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
   , resolvConcurrent    :: Bool
@@ -143,9 +143,12 @@ data ResolvConf = ResolvConf {
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , resolvQueryControls :: QueryControls
+   -- | Action to get an epoch time.
   , resolvGetTime       :: IO EpochTime
+   -- | Action for timeout used with 'resolvTimeout'.
   , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
-  , resolvDoX           :: DoX
+   -- | Resolver engine aka DNS over X.
+  , resolvSolver        :: Solver
 }
 
 ----------------------------------------------------------------
@@ -162,16 +165,18 @@ data Resolver = Resolver {
 
 ----------------------------------------------------------------
 
-data Do = Do {
-    doQuestion      :: Question
-  , doHostName      :: HostName
-  , doPortNumber    :: PortNumber
-  , doTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , doRetry         :: Int
-  , doGenId         :: IO Identifier
-  , doGetTime       :: IO EpochTime
-  , doQueryControls :: QueryControls
-  , doX             :: DoX
+-- | Information for solvers.
+data SolvInfo = SolvInfo {
+    solvQuestion      :: Question
+  , solvHostName      :: HostName
+  , solvPortNumber    :: PortNumber
+  , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , solvRetry         :: Int
+  , solvGenId         :: IO Identifier
+  , solvGetTime       :: IO EpochTime
+  , solvQueryControls :: QueryControls
+  , solvSolver        :: Solver
   }
 
-type DoX = Do -> IO DNSMessage
+-- | The type of solvers (DNS over X).
+type Solver = SolvInfo -> IO DNSMessage
