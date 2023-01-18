@@ -39,7 +39,7 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> withResolvConf defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
+--   >>> withResolvConf defaultResolvConf $ \seeds -> lookup seeds "www.example.com" A
 --   Right [93.184.216.34]
 --
 lookup :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
@@ -218,7 +218,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolvConf defaultResolvConf $ \\resolver -> lookupRaw resolver \"www.example.com\" A
+--   withResolvConf defaultResolvConf $ \\seeds -> lookupRaw seeds \"www.example.com\" A
 --   @
 --
 --   And the (formatted) expected output:
@@ -251,7 +251,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolvConf defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
+--   >>> withResolvConf defaultResolvConf $ \seeds -> lookupRaw seeds "mew.org" AXFR
 --   Left InvalidAXFRLookup
 --
 lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'

@@ -35,18 +35,18 @@ import DNS.Do53.Types
 -- configuration with any additional overrides from the caller.
 --
 resolve :: Seeds -> Domain -> TYPE -> QueryControls -> IO DNSMessage
-resolve rlv dom typ qctl0
+resolve seeds dom typ qctl0
   | typ == AXFR   = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent dos
   | otherwise     = resolveSequential dos
   where
-    concurrent = resolvConcurrent $ resolvConf rlv
-    dos = makeInfo rlv dom typ qctl0
+    concurrent = resolvConcurrent $ resolvConf seeds
+    dos = makeInfo seeds dom typ qctl0
 
 makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [SolvInfo]
-makeInfo rlv dom typ qctl0 = go hps0 gens0
+makeInfo seeds dom typ qctl0 = go hps0 gens0
   where
-    conf = resolvConf rlv
+    conf = resolvConf seeds
     defaultSolvInfo = SolvInfo {
         solvQuestion      = Question dom typ classIN
       , solvHostName      = "127.0.0.1" -- to be overwitten
@@ -58,8 +58,8 @@ makeInfo rlv dom typ qctl0 = go hps0 gens0
       , solvQueryControls = qctl0 <> resolvQueryControls conf
       , solvSolver        = resolvSolver conf
       }
-    hps0 = serverAddrs rlv
-    gens0 = genIds rlv
+    hps0 = serverAddrs seeds
+    gens0 = genIds seeds
     go ((h,p):hps) (gen:gens) = defaultSolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
     go _ _ = []
 

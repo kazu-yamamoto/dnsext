@@ -760,7 +760,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
              , resolvGetTime = currentSeconds_ cxt
              }
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolver conf ( \resolver -> lookupRaw resolver name typ )
+    DNS.withResolvConf conf ( \seeds -> lookupRaw seeds name typ )
 
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.
