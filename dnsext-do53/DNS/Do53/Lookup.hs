@@ -43,7 +43,9 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --   Right [93.184.216.34]
 --
 lookup :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookup = lookupSection Answer
+lookup seeds dom typ = lookupSection Answer seeds q
+  where
+    q = Question dom typ classIN
 
 -- | Look up resource records of a specified type for a domain,
 --   collecting the results
@@ -52,7 +54,9 @@ lookup = lookupSection Answer
 --   to understand the concrete behavior.
 --   Cache is used even if 'resolvCache' is 'Just'.
 lookupAuth :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookupAuth = lookupSection Authority
+lookupAuth seeds dom typ = lookupSection Authority seeds q
+  where
+    q = Question dom typ classIN
 
 lookup' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
 lookup' typ seeds dom = unwrap <$> lookup seeds dom typ
@@ -79,44 +83,41 @@ unTag rd = case fromRData rd of
 
 lookupSection :: Section
               -> Seeds
-              -> Domain
-              -> TYPE
+              -> Question
               -> IO (Either DNSError [RData])
-lookupSection section seeds dom typ
-  | section == Authority = lookupFreshSection seeds dom typ section
+lookupSection section seeds q
+  | section == Authority = lookupFreshSection seeds q section
   | otherwise = case mcacheConf of
-      Nothing           -> lookupFreshSection seeds dom typ section
-      Just cacheconf    -> lookupCacheSection seeds dom typ cacheconf
+      Nothing           -> lookupFreshSection seeds q section
+      Just cacheconf    -> lookupCacheSection seeds q cacheconf
   where
     mcacheConf = resolvCache $ seedsResolvConf seeds
 
 lookupFreshSection :: Seeds
-                   -> Domain
-                   -> TYPE
+                   -> Question
                    -> Section
                    -> IO (Either DNSError [RData])
-lookupFreshSection seeds dom typ section = do
-    eans <- lookupRaw seeds dom typ
+lookupFreshSection seeds q@Question{..} section = do
+    eans <- lookupRaw seeds q
     case eans of
       Left err  -> return $ Left err
       Right ans -> return $ fromDNSMessage ans toRD
   where
-    correct ResourceRecord{..} = rrtype == typ
+    correct ResourceRecord{..} = rrtype == qtype
     toRD = map rdata . filter correct . sectionF
     sectionF = case section of
       Answer    -> answer
       Authority -> authority
 
 lookupCacheSection :: Seeds
-                   -> Domain
-                   -> TYPE
+                   -> Question
                    -> CacheConf
                    -> IO (Either DNSError [RData])
-lookupCacheSection seeds dom typ cconf = do
-    mx <- lookupCache (dom,typ) c
+lookupCacheSection seeds q@Question{..} cconf = do
+    mx <- lookupCache q c
     case mx of
       Nothing -> do
-          eans <- lookupRaw seeds dom typ
+          eans <- lookupRaw seeds q
           case eans of
             Left  err ->
                 -- Probably a network error happens.
@@ -127,21 +128,20 @@ lookupCacheSection seeds dom typ cconf = do
                 case ex of
                   Left NameError -> do
                       let v = Left NameError
-                      cacheNegative cconf c key v ans
+                      cacheNegative cconf c q v ans
                       return v
                   Left e -> return $ Left e
                   Right [] -> do
                       let v = Right []
-                      cacheNegative cconf c key v ans
+                      cacheNegative cconf c q v ans
                       return v
                   Right rss -> do
-                      cachePositive cconf c key rss
+                      cachePositive cconf c q rss
                       return $ Right $ map rdata rss
       Just (_,x) -> return x
   where
-    toRR = filter (typ `isTypeOf`) . answer
+    toRR = filter (qtype `isTypeOf`) . answer
     c = fromJust $ seedsCache seeds
-    key = (dom,typ)
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
 cachePositive cconf c key rss
@@ -218,7 +218,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolvConf defaultResolvConf $ \\seeds -> lookupRaw seeds \"www.example.com\" A
+--   withResolvConf defaultResolvConf $ \\seeds -> lookupRaw seeds $ Question \"www.example.com\" A classIN
 --   @
 --
 --   And the (formatted) expected output:
@@ -251,22 +251,20 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupRaw seeds "mew.org" AXFR
+--   >>> withResolvConf defaultResolvConf $ \seeds -> lookupRaw seeds $ Question "mew.org" AXFR classIN
 --   Left InvalidAXFRLookup
 --
 lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
-          -> Domain     -- ^ Query domain
-          -> TYPE       -- ^ Query RRtype
+          -> Question
           -> IO (Either DNSError DNSMessage)
-lookupRaw rslv dom typ = lookupRawCtl rslv dom typ mempty
+lookupRaw seeds q = lookupRawCtl seeds q mempty
 
 -- | Similar to 'lookupRaw', but the default values of the RD, AD, CD and DO
 -- flag bits, as well as various EDNS features, can be adjusted via the
 -- 'QueryControls' parameter.
 --
 lookupRawCtl :: Seeds         -- ^ Seeds obtained via 'withResolvConf'
-             -> Domain        -- ^ Query domain
-             -> TYPE          -- ^ Query RRtype
+             -> Question
              -> QueryControls -- ^ Query flag and EDNS overrides
              -> IO (Either DNSError DNSMessage)
-lookupRawCtl rslv dom typ ctls = E.try $ resolve rslv dom typ ctls
+lookupRawCtl seeds q ctls = E.try $ resolve seeds q ctls

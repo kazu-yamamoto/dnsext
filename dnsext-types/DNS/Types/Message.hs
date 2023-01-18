@@ -571,7 +571,7 @@ data Question = Question {
     qname  :: Domain -- ^ A domain name
   , qtype  :: TYPE   -- ^ The type of the query
   , qclass :: CLASS
-  } deriving (Eq, Show)
+  } deriving (Eq, Ord, Show)
 
 putQuestion :: CanonicalFlag -> Question -> SPut ()
 putQuestion cf Question{..} = do

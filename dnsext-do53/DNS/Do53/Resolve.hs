@@ -34,21 +34,21 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Seeds -> Domain -> TYPE -> QueryControls -> IO DNSMessage
-resolve seeds@Seeds{..} dom typ qctl0
-  | typ == AXFR   = E.throwIO InvalidAXFRLookup
+resolve :: Seeds -> Question -> QueryControls -> IO DNSMessage
+resolve seeds@Seeds{..} q@Question{..} qctl0
+  | qtype == AXFR = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent dos
   | otherwise     = resolveSequential dos
   where
     concurrent = resolvConcurrent seedsResolvConf
-    dos = makeInfo seeds dom typ qctl0
+    dos = makeInfo seeds q qctl0
 
-makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [ResolvInfo]
-makeInfo Seeds{..} dom typ qctl0 = go hps0 gens0
+makeInfo :: Seeds -> Question -> QueryControls -> [ResolvInfo]
+makeInfo Seeds{..} q qctl0 = go hps0 gens0
   where
     ResolvConf{..} = seedsResolvConf
     defaultResolvInfo = ResolvInfo {
-        solvQuestion      = Question dom typ classIN
+        solvQuestion      = q
       , solvHostName      = "127.0.0.1" -- to be overwitten
       , solvPortNumber    = 53          -- to be overwitten
       , solvTimeout       = resolvTimeoutAction resolvTimeout
