@@ -34,7 +34,7 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Resolver -> Domain -> TYPE -> QueryControls -> IO DNSMessage
+resolve :: Seeds -> Domain -> TYPE -> QueryControls -> IO DNSMessage
 resolve rlv dom typ qctl0
   | typ == AXFR   = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent dos
@@ -43,7 +43,7 @@ resolve rlv dom typ qctl0
     concurrent = resolvConcurrent $ resolvConf rlv
     dos = makeInfo rlv dom typ qctl0
 
-makeInfo :: Resolver -> Domain -> TYPE -> QueryControls -> [SolvInfo]
+makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [SolvInfo]
 makeInfo rlv dom typ qctl0 = go hps0 gens0
   where
     conf = resolvConf rlv

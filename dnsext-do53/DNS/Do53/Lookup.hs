@@ -42,7 +42,7 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
 --   Right [93.184.216.34]
 --
-lookup :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookup :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookup = lookupSection Answer
 
 -- | Look up resource records of a specified type for a domain,
@@ -51,13 +51,13 @@ lookup = lookupSection Answer
 --   See the documentation of 'lookupRaw'
 --   to understand the concrete behavior.
 --   Cache is used even if 'resolvCache' is 'Just'.
-lookupAuth :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookupAuth :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookupAuth = lookupSection Authority
 
-lookup' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
+lookup' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
 lookup' typ rlv dom = unwrap <$> lookup rlv dom typ
 
-lookupAuth' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
+lookupAuth' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
 lookupAuth' typ rlv dom = unwrap <$> lookupAuth rlv dom typ
 
 unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
@@ -78,7 +78,7 @@ unTag rd = case fromRData rd of
 --   to inspect for the result.
 
 lookupSection :: Section
-              -> Resolver
+              -> Seeds
               -> Domain
               -> TYPE
               -> IO (Either DNSError [RData])
@@ -90,7 +90,7 @@ lookupSection section rlv dom typ
   where
     mcacheConf = resolvCache $ resolvConf rlv
 
-lookupFreshSection :: Resolver
+lookupFreshSection :: Seeds
                    -> Domain
                    -> TYPE
                    -> Section
@@ -107,7 +107,7 @@ lookupFreshSection rlv dom typ section = do
       Answer    -> answer
       Authority -> authority
 
-lookupCacheSection :: Resolver
+lookupCacheSection :: Seeds
                    -> Domain
                    -> TYPE
                    -> CacheConf
@@ -254,7 +254,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
 --   Left InvalidAXFRLookup
 --
-lookupRaw :: Resolver   -- ^ Resolver obtained via 'withResolvConf'
+lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
           -> Domain     -- ^ Query domain
           -> TYPE       -- ^ Query RRtype
           -> IO (Either DNSError DNSMessage)
@@ -264,7 +264,7 @@ lookupRaw rslv dom typ = lookupRawCtl rslv dom typ mempty
 -- flag bits, as well as various EDNS features, can be adjusted via the
 -- 'QueryControls' parameter.
 --
-lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolvConf'
+lookupRawCtl :: Seeds         -- ^ Seeds obtained via 'withResolvConf'
              -> Domain        -- ^ Query domain
              -> TYPE          -- ^ Query RRtype
              -> QueryControls -- ^ Query flag and EDNS overrides

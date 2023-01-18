@@ -11,8 +11,8 @@ module DNS.Do53.Internal (
     -- * ResolvConf
   , ResolvConf(..)
   , getEpochTime
-    -- * Resolver
-  , Resolver(..)
+    -- * Seeds
+  , Seeds(..)
   , Cache
     -- * Solver: DNS over X
   , vcSolver

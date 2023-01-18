@@ -5,14 +5,14 @@
 module DNS.Do53.Types (
   -- * Configuration for resolver
     ResolvConf(..)
+  , withResolvConf
+  , Seeds(..)
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
   -- ** Configuring cache
   , CacheConf(..)
   , defaultCacheConf
   -- * Type and function for resolver
-  , Resolver(..)
-  , withResolvConf
   , SolvInfo(..)
   , Solver
   ) where
@@ -42,9 +42,9 @@ findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
--- | Giving a thread-safe 'Resolver' to the function of the second
+-- | Giving a thread-safe 'Seeds' to the function of the second
 --   argument.
-withResolvConf :: ResolvConf -> (Resolver -> IO a) -> IO a
+withResolvConf :: ResolvConf -> (Seeds -> IO a) -> IO a
 withResolvConf conf f = do
     addrs <- findAddrPorts $ resolvInfo conf
     let n = length addrs
@@ -53,7 +53,7 @@ withResolvConf conf f = do
     mcache <- case resolvCache conf of
       Just cacheconf -> Just <$> newCache (pruningDelay cacheconf)
       Nothing -> return Nothing
-    let resolver = Resolver conf addrs gens mcache
+    let resolver = Seeds conf addrs gens mcache
     f resolver
 
 ----------------------------------------------------------------
@@ -156,7 +156,7 @@ data ResolvConf = ResolvConf {
 -- | Abstract data type of DNS Resolver.
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
-data Resolver = Resolver {
+data Seeds = Seeds {
     resolvConf  :: ResolvConf
   , serverAddrs :: [(HostName,PortNumber)]
   , genIds      :: [IO Word16]

@@ -101,7 +101,7 @@ import DNS.Do53.Types as DNS
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupA resolver "www.kame.net"
 --   Right [210.155.141.200]
 --
-lookupA :: Resolver -> Domain -> IO (Either DNSError [RD_A])
+lookupA :: Seeds -> Domain -> IO (Either DNSError [RD_A])
 lookupA = lookup' A
 
 -- | Look up all (IPv6) \'AAAA\' records for the given hostname.
@@ -111,7 +111,7 @@ lookupA = lookup' A
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupAAAA resolver "www.wide.ad.jp"
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
-lookupAAAA :: Resolver -> Domain -> IO (Either DNSError [RD_AAAA])
+lookupAAAA :: Seeds -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAA = lookup' AAAA
 
 ----------------------------------------------------------------
@@ -142,7 +142,7 @@ lookupAAAA = lookup' AAAA
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupMX resolver "mail.mew.org"
 --   Right []
 --
-lookupMX :: Resolver -> Domain -> IO (Either DNSError [RD_MX])
+lookupMX :: Seeds -> Domain -> IO (Either DNSError [RD_MX])
 lookupMX = lookup' MX
 
 -- | Look up all \'MX\' records for the given hostname, and then
@@ -159,17 +159,17 @@ lookupMX = lookup' MX
 --   Since there is more than one result, it is necessary to sort the
 --   list in order to check for equality.
 --
-lookupAviaMX :: Resolver -> Domain -> IO (Either DNSError [RD_A])
+lookupAviaMX :: Seeds -> Domain -> IO (Either DNSError [RD_A])
 lookupAviaMX rlv dom = lookupXviaMX rlv dom (lookupA rlv)
 
 -- | Look up all \'MX\' records for the given hostname, and then
 --   resolve their hostnames to IPv6 addresses by calling
 --   'lookupAAAA'. The priorities are not retained.
 --
-lookupAAAAviaMX :: Resolver -> Domain -> IO (Either DNSError [RD_AAAA])
+lookupAAAAviaMX :: Seeds -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAAviaMX rlv dom = lookupXviaMX rlv dom (lookupAAAA rlv)
 
-lookupXviaMX :: Resolver
+lookupXviaMX :: Seeds
              -> Domain
              -> (Domain -> IO (Either DNSError [a]))
              -> IO (Either DNSError [a])
@@ -208,7 +208,7 @@ lookupXviaMX rlv dom func = do
 --   >>> fmap sort ns
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
-lookupNS :: Resolver -> Domain -> IO (Either DNSError [RD_NS])
+lookupNS :: Seeds -> Domain -> IO (Either DNSError [RD_NS])
 lookupNS = lookup' NS
 
 -- | Look up all \'NS\' records for the given hostname. The results
@@ -231,7 +231,7 @@ lookupNS = lookup' NS
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
-lookupNSAuth :: Resolver -> Domain -> IO (Either DNSError [RD_NS])
+lookupNSAuth :: Seeds -> Domain -> IO (Either DNSError [RD_NS])
 lookupNSAuth = lookupAuth' NS
 
 ----------------------------------------------------------------
@@ -247,7 +247,7 @@ lookupNSAuth = lookupAuth' NS
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupTXT resolver "mew.org"
 --   Right ["v=spf1 +mx -all"]
 --
-lookupTXT :: Resolver -> Domain -> IO (Either DNSError [RD_TXT])
+lookupTXT :: Seeds -> Domain -> IO (Either DNSError [RD_TXT])
 lookupTXT = lookup' TXT
 
 ----------------------------------------------------------------
@@ -267,7 +267,7 @@ lookupTXT = lookup' TXT
 --   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
-lookupSOA :: Resolver -> Domain -> IO (Either DNSError [RD_SOA])
+lookupSOA :: Seeds -> Domain -> IO (Either DNSError [RD_SOA])
 lookupSOA = lookup' SOA
 
 ----------------------------------------------------------------
@@ -284,7 +284,7 @@ lookupSOA = lookup' SOA
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
 --
-lookupPTR :: Resolver -> Domain -> IO (Either DNSError [RD_PTR])
+lookupPTR :: Seeds -> Domain -> IO (Either DNSError [RD_PTR])
 lookupPTR = lookup' PTR
 
 -- | Convenient wrapper around 'lookupPTR' to perform a reverse lookup
@@ -296,7 +296,7 @@ lookupPTR = lookup' PTR
 --   >>> withResolvConf defaultResolvConf $ \resolver -> lookupRDNS resolver "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
 --
-lookupRDNS :: Resolver -> IPv4 -> IO (Either DNSError [RD_PTR])
+lookupRDNS :: Seeds -> IPv4 -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
     octets = map (fromString . show ) $ fromIPv4 ip
@@ -333,5 +333,5 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 -- example should be displayed in a format that is not recognized as a test
 -- by "doctest".
 
-lookupSRV :: Resolver -> Domain -> IO (Either DNSError [RD_SRV])
+lookupSRV :: Seeds -> Domain -> IO (Either DNSError [RD_SRV])
 lookupSRV = lookup' SRV
