@@ -12,7 +12,7 @@ module DNS.Do53.Types (
   , defaultCacheConf
   -- * Type and function for resolver
   , Resolver(..)
-  , withResolver
+  , withResolvConf
   , SolvInfo(..)
   , Solver
   ) where
@@ -44,8 +44,8 @@ findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 -- | Giving a thread-safe 'Resolver' to the function of the second
 --   argument.
-withResolver :: ResolvConf -> (Resolver -> IO a) -> IO a
-withResolver conf f = do
+withResolvConf :: ResolvConf -> (Resolver -> IO a) -> IO a
+withResolvConf conf f = do
     addrs <- findAddrPorts $ resolvInfo conf
     let n = length addrs
     gs <- replicateM n (R.initStdGen >>= R.newIOGenM)

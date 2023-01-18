@@ -39,7 +39,7 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
 --   Right [93.184.216.34]
 --
 lookup :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
@@ -218,7 +218,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolver defaultResolvConf $ \\resolver -> lookupRaw resolver \"www.example.com\" A
+--   withResolvConf defaultResolvConf $ \\resolver -> lookupRaw resolver \"www.example.com\" A
 --   @
 --
 --   And the (formatted) expected output:
@@ -251,10 +251,10 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
 --   Left InvalidAXFRLookup
 --
-lookupRaw :: Resolver   -- ^ Resolver obtained via 'withResolver'
+lookupRaw :: Resolver   -- ^ Resolver obtained via 'withResolvConf'
           -> Domain     -- ^ Query domain
           -> TYPE       -- ^ Query RRtype
           -> IO (Either DNSError DNSMessage)
@@ -264,7 +264,7 @@ lookupRaw rslv dom typ = lookupRawCtl rslv dom typ mempty
 -- flag bits, as well as various EDNS features, can be adjusted via the
 -- 'QueryControls' parameter.
 --
-lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
+lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolvConf'
              -> Domain        -- ^ Query domain
              -> TYPE          -- ^ Query RRtype
              -> QueryControls -- ^ Query flag and EDNS overrides

@@ -35,7 +35,7 @@
 --
 --   >>> :set -XOverloadedStrings
 --   >>>
---   >>> withResolver defaultResolvConf $ \resolver -> lookupA resolver "www.example.com"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupA resolver "www.example.com"
 --   Right [93.184.216.34]
 --
 --   The only error that we can easily cause is a timeout. We do this
@@ -44,7 +44,7 @@
 --
 --   >>> let badrc = defaultResolvConf { resolvTimeout = 0, resolvRetry = 1 }
 --   >>>
---   >>> withResolver badrc $ \resolver -> lookupA resolver "www.example.com"
+--   >>> withResolvConf badrc $ \resolver -> lookupA resolver "www.example.com"
 --   Left RetryLimitExceeded
 --
 --   As is the convention, successful results will always be wrapped
@@ -92,13 +92,13 @@ import DNS.Do53.Types as DNS
 --
 --   A straightforward example:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupA resolver "192.0.2.1.nip.io"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupA resolver "192.0.2.1.nip.io"
 --   Right [192.0.2.1]
 --
 --   This function will also follow a CNAME and resolve its target if
 --   one exists for the queried hostname:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupA resolver "www.kame.net"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupA resolver "www.kame.net"
 --   Right [210.155.141.200]
 --
 lookupA :: Resolver -> Domain -> IO (Either DNSError [RD_A])
@@ -108,7 +108,7 @@ lookupA = lookup' A
 --
 --   Examples:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupAAAA resolver "www.wide.ad.jp"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupAAAA resolver "www.wide.ad.jp"
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
 lookupAAAA :: Resolver -> Domain -> IO (Either DNSError [RD_AAAA])
@@ -124,13 +124,13 @@ lookupAAAA = lookup' AAAA
 --   It has an RFC7505 NULL MX (to prevent a deluge of spam from examples
 --   posted on the internet).
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupMX resolver "example.com"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupMX resolver "example.com"
 --   Right [RD_MX {mx_preference = 0, mx_exchange = "."}]
 --
 --
 --   The domain \"mew.org\" does however have a single MX:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupMX resolver "mew.org"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupMX resolver "mew.org"
 --   Right [RD_MX {mx_preference = 10, mx_exchange = "mail.mew.org."}]
 --
 --   Also note that all hostnames are returned with a trailing dot to
@@ -139,7 +139,7 @@ lookupAAAA = lookup' AAAA
 --   However the MX host itself has no need for an MX record, so its MX RRset
 --   is empty.  But, \"no results\" is still a successful result.
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupMX resolver "mail.mew.org"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupMX resolver "mail.mew.org"
 --   Right []
 --
 lookupMX :: Resolver -> Domain -> IO (Either DNSError [RD_MX])
@@ -152,7 +152,7 @@ lookupMX = lookup' MX
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ips <- withResolver defaultResolvConf $ \resolver -> lookupAviaMX resolver "wide.ad.jp"
+--   >>> ips <- withResolvConf defaultResolvConf $ \resolver -> lookupAviaMX resolver "wide.ad.jp"
 --   >>> fmap sort ips
 --   Right [203.178.136.30]
 --
@@ -204,7 +204,7 @@ lookupXviaMX rlv dom func = do
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ns <- withResolver defaultResolvConf $ \resolver -> lookupNS resolver "mew.org"
+--   >>> ns <- withResolvConf defaultResolvConf $ \resolver -> lookupNS resolver "mew.org"
 --   >>> fmap sort ns
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
@@ -227,7 +227,7 @@ lookupNS = lookup' NS
 --   >>> import Data.List (sort)
 --   >>> let ri = RCHostName "192.5.6.30" -- a.gtld-servers.net
 --   >>> let rc = defaultResolvConf { resolvInfo = ri }
---   >>> ns <- withResolver rc $ \resolver -> lookupNSAuth resolver "example.com"
+--   >>> ns <- withResolvConf rc $ \resolver -> lookupNSAuth resolver "example.com"
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
@@ -244,7 +244,7 @@ lookupNSAuth = lookupAuth' NS
 --   <http://en.wikipedia.org/wiki/DomainKeys_Identified_Mail>. As an
 --   example, we find the SPF record for \"mew.org\":
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupTXT resolver "mew.org"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupTXT resolver "mew.org"
 --   Right ["v=spf1 +mx -all"]
 --
 lookupTXT :: Resolver -> Domain -> IO (Either DNSError [RD_TXT])
@@ -263,7 +263,7 @@ lookupTXT = lookup' TXT
 --   future.  Users should be prepared to remove any trailing period before
 --   using the \'rname\` as a contact email address.
 --
---   >>> soa <- withResolver defaultResolvConf $ \resolver -> lookupSOA resolver "mew.org"
+--   >>> soa <- withResolvConf defaultResolvConf $ \resolver -> lookupSOA resolver "mew.org"
 --   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
@@ -279,7 +279,7 @@ lookupSOA = lookup' SOA
 --   We look up the PTR associated with the IP address
 --   210.130.137.80, i.e., 80.137.130.210.in-addr.arpa:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupPTR resolver "180.2.232.202.in-addr.arpa"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupPTR resolver "180.2.232.202.in-addr.arpa"
 --   Right ["www.iij.ad.jp."]
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
@@ -293,7 +293,7 @@ lookupPTR = lookup' PTR
 --   We repeat the example from 'lookupPTR', except now we pass the IP
 --   address directly:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupRDNS resolver "202.232.2.180"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupRDNS resolver "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
 --
 lookupRDNS :: Resolver -> IPv4 -> IO (Either DNSError [RD_PTR])
@@ -324,7 +324,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --
 --   Examples:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupSRV resolver "_xmpp-server._tcp.jabber.ietf.org"
+--   >>> withResolvConf defaultResolvConf $ \resolver -> lookupSRV resolver "_xmpp-server._tcp.jabber.ietf.org"
 --   Right [RD_SRV {srv_priority = 5, srv_weight = 0, srv_port = 5269, srv_target = "jabber.ietf.org."}]
 
 -- Though the "jabber.ietf.orgs" SRV record may prove reasonably stable, as

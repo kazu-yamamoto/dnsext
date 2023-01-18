@@ -20,12 +20,11 @@ module DNS.Do53.Client (
   -- * Lookups returning DNS Messages
   , lookupRaw
   , lookupRawCtl
-  -- * Type and function for resolver
-  , Resolver
-  , withResolver
-  -- * Configuration for resolver
+  -- * Configuration for sutf resolver
   , ResolvConf
   , defaultResolvConf
+  , withResolvConf
+  , Resolver
   -- ** Accessors
   , resolvInfo
   , resolvTimeout
