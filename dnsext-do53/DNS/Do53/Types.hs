@@ -15,6 +15,7 @@ module DNS.Do53.Types (
   , defaultCacheConf
   -- * Type and function for resolver
   , ResolvInfo(..)
+  , defaultResolvInfo
   , Resolver
   ) where
 
@@ -23,6 +24,7 @@ import DNS.Types.Decode
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 import Prelude
 import qualified System.Random.Stateful as R
+import System.Timeout (timeout)
 
 import DNS.Do53.Imports
 import DNS.Do53.Memo
@@ -63,16 +65,17 @@ withResolvConf rc@ResolvConf{..} f = do
 makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
 makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
   where
-    defaultResolvInfo = ResolvInfo {
-        solvHostName      = "127.0.0.1" -- to be overwitten
-      , solvPortNumber    = 53          -- to be overwitten
-      , solvTimeout       = resolvTimeoutAction resolvTimeout
-      , solvRetry         = resolvRetry
-      , solvGenId         = return 0    -- to be overwitten
-      , solvGetTime       = resolvGetTime
-      , solvQueryControls = resolvQueryControls
-      }
-    go ((h,p):hps) (gen:gens) = defaultResolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
+    go ((h,p):hps) (gen:gens) = ri : go hps gens
+      where
+        ri = ResolvInfo {
+                solvHostName      = h
+              , solvPortNumber    = p
+              , solvGenId         = gen
+              , solvTimeout       = resolvTimeoutAction resolvTimeout
+              , solvGetTime       = resolvGetTime
+              , solvQueryControls = resolvQueryControls
+              , solvRetry         = resolvRetry
+              }
     go _ _ = []
 
 ----------------------------------------------------------------
@@ -197,6 +200,17 @@ data ResolvInfo = ResolvInfo {
   , solvQueryControls :: QueryControls
   -- UDP only
   , solvRetry         :: Int
+  }
+
+defaultResolvInfo :: ResolvInfo
+defaultResolvInfo = ResolvInfo {
+    solvHostName      = "127.0.0.1"
+  , solvPortNumber    = 53
+  , solvGenId         = return 0
+  , solvTimeout       = timeout 3000000
+  , solvGetTime       = getEpochTime
+  , solvQueryControls = mempty
+  , solvRetry         = 3
   }
 
 -- | The type of solvers (DNS over X).
