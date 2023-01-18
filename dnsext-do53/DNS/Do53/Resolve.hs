@@ -35,31 +35,31 @@ import DNS.Do53.Types
 -- configuration with any additional overrides from the caller.
 --
 resolve :: Seeds -> Domain -> TYPE -> QueryControls -> IO DNSMessage
-resolve seeds dom typ qctl0
+resolve seeds@Seeds{..} dom typ qctl0
   | typ == AXFR   = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent dos
   | otherwise     = resolveSequential dos
   where
-    concurrent = resolvConcurrent $ resolvConf seeds
+    concurrent = resolvConcurrent seedsResolvConf
     dos = makeInfo seeds dom typ qctl0
 
 makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [ResolvInfo]
-makeInfo seeds dom typ qctl0 = go hps0 gens0
+makeInfo Seeds{..} dom typ qctl0 = go hps0 gens0
   where
-    conf = resolvConf seeds
+    ResolvConf{..} = seedsResolvConf
     defaultResolvInfo = ResolvInfo {
         solvQuestion      = Question dom typ classIN
       , solvHostName      = "127.0.0.1" -- to be overwitten
       , solvPortNumber    = 53          -- to be overwitten
-      , solvTimeout       = resolvTimeoutAction conf (resolvTimeout conf)
-      , solvRetry         = resolvRetry conf
+      , solvTimeout       = resolvTimeoutAction resolvTimeout
+      , solvRetry         = resolvRetry
       , solvGenId         = return 0    -- to be overwitten
-      , solvGetTime       = resolvGetTime conf
-      , solvQueryControls = qctl0 <> resolvQueryControls conf
-      , solvResolver      = resolvResolver conf
+      , solvGetTime       = resolvGetTime
+      , solvQueryControls = qctl0 <> resolvQueryControls
+      , solvResolver      = resolvResolver
       }
-    hps0 = serverAddrs seeds
-    gens0 = genIds seeds
+    hps0 = seedsAddrPorts
+    gens0 = seedsGenIds
     go ((h,p):hps) (gen:gens) = defaultResolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
     go _ _ = []
 

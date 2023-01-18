@@ -157,10 +157,10 @@ data ResolvConf = ResolvConf {
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
 data Seeds = Seeds {
-    resolvConf  :: ResolvConf
-  , serverAddrs :: [(HostName,PortNumber)]
-  , genIds      :: [IO Word16]
-  , cache       :: Maybe Cache
+    seedsResolvConf :: ResolvConf
+  , seedsAddrPorts  :: [(HostName,PortNumber)]
+  , seedsGenIds     :: [IO Word16]
+  , seedsCache      :: Maybe Cache
 }
 
 ----------------------------------------------------------------

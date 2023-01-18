@@ -55,10 +55,10 @@ lookupAuth :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookupAuth = lookupSection Authority
 
 lookup' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
-lookup' typ rlv dom = unwrap <$> lookup rlv dom typ
+lookup' typ seeds dom = unwrap <$> lookup seeds dom typ
 
 lookupAuth' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
-lookupAuth' typ rlv dom = unwrap <$> lookupAuth rlv dom typ
+lookupAuth' typ seeds dom = unwrap <$> lookupAuth seeds dom typ
 
 unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
 unwrap erds = case erds of
@@ -82,21 +82,21 @@ lookupSection :: Section
               -> Domain
               -> TYPE
               -> IO (Either DNSError [RData])
-lookupSection section rlv dom typ
-  | section == Authority = lookupFreshSection rlv dom typ section
+lookupSection section seeds dom typ
+  | section == Authority = lookupFreshSection seeds dom typ section
   | otherwise = case mcacheConf of
-      Nothing           -> lookupFreshSection rlv dom typ section
-      Just cacheconf    -> lookupCacheSection rlv dom typ cacheconf
+      Nothing           -> lookupFreshSection seeds dom typ section
+      Just cacheconf    -> lookupCacheSection seeds dom typ cacheconf
   where
-    mcacheConf = resolvCache $ resolvConf rlv
+    mcacheConf = resolvCache $ seedsResolvConf seeds
 
 lookupFreshSection :: Seeds
                    -> Domain
                    -> TYPE
                    -> Section
                    -> IO (Either DNSError [RData])
-lookupFreshSection rlv dom typ section = do
-    eans <- lookupRaw rlv dom typ
+lookupFreshSection seeds dom typ section = do
+    eans <- lookupRaw seeds dom typ
     case eans of
       Left err  -> return $ Left err
       Right ans -> return $ fromDNSMessage ans toRD
@@ -112,11 +112,11 @@ lookupCacheSection :: Seeds
                    -> TYPE
                    -> CacheConf
                    -> IO (Either DNSError [RData])
-lookupCacheSection rlv dom typ cconf = do
+lookupCacheSection seeds dom typ cconf = do
     mx <- lookupCache (dom,typ) c
     case mx of
       Nothing -> do
-          eans <- lookupRaw rlv dom typ
+          eans <- lookupRaw seeds dom typ
           case eans of
             Left  err ->
                 -- Probably a network error happens.
@@ -140,7 +140,7 @@ lookupCacheSection rlv dom typ cconf = do
       Just (_,x) -> return x
   where
     toRR = filter (typ `isTypeOf`) . answer
-    c = fromJust $ cache rlv
+    c = fromJust $ seedsCache seeds
     key = (dom,typ)
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
