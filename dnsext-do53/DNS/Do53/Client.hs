@@ -55,7 +55,6 @@ module DNS.Do53.Client (
 
 import Prelude hiding (lookup)
 
-import DNS.Do53.Do53
 import DNS.Do53.Lookup
 import DNS.Do53.LookupX
 import DNS.Do53.Query

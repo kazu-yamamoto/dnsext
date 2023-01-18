@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module DNS.Do53.Lookup (
   -- * Lookups returning requested RData
@@ -10,19 +11,21 @@ module DNS.Do53.Lookup (
   , lookupRaw
   -- * DNS Message procesing
   , fromDNSMessage
+  , withResolvConf
   ) where
 
 import Control.Exception as E
 import DNS.Types hiding (Seconds)
 import Prelude hiding (lookup)
+import qualified System.Random.Stateful as R
+import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 
+import DNS.Do53.Do53
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Resolve
+import DNS.Do53.System
 import DNS.Do53.Types
-
--- $setup
--- >>> import DNS.Do53.Do53
 
 data Section = Answer | Authority deriving (Eq, Ord, Show)
 
@@ -253,3 +256,50 @@ lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
           -> Question
           -> IO (Either DNSError DNSMessage)
 lookupRaw seeds q = E.try $ resolve seeds q
+
+----------------------------------------------------------------
+
+-- 53 is the standard port number for domain name servers as assigned by IANA
+dnsPort :: PortNumber
+dnsPort = 53
+
+findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
+findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
+findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
+
+----------------------------------------------------------------
+
+-- | Giving a thread-safe 'Seeds' to the function of the second
+--   argument.
+withResolvConf :: ResolvConf -> (Seeds -> IO a) -> IO a
+withResolvConf rc@ResolvConf{..} f = do
+    addrs <- findAddrPorts resolvInfo
+    let n = length addrs
+    gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
+    let gens = map R.uniformWord16 gs
+    mcache <- case resolvCacheConf of
+      Just cacheconf -> do
+          cache <- newCache (pruningDelay cacheconf)
+          return $ Just (cache, cacheconf)
+      Nothing -> return Nothing
+    let ris = makeInfo rc addrs gens
+        seeds = Seeds mcache udpTcpResolver resolvConcurrent ris
+    f seeds
+
+makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
+makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
+  where
+    go ((h,p):hps) (gen:gens) = ri : go hps gens
+      where
+        ri = ResolvInfo {
+                solvHostName      = h
+              , solvPortNumber    = p
+              , solvGenId         = gen
+              , solvTimeout       = resolvTimeoutAction resolvTimeout
+              , solvGetTime       = resolvGetTime
+              , solvQueryControls = resolvQueryControls
+              , solvRetry         = resolvRetry
+              }
+    go _ _ = []

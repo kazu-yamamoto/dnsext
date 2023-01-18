@@ -1,12 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Types (
   -- * Configuration for resolver
     ResolvConf(..)
-  , withResolvConf
+  , defaultResolvConf
   , Seeds(..)
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
@@ -23,60 +22,11 @@ import DNS.Types
 import DNS.Types.Decode
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 import Prelude
-import qualified System.Random.Stateful as R
 import System.Timeout (timeout)
 
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
-import DNS.Do53.System
-
-----------------------------------------------------------------
-
--- 53 is the standard port number for domain name servers as assigned by IANA
-dnsPort :: PortNumber
-dnsPort = 53
-
-findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
-findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
-findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
-findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
-findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
-
-----------------------------------------------------------------
-
--- | Giving a thread-safe 'Seeds' to the function of the second
---   argument.
-withResolvConf :: ResolvConf -> (Seeds -> IO a) -> IO a
-withResolvConf rc@ResolvConf{..} f = do
-    addrs <- findAddrPorts resolvInfo
-    let n = length addrs
-    gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
-    let gens = map R.uniformWord16 gs
-    mcache <- case resolvCacheConf of
-      Just cacheconf -> do
-          cache <- newCache (pruningDelay cacheconf)
-          return $ Just (cache, cacheconf)
-      Nothing -> return Nothing
-    let ris = makeInfo rc addrs gens
-        seeds = Seeds mcache resolvResolver resolvConcurrent ris
-    f seeds
-
-makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
-makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
-  where
-    go ((h,p):hps) (gen:gens) = ri : go hps gens
-      where
-        ri = ResolvInfo {
-                solvHostName      = h
-              , solvPortNumber    = p
-              , solvGenId         = gen
-              , solvTimeout       = resolvTimeoutAction resolvTimeout
-              , solvGetTime       = resolvGetTime
-              , solvQueryControls = resolvQueryControls
-              , solvRetry         = resolvRetry
-              }
-    go _ _ = []
 
 ----------------------------------------------------------------
 
@@ -169,8 +119,27 @@ data ResolvConf = ResolvConf {
   , resolvGetTime       :: IO EpochTime
    -- | Action for timeout used with 'resolvTimeout'.
   , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
-   -- | Resolver engine aka DNS over X.
-  , resolvResolver      :: Resolver
+}
+
+
+-- | Return a default 'ResolvConf':
+--
+-- * 'resolvInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
+-- * 'resolvTimeout' is 3,000,000 micro seconds.
+-- * 'resolvRetry' is 3.
+-- * 'resolvConcurrent' is False.
+-- * 'resolvCacheConf' is Nothing.
+-- * 'resolvQueryControls' is an empty set of overrides.
+defaultResolvConf :: ResolvConf
+defaultResolvConf = ResolvConf {
+    resolvInfo          = RCFilePath "/etc/resolv.conf"
+  , resolvTimeout       = 3 * 1000 * 1000
+  , resolvRetry         = 3
+  , resolvConcurrent    = False
+  , resolvCacheConf     = Nothing
+  , resolvQueryControls = mempty
+  , resolvGetTime       = getEpochTime
+  , resolvTimeoutAction = timeout
 }
 
 ----------------------------------------------------------------

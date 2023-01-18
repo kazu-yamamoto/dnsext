@@ -7,7 +7,6 @@ module DNS.Do53.Do53 (
     udpTcpResolver
   , udpResolver
   , tcpResolver
-  , defaultResolvConf
   , vcResolver
   , Send
   , Recv
@@ -20,7 +19,6 @@ import DNS.Types.Decode
 import Network.Socket (HostName, close)
 import qualified Network.UDP as UDP
 import System.IO.Error (annotateIOError)
-import System.Timeout (timeout)
 
 import DNS.Do53.IO
 import DNS.Do53.Imports
@@ -164,24 +162,3 @@ vcResolver proto perform q ResolvInfo{..} =
             Right msg -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
-
--- | Return a default 'ResolvConf':
---
--- * 'resolvInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
--- * 'resolvTimeout' is 3,000,000 micro seconds.
--- * 'resolvRetry' is 3.
--- * 'resolvConcurrent' is False.
--- * 'resolvCacheConf' is Nothing.
--- * 'resolvQueryControls' is an empty set of overrides.
-defaultResolvConf :: ResolvConf
-defaultResolvConf = ResolvConf {
-    resolvInfo          = RCFilePath "/etc/resolv.conf"
-  , resolvTimeout       = 3 * 1000 * 1000
-  , resolvRetry         = 3
-  , resolvConcurrent    = False
-  , resolvCacheConf     = Nothing
-  , resolvQueryControls = mempty
-  , resolvGetTime       = getEpochTime
-  , resolvTimeoutAction = timeout
-  , resolvResolver      = udpTcpResolver
-}
