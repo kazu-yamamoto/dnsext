@@ -11,6 +11,7 @@ module DNS.StateBinary.SGet (
   , runSGetAt
   , runSGetWithLeftovers
   , runSGetWithLeftoversAt
+  , runSGetChunks
   -- ** Basic parsers
   , get8
   , get16
@@ -222,3 +223,19 @@ runSGetWithLeftoversAt t parser inp =
 
 runSGetWithLeftovers :: SGet a -> ByteString -> Either DNSError ((a, PState), ByteString)
 runSGetWithLeftovers = runSGetWithLeftoversAt dnsTimeMid
+
+----------------------------------------------------------------
+
+runSGetChunks :: EpochTime  -- ^ Reference time for DNS clock arithmetic
+              -> SGet a     -- ^ Parser
+              -> [ByteString] -- ^ Encoded message
+              -> Either DNSError ((a, PState), [ByteString])
+runSGetChunks t parser inps0 = go cont0 inps0
+    where
+    st0 = initialState t
+    cont0 = A.parse (ST.runStateT parser st0)
+    go _ []         = Left $ DecodeError "not enough data"
+    go cont (inp:inps) = case cont inp of
+      A.Done     i r  -> Right (r, if i == "" then inps else i:inps)
+      A.Partial cont' -> go cont' inps
+      A.Fail _ ctx e  -> Left $ DecodeError $ head $ ctx ++ [e]
