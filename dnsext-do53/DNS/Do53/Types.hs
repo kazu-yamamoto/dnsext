@@ -13,8 +13,8 @@ module DNS.Do53.Types (
   , CacheConf(..)
   , defaultCacheConf
   -- * Type and function for resolver
-  , SolvInfo(..)
-  , Solver
+  , ResolvInfo(..)
+  , Resolver
   ) where
 
 import DNS.Types
@@ -148,7 +148,7 @@ data ResolvConf = ResolvConf {
    -- | Action for timeout used with 'resolvTimeout'.
   , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
    -- | Resolver engine aka DNS over X.
-  , resolvSolver        :: Solver
+  , resolvResolver      :: Resolver
 }
 
 ----------------------------------------------------------------
@@ -166,7 +166,7 @@ data Seeds = Seeds {
 ----------------------------------------------------------------
 
 -- | Information for solvers.
-data SolvInfo = SolvInfo {
+data ResolvInfo = ResolvInfo {
     solvQuestion      :: Question
   , solvHostName      :: HostName
   , solvPortNumber    :: PortNumber
@@ -175,8 +175,8 @@ data SolvInfo = SolvInfo {
   , solvGenId         :: IO Identifier
   , solvGetTime       :: IO EpochTime
   , solvQueryControls :: QueryControls
-  , solvSolver        :: Solver
+  , solvResolver      :: Resolver
   }
 
 -- | The type of solvers (DNS over X).
-type Solver = SolvInfo -> IO DNSMessage
+type Resolver = ResolvInfo -> IO DNSMessage

@@ -13,7 +13,7 @@ spec :: Spec
 spec = describe "solvers" $ do
 
     it "resolves well with TLS" $ do
-        let si0 = SolvInfo {
+        let si0 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "1.1.1.1"
               , solvPortNumber    = 853
@@ -22,13 +22,13 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = tlsSolver -- dummy
+              , solvResolver      = tlsResolver -- dummy
               }
 
-        ans0 <- tlsSolver si0
+        ans0 <- tlsResolver si0
         identifier (header ans0) `shouldBe` 1
 
-        let si1 = SolvInfo {
+        let si1 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "8.8.8.8"
               , solvPortNumber    = 853
@@ -37,13 +37,13 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = tlsSolver -- dummy
+              , solvResolver      = tlsResolver -- dummy
               }
 
-        ans1 <- tlsSolver si1
+        ans1 <- tlsResolver si1
         identifier (header ans1) `shouldBe` 1
 
-        let si2 = SolvInfo {
+        let si2 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "94.140.14.140"
               , solvPortNumber    = 853
@@ -52,14 +52,14 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = tlsSolver -- dummy
+              , solvResolver      = tlsResolver -- dummy
               }
 
-        ans2 <- tlsSolver si2
+        ans2 <- tlsResolver si2
         identifier (header ans2) `shouldBe` 1
 
     it "resolves well with QUIC" $ do
-        let si2 = SolvInfo {
+        let si2 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "94.140.14.140"
               , solvPortNumber    = 853
@@ -68,14 +68,14 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = quicSolver -- dummy
+              , solvResolver      = quicResolver -- dummy
               }
 
-        ans2 <- quicSolver si2
+        ans2 <- quicResolver si2
         identifier (header ans2) `shouldBe` 1
 
     it "resolves well with HTTP/2" $ do
-        let si0 = SolvInfo {
+        let si0 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "1.1.1.1"
               , solvPortNumber    = 443
@@ -84,13 +84,13 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = http2Solver -- dummy
+              , solvResolver      = http2Resolver -- dummy
               }
 
-        ans0 <- http2Solver si0
+        ans0 <- http2Resolver si0
         identifier (header ans0) `shouldBe` 1
 
-        let si1 = SolvInfo {
+        let si1 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "8.8.8.8"
               , solvPortNumber    = 443
@@ -99,13 +99,13 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = http2Solver -- dummy
+              , solvResolver      = http2Resolver -- dummy
               }
 
-        ans1 <- http2Solver si1
+        ans1 <- http2Resolver si1
         identifier (header ans1) `shouldBe` 1
 
-        let si2 = SolvInfo {
+        let si2 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "94.140.14.140"
               , solvPortNumber    = 443
@@ -114,14 +114,14 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = http2Solver -- dummy
+              , solvResolver      = http2Resolver -- dummy
               }
 
-        ans2 <- http2Solver si2
+        ans2 <- http2Resolver si2
         identifier (header ans2) `shouldBe` 1
 
     it "resolves well with HTTP/3" $ do
-        let si2 = SolvInfo {
+        let si2 = ResolvInfo {
                 solvQuestion      = Question "www.mew.org" A classIN
               , solvHostName      = "94.140.14.140"
               , solvPortNumber    = 443
@@ -130,8 +130,8 @@ spec = describe "solvers" $ do
               , solvGenId         = return 1
               , solvGetTime       = getEpochTime
               , solvQueryControls = mempty
-              , solvSolver        = http3Solver -- dummy
+              , solvResolver      = http3Resolver -- dummy
               }
 
-        ans2 <- http3Solver si2
+        ans2 <- http3Resolver si2
         identifier (header ans2) `shouldBe` 1

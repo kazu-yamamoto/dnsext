@@ -43,11 +43,11 @@ resolve seeds dom typ qctl0
     concurrent = resolvConcurrent $ resolvConf seeds
     dos = makeInfo seeds dom typ qctl0
 
-makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [SolvInfo]
+makeInfo :: Seeds -> Domain -> TYPE -> QueryControls -> [ResolvInfo]
 makeInfo seeds dom typ qctl0 = go hps0 gens0
   where
     conf = resolvConf seeds
-    defaultSolvInfo = SolvInfo {
+    defaultResolvInfo = ResolvInfo {
         solvQuestion      = Question dom typ classIN
       , solvHostName      = "127.0.0.1" -- to be overwitten
       , solvPortNumber    = 53          -- to be overwitten
@@ -56,14 +56,14 @@ makeInfo seeds dom typ qctl0 = go hps0 gens0
       , solvGenId         = return 0    -- to be overwitten
       , solvGetTime       = resolvGetTime conf
       , solvQueryControls = qctl0 <> resolvQueryControls conf
-      , solvSolver        = resolvSolver conf
+      , solvResolver      = resolvResolver conf
       }
     hps0 = serverAddrs seeds
     gens0 = genIds seeds
-    go ((h,p):hps) (gen:gens) = defaultSolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
+    go ((h,p):hps) (gen:gens) = defaultResolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
     go _ _ = []
 
-resolveSequential :: [SolvInfo] -> IO DNSMessage
+resolveSequential :: [ResolvInfo] -> IO DNSMessage
 resolveSequential sis0 = loop sis0
   where
     loop []       = error "resolveSequential:loop"
@@ -74,7 +74,7 @@ resolveSequential sis0 = loop sis0
           Left (_ :: DNSError) -> loop sis
           Right res -> return res
 
-resolveConcurrent :: [SolvInfo] -> IO DNSMessage
+resolveConcurrent :: [ResolvInfo] -> IO DNSMessage
 resolveConcurrent sis =
     raceAny $ map resolveOne sis
   where
@@ -82,5 +82,5 @@ resolveConcurrent sis =
         asyncs <- mapM async ios
         snd <$> waitAnyCancel asyncs
 
-resolveOne :: Solver
-resolveOne si = (solvSolver si) si
+resolveOne :: Resolver
+resolveOne si = (solvResolver si) si

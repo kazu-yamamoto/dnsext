@@ -4,11 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Do53 (
-    udpTcpSolver
-  , udpSolver
-  , tcpSolver
+    udpTcpResolver
+  , udpResolver
+  , tcpResolver
   , defaultResolvConf
-  , vcSolver
+  , vcResolver
   , Send
   , Recv
   , checkRespM
@@ -50,9 +50,9 @@ checkRespM q seqno resp
 data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
--- | A solver using UDP and TCP.
-udpTcpSolver :: Solver
-udpTcpSolver si = udpSolver si `E.catch` \TCPFallback -> tcpSolver si
+-- | A resolver using UDP and TCP.
+udpTcpResolver :: Resolver
+udpTcpResolver si = udpResolver si `E.catch` \TCPFallback -> tcpResolver si
 
 ----------------------------------------------------------------
 
@@ -64,10 +64,10 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 ----------------------------------------------------------------
 
--- | A solver using UDP.
+-- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpSolver :: Solver
-udpSolver SolvInfo{..} =
+udpResolver :: Resolver
+udpResolver ResolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
   where
     -- Using only one socket and the same identifier.
@@ -114,9 +114,9 @@ udpSolver SolvInfo{..} =
 
 ----------------------------------------------------------------
 
--- | A solver using TCP.
-tcpSolver :: Solver
-tcpSolver si@SolvInfo{..} = vcSolver "TCP" perform si
+-- | A resolver using TCP.
+tcpResolver :: Resolver
+tcpResolver si@ResolvInfo{..} = vcResolver "TCP" perform si
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
@@ -129,9 +129,9 @@ tcpSolver si@SolvInfo{..} = vcSolver "TCP" perform si
 type Send = ByteString -> IO ()
 type Recv = IO ByteString
 
--- | Generic solver for virtual circuit.
-vcSolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Solver
-vcSolver proto perform SolvInfo{..} =
+-- | Generic resolver for virtual circuit.
+vcResolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Resolver
+vcResolver proto perform ResolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName proto) $ go solvQueryControls
   where
     go qctl0 = do
@@ -183,5 +183,5 @@ defaultResolvConf = ResolvConf {
   , resolvQueryControls = mempty
   , resolvGetTime       = getEpochTime
   , resolvTimeoutAction = timeout
-  , resolvSolver        = udpTcpSolver
+  , resolvResolver      = udpTcpResolver
 }

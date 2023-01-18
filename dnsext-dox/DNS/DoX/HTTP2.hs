@@ -21,8 +21,8 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-http2Solver :: Solver
-http2Solver si@SolvInfo{..} = E.bracket open close $ \sock ->
+http2Resolver :: Resolver
+http2Resolver si@ResolvInfo{..} = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         ident <- solvGenId
@@ -32,8 +32,8 @@ http2Solver si@SolvInfo{..} = E.bracket open close $ \sock ->
     params = getTLSParams solvHostName "h2" False
 
 
-client :: Context -> Identifier -> Solver
-client ctx ident SolvInfo{..} =
+client :: Context -> Identifier -> Resolver
+client ctx ident ResolvInfo{..} =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
     wire = encodeQuery ident solvQuestion solvQueryControls

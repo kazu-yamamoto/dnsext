@@ -14,15 +14,15 @@ module DNS.Do53.Internal (
     -- * Seeds
   , Seeds(..)
   , Cache
-    -- * Solver: DNS over X
-  , vcSolver
-  , SolvInfo(..)
-  , Solver
+    -- * Resolver: DNS over X
+  , vcResolver
+  , ResolvInfo(..)
+  , Resolver
   , Send
   , Recv
-  , udpTcpSolver
-  , udpSolver
-  , tcpSolver
+  , udpTcpResolver
+  , udpResolver
+  , tcpResolver
   , checkRespM
   ) where
 
