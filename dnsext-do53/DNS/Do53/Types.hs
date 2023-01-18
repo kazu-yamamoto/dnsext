@@ -167,16 +167,14 @@ data Seeds = Seeds {
 
 -- | Information for solvers.
 data ResolvInfo = ResolvInfo {
-    solvQuestion      :: Question
-  , solvHostName      :: HostName
+    solvHostName      :: HostName
   , solvPortNumber    :: PortNumber
   , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
   , solvRetry         :: Int
   , solvGenId         :: IO Identifier
   , solvGetTime       :: IO EpochTime
   , solvQueryControls :: QueryControls
-  , solvResolver      :: Resolver
   }
 
 -- | The type of solvers (DNS over X).
-type Resolver = ResolvInfo -> IO DNSMessage
+type Resolver = Question -> ResolvInfo -> IO DNSMessage

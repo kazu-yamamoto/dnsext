@@ -22,21 +22,21 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.Common
 
 http2Resolver :: Resolver
-http2Resolver si@ResolvInfo{..} = E.bracket open close $ \sock ->
+http2Resolver q si@ResolvInfo{..} = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         ident <- solvGenId
-        client ctx ident si
+        client ctx ident q si
   where
     open = openTCP solvHostName solvPortNumber
     params = getTLSParams solvHostName "h2" False
 
 
 client :: Context -> Identifier -> Resolver
-client ctx ident ResolvInfo{..} =
+client ctx ident q ResolvInfo{..} =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
-    wire = encodeQuery ident solvQuestion solvQueryControls
+    wire = encodeQuery ident q solvQueryControls
     hdr = clientDoHHeaders wire
     req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {
@@ -49,7 +49,7 @@ client ctx ident ResolvInfo{..} =
         now <- solvGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
-            Right msg -> case checkRespM solvQuestion ident msg of
+            Right msg -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
       where

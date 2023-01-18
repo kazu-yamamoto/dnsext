@@ -52,7 +52,7 @@ instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
 udpTcpResolver :: Resolver
-udpTcpResolver si = udpResolver si `E.catch` \TCPFallback -> tcpResolver si
+udpTcpResolver q ri = udpResolver q ri `E.catch` \TCPFallback -> tcpResolver q ri
 
 ----------------------------------------------------------------
 
@@ -67,7 +67,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: Resolver
-udpResolver ResolvInfo{..} =
+udpResolver q ResolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName "UDP") $ go solvQueryControls
   where
     -- Using only one socket and the same identifier.
@@ -95,7 +95,7 @@ udpResolver ResolvInfo{..} =
                   return res
 
     solve ident qctl send recv = do
-        let qry = encodeQuery ident solvQuestion qctl
+        let qry = encodeQuery ident q qctl
         solvTimeout $ do
             _ <- send qry
             getAnswer ident recv
@@ -106,9 +106,9 @@ udpResolver ResolvInfo{..} =
         case decodeAt now bs of
             Left  e -> E.throwIO e
             Right msg
-              | checkResp solvQuestion ident msg -> return msg
+              | checkResp q ident msg -> return msg
               -- Just ignoring a wrong answer.
-              | otherwise                        -> getAnswer ident recv
+              | otherwise             -> getAnswer ident recv
 
     open = UDP.clientSocket solvHostName (show solvPortNumber) True -- connected
 
@@ -116,7 +116,7 @@ udpResolver ResolvInfo{..} =
 
 -- | A resolver using TCP.
 tcpResolver :: Resolver
-tcpResolver si@ResolvInfo{..} = vcResolver "TCP" perform si
+tcpResolver q ri@ResolvInfo{..} = vcResolver "TCP" perform q ri
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
@@ -131,7 +131,7 @@ type Recv = IO ByteString
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Resolver
-vcResolver proto perform ResolvInfo{..} =
+vcResolver proto perform q ResolvInfo{..} =
     E.handle (ioErrorToDNSError solvHostName proto) $ go solvQueryControls
   where
     go qctl0 = do
@@ -148,7 +148,7 @@ vcResolver proto perform ResolvInfo{..} =
     solve qctl send recv = do
         -- Using a fresh identifier.
         ident <- solvGenId
-        let qry = encodeQuery ident solvQuestion qctl
+        let qry = encodeQuery ident q qctl
         mres <- solvTimeout $ do
             _ <- send qry
             getAnswer ident recv
@@ -161,7 +161,7 @@ vcResolver proto perform ResolvInfo{..} =
         now <- solvGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
-            Right msg -> case checkRespM solvQuestion ident msg of
+            Right msg -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
 

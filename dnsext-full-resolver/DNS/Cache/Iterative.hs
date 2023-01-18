@@ -53,7 +53,7 @@ import qualified Data.IP as IP
 import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
-   RCODE, DNSHeader, DNSMessage)
+   RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import DNS.Do53.Client (ResolvConf (..), FlagOp (FlagClear), lookupRaw)
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (resolvGetTime)
@@ -760,7 +760,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
              , resolvGetTime = currentSeconds_ cxt
              }
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolvConf conf ( \seeds -> lookupRaw seeds name typ )
+    DNS.withResolvConf conf ( \seeds -> lookupRaw seeds (Question name typ classIN))
 
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.

@@ -14,9 +14,9 @@ spec :: Spec
 spec = describe "solvers" $ do
 
     it "resolves well with UDP" $ do
-        let si = ResolvInfo {
-                solvQuestion      = Question "www.mew.org" A classIN
-              , solvHostName      = "8.8.8.8"
+        let q = Question "www.mew.org" A classIN
+            ri = ResolvInfo {
+                solvHostName      = "8.8.8.8"
               , solvPortNumber    = 53
               , solvTimeout       = timeout 3000000
               , solvRetry         = 1
@@ -24,16 +24,15 @@ spec = describe "solvers" $ do
               , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
               , solvQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
-              , solvResolver      = udpResolver -- dummy
               }
 
-        ans <- udpResolver si
+        ans <- udpResolver q ri
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
-        let si = ResolvInfo {
-                solvQuestion      = Question "www.mew.org" A classIN
-              , solvHostName      = "8.8.8.8"
+        let q = Question "www.mew.org" A classIN
+            ri = ResolvInfo {
+                solvHostName      = "8.8.8.8"
               , solvPortNumber    = 53
               , solvTimeout       = timeout 3000000
               , solvRetry         = 1
@@ -41,7 +40,6 @@ spec = describe "solvers" $ do
               , solvGetTime       = getEpochTime
               -- Google's resolvers support the AD and CD bits
               , solvQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-              , solvResolver      = tcpResolver -- dummy
               }
-        ans <- tcpResolver si
+        ans <- tcpResolver q ri
         identifier (header ans) `shouldBe` 1
