@@ -2,6 +2,7 @@
 
 module DNS.DoX.Common where
 
+import DNS.Do53.Internal (Recv)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
@@ -10,7 +11,6 @@ import Network.HTTP.Types
 import Network.QUIC.Client
 import Network.QUIC.Internal hiding (Recv, shared)
 import Network.Socket
-import Network.Socket.BufferPool
 import Network.TLS hiding (HostName)
 import Network.TLS.Extra
 import System.IO.Error (isEOFError)

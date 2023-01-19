@@ -19,6 +19,13 @@ module DNS.Do53.Types (
   , ResolvActions(..)
   , defaultResolvActions
   , Resolver
+  -- * IO
+  , Recv
+  , RecvN
+  , RecvMany
+  , RecvManyN
+  , Send
+  , SendMany
   ) where
 
 import DNS.Types
@@ -190,3 +197,13 @@ defaultResolvActions = ResolvActions {
   , ractionGenId   = singleGenId
   , ractionGetTime = getEpochTime
   }
+
+----------------------------------------------------------------
+
+type Recv      = IO ByteString
+type RecvN     = Int -> IO ByteString
+type RecvMany  = IO [ByteString]
+type RecvManyN = Int -> IO (Int, [ByteString])
+
+type Send = ByteString -> IO ()
+type SendMany = [ByteString] -> IO ()
