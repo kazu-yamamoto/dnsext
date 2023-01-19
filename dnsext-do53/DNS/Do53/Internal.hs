@@ -11,24 +11,31 @@ module DNS.Do53.Internal (
     -- * ResolvConf
   , ResolvConf(..)
   , getEpochTime
-    -- * Env
+    -- * Lookup
   , LookupEnv(..)
   , Cache
+    -- * Resolv
+  , resolve
   , ResolvEnv(..)
     -- * Resolver: DNS over X
-  , vcResolver
   , ResolvInfo(..)
+  , defaultResolvInfo
   , Resolver
   , Send
   , Recv
   , udpTcpResolver
   , udpResolver
   , tcpResolver
+  , vcResolver
   , checkRespM
+    -- * Misc
+  , makeIdGenerators
   ) where
 
 import DNS.Do53.Do53
 import DNS.Do53.IO
 import DNS.Do53.Imports
+import DNS.Do53.Lookup
 import DNS.Do53.Memo
+import DNS.Do53.Resolve
 import DNS.Do53.Types

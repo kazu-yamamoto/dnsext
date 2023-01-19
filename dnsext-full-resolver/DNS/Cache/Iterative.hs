@@ -26,6 +26,7 @@ module DNS.Cache.Iterative (
 -- GHC packages
 import Control.Applicative ((<|>))
 import Control.Arrow ((&&&), first)
+import qualified Control.Exception as E
 import Control.Monad (when, unless, join, guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -54,9 +55,10 @@ import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
-import DNS.Do53.Client (ResolvConf (..), FlagOp (FlagClear), lookupRaw)
+import DNS.Do53.Client (FlagOp (FlagClear))
 import qualified DNS.Do53.Client as DNS
-import DNS.Do53.Internal (resolvGetTime)
+import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo)
+import qualified DNS.Do53.Internal as DNS
 import qualified DNS.Types as DNS
 
 -- this package
@@ -752,15 +754,22 @@ cnameList dom h = foldr takeCNAME []
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
 norec aserver name typ = dnsQueryT $ \cxt -> do
-  let conf = DNS.defaultResolvConf
-             { resolvInfo = DNS.RCHostName $ show aserver
-             , resolvTimeout = 5 * 1000 * 1000
-             , resolvRetry = 1
-             , resolvQueryControls = DNS.rdFlag FlagClear
-             , resolvGetTime = currentSeconds_ cxt
-             }
+  -- fixme: generator should be reused
+  gen <- head <$> DNS.makeIdGenerators 1
+  let ri = defaultResolvInfo {
+          rinfoHostName   = show aserver
+        , rinfoGenId      = gen
+        , rinfoGetTime    = currentSeconds_ cxt
+        }
+      renv = ResolvEnv {
+          renvResolver    = udpTcpResolver 3 -- 3 is retry
+        , renvConcurrent  = False -- should set True if multiple RIs are provided
+        , renvResolvInfos = [ri]
+        }
+      q = Question name typ classIN
+      qctl = DNS.rdFlag FlagClear
   either (Left . DnsError) (handleResponseError Left Right) <$>
-    DNS.withResolvConf conf ( \seeds -> lookupRaw seeds (Question name typ classIN))
+    E.try (DNS.resolve renv q qctl)
 
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.

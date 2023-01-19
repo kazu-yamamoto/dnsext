@@ -11,7 +11,9 @@ module DNS.Do53.Lookup (
   , lookupRaw
   -- * DNS Message procesing
   , fromDNSMessage
+  -- * Misc
   , withResolvConf
+  , makeIdGenerators
   ) where
 
 import Control.Exception as E
@@ -271,14 +273,16 @@ findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
+makeIdGenerators :: Int -> IO [IO Identifier]
+makeIdGenerators n = map R.uniformWord16 <$> replicateM n (R.initStdGen >>= R.newIOGenM)
+
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withResolvConf :: ResolvConf -> (LookupEnv -> IO a) -> IO a
 withResolvConf rc@ResolvConf{..} f = do
     addrs <- findAddrPorts resolvInfo
     let n = length addrs
-    gs <- replicateM n (R.initStdGen >>= R.newIOGenM)
-    let gens = map R.uniformWord16 gs
+    gens <- makeIdGenerators n
     mcache <- case resolvCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
