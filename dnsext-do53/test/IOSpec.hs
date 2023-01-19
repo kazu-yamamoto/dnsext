@@ -16,11 +16,11 @@ spec = describe "solvers" $ do
     it "resolves well with UDP" $ do
         let q = Question "www.mew.org" A classIN
             ri = ResolvInfo {
-                solvHostName      = "8.8.8.8"
-              , solvPortNumber    = 53
-              , solvTimeout       = timeout 3000000
-              , solvGenId         = return 1
-              , solvGetTime       = getEpochTime
+                rinfoHostName      = "8.8.8.8"
+              , rinfoPortNumber    = 53
+              , rinfoTimeout       = timeout 3000000
+              , rinfoGenId         = return 1
+              , rinfoGetTime       = getEpochTime
               }
             -- Google's resolvers support the AD and CD bits
             qctl = adFlag FlagSet <> ednsEnabled FlagClear
@@ -31,11 +31,11 @@ spec = describe "solvers" $ do
     it "resolves well with TCP" $ do
         let q = Question "www.mew.org" A classIN
             ri = ResolvInfo {
-                solvHostName      = "8.8.8.8"
-              , solvPortNumber    = 53
-              , solvTimeout       = timeout 3000000
-              , solvGenId         = return 1
-              , solvGetTime       = getEpochTime
+                rinfoHostName      = "8.8.8.8"
+              , rinfoPortNumber    = 53
+              , rinfoTimeout       = timeout 3000000
+              , rinfoGenId         = return 1
+              , rinfoGetTime       = getEpochTime
               }
             -- Google's resolvers support the AD and CD bits
             qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
