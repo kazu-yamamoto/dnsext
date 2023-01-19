@@ -25,5 +25,5 @@ tlsResolver ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
             recvDoT = recvVC recvN
         solve sendDoT recvDoT
 
-    open = openTCP solvHostName solvPortNumber
-    params = getTLSParams solvHostName "dot" False
+    open = openTCP rinfoHostName rinfoPortNumber
+    params = getTLSParams rinfoHostName "dot" False

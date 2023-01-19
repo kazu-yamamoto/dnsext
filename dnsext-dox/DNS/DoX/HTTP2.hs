@@ -25,11 +25,11 @@ http2Resolver :: Resolver
 http2Resolver ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
-        ident <- solvGenId
+        ident <- rinfoGenId
         client ctx ident ri q qctl
   where
-    open = openTCP solvHostName solvPortNumber
-    params = getTLSParams solvHostName "h2" False
+    open = openTCP rinfoHostName rinfoPortNumber
+    params = getTLSParams rinfoHostName "h2" False
 
 
 client :: Context -> Identifier -> Resolver
@@ -41,12 +41,12 @@ client ctx ident ResolvInfo{..} q qctl =
     req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {
         scheme = "https"
-      , authority = C8.pack solvHostName
+      , authority = C8.pack rinfoHostName
       , cacheLimit = 20
       }
     cli sendRequest = sendRequest req $ \rsp -> do
         bs <- loop rsp ""
-        now <- solvGetTime
+        now <- rinfoGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
             Right msg -> case checkRespM q ident msg of

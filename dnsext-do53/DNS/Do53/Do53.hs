@@ -66,13 +66,13 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: Int -> Resolver
 udpResolver retry ResolvInfo{..} q _qctl =
-    E.handle (ioErrorToDNSError solvHostName "UDP") $ go _qctl
+    E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        ident <- solvGenId
+        ident <- rinfoGenId
         loop retry ident qctl send recv
 
     loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
@@ -94,13 +94,13 @@ udpResolver retry ResolvInfo{..} q _qctl =
 
     solve ident qctl send recv = do
         let qry = encodeQuery ident q qctl
-        solvTimeout $ do
+        rinfoTimeout $ do
             _ <- send qry
             getAnswer ident recv
 
     getAnswer ident recv = do
         bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
-        now <- solvGetTime
+        now <- rinfoGetTime
         case decodeAt now bs of
             Left  e -> E.throwIO e
             Right msg
@@ -108,7 +108,7 @@ udpResolver retry ResolvInfo{..} q _qctl =
               -- Just ignoring a wrong answer.
               | otherwise             -> getAnswer ident recv
 
-    open = UDP.clientSocket solvHostName (show solvPortNumber) True -- connected
+    open = UDP.clientSocket rinfoHostName (show rinfoPortNumber) True -- connected
 
 ----------------------------------------------------------------
 
@@ -122,7 +122,7 @@ tcpResolver ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
             recv = recvVC $ recvTCP sock
         solve send recv
 
-    open = openTCP solvHostName solvPortNumber
+    open = openTCP rinfoHostName rinfoPortNumber
 
 type Send = ByteString -> IO ()
 type Recv = IO ByteString
@@ -130,7 +130,7 @@ type Recv = IO ByteString
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Resolver
 vcResolver proto perform ResolvInfo{..} q _qctl =
-    E.handle (ioErrorToDNSError solvHostName proto) $ go _qctl
+    E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
     go qctl0 = do
         res <- perform $ solve qctl0
@@ -145,9 +145,9 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
 
     solve qctl send recv = do
         -- Using a fresh identifier.
-        ident <- solvGenId
+        ident <- rinfoGenId
         let qry = encodeQuery ident q qctl
-        mres <- solvTimeout $ do
+        mres <- rinfoTimeout $ do
             _ <- send qry
             getAnswer ident recv
         case mres of
@@ -156,7 +156,7 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
 
     getAnswer ident recv = do
         bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
-        now <- solvGetTime
+        now <- rinfoGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
             Right msg -> case checkRespM q ident msg of

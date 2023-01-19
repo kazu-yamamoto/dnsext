@@ -162,24 +162,24 @@ data ResolvEnv = ResolvEnv {
 
 ----------------------------------------------------------------
 
--- | Information for solvers.
+-- | Information for resolvers.
 data ResolvInfo = ResolvInfo {
-    solvHostName      :: HostName
-  , solvPortNumber    :: PortNumber
-  , solvGenId         :: IO Identifier
+    rinfoHostName      :: HostName
+  , rinfoPortNumber    :: PortNumber
+  , rinfoGenId         :: IO Identifier
   -- share part
-  , solvTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , solvGetTime       :: IO EpochTime
+  , rinfoTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , rinfoGetTime       :: IO EpochTime
   }
 
 defaultResolvInfo :: ResolvInfo
 defaultResolvInfo = ResolvInfo {
-    solvHostName      = "127.0.0.1"
-  , solvPortNumber    = 53
-  , solvGenId         = return 0
-  , solvTimeout       = timeout 3000000
-  , solvGetTime       = getEpochTime
+    rinfoHostName      = "127.0.0.1"
+  , rinfoPortNumber    = 53
+  , rinfoGenId         = return 0
+  , rinfoTimeout       = timeout 3000000
+  , rinfoGetTime       = getEpochTime
   }
 
--- | The type of solvers (DNS over X).
+-- | The type of resolvers (DNS over X).
 type Resolver = ResolvInfo -> Question -> QueryControls -> IO DNSMessage

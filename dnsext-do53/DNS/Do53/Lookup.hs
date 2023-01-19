@@ -296,10 +296,10 @@ makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
     go ((h,p):hps) (gen:gens) = ri : go hps gens
       where
         ri = ResolvInfo {
-                solvHostName      = h
-              , solvPortNumber    = p
-              , solvGenId         = gen
-              , solvTimeout       = resolvTimeoutAction resolvTimeout
-              , solvGetTime       = resolvGetTime
+                rinfoHostName   = h
+              , rinfoPortNumber = p
+              , rinfoGenId      = gen
+              , rinfoTimeout    = resolvTimeoutAction resolvTimeout
+              , rinfoGetTime    = resolvGetTime
               }
     go _ _ = []
