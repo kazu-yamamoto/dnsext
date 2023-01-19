@@ -35,7 +35,7 @@
 --
 --   >>> :set -XOverloadedStrings
 --   >>>
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupA seeds "www.example.com"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "www.example.com"
 --   Right [93.184.216.34]
 --
 --   The only error that we can easily cause is a timeout. We do this
@@ -44,7 +44,7 @@
 --
 --   >>> let badrc = defaultResolvConf { resolvTimeout = 0, resolvRetry = 1 }
 --   >>>
---   >>> withResolvConf badrc $ \seeds -> lookupA seeds "www.example.com"
+--   >>> withResolvConf badrc $ \env -> lookupA env "www.example.com"
 --   Left RetryLimitExceeded
 --
 --   As is the convention, successful results will always be wrapped
@@ -89,26 +89,26 @@ import DNS.Do53.Types as DNS
 --
 --   A straightforward example:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupA seeds "192.0.2.1.nip.io"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "192.0.2.1.nip.io"
 --   Right [192.0.2.1]
 --
 --   This function will also follow a CNAME and resolve its target if
 --   one exists for the queried hostname:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupA seeds "www.kame.net"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "www.kame.net"
 --   Right [210.155.141.200]
 --
-lookupA :: Seeds -> Domain -> IO (Either DNSError [RD_A])
+lookupA :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
 lookupA = lookup' A
 
 -- | Look up all (IPv6) \'AAAA\' records for the given hostname.
 --
 --   Examples:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupAAAA seeds "www.wide.ad.jp"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupAAAA env "www.wide.ad.jp"
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
-lookupAAAA :: Seeds -> Domain -> IO (Either DNSError [RD_AAAA])
+lookupAAAA :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAA = lookup' AAAA
 
 ----------------------------------------------------------------
@@ -121,13 +121,13 @@ lookupAAAA = lookup' AAAA
 --   It has an RFC7505 NULL MX (to prevent a deluge of spam from examples
 --   posted on the internet).
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupMX seeds "example.com"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "example.com"
 --   Right [RD_MX {mx_preference = 0, mx_exchange = "."}]
 --
 --
 --   The domain \"mew.org\" does however have a single MX:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupMX seeds "mew.org"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "mew.org"
 --   Right [RD_MX {mx_preference = 10, mx_exchange = "mail.mew.org."}]
 --
 --   Also note that all hostnames are returned with a trailing dot to
@@ -136,10 +136,10 @@ lookupAAAA = lookup' AAAA
 --   However the MX host itself has no need for an MX record, so its MX RRset
 --   is empty.  But, \"no results\" is still a successful result.
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupMX seeds "mail.mew.org"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "mail.mew.org"
 --   Right []
 --
-lookupMX :: Seeds -> Domain -> IO (Either DNSError [RD_MX])
+lookupMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_MX])
 lookupMX = lookup' MX
 
 -- | Look up all \'MX\' records for the given hostname, and then
@@ -149,24 +149,24 @@ lookupMX = lookup' MX
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ips <- withResolvConf defaultResolvConf $ \seeds -> lookupAviaMX seeds "wide.ad.jp"
+--   >>> ips <- withResolvConf defaultResolvConf $ \env -> lookupAviaMX env "wide.ad.jp"
 --   >>> fmap sort ips
 --   Right [203.178.136.30]
 --
 --   Since there is more than one result, it is necessary to sort the
 --   list in order to check for equality.
 --
-lookupAviaMX :: Seeds -> Domain -> IO (Either DNSError [RD_A])
+lookupAviaMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
 lookupAviaMX rlv dom = lookupXviaMX rlv dom (lookupA rlv)
 
 -- | Look up all \'MX\' records for the given hostname, and then
 --   resolve their hostnames to IPv6 addresses by calling
 --   'lookupAAAA'. The priorities are not retained.
 --
-lookupAAAAviaMX :: Seeds -> Domain -> IO (Either DNSError [RD_AAAA])
+lookupAAAAviaMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAAviaMX rlv dom = lookupXviaMX rlv dom (lookupAAAA rlv)
 
-lookupXviaMX :: Seeds
+lookupXviaMX :: LookupEnv
              -> Domain
              -> (Domain -> IO (Either DNSError [a]))
              -> IO (Either DNSError [a])
@@ -201,11 +201,11 @@ lookupXviaMX rlv dom func = do
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ns <- withResolvConf defaultResolvConf $ \seeds -> lookupNS seeds "mew.org"
+--   >>> ns <- withResolvConf defaultResolvConf $ \env -> lookupNS env "mew.org"
 --   >>> fmap sort ns
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
-lookupNS :: Seeds -> Domain -> IO (Either DNSError [RD_NS])
+lookupNS :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNS = lookup' NS
 
 -- | Look up all \'NS\' records for the given hostname. The results
@@ -224,11 +224,11 @@ lookupNS = lookup' NS
 --   >>> import Data.List (sort)
 --   >>> let ri = RCHostName "192.5.6.30" -- a.gtld-servers.net
 --   >>> let rc = defaultResolvConf { resolvInfo = ri }
---   >>> ns <- withResolvConf rc $ \seeds -> lookupNSAuth seeds "example.com"
+--   >>> ns <- withResolvConf rc $ \env -> lookupNSAuth env "example.com"
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
-lookupNSAuth :: Seeds -> Domain -> IO (Either DNSError [RD_NS])
+lookupNSAuth :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNSAuth = lookupAuth' NS
 
 ----------------------------------------------------------------
@@ -241,10 +241,10 @@ lookupNSAuth = lookupAuth' NS
 --   <http://en.wikipedia.org/wiki/DomainKeys_Identified_Mail>. As an
 --   example, we find the SPF record for \"mew.org\":
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupTXT seeds "mew.org"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupTXT env "mew.org"
 --   Right ["v=spf1 +mx -all"]
 --
-lookupTXT :: Seeds -> Domain -> IO (Either DNSError [RD_TXT])
+lookupTXT :: LookupEnv -> Domain -> IO (Either DNSError [RD_TXT])
 lookupTXT = lookup' TXT
 
 ----------------------------------------------------------------
@@ -260,11 +260,11 @@ lookupTXT = lookup' TXT
 --   future.  Users should be prepared to remove any trailing period before
 --   using the \'rname\` as a contact email address.
 --
---   >>> soa <- withResolvConf defaultResolvConf $ \seeds -> lookupSOA seeds "mew.org"
+--   >>> soa <- withResolvConf defaultResolvConf $ \env -> lookupSOA env "mew.org"
 --   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
-lookupSOA :: Seeds -> Domain -> IO (Either DNSError [RD_SOA])
+lookupSOA :: LookupEnv -> Domain -> IO (Either DNSError [RD_SOA])
 lookupSOA = lookup' SOA
 
 ----------------------------------------------------------------
@@ -276,12 +276,12 @@ lookupSOA = lookup' SOA
 --   We look up the PTR associated with the IP address
 --   210.130.137.80, i.e., 80.137.130.210.in-addr.arpa:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupPTR seeds "180.2.232.202.in-addr.arpa"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupPTR env "180.2.232.202.in-addr.arpa"
 --   Right ["www.iij.ad.jp."]
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
 --
-lookupPTR :: Seeds -> Domain -> IO (Either DNSError [RD_PTR])
+lookupPTR :: LookupEnv -> Domain -> IO (Either DNSError [RD_PTR])
 lookupPTR = lookup' PTR
 
 -- | Convenient wrapper around 'lookupPTR' to perform a reverse lookup
@@ -290,10 +290,10 @@ lookupPTR = lookup' PTR
 --   We repeat the example from 'lookupPTR', except now we pass the IP
 --   address directly:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupRDNS seeds "202.232.2.180"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupRDNS env "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
 --
-lookupRDNS :: Seeds -> IPv4 -> IO (Either DNSError [RD_PTR])
+lookupRDNS :: LookupEnv -> IPv4 -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
     octets = map (fromString . show ) $ fromIPv4 ip
@@ -321,7 +321,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --
 --   Examples:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupSRV seeds "_xmpp-server._tcp.jabber.ietf.org"
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupSRV env "_xmpp-server._tcp.jabber.ietf.org"
 --   Right [RD_SRV {srv_priority = 5, srv_weight = 0, srv_port = 5269, srv_target = "jabber.ietf.org."}]
 
 -- Though the "jabber.ietf.orgs" SRV record may prove reasonably stable, as
@@ -330,5 +330,5 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 -- example should be displayed in a format that is not recognized as a test
 -- by "doctest".
 
-lookupSRV :: Seeds -> Domain -> IO (Either DNSError [RD_SRV])
+lookupSRV :: LookupEnv -> Domain -> IO (Either DNSError [RD_SRV])
 lookupSRV = lookup' SRV

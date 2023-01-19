@@ -34,15 +34,15 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Seeds -> Question -> QueryControls -> IO DNSMessage
-resolve Seeds{..} q@Question{..} qctl
+resolve :: ResolvEnv -> Question -> QueryControls -> IO DNSMessage
+resolve ResolvEnv{..} q@Question{..} qctl
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent ris resolver q qctl
   | otherwise     = resolveSequential ris resolver q qctl
   where
-    concurrent = seedsConcurrent
-    resolver   = seedsResolver
-    ris        = seedsResolvInfos
+    concurrent = renvConcurrent
+    resolver   = renvResolver
+    ris        = renvResolvInfos
 
 resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
 resolveSequential ris0 resolver q qctl = loop ris0

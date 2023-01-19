@@ -40,11 +40,11 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookup seeds "www.example.com" A
+--   >>> withResolvConf defaultResolvConf $ \env -> lookup env "www.example.com" A
 --   Right [93.184.216.34]
 --
-lookup :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookup seeds dom typ = lookupSection Answer seeds q
+lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookup env dom typ = lookupSection Answer env q
   where
     q = Question dom typ classIN
 
@@ -54,16 +54,16 @@ lookup seeds dom typ = lookupSection Answer seeds q
 --   See the documentation of 'lookupRaw'
 --   to understand the concrete behavior.
 --   Cache is used even if 'resolvCache' is 'Just'.
-lookupAuth :: Seeds -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookupAuth seeds dom typ = lookupSection Authority seeds q
+lookupAuth :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookupAuth env dom typ = lookupSection Authority env q
   where
     q = Question dom typ classIN
 
-lookup' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
-lookup' typ seeds dom = unwrap <$> lookup seeds dom typ
+lookup' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookup' typ env dom = unwrap <$> lookup env dom typ
 
-lookupAuth' :: ResourceData a => TYPE -> Seeds -> Domain -> IO (Either DNSError [a])
-lookupAuth' typ seeds dom = unwrap <$> lookupAuth seeds dom typ
+lookupAuth' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupAuth' typ env dom = unwrap <$> lookupAuth env dom typ
 
 unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
 unwrap erds = case erds of
@@ -83,21 +83,21 @@ unTag rd = case fromRData rd of
 --   to inspect for the result.
 
 lookupSection :: Section
-              -> Seeds
+              -> LookupEnv
               -> Question
               -> IO (Either DNSError [RData])
-lookupSection section seeds q
-  | section == Authority = lookupFreshSection seeds q section
-  | otherwise = case seedsCache seeds of
-      Nothing -> lookupFreshSection seeds q section
-      Just _  -> lookupCacheSection seeds q
+lookupSection section env q
+  | section == Authority = lookupFreshSection env q section
+  | otherwise = case lenvCache env of
+      Nothing -> lookupFreshSection env q section
+      Just _  -> lookupCacheSection env q
 
-lookupFreshSection :: Seeds
+lookupFreshSection :: LookupEnv
                    -> Question
                    -> Section
                    -> IO (Either DNSError [RData])
-lookupFreshSection seeds q@Question{..} section = do
-    eans <- lookupRaw seeds q
+lookupFreshSection env q@Question{..} section = do
+    eans <- lookupRaw env q
     case eans of
       Left err  -> return $ Left err
       Right ans -> return $ fromDNSMessage ans toRD
@@ -108,14 +108,14 @@ lookupFreshSection seeds q@Question{..} section = do
       Answer    -> answer
       Authority -> authority
 
-lookupCacheSection :: Seeds
+lookupCacheSection :: LookupEnv
                    -> Question
                    -> IO (Either DNSError [RData])
-lookupCacheSection seeds@Seeds{..} q@Question{..} = do
+lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     mx <- lookupCache q c
     case mx of
       Nothing -> do
-          eans <- lookupRaw seeds q
+          eans <- lookupRaw env q
           case eans of
             Left  err ->
                 -- Probably a network error happens.
@@ -139,7 +139,7 @@ lookupCacheSection seeds@Seeds{..} q@Question{..} = do
       Just (_,x) -> return x
   where
     toRR = filter (qtype `isTypeOf`) . answer
-    (c, cconf) = fromJust seedsCache
+    (c, cconf) = fromJust lenvCache
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
 cachePositive cconf c key rss
@@ -216,7 +216,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolvConf defaultResolvConf $ \\seeds -> lookupRaw seeds $ Question \"www.example.com\" A classIN
+--   withResolvConf defaultResolvConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A classIN
 --   @
 --
 --   And the (formatted) expected output:
@@ -249,13 +249,13 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolvConf defaultResolvConf $ \seeds -> lookupRaw seeds $ Question "mew.org" AXFR classIN
+--   >>> withResolvConf defaultResolvConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
 --   Left InvalidAXFRLookup
 --
-lookupRaw :: Seeds      -- ^ Seeds obtained via 'withResolvConf'
+lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withResolvConf'
           -> Question
           -> IO (Either DNSError DNSMessage)
-lookupRaw seeds q = E.try $ resolve seeds q (seedsQueryControls seeds)
+lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 
 ----------------------------------------------------------------
 
@@ -271,9 +271,9 @@ findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
--- | Giving a thread-safe 'Seeds' to the function of the second
+-- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
-withResolvConf :: ResolvConf -> (Seeds -> IO a) -> IO a
+withResolvConf :: ResolvConf -> (LookupEnv -> IO a) -> IO a
 withResolvConf rc@ResolvConf{..} f = do
     addrs <- findAddrPorts resolvInfo
     let n = length addrs
@@ -286,8 +286,9 @@ withResolvConf rc@ResolvConf{..} f = do
       Nothing -> return Nothing
     let ris = makeInfo rc addrs gens
         resolver = udpTcpResolver resolvRetry
-        seeds = Seeds mcache resolvQueryControls resolver resolvConcurrent ris
-    f seeds
+        renv = ResolvEnv resolver resolvConcurrent ris
+        lenv = LookupEnv mcache resolvQueryControls renv
+    f lenv
 
 makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
 makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0

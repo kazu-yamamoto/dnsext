@@ -6,13 +6,14 @@ module DNS.Do53.Types (
   -- * Configuration for resolver
     ResolvConf(..)
   , defaultResolvConf
-  , Seeds(..)
+  , LookupEnv(..)
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
   -- ** Configuring cache
   , CacheConf(..)
   , defaultCacheConf
   -- * Type and function for resolver
+  , ResolvEnv(..)
   , ResolvInfo(..)
   , defaultResolvInfo
   , Resolver
@@ -147,15 +148,17 @@ defaultResolvConf = ResolvConf {
 -- | Abstract data type of DNS Resolver.
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
-data Seeds = Seeds {
-    -- Lookup level
-    seedsCache       :: Maybe (Cache, CacheConf)
-  , seedsQueryControls :: QueryControls
-    -- Resolve level
-  , seedsResolver    :: Resolver
-  , seedsConcurrent  :: Bool
-  , seedsResolvInfos :: [ResolvInfo]
+data LookupEnv = LookupEnv {
+    lenvCache         :: Maybe (Cache, CacheConf)
+  , lenvQueryControls :: QueryControls
+  , lenvResolvEnv     :: ResolvEnv
 }
+
+data ResolvEnv = ResolvEnv {
+    renvResolver    :: Resolver
+  , renvConcurrent  :: Bool
+  , renvResolvInfos :: [ResolvInfo]
+  }
 
 ----------------------------------------------------------------
 

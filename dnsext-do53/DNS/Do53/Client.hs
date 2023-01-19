@@ -23,7 +23,7 @@ module DNS.Do53.Client (
   , ResolvConf
   , defaultResolvConf
   , withResolvConf
-  , Seeds
+  , LookupEnv
   -- ** Accessors
   , resolvInfo
   , resolvTimeout
