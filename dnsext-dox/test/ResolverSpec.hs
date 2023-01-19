@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module SolverSpec where
+module ResolverSpec where
 
 import DNS.Types
 import Test.Hspec
