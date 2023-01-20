@@ -19,20 +19,18 @@ module DNS.Do53.Client (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  , lookupRawCtl
-  -- * Type and function for resolver
-  , Resolver
-  , withResolver
-  -- * Configuration for resolver
-  , ResolvConf
-  , defaultResolvConf
+  -- * Configuration for sutf resolver
+  , LookupConf
+  , defaultLookupConf
+  , withLookupConf
+  , LookupEnv
   -- ** Accessors
-  , resolvInfo
-  , resolvTimeout
-  , resolvRetry
-  , resolvConcurrent
-  , resolvCache
-  , resolvQueryControls
+  , lconfInfo
+  , lconfTimeout
+  , lconfRetry
+  , lconfConcurrent
+  , lconfCacheConf
+  , lconfQueryControls
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
   -- ** Configuring cache
@@ -57,7 +55,6 @@ module DNS.Do53.Client (
 
 import Prelude hiding (lookup)
 
-import DNS.Do53.Do53
 import DNS.Do53.Lookup
 import DNS.Do53.LookupX
 import DNS.Do53.Query

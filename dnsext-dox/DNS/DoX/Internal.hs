@@ -1,10 +1,10 @@
 module DNS.DoX.Internal (
-    SolvInfo(..)
+    ResolvInfo(..)
   , getEpochTime
-  , http2Solver
-  , http3Solver
-  , tlsSolver
-  , quicSolver
+  , http2Resolver
+  , http3Resolver
+  , tlsResolver
+  , quicResolver
   )  where
 
 import DNS.Do53.Internal

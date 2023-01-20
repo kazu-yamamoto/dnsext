@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module DNS.Do53.Lookup (
   -- * Lookups returning requested RData
@@ -8,23 +9,25 @@ module DNS.Do53.Lookup (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  , lookupRawCtl
   -- * DNS Message procesing
   , fromDNSMessage
+  -- * Misc
+  , withLookupConf
+  , makeIdGenerators
   ) where
 
 import Control.Exception as E
 import DNS.Types hiding (Seconds)
 import Prelude hiding (lookup)
+import qualified System.Random.Stateful as R
+import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 
+import DNS.Do53.Do53
 import DNS.Do53.Imports
 import DNS.Do53.Memo
-import DNS.Do53.Query
 import DNS.Do53.Resolve
+import DNS.Do53.System
 import DNS.Do53.Types
-
--- $setup
--- >>> import DNS.Do53.Do53
 
 data Section = Answer | Authority deriving (Eq, Ord, Show)
 
@@ -39,11 +42,13 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookup resolver "www.example.com" A
+--   >>> withLookupConf defaultLookupConf $ \env -> lookup env "www.example.com" A
 --   Right [93.184.216.34]
 --
-lookup :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookup = lookupSection Answer
+lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookup env dom typ = lookupSection Answer env q
+  where
+    q = Question dom typ classIN
 
 -- | Look up resource records of a specified type for a domain,
 --   collecting the results
@@ -51,14 +56,16 @@ lookup = lookupSection Answer
 --   See the documentation of 'lookupRaw'
 --   to understand the concrete behavior.
 --   Cache is used even if 'resolvCache' is 'Just'.
-lookupAuth :: Resolver -> Domain -> TYPE -> IO (Either DNSError [RData])
-lookupAuth = lookupSection Authority
+lookupAuth :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
+lookupAuth env dom typ = lookupSection Authority env q
+  where
+    q = Question dom typ classIN
 
-lookup' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
-lookup' typ rlv dom = unwrap <$> lookup rlv dom typ
+lookup' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookup' typ env dom = unwrap <$> lookup env dom typ
 
-lookupAuth' :: ResourceData a => TYPE -> Resolver -> Domain -> IO (Either DNSError [a])
-lookupAuth' typ rlv dom = unwrap <$> lookupAuth rlv dom typ
+lookupAuth' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupAuth' typ env dom = unwrap <$> lookupAuth env dom typ
 
 unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
 unwrap erds = case erds of
@@ -78,45 +85,39 @@ unTag rd = case fromRData rd of
 --   to inspect for the result.
 
 lookupSection :: Section
-              -> Resolver
-              -> Domain
-              -> TYPE
+              -> LookupEnv
+              -> Question
               -> IO (Either DNSError [RData])
-lookupSection section rlv dom typ
-  | section == Authority = lookupFreshSection rlv dom typ section
-  | otherwise = case mcacheConf of
-      Nothing           -> lookupFreshSection rlv dom typ section
-      Just cacheconf    -> lookupCacheSection rlv dom typ cacheconf
-  where
-    mcacheConf = resolvCache $ resolvConf rlv
+lookupSection section env q
+  | section == Authority = lookupFreshSection env q section
+  | otherwise = case lenvCache env of
+      Nothing -> lookupFreshSection env q section
+      Just _  -> lookupCacheSection env q
 
-lookupFreshSection :: Resolver
-                   -> Domain
-                   -> TYPE
+lookupFreshSection :: LookupEnv
+                   -> Question
                    -> Section
                    -> IO (Either DNSError [RData])
-lookupFreshSection rlv dom typ section = do
-    eans <- lookupRaw rlv dom typ
+lookupFreshSection env q@Question{..} section = do
+    eans <- lookupRaw env q
     case eans of
       Left err  -> return $ Left err
       Right ans -> return $ fromDNSMessage ans toRD
   where
-    correct ResourceRecord{..} = rrtype == typ
+    correct ResourceRecord{..} = rrtype == qtype
     toRD = map rdata . filter correct . sectionF
     sectionF = case section of
       Answer    -> answer
       Authority -> authority
 
-lookupCacheSection :: Resolver
-                   -> Domain
-                   -> TYPE
-                   -> CacheConf
+lookupCacheSection :: LookupEnv
+                   -> Question
                    -> IO (Either DNSError [RData])
-lookupCacheSection rlv dom typ cconf = do
-    mx <- lookupCache (dom,typ) c
+lookupCacheSection env@LookupEnv{..} q@Question{..} = do
+    mx <- lookupCache q c
     case mx of
       Nothing -> do
-          eans <- lookupRaw rlv dom typ
+          eans <- lookupRaw env q
           case eans of
             Left  err ->
                 -- Probably a network error happens.
@@ -127,21 +128,20 @@ lookupCacheSection rlv dom typ cconf = do
                 case ex of
                   Left NameError -> do
                       let v = Left NameError
-                      cacheNegative cconf c key v ans
+                      cacheNegative cconf c q v ans
                       return v
                   Left e -> return $ Left e
                   Right [] -> do
                       let v = Right []
-                      cacheNegative cconf c key v ans
+                      cacheNegative cconf c q v ans
                       return v
                   Right rss -> do
-                      cachePositive cconf c key rss
+                      cachePositive cconf c q rss
                       return $ Right $ map rdata rss
       Just (_,x) -> return x
   where
-    toRR = filter (typ `isTypeOf`) . answer
-    c = fromJust $ cache rlv
-    key = (dom,typ)
+    toRR = filter (qtype `isTypeOf`) . answer
+    (c, cconf) = fromJust lenvCache
 
 cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
 cachePositive cconf c key rss
@@ -197,7 +197,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --    local port is created. Then exactly one TCP query is retried.
 --
 --
--- If multiple DNS servers are specified 'ResolvConf' ('RCHostNames ')
+-- If multiple DNS servers are specified 'LookupConf' ('RCHostNames ')
 -- or found ('RCFilePath'), either sequential lookup or
 -- concurrent lookup is carried out:
 --
@@ -218,7 +218,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolver defaultResolvConf $ \\resolver -> lookupRaw resolver \"www.example.com\" A
+--   withLookupConf defaultLookupConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A classIN
 --   @
 --
 --   And the (formatted) expected output:
@@ -251,22 +251,59 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolver defaultResolvConf $ \resolver -> lookupRaw resolver "mew.org" AXFR
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
 --   Left InvalidAXFRLookup
 --
-lookupRaw :: Resolver   -- ^ Resolver obtained via 'withResolver'
-          -> Domain     -- ^ Query domain
-          -> TYPE       -- ^ Query RRtype
+lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withLookupConf'
+          -> Question
           -> IO (Either DNSError DNSMessage)
-lookupRaw rslv dom typ = lookupRawCtl rslv dom typ mempty
+lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 
--- | Similar to 'lookupRaw', but the default values of the RD, AD, CD and DO
--- flag bits, as well as various EDNS features, can be adjusted via the
--- 'QueryControls' parameter.
---
-lookupRawCtl :: Resolver      -- ^ Resolver obtained via 'withResolver'
-             -> Domain        -- ^ Query domain
-             -> TYPE          -- ^ Query RRtype
-             -> QueryControls -- ^ Query flag and EDNS overrides
-             -> IO (Either DNSError DNSMessage)
-lookupRawCtl rslv dom typ ctls = E.try $ resolve rslv dom typ ctls
+----------------------------------------------------------------
+
+-- 53 is the standard port number for domain name servers as assigned by IANA
+dnsPort :: PortNumber
+dnsPort = 53
+
+findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
+findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
+findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
+
+----------------------------------------------------------------
+
+makeIdGenerators :: Int -> IO [IO Identifier]
+makeIdGenerators n = map R.uniformWord16 <$> replicateM n (R.initStdGen >>= R.newIOGenM)
+
+-- | Giving a thread-safe 'LookupEnv' to the function of the second
+--   argument.
+withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
+withLookupConf rc@LookupConf{..} f = do
+    addrs <- findAddrPorts lconfInfo
+    let n = length addrs
+    gens <- makeIdGenerators n
+    mcache <- case lconfCacheConf of
+      Just cacheconf -> do
+          cache <- newCache (pruningDelay cacheconf)
+          return $ Just (cache, cacheconf)
+      Nothing -> return Nothing
+    let ris = makeInfo rc addrs gens
+        resolver = udpTcpResolver lconfRetry
+        renv = ResolvEnv resolver lconfConcurrent ris
+        lenv = LookupEnv mcache lconfQueryControls renv
+    f lenv
+
+makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
+makeInfo LookupConf{..} hps0 gens0 = go hps0 gens0
+  where
+    go ((h,p):hps) (gen:gens) = ri : go hps gens
+      where
+        ri = ResolvInfo {
+                rinfoHostName   = h
+              , rinfoPortNumber = p
+              , rinfoGenId      = gen
+              , rinfoTimeout    = lconfTimeoutAction lconfTimeout
+              , rinfoGetTime    = lconfGetTime
+              }
+    go _ _ = []

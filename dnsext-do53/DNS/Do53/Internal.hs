@@ -8,26 +8,28 @@ module DNS.Do53.Internal (
   , recvVC
   , encodeVCLength
   , decodeVCLength
-    -- * ResolvConf
-  , ResolvConf(..)
-  , getEpochTime
-    -- * Resolver
-  , Resolver(..)
-  , Cache
-    -- * Solver: DNS over X
-  , vcSolver
-  , SolvInfo(..)
-  , Solver
+    -- * Resolv
+  , resolve
+  , ResolvEnv(..)
+    -- * Resolver: DNS over X
+  , ResolvInfo(..)
+  , defaultResolvInfo
+  , Resolver
   , Send
   , Recv
-  , udpTcpSolver
-  , udpSolver
-  , tcpSolver
+  , udpTcpResolver
+  , udpResolver
+  , tcpResolver
+  , vcResolver
   , checkRespM
+    -- * Misc
+  , getEpochTime
+  , makeIdGenerators
   ) where
 
 import DNS.Do53.Do53
 import DNS.Do53.IO
 import DNS.Do53.Imports
-import DNS.Do53.Memo
+import DNS.Do53.Lookup
+import DNS.Do53.Resolve
 import DNS.Do53.Types

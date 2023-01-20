@@ -17,30 +17,30 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-http3Solver :: Solver
-http3Solver si@SolvInfo{..} = QUIC.run cc $ \conn ->
+http3Resolver :: Resolver
+http3Resolver ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
-        ident <- solvGenId
-        client conn conf ident si
+        ident <- rinfoGenId
+        client conn conf ident ri q qctl
   where
-    cc = getQUICParams solvHostName solvPortNumber "h3"
+    cc = getQUICParams rinfoHostName rinfoPortNumber "h3"
 
-client :: Connection -> Config -> Identifier -> Solver
-client conn conf ident SolvInfo{..} = run conn cliconf conf cli
+client :: Connection -> Config -> Identifier -> Resolver
+client conn conf ident ResolvInfo{..} q qctl = run conn cliconf conf cli
   where
-    wire = encodeQuery ident solvQuestion solvQueryControls
+    wire = encodeQuery ident q qctl
     hdr = clientDoHHeaders wire
     req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {
         scheme = "https"
-      , authority = C8.pack solvHostName
+      , authority = C8.pack rinfoHostName
       }
     cli sendRequest = sendRequest req $ \rsp -> do
         bs <- loop rsp ""
-        now <- solvGetTime
+        now <- rinfoGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
-            Right msg -> case checkRespM solvQuestion ident msg of
+            Right msg -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
       where

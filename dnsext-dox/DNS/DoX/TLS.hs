@@ -12,8 +12,8 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-tlsSolver :: Solver
-tlsSolver si@SolvInfo{..} = vcSolver "TLS" perform si
+tlsResolver :: Resolver
+tlsResolver ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = E.bracket open close $ \sock -> do
@@ -25,5 +25,5 @@ tlsSolver si@SolvInfo{..} = vcSolver "TLS" perform si
             recvDoT = recvVC recvN
         solve sendDoT recvDoT
 
-    open = openTCP solvHostName solvPortNumber
-    params = getTLSParams solvHostName "dot" False
+    open = openTCP rinfoHostName rinfoPortNumber
+    params = getTLSParams rinfoHostName "dot" False

@@ -34,53 +34,31 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: Resolver -> Domain -> TYPE -> QueryControls -> IO DNSMessage
-resolve rlv dom typ qctl0
-  | typ == AXFR   = E.throwIO InvalidAXFRLookup
-  | concurrent    = resolveConcurrent dos
-  | otherwise     = resolveSequential dos
+resolve :: ResolvEnv -> Question -> QueryControls -> IO DNSMessage
+resolve ResolvEnv{..} q@Question{..} qctl
+  | qtype == AXFR = E.throwIO InvalidAXFRLookup
+  | concurrent    = resolveConcurrent ris resolver q qctl
+  | otherwise     = resolveSequential ris resolver q qctl
   where
-    concurrent = resolvConcurrent $ resolvConf rlv
-    dos = makeInfo rlv dom typ qctl0
+    concurrent = renvConcurrent
+    resolver   = renvResolver
+    ris        = renvResolvInfos
 
-makeInfo :: Resolver -> Domain -> TYPE -> QueryControls -> [SolvInfo]
-makeInfo rlv dom typ qctl0 = go hps0 gens0
-  where
-    conf = resolvConf rlv
-    defaultSolvInfo = SolvInfo {
-        solvQuestion      = Question dom typ classIN
-      , solvHostName      = "127.0.0.1" -- to be overwitten
-      , solvPortNumber    = 53          -- to be overwitten
-      , solvTimeout       = resolvTimeoutAction conf (resolvTimeout conf)
-      , solvRetry         = resolvRetry conf
-      , solvGenId         = return 0    -- to be overwitten
-      , solvGetTime       = resolvGetTime conf
-      , solvQueryControls = qctl0 <> resolvQueryControls conf
-      , solvSolver        = resolvSolver conf
-      }
-    hps0 = serverAddrs rlv
-    gens0 = genIds rlv
-    go ((h,p):hps) (gen:gens) = defaultSolvInfo { solvHostName = h, solvPortNumber = p, solvGenId = gen } : go hps gens
-    go _ _ = []
-
-resolveSequential :: [SolvInfo] -> IO DNSMessage
-resolveSequential sis0 = loop sis0
+resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveSequential ris0 resolver q qctl = loop ris0
   where
     loop []       = error "resolveSequential:loop"
-    loop [si]     = resolveOne si
-    loop (si:sis) = do
-        eres <- E.try $ resolveOne si
+    loop [ri]     = resolver ri q qctl
+    loop (ri:ris) = do
+        eres <- E.try $ resolver ri q qctl
         case eres of
-          Left (_ :: DNSError) -> loop sis
+          Left (_ :: DNSError) -> loop ris
           Right res -> return res
 
-resolveConcurrent :: [SolvInfo] -> IO DNSMessage
-resolveConcurrent sis =
-    raceAny $ map resolveOne sis
+resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveConcurrent ris resolver q qctl =
+    raceAny $ map (\ri -> resolver ri q qctl) ris
   where
     raceAny ios = do
         asyncs <- mapM async ios
         snd <$> waitAnyCancel asyncs
-
-resolveOne :: Solver
-resolveOne si = (solvSolver si) si

@@ -14,34 +14,31 @@ spec :: Spec
 spec = describe "solvers" $ do
 
     it "resolves well with UDP" $ do
-        let si = SolvInfo {
-                solvQuestion      = Question "www.mew.org" A classIN
-              , solvHostName      = "8.8.8.8"
-              , solvPortNumber    = 53
-              , solvTimeout       = timeout 3000000
-              , solvRetry         = 1
-              , solvGenId         = return 1
-              , solvGetTime       = getEpochTime
-              -- Google's resolvers support the AD and CD bits
-              , solvQueryControls = adFlag FlagSet <> ednsEnabled FlagClear
-              , solvSolver        = udpSolver -- dummy
+        let q = Question "www.mew.org" A classIN
+            ri = ResolvInfo {
+                rinfoHostName      = "8.8.8.8"
+              , rinfoPortNumber    = 53
+              , rinfoTimeout       = timeout 3000000
+              , rinfoGenId         = return 1
+              , rinfoGetTime       = getEpochTime
               }
+            -- Google's resolvers support the AD and CD bits
+            qctl = adFlag FlagSet <> ednsEnabled FlagClear
 
-        ans <- udpSolver si
+        ans <- udpResolver 1 ri q qctl
         identifier (header ans) `shouldBe` 1
 
     it "resolves well with TCP" $ do
-        let si = SolvInfo {
-                solvQuestion      = Question "www.mew.org" A classIN
-              , solvHostName      = "8.8.8.8"
-              , solvPortNumber    = 53
-              , solvTimeout       = timeout 3000000
-              , solvRetry         = 1
-              , solvGenId         = return 1
-              , solvGetTime       = getEpochTime
-              -- Google's resolvers support the AD and CD bits
-              , solvQueryControls = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
-              , solvSolver        = tcpSolver -- dummy
+        let q = Question "www.mew.org" A classIN
+            ri = ResolvInfo {
+                rinfoHostName      = "8.8.8.8"
+              , rinfoPortNumber    = 53
+              , rinfoTimeout       = timeout 3000000
+              , rinfoGenId         = return 1
+              , rinfoGetTime       = getEpochTime
               }
-        ans <- tcpSolver si
+            -- Google's resolvers support the AD and CD bits
+            qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
+
+        ans <- tcpResolver ri q qctl
         identifier (header ans) `shouldBe` 1

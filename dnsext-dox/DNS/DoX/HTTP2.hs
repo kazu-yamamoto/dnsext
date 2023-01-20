@@ -21,35 +21,35 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-http2Solver :: Solver
-http2Solver si@SolvInfo{..} = E.bracket open close $ \sock ->
+http2Resolver :: Resolver
+http2Resolver ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
-        ident <- solvGenId
-        client ctx ident si
+        ident <- rinfoGenId
+        client ctx ident ri q qctl
   where
-    open = openTCP solvHostName solvPortNumber
-    params = getTLSParams solvHostName "h2" False
+    open = openTCP rinfoHostName rinfoPortNumber
+    params = getTLSParams rinfoHostName "h2" False
 
 
-client :: Context -> Identifier -> Solver
-client ctx ident SolvInfo{..} =
+client :: Context -> Identifier -> Resolver
+client ctx ident ResolvInfo{..} q qctl =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf -> run cliconf conf cli
   where
-    wire = encodeQuery ident solvQuestion solvQueryControls
+    wire = encodeQuery ident q qctl
     hdr = clientDoHHeaders wire
     req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
     cliconf = ClientConfig {
         scheme = "https"
-      , authority = C8.pack solvHostName
+      , authority = C8.pack rinfoHostName
       , cacheLimit = 20
       }
     cli sendRequest = sendRequest req $ \rsp -> do
         bs <- loop rsp ""
-        now <- solvGetTime
+        now <- rinfoGetTime
         case decodeAt now bs of
             Left  e   -> E.throwIO e
-            Right msg -> case checkRespM solvQuestion ident msg of
+            Right msg -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
       where

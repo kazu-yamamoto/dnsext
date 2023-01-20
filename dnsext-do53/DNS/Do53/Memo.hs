@@ -14,7 +14,7 @@ import qualified Data.OrdPSQ as PSQ
 
 import DNS.Do53.Imports
 
-type Key = (Domain, TYPE)
+type Key = Question
 type Prio = EpochTime
 
 type Entry = Either DNSError [RData]
