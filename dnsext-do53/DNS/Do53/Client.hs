@@ -19,7 +19,7 @@ module DNS.Do53.Client (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  -- * Configuration for sutf resolver
+  -- * Lookup configuration for sub resolvers
   , LookupConf
   , defaultLookupConf
   , withLookupConf
@@ -31,7 +31,7 @@ module DNS.Do53.Client (
   , lconfCacheConf
   , lconfQueryControls
   , lconfActions
-  -- ** Specifying DNS servers
+  -- ** Specifying full resolvers
   , Seeds(..)
   -- ** Configuring cache
   , CacheConf
