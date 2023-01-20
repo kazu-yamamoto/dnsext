@@ -26,11 +26,13 @@ module DNS.Do53.Client (
   , LookupEnv
   -- ** Accessors
   , lconfSeeds
-  , lconfTimeout
   , lconfRetry
+  , lconfTimeout
   , lconfConcurrent
   , lconfCacheConf
   , lconfQueryControls
+  , lconfGetTime
+  , lconfTimeoutAction
   -- ** Specifying DNS servers
   , Seeds(..)
   -- ** Configuring cache
