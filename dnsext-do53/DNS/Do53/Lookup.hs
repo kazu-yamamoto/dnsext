@@ -197,8 +197,8 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --    local port is created. Then exactly one TCP query is retried.
 --
 --
--- If multiple DNS servers are specified 'LookupConf' ('RCHostNames ')
--- or found ('RCFilePath'), either sequential lookup or
+-- If multiple DNS servers are specified 'LookupConf' ('SeedsHostNames ')
+-- or found ('SeedsFilePath'), either sequential lookup or
 -- concurrent lookup is carried out:
 --
 --  * In sequential lookup ('resolvConcurrent' is False),
@@ -265,11 +265,11 @@ lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 dnsPort :: PortNumber
 dnsPort = 53
 
-findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
-findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
-findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
-findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
-findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
+findAddrPorts :: Seeds -> IO [(HostName,PortNumber)]
+findAddrPorts (SeedsHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (SeedsHostPort  nh p) = return [(nh, p)]
+findAddrPorts (SeedsHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
@@ -280,7 +280,7 @@ makeIdGenerators n = map R.uniformWord16 <$> replicateM n (R.initStdGen >>= R.ne
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
 withLookupConf rc@LookupConf{..} f = do
-    addrs <- findAddrPorts lconfInfo
+    addrs <- findAddrPorts lconfSeeds
     let n = length addrs
     gens <- makeIdGenerators n
     mcache <- case lconfCacheConf of

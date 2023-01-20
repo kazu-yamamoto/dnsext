@@ -5,7 +5,7 @@ import Text.Read (readMaybe)
 import Data.IP (IP (..))
 import DNS.Types (TYPE, DNSError, DNSMessage)
 import DNS.Do53.Client (QueryControls,
-               LookupConf (lconfInfo, lconfTimeout, lconfRetry, lconfQueryControls))
+               LookupConf (lconfSeeds, lconfTimeout, lconfRetry, lconfQueryControls))
 import qualified DNS.Do53.Client as DNS
 import qualified DNS.Types as DNS
 import System.Random (randomRIO)
@@ -43,10 +43,10 @@ getCustomConf mayServer controls = do
 
     queryName :: String -> IO IP
     queryName sname = do
-      as <- DNS.withLookupConf DNS.defaultLookupConf $ \seeds -> do
+      as <- DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
         let dom = DNS.fromRepresentation sname
-        eA  <- DNS.lookupA    seeds dom
-        eQA <- DNS.lookupAAAA seeds dom
+        eA  <- DNS.lookupA    env dom
+        eQA <- DNS.lookupAAAA env dom
         let catAs = do
               as  <- eA
               qas <- eQA
@@ -55,4 +55,4 @@ getCustomConf mayServer controls = do
       ix <- randomRIO (0, length as - 1)
       return $ as !! ix
 
-    setServer ip c = c { lconfInfo = DNS.RCHostName $ show ip }
+    setServer ip c = c { lconfSeeds = DNS.SeedsHostName $ show ip }

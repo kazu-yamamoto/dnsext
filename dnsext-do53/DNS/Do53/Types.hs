@@ -8,7 +8,7 @@ module DNS.Do53.Types (
   , defaultLookupConf
   , LookupEnv(..)
   -- ** Specifying DNS servers
-  , FileOrNumericHost(..)
+  , Seeds(..)
   -- ** Configuring cache
   , CacheConf(..)
   , defaultCacheConf
@@ -32,7 +32,7 @@ import DNS.Do53.Query
 ----------------------------------------------------------------
 
 -- | The type to specify a cache server.
-data FileOrNumericHost = RCFilePath FilePath -- ^ A path for \"resolv.conf\"
+data Seeds = SeedsFilePath FilePath -- ^ A path for \"resolv.conf\"
                                              -- where one or more IP addresses
                                              -- of DNS servers should be found
                                              -- on Unix.
@@ -40,10 +40,10 @@ data FileOrNumericHost = RCFilePath FilePath -- ^ A path for \"resolv.conf\"
                                              -- automatically detected
                                              -- on Windows regardless of
                                              -- the value of the file name.
-                       | RCHostName HostName -- ^ A numeric IP address. /Warning/: host names are invalid.
-                       | RCHostNames [HostName] -- ^ Numeric IP addresses. /Warning/: host names are invalid.
-                       | RCHostPort HostName PortNumber -- ^ A numeric IP address and port number. /Warning/: host names are invalid.
-                       deriving Show
+           | SeedsHostName HostName -- ^ A numeric IP address. /Warning/: host names are invalid.
+           | SeedsHostNames [HostName] -- ^ Numeric IP addresses. /Warning/: host names are invalid.
+           | SeedsHostPort HostName PortNumber -- ^ A numeric IP address and port number. /Warning/: host names are invalid.
+           deriving Show
 
 ----------------------------------------------------------------
 
@@ -104,7 +104,7 @@ defaultCacheConf = CacheConf 300 0 10
 --
 data LookupConf = LookupConf {
    -- | Server information.
-    lconfInfo          :: FileOrNumericHost
+    lconfSeeds         :: Seeds
    -- | Timeout in micro seconds.
   , lconfTimeout       :: Int
    -- | The number of UDP retries including the first try.
@@ -125,7 +125,7 @@ data LookupConf = LookupConf {
 
 -- | Return a default 'LookupConf':
 --
--- * 'lcInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
+-- * 'lconfSeeds' is 'SeedsFilePath' \"\/etc\/resolv.conf\".
 -- * 'lcTimeout' is 3,000,000 micro seconds.
 -- * 'lcRetry' is 3.
 -- * 'lcConcurrent' is False.
@@ -133,7 +133,7 @@ data LookupConf = LookupConf {
 -- * 'lcQueryControls' is an empty set of overrides.
 defaultLookupConf :: LookupConf
 defaultLookupConf = LookupConf {
-    lconfInfo          = RCFilePath "/etc/resolv.conf"
+    lconfSeeds         = SeedsFilePath "/etc/resolv.conf"
   , lconfTimeout       = 3 * 1000 * 1000
   , lconfRetry         = 3
   , lconfConcurrent    = False

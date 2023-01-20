@@ -222,8 +222,8 @@ lookupNS = lookup' NS
 --   the IP address of which was found beforehand:
 --
 --   >>> import Data.List (sort)
---   >>> let ri = RCHostName "192.5.6.30" -- a.gtld-servers.net
---   >>> let rc = defaultLookupConf { lconfInfo = ri }
+--   >>> let seeds = SeedsHostName "192.5.6.30" -- a.gtld-servers.net
+--   >>> let rc = defaultLookupConf { lconfSeeds = seeds }
 --   >>> ns <- withLookupConf rc $ \env -> lookupNSAuth env "example.com"
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
