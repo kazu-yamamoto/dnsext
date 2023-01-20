@@ -8,12 +8,6 @@ module DNS.Do53.Internal (
   , recvVC
   , encodeVCLength
   , decodeVCLength
-    -- * ResolvConf
-  , ResolvConf(..)
-  , getEpochTime
-    -- * Lookup
-  , LookupEnv(..)
-  , Cache
     -- * Resolv
   , resolve
   , ResolvEnv(..)
@@ -29,6 +23,7 @@ module DNS.Do53.Internal (
   , vcResolver
   , checkRespM
     -- * Misc
+  , getEpochTime
   , makeIdGenerators
   ) where
 
@@ -36,6 +31,5 @@ import DNS.Do53.Do53
 import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Lookup
-import DNS.Do53.Memo
 import DNS.Do53.Resolve
 import DNS.Do53.Types
