@@ -16,6 +16,8 @@ module DNS.Do53.Types (
   , ResolvEnv(..)
   , ResolvInfo(..)
   , defaultResolvInfo
+  , ResolvActions(..)
+  , defaultResolvActions
   , Resolver
   ) where
 
@@ -107,7 +109,6 @@ data LookupConf = LookupConf {
    -- | Server information.
     lconfSeeds         :: Seeds
    -- | Timeout in micro seconds.
-  , lconfTimeout       :: Int
    -- | The number of UDP retries including the first try.
   , lconfRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
@@ -117,34 +118,26 @@ data LookupConf = LookupConf {
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , lconfQueryControls :: QueryControls
-   -- | Action to get an epoch time.
-  , lconfGetTime       :: IO EpochTime
-   -- | Action for timeout used with 'lcTimeout'.
-  , lconfTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
-   -- | Action to generate an identifier
-  , lconfGenId         :: IO Identifier
+   -- | Actions for resolvers.
+  , lconfActions       :: ResolvActions
 }
 
 
 -- | Return a default 'LookupConf':
 --
 -- * 'lconfSeeds' is 'SeedsFilePath' \"\/etc\/resolv.conf\".
--- * 'lcTimeout' is 3,000,000 micro seconds.
--- * 'lcRetry' is 3.
--- * 'lcConcurrent' is False.
--- * 'lcCacheConf' is Nothing.
--- * 'lcQueryControls' is an empty set of overrides.
+-- * 'lconfRetry' is 3.
+-- * 'lconfConcurrent' is False.
+-- * 'lconfCacheConf' is Nothing.
+-- * 'lconfQueryControls' is an empty set of overrides.
 defaultLookupConf :: LookupConf
 defaultLookupConf = LookupConf {
     lconfSeeds         = SeedsFilePath "/etc/resolv.conf"
-  , lconfTimeout       = 3 * 1000 * 1000
   , lconfRetry         = 3
   , lconfConcurrent    = False
   , lconfCacheConf     = Nothing
   , lconfQueryControls = mempty
-  , lconfTimeoutAction = timeout
-  , lconfGenId         = uniformWord16 globalStdGen
-  , lconfGetTime       = getEpochTime
+  , lconfActions       = defaultResolvActions
 }
 
 ----------------------------------------------------------------
@@ -170,19 +163,30 @@ data ResolvEnv = ResolvEnv {
 data ResolvInfo = ResolvInfo {
     rinfoHostName      :: HostName
   , rinfoPortNumber    :: PortNumber
-  , rinfoTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , rinfoGenId         :: IO Identifier
-  , rinfoGetTime       :: IO EpochTime
+  , rinfoActions       :: ResolvActions
   }
 
 defaultResolvInfo :: ResolvInfo
 defaultResolvInfo = ResolvInfo {
     rinfoHostName      = "127.0.0.1"
   , rinfoPortNumber    = 53
-  , rinfoTimeout       = timeout 3000000
-  , rinfoGenId         = uniformWord16 globalStdGen
-  , rinfoGetTime       = getEpochTime
+  , rinfoActions       = defaultResolvActions
   }
 
 -- | The type of resolvers (DNS over X).
 type Resolver = ResolvInfo -> Question -> QueryControls -> IO DNSMessage
+
+----------------------------------------------------------------
+
+data ResolvActions = ResolvActions {
+    ractionTimeout :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , ractionGenId   :: IO Identifier
+  , ractionGetTime :: IO EpochTime
+  }
+
+defaultResolvActions :: ResolvActions
+defaultResolvActions = ResolvActions {
+    ractionTimeout = timeout 3000000
+  , ractionGenId   = uniformWord16 globalStdGen
+  , ractionGetTime = getEpochTime
+  }

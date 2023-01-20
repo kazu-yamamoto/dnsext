@@ -5,7 +5,7 @@ import Text.Read (readMaybe)
 import Data.IP (IP (..))
 import DNS.Types (TYPE, DNSError, DNSMessage)
 import DNS.Do53.Client (QueryControls,
-               LookupConf (lconfSeeds, lconfTimeout, lconfRetry, lconfQueryControls))
+               LookupConf (lconfSeeds, lconfRetry, lconfQueryControls))
 import qualified DNS.Do53.Client as DNS
 import qualified DNS.Types as DNS
 import System.Random (randomRIO)
@@ -32,8 +32,7 @@ getCustomConf mayServer controls = do
 
   maybe return resolveServer mayServer
     DNS.defaultLookupConf
-    { lconfTimeout = 5 * 1000 * 1000
-    , lconfRetry = 2
+    { lconfRetry = 2
     , lconfQueryControls = controls
     }
   where

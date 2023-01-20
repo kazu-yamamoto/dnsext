@@ -292,7 +292,5 @@ makeInfo LookupConf{..} hps = map mk hps
     mk (h,p) = ResolvInfo {
             rinfoHostName   = h
           , rinfoPortNumber = p
-          , rinfoGenId      = lconfGenId
-          , rinfoTimeout    = lconfTimeoutAction lconfTimeout
-          , rinfoGetTime    = lconfGetTime
+          , rinfoActions    = lconfActions
           }

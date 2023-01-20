@@ -42,7 +42,8 @@
 --   by creating and utilizing a 'LookupConf' which has a timeout of
 --   one millisecond and a very limited number of retries:
 --
---   >>> let badrc = defaultLookupConf { lconfTimeout = 0, lconfRetry = 1 }
+--   >>> import System.Timeout
+--   >>> let badrc = defaultLookupConf { lconfRetry = 1, lconfActions = defaultResolvActions { ractionTimeout = timeout 0 } }
 --   >>>
 --   >>> withLookupConf badrc $ \env -> lookupA env "www.example.com"
 --   Left RetryLimitExceeded

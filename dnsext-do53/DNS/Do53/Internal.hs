@@ -14,6 +14,8 @@ module DNS.Do53.Internal (
     -- * Resolver: DNS over X
   , ResolvInfo(..)
   , defaultResolvInfo
+  , ResolvActions(..)
+  , defaultResolvActions
   , Resolver
   , Send
   , Recv

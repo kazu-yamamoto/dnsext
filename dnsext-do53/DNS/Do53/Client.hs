@@ -27,12 +27,10 @@ module DNS.Do53.Client (
   -- ** Accessors
   , lconfSeeds
   , lconfRetry
-  , lconfTimeout
   , lconfConcurrent
   , lconfCacheConf
   , lconfQueryControls
-  , lconfGetTime
-  , lconfTimeoutAction
+  , lconfActions
   -- ** Specifying DNS servers
   , Seeds(..)
   -- ** Configuring cache
@@ -40,7 +38,13 @@ module DNS.Do53.Client (
   , defaultCacheConf
   , maximumTTL
   , pruningDelay
-  -- * Query control
+  -- ** Actions
+  , ResolvActions
+  , defaultResolvActions
+  , ractionTimeout
+  , ractionGenId
+  , ractionGetTime
+  -- ** Query control
   , QueryControls
   , FlagOp(..)
   , rdFlag

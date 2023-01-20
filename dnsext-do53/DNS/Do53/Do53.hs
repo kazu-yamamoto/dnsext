@@ -72,7 +72,7 @@ udpResolver retry ResolvInfo{..} q _qctl =
     go qctl = bracket open UDP.close $ \sock -> do
         let send = UDP.send sock
             recv = UDP.recv sock
-        ident <- rinfoGenId
+        ident <- ractionGenId rinfoActions
         loop retry ident qctl send recv
 
     loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
@@ -94,13 +94,13 @@ udpResolver retry ResolvInfo{..} q _qctl =
 
     solve ident qctl send recv = do
         let qry = encodeQuery ident q qctl
-        rinfoTimeout $ do
+        ractionTimeout rinfoActions $ do
             _ <- send qry
             getAnswer ident recv
 
     getAnswer ident recv = do
         bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
-        now <- rinfoGetTime
+        now <- ractionGetTime rinfoActions
         case decodeAt now bs of
             Left  e -> E.throwIO e
             Right msg
@@ -145,9 +145,9 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
 
     solve qctl send recv = do
         -- Using a fresh identifier.
-        ident <- rinfoGenId
+        ident <- ractionGenId rinfoActions
         let qry = encodeQuery ident q qctl
-        mres <- rinfoTimeout $ do
+        mres <- ractionTimeout rinfoActions $ do
             _ <- send qry
             getAnswer ident recv
         case mres of
@@ -156,7 +156,7 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
 
     getAnswer ident recv = do
         bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
-        now <- rinfoGetTime
+        now <- ractionGetTime rinfoActions
         case decodeAt now bs of
             Left  e   -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
