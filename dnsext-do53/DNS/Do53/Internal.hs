@@ -24,12 +24,10 @@ module DNS.Do53.Internal (
   , checkRespM
     -- * Misc
   , getEpochTime
-  , makeIdGenerators
   ) where
 
 import DNS.Do53.Do53
 import DNS.Do53.IO
 import DNS.Do53.Imports
-import DNS.Do53.Lookup
 import DNS.Do53.Resolve
 import DNS.Do53.Types

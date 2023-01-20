@@ -23,6 +23,7 @@ import DNS.Types
 import DNS.Types.Decode
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 import Prelude
+import System.Random.Stateful (globalStdGen, uniformWord16)
 import System.Timeout (timeout)
 
 import DNS.Do53.Imports
@@ -120,6 +121,8 @@ data LookupConf = LookupConf {
   , lconfGetTime       :: IO EpochTime
    -- | Action for timeout used with 'lcTimeout'.
   , lconfTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
+   -- | Action to generate an identifier
+  , lconfGenId         :: IO Identifier
 }
 
 
@@ -139,8 +142,9 @@ defaultLookupConf = LookupConf {
   , lconfConcurrent    = False
   , lconfCacheConf     = Nothing
   , lconfQueryControls = mempty
-  , lconfGetTime       = getEpochTime
   , lconfTimeoutAction = timeout
+  , lconfGenId         = uniformWord16 globalStdGen
+  , lconfGetTime       = getEpochTime
 }
 
 ----------------------------------------------------------------
@@ -166,9 +170,8 @@ data ResolvEnv = ResolvEnv {
 data ResolvInfo = ResolvInfo {
     rinfoHostName      :: HostName
   , rinfoPortNumber    :: PortNumber
-  , rinfoGenId         :: IO Identifier
-  -- share part
   , rinfoTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , rinfoGenId         :: IO Identifier
   , rinfoGetTime       :: IO EpochTime
   }
 
@@ -176,8 +179,8 @@ defaultResolvInfo :: ResolvInfo
 defaultResolvInfo = ResolvInfo {
     rinfoHostName      = "127.0.0.1"
   , rinfoPortNumber    = 53
-  , rinfoGenId         = return 0
   , rinfoTimeout       = timeout 3000000
+  , rinfoGenId         = uniformWord16 globalStdGen
   , rinfoGetTime       = getEpochTime
   }
 
