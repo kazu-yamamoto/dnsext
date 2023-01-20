@@ -80,6 +80,7 @@ data Context =
   , getCache_ :: IO Cache
   , currentSeconds_ :: IO Timestamp
   , timeString_ :: IO ShowS
+  , idGen_ :: IO DNS.Identifier
   }
 
 data QueryError
@@ -112,10 +113,11 @@ type TimeCache = (IO EpochTime, IO ShowS)
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
 newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
+  rng <- head <$> DNS.makeIdGenerators 1
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
-        , currentSeconds_ = curSec, timeString_ = timeStr }
+        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = rng }
   return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
@@ -754,11 +756,9 @@ cnameList dom h = foldr takeCNAME []
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
 norec aserver name typ = dnsQueryT $ \cxt -> do
-  -- fixme: generator should be reused
-  gen <- head <$> DNS.makeIdGenerators 1
   let ri = defaultResolvInfo {
           rinfoHostName   = show aserver
-        , rinfoGenId      = gen
+        , rinfoGenId      = idGen_ cxt
         , rinfoGetTime    = currentSeconds_ cxt
         }
       renv = ResolvEnv {
