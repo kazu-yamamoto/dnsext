@@ -25,9 +25,9 @@ import DNS.Types
 import DNS.Types.Decode
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 import Prelude
-import System.Random.Stateful (globalStdGen, uniformWord16)
 import System.Timeout (timeout)
 
+import DNS.Do53.Id
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
@@ -187,6 +187,6 @@ data ResolvActions = ResolvActions {
 defaultResolvActions :: ResolvActions
 defaultResolvActions = ResolvActions {
     ractionTimeout = timeout 3000000
-  , ractionGenId   = uniformWord16 globalStdGen
+  , ractionGenId   = singleGenId
   , ractionGetTime = getEpochTime
   }

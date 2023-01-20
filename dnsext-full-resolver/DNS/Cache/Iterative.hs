@@ -47,7 +47,6 @@ import Numeric (readDec, readHex, showHex)
 
 -- other packages
 import System.Random (randomR, getStdRandom)
-import System.Random.Stateful (globalStdGen, uniformWord16)
 
 -- dns packages
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
@@ -58,7 +57,7 @@ import DNS.Types
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
-import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo)
+import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
 import qualified DNS.Do53.Internal as DNS
 import qualified DNS.Types as DNS
 
@@ -114,10 +113,11 @@ type TimeCache = (IO EpochTime, IO ShowS)
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
 newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
+  genId <- newConcurrentGenId
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
-        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = uniformWord16 globalStdGen }
+        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
