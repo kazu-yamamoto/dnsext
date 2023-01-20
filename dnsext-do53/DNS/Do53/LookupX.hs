@@ -35,16 +35,16 @@
 --
 --   >>> :set -XOverloadedStrings
 --   >>>
---   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "www.example.com"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupA env "www.example.com"
 --   Right [93.184.216.34]
 --
 --   The only error that we can easily cause is a timeout. We do this
---   by creating and utilizing a 'ResolvConf' which has a timeout of
+--   by creating and utilizing a 'LookupConf' which has a timeout of
 --   one millisecond and a very limited number of retries:
 --
---   >>> let badrc = defaultResolvConf { resolvTimeout = 0, resolvRetry = 1 }
+--   >>> let badrc = defaultLookupConf { lconfTimeout = 0, lconfRetry = 1 }
 --   >>>
---   >>> withResolvConf badrc $ \env -> lookupA env "www.example.com"
+--   >>> withLookupConf badrc $ \env -> lookupA env "www.example.com"
 --   Left RetryLimitExceeded
 --
 --   As is the convention, successful results will always be wrapped
@@ -89,13 +89,13 @@ import DNS.Do53.Types as DNS
 --
 --   A straightforward example:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "192.0.2.1.nip.io"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupA env "192.0.2.1.nip.io"
 --   Right [192.0.2.1]
 --
 --   This function will also follow a CNAME and resolve its target if
 --   one exists for the queried hostname:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupA env "www.kame.net"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupA env "www.kame.net"
 --   Right [210.155.141.200]
 --
 lookupA :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
@@ -105,7 +105,7 @@ lookupA = lookup' A
 --
 --   Examples:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupAAAA env "www.wide.ad.jp"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupAAAA env "www.wide.ad.jp"
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
 lookupAAAA :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
@@ -121,13 +121,13 @@ lookupAAAA = lookup' AAAA
 --   It has an RFC7505 NULL MX (to prevent a deluge of spam from examples
 --   posted on the internet).
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "example.com"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupMX env "example.com"
 --   Right [RD_MX {mx_preference = 0, mx_exchange = "."}]
 --
 --
 --   The domain \"mew.org\" does however have a single MX:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "mew.org"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupMX env "mew.org"
 --   Right [RD_MX {mx_preference = 10, mx_exchange = "mail.mew.org."}]
 --
 --   Also note that all hostnames are returned with a trailing dot to
@@ -136,7 +136,7 @@ lookupAAAA = lookup' AAAA
 --   However the MX host itself has no need for an MX record, so its MX RRset
 --   is empty.  But, \"no results\" is still a successful result.
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupMX env "mail.mew.org"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupMX env "mail.mew.org"
 --   Right []
 --
 lookupMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_MX])
@@ -149,7 +149,7 @@ lookupMX = lookup' MX
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ips <- withResolvConf defaultResolvConf $ \env -> lookupAviaMX env "wide.ad.jp"
+--   >>> ips <- withLookupConf defaultLookupConf $ \env -> lookupAviaMX env "wide.ad.jp"
 --   >>> fmap sort ips
 --   Right [203.178.136.30]
 --
@@ -201,7 +201,7 @@ lookupXviaMX rlv dom func = do
 --   Examples:
 --
 --   >>> import Data.List (sort)
---   >>> ns <- withResolvConf defaultResolvConf $ \env -> lookupNS env "mew.org"
+--   >>> ns <- withLookupConf defaultLookupConf $ \env -> lookupNS env "mew.org"
 --   >>> fmap sort ns
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
@@ -223,8 +223,8 @@ lookupNS = lookup' NS
 --
 --   >>> import Data.List (sort)
 --   >>> let ri = RCHostName "192.5.6.30" -- a.gtld-servers.net
---   >>> let rc = defaultResolvConf { resolvInfo = ri }
---   >>> ns <- withResolvConf rc $ \env -> lookupNSAuth env "example.com"
+--   >>> let rc = defaultLookupConf { lconfInfo = ri }
+--   >>> ns <- withLookupConf rc $ \env -> lookupNSAuth env "example.com"
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
@@ -241,7 +241,7 @@ lookupNSAuth = lookupAuth' NS
 --   <http://en.wikipedia.org/wiki/DomainKeys_Identified_Mail>. As an
 --   example, we find the SPF record for \"mew.org\":
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupTXT env "mew.org"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupTXT env "mew.org"
 --   Right ["v=spf1 +mx -all"]
 --
 lookupTXT :: LookupEnv -> Domain -> IO (Either DNSError [RD_TXT])
@@ -260,7 +260,7 @@ lookupTXT = lookup' TXT
 --   future.  Users should be prepared to remove any trailing period before
 --   using the \'rname\` as a contact email address.
 --
---   >>> soa <- withResolvConf defaultResolvConf $ \env -> lookupSOA env "mew.org"
+--   >>> soa <- withLookupConf defaultLookupConf $ \env -> lookupSOA env "mew.org"
 --   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
@@ -276,7 +276,7 @@ lookupSOA = lookup' SOA
 --   We look up the PTR associated with the IP address
 --   210.130.137.80, i.e., 80.137.130.210.in-addr.arpa:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupPTR env "180.2.232.202.in-addr.arpa"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupPTR env "180.2.232.202.in-addr.arpa"
 --   Right ["www.iij.ad.jp."]
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
@@ -290,7 +290,7 @@ lookupPTR = lookup' PTR
 --   We repeat the example from 'lookupPTR', except now we pass the IP
 --   address directly:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupRDNS env "202.232.2.180"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupRDNS env "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
 --
 lookupRDNS :: LookupEnv -> IPv4 -> IO (Either DNSError [RD_PTR])
@@ -321,7 +321,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --
 --   Examples:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupSRV env "_xmpp-server._tcp.jabber.ietf.org"
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupSRV env "_xmpp-server._tcp.jabber.ietf.org"
 --   Right [RD_SRV {srv_priority = 5, srv_weight = 0, srv_port = 5269, srv_target = "jabber.ietf.org."}]
 
 -- Though the "jabber.ietf.orgs" SRV record may prove reasonably stable, as

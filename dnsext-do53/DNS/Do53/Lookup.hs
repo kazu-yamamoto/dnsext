@@ -12,7 +12,7 @@ module DNS.Do53.Lookup (
   -- * DNS Message procesing
   , fromDNSMessage
   -- * Misc
-  , withResolvConf
+  , withLookupConf
   , makeIdGenerators
   ) where
 
@@ -42,7 +42,7 @@ data Section = Answer | Authority deriving (Eq, Ord, Show)
 --
 --   Example:
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookup env "www.example.com" A
+--   >>> withLookupConf defaultLookupConf $ \env -> lookup env "www.example.com" A
 --   Right [93.184.216.34]
 --
 lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
@@ -197,7 +197,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --    local port is created. Then exactly one TCP query is retried.
 --
 --
--- If multiple DNS servers are specified 'ResolvConf' ('RCHostNames ')
+-- If multiple DNS servers are specified 'LookupConf' ('RCHostNames ')
 -- or found ('RCFilePath'), either sequential lookup or
 -- concurrent lookup is carried out:
 --
@@ -218,7 +218,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withResolvConf defaultResolvConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A classIN
+--   withLookupConf defaultLookupConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A classIN
 --   @
 --
 --   And the (formatted) expected output:
@@ -251,10 +251,10 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withResolvConf defaultResolvConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
 --   Left InvalidAXFRLookup
 --
-lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withResolvConf'
+lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withLookupConf'
           -> Question
           -> IO (Either DNSError DNSMessage)
 lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
@@ -278,24 +278,24 @@ makeIdGenerators n = map R.uniformWord16 <$> replicateM n (R.initStdGen >>= R.ne
 
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
-withResolvConf :: ResolvConf -> (LookupEnv -> IO a) -> IO a
-withResolvConf rc@ResolvConf{..} f = do
-    addrs <- findAddrPorts resolvInfo
+withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
+withLookupConf rc@LookupConf{..} f = do
+    addrs <- findAddrPorts lconfInfo
     let n = length addrs
     gens <- makeIdGenerators n
-    mcache <- case resolvCacheConf of
+    mcache <- case lconfCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
     let ris = makeInfo rc addrs gens
-        resolver = udpTcpResolver resolvRetry
-        renv = ResolvEnv resolver resolvConcurrent ris
-        lenv = LookupEnv mcache resolvQueryControls renv
+        resolver = udpTcpResolver lconfRetry
+        renv = ResolvEnv resolver lconfConcurrent ris
+        lenv = LookupEnv mcache lconfQueryControls renv
     f lenv
 
-makeInfo :: ResolvConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
-makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
+makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
+makeInfo LookupConf{..} hps0 gens0 = go hps0 gens0
   where
     go ((h,p):hps) (gen:gens) = ri : go hps gens
       where
@@ -303,7 +303,7 @@ makeInfo ResolvConf{..} hps0 gens0 = go hps0 gens0
                 rinfoHostName   = h
               , rinfoPortNumber = p
               , rinfoGenId      = gen
-              , rinfoTimeout    = resolvTimeoutAction resolvTimeout
-              , rinfoGetTime    = resolvGetTime
+              , rinfoTimeout    = lconfTimeoutAction lconfTimeout
+              , rinfoGetTime    = lconfGetTime
               }
     go _ _ = []

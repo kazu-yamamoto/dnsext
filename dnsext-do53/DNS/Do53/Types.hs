@@ -4,8 +4,8 @@
 -- | Resolver related data types.
 module DNS.Do53.Types (
   -- * Configuration for resolver
-    ResolvConf(..)
-  , defaultResolvConf
+    LookupConf(..)
+  , defaultLookupConf
   , LookupEnv(..)
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
@@ -67,80 +67,80 @@ defaultCacheConf = CacheConf 300 0 10
 ----------------------------------------------------------------
 
 -- | Type for resolver configuration.
---  Use 'defaultResolvConf' to create a new value.
+--  Use 'defaultLookupConf' to create a new value.
 --
 --  An example to use Google's public DNS cache instead of resolv.conf:
 --
---  > let conf = defaultResolvConf { resolvInfo = RCHostName "8.8.8.8" }
+--  > let conf = defaultLookupConf { lconfInfo = RCHostName "8.8.8.8" }
 --
 --  An example to use multiple Google's public DNS cache concurrently:
 --
---  > let conf = defaultResolvConf { resolvInfo = RCHostNames ["8.8.8.8","8.8.4.4"], resolvConcurrent = True }
+--  > let conf = defaultLookupConf { lconfInfo = RCHostNames ["8.8.8.8","8.8.4.4"], lconfConcurrent = True }
 --
 --  An example to disable EDNS:
 --
---  > let conf = defaultResolvConf { resolvQueryControls = ednsEnabled FlagClear }
+--  > let conf = defaultLookupConf { lconfQueryControls = ednsEnabled FlagClear }
 --
 --  An example to enable query result caching:
 --
---  > let conf = defaultResolvConf { resolvCache = Just defaultCacheConf }
+--  > let conf = defaultLookupConf { lconfCache = Just defaultCacheConf }
 --
 -- An example to disable requesting recursive service.
 --
---  > let conf = defaultResolvConf { resolvQueryControls = rdFlag FlagClear }
+--  > let conf = defaultLookupConf { lconfQueryControls = rdFlag FlagClear }
 --
 -- An example to set the AD bit in all queries by default.
 --
---  > let conf = defaultResolvConf { resolvQueryControls = adFlag FlagSet }
+--  > let conf = defaultLookupConf { lconfQueryControls = adFlag FlagSet }
 --
 -- An example to set the both the AD and CD bits in all queries by default.
 --
---  > let conf = defaultResolvConf { resolvQueryControls = adFlag FlagSet <> cdFlag FlagSet }
+--  > let conf = defaultLookupConf { lconfQueryControls = adFlag FlagSet <> cdFlag FlagSet }
 --
 -- An example with an EDNS buffer size of 1216 bytes, which is more robust with
 -- IPv6, and the DO bit set to request DNSSEC responses.
 --
---  > let conf = defaultResolvConf { resolvQueryControls = ednsSetUdpSize (Just 1216) <> doFlag FlagSet }
+--  > let conf = defaultLookupConf { lconfQueryControls = ednsSetUdpSize (Just 1216) <> doFlag FlagSet }
 --
-data ResolvConf = ResolvConf {
+data LookupConf = LookupConf {
    -- | Server information.
-    resolvInfo          :: FileOrNumericHost
+    lconfInfo          :: FileOrNumericHost
    -- | Timeout in micro seconds.
-  , resolvTimeout       :: Int
+  , lconfTimeout       :: Int
    -- | The number of UDP retries including the first try.
-  , resolvRetry         :: Int
+  , lconfRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
-  , resolvConcurrent    :: Bool
+  , lconfConcurrent    :: Bool
    -- | Cache configuration.
-  , resolvCacheConf     :: Maybe CacheConf
+  , lconfCacheConf     :: Maybe CacheConf
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
-  , resolvQueryControls :: QueryControls
+  , lconfQueryControls :: QueryControls
    -- | Action to get an epoch time.
-  , resolvGetTime       :: IO EpochTime
-   -- | Action for timeout used with 'resolvTimeout'.
-  , resolvTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
+  , lconfGetTime       :: IO EpochTime
+   -- | Action for timeout used with 'lcTimeout'.
+  , lconfTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
 }
 
 
--- | Return a default 'ResolvConf':
+-- | Return a default 'LookupConf':
 --
--- * 'resolvInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
--- * 'resolvTimeout' is 3,000,000 micro seconds.
--- * 'resolvRetry' is 3.
--- * 'resolvConcurrent' is False.
--- * 'resolvCacheConf' is Nothing.
--- * 'resolvQueryControls' is an empty set of overrides.
-defaultResolvConf :: ResolvConf
-defaultResolvConf = ResolvConf {
-    resolvInfo          = RCFilePath "/etc/resolv.conf"
-  , resolvTimeout       = 3 * 1000 * 1000
-  , resolvRetry         = 3
-  , resolvConcurrent    = False
-  , resolvCacheConf     = Nothing
-  , resolvQueryControls = mempty
-  , resolvGetTime       = getEpochTime
-  , resolvTimeoutAction = timeout
+-- * 'lcInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
+-- * 'lcTimeout' is 3,000,000 micro seconds.
+-- * 'lcRetry' is 3.
+-- * 'lcConcurrent' is False.
+-- * 'lcCacheConf' is Nothing.
+-- * 'lcQueryControls' is an empty set of overrides.
+defaultLookupConf :: LookupConf
+defaultLookupConf = LookupConf {
+    lconfInfo          = RCFilePath "/etc/resolv.conf"
+  , lconfTimeout       = 3 * 1000 * 1000
+  , lconfRetry         = 3
+  , lconfConcurrent    = False
+  , lconfCacheConf     = Nothing
+  , lconfQueryControls = mempty
+  , lconfGetTime       = getEpochTime
+  , lconfTimeoutAction = timeout
 }
 
 ----------------------------------------------------------------

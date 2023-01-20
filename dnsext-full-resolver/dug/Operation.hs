@@ -5,7 +5,7 @@ import Text.Read (readMaybe)
 import Data.IP (IP (..))
 import DNS.Types (TYPE, DNSError, DNSMessage)
 import DNS.Do53.Client (QueryControls,
-               ResolvConf (resolvInfo, resolvTimeout, resolvRetry, resolvQueryControls))
+               LookupConf (lconfInfo, lconfTimeout, lconfRetry, lconfQueryControls))
 import qualified DNS.Do53.Client as DNS
 import qualified DNS.Types as DNS
 import System.Random (randomRIO)
@@ -18,12 +18,12 @@ operate server domain type_ controls = do
   conf <- getCustomConf server controls
   operate_ conf domain type_
 
-operate_ :: ResolvConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
-operate_ conf name typ = DNS.withResolvConf conf $ \seeds -> do
+operate_ :: LookupConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
+operate_ conf name typ = DNS.withLookupConf conf $ \seeds -> do
     let q = DNS.Question (DNS.fromRepresentation name) typ DNS.classIN
     DNS.lookupRaw seeds q
 
-getCustomConf :: Maybe HostName -> QueryControls -> IO ResolvConf
+getCustomConf :: Maybe HostName -> QueryControls -> IO LookupConf
 getCustomConf mayServer controls = do
   let resolveServer server c = do
         ip <- resolve server
@@ -31,10 +31,10 @@ getCustomConf mayServer controls = do
         return $ setServer ip c
 
   maybe return resolveServer mayServer
-    DNS.defaultResolvConf
-    { resolvTimeout = 5 * 1000 * 1000
-    , resolvRetry = 2
-    , resolvQueryControls = controls
+    DNS.defaultLookupConf
+    { lconfTimeout = 5 * 1000 * 1000
+    , lconfRetry = 2
+    , lconfQueryControls = controls
     }
   where
     resolve :: String -> IO IP
@@ -43,7 +43,7 @@ getCustomConf mayServer controls = do
 
     queryName :: String -> IO IP
     queryName sname = do
-      as <- DNS.withResolvConf DNS.defaultResolvConf $ \seeds -> do
+      as <- DNS.withLookupConf DNS.defaultLookupConf $ \seeds -> do
         let dom = DNS.fromRepresentation sname
         eA  <- DNS.lookupA    seeds dom
         eQA <- DNS.lookupAAAA seeds dom
@@ -55,4 +55,4 @@ getCustomConf mayServer controls = do
       ix <- randomRIO (0, length as - 1)
       return $ as !! ix
 
-    setServer ip c = c { resolvInfo = DNS.RCHostName $ show ip }
+    setServer ip c = c { lconfInfo = DNS.RCHostName $ show ip }

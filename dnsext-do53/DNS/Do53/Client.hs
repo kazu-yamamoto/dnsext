@@ -20,17 +20,17 @@ module DNS.Do53.Client (
   -- * Lookups returning DNS Messages
   , lookupRaw
   -- * Configuration for sutf resolver
-  , ResolvConf
-  , defaultResolvConf
-  , withResolvConf
+  , LookupConf
+  , defaultLookupConf
+  , withLookupConf
   , LookupEnv
   -- ** Accessors
-  , resolvInfo
-  , resolvTimeout
-  , resolvRetry
-  , resolvConcurrent
-  , resolvCacheConf
-  , resolvQueryControls
+  , lconfInfo
+  , lconfTimeout
+  , lconfRetry
+  , lconfConcurrent
+  , lconfCacheConf
+  , lconfQueryControls
   -- ** Specifying DNS servers
   , FileOrNumericHost(..)
   -- ** Configuring cache
