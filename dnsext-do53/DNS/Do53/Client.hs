@@ -19,26 +19,32 @@ module DNS.Do53.Client (
   , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
-  -- * Configuration for sutf resolver
+  -- * Lookup configuration for sub resolvers
   , LookupConf
   , defaultLookupConf
   , withLookupConf
   , LookupEnv
   -- ** Accessors
-  , lconfInfo
-  , lconfTimeout
+  , lconfSeeds
   , lconfRetry
   , lconfConcurrent
   , lconfCacheConf
   , lconfQueryControls
-  -- ** Specifying DNS servers
-  , FileOrNumericHost(..)
+  , lconfActions
+  -- ** Specifying full resolvers
+  , Seeds(..)
   -- ** Configuring cache
   , CacheConf
   , defaultCacheConf
   , maximumTTL
   , pruningDelay
-  -- * Query control
+  -- ** Actions
+  , ResolvActions
+  , defaultResolvActions
+  , ractionTimeout
+  , ractionGenId
+  , ractionGetTime
+  -- ** Query control
   , QueryControls
   , FlagOp(..)
   , rdFlag
@@ -50,7 +56,6 @@ module DNS.Do53.Client (
   , ednsSetUdpSize
   , ednsSetOptions
   , ODataOp(..)
-  , encodeQuery
   ) where
 
 import Prelude hiding (lookup)

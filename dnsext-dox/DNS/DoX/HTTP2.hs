@@ -25,7 +25,7 @@ http2Resolver :: Resolver
 http2Resolver ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
-        ident <- rinfoGenId
+        ident <- ractionGenId rinfoActions
         client ctx ident ri q qctl
   where
     open = openTCP rinfoHostName rinfoPortNumber
@@ -46,7 +46,7 @@ client ctx ident ResolvInfo{..} q qctl =
       }
     cli sendRequest = sendRequest req $ \rsp -> do
         bs <- loop rsp ""
-        now <- rinfoGetTime
+        now <- ractionGetTime rinfoActions
         case decodeAt now bs of
             Left  e   -> E.throwIO e
             Right msg -> case checkRespM q ident msg of

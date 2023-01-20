@@ -55,9 +55,9 @@ import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
-import DNS.Do53.Client (FlagOp (FlagClear))
+import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
-import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo)
+import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
 import qualified DNS.Do53.Internal as DNS
 import qualified DNS.Types as DNS
 
@@ -113,11 +113,11 @@ type TimeCache = (IO EpochTime, IO ShowS)
 newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
            -> IO Context
 newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
-  rng <- head <$> DNS.makeIdGenerators 1
+  genId <- newConcurrentGenId
   let cxt = Context
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
-        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = rng }
+        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
 dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
@@ -758,8 +758,10 @@ norec :: IP -> Domain -> TYPE -> DNSQuery DNSMessage
 norec aserver name typ = dnsQueryT $ \cxt -> do
   let ri = defaultResolvInfo {
           rinfoHostName   = show aserver
-        , rinfoGenId      = idGen_ cxt
-        , rinfoGetTime    = currentSeconds_ cxt
+        , rinfoActions    = defaultResolvActions {
+              ractionGenId   = idGen_ cxt
+            , ractionGetTime = currentSeconds_ cxt
+            }
         }
       renv = ResolvEnv {
           renvResolver    = udpTcpResolver 3 -- 3 is retry

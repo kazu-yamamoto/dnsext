@@ -30,6 +30,7 @@ library
     other-modules:
         DNS.Do53.Do53
         DNS.Do53.Imports
+        DNS.Do53.Id
         DNS.Do53.IO
         DNS.Do53.Lookup
         DNS.Do53.LookupX

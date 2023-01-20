@@ -20,7 +20,7 @@ import DNS.DoX.Common
 http3Resolver :: Resolver
 http3Resolver ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
-        ident <- rinfoGenId
+        ident <- ractionGenId rinfoActions
         client conn conf ident ri q qctl
   where
     cc = getQUICParams rinfoHostName rinfoPortNumber "h3"
@@ -37,7 +37,7 @@ client conn conf ident ResolvInfo{..} q qctl = run conn cliconf conf cli
       }
     cli sendRequest = sendRequest req $ \rsp -> do
         bs <- loop rsp ""
-        now <- rinfoGetTime
+        now <- ractionGetTime rinfoActions
         case decodeAt now bs of
             Left  e   -> E.throwIO e
             Right msg -> case checkRespM q ident msg of

@@ -8,7 +8,7 @@ module DNS.Do53.Types (
   , defaultLookupConf
   , LookupEnv(..)
   -- ** Specifying DNS servers
-  , FileOrNumericHost(..)
+  , Seeds(..)
   -- ** Configuring cache
   , CacheConf(..)
   , defaultCacheConf
@@ -16,6 +16,8 @@ module DNS.Do53.Types (
   , ResolvEnv(..)
   , ResolvInfo(..)
   , defaultResolvInfo
+  , ResolvActions(..)
+  , defaultResolvActions
   , Resolver
   ) where
 
@@ -25,6 +27,7 @@ import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 import Prelude
 import System.Timeout (timeout)
 
+import DNS.Do53.Id
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
@@ -32,7 +35,7 @@ import DNS.Do53.Query
 ----------------------------------------------------------------
 
 -- | The type to specify a cache server.
-data FileOrNumericHost = RCFilePath FilePath -- ^ A path for \"resolv.conf\"
+data Seeds = SeedsFilePath FilePath -- ^ A path for \"resolv.conf\"
                                              -- where one or more IP addresses
                                              -- of DNS servers should be found
                                              -- on Unix.
@@ -40,10 +43,10 @@ data FileOrNumericHost = RCFilePath FilePath -- ^ A path for \"resolv.conf\"
                                              -- automatically detected
                                              -- on Windows regardless of
                                              -- the value of the file name.
-                       | RCHostName HostName -- ^ A numeric IP address. /Warning/: host names are invalid.
-                       | RCHostNames [HostName] -- ^ Numeric IP addresses. /Warning/: host names are invalid.
-                       | RCHostPort HostName PortNumber -- ^ A numeric IP address and port number. /Warning/: host names are invalid.
-                       deriving Show
+           | SeedsHostName HostName -- ^ A numeric IP address. /Warning/: host names are invalid.
+           | SeedsHostNames [HostName] -- ^ Numeric IP addresses. /Warning/: host names are invalid.
+           | SeedsHostPort HostName PortNumber -- ^ A numeric IP address and port number. /Warning/: host names are invalid.
+           deriving Show
 
 ----------------------------------------------------------------
 
@@ -104,9 +107,8 @@ defaultCacheConf = CacheConf 300 0 10
 --
 data LookupConf = LookupConf {
    -- | Server information.
-    lconfInfo          :: FileOrNumericHost
+    lconfSeeds         :: Seeds
    -- | Timeout in micro seconds.
-  , lconfTimeout       :: Int
    -- | The number of UDP retries including the first try.
   , lconfRetry         :: Int
    -- | Concurrent queries if multiple DNS servers are specified.
@@ -116,31 +118,26 @@ data LookupConf = LookupConf {
    -- | Overrides for the default flags used for queries via resolvers that use
    -- this configuration.
   , lconfQueryControls :: QueryControls
-   -- | Action to get an epoch time.
-  , lconfGetTime       :: IO EpochTime
-   -- | Action for timeout used with 'lcTimeout'.
-  , lconfTimeoutAction :: Int -> IO DNSMessage -> IO (Maybe DNSMessage)
+   -- | Actions for resolvers.
+  , lconfActions       :: ResolvActions
 }
 
 
 -- | Return a default 'LookupConf':
 --
--- * 'lcInfo' is 'RCFilePath' \"\/etc\/resolv.conf\".
--- * 'lcTimeout' is 3,000,000 micro seconds.
--- * 'lcRetry' is 3.
--- * 'lcConcurrent' is False.
--- * 'lcCacheConf' is Nothing.
--- * 'lcQueryControls' is an empty set of overrides.
+-- * 'lconfSeeds' is 'SeedsFilePath' \"\/etc\/resolv.conf\".
+-- * 'lconfRetry' is 3.
+-- * 'lconfConcurrent' is False.
+-- * 'lconfCacheConf' is Nothing.
+-- * 'lconfQueryControls' is an empty set of overrides.
 defaultLookupConf :: LookupConf
 defaultLookupConf = LookupConf {
-    lconfInfo          = RCFilePath "/etc/resolv.conf"
-  , lconfTimeout       = 3 * 1000 * 1000
+    lconfSeeds         = SeedsFilePath "/etc/resolv.conf"
   , lconfRetry         = 3
   , lconfConcurrent    = False
   , lconfCacheConf     = Nothing
   , lconfQueryControls = mempty
-  , lconfGetTime       = getEpochTime
-  , lconfTimeoutAction = timeout
+  , lconfActions       = defaultResolvActions
 }
 
 ----------------------------------------------------------------
@@ -166,20 +163,30 @@ data ResolvEnv = ResolvEnv {
 data ResolvInfo = ResolvInfo {
     rinfoHostName      :: HostName
   , rinfoPortNumber    :: PortNumber
-  , rinfoGenId         :: IO Identifier
-  -- share part
-  , rinfoTimeout       :: IO DNSMessage -> IO (Maybe DNSMessage)
-  , rinfoGetTime       :: IO EpochTime
+  , rinfoActions       :: ResolvActions
   }
 
 defaultResolvInfo :: ResolvInfo
 defaultResolvInfo = ResolvInfo {
     rinfoHostName      = "127.0.0.1"
   , rinfoPortNumber    = 53
-  , rinfoGenId         = return 0
-  , rinfoTimeout       = timeout 3000000
-  , rinfoGetTime       = getEpochTime
+  , rinfoActions       = defaultResolvActions
   }
 
 -- | The type of resolvers (DNS over X).
 type Resolver = ResolvInfo -> Question -> QueryControls -> IO DNSMessage
+
+----------------------------------------------------------------
+
+data ResolvActions = ResolvActions {
+    ractionTimeout :: IO DNSMessage -> IO (Maybe DNSMessage)
+  , ractionGenId   :: IO Identifier
+  , ractionGetTime :: IO EpochTime
+  }
+
+defaultResolvActions :: ResolvActions
+defaultResolvActions = ResolvActions {
+    ractionTimeout = timeout 3000000
+  , ractionGenId   = singleGenId
+  , ractionGetTime = getEpochTime
+  }

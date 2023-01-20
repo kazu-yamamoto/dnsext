@@ -11,25 +11,32 @@ module DNS.Do53.Internal (
     -- * Resolv
   , resolve
   , ResolvEnv(..)
-    -- * Resolver: DNS over X
+    -- * Resolver information
   , ResolvInfo(..)
   , defaultResolvInfo
+  , ResolvActions(..)
+  , defaultResolvActions
+    -- * Resolver: DNS over X
   , Resolver
-  , Send
-  , Recv
   , udpTcpResolver
   , udpResolver
   , tcpResolver
+    -- * Resolver for virtual circuit
+  , Send
+  , Recv
   , vcResolver
-  , checkRespM
+    -- * Query
+  , encodeQuery
+    -- * Generating identifier
+  , singleGenId
+  , newConcurrentGenId
     -- * Misc
-  , getEpochTime
-  , makeIdGenerators
+  , checkRespM
   ) where
 
 import DNS.Do53.Do53
 import DNS.Do53.IO
-import DNS.Do53.Imports
-import DNS.Do53.Lookup
+import DNS.Do53.Id
+import DNS.Do53.Query
 import DNS.Do53.Resolve
 import DNS.Do53.Types

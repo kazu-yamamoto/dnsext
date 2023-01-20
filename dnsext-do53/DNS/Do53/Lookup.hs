@@ -13,13 +13,11 @@ module DNS.Do53.Lookup (
   , fromDNSMessage
   -- * Misc
   , withLookupConf
-  , makeIdGenerators
   ) where
 
 import Control.Exception as E
 import DNS.Types hiding (Seconds)
 import Prelude hiding (lookup)
-import qualified System.Random.Stateful as R
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 
 import DNS.Do53.Do53
@@ -197,8 +195,8 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --    local port is created. Then exactly one TCP query is retried.
 --
 --
--- If multiple DNS servers are specified 'LookupConf' ('RCHostNames ')
--- or found ('RCFilePath'), either sequential lookup or
+-- If multiple DNS servers are specified 'LookupConf' ('SeedsHostNames ')
+-- or found ('SeedsFilePath'), either sequential lookup or
 -- concurrent lookup is carried out:
 --
 --  * In sequential lookup ('resolvConcurrent' is False),
@@ -265,45 +263,34 @@ lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 dnsPort :: PortNumber
 dnsPort = 53
 
-findAddrPorts :: FileOrNumericHost -> IO [(HostName,PortNumber)]
-findAddrPorts (RCHostName   nh)  = return [(nh, dnsPort)]
-findAddrPorts (RCHostPort  nh p) = return [(nh, p)]
-findAddrPorts (RCHostNames nss)  = return $ map (,dnsPort) nss
-findAddrPorts (RCFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
+findAddrPorts :: Seeds -> IO [(HostName,PortNumber)]
+findAddrPorts (SeedsHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (SeedsHostPort  nh p) = return [(nh, p)]
+findAddrPorts (SeedsHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
-
-makeIdGenerators :: Int -> IO [IO Identifier]
-makeIdGenerators n = map R.uniformWord16 <$> replicateM n (R.initStdGen >>= R.newIOGenM)
 
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
 withLookupConf rc@LookupConf{..} f = do
-    addrs <- findAddrPorts lconfInfo
-    let n = length addrs
-    gens <- makeIdGenerators n
+    ris <- makeInfo rc <$> findAddrPorts lconfSeeds
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
-    let ris = makeInfo rc addrs gens
-        resolver = udpTcpResolver lconfRetry
+    let resolver = udpTcpResolver lconfRetry
         renv = ResolvEnv resolver lconfConcurrent ris
         lenv = LookupEnv mcache lconfQueryControls renv
     f lenv
 
-makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [IO Identifier] -> [ResolvInfo]
-makeInfo LookupConf{..} hps0 gens0 = go hps0 gens0
+makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [ResolvInfo]
+makeInfo LookupConf{..} hps = map mk hps
   where
-    go ((h,p):hps) (gen:gens) = ri : go hps gens
-      where
-        ri = ResolvInfo {
-                rinfoHostName   = h
-              , rinfoPortNumber = p
-              , rinfoGenId      = gen
-              , rinfoTimeout    = lconfTimeoutAction lconfTimeout
-              , rinfoGetTime    = lconfGetTime
-              }
-    go _ _ = []
+    mk (h,p) = ResolvInfo {
+            rinfoHostName   = h
+          , rinfoPortNumber = p
+          , rinfoActions    = lconfActions
+          }
