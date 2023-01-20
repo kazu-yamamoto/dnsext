@@ -56,7 +56,6 @@ module DNS.Do53.Client (
   , ednsSetUdpSize
   , ednsSetOptions
   , ODataOp(..)
-  , encodeQuery
   ) where
 
 import Prelude hiding (lookup)
