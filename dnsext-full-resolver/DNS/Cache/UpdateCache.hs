@@ -11,7 +11,7 @@ import Control.Monad (forever)
 import Control.Concurrent (threadDelay)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
--- dns packages
+-- dnsext-* packages
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
 
@@ -31,6 +31,7 @@ data CacheConf = CacheConf {
 data MemoActions = MemoActions {
     memoLogLn :: String -> IO ()
   , memoErrorLn :: String -> IO ()
+  , memoGetTime :: IO EpochTime
   }
 
 data Update
@@ -47,10 +48,9 @@ runUpdate t u cache = case u of
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: CacheConf
-    -> IO EpochTime
     -> Int
     -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO (), IO (Int, Int))
-new CacheConf{..} getSec maxCacheSize = do
+new CacheConf{..} maxCacheSize = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
@@ -70,16 +70,16 @@ new CacheConf{..} getSec maxCacheSize = do
         body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
     return (forever body, writeQueue inQ, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
 
-  let expires1 ts = enqueueU =<< (,) ts <$> pure E
+  let expires1 ts = enqueueU (ts, E)
 
       expireEvsnts = forever body
         where
           errorLn = memoErrorLn . ("Memo.expireEvents: error: " ++) . show
           interval = threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
-          body = either errorLn return =<< tryAny (interval *> (expires1 =<< getSec))
+          body = either errorLn return =<< tryAny (interval *> (expires1 =<< memoGetTime))
 
   let insert k ttl crs rank =
-        enqueueU =<< (,) <$> getSec <*> pure (I k ttl crs rank)
+        enqueueU =<< (,) <$> memoGetTime <*> pure (I k ttl crs rank)
 
   return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1, readUSize)
 
