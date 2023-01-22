@@ -1,6 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.UpdateCache (
+  CacheConf (..),
+  MemoActions (..),
+  getDefaultStubConf,
+  UpdateEvent,
   new,
   none,
   Insert,
