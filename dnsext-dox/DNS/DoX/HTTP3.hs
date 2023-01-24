@@ -15,17 +15,17 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.Common
 import DNS.DoX.HTTP2
 
-http3Resolver :: Resolver
-http3Resolver ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
+http3Resolver :: VCLimit -> Resolver
+http3Resolver lim ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
         ident <- ractionGenId rinfoActions
-        h3resolver conn conf ident ri q qctl
+        h3resolver conn conf ident lim ri q qctl
   where
     cc = getQUICParams rinfoHostName rinfoPortNumber "h3"
 
-h3resolver :: Connection -> Config -> Identifier -> Resolver
-h3resolver conn conf ident ri@ResolvInfo{..} q qctl =
-    run conn cliconf conf $ doHTTP ri q qctl ident
+h3resolver :: Connection -> Config -> Identifier -> VCLimit -> Resolver
+h3resolver conn conf ident lim ri@ResolvInfo{..} q qctl =
+    run conn cliconf conf $ doHTTP lim ri q qctl ident
   where
     cliconf = ClientConfig {
         scheme = "https"

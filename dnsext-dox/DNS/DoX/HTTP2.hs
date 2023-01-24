@@ -24,20 +24,20 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-http2Resolver :: Resolver
-http2Resolver ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
+http2Resolver :: VCLimit -> Resolver
+http2Resolver lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         ident <- ractionGenId rinfoActions
-        h2resolver ctx ident ri q qctl
+        h2resolver ctx ident lim ri q qctl
   where
     open = openTCP rinfoHostName rinfoPortNumber
     params = getTLSParams rinfoHostName "h2" False
 
-h2resolver :: Context -> Identifier -> Resolver
-h2resolver ctx ident ri@ResolvInfo{..} q qctl =
+h2resolver :: Context -> Identifier -> VCLimit -> Resolver
+h2resolver ctx ident lim ri@ResolvInfo{..} q qctl =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf ->
-        run cliconf conf $ doHTTP ri q qctl ident
+        run cliconf conf $ doHTTP lim ri q qctl ident
   where
     cliconf = ClientConfig {
         scheme = "https"
@@ -45,10 +45,10 @@ h2resolver ctx ident ri@ResolvInfo{..} q qctl =
       , cacheLimit = 20
       }
 
-doHTTP :: ResolvInfo -> Question -> QueryControls -> Identifier -> Client DNSMessage
-doHTTP ResolvInfo{..} q qctl ident sendRequest = sendRequest req $ \rsp -> do
+doHTTP :: VCLimit -> ResolvInfo -> Question -> QueryControls -> Identifier -> Client DNSMessage
+doHTTP lim ResolvInfo{..} q qctl ident sendRequest = sendRequest req $ \rsp -> do
     let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-    (_,bss) <- recvHTTP (32 * 1024) -- fixme
+    (_,bss) <- recvHTTP lim
     now <- getTime
     case decodeChunks now bss of
         Left  e       -> E.throwIO e

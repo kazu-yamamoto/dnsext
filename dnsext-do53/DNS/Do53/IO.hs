@@ -21,7 +21,6 @@ import qualified Data.ByteString as BS
 import Network.Socket (Socket, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
-import System.IO.Error
 
 import DNS.Do53.Imports
 import DNS.Do53.Types
@@ -48,16 +47,17 @@ makeAddrInfo nh p = do
 ----------------------------------------------------------------
 
 -- | Receiving data from a virtual circuit.
-recvVC :: RecvN -> RecvMany
-recvVC recvN = do
+recvVC :: VCLimit -> RecvN -> RecvMany
+recvVC lim recvN = do
     (l2,b2) <- recvManyNN recvN 2
-    when (l2 /= 2) $ E.throwIO $ NetworkFailure eofE
+    when (l2 /= 2) $ E.throwIO $ DecodeError "length is broken"
     let len = decodeVCLength $ BS.concat b2
+    when (len > lim) $ E.throwIO $ DecodeError "length is over the limit"
     (len', bss) <- recvManyNN recvN len
-    when (len' /= len) $ E.throwIO $ NetworkFailure eofE
-    return bss
-  where
-      eofE = mkIOError eofErrorType "cannot receive data of the exact size" Nothing Nothing
+    case compare len' len of
+      LT -> E.throwIO $ DecodeError "message length is not enough"
+      EQ -> return bss
+      GT -> E.throwIO $ DecodeError "message length is too large"
 
 -- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int

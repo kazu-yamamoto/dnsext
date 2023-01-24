@@ -40,6 +40,8 @@ module DNS.Do53.Internal (
   , newConcurrentGenId
     -- * Misc
   , checkRespM
+  , UDPRetry
+  , VCLimit
   ) where
 
 import DNS.Do53.Do53

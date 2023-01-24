@@ -281,7 +281,7 @@ withLookupConf rc@LookupConf{..} f = do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
-    let resolver = udpTcpResolver lconfRetry
+    let resolver = udpTcpResolver lconfRetry lconfLimit
         renv = ResolvEnv resolver lconfConcurrent ris
         lenv = LookupEnv mcache lconfQueryControls renv
     f lenv

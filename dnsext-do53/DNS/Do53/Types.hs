@@ -7,6 +7,7 @@ module DNS.Do53.Types (
     LookupConf(..)
   , defaultLookupConf
   , UDPRetry
+  , VCLimit
   , LookupEnv(..)
   -- ** Specifying DNS servers
   , Seeds(..)
@@ -78,6 +79,7 @@ defaultCacheConf = CacheConf 300 0 10
 ----------------------------------------------------------------
 
 type UDPRetry = Int
+type VCLimit = Int
 
 -- | Type for resolver configuration.
 --  Use 'defaultLookupConf' to create a new value.
@@ -121,6 +123,8 @@ data LookupConf = LookupConf {
    -- | Timeout in micro seconds.
    -- | The number of UDP retries including the first try.
   , lconfRetry         :: UDPRetry
+   -- | How many bytes are allowed to be received on a virtual circuit.
+  , lconfLimit         :: VCLimit
    -- | Concurrent queries if multiple DNS servers are specified.
   , lconfConcurrent    :: Bool
    -- | Cache configuration.
@@ -144,6 +148,7 @@ defaultLookupConf :: LookupConf
 defaultLookupConf = LookupConf {
     lconfSeeds         = SeedsFilePath "/etc/resolv.conf"
   , lconfRetry         = 3
+  , lconfLimit         = 32 * 1024
   , lconfConcurrent    = False
   , lconfCacheConf     = Nothing
   , lconfQueryControls = mempty

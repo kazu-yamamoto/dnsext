@@ -47,8 +47,8 @@ data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: UDPRetry -> Resolver
-udpTcpResolver retry ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver ri q qctl
+udpTcpResolver :: UDPRetry -> VCLimit -> Resolver
+udpTcpResolver retry lim ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver lim ri q qctl
 
 ----------------------------------------------------------------
 
@@ -111,13 +111,13 @@ udpResolver retry ResolvInfo{..} q _qctl =
 ----------------------------------------------------------------
 
 -- | A resolver using TCP.
-tcpResolver :: Resolver
-tcpResolver ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
+tcpResolver :: VCLimit -> Resolver
+tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
         let send = sendVC $ sendTCP sock
-            recv = recvVC $ recvTCP sock
+            recv = recvVC lim $ recvTCP sock
         solve send recv
 
     open = openTCP rinfoHostName rinfoPortNumber

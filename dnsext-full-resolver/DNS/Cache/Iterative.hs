@@ -764,7 +764,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
             }
         }
       renv = ResolvEnv {
-          renvResolver    = udpTcpResolver 3 -- 3 is retry
+          renvResolver    = udpTcpResolver 3 (32 * 1024) -- 3 is retry
         , renvConcurrent  = False -- should set True if multiple RIs are provided
         , renvResolvInfos = [ri]
         }
