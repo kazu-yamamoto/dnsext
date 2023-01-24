@@ -115,8 +115,7 @@ lookupAAAA = lookup' AAAA
 ----------------------------------------------------------------
 
 -- | Look up all \'MX\' records for the given hostname. Two parts
---   constitute an MX record: a hostname , and an integer priority. We
---   therefore return each record as a @('Domain', Int)@.
+--   constitute an MX record: a hostname , and an integer priority.
 --
 --   In this first example, we look up the MX for the domain \"example.com\".
 --   It has an RFC7505 NULL MX (to prevent a deluge of spam from examples
@@ -250,7 +249,7 @@ lookupTXT = lookup' TXT
 
 ----------------------------------------------------------------
 
--- | Look up the \'SOA\' record for the given domain. The result 7-tuple
+-- | Look up the \'SOA\' record for the given domain. The result
 --   consists of the \'mname\', \'rname\', \'serial\', \'refresh\', \'retry\',
 --   \'expire\' and \'minimum\' fields of the SOA record.
 --
@@ -317,8 +316,7 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --     * Target (the hostname on which the service is offered)
 --
 --   The first three are integral, and the target is another DNS
---   hostname. We therefore return a four-tuple
---   @(Int,Int,Int,'Domain')@.
+--   hostname.
 --
 --   Examples:
 --
