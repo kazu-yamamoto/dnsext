@@ -46,6 +46,10 @@ makeAddrInfo nh p = do
 
 ----------------------------------------------------------------
 
+-- TCP and QUIC has its own RecvN.
+-- TLS has Recv. This must be converted to RecvN by makeRecvN in the
+-- "recv" package. If not converted, a message is also read when
+-- obtaining the length of the message!
 -- | Receiving data from a virtual circuit.
 recvVC :: VCLimit -> RecvN -> RecvMany
 recvVC lim recvN = do
@@ -65,6 +69,9 @@ decodeVCLength bs = case BS.unpack bs of
   [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
   _        -> 0              -- never reached
 
+-- Used only in DoH.
+-- Recv is getResponseBodyChunk.
+-- "lim" is a really limitation
 recvManyN :: Recv -> RecvManyN
 recvManyN rcv lim = loop id 0
  where
@@ -81,6 +88,8 @@ recvManyN rcv lim = loop id 0
               else
                 loop build' total'
 
+-- Used only in recvVC.
+-- "lim" is the size to be received.
 recvManyNN :: RecvN -> RecvManyN
 recvManyNN rcv lim = loop id 0
  where
