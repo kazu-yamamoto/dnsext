@@ -6,6 +6,7 @@ module DNS.Do53.Types (
   -- * Configuration for resolver
     LookupConf(..)
   , defaultLookupConf
+  , UDPRetry
   , LookupEnv(..)
   -- ** Specifying DNS servers
   , Seeds(..)
@@ -76,6 +77,8 @@ defaultCacheConf = CacheConf 300 0 10
 
 ----------------------------------------------------------------
 
+type UDPRetry = Int
+
 -- | Type for resolver configuration.
 --  Use 'defaultLookupConf' to create a new value.
 --
@@ -117,7 +120,7 @@ data LookupConf = LookupConf {
     lconfSeeds         :: Seeds
    -- | Timeout in micro seconds.
    -- | The number of UDP retries including the first try.
-  , lconfRetry         :: Int
+  , lconfRetry         :: UDPRetry
    -- | Concurrent queries if multiple DNS servers are specified.
   , lconfConcurrent    :: Bool
    -- | Cache configuration.

@@ -47,7 +47,7 @@ data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: Int -> Resolver
+udpTcpResolver :: UDPRetry -> Resolver
 udpTcpResolver retry ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver ri q qctl
 
 ----------------------------------------------------------------
@@ -62,7 +62,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: Int -> Resolver
+udpResolver :: UDPRetry -> Resolver
 udpResolver retry ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
