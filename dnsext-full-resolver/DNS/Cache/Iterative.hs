@@ -63,7 +63,7 @@ import qualified DNS.Types as DNS
 
 -- this package
 import DNS.Cache.RootServers (rootServers)
-import DNS.Cache.Types (NE, Timestamp)
+import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 import DNS.Cache.Cache
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
@@ -78,7 +78,7 @@ data Context =
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , getCache_ :: IO Cache
-  , currentSeconds_ :: IO Timestamp
+  , currentSeconds_ :: IO EpochTime
   , timeString_ :: IO ShowS
   , idGen_ :: IO DNS.Identifier
   }

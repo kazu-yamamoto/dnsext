@@ -48,7 +48,6 @@ import DNS.Types
 import qualified DNS.Types as DNS
 
 -- this package
-import DNS.Cache.Types (Timestamp)
 
 {- CRSet
    -  Left  - NXDOMAIN or NODATA, hold domain delegatoin from
@@ -119,12 +118,12 @@ rankedAdditional =
 type Key = Question
 data Val = Val CRSet Ranking deriving Show
 
-data Cache = Cache (OrdPSQ Key Timestamp Val) Int {- max size -}
+data Cache = Cache (OrdPSQ Key EpochTime Val) Int {- max size -}
 
 empty :: Int -> Cache
 empty = Cache PSQ.empty
 
-lookup :: Timestamp
+lookup :: EpochTime
        -> Domain -> TYPE -> CLASS
        -> Cache -> Maybe ([ResourceRecord], Ranking)
 lookup now dom typ cls = lookup_ now result dom typ cls
@@ -132,7 +131,7 @@ lookup now dom typ cls = lookup_ now result dom typ cls
     result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
 -- when cache has EMPTY, returns SOA
-lookupEither :: Timestamp
+lookupEither :: EpochTime
              -> Domain -> TYPE -> CLASS
              -> Cache -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking)  {- SOA or RRs, ranking -}
 lookupEither now dom typ cls cache = lookup_ now result dom typ cls cache
@@ -145,7 +144,7 @@ lookupEither now dom typ cls cache = lookup_ now result dom typ cls cache
     soaResult ettl srcDom ttl (Val crs rank) =
       Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl) {- treated as TTL of empty data -} crs, rank)
 
-lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
+lookup_ :: EpochTime -> (TTL -> Val -> Maybe a)
         -> Domain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache cache _) = do
@@ -154,7 +153,7 @@ lookup_ now mk dom typ cls (Cache cache _) = do
   ttl <- alive now eol
   mk ttl v
 
-insertRRs :: Timestamp -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
+insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
   where
     insertRRSet rrset = rrset $ \key ttl cr -> insert now key ttl cr rank c
@@ -178,7 +177,7 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
    insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 @
  -}
-insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insert :: EpochTime -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
   maybe sized withOldRank lookupRank
   where
@@ -197,14 +196,14 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
           guard $ eol > l  -- Guard if the tried to insert has the smallest lifetime
           Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
 
-expires :: Timestamp -> Cache -> Maybe Cache
+expires :: EpochTime -> Cache -> Maybe Cache
 expires now (Cache c xsz) =
   case PSQ.findMin c of
     Just (_, eol, _) | eol <= now ->  Just $ Cache (snd $ PSQ.atMostView now c) xsz
                      | otherwise  ->  Nothing
     Nothing                       ->  Nothing
 
-alive :: Timestamp -> Timestamp -> Maybe TTL
+alive :: EpochTime -> EpochTime -> Maybe TTL
 alive now eol = do
   let ttl' = eol - now
       safeToTTL :: EpochTime -> Maybe TTL
@@ -226,20 +225,20 @@ nxTYPE = DNS.toTYPE 0xff00
 ---
 {- debug interfaces -}
 
-member :: Timestamp
+member :: EpochTime
        -> Domain -> TYPE -> CLASS
        -> Cache -> Bool
 member now dom typ cls = isJust . lookup_ now (\_ _ -> Just ()) dom typ cls
 
-dump :: Cache -> [(Key, (Timestamp, Val))]
+dump :: Cache -> [(Key, (EpochTime, Val))]
 dump (Cache c _) = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
 
-dumpKeys :: Cache -> [(Key, Timestamp)]
+dumpKeys :: Cache -> [(Key, EpochTime)]
 dumpKeys (Cache c _) = [ (k, eol) | (k, eol, _v) <- PSQ.toAscList c ]
 
 ---
 
-(<+) :: Timestamp -> TTL -> Timestamp
+(<+) :: EpochTime -> TTL -> EpochTime
 now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+

@@ -19,10 +19,11 @@ import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import qualified Network.UDP as UDP
 
 -- dns packages
-import qualified DNS.Types as DNS
-import qualified DNS.Types.Encode as DNS
-import qualified DNS.Types.Decode as DNS
 import qualified DNS.SEC as DNS
+import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
+import qualified DNS.Types.Decode as DNS
+import qualified DNS.Types.Encode as DNS
 import Network.Socket (HostName, PortNumber)
 
 -- other packages
@@ -33,7 +34,7 @@ import DNS.Cache.Queue (newQueue, newQueueChan, ReadQueue, readQueue, WriteQueue
 import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.ServerMonitor (monitor, PLStatus)
 import qualified DNS.Cache.ServerMonitor as Mon
-import DNS.Cache.Types (Timestamp, NE)
+import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Cache.Cache as Cache
@@ -82,7 +83,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
 
   return (logLoops ++ ucacheLoops ++ pLoops, monLoops)
 
-getPipeline :: Int -> Bool -> Int -> IO Timestamp -> Context -> PortNumber -> HostName
+getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Context -> PortNumber -> HostName
             -> IO ([IO ()], PLStatus)
 getPipeline workers sharedQueue perWorker getSec cxt port host = do
   sock <- UDP.serverSocket (fromString host, port)
@@ -169,7 +170,7 @@ type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int
 
 getWorkers :: Show a
            => Int -> Bool -> Int
-           -> IO Timestamp -> Context
+           -> IO EpochTime -> Context
            -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getWorkers workers sharedQueue perWorker getSec cxt
   | perWorker <= 0 = do
@@ -196,7 +197,7 @@ getWorkers workers sharedQueue perWorker getSec cxt
 
 workerPipeline :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize q2)
                => q1 (Request a) -> q2 (Response a)
-               -> Int -> IO Timestamp -> Context
+               -> Int -> IO EpochTime -> Context
                -> IO ([IO ()], WorkerStatus)
 workerPipeline reqQ resQ perWorker getSec cxt = do
   let putLn lv = logLines_ cxt lv . (:[])
@@ -228,7 +229,7 @@ recvRequest recv _cxt enqReq = do
 
 cachedWorker :: Show a
              => Context
-             -> IO Timestamp
+             -> IO EpochTime
              -> IO ()
              -> IO ()
              -> (Decoded a -> IO ())

@@ -11,6 +11,7 @@ import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
 -- dns packages
 import DNS.Types (TTL)
+import DNS.Types.Decode (EpochTime)
 
 -- other packages
 import UnliftIO (tryAny)
@@ -18,7 +19,6 @@ import UnliftIO (tryAny)
 -- this package
 import DNS.Cache.Queue (newQueue, readQueue, writeQueue)
 import qualified DNS.Cache.Queue as Queue
-import DNS.Cache.Types (Timestamp)
 import qualified DNS.Cache.Log as Log
 import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNS.Cache.Cache as Cache
@@ -28,7 +28,7 @@ data Update
   | E
   deriving Show
 
-runUpdate :: Timestamp -> Update -> Cache -> Maybe Cache
+runUpdate :: EpochTime -> Update -> Cache -> Maybe Cache
 runUpdate t u cache = case u of
   I k ttl crs rank -> maybe (insert cache) insert $ Cache.expires t cache {- expires before insert -}
     where insert = Cache.insert t k ttl crs rank
@@ -36,9 +36,9 @@ runUpdate t u cache = case u of
 
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-new :: (Log.Level -> [String] -> IO ()) -> (IO Timestamp, IO ShowS)
+new :: (Log.Level -> [String] -> IO ()) -> (IO EpochTime, IO ShowS)
     -> Int
-    -> IO ([IO ()], Insert, IO Cache, Timestamp -> IO (), IO (Int, Int))
+    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO (), IO (Int, Int))
 new putLines (getSec, getTimeStr) maxCacheSize = do
   let putLn level = putLines level . (:[])
   cacheRef <- newIORef $ Cache.empty maxCacheSize

@@ -9,15 +9,15 @@ module CacheProp
 import Test.QuickCheck
 
 import Control.Monad (unless)
-import Data.Maybe (mapMaybe)
-import Data.List (sort)
-import Data.Char (toUpper, toLower)
 import DNS.Types (TYPE (..), TTL, Domain, Seconds(..))
 import qualified DNS.Types as DNS
-import System.IO.Unsafe (unsafePerformIO)
+import DNS.Types.Decode (EpochTime)
+import Data.Char (toUpper, toLower)
+import Data.List (sort)
+import Data.Maybe (mapMaybe)
 import System.Exit (exitFailure)
+import System.IO.Unsafe (unsafePerformIO)
 
-import DNS.Cache.Types (Timestamp)
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Cache
   (Cache, Key, Question(..), Val (Val), CRSet, (<+),
@@ -63,7 +63,7 @@ nsList =
   , "ns4.example.com.", "ns5.example.com." ]
 
 
-ts0 :: Timestamp
+ts0 :: EpochTime
 ts0 = unsafePerformIO $ fst TimeCache.none
 {-# NOINLINE ts0 #-}
 
@@ -78,22 +78,22 @@ data Update
   | E
   deriving Show
 
-runUpdate :: Timestamp -> Update -> Cache -> Cache
+runUpdate :: EpochTime -> Update -> Cache -> Cache
 runUpdate t u = case u of
   I k ttl (Val crs rank) -> may $ Cache.insert t k ttl crs rank
   E                      -> may $ Cache.expires t
   where may f c = maybe c id $ f c
 
-foldUpdates :: [(Timestamp, Update)] -> Cache -> Cache
+foldUpdates :: [(EpochTime, Update)] -> Cache -> Cache
 foldUpdates = foldr (\p k -> k . uncurry runUpdate p) id
 
-removeKeyUpdates :: Key -> [(Timestamp, Update)] -> [(Timestamp, Update)]
+removeKeyUpdates :: Key -> [(EpochTime, Update)] -> [(EpochTime, Update)]
 removeKeyUpdates k = filter (not . match)
   where
     match (_, I ik _ _)  =  k == ik
     match (_, E)         =  False
 
-removeExpiresUpdates :: [(Timestamp, Update)] -> [(Timestamp, Update)]
+removeExpiresUpdates :: [(EpochTime, Update)] -> [(EpochTime, Update)]
 removeExpiresUpdates = filter (not . expire)
   where
     expire (_, E)  =  True
@@ -157,8 +157,8 @@ genTTL = Seconds <$> choose (1, 7200000)
 genRanking :: Gen Ranking
 genRanking = elements rankings
 
-genTimestamp :: Gen Timestamp
-genTimestamp = (ts0 <+) . Seconds <$> choose (1, 21600000)
+genEpochTime :: Gen EpochTime
+genEpochTime = (ts0 <+) . Seconds <$> choose (1, 21600000)
 
 genUpdate :: Gen Update
 genUpdate =
@@ -171,10 +171,10 @@ genUpdate =
       (k, crs) <- genCRPair
       I k <$> genTTL <*> (Val crs <$> genRanking)
 
-genUpdates :: Gen [(Timestamp, Update)]
+genUpdates :: Gen [(EpochTime, Update)]
 genUpdates = do
   ks <- listOf genUpdate
-  tss <- sort <$> vectorOf (length ks) genTimestamp
+  tss <- sort <$> vectorOf (length ks) genEpochTime
   pure $ zip tss ks
 
 genRankOrds :: Gen (Ranking, Ranking)
@@ -224,12 +224,12 @@ newtype ARanking = ARanking Ranking deriving Show
 instance Arbitrary ARanking where
   arbitrary = ARanking <$> genRanking
 
-newtype ATimestamp = ATimestamp Timestamp deriving Show
+newtype AEpochTime = AEpochTime EpochTime deriving Show
 
-instance Arbitrary ATimestamp where
-  arbitrary = ATimestamp <$> genTimestamp
+instance Arbitrary AEpochTime where
+  arbitrary = AEpochTime <$> genEpochTime
 
-newtype AUpdates = AUpdates [(Timestamp, Update)] deriving Show
+newtype AUpdates = AUpdates [(EpochTime, Update)] deriving Show
 
 instance Arbitrary AUpdates where
   arbitrary = AUpdates <$> genUpdates
@@ -329,8 +329,8 @@ lookupInserted (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking r
   where
     cache = foldUpdates us cacheEmpty
 
-lookupTTL :: ACRPair -> ATTL -> ARanking -> ATimestamp -> AUpdates -> Property
-lookupTTL (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATimestamp ts1) (AUpdates us)  =
+lookupTTL :: ACRPair -> ATTL -> ARanking -> AEpochTime -> AUpdates -> Property
+lookupTTL (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AEpochTime ts1) (AUpdates us)  =
   maybe (property Discard) checkTTL
   $ Cache.insert ts0 k ttl_ crs rank rcache
   where
@@ -382,8 +382,8 @@ rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo 
 
 -- expires
 
-expiresAlives :: AUpdates -> ATimestamp -> Property
-expiresAlives (AUpdates us) (ATimestamp ts1) =
+expiresAlives :: AUpdates -> AEpochTime -> Property
+expiresAlives (AUpdates us) (AEpochTime ts1) =
   maybe (property Discard) checkSize
   $ Cache.expires ts1 cache
   where
@@ -402,7 +402,7 @@ expiresMaxEOL (AUpdates us) =
   return $ Cache.size c
   where
     cache = foldUpdates us cacheEmpty
-    eol :: (Timestamp, Update) -> Maybe Timestamp
+    eol :: (EpochTime, Update) -> Maybe EpochTime
     eol (ts, I _ ttl _)  =  Just $ ts <+ ttl
     eol ( _,  E)         =  Nothing
     maxEOL = case mapMaybe eol us of
