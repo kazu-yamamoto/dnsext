@@ -164,6 +164,7 @@ data LookupEnv = LookupEnv {
     lenvCache         :: Maybe (Cache, CacheConf)
   , lenvQueryControls :: QueryControls
   , lenvResolvEnv     :: ResolvEnv
+  , lenvActions       :: ResolvActions
 }
 
 data ResolvEnv = ResolvEnv {

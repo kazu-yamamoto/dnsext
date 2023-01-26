@@ -116,6 +116,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     case mx of
       Nothing -> do
           eans <- lookupRaw env q
+          now <- ractionGetTime lenvActions
           case eans of
             Left  err ->
                 -- Probably a network error happens.
@@ -126,52 +127,49 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                 case ex of
                   Left NameError -> do
                       let v = Left NameError
-                      cacheNegative cconf c q v ans
+                      cacheNegative cconf c q now v ans
                       return v
                   Left e -> return $ Left e
                   Right [] -> do
                       let v = Right []
-                      cacheNegative cconf c q v ans
+                      cacheNegative cconf c q now v ans
                       return v
                   Right rss -> do
-                      cachePositive cconf c q rss
+                      cachePositive cconf c q now rss
                       return $ Right $ map rdata rss
       Just (_,x) -> return x
   where
     toRR = filter (qtype `isTypeOf`) . answer
     (c, cconf) = fromJust lenvCache
 
-cachePositive :: CacheConf -> Cache -> Key -> [ResourceRecord] -> IO ()
-cachePositive cconf c key rss
+cachePositive :: CacheConf -> Cache -> Key -> EpochTime -> [ResourceRecord] -> IO ()
+cachePositive cconf c k now rss
   | ttl == 0  = return () -- does not cache anything
-  | otherwise = insertPositive cconf c key (Right rds) ttl
+  | otherwise = insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
+    v = Right rds
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
-insertPositive :: CacheConf -> Cache -> Key -> Entry -> TTL -> IO ()
-insertPositive CacheConf{..} c k v ttl = when (ttl /= 0) $ do
-    ctime <- getEpochTime
-    let tim = ctime + life
-    insertCache k tim v c
+insertPositive :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
+    let p = now + life
+    insertCache k p v c
   where
-    life :: EpochTime
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
-cacheNegative :: CacheConf -> Cache -> Key -> Entry -> DNSMessage -> IO ()
-cacheNegative cconf c key v ans = case soas of
+cacheNegative :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> DNSMessage -> IO ()
+cacheNegative cconf c k now v ans = case soas of
   []    -> return () -- does not cache anything
-  soa:_ -> insertNegative cconf c key v $ rrttl soa
+  soa:_ -> insertNegative cconf c k now v $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
-insertNegative :: CacheConf -> Cache -> Key -> Entry -> TTL -> IO ()
-insertNegative _ c k v ttl = when (ttl /= 0) $ do
-    ctime <- getEpochTime
-    let tim = ctime + life
-    insertCache k tim v c
+insertNegative :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertNegative _ c k now v ttl = when (ttl /= 0) $ do
+    let p = now + life
+    insertCache k p v c
   where
-    life :: EpochTime
     life = fromIntegral ttl
 
 isTypeOf :: TYPE -> ResourceRecord -> Bool
@@ -283,7 +281,7 @@ withLookupConf rc@LookupConf{..} f = do
       Nothing -> return Nothing
     let resolver = udpTcpResolver lconfRetry lconfLimit
         renv = ResolvEnv resolver lconfConcurrent ris
-        lenv = LookupEnv mcache lconfQueryControls renv
+        lenv = LookupEnv mcache lconfQueryControls renv lconfActions
     f lenv
 
 makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [ResolvInfo]
