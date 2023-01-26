@@ -45,7 +45,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
         cxt <- newContext (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
         eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
         threadDelay $ 1 * 1000 * 1000
-        let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Key dom typ _, (_, Cache.Val crs rank)) <- xs ]
+        let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Question dom typ _, (_, Cache.Val crs rank)) <- xs ]
         (,) eresult . convert . Cache.dump <$> getCache_ cxt
       clookup cs n typ = lookup (fromString n, typ) cs
       check cs n typ = lookup (fromString n, typ) cs

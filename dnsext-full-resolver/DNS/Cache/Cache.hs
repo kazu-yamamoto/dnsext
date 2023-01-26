@@ -21,7 +21,7 @@ module DNS.Cache.Cache (
   insertRRs,
 
   -- * low-level interfaces
-  Cache (..), Key (..), Val (..), CRSet,
+  Cache (..), Key, Question(..), Val (..), CRSet,
   extractRRSet,
   (<+), alive,
   member,
@@ -31,6 +31,7 @@ module DNS.Cache.Cache (
 -- GHC packages
 import Control.DeepSeq (liftRnf)
 import Control.Monad (guard)
+import DNS.Types (Question(..))
 import DNS.Types.Decode (EpochTime)
 import Data.Either (partitionEithers)
 import Data.Function (on)
@@ -115,7 +116,7 @@ rankedAdditional =
 
 ---
 
-data Key = Key Domain TYPE CLASS deriving (Eq, Ord, Show)
+type Key = Question
 data Val = Val CRSet Ranking deriving Show
 
 data Cache = Cache (OrdPSQ Key Timestamp Val) Int {- max size -}
@@ -148,7 +149,7 @@ lookup_ :: Timestamp -> (TTL -> Val -> Maybe a)
         -> Domain -> TYPE -> CLASS
         -> Cache -> Maybe a
 lookup_ now mk dom typ cls (Cache cache _) = do
-  let k = Key dom typ cls
+  let k = Question dom typ cls
   (eol, v) <- k `PSQ.lookup` cache
   ttl <- alive now eol
   mk ttl v
@@ -178,7 +179,7 @@ insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
 @
  -}
 insert :: Timestamp -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
-insert now k@(Key dom typ cls) ttl crs rank cache@(Cache c xsz) =
+insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
   maybe sized withOldRank lookupRank
   where
     lookupRank =
@@ -259,7 +260,7 @@ fromRDatas rds = rds `listseq` Just (Right rds)
 rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
 rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
   | rrclass == DNS.classIN &&
-    DNS.rdataType rd == rrtype = Just (Key rrname rrtype rrclass, rrttl)
+    DNS.rdataType rd == rrtype = Just (Question rrname rrtype rrclass, rrttl)
   | otherwise                  = Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
@@ -285,4 +286,4 @@ insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
 insertSetEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
 insertSetEmpty srcDom dom typ ttl rank h = srcDom `seq` h key ttl (Left srcDom) rank
   where
-    key = Key dom typ DNS.classIN
+    key = Question dom typ DNS.classIN

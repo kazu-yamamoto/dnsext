@@ -20,7 +20,7 @@ import System.Exit (exitFailure)
 import DNS.Cache.Types (Timestamp)
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Cache
-  (Cache, Key (Key), Val (Val), CRSet, (<+),
+  (Cache, Key, Question(..), Val (Val), CRSet, (<+),
    Ranking (..), takeRRSet, extractRRSet)
 import qualified DNS.Cache.Cache as Cache
 
@@ -121,7 +121,7 @@ toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
 genWrongCRPair :: Gen (Key, CRSet)
 genWrongCRPair = do
   (typ, genCrs) <- elements wrongs
-  key <- Key <$> elements sbsDomainList <*> pure typ <*> pure DNS.classIN
+  key <- Question <$> elements sbsDomainList <*> pure typ <*> pure DNS.classIN
   crs <- genCrs
   pure (key, crs)
   where
@@ -139,7 +139,7 @@ genCRsRec = do
         | typ `elem` [NS, SOA, MX]  =  domainList
         | otherwise                 =  nameList
   lbl <- elements labelList
-  (,) (Key (DNS.fromRepresentation lbl) typ DNS.classIN, genCrs)
+  (,) (Question (DNS.fromRepresentation lbl) typ DNS.classIN, genCrs)
     <$> (DNS.fromRepresentation <$> toULString lbl)
 
 genCRsPair :: Gen (Key, Gen CRSet)
@@ -194,7 +194,7 @@ genRankOrdsCo = elements ordsCo
 newtype AKey = AKey Key deriving Show
 
 instance Arbitrary AKey where
-  arbitrary = AKey <$> (Key <$> elements sbsDomainList <*> elements [A, NS, AAAA] <*> pure DNS.classIN)
+  arbitrary = AKey <$> (Question <$> elements sbsDomainList <*> elements [A, NS, AAAA] <*> pure DNS.classIN)
 
 newtype AWrongCRPair = AWrongCRPair (Key, CRSet) deriving Show
 
@@ -259,11 +259,11 @@ instance Arbitrary ACR2 where
 
 -- forall ((k, crs) :: AWrongCRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Nothing
 rrsetTakeNothing :: AWrongCRPair -> ATTL -> Property
-rrsetTakeNothing (AWrongCRPair (Key dom typ cls, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Nothing
+rrsetTakeNothing (AWrongCRPair (Question dom typ cls, crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Nothing
 
 -- forall ((k, crs) :: ACRPair) ttl . takeRRSet (extractRRSet k ttl crs) == Just ((k, ttl), crs)
 rrsetExtractTake :: ACRPair -> ATTL  -> Property
-rrsetExtractTake (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Just (k, ttl, crs)
+rrsetExtractTake (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl) = fmap ($ (,,)) (takeRRSet $ extractRRSet dom typ cls ttl crs) === Just (k, ttl, crs)
 
 ---
 
@@ -296,7 +296,7 @@ sizeNewInserted (ACRPair (k, crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
 -- (       member k cache  -> size inserted == size cache   \/
 --    not (member k cache) -> size inserted == size cache + 1 )
 sizeInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
-sizeInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
+sizeInserted (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
   maybe (property Discard) checkSize
   $ Cache.insert ts0 k ttl_ crs rank cache
   where
@@ -310,11 +310,11 @@ sizeInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (A
 -- lookup
 
 lookupEmpty :: AKey -> Property
-lookupEmpty (AKey (Key dom typ cls)) = Cache.lookup ts0 dom typ cls cacheEmpty === Nothing
+lookupEmpty (AKey (Question dom typ cls)) = Cache.lookup ts0 dom typ cls cacheEmpty === Nothing
 
 -- lookup key cache after inserted as new key
 lookupNewInserted :: ACRRec -> ATTL -> ARanking -> AUpdates -> Property
-lookupNewInserted (ACRRec (k@(Key _dom typ cls), crs, ulDom)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
+lookupNewInserted (ACRRec (k@(Question _dom typ cls), crs, ulDom)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
   (Cache.lookup ts0 ulDom typ cls =<< Cache.insert ts0 k ttl_ crs rank rcache)
   =/=
   Nothing
@@ -322,7 +322,7 @@ lookupNewInserted (ACRRec (k@(Key _dom typ cls), crs, ulDom)) (ATTL ttl_) (ARank
     rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
 
 lookupInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
-lookupInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
+lookupInserted (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us)  =
   case Cache.insert ts0 k ttl_ crs rank cache of
     Nothing   ->  label "old" $ Cache.lookup ts0 dom typ cls cache =/= Nothing
     Just ins  ->  label "new" $ Cache.lookup ts0 dom typ cls ins   =/= Nothing
@@ -330,7 +330,7 @@ lookupInserted (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) 
     cache = foldUpdates us cacheEmpty
 
 lookupTTL :: ACRPair -> ATTL -> ARanking -> ATimestamp -> AUpdates -> Property
-lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATimestamp ts1) (AUpdates us)  =
+lookupTTL (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATimestamp ts1) (AUpdates us)  =
   maybe (property Discard) checkTTL
   $ Cache.insert ts0 k ttl_ crs rank rcache
   where
@@ -343,7 +343,7 @@ lookupTTL (ACRPair (k@(Key dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (ATim
         life = Cache.alive ts1 (ts0 <+ ttl_)
 
 lookupEither :: AKey -> AUpdates -> Property
-lookupEither (AKey (Key dom typ cls)) (AUpdates us) =
+lookupEither (AKey (Question dom typ cls)) (AUpdates us) =
   (foldE =<< Cache.lookupEither ts0 dom typ cls cache)
   ===
   Cache.lookup ts0 dom typ cls cache
@@ -358,7 +358,7 @@ lookupEither (AKey (Key dom typ cls)) (AUpdates us) =
 -- ranking
 
 rankingOrdered :: ACR2 -> ATTL -> ATTL ->  ARankOrds -> AUpdates -> Property
-rankingOrdered (ACR2 (k@(Key dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
+rankingOrdered (ACR2 (k@(Question dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
   maybe (property False) id action
   where
     rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty  -- 挿入する Key を除去
