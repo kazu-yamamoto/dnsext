@@ -8,8 +8,6 @@ module DNS.Do53.Do53 (
   , udpResolver
   , tcpResolver
   , vcResolver
-  , Send
-  , Recv
   , checkRespM
   ) where
 
@@ -49,8 +47,8 @@ data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: Int -> Resolver
-udpTcpResolver retry ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver ri q qctl
+udpTcpResolver :: UDPRetry -> VCLimit -> Resolver
+udpTcpResolver retry lim ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver lim ri q qctl
 
 ----------------------------------------------------------------
 
@@ -64,7 +62,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: Int -> Resolver
+udpResolver :: UDPRetry -> Resolver
 udpResolver retry ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
@@ -113,22 +111,19 @@ udpResolver retry ResolvInfo{..} q _qctl =
 ----------------------------------------------------------------
 
 -- | A resolver using TCP.
-tcpResolver :: Resolver
-tcpResolver ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
+tcpResolver :: VCLimit -> Resolver
+tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
         let send = sendVC $ sendTCP sock
-            recv = recvVC $ recvTCP sock
+            recv = recvVC lim $ recvTCP sock
         solve send recv
 
     open = openTCP rinfoHostName rinfoPortNumber
 
-type Send = ByteString -> IO ()
-type Recv = IO ByteString
-
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> ((Send -> Recv -> IO DNSMessage) -> IO DNSMessage) -> Resolver
+vcResolver :: String -> ((Send -> RecvMany -> IO DNSMessage) -> IO DNSMessage) -> Resolver
 vcResolver proto perform ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
@@ -155,10 +150,10 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
            Just res -> return res
 
     getAnswer ident recv = do
-        bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        bss <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
         now <- ractionGetTime rinfoActions
-        case decodeAt now bs of
+        case decodeChunks now bss of
             Left  e   -> E.throwIO e
-            Right msg -> case checkRespM q ident msg of
+            Right (msg,_) -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err

@@ -22,6 +22,8 @@ module DNS.Types.Decode (
     -- e.g., from TCP traffic.
   , decodeManyAt
   , decodeMany
+    -- * Generic decoder
+  , decodeChunks
     -- * Decoders for parts
   , decodeDNSHeader
   , decodeDNSFlags
@@ -68,6 +70,8 @@ decode :: ByteString                 -- ^ encoded input buffer
        -> Either DNSError DNSMessage -- ^ decoded message or error
 decode bs = fst <$> runSGet (fitSGet (BS.length bs) getDNSMessage) bs
 
+----------------------------------------------------------------
+
 -- | Decode a buffer containing multiple encoded DNS messages each preceded by
 -- a 16-bit length in network byte order.  Any left-over bytes of a partial
 -- message after the last complete message are returned as the second element
@@ -97,7 +101,6 @@ decodeMany :: ByteString -- ^ encoded input buffer
                          -- or error if any complete message fails to parse.
 decodeMany bs = decodeMParse decode bs
 
-
 -- | Decode multiple messages using the given parser.
 --
 decodeMParse :: (ByteString -> Either DNSError DNSMessage)
@@ -115,6 +118,18 @@ decodeMParse decoder bs = do
     -- Read a list of length-encoded bytestrings
     lengthEncoded :: SGet [ByteString]
     lengthEncoded = many $ getInt16 >>= getNByteString
+
+----------------------------------------------------------------
+
+decodeChunks :: EpochTime
+             -> [ByteString] -> Either DNSError (DNSMessage, [ByteString])
+decodeChunks t bss = case runSGetChunks t (fitSGet len getDNSMessage) bss of
+    Left err        -> Left err
+    Right ((r,_),l) -> Right (r,l)
+  where
+    len = foldr (\x y -> BS.length x + y) 0 bss
+
+----------------------------------------------------------------
 
 -- | Decode DNS header.
 decodeDNSHeader :: ByteString -> Either DNSError DNSHeader

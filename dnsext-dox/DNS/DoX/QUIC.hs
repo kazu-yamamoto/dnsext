@@ -9,8 +9,8 @@ import Network.QUIC.Client
 
 import DNS.DoX.Common
 
-quicResolver :: Resolver
-quicResolver ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
+quicResolver :: VCLimit -> Resolver
+quicResolver lim ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
   where
     cc = getQUICParams rinfoHostName rinfoPortNumber "doq"
     perform solve = run cc $ \conn -> do
@@ -18,5 +18,5 @@ quicResolver ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
         let sendDoQ bs = do
                 sendVC (sendStreamMany strm) bs
                 shutdownStream strm
-            recvDoQ = recvVC $ recvStream strm
+            recvDoQ = recvVC lim $ recvStream strm
         solve sendDoQ recvDoQ

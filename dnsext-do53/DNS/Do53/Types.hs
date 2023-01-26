@@ -6,6 +6,8 @@ module DNS.Do53.Types (
   -- * Configuration for resolver
     LookupConf(..)
   , defaultLookupConf
+  , UDPRetry
+  , VCLimit
   , LookupEnv(..)
   -- ** Specifying DNS servers
   , Seeds(..)
@@ -19,6 +21,13 @@ module DNS.Do53.Types (
   , ResolvActions(..)
   , defaultResolvActions
   , Resolver
+  -- * IO
+  , Recv
+  , RecvN
+  , RecvMany
+  , RecvManyN
+  , Send
+  , SendMany
   ) where
 
 import DNS.Types
@@ -69,6 +78,9 @@ defaultCacheConf = CacheConf 300 0 10
 
 ----------------------------------------------------------------
 
+type UDPRetry = Int
+type VCLimit = Int
+
 -- | Type for resolver configuration.
 --  Use 'defaultLookupConf' to create a new value.
 --
@@ -110,7 +122,9 @@ data LookupConf = LookupConf {
     lconfSeeds         :: Seeds
    -- | Timeout in micro seconds.
    -- | The number of UDP retries including the first try.
-  , lconfRetry         :: Int
+  , lconfRetry         :: UDPRetry
+   -- | How many bytes are allowed to be received on a virtual circuit.
+  , lconfLimit         :: VCLimit
    -- | Concurrent queries if multiple DNS servers are specified.
   , lconfConcurrent    :: Bool
    -- | Cache configuration.
@@ -134,6 +148,7 @@ defaultLookupConf :: LookupConf
 defaultLookupConf = LookupConf {
     lconfSeeds         = SeedsFilePath "/etc/resolv.conf"
   , lconfRetry         = 3
+  , lconfLimit         = 32 * 1024
   , lconfConcurrent    = False
   , lconfCacheConf     = Nothing
   , lconfQueryControls = mempty
@@ -190,3 +205,13 @@ defaultResolvActions = ResolvActions {
   , ractionGenId   = singleGenId
   , ractionGetTime = getEpochTime
   }
+
+----------------------------------------------------------------
+
+type Recv      = IO ByteString
+type RecvN     = Int -> IO ByteString
+type RecvMany  = IO [ByteString]
+type RecvManyN = Int -> IO (Int, [ByteString])
+
+type Send = ByteString -> IO ()
+type SendMany = [ByteString] -> IO ()

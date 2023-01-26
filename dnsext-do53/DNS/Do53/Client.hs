@@ -23,6 +23,7 @@ module DNS.Do53.Client (
   , LookupConf
   , defaultLookupConf
   , withLookupConf
+  , UDPRetry
   , LookupEnv
   -- ** Accessors
   , lconfSeeds

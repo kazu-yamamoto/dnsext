@@ -33,5 +33,5 @@ spec = describe "solvers" $ do
             -- Google's resolvers support the AD and CD bits
             qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
 
-        ans <- tcpResolver ri q qctl
+        ans <- tcpResolver (32 * 1024) ri q qctl
         rcode (flags (header ans)) `shouldBe` NoErr

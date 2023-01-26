@@ -10,6 +10,9 @@ module DNS.Do53.IO (
   , sendTCP
   , sendVC
   , encodeVCLength
+    -- * Making recv
+  , recvManyN
+  , recvManyNN
   ) where
 
 import qualified Control.Exception as E
@@ -18,9 +21,9 @@ import qualified Data.ByteString as BS
 import Network.Socket (Socket, openSocket, connect, getAddrInfo, AddrInfo(..), defaultHints, HostName, PortNumber, SocketType(..), AddrInfoFlag(..))
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
-import System.IO.Error
 
 import DNS.Do53.Imports
+import DNS.Do53.Types
 
 ----------------------------------------------------------------
 
@@ -43,11 +46,22 @@ makeAddrInfo nh p = do
 
 ----------------------------------------------------------------
 
+-- TCP and QUIC has its own RecvN.
+-- TLS has Recv. This must be converted to RecvN by makeRecvN in the
+-- "recv" package. If not converted, a message is also read when
+-- obtaining the length of the message!
 -- | Receiving data from a virtual circuit.
-recvVC :: (Int -> IO ByteString) -> IO ByteString
-recvVC rcv = do
-    len <- decodeVCLength <$> rcv 2
-    rcv len
+recvVC :: VCLimit -> RecvN -> RecvMany
+recvVC lim recvN = do
+    (l2,b2) <- recvManyNN recvN 2
+    when (l2 /= 2) $ E.throwIO $ DecodeError "length is broken"
+    let len = decodeVCLength $ BS.concat b2
+    when (len > lim) $ E.throwIO $ DecodeError "length is over the limit"
+    (len', bss) <- recvManyNN recvN len
+    case compare len' len of
+      LT -> E.throwIO $ DecodeError "message length is not enough"
+      EQ -> return bss
+      GT -> E.throwIO $ DecodeError "message length is too large"
 
 -- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int
@@ -55,33 +69,48 @@ decodeVCLength bs = case BS.unpack bs of
   [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
   _        -> 0              -- never reached
 
--- | Receiving data from a TCP socket.
---   'NetworkFailure' is thrown if necessary.
-recvTCP :: Socket -> Int -> IO ByteString
--- fixme by setting limitation
-recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
-  where
-    recv1 = do
-        bs1 <- recvCore len
-        if BS.length bs1 == len then
-            return bs1
+-- Used only in DoH.
+-- Recv is getResponseBodyChunk.
+-- "lim" is a really limitation
+recvManyN :: Recv -> RecvManyN
+recvManyN rcv lim = loop id 0
+ where
+    loop build total = do
+        bs <- rcv
+        let len = BS.length bs
+        if len == 0 then
+            return $ (total, build [])
           else do
-            loop bs1
-    loop bs0 = do
-        let left = len - BS.length bs0
-        bs1 <- recvCore left
-        let bs = bs0 <> bs1 -- fixme by attoparsec
-        if BS.length bs == len then -- fixme using >=
-            return bs
-          else
-            loop bs
-    eofE = mkIOError eofErrorType "connection terminated" Nothing Nothing
-    recvCore len0 = do
-        bs <- recv sock len0
-        if bs == "" then
-            E.throwIO eofE
-          else
-            return bs
+            let total' = total + len
+                build' = build . (bs :)
+            if total' >= lim then do
+                return $ (total', build' [])
+              else
+                loop build' total'
+
+-- Used only in recvVC.
+-- "lim" is the size to be received.
+recvManyNN :: RecvN -> RecvManyN
+recvManyNN rcv lim = loop id 0
+ where
+    loop build total = do
+        let left = lim - total
+            siz = if left <= 2048 then left else 2048
+        bs <- rcv siz
+        let len = BS.length bs
+        if len == 0 then
+            return $ (total, build [])
+          else do
+            let total' = total + len
+                build' = build . (bs :)
+            if total' >= lim then do
+                return $ (total', build' [])
+              else
+                loop build' total'
+
+-- | Receiving data from a TCP socket.
+recvTCP :: Socket -> RecvN
+recvTCP sock = recv sock
 
 ----------------------------------------------------------------
 
@@ -92,13 +121,13 @@ recvTCP sock len = recv1 `E.catch` \e -> E.throwIO $ NetworkFailure e
 -- to prefix each message with a length, and then use 'sendAll' to send
 -- a concatenated batch of the resulting encapsulated messages.
 --
-sendVC :: ([ByteString] -> IO ()) -> ByteString -> IO ()
+sendVC :: SendMany -> Send
 sendVC writev bs = do
     let lb = encodeVCLength $ BS.length bs
     writev [lb,bs]
 
 -- | Sending data to a TCP socket.
-sendTCP :: Socket -> [ByteString] -> IO ()
+sendTCP :: Socket -> SendMany
 sendTCP = NSB.sendMany
 
 -- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a VC

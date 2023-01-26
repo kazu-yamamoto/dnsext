@@ -19,7 +19,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans0 <- tlsResolver ri0 q mempty
+        ans0 <- tlsResolver 32768 ri0 q mempty
         rcode (flags (header ans0)) `shouldBe` NoErr
 
         let ri1 = defaultResolvInfo {
@@ -27,7 +27,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans1 <- tlsResolver ri1 q mempty
+        ans1 <- tlsResolver 32768 ri1 q mempty
         rcode (flags (header ans1)) `shouldBe` NoErr
 
         let ri2 = defaultResolvInfo {
@@ -35,7 +35,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans2 <- tlsResolver ri2 q mempty
+        ans2 <- tlsResolver 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr
 
     it "resolves well with QUIC" $ do
@@ -44,7 +44,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans2 <- quicResolver ri2 q mempty
+        ans2 <- quicResolver 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr
 
     it "resolves well with HTTP/2" $ do
@@ -53,7 +53,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans0 <- http2Resolver ri0 q mempty
+        ans0 <- http2Resolver 32768 ri0 q mempty
         rcode (flags (header ans0)) `shouldBe` NoErr
 
         let ri1 = defaultResolvInfo {
@@ -61,7 +61,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans1 <- http2Resolver ri1 q mempty
+        ans1 <- http2Resolver 32768 ri1 q mempty
         rcode (flags (header ans1)) `shouldBe` NoErr
 
         let ri2 = defaultResolvInfo {
@@ -69,7 +69,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http2Resolver ri2 q mempty
+        ans2 <- http2Resolver 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr
 
     it "resolves well with HTTP/3" $ do
@@ -78,5 +78,5 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http3Resolver ri2 q mempty
+        ans2 <- http3Resolver 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr

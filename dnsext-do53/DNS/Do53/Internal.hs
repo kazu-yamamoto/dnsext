@@ -1,6 +1,13 @@
 module DNS.Do53.Internal (
+    -- * IO types
+    Recv
+  , RecvN
+  , RecvMany
+  , RecvManyN
+  , Send
+  , SendMany
     -- * TCP related
-    openTCP
+  , openTCP
   , sendTCP
   , recvTCP
     -- * Virtual circuit
@@ -8,6 +15,9 @@ module DNS.Do53.Internal (
   , recvVC
   , encodeVCLength
   , decodeVCLength
+    -- * Making recvMany
+  , recvManyN
+  , recvManyNN
     -- * Resolv
   , resolve
   , ResolvEnv(..)
@@ -22,8 +32,6 @@ module DNS.Do53.Internal (
   , udpResolver
   , tcpResolver
     -- * Resolver for virtual circuit
-  , Send
-  , Recv
   , vcResolver
     -- * Query
   , encodeQuery
@@ -32,6 +40,8 @@ module DNS.Do53.Internal (
   , newConcurrentGenId
     -- * Misc
   , checkRespM
+  , UDPRetry
+  , VCLimit
   ) where
 
 import DNS.Do53.Do53
