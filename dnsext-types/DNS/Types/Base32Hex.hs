@@ -99,25 +99,25 @@ decode bs = do
           store8 a (n + 4) w4 ]
 
     go [] a _n =  return a
-    go ([f0,f1]:[]) a n = do
+    go [[f0,f1]] a n = do
       stores 1 a n f0 f1 0 0 0 0 0 0
       -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
       return a
 
-    go ([f0,f1,f2,f3]:[]) a n = do
+    go [[f0,f1,f2,f3]] a n = do
       stores 2 a n f0 f1 f2 f3 0 0 0 0
       -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
       --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
       return a
 
-    go ([f0,f1,f2,f3,f4]:[]) a n = do
+    go [[f0,f1,f2,f3,f4]] a n = do
       stores 3 a n f0 f1 f2 f3 f4 0 0 0
       -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
       --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
       --     w2 = f3 `shiftL` 4 .|. f4 `shiftR` 1
       return a
 
-    go ([f0,f1,f2,f3,f4,f5,f6]:[]) a n = do
+    go [[f0,f1,f2,f3,f4,f5,f6]] a n = do
       stores 4 a n f0 f1 f2 f3 f4 f5 f6 0
       -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
       --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
