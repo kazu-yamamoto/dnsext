@@ -49,7 +49,7 @@ type Response a = (ByteString, a)
 run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
 run fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
-  DNS.runInitIO $ DNS.addResourceDataForDNSSEC
+  DNS.runInitIO DNS.addResourceDataForDNSSEC
   (serverLoops, monLoops) <- setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
   race_
     (foldr concurrently_ (return ()) serverLoops)

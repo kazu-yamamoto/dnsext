@@ -37,11 +37,12 @@ import Data.Bits ((.|.), shiftL)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
+import Data.Functor (($>))
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import qualified Data.List as L
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (listToMaybe, isJust)
+import Data.Maybe (listToMaybe, isJust, fromMaybe)
 import qualified Data.Set as Set
 import Numeric (readDec, readHex, showHex)
 
@@ -585,7 +586,7 @@ nsDomain (DEonlyNS dom  )  =  dom
 
 v4DEntryList :: Domain -> [DEntry] -> [DEntry]
 v4DEntryList _      []          =  []
-v4DEntryList _srcDom des@(de:_)  =  concat $ map skipAAAA $ byNS des
+v4DEntryList _srcDom des@(de:_)  =  concatMap skipAAAA $ byNS des
   where
     byNS = groupBy ((==) `on` nsDomain)
     skipAAAA = nullCase . filter (not . aaaaDE)
@@ -599,9 +600,8 @@ v4DEntryList _srcDom des@(de:_)  =  concat $ map skipAAAA $ byNS des
 -- {-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
 rootNS :: Delegation
 rootNS =
-  maybe
+  fromMaybe
   (error "rootNS: bad configuration.")
-  id
   $ takeDelegation (nsList "." (,) ns) as
   where
     (ns, as) = rootServers
@@ -680,7 +680,7 @@ delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (May
 delegationWithCache srcDom dom msg =
   -- 選択可能な NS が有るときだけ Just
   maybe
-  (ncache *> return Nothing)
+  (ncache $> Nothing)
   (fmap Just . withCache)
   $ takeDelegation nsps adds
   where

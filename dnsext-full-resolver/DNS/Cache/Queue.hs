@@ -15,7 +15,7 @@ import Control.Monad (guard, msum, when)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
   (TVar, newTVar, readTVar, modifyTVar', writeTVar,
-   TMVar, newEmptyTMVar, takeTMVar, putTMVar, isEmptyTMVar,
+   TMVar, newEmptyTMVarIO, takeTMVar, putTMVar, isEmptyTMVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
    atomically, STM)
 
@@ -197,7 +197,7 @@ instance QueueSize Chan where
 type Q1 = TMVar
 
 newQueue1 :: IO (Q1 a)
-newQueue1 = atomically newEmptyTMVar
+newQueue1 = newEmptyTMVarIO
 
 instance ReadQueue TMVar where
   readQueue = atomically . takeTMVar
