@@ -19,9 +19,9 @@ operate server domain type_ controls = do
   operate_ conf domain type_
 
 operate_ :: LookupConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
-operate_ conf name typ = DNS.withLookupConf conf $ \seeds -> do
+operate_ conf name typ = DNS.withLookupConf conf $ \env -> do
     let q = DNS.Question (DNS.fromRepresentation name) typ DNS.classIN
-    DNS.lookupRaw seeds q
+    DNS.lookupRaw env q
 
 getCustomConf :: Maybe HostName -> QueryControls -> IO LookupConf
 getCustomConf mayServer controls = do
