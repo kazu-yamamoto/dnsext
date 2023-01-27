@@ -79,12 +79,12 @@ recvManyN rcv lim = loop id 0
         bs <- rcv
         let len = BS.length bs
         if len == 0 then
-            return $ (total, build [])
+            return (total, build [])
           else do
             let total' = total + len
                 build' = build . (bs :)
             if total' >= lim then do
-                return $ (total', build' [])
+                return (total', build' [])
               else
                 loop build' total'
 
@@ -95,16 +95,16 @@ recvManyNN rcv lim = loop id 0
  where
     loop build total = do
         let left = lim - total
-            siz = if left <= 2048 then left else 2048
+            siz = min left 2048
         bs <- rcv siz
         let len = BS.length bs
         if len == 0 then
-            return $ (total, build [])
+            return (total, build [])
           else do
             let total' = total + len
                 build' = build . (bs :)
             if total' >= lim then do
-                return $ (total', build' [])
+                return (total', build' [])
               else
                 loop build' total'
 
