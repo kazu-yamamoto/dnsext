@@ -13,17 +13,14 @@ description:
 
 category:           Network
 build-type:         Simple
-extra-source-files:
-    Changelog.md
+extra-source-files: Changelog.md
 
 source-repository head
     type:     git
     location: https://github.com/kazu-yamamoto/dnsext
 
 library
-    exposed-modules:
-        DNS.DoX.Internal
-
+    exposed-modules:  DNS.DoX.Internal
     other-modules:
         DNS.DoX.Common
         DNS.DoX.HTTP2
@@ -44,10 +41,10 @@ library
         http3,
         network >=2.3,
         quic,
-        recv >= 0.1.0,
+        recv >=0.1.0,
         time-manager,
         tls,
-        unliftio,
+        unliftio
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -57,9 +54,7 @@ test-suite spec
     main-is:            Spec.hs
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
-    other-modules:
-        ResolverSpec
-
+    other-modules:      ResolverSpec
     default-language:   Haskell2010
     ghc-options:        -Wall -threaded
     build-depends:
@@ -68,7 +63,7 @@ test-suite spec
         dnsext-do53,
         dnsext-dox,
         dnsext-types,
-        hspec,
+        hspec
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
