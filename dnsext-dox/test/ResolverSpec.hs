@@ -2,8 +2,9 @@
 
 module ResolverSpec where
 
-import DNS.Types
 import DNS.Do53.Internal
+import DNS.Types
+import Data.ByteString.Short ()
 import Test.Hspec
 
 import DNS.DoX.Internal
@@ -53,7 +54,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans0 <- http2Resolver 32768 ri0 q mempty
+        ans0 <- http2Resolver "/dns-query" 32768 ri0 q mempty
         rcode (flags (header ans0)) `shouldBe` NoErr
 
         let ri1 = defaultResolvInfo {
@@ -61,7 +62,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans1 <- http2Resolver 32768 ri1 q mempty
+        ans1 <- http2Resolver "/dns-query" 32768 ri1 q mempty
         rcode (flags (header ans1)) `shouldBe` NoErr
 
         let ri2 = defaultResolvInfo {
@@ -69,7 +70,7 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http2Resolver 32768 ri2 q mempty
+        ans2 <- http2Resolver "/dns-query" 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr
 
     it "resolves well with HTTP/3" $ do
@@ -78,5 +79,5 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http3Resolver 32768 ri2 q mempty
+        ans2 <- http3Resolver "/dns-query" 32768 ri2 q mempty
         rcode (flags (header ans2)) `shouldBe` NoErr

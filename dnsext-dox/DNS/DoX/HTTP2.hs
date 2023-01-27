@@ -11,6 +11,8 @@ import DNS.Do53.Internal
 import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString.Builder as BB
+import Data.ByteString.Short (ShortByteString)
+import Data.ByteString.Short (fromShort)
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Char8 as C8
 import Foreign.Marshal.Alloc (mallocBytes, free)
@@ -24,20 +26,20 @@ import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
 
-http2Resolver :: VCLimit -> Resolver
-http2Resolver lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
+http2Resolver :: ShortByteString -> VCLimit -> Resolver
+http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
       E.bracket (contextNew sock params) bye $ \ctx -> do
         handshake ctx
         ident <- ractionGenId rinfoActions
-        h2resolver ctx ident lim ri q qctl
+        h2resolver ctx ident path lim ri q qctl
   where
     open = openTCP rinfoHostName rinfoPortNumber
     params = getTLSParams rinfoHostName "h2" False
 
-h2resolver :: Context -> Identifier -> VCLimit -> Resolver
-h2resolver ctx ident lim ri@ResolvInfo{..} q qctl =
+h2resolver :: Context -> Identifier -> ShortByteString -> VCLimit -> Resolver
+h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf ->
-        run cliconf conf $ doHTTP lim ri q qctl ident
+        run cliconf conf $ doHTTP ident path lim ri q qctl
   where
     cliconf = ClientConfig {
         scheme = "https"
@@ -45,8 +47,8 @@ h2resolver ctx ident lim ri@ResolvInfo{..} q qctl =
       , cacheLimit = 20
       }
 
-doHTTP :: VCLimit -> ResolvInfo -> Question -> QueryControls -> Identifier -> Client DNSMessage
-doHTTP lim ResolvInfo{..} q qctl ident sendRequest = sendRequest req $ \rsp -> do
+doHTTP :: Identifier -> ShortByteString ->  VCLimit -> ResolvInfo -> Question -> QueryControls -> Client DNSMessage
+doHTTP ident path lim ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
     let recvHTTP = recvManyN $ getResponseBodyChunk rsp
     (_,bss) <- recvHTTP lim
     now <- getTime
@@ -59,7 +61,7 @@ doHTTP lim ResolvInfo{..} q qctl ident sendRequest = sendRequest req $ \rsp -> d
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     hdr = clientDoHHeaders wire
-    req = requestBuilder methodPost "/dns-query" hdr $ BB.byteString wire
+    req = requestBuilder methodPost (fromShort path) hdr $ BB.byteString wire
 
 allocConfig :: Context -> Int -> IO Config
 allocConfig ctx bufsiz = do
