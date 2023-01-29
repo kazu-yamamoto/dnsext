@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module DNS.Cache.Queue (
   ReadQueue (..),
   WriteQueue (..),
@@ -17,6 +19,15 @@ import Control.Concurrent.STM
    TQueue, newTQueue, readTQueue, writeTQueue,
    atomically, STM)
 
+-- queue interface
+data Queue m a =
+  Queue
+  { qReadQueue :: m a
+  , qWriteQueue :: a -> m ()
+  , qSizeMaxBound :: Int
+  , qReadSize :: m Int
+  , qReadLastMaxSize :: m Int
+  }
 
 class ReadQueue q where
   readQueue :: q a -> IO a
@@ -33,6 +44,34 @@ class ReadQueueSTM q where
 
 class WriteQueueSTM q where
   writeQueueSTM :: q a -> a -> STM ()
+
+
+instance ReadQueue (Queue IO) where
+  readQueue = qReadQueue
+
+instance WriteQueue (Queue IO) where
+  writeQueue = qWriteQueue
+
+instance QueueSize (Queue IO) where
+  sizeMaxBound = qSizeMaxBound
+  readSizes q = (,) <$> qReadSize q <*> qReadLastMaxSize q
+
+
+instance ReadQueue (Queue STM) where
+  readQueue = atomically . qReadQueue
+
+instance WriteQueue (Queue STM) where
+  writeQueue q = atomically . qWriteQueue q
+
+instance QueueSize (Queue STM) where
+  sizeMaxBound = qSizeMaxBound
+  readSizes q = atomically $ (,) <$> qReadSize q <*> qReadLastMaxSize q
+
+instance ReadQueueSTM (Queue STM) where
+  readQueueSTM = qReadQueue
+
+instance WriteQueueSTM (Queue STM) where
+  writeQueueSTM = qWriteQueue
 
 ---
 
