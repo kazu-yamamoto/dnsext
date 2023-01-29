@@ -13,6 +13,7 @@ module DNS.Do53.Lookup (
   , fromDNSMessage
   -- * Misc
   , withLookupConf
+  , modifyLookupEnv
   ) where
 
 import Control.Exception as E
@@ -272,23 +273,35 @@ findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers fi
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
-withLookupConf rc@LookupConf{..} f = do
-    ris <- makeInfo rc <$> findAddrPorts lconfSeeds
+withLookupConf LookupConf{..} f = do
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
+    ris <- findAddrPorts lconfSeeds
     let resolver = udpTcpResolver lconfRetry lconfLimit
-        renv = ResolvEnv resolver lconfConcurrent ris
-        lenv = LookupEnv mcache lconfQueryControls renv lconfActions
+        renv = resolvEnv resolver lconfConcurrent lconfActions ris
+        lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
-makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [ResolvInfo]
-makeInfo LookupConf{..} hps = map mk hps
+resolvEnv :: Resolver -> Bool -> ResolvActions -> [(HostName, PortNumber)] -> ResolvEnv
+resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
+  where
+    ris = resolvInfos actions hps
+
+resolvInfos :: ResolvActions -> [(HostName, PortNumber)] -> [ResolvInfo]
+resolvInfos actions hps = map mk hps
   where
     mk (h,p) = ResolvInfo {
             rinfoHostName   = h
           , rinfoPortNumber = p
-          , rinfoActions    = lconfActions
+          , rinfoActions    = actions
           }
+
+modifyLookupEnv :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
+modifyLookupEnv resolver hps lenv@LookupEnv{..} = lenv {
+    lenvResolvEnv = renv
+  }
+  where
+    renv = resolvEnv resolver lenvConcurrent lenvActions hps

@@ -162,8 +162,9 @@ defaultLookupConf = LookupConf {
 data LookupEnv = LookupEnv {
     lenvCache         :: Maybe (Cache, CacheConf)
   , lenvQueryControls :: QueryControls
+  , lenvConcurrent    :: Bool
   , lenvResolvEnv     :: ResolvEnv
-  , lenvActions       :: ResolvActions
+  , lenvActions       :: ResolvActions -- for cache lookup
 }
 
 data ResolvEnv = ResolvEnv {
