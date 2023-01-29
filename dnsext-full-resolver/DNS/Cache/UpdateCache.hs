@@ -34,16 +34,8 @@ data MemoActions = MemoActions {
   , memoGetTime :: IO EpochTime
   }
 
-data Update
-  = I Key TTL CRSet Ranking
-  | E
-  deriving Show
-
-runUpdate :: EpochTime -> Update -> Cache -> Maybe Cache
-runUpdate t u cache = case u of
-  I k ttl crs rank -> maybe (insert cache) insert $ Cache.expires t cache {- expires before insert -}
-    where insert = Cache.insert t k ttl crs rank
-  E                -> Cache.expires t cache
+-- function update to update cache, and log action
+type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
@@ -54,15 +46,14 @@ new CacheConf{..} maxCacheSize = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
-  let update1 (ts, u) = do   -- step of single update theard
+  let update1 :: UpdateEvent -> IO ()
+      update1 (uevent, logAction) = do   -- step of single update theard
         cache <- readIORef cacheRef
         let updateRef c = do
               -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
               c `seq` atomicWriteIORef cacheRef c
-              case u of
-                I {}  ->  return ()
-                E     ->  memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
-        maybe (pure ()) updateRef $ runUpdate ts u cache
+              logAction c
+        maybe (pure ()) updateRef $ uevent cache
 
   (updateLoop, enqueueU, readUSize) <- do
     inQ <- newQueue 8
@@ -70,7 +61,9 @@ new CacheConf{..} maxCacheSize = do
         body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
     return (forever body, writeQueue inQ, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
 
-  let expires1 ts = enqueueU (ts, E)
+  let expires1 ts = enqueueU (Cache.expires ts, expiredLog)
+        where
+          expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
       expireEvsnts = forever body
         where
@@ -78,8 +71,11 @@ new CacheConf{..} maxCacheSize = do
           interval = threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
           body = either errorLn return =<< tryAny (interval *> (expires1 =<< memoGetTime))
 
-  let insert k ttl crs rank =
-        enqueueU =<< (,) <$> memoGetTime <*> pure (I k ttl crs rank)
+  let insert k ttl crs rank = do
+        t <- memoGetTime
+        let insert_ = Cache.insert t k ttl crs rank
+            evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
+        enqueueU (evInsert, const $ pure ())
 
   return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1, readUSize)
 
