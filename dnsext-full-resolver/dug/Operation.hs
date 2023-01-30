@@ -24,21 +24,21 @@ operate_ conf name typ = DNS.withLookupConf conf $ \env -> do
     DNS.lookupRaw env q
 
 getCustomConf :: Maybe HostName -> QueryControls -> IO LookupConf
-getCustomConf mayServer controls = do
-  let resolveServer server c = do
-        ip <- resolve server
-        -- print ip
-        return $ setServer ip c
-
-  maybe return resolveServer mayServer
-    DNS.defaultLookupConf
-    { lconfRetry = 2
-    , lconfQueryControls = controls
-    }
+getCustomConf mayServer controls = case mayServer of
+  Nothing     -> return conf
+  Just server -> resolveServer server conf
   where
-    resolve :: String -> IO IP
-    resolve sname =
-      maybe (queryName sname) return $ readMaybe sname
+    conf = DNS.defaultLookupConf {
+        lconfRetry = 2
+      , lconfQueryControls = controls
+      }
+
+    resolveServer server c = do
+        ip <- case readMaybe server of
+          Nothing -> queryName server
+          Just x  -> return x
+        -- print ip
+        return $ c { lconfSeeds = DNS.SeedsHostName $ show ip }
 
     queryName :: String -> IO IP
     queryName sname = do
@@ -53,5 +53,3 @@ getCustomConf mayServer controls = do
         either (fail . show) return catAs
       ix <- randomRIO (0, length as - 1)
       return $ as !! ix
-
-    setServer ip c = c { lconfSeeds = DNS.SeedsHostName $ show ip }
