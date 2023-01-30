@@ -27,7 +27,7 @@ main = do
               []  -> Nothing
               x:_ -> Just $ drop 1 x
             mHostTyp = case targets of
-              h:[]   -> Just (h,A)
+              h:[]   -> Just (h, A)
               h:t:[] -> Just (h, read t)
               _      -> Nothing
             ctl = mconcat $ map toFlag plus
@@ -74,4 +74,5 @@ help =
   , "         query-type: a | ns | txt | ptr"
   , "         query-option:"
   , "           +[no]rec[urse]  (Recursive mode)"
+  , "           +[no]dnssec     (DNSSEC)"
   ]
