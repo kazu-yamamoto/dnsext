@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Main (main) where
 
 import Control.Monad (when)
@@ -5,9 +7,10 @@ import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, intercalate)
+import System.Console.GetOpt
 import System.Environment (getArgs)
-import System.Exit (exitSuccess)
+import System.Exit (exitSuccess, exitFailure)
 
 import qualified DNS.Cache.Log as Log
 
@@ -15,16 +18,47 @@ import Operation (operate)
 import FullResolve (fullResolve)
 import Output (pprResult)
 
+options :: [OptDescr (Options -> Options)]
+options = [
+    Option ['h'] ["help"]
+    (NoArg (\ opts -> opts { optHelp = True }))
+    "print help"
+  , Option ['i'] ["iterative"]
+    (NoArg (\ opts -> opts { optIterative = True }))
+    "resolve iteratively"
+  , Option ['4'] ["ipv4"]
+    (NoArg (\ opts -> opts { optDisableV6NS = True }))
+    "disable IPv6 NS"
+  ]
+
+data Options = Options {
+    optHelp        :: Bool
+  , optIterative   :: Bool
+  , optDisableV6NS :: Bool
+  } deriving Show
+
+defaultOptions :: Options
+defaultOptions    = Options {
+    optHelp        = False
+  , optIterative   = False
+  , optDisableV6NS = False
+  }
+
 main :: IO ()
 main = do
+    args <- getArgs
+    let (at, plus, minus, targets) = divide args
+    Options{..} <- case getOpt Permute options minus of
+          (o,_,[])   -> return $ foldl (flip id) defaultOptions o
+          (_,_,errs) -> do
+              mapM_ putStr errs
+              exitFailure
+    when optHelp $ do
+        putStr $ usageInfo help options
+        exitSuccess
     runInitIO $ do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    args <- getArgs
-    let (at, plus, minus, targets) = divide args
-    when ("-h" `elem` minus || "--help" `elem` minus) $ do
-        putStr help
-        exitSuccess
     let mserver = case at of
           []  -> Nothing
           x:_ -> Just $ drop 1 x
@@ -33,13 +67,11 @@ main = do
           h:t:[] -> Just (h, read t)
           _      -> Nothing
         ctl = mconcat $ map toFlag plus
-        full = "--full" `elem` minus
-        disableV6NS = "-4" `elem` minus
     case mHostTyp of
       Nothing -> putStr help
       Just (host,typ)
-        | full      -> do
-            ex <- fullResolve disableV6NS Log.Stdout Log.INFO host typ
+        | optIterative -> do
+            ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO host typ
             case ex of
               Left err -> fail $ show err
               Right rs -> putStr $ pprResult rs
@@ -69,12 +101,14 @@ toFlag "+nodnssec"  = doFlag FlagClear
 toFlag _            = mempty -- fixme
 
 help :: String
-help =
-  unlines
-  [ "Usage: dug [@server] [name [query-type [query-option]]]"
+help = intercalate "\n"
+  [ "Usage: dug [@server] [name [query-type [query-option]]] [options]"
   , ""
-  , "         query-type: a | aaaa | ns | txt | ptr | ..."
-  , "         query-option:"
-  , "           +[no]rec[urse]  (Recursive mode)"
-  , "           +[no]dnssec     (DNSSEC)"
+  , "query-type: a | aaaa | ns | txt | ptr | ..."
+  , ""
+  , "query-option:"
+  , "  +[no]rec[urse]  (Recursive mode)"
+  , "  +[no]dnssec     (DNSSEC)"
+  , ""
+  , "options:"
   ]
