@@ -18,6 +18,8 @@ import Operation (operate)
 import FullResolve (fullResolve)
 import Output (pprResult)
 
+data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
+
 options :: [OptDescr (Options -> Options)]
 options = [
     Option ['h'] ["help"]
@@ -29,12 +31,23 @@ options = [
   , Option ['4'] ["ipv4"]
     (NoArg (\ opts -> opts { optDisableV6NS = True }))
     "disable IPv6 NS"
+  , Option ['d'] ["dox"]
+    (ReqArg (\ dox opts -> opts { optDoX = toDoX dox }) "dot|doq|doh2|doh3")
+    "enable DoX (auto if unknown"
   ]
+
+toDoX :: String -> DoX
+toDoX "dot"  = DoT
+toDoX "doq"  = DoQ
+toDoX "doh2" = DoH2
+toDoX "doh3" = DoH3
+toDoX _      = Auto
 
 data Options = Options {
     optHelp        :: Bool
   , optIterative   :: Bool
   , optDisableV6NS :: Bool
+  , optDoX         :: DoX
   } deriving Show
 
 defaultOptions :: Options
@@ -42,14 +55,14 @@ defaultOptions    = Options {
     optHelp        = False
   , optIterative   = False
   , optDisableV6NS = False
+  , optDoX         = Do53
   }
 
 main :: IO ()
 main = do
     args <- getArgs
-    let (at, plus, minus, targets) = divide args
-    Options{..} <- case getOpt Permute options minus of
-          (o,_,[])   -> return $ foldl (flip id) defaultOptions o
+    (args', Options{..}) <- case getOpt Permute options args of
+          (o,n,[])   -> return (n, foldl (flip id) defaultOptions o)
           (_,_,errs) -> do
               mapM_ putStr errs
               exitFailure
@@ -59,6 +72,7 @@ main = do
     runInitIO $ do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
+    let (at, plus, targets) = divide args'
     let mserver = case at of
           []  -> Nothing
           x:_ -> Just $ drop 1 x
@@ -81,15 +95,14 @@ main = do
               Left err -> fail $ show err
               Right rs -> putStr $ pprResult rs
 
-divide :: [String] -> ([String],[String],[String],[String])
-divide ls = loop ls (id,id,id,id)
+divide :: [String] -> ([String],[String],[String])
+divide ls = loop ls (id,id,id)
   where
-    loop [] (b0,b1,b2,b3) = (b0 [], b1 [], b2 [], b3 [])
-    loop (x:xs) (b0,b1,b2,b3)
-      | "@" `isPrefixOf` x = loop xs (b0 . (x:), b1, b2, b3)
-      | "+" `isPrefixOf` x = loop xs (b0, b1 . (x:), b2, b3)
-      | "-" `isPrefixOf` x = loop xs (b0, b1, b2 . (x:), b3)
-      | otherwise          = loop xs (b0, b1, b2, b3 . (x:))
+    loop [] (b0,b1,b2) = (b0 [], b1 [], b2 [])
+    loop (x:xs) (b0,b1,b2)
+      | "@" `isPrefixOf` x = loop xs (b0 . (x:), b1, b2)
+      | "+" `isPrefixOf` x = loop xs (b0, b1 . (x:), b2)
+      | otherwise          = loop xs (b0, b1, b2 . (x:))
 
 toFlag :: String -> QueryControls
 toFlag "+rec"       = rdFlag FlagSet
