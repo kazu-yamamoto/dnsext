@@ -16,11 +16,9 @@ import System.Exit (exitSuccess, exitFailure)
 
 import qualified DNS.Cache.Log as Log
 
-import Operation (operate)
+import Operation (operate, DoX(..))
 import FullResolve (fullResolve)
 import Output (pprResult)
-
-data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
 
 options :: [OptDescr (Options -> Options)]
 options = [
@@ -98,7 +96,7 @@ main = do
         Do53 -> 53
         Auto -> 53
         DoT  -> 853
-        DoQ  -> 443
+        DoQ  -> 853
         DoH2 -> 443
         DoH3 -> 443
       Just x  -> readCatch x
@@ -112,7 +110,7 @@ main = do
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
-        ex <- operate mserver port host typ ctl
+        ex <- operate mserver port optDoX host typ ctl
         case ex of
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs

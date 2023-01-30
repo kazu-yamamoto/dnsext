@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Operation where
 
 import Text.Read (readMaybe)
@@ -7,21 +9,26 @@ import DNS.Types (TYPE, DNSError, DNSMessage)
 import DNS.Do53.Client (QueryControls,
                LookupConf (lconfSeeds, lconfRetry, lconfQueryControls))
 import qualified DNS.Do53.Client as DNS
+import DNS.Do53.Internal (withLookupConfAndResolver, udpTcpResolver)
+import DNS.DoX.Internal
 import qualified DNS.Types as DNS
-import Network.Socket (PortNumber)
+import Network.Socket (PortNumber, HostName)
 import System.Random (randomRIO)
 
+data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
 
-type HostName = String
-
-operate :: Maybe HostName -> PortNumber -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
-operate server port domain type_ controls = do
+operate :: Maybe HostName -> PortNumber -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
+operate server port dox domain typ controls = do
   conf <- getCustomConf server port controls
-  operate_ conf domain type_
-
-operate_ :: LookupConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
-operate_ conf name typ = DNS.withLookupConf conf $ \env -> do
-    let q = DNS.Question (DNS.fromRepresentation name) typ DNS.classIN
+  let lim = 32 * 1024
+  let resolver = case dox of
+        DoT  -> tlsResolver lim
+        DoQ  -> quicResolver lim
+        DoH2 -> http2Resolver "/dns-query" lim
+        DoH3 -> http3Resolver "/dns-query" lim
+        _    -> udpTcpResolver 3 lim
+  withLookupConfAndResolver conf resolver $ \env -> do
+    let q = DNS.Question (DNS.fromRepresentation domain) typ DNS.classIN
     DNS.lookupRaw env q
 
 getCustomConf :: Maybe HostName -> PortNumber -> QueryControls -> IO LookupConf

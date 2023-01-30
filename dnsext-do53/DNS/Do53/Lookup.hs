@@ -13,6 +13,7 @@ module DNS.Do53.Lookup (
   , fromDNSMessage
   -- * Misc
   , withLookupConf
+  , withLookupConfAndResolver
   , modifyLookupEnv
   ) where
 
@@ -273,15 +274,19 @@ findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers fi
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
-withLookupConf LookupConf{..} f = do
+withLookupConf lconf@LookupConf{..} f = do
+    let resolver = udpTcpResolver lconfRetry lconfLimit
+    withLookupConfAndResolver lconf resolver f
+
+withLookupConfAndResolver :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
+withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
     ris <- findAddrPorts lconfSeeds
-    let resolver = udpTcpResolver lconfRetry lconfLimit
-        renv = resolvEnv resolver lconfConcurrent lconfActions ris
+    let renv = resolvEnv resolver lconfConcurrent lconfActions ris
         lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 

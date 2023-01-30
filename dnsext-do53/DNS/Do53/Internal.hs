@@ -43,6 +43,7 @@ module DNS.Do53.Internal (
   , UDPRetry
   , VCLimit
   , modifyLookupEnv
+  , withLookupConfAndResolver
   ) where
 
 import DNS.Do53.Do53
