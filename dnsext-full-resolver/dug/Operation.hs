@@ -20,13 +20,14 @@ data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
 operate :: Maybe HostName -> PortNumber -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
 operate server port dox domain typ controls = do
   conf <- getCustomConf server port controls
-  let lim = 32 * 1024
+  let lim = DNS.lconfLimit conf
+      retry = DNS.lconfRetry conf
   let resolver = case dox of
         DoT  -> tlsResolver lim
         DoQ  -> quicResolver lim
         DoH2 -> http2Resolver "/dns-query" lim
         DoH3 -> http3Resolver "/dns-query" lim
-        _    -> udpTcpResolver 3 lim
+        _    -> udpTcpResolver retry lim
   withLookupConfAndResolver conf resolver $ \env -> do
     let q = DNS.Question (DNS.fromRepresentation domain) typ DNS.classIN
     DNS.lookupRaw env q
