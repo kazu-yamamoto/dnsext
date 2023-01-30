@@ -3,6 +3,7 @@
 module Main (main) where
 
 import Control.Monad (when)
+import qualified Control.Exception as E
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
@@ -73,27 +74,30 @@ main = do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
     let (at, plus, targets) = divide args'
+    (host,typ) <- case targets of
+          [h]   -> return (h,A)
+          [h,t] -> do
+              typ' <- E.evaluate (read t) `E.catch` \(E.SomeException _) -> do
+                  putStrLn $ "Type " ++ t ++ " is not supported"
+                  exitFailure
+              return (h,typ')
+          _     -> do
+                  putStrLn "One or two arguments are necessary"
+                  exitFailure
     let mserver = case at of
           []  -> Nothing
           x:_ -> Just $ drop 1 x
-        mHostTyp = case targets of
-          h:[]   -> Just (h, A)
-          h:t:[] -> Just (h, read t)
-          _      -> Nothing
         ctl = mconcat $ map toFlag plus
-    case mHostTyp of
-      Nothing -> putStr help
-      Just (host,typ)
-        | optIterative -> do
-            ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO host typ
-            case ex of
-              Left err -> fail $ show err
-              Right rs -> putStr $ pprResult rs
-        | otherwise -> do
-            ex <- operate mserver host typ ctl
-            case ex of
-              Left err -> fail $ show err
-              Right rs -> putStr $ pprResult rs
+    if optIterative then do
+        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO host typ
+        case ex of
+          Left err -> fail $ show err
+          Right rs -> putStr $ pprResult rs
+      else do
+        ex <- operate mserver host typ ctl
+        case ex of
+          Left err -> fail $ show err
+          Right rs -> putStr $ pprResult rs
 
 divide :: [String] -> ([String],[String],[String])
 divide ls = loop ls (id,id,id)
