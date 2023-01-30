@@ -71,7 +71,7 @@ help =
   unlines
   [ "Usage: dug [@server] [name [query-type [query-option]]]"
   , ""
-  , "         query-type: a | ns | txt | ptr"
+  , "         query-type: a | aaaa | ns | txt | ptr | ..."
   , "         query-option:"
   , "           +[no]rec[urse]  (Recursive mode)"
   , "           +[no]dnssec     (DNSSEC)"
