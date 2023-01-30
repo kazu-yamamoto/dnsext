@@ -9,7 +9,7 @@ import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf, intercalate)
-import Network.Socket ()
+import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
@@ -45,6 +45,14 @@ toDoX "doq"  = DoQ
 toDoX "doh2" = DoH2
 toDoX "doh3" = DoH3
 toDoX _      = Auto
+
+doxPort :: DoX -> PortNumber
+doxPort Do53 = 53
+doxPort Auto = 53
+doxPort DoT  = 853
+doxPort DoQ  = 853
+doxPort DoH2 = 443
+doxPort DoH3 = 443
 
 data Options = Options {
     optHelp        :: Bool
@@ -92,13 +100,7 @@ main = do
                   putStrLn "One or two arguments are necessary"
                   exitFailure
     port <- case optPort of
-      Nothing -> return $ case optDoX of
-        Do53 -> 53
-        Auto -> 53
-        DoT  -> 853
-        DoQ  -> 853
-        DoH2 -> 443
-        DoH3 -> 443
+      Nothing -> return $ doxPort optDoX
       Just x  -> readCatch x
     let mserver = case at of
           []  -> Nothing
