@@ -8,14 +8,15 @@ import DNS.Do53.Client (QueryControls,
                LookupConf (lconfSeeds, lconfRetry, lconfQueryControls))
 import qualified DNS.Do53.Client as DNS
 import qualified DNS.Types as DNS
+import Network.Socket (PortNumber)
 import System.Random (randomRIO)
 
 
 type HostName = String
 
-operate :: Maybe HostName -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
-operate server domain type_ controls = do
-  conf <- getCustomConf server controls
+operate :: Maybe HostName -> PortNumber -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
+operate server port domain type_ controls = do
+  conf <- getCustomConf server port controls
   operate_ conf domain type_
 
 operate_ :: LookupConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
@@ -23,8 +24,8 @@ operate_ conf name typ = DNS.withLookupConf conf $ \env -> do
     let q = DNS.Question (DNS.fromRepresentation name) typ DNS.classIN
     DNS.lookupRaw env q
 
-getCustomConf :: Maybe HostName -> QueryControls -> IO LookupConf
-getCustomConf mayServer controls = case mayServer of
+getCustomConf :: Maybe HostName -> PortNumber -> QueryControls -> IO LookupConf
+getCustomConf mayServer port controls = case mayServer of
   Nothing     -> return conf
   Just server -> resolveServer server conf
   where
@@ -38,7 +39,7 @@ getCustomConf mayServer controls = case mayServer of
           Nothing -> queryName server
           Just x  -> return x
         -- print ip
-        return $ c { lconfSeeds = DNS.SeedsHostName $ show ip }
+        return $ c { lconfSeeds = DNS.SeedsHostPort (show ip) port }
 
     queryName :: String -> IO IP
     queryName sname = do

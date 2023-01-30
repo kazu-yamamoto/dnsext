@@ -2,13 +2,14 @@
 
 module Main (main) where
 
-import Control.Monad (when)
 import qualified Control.Exception as E
+import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf, intercalate)
+import Network.Socket ()
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
@@ -32,6 +33,9 @@ options = [
   , Option ['4'] ["ipv4"]
     (NoArg (\ opts -> opts { optDisableV6NS = True }))
     "disable IPv6 NS"
+  , Option ['p'] ["port"]
+    (ReqArg (\ port opts -> opts { optPort = Just port }) "<port>")
+    "specify port number"
   , Option ['d'] ["dox"]
     (ReqArg (\ dox opts -> opts { optDoX = toDoX dox }) "dot|doq|doh2|doh3")
     "enable DoX (auto if unknown"
@@ -48,6 +52,7 @@ data Options = Options {
     optHelp        :: Bool
   , optIterative   :: Bool
   , optDisableV6NS :: Bool
+  , optPort        :: Maybe String
   , optDoX         :: DoX
   } deriving Show
 
@@ -56,8 +61,14 @@ defaultOptions    = Options {
     optHelp        = False
   , optIterative   = False
   , optDisableV6NS = False
+  , optPort        = Nothing
   , optDoX         = Do53
   }
+
+readCatch :: Read a => String -> IO a
+readCatch x = E.evaluate (read x) `E.catch` \(E.SomeException _) -> do
+    putStrLn $ "Type " ++ x ++ " is not supported"
+    exitFailure
 
 main :: IO ()
 main = do
@@ -77,13 +88,20 @@ main = do
     (host,typ) <- case targets of
           [h]   -> return (h,A)
           [h,t] -> do
-              typ' <- E.evaluate (read t) `E.catch` \(E.SomeException _) -> do
-                  putStrLn $ "Type " ++ t ++ " is not supported"
-                  exitFailure
+              typ' <- readCatch t
               return (h,typ')
           _     -> do
                   putStrLn "One or two arguments are necessary"
                   exitFailure
+    port <- case optPort of
+      Nothing -> return $ case optDoX of
+        Do53 -> 53
+        Auto -> 53
+        DoT  -> 853
+        DoQ  -> 443
+        DoH2 -> 443
+        DoH3 -> 443
+      Just x  -> readCatch x
     let mserver = case at of
           []  -> Nothing
           x:_ -> Just $ drop 1 x
@@ -94,7 +112,7 @@ main = do
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
-        ex <- operate mserver host typ ctl
+        ex <- operate mserver port host typ ctl
         case ex of
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
