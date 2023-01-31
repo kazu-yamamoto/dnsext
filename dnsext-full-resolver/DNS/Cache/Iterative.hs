@@ -777,6 +777,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
 -- If the resolution result is NODATA, IllegalDomain is returned.
 selectDelegation :: Int -> Delegation -> DNSQuery IP
 selectDelegation dc (srcDom, des) = do
+  lift $ logLn Log.INFO $ ppDelegation des
   disableV6NS <- lift $ asks disableV6NS_
   let failEmptyDEs = do
         lift $ logLn Log.INFO $ "selectDelegation: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
@@ -836,7 +837,7 @@ selectDelegation dc (srcDom, des) = do
   a <- case dentry of
          DEwithAx   _ ip  ->  pure ip
          DEonlyNS   {}    ->  fst <$> resolveAXofNS
-  lift $ logLn Log.DEBUG $ "selectDelegation: " ++ show (srcDom, (ns, a))
+  lift $ logLn Log.INFO $ "selectDelegation: " ++ show (srcDom, (ns, a))
 
   return a
 
@@ -1003,3 +1004,12 @@ printResult = either print pmsg
       ["additional:"] ++
       map show (DNS.additional msg) ++
       [""]
+
+ppDelegation :: NE DEntry -> String
+ppDelegation des = "\t" ++ (intercalate "\n\t" $ map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT (fst des : snd des))
+  where
+    toT (DEwithAx d i) = (d, show i)
+    toT (DEonlyNS d)   = (d, "")
+    bundle xss@(x:_) = (fst x, filter (/= "") $ map snd xss)
+    bundle []        = ("",[]) -- never reach
+    pp (d,is) = show d ++ " " ++ show is
