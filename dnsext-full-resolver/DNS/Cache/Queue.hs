@@ -6,6 +6,7 @@ module DNS.Cache.Queue (
   QueueSize (..),
   ReadQueueSTM (..),
   WriteQueueSTM (..),
+  Queue,
   TQ, newQueue,
   ChanQ, newQueueChan,
   GetAny, makeGetAny,
@@ -161,9 +162,6 @@ data TQ a =
   , tqSizeMaxBound :: Int
   }
 
-newQueue :: Int -> IO (TQ a)
-newQueue = atomically . newTQ
-
 newTQ :: Int -> STM (TQ a)
 newTQ xsz = TQ <$> newTQueue <*> newTVar 0 <*> newTVar 0 <*> pure xsz
 
@@ -196,6 +194,17 @@ readSizesTQ q = do
   mx <- max sz <$> readTVar (tqLastMaxSizeRef q)
   return (sz, mx)
 
+newQueue :: Int -> IO (Queue STM a)
+newQueue xsz  = do
+  q <- atomically $ newTQ xsz
+  let readSize = readTVar $ tqSizeRef q
+  return $ Queue
+    (readTQ q)
+    (writeTQ q)
+    (tqSizeMaxBound q)
+    readSize
+    (max <$> readSize <*> readTVar (tqLastMaxSizeRef q))
+
 instance ReadQueue TQ where
   readQueue = atomically . readTQ
 
@@ -216,8 +225,10 @@ instance WriteQueueSTM TQ where
 
 type ChanQ = Chan
 
-newQueueChan :: IO (ChanQ a)
-newQueueChan = newChan
+newQueueChan :: IO (Queue IO a)
+newQueueChan = do
+  q <- newChan
+  return $ Queue (readChan q) (writeChan q) (-1) (return (-1)) (return (-1))
 
 instance ReadQueue Chan where
   readQueue = readChan
