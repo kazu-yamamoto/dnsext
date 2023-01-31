@@ -12,6 +12,7 @@ import Control.Monad ((<=<), forever, replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Data.List (uncons)
+import Data.Maybe (mapMaybe)
 import Data.ByteString (ByteString)
 import Data.IORef (newIORef, readIORef, atomicModifyIORef')
 import Data.String (fromString)
@@ -24,7 +25,8 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import Network.Socket (HostName, PortNumber)
+import Network.Socket (HostName, PortNumber, getAddrInfo, AddrInfo (..), SockAddr (..), SocketType (Datagram))
+import Data.IP (IP(..), fromHostAddress, fromHostAddress6)
 
 -- other packages
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
@@ -71,8 +73,18 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
   (ucacheLoops, insert, getCache, expires, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
   cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
+  let getAInfoIPs = do
+        ais <- getAddrInfo Nothing Nothing (Just $ show port)
+        let dgramIP AddrInfo { addrAddress = SockAddrInet _ ha }        =  Just $ IPv4 $ fromHostAddress ha
+            dgramIP AddrInfo { addrAddress = SockAddrInet6 _ _ ha6 _ }  =  Just $ IPv6 $ fromHostAddress6 ha6
+            dgramIP _                                                   =  Nothing
+        return $ mapMaybe dgramIP [ ai | ai@AddrInfo { addrSocketType = Datagram } <- ais ]
+  hostIPs <- if null hosts
+             then getAInfoIPs
+             else return $ map fromString hosts
+
   (pLoops, qsizes) <- do
-    (loopsList, qsizes) <- unzip <$> mapM (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port) hosts
+    (loopsList, qsizes) <- unzip <$> mapM (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port) hostIPs
     return (concat loopsList, qsizes)
 
   caps <- getNumCapabilities
@@ -83,10 +95,10 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
 
   return (logLoops ++ ucacheLoops ++ pLoops, monLoops)
 
-getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Context -> PortNumber -> HostName
+getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Context -> PortNumber -> IP
             -> IO ([IO ()], PLStatus)
-getPipeline workers sharedQueue perWorker getSec cxt port host = do
-  sock <- UDP.serverSocket (fromString host, port)
+getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
+  sock <- UDP.serverSocket (hostIP, port)
   let putLn lv = logLines_ cxt lv . (:[])
 
   (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers sharedQueue perWorker getSec cxt
