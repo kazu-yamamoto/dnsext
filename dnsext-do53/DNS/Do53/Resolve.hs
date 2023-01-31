@@ -33,7 +33,7 @@ import DNS.Do53.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: ResolvEnv -> Question -> QueryControls -> IO DNSMessage
+resolve :: ResolvEnv -> Question -> QueryControls -> IO Result
 resolve ResolvEnv{..} q@Question{..} qctl
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
   | concurrent    = resolveConcurrent ris resolver q qctl
@@ -43,7 +43,7 @@ resolve ResolvEnv{..} q@Question{..} qctl
     resolver   = renvResolver
     ris        = renvResolvInfos
 
-resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveSequential ris0 resolver q qctl = loop ris0
   where
     loop []       = error "resolveSequential:loop"
@@ -54,7 +54,7 @@ resolveSequential ris0 resolver q qctl = loop ris0
           Left (_ :: DNSError) -> loop ris
           Right res -> return res
 
-resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO DNSMessage
+resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent ris resolver q qctl =
     raceAny $ map (\ri -> resolver ri q qctl) ris
   where

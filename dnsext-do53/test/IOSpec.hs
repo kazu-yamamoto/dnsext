@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module IOSpec where
 
@@ -21,8 +22,8 @@ spec = describe "solvers" $ do
             -- Google's resolvers support the AD and CD bits
             qctl = adFlag FlagSet <> ednsEnabled FlagClear
 
-        ans <- udpResolver 1 ri q qctl
-        rcode (flags (header ans)) `shouldBe` NoErr
+        Result{..} <- udpResolver 1 ri q qctl
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
     it "resolves well with TCP" $ do
         let q = Question "www.mew.org" A classIN
@@ -33,5 +34,5 @@ spec = describe "solvers" $ do
             -- Google's resolvers support the AD and CD bits
             qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
 
-        ans <- tcpResolver (32 * 1024) ri q qctl
-        rcode (flags (header ans)) `shouldBe` NoErr
+        Result{..} <- tcpResolver (32 * 1024) ri q qctl
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr

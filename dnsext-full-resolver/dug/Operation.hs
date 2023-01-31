@@ -2,24 +2,23 @@
 
 module Operation where
 
-import Text.Read (readMaybe)
-
-import Data.IP (IP (..))
-import DNS.Types (TYPE, DNSError, DNSMessage)
-import DNS.Do53.Client (QueryControls,
-               LookupConf (lconfSeeds, lconfRetry, lconfQueryControls))
+-- import Text.Read (readMaybe)
+-- import Data.IP (IP (..))
+import DNS.Types (TYPE, DNSError)
+import DNS.Do53.Client (QueryControls, LookupConf (..))
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (withLookupConfAndResolver, udpTcpResolver)
+import qualified DNS.Do53.Internal as DNS
 import DNS.DoX.Internal
 import qualified DNS.Types as DNS
 import Network.Socket (PortNumber, HostName)
-import System.Random (randomRIO)
+-- import System.Random (randomRIO)
 
 data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
 
-operate :: Maybe HostName -> PortNumber -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
-operate server port dox domain typ controls = do
-  conf <- getCustomConf server port controls
+operate :: Maybe [(HostName,PortNumber)] -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNS.Result)
+operate mhps dox domain typ controls = do
+  conf <- getCustomConf mhps controls
   let lim = DNS.lconfLimit conf
       retry = DNS.lconfRetry conf
   let resolver = case dox of
@@ -32,23 +31,21 @@ operate server port dox domain typ controls = do
     let q = DNS.Question (DNS.fromRepresentation domain) typ DNS.classIN
     DNS.lookupRaw env q
 
-getCustomConf :: Maybe HostName -> PortNumber -> QueryControls -> IO LookupConf
-getCustomConf mayServer port controls = case mayServer of
-  Nothing     -> return conf
-  Just server -> resolveServer server conf
+getCustomConf :: Maybe [(HostName,PortNumber)] -> QueryControls -> IO LookupConf
+getCustomConf mhps controls = case mhps of
+  Nothing  -> return conf
+  Just hps -> resolveServer hps conf
   where
     conf = DNS.defaultLookupConf {
-        lconfRetry = 2
+        lconfRetry         = 2
       , lconfQueryControls = controls
+      , lconfConcurrent    = True
       }
 
-    resolveServer server c = do
-        ip <- case readMaybe server of
-          Nothing -> queryName server
-          Just x  -> return x
-        -- print ip
-        return $ c { lconfSeeds = DNS.SeedsHostPort (show ip) port }
+    resolveServer hps c = do
+        return $ c { lconfSeeds = DNS.SeedsHostPorts hps }
 
+{-
     queryName :: String -> IO IP
     queryName sname = do
       as <- DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
@@ -62,3 +59,4 @@ getCustomConf mayServer port controls = case mayServer of
         either (fail . show) return catAs
       ix <- randomRIO (0, length as - 1)
       return $ as !! ix
+-}

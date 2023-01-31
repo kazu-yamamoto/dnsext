@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module ResolverSpec where
 
@@ -20,24 +22,24 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans0 <- tlsResolver 32768 ri0 q mempty
-        rcode (flags (header ans0)) `shouldBe` NoErr
+        Result{..} <- tlsResolver 32768 ri0 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
         let ri1 = defaultResolvInfo {
                 rinfoHostName      = "8.8.8.8"
               , rinfoPortNumber    = 853
               }
 
-        ans1 <- tlsResolver 32768 ri1 q mempty
-        rcode (flags (header ans1)) `shouldBe` NoErr
+        Result{..} <- tlsResolver 32768 ri1 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
         let ri2 = defaultResolvInfo {
                 rinfoHostName      = "94.140.14.140"
               , rinfoPortNumber    = 853
               }
 
-        ans2 <- tlsResolver 32768 ri2 q mempty
-        rcode (flags (header ans2)) `shouldBe` NoErr
+        Result{..} <- tlsResolver 32768 ri2 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
     it "resolves well with QUIC" $ do
         let ri2 = defaultResolvInfo {
@@ -45,8 +47,8 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 853
               }
 
-        ans2 <- quicResolver 32768 ri2 q mempty
-        rcode (flags (header ans2)) `shouldBe` NoErr
+        Result{..} <- quicResolver 32768 ri2 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
     it "resolves well with HTTP/2" $ do
         let ri0 = defaultResolvInfo {
@@ -54,24 +56,24 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans0 <- http2Resolver "/dns-query" 32768 ri0 q mempty
-        rcode (flags (header ans0)) `shouldBe` NoErr
+        Result{..} <- http2Resolver "/dns-query" 32768 ri0 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
         let ri1 = defaultResolvInfo {
                 rinfoHostName      = "8.8.8.8"
               , rinfoPortNumber    = 443
               }
 
-        ans1 <- http2Resolver "/dns-query" 32768 ri1 q mempty
-        rcode (flags (header ans1)) `shouldBe` NoErr
+        Result{..} <- http2Resolver "/dns-query" 32768 ri1 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
         let ri2 = defaultResolvInfo {
                 rinfoHostName      = "94.140.14.140"
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http2Resolver "/dns-query" 32768 ri2 q mempty
-        rcode (flags (header ans2)) `shouldBe` NoErr
+        Result{..} <- http2Resolver "/dns-query" 32768 ri2 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
 
     it "resolves well with HTTP/3" $ do
         let ri2 = defaultResolvInfo {
@@ -79,5 +81,5 @@ spec = describe "solvers" $ do
               , rinfoPortNumber    = 443
               }
 
-        ans2 <- http3Resolver "/dns-query" 32768 ri2 q mempty
-        rcode (flags (header ans2)) `shouldBe` NoErr
+        Result{..} <- http3Resolver "/dns-query" 32768 ri2 q mempty
+        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr

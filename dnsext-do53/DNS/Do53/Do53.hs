@@ -9,6 +9,7 @@ module DNS.Do53.Do53 (
   , tcpResolver
   , vcResolver
   , checkRespM
+  , toResult
   ) where
 
 import Control.Exception as E
@@ -52,7 +53,7 @@ udpTcpResolver retry lim ri q qctl = udpResolver retry ri q qctl `E.catch` \TCPF
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: HostName -> String -> IOError -> IO DNSMessage
+ioErrorToDNSError :: HostName -> String -> IOError -> IO Result
 ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
   where
     loc = protoName ++ "@" ++ h
@@ -63,7 +64,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: UDPRetry -> Resolver
-udpResolver retry ResolvInfo{..} q _qctl =
+udpResolver retry ri@ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
     -- Using only one socket and the same identifier.
@@ -88,7 +89,7 @@ udpResolver retry ResolvInfo{..} q _qctl =
               if rc == FormatErr && eh == NoEDNS && qctl /= qctl0 then
                   loop cnt ident qctl send recv
                 else
-                  return res
+                  return $ toResult ri "UDP" res
 
     solve ident qctl send recv = do
         let qry = encodeQuery ident q qctl
@@ -124,7 +125,7 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO DNSMessage) -> IO DNSMessage) -> Resolver
-vcResolver proto perform ResolvInfo{..} q _qctl =
+vcResolver proto perform ri@ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
     go qctl0 = do
@@ -135,8 +136,8 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-        then perform $ solve qctl
-        else return res
+        then toResult ri proto <$> perform (solve qctl)
+        else return $ toResult ri proto res
 
     solve qctl send recv = do
         -- Using a fresh identifier.
@@ -157,3 +158,11 @@ vcResolver proto perform ResolvInfo{..} q _qctl =
             Right (msg,_) -> case checkRespM q ident msg of
                 Nothing  -> return msg
                 Just err -> E.throwIO err
+
+toResult :: ResolvInfo -> String -> DNSMessage -> Result
+toResult ResolvInfo{..} tag msg = Result {
+    resultHostName   = rinfoHostName
+  , resultPortNumber = rinfoPortNumber
+  , resultTag        = tag
+  , resultDNSMessage = msg
+  }

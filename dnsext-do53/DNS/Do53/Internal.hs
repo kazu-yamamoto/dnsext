@@ -27,6 +27,8 @@ module DNS.Do53.Internal (
   , ResolvActions(..)
   , defaultResolvActions
     -- * Resolver: DNS over X
+  , Result(..)
+  , toResult
   , Resolver
   , udpTcpResolver
   , udpResolver

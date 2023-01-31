@@ -19,6 +19,7 @@ module DNS.Do53.Types (
   , defaultResolvInfo
   , ResolvActions(..)
   , defaultResolvActions
+  , Result(..)
   , Resolver
   -- * IO
   , Recv
@@ -54,6 +55,7 @@ data Seeds = SeedsFilePath FilePath -- ^ A path for \"resolv.conf\"
            | SeedsHostName HostName -- ^ A numeric IP address. /Warning/: host names are invalid.
            | SeedsHostNames [HostName] -- ^ Numeric IP addresses. /Warning/: host names are invalid.
            | SeedsHostPort HostName PortNumber -- ^ A numeric IP address and port number. /Warning/: host names are invalid.
+           | SeedsHostPorts [(HostName,PortNumber)]
            deriving Show
 
 ----------------------------------------------------------------
@@ -189,8 +191,15 @@ defaultResolvInfo = ResolvInfo {
   , rinfoActions       = defaultResolvActions
   }
 
+data Result = Result {
+    resultHostName   :: HostName
+  , resultPortNumber :: PortNumber
+  , resultTag        :: String
+  , resultDNSMessage :: DNSMessage
+  } deriving (Eq, Show)
+
 -- | The type of resolvers (DNS over X).
-type Resolver = ResolvInfo -> Question -> QueryControls -> IO DNSMessage
+type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
 
 ----------------------------------------------------------------
 

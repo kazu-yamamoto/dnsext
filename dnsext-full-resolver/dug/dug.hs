@@ -5,6 +5,7 @@ module Main (main) where
 import qualified Control.Exception as E
 import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
+import qualified DNS.Do53.Internal as DNS
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
@@ -91,7 +92,7 @@ main = do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
     let (at, plus, targets) = divide args'
-    (host,typ) <- case targets of
+    (dom,typ) <- case targets of
           [h]   -> return (h,A)
           [h,t] -> do
               typ' <- readCatch t
@@ -103,19 +104,21 @@ main = do
       Nothing -> return $ doxPort optDoX
       Just x  -> readCatch x
     let mserver = case at of
-          []  -> Nothing
-          x:_ -> Just $ drop 1 x
+          [] -> Nothing
+          xs -> Just $ map (\x -> (drop 1 x,port)) xs
         ctl = mconcat $ map toFlag plus
     if optIterative then do
-        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO host typ
+        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO dom typ
         case ex of
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
-        ex <- operate mserver port optDoX host typ ctl
+        ex <- operate mserver optDoX dom typ ctl
         case ex of
           Left err -> fail $ show err
-          Right rs -> putStr $ pprResult rs
+          Right DNS.Result{..} -> do
+              putStrLn $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag ++ "\n"
+              putStr $ pprResult resultDNSMessage
 
 divide :: [String] -> ([String],[String],[String])
 divide ls = loop ls (id,id,id)

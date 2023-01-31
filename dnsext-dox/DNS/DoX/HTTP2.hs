@@ -39,7 +39,7 @@ http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock -
 h2resolver :: Context -> Identifier -> ShortByteString -> VCLimit -> Resolver
 h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
     E.bracket (allocConfig ctx 4096) freeConfig $ \conf ->
-        run cliconf conf $ doHTTP ident path lim ri q qctl
+        run cliconf conf $ doHTTP "HTTP/2" ident path lim ri q qctl
   where
     cliconf = ClientConfig {
         scheme = "https"
@@ -47,15 +47,15 @@ h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
       , cacheLimit = 20
       }
 
-doHTTP :: Identifier -> ShortByteString ->  VCLimit -> ResolvInfo -> Question -> QueryControls -> Client DNSMessage
-doHTTP ident path lim ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
+doHTTP :: String -> Identifier -> ShortByteString -> VCLimit -> ResolvInfo -> Question -> QueryControls -> Client Result
+doHTTP tag ident path lim ri@ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
     let recvHTTP = recvManyN $ getResponseBodyChunk rsp
     (_,bss) <- recvHTTP lim
     now <- getTime
     case decodeChunks now bss of
         Left  e       -> E.throwIO e
         Right (msg,_) -> case checkRespM q ident msg of -- fixme
-            Nothing  -> return msg
+            Nothing  -> return $ toResult ri tag msg
             Just err -> E.throwIO err
   where
     getTime = ractionGetTime rinfoActions
