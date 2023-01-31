@@ -6,7 +6,6 @@ module DNS.Cache.Queue (
   WriteQueueSTM (..),
   TQ, newQueue,
   ChanQ, newQueueChan,
-  Q1, newQueue1,
   GetAny, makeGetAny,
   PutAny, makePutAny,
   ) where
@@ -15,7 +14,6 @@ import Control.Monad (guard, msum, when)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
   (TVar, newTVar, readTVar, modifyTVar', writeTVar,
-   TMVar, newEmptyTMVarIO, takeTMVar, putTMVar, isEmptyTMVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
    atomically, STM)
 
@@ -191,27 +189,3 @@ instance WriteQueue Chan where
 instance QueueSize Chan where
   sizeMaxBound _ = -1
   readSizes _ = return (-1, -1)
-
----
-
-type Q1 = TMVar
-
-newQueue1 :: IO (Q1 a)
-newQueue1 = newEmptyTMVarIO
-
-instance ReadQueue TMVar where
-  readQueue = atomically . takeTMVar
-
-instance WriteQueue TMVar where
-  writeQueue q = atomically . putTMVar q
-
-instance QueueSize TMVar where
-  sizeMaxBound _ = 1
-  readSizes q = atomically $ (,) <$> (emptySize <$> isEmptyTMVar q) <*> pure (-1)
-    where emptySize empty = if empty then 0 else 1
-
-instance ReadQueueSTM TMVar where
-  readQueueSTM = takeTMVar
-
-instance WriteQueueSTM TMVar where
-  writeQueueSTM = putTMVar
