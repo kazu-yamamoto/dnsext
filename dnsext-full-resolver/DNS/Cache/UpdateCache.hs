@@ -19,8 +19,6 @@ import DNS.Types.Decode (EpochTime)
 import UnliftIO (tryAny)
 
 -- this package
-import DNS.Cache.Queue (newQueue, readQueue, writeQueue)
-import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNS.Cache.Cache as Cache
 
@@ -32,6 +30,8 @@ data MemoActions = MemoActions {
     memoLogLn :: String -> IO ()
   , memoErrorLn :: String -> IO ()
   , memoGetTime :: IO EpochTime
+  , memoReadQueue :: IO UpdateEvent
+  , memoWriteQueue :: UpdateEvent -> IO ()
   }
 
 -- function update to update cache, and log action
@@ -41,7 +41,7 @@ type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: CacheConf
     -> Int
-    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO (), IO (Int, Int))
+    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
 new CacheConf{..} maxCacheSize = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
@@ -55,11 +55,10 @@ new CacheConf{..} maxCacheSize = do
               logAction c
         maybe (pure ()) updateRef $ uevent cache
 
-  (updateLoop, enqueueU, readUSize) <- do
-    inQ <- newQueue 8
+  (updateLoop, enqueueU) <- do
     let errorLn = memoErrorLn . ("Memo.updateLoop: error: " ++) . show
-        body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
-    return (forever body, writeQueue inQ, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+        body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
+    return (forever body, memoWriteQueue)
 
   let expires1 ts = enqueueU (Cache.expires ts, expiredLog)
         where
@@ -77,7 +76,7 @@ new CacheConf{..} maxCacheSize = do
             evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
         enqueueU (evInsert, const $ pure ())
 
-  return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1, readUSize)
+  return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1)
 
 -- no caching
 none :: (Insert, IO Cache)
