@@ -69,8 +69,15 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
             (logLoop, putLines, logQSize, _waitQuit) <- Log.new (Log.outputHandle logOutput) logLevel
             return ([logLoop], putLines, logQSize, pure ())
   (logLoops, putLines, logQSize, flushLog) <- getLogger
-  tcache@(getSec, _) <- TimeCache.new
-  (ucacheLoops, insert, getCache, expires, ucacheQSize) <- UCache.new putLines tcache maxCacheSize
+  tcache@(getSec, getTimeStr) <- TimeCache.new
+  (cacheConf, ucacheQSize) <- do
+    ucacheQ <- newQueue 8
+    let memoLogLn msg = do
+          tstr <- getTimeStr
+          putLines Log.NOTICE [tstr $ ": " ++ msg]
+        memoActions = UCache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
+    return (UCache.CacheConf maxCacheSize memoActions, Queue.readSizes ucacheQ)
+  (ucacheLoops, insert, getCache, expires) <- UCache.new cacheConf
   cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
   let getAInfoIPs = do
@@ -129,7 +136,12 @@ workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
   (logLoop, putLines, _logQSize, _) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE
   tcache@(getSec, _) <- TimeCache.new
-  (ucacheLoops, insert, getCache, _expires, _ucacheQSize) <- UCache.new putLines tcache (2 * 1024 * 1024)
+  cacheConf <- do
+    ucacheQ <- newQueue 8
+    let memoLogLn = putLines Log.NOTICE . (:[])
+        memoActions = UCache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
+    return (UCache.CacheConf (2 * 1024 * 1024) memoActions)
+  (ucacheLoops, insert, getCache, _expires) <- UCache.new cacheConf
   cxt <- newContext putLines False (insert, getCache) tcache
 
   let getPipieline
