@@ -23,7 +23,8 @@ import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNS.Cache.Cache as Cache
 
 data CacheConf = CacheConf {
-    memoActions :: MemoActions
+    maxCacheSize :: Int
+  , memoActions :: MemoActions
   }
 
 data MemoActions = MemoActions {
@@ -40,9 +41,8 @@ type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
 new :: CacheConf
-    -> Int
     -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
-new CacheConf{..} maxCacheSize = do
+new CacheConf{..} = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
