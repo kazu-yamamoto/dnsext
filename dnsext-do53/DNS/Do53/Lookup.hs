@@ -13,6 +13,8 @@ module DNS.Do53.Lookup (
   , fromDNSMessage
   -- * Misc
   , withLookupConf
+  , withLookupConfAndResolver
+  , modifyLookupEnv
   ) where
 
 import Control.Exception as E
@@ -97,10 +99,10 @@ lookupFreshSection :: LookupEnv
                    -> Section
                    -> IO (Either DNSError [RData])
 lookupFreshSection env q@Question{..} section = do
-    eans <- lookupRaw env q
-    case eans of
-      Left err  -> return $ Left err
-      Right ans -> return $ fromDNSMessage ans toRD
+    eres <- lookupRaw env q
+    case eres of
+      Left  err -> return $ Left err
+      Right res -> return $ fromDNSMessage (resultDNSMessage res) toRD
   where
     correct ResourceRecord{..} = rrtype == qtype
     toRD = map rdata . filter correct . sectionF
@@ -115,15 +117,16 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     mx <- lookupCache q c
     case mx of
       Nothing -> do
-          eans <- lookupRaw env q
+          eres <- lookupRaw env q
           now <- ractionGetTime lenvActions
-          case eans of
+          case eres of
             Left  err ->
                 -- Probably a network error happens.
                 -- We do not cache anything.
                 return $ Left err
-            Right ans -> do
-                let ex = fromDNSMessage ans toRR
+            Right res -> do
+                let ans = resultDNSMessage res
+                    ex = fromDNSMessage ans toRR
                 case ex of
                   Left NameError -> do
                       let v = Left NameError
@@ -252,7 +255,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withLookupConf'
           -> Question
-          -> IO (Either DNSError DNSMessage)
+          -> IO (Either DNSError Result)
 lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 
 ----------------------------------------------------------------
@@ -262,9 +265,10 @@ dnsPort :: PortNumber
 dnsPort = 53
 
 findAddrPorts :: Seeds -> IO [(HostName,PortNumber)]
-findAddrPorts (SeedsHostName   nh)  = return [(nh, dnsPort)]
+findAddrPorts (SeedsHostName  nh)   = return [(nh, dnsPort)]
 findAddrPorts (SeedsHostPort  nh p) = return [(nh, p)]
 findAddrPorts (SeedsHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts (SeedsHostPorts nhps) = return nhps
 findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
@@ -272,23 +276,39 @@ findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers fi
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
-withLookupConf rc@LookupConf{..} f = do
-    ris <- makeInfo rc <$> findAddrPorts lconfSeeds
+withLookupConf lconf@LookupConf{..} f = do
+    let resolver = udpTcpResolver lconfRetry lconfLimit
+    withLookupConfAndResolver lconf resolver f
+
+withLookupConfAndResolver :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
+withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
           cache <- newCache (pruningDelay cacheconf)
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
-    let resolver = udpTcpResolver lconfRetry lconfLimit
-        renv = ResolvEnv resolver lconfConcurrent ris
-        lenv = LookupEnv mcache lconfQueryControls renv lconfActions
+    ris <- findAddrPorts lconfSeeds
+    let renv = resolvEnv resolver lconfConcurrent lconfActions ris
+        lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
-makeInfo :: LookupConf -> [(HostName, PortNumber)] -> [ResolvInfo]
-makeInfo LookupConf{..} hps = map mk hps
+resolvEnv :: Resolver -> Bool -> ResolvActions -> [(HostName, PortNumber)] -> ResolvEnv
+resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
+  where
+    ris = resolvInfos actions hps
+
+resolvInfos :: ResolvActions -> [(HostName, PortNumber)] -> [ResolvInfo]
+resolvInfos actions hps = map mk hps
   where
     mk (h,p) = ResolvInfo {
             rinfoHostName   = h
           , rinfoPortNumber = p
-          , rinfoActions    = lconfActions
+          , rinfoActions    = actions
           }
+
+modifyLookupEnv :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
+modifyLookupEnv resolver hps lenv@LookupEnv{..} = lenv {
+    lenvResolvEnv = renv
+  }
+  where
+    renv = resolvEnv resolver lenvConcurrent lenvActions hps

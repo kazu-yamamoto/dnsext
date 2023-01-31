@@ -77,9 +77,11 @@ executable dug
         dnsext-full-resolver,
         dnsext-types,
         dnsext-do53,
+        dnsext-dox,
         dnsext-dnssec,
         dnsext-svcb,
         iproute,
+        network,
         transformers,
         bytestring,
         random

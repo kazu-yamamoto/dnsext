@@ -770,7 +770,7 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
         }
       q = Question name typ classIN
       qctl = DNS.rdFlag FlagClear
-  either (Left . DnsError) (handleResponseError Left Right) <$>
+  either (Left . DnsError) (\res -> handleResponseError Left Right $ DNS.resultDNSMessage res) <$>
     E.try (DNS.resolve renv q qctl)
 
 -- Select an authoritative server from the delegation information and resolve to an IP address.

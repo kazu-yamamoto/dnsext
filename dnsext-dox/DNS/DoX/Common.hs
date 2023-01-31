@@ -102,7 +102,7 @@ getQUICParams hostname port alpn = defaultClientConfig {
     ccServerName = hostname
   , ccPortName   = show port
   , ccALPN       = \_ -> return $ Just [alpn]
-  , ccDebugLog   = True
+  , ccDebugLog   = False
   , ccValidate   = False
   , ccVersions   = [Version1]
   }

@@ -1,57 +1,65 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
+
 module Operation where
 
+import DNS.Do53.Client (QueryControls, LookupConf (..))
+import qualified DNS.Do53.Client as DNS
+import DNS.Do53.Internal (withLookupConfAndResolver, udpTcpResolver)
+import qualified DNS.Do53.Internal as DNS
+import DNS.DoX.Internal
+import DNS.Types (TYPE, DNSError)
+import qualified DNS.Types as DNS
+import Data.IP (IPv4, IPv6)
+import Network.Socket (PortNumber, HostName)
 import Text.Read (readMaybe)
 
-import Data.IP (IP (..))
-import DNS.Types (TYPE, DNSError, DNSMessage)
-import DNS.Do53.Client (QueryControls,
-               LookupConf (lconfSeeds, lconfRetry, lconfQueryControls))
-import qualified DNS.Do53.Client as DNS
-import qualified DNS.Types as DNS
-import System.Random (randomRIO)
+data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
 
+operate :: [HostName] -> PortNumber -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNS.Result)
+operate mserver port dox domain typ controls = do
+  conf <- getCustomConf mserver port controls
+  let lim = DNS.lconfLimit conf
+      retry = DNS.lconfRetry conf
+  let resolver = case dox of
+        DoT  -> tlsResolver lim
+        DoQ  -> quicResolver lim
+        DoH2 -> http2Resolver "/dns-query" lim
+        DoH3 -> http3Resolver "/dns-query" lim
+        _    -> udpTcpResolver retry lim
+  withLookupConfAndResolver conf resolver $ \env -> do
+    let q = DNS.Question (DNS.fromRepresentation domain) typ DNS.classIN
+    DNS.lookupRaw env q
 
-type HostName = String
-
-operate :: Maybe HostName -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNSMessage)
-operate server domain type_ controls = do
-  conf <- getCustomConf server controls
-  operate_ conf domain type_
-
-operate_ :: LookupConf -> HostName -> TYPE -> IO (Either DNSError DNSMessage)
-operate_ conf name typ = DNS.withLookupConf conf $ \seeds -> do
-    let q = DNS.Question (DNS.fromRepresentation name) typ DNS.classIN
-    DNS.lookupRaw seeds q
-
-getCustomConf :: Maybe HostName -> QueryControls -> IO LookupConf
-getCustomConf mayServer controls = do
-  let resolveServer server c = do
-        ip <- resolve server
-        -- print ip
-        return $ setServer ip c
-
-  maybe return resolveServer mayServer
-    DNS.defaultLookupConf
-    { lconfRetry = 2
-    , lconfQueryControls = controls
-    }
+getCustomConf :: [HostName] -> PortNumber ->  QueryControls -> IO LookupConf
+getCustomConf mserver port controls = case mserver of
+  [] -> return conf
+  hs -> do
+      as <- concat <$> mapM toNumeric hs
+      let aps = map (,port) as
+      return $ conf { lconfSeeds = DNS.SeedsHostPorts aps }
   where
-    resolve :: String -> IO IP
-    resolve sname =
-      maybe (queryName sname) return $ readMaybe sname
+    conf = DNS.defaultLookupConf {
+        lconfRetry         = 2
+      , lconfQueryControls = controls
+      , lconfConcurrent    = True
+      }
 
-    queryName :: String -> IO IP
-    queryName sname = do
-      as <- DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
+    toNumeric :: HostName -> IO [HostName]
+    toNumeric sname | isNumeric sname = return [sname]
+    toNumeric sname = DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
         let dom = DNS.fromRepresentation sname
         eA  <- DNS.lookupA    env dom
         eQA <- DNS.lookupAAAA env dom
-        let catAs = do
+        let eas = do
               as  <- eA
               qas <- eQA
-              return $ map (IPv4 . DNS.a_ipv4) as ++ map (IPv6 . DNS.aaaa_ipv6) qas
-        either (fail . show) return catAs
-      ix <- randomRIO (0, length as - 1)
-      return $ as !! ix
+              return $ map (show . DNS.a_ipv4) as ++ map (show . DNS.aaaa_ipv6) qas
+        either (fail . show) return eas
 
-    setServer ip c = c { lconfSeeds = DNS.SeedsHostName $ show ip }
+isNumeric :: HostName -> Bool
+isNumeric h = case readMaybe h :: Maybe IPv4 of
+  Just _  -> True
+  Nothing -> case readMaybe h :: Maybe IPv6 of
+    Just _  -> True
+    Nothing -> False
