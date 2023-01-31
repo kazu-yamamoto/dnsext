@@ -7,8 +7,7 @@ module DNS.Cache.Queue (
   ReadQueueSTM (..),
   WriteQueueSTM (..),
   Queue,
-  TQ, newQueue,
-  ChanQ, newQueueChan,
+  newQueue, newQueueChan,
   GetAny, makeGetAny,
   PutAny, makePutAny,
   ) where
@@ -222,8 +221,6 @@ instance WriteQueueSTM TQ where
   writeQueueSTM = writeTQ
 
 ---
-
-type ChanQ = Chan
 
 newQueueChan :: IO (Queue IO a)
 newQueueChan = do
