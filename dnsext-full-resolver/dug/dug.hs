@@ -2,7 +2,6 @@
 
 module Main (main) where
 
-import qualified Control.Exception as E
 import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import qualified DNS.Do53.Internal as DNS
@@ -14,6 +13,7 @@ import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
+import Text.Read (readMaybe)
 
 import qualified DNS.Cache.Log as Log
 
@@ -72,11 +72,6 @@ defaultOptions    = Options {
   , optDoX         = Do53
   }
 
-readCatch :: Read a => String -> IO a
-readCatch x = E.evaluate (read x) `E.catch` \(E.SomeException _) -> do
-    putStrLn $ "Type " ++ x ++ " is not supported"
-    exitFailure
-
 main :: IO ()
 main = do
     args <- getArgs
@@ -93,19 +88,25 @@ main = do
         addResourceDataForSVCB
     let (at, plus, targets) = divide args'
     (dom,typ) <- case targets of
-          [h]   -> return (h,A)
+          [h]   -> return (h, A)
           [h,t] -> do
-              typ' <- readCatch t
-              return (h,typ')
+              let mtyp' = readMaybe t
+              case mtyp' of
+                Just typ' -> return (h, typ')
+                Nothing   -> do
+                    putStrLn $ "Type " ++ t ++ " is not supported"
+                    exitFailure
           _     -> do
                   putStrLn "One or two arguments are necessary"
                   exitFailure
     port <- case optPort of
       Nothing -> return $ doxPort optDoX
-      Just x  -> readCatch x
-    let mserver = case at of
-          [] -> Nothing
-          xs -> Just $ map (\x -> (drop 1 x,port)) xs
+      Just x  -> case readMaybe x of
+        Just p -> return p
+        Nothing -> do
+            putStrLn $ "Port " ++ x ++ " is illegal"
+            exitFailure
+    let mserver = map (drop 1) at
         ctl = mconcat $ map toFlag plus
     if optIterative then do
         ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO dom typ
@@ -113,7 +114,7 @@ main = do
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
-        ex <- operate mserver optDoX dom typ ctl
+        ex <- operate mserver port optDoX dom typ ctl
         case ex of
           Left err -> fail $ show err
           Right DNS.Result{..} -> do
