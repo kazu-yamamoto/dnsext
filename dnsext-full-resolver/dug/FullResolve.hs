@@ -29,8 +29,9 @@ fullResolve disableV6NS logOutput logLevel n ty = do
 setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Context)
 setup disableV6NS logOutput logLevel = do
   (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
-  tcache <- TimeCache.new
-  (loops, insert, getCache, _, _) <- UCache.new putLines tcache $ 4 * 1024
+  tcache@(getSec, _) <- TimeCache.new
+  cacheConf <- UCache.getDefaultStubConf (4 * 1024) getSec
+  (loops, insert, getCache, _) <- UCache.new cacheConf
   let ucache = (insert, getCache)
   cxt <- Iterative.newContext putLines disableV6NS ucache tcache
   return (putLines, flush, logLoop : loops, cxt)
