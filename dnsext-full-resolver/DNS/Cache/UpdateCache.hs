@@ -9,6 +9,7 @@ module DNS.Cache.UpdateCache (
 -- GHC packages
 import Control.Monad (forever)
 import Control.Concurrent (threadDelay)
+import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
 -- dnsext-* packages
@@ -34,6 +35,13 @@ data MemoActions = MemoActions {
   , memoReadQueue :: IO UpdateEvent
   , memoWriteQueue :: UpdateEvent -> IO ()
   }
+
+getDefaultStubConf :: Int -> IO EpochTime -> IO CacheConf
+getDefaultStubConf size getSec = do
+  let noLog _ = pure ()
+  q <- newChan
+  pure $ CacheConf size $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+
 
 -- function update to update cache, and log action
 type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
