@@ -45,7 +45,7 @@ rootServers =
     , mkRR "h.root-servers.net." AAAA 3600000 (rd_aaaa "2001:500:1::53")
     , mkRR "i.root-servers.net." A    3600000 (rd_a    "192.36.148.17")
     , mkRR "i.root-servers.net." AAAA 3600000 (rd_aaaa "2001:7fe::53")
-    , mkRR "j.root-servers.net." A    310698  (rd_a    "192.58.128.30")
+    , mkRR "j.root-servers.net." A    3600000 (rd_a    "192.58.128.30")
     , mkRR "j.root-servers.net." AAAA 3600000 (rd_aaaa "2001:503:c27::2:30")
     , mkRR "k.root-servers.net." A    3600000 (rd_a    "193.0.14.129")
     , mkRR "k.root-servers.net." AAAA 3600000 (rd_aaaa "2001:7fd::1")
