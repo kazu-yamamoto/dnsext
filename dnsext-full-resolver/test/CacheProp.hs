@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CacheProp
   ( props
@@ -9,12 +10,13 @@ module CacheProp
 import Test.QuickCheck
 
 import Control.Monad (unless)
-import DNS.Types (TYPE (..), TTL, Domain, Seconds(..))
-import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
 import Data.Char (toUpper, toLower)
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
+import Data.String (IsString)
+import DNS.Types (TYPE (..), TTL, Domain, Seconds(..))
+import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
 import System.Exit (exitFailure)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -24,8 +26,6 @@ import DNS.Cache.Cache
    Ranking (..), takeRRSet, extractRRSet)
 import qualified DNS.Cache.Cache as Cache
 
-
-{-# ANN module "HLint: ignore Use fromMaybe" #-}
 
 -----
 
@@ -50,15 +50,14 @@ nameList =
 sbsDomainList :: [Domain]
 sbsDomainList = map DNS.fromRepresentation domainList
 
-v4List :: Read a => [a]
-v4List = map read [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
+v4List :: IsString a => [a]
+v4List = [ "192.168.10.1", "192.168.10.2", "192.168.10.3", "192.168.10.4" ]
 
-v6List :: Read a => [a]
-v6List = map read [ "fe80::000a:0001", "fe80::000a:0002", "fe80::000a:0003", "fe80::000a:0004" ]
+v6List :: IsString a => [a]
+v6List = [ "fe80::000a:0001", "fe80::000a:0002", "fe80::000a:0003", "fe80::000a:0004" ]
 
 nsList :: [Domain]
 nsList =
-  map DNS.fromRepresentation
   [ "ns1.example.com.", "ns2.example.com.", "ns3.example.com."
   , "ns4.example.com.", "ns5.example.com." ]
 
