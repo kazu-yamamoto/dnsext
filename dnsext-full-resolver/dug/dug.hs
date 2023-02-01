@@ -4,11 +4,12 @@ module Main (main) where
 
 import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
-import qualified DNS.Do53.Internal as DNS
+import DNS.Do53.Internal (Result(..), Reply(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf, intercalate)
+import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -114,12 +115,22 @@ main = do
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
+        t0 <- T.getUnixTime
         ex <- operate mserver port optDoX dom typ ctl
+        t1 <- T.getUnixTime
         case ex of
           Left err -> fail $ show err
-          Right DNS.Result{..} -> do
-              putStrLn $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag ++ "\n"
-              putStr $ pprResult resultDNSMessage
+          Right Result{..} -> do
+              let Reply{..} = resultReply
+              putStr $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag
+              putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
+              putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
+              putStr   ", "
+              let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
+              when (s /= 0) $ putStr $ show s ++ "sec "
+              putStr $ show (u `div` 1000) ++ "usec"
+              putStr "\n\n"
+              putStr $ pprResult replyDNSMessage
 
 divide :: [String] -> ([String],[String],[String])
 divide ls = loop ls (id,id,id)

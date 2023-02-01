@@ -10,6 +10,7 @@ import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.Types
 import DNS.Types.Decode
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Short (ShortByteString)
 import Data.ByteString.Short (fromShort)
@@ -50,16 +51,17 @@ h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
 doHTTP :: String -> Identifier -> ShortByteString -> VCLimit -> ResolvInfo -> Question -> QueryControls -> Client Result
 doHTTP tag ident path lim ri@ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
     let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-    (_,bss) <- recvHTTP lim
+    (rx,bss) <- recvHTTP lim
     now <- getTime
     case decodeChunks now bss of
         Left  e       -> E.throwIO e
         Right (msg,_) -> case checkRespM q ident msg of -- fixme
-            Nothing  -> return $ toResult ri tag msg
+            Nothing  -> return $ toResult ri tag $ Reply msg tx rx
             Just err -> E.throwIO err
   where
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
+    tx = BS.length wire
     hdr = clientDoHHeaders wire
     req = requestBuilder methodPost (fromShort path) hdr $ BB.byteString wire
 

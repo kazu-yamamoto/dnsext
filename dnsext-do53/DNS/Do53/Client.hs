@@ -46,6 +46,7 @@ module DNS.Do53.Client (
   , ractionTimeout
   , ractionGenId
   , ractionGetTime
+  , Reply
   -- ** Query control
   , QueryControls
   , FlagOp(..)

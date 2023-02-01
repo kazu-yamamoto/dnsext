@@ -20,6 +20,7 @@ module DNS.Do53.Types (
   , ResolvActions(..)
   , defaultResolvActions
   , Result(..)
+  , Reply(..)
   , Resolver
   -- * IO
   , Recv
@@ -195,7 +196,13 @@ data Result = Result {
     resultHostName   :: HostName
   , resultPortNumber :: PortNumber
   , resultTag        :: String
-  , resultDNSMessage :: DNSMessage
+  , resultReply      :: Reply
+  } deriving (Eq, Show)
+
+data Reply = Reply {
+    replyDNSMessage :: DNSMessage
+  , replyTxBytes    :: Int
+  , replyRxBytes    :: Int
   } deriving (Eq, Show)
 
 -- | The type of resolvers (DNS over X).
@@ -204,7 +211,7 @@ type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
 ----------------------------------------------------------------
 
 data ResolvActions = ResolvActions {
-    ractionTimeout :: IO DNSMessage -> IO (Maybe DNSMessage)
+    ractionTimeout :: IO Reply -> IO (Maybe Reply)
   , ractionGenId   :: IO Identifier
   , ractionGetTime :: IO EpochTime
   }
@@ -220,7 +227,7 @@ defaultResolvActions = ResolvActions {
 
 type Recv      = IO ByteString
 type RecvN     = Int -> IO ByteString
-type RecvMany  = IO [ByteString]
+type RecvMany  = IO (Int, [ByteString])
 type RecvManyN = Int -> IO (Int, [ByteString])
 
 type Send = ByteString -> IO ()

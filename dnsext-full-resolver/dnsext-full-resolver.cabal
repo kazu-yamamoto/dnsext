@@ -74,17 +74,18 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        dnsext-full-resolver,
-        dnsext-types,
+        bytestring,
+        dnsext-dnssec,
         dnsext-do53,
         dnsext-dox,
-        dnsext-dnssec,
+        dnsext-full-resolver,
         dnsext-svcb,
+        dnsext-types,
         iproute,
         network,
+        random,
         transformers,
-        bytestring,
-        random
+        unix-time
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
