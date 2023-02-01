@@ -60,7 +60,7 @@ recvVC lim recvN = do
     (len', bss) <- recvManyNN recvN len
     case compare len' len of
       LT -> E.throwIO $ DecodeError "message length is not enough"
-      EQ -> return bss
+      EQ -> return (len, bss)
       GT -> E.throwIO $ DecodeError "message length is too large"
 
 -- | Decoding the length from the first two bytes.

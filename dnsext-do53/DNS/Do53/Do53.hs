@@ -13,6 +13,7 @@ module DNS.Do53.Do53 (
   ) where
 
 import Control.Exception as E
+import qualified Data.ByteString as BS
 import DNS.Types
 import DNS.Types.Decode
 import Network.Socket (HostName, close)
@@ -76,36 +77,40 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
 
     loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
     loop cnt ident qctl0 send recv = do
-        mres <- solve ident qctl0 send recv
-        case mres of
+        mrply <- solve ident qctl0 send recv
+        case mrply of
           Nothing -> loop (cnt - 1) ident qctl0 send recv
-          Just res -> do
-              let fl = flags $ header res
+          Just rply -> do
+              let ans = replyDNSMessage rply
+                  fl = flags $ header ans
                   tc = trunCation fl
                   rc = rcode fl
-                  eh = ednsHeader res
+                  eh = ednsHeader ans
                   qctl = ednsEnabled FlagClear <> qctl0
               when tc $ E.throwIO TCPFallback
               if rc == FormatErr && eh == NoEDNS && qctl /= qctl0 then
                   loop cnt ident qctl send recv
                 else
-                  return $ toResult ri "UDP" res
+                  return $ toResult ri "UDP" rply
 
     solve ident qctl send recv = do
         let qry = encodeQuery ident q qctl
         ractionTimeout rinfoActions $ do
             _ <- send qry
-            getAnswer ident recv
+            let tx = BS.length qry
+            getAnswer ident recv tx
 
-    getAnswer ident recv = do
-        bs <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+    getAnswer ident recv tx = do
+        ans <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
         now <- ractionGetTime rinfoActions
-        case decodeAt now bs of
+        case decodeAt now ans of
             Left  e -> E.throwIO e
             Right msg
-              | checkResp q ident msg -> return msg
+              | checkResp q ident msg -> do
+                    let rx = BS.length ans
+                    return $ Reply msg tx rx
               -- Just ignoring a wrong answer.
-              | otherwise             -> getAnswer ident recv
+              | otherwise             -> getAnswer ident recv tx
 
     open = UDP.clientSocket rinfoHostName (show rinfoPortNumber) True -- connected
 
@@ -124,20 +129,22 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
     open = openTCP rinfoHostName rinfoPortNumber
 
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> ((Send -> RecvMany -> IO DNSMessage) -> IO DNSMessage) -> Resolver
+vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
 vcResolver proto perform ri@ResolvInfo{..} q _qctl =
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
     go qctl0 = do
-        res <- perform $ solve qctl0
-        let fl = flags $ header res
+        rply <- perform $ solve qctl0
+        let ans = replyDNSMessage rply
+            fl = flags $ header ans
             rc = rcode fl
-            eh = ednsHeader res
+            eh = ednsHeader ans
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-        then toResult ri proto <$> perform (solve qctl)
-        else return $ toResult ri proto res
+        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0 then do
+            toResult ri proto <$> perform (solve qctl)
+          else
+            return $ toResult ri proto rply
 
     solve qctl send recv = do
         -- Using a fresh identifier.
@@ -145,24 +152,25 @@ vcResolver proto perform ri@ResolvInfo{..} q _qctl =
         let qry = encodeQuery ident q qctl
         mres <- ractionTimeout rinfoActions $ do
             _ <- send qry
-            getAnswer ident recv
+            let tx = BS.length qry
+            getAnswer ident recv tx
         case mres of
            Nothing  -> E.throwIO TimeoutExpired
            Just res -> return res
 
-    getAnswer ident recv = do
-        bss <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+    getAnswer ident recv tx = do
+        (rx,bss) <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left  e   -> E.throwIO e
             Right (msg,_) -> case checkRespM q ident msg of
-                Nothing  -> return msg
+                Nothing  -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
-toResult :: ResolvInfo -> String -> DNSMessage -> Result
-toResult ResolvInfo{..} tag msg = Result {
+toResult :: ResolvInfo -> String -> Reply -> Result
+toResult ResolvInfo{..} tag rply = Result {
     resultHostName   = rinfoHostName
   , resultPortNumber = rinfoPortNumber
   , resultTag        = tag
-  , resultDNSMessage = msg
+  , resultReply      = rply
   }

@@ -4,7 +4,7 @@ module Main (main) where
 
 import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
-import qualified DNS.Do53.Internal as DNS
+import DNS.Do53.Internal (Result(..), Reply(..))
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
@@ -117,9 +117,13 @@ main = do
         ex <- operate mserver port optDoX dom typ ctl
         case ex of
           Left err -> fail $ show err
-          Right DNS.Result{..} -> do
-              putStrLn $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag ++ "\n"
-              putStr $ pprResult resultDNSMessage
+          Right Result{..} -> do
+              let Reply{..} = resultReply
+              putStrLn $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag
+                      ++ ", Tx:" ++ show replyTxBytes ++ "bytes"
+                      ++ ", Rx:" ++ show replyRxBytes ++ "bytes"
+                      ++ "\n"
+              putStr $ pprResult replyDNSMessage
 
 divide :: [String] -> ([String],[String],[String])
 divide ls = loop ls (id,id,id)

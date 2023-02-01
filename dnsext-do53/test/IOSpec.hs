@@ -23,7 +23,8 @@ spec = describe "solvers" $ do
             qctl = adFlag FlagSet <> ednsEnabled FlagClear
 
         Result{..} <- udpResolver 1 ri q qctl
-        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
+        let Reply{..} = resultReply
+        rcode (flags (header replyDNSMessage)) `shouldBe` NoErr
 
     it "resolves well with TCP" $ do
         let q = Question "www.mew.org" A classIN
@@ -35,4 +36,5 @@ spec = describe "solvers" $ do
             qctl = adFlag FlagClear <> cdFlag FlagSet <> doFlag FlagSet
 
         Result{..} <- tcpResolver (32 * 1024) ri q qctl
-        rcode (flags (header resultDNSMessage)) `shouldBe` NoErr
+        let Reply{..} = resultReply
+        rcode (flags (header replyDNSMessage)) `shouldBe` NoErr

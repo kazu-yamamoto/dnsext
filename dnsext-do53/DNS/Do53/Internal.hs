@@ -29,6 +29,7 @@ module DNS.Do53.Internal (
     -- * Resolver: DNS over X
   , Result(..)
   , toResult
+  , Reply(..)
   , Resolver
   , udpTcpResolver
   , udpResolver
