@@ -629,6 +629,9 @@ iterative_ dc nss (x:xs) =
     stepQuery nss_@(srcDom, _) = do
       sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
+      {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
+         See the following document:
+         QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec sa name A
       lift $ delegationWithCache srcDom name msg
 
