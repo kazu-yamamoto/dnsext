@@ -9,6 +9,7 @@ import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf, intercalate)
+import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -114,15 +115,21 @@ main = do
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
       else do
+        t0 <- T.getUnixTime
         ex <- operate mserver port optDoX dom typ ctl
+        t1 <- T.getUnixTime
         case ex of
           Left err -> fail $ show err
           Right Result{..} -> do
               let Reply{..} = resultReply
-              putStrLn $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag
-                      ++ ", Tx:" ++ show replyTxBytes ++ "bytes"
-                      ++ ", Rx:" ++ show replyRxBytes ++ "bytes"
-                      ++ "\n"
+              putStr $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag
+              putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
+              putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
+              putStr   ", "
+              let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
+              when (s /= 0) $ putStr $ show s ++ "sec "
+              putStr $ show (u `div` 1000) ++ "usec"
+              putStr "\n\n"
               putStr $ pprResult replyDNSMessage
 
 divide :: [String] -> ([String],[String],[String])
