@@ -17,16 +17,16 @@ import Data.ByteString (ByteString)
 import Data.IORef (newIORef, readIORef, atomicModifyIORef')
 import Data.String (fromString)
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
-import qualified Network.UDP as UDP
 
--- dns packages
+-- dnsext-* packages
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import Network.Socket (HostName, PortNumber, getAddrInfo, AddrInfo (..), SockAddr (..), SocketType (Datagram))
 import Data.IP (IP(..), fromHostAddress, fromHostAddress6)
+import Network.Socket (HostName, PortNumber, getAddrInfo, AddrInfo (..), SockAddr (..), SocketType (Datagram))
+import qualified Network.UDP as UDP
 
 -- other packages
 import UnliftIO (SomeException, tryAny, concurrently_, race_)
