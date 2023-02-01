@@ -1,12 +1,13 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module DNS.Cache.Queue (
   ReadQueue (..),
   WriteQueue (..),
   QueueSize (..),
   ReadQueueSTM (..),
   WriteQueueSTM (..),
-  TQ, newQueue,
-  ChanQ, newQueueChan,
-  Q1, newQueue1,
+  Queue,
+  newQueue, newQueueChan,
   GetAny, makeGetAny,
   PutAny, makePutAny,
   ) where
@@ -15,10 +16,18 @@ import Control.Monad (guard, msum, when)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM
   (TVar, newTVar, readTVar, modifyTVar', writeTVar,
-   TMVar, newEmptyTMVarIO, takeTMVar, putTMVar, isEmptyTMVar,
    TQueue, newTQueue, readTQueue, writeTQueue,
    atomically, STM)
 
+-- queue interface
+data Queue m a =
+  Queue
+  { qReadQueue :: m a
+  , qWriteQueue :: a -> m ()
+  , qSizeMaxBound :: Int
+  , qReadSize :: m Int
+  , qReadLastMaxSize :: m Int
+  }
 
 class ReadQueue q where
   readQueue :: q a -> IO a
@@ -35,6 +44,34 @@ class ReadQueueSTM q where
 
 class WriteQueueSTM q where
   writeQueueSTM :: q a -> a -> STM ()
+
+
+instance ReadQueue (Queue IO) where
+  readQueue = qReadQueue
+
+instance WriteQueue (Queue IO) where
+  writeQueue = qWriteQueue
+
+instance QueueSize (Queue IO) where
+  sizeMaxBound = qSizeMaxBound
+  readSizes q = (,) <$> qReadSize q <*> qReadLastMaxSize q
+
+
+instance ReadQueue (Queue STM) where
+  readQueue = atomically . qReadQueue
+
+instance WriteQueue (Queue STM) where
+  writeQueue q = atomically . qWriteQueue q
+
+instance QueueSize (Queue STM) where
+  sizeMaxBound = qSizeMaxBound
+  readSizes q = atomically $ (,) <$> qReadSize q <*> qReadLastMaxSize q
+
+instance ReadQueueSTM (Queue STM) where
+  readQueueSTM = qReadQueue
+
+instance WriteQueueSTM (Queue STM) where
+  writeQueueSTM = qWriteQueue
 
 ---
 
@@ -124,9 +161,6 @@ data TQ a =
   , tqSizeMaxBound :: Int
   }
 
-newQueue :: Int -> IO (TQ a)
-newQueue = atomically . newTQ
-
 newTQ :: Int -> STM (TQ a)
 newTQ xsz = TQ <$> newTQueue <*> newTVar 0 <*> newTVar 0 <*> pure xsz
 
@@ -159,6 +193,17 @@ readSizesTQ q = do
   mx <- max sz <$> readTVar (tqLastMaxSizeRef q)
   return (sz, mx)
 
+newQueue :: Int -> IO (Queue STM a)
+newQueue xsz  = do
+  q <- atomically $ newTQ xsz
+  let readSize = readTVar $ tqSizeRef q
+  return $ Queue
+    (readTQ q)
+    (writeTQ q)
+    (tqSizeMaxBound q)
+    readSize
+    (max <$> readSize <*> readTVar (tqLastMaxSizeRef q))
+
 instance ReadQueue TQ where
   readQueue = atomically . readTQ
 
@@ -177,10 +222,10 @@ instance WriteQueueSTM TQ where
 
 ---
 
-type ChanQ = Chan
-
-newQueueChan :: IO (ChanQ a)
-newQueueChan = newChan
+newQueueChan :: IO (Queue IO a)
+newQueueChan = do
+  q <- newChan
+  return $ Queue (readChan q) (writeChan q) (-1) (return (-1)) (return (-1))
 
 instance ReadQueue Chan where
   readQueue = readChan
@@ -191,27 +236,3 @@ instance WriteQueue Chan where
 instance QueueSize Chan where
   sizeMaxBound _ = -1
   readSizes _ = return (-1, -1)
-
----
-
-type Q1 = TMVar
-
-newQueue1 :: IO (Q1 a)
-newQueue1 = newEmptyTMVarIO
-
-instance ReadQueue TMVar where
-  readQueue = atomically . takeTMVar
-
-instance WriteQueue TMVar where
-  writeQueue q = atomically . putTMVar q
-
-instance QueueSize TMVar where
-  sizeMaxBound _ = 1
-  readSizes q = atomically $ (,) <$> (emptySize <$> isEmptyTMVar q) <*> pure (-1)
-    where emptySize empty = if empty then 0 else 1
-
-instance ReadQueueSTM TMVar where
-  readQueueSTM = takeTMVar
-
-instance WriteQueueSTM TMVar where
-  writeQueueSTM = putTMVar
