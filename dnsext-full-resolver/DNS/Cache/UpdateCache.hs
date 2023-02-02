@@ -67,12 +67,12 @@ new CacheConf{..} = do
               logAction c
         maybe (pure ()) updateRef $ uevent cache
 
-  (updateLoop, enqueueU) <- do
+  updateLoop <- do
     let errorLn = memoErrorLn . ("Memo.updateLoop: error: " ++) . show
         body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
-    return (forever body, memoWriteQueue)
+    return $ forever body
 
-  let expires1 ts = enqueueU (Cache.expires ts, expiredLog)
+  let expires1 ts = memoWriteQueue (Cache.expires ts, expiredLog)
         where
           expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
@@ -86,7 +86,7 @@ new CacheConf{..} = do
         t <- memoGetTime
         let insert_ = Cache.insert t k ttl crs rank
             evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
-        enqueueU (evInsert, const $ pure ())
+        memoWriteQueue (evInsert, const $ pure ())
 
   return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1)
 
