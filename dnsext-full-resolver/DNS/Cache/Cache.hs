@@ -2,7 +2,7 @@
 
 module DNS.Cache.Cache (
   -- * cache interfaces
-  empty,
+  empty, null,
   lookup, lookupEither,
   takeRRSet,
   insert,
@@ -37,7 +37,7 @@ import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List (group, groupBy, sortOn, uncons)
 import Data.Maybe (isJust)
-import Prelude hiding (lookup)
+import Prelude hiding (lookup, null)
 
 -- dns packages
 import Data.OrdPSQ (OrdPSQ)
@@ -122,6 +122,9 @@ data Cache = Cache (OrdPSQ Key EpochTime Val) Int {- max size -}
 
 empty :: Int -> Cache
 empty = Cache PSQ.empty
+
+null :: Cache -> Bool
+null (Cache psq _) = PSQ.null psq
 
 lookup :: EpochTime
        -> Domain -> TYPE -> CLASS
