@@ -1,4 +1,10 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DNS.Cache.UpdateCache (
+  CacheConf (..),
+  MemoActions (..),
+  getDefaultStubConf,
+  UpdateEvent,
   new,
   none,
   Insert,
@@ -7,9 +13,10 @@ module DNS.Cache.UpdateCache (
 -- GHC packages
 import Control.Monad (forever)
 import Control.Concurrent (threadDelay)
+import Control.Concurrent.Chan (newChan, readChan, writeChan)
 import Data.IORef (newIORef, readIORef, atomicWriteIORef)
 
--- dns packages
+-- dnsext-* packages
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
 
@@ -17,60 +24,71 @@ import DNS.Types.Decode (EpochTime)
 import UnliftIO (tryAny)
 
 -- this package
-import DNS.Cache.Queue (newQueue, readQueue, writeQueue)
-import qualified DNS.Cache.Queue as Queue
-import qualified DNS.Cache.Log as Log
 import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNS.Cache.Cache as Cache
 
-data Update
-  = I Key TTL CRSet Ranking
-  | E
-  deriving Show
+data CacheConf = CacheConf {
+    maxCacheSize :: Int
+  , memoActions :: MemoActions
+  }
 
-runUpdate :: EpochTime -> Update -> Cache -> Maybe Cache
-runUpdate t u cache = case u of
-  I k ttl crs rank -> maybe (insert cache) insert $ Cache.expires t cache {- expires before insert -}
-    where insert = Cache.insert t k ttl crs rank
-  E                -> Cache.expires t cache
+data MemoActions = MemoActions {
+    memoLogLn :: String -> IO ()
+  , memoErrorLn :: String -> IO ()
+  , memoGetTime :: IO EpochTime
+  , memoReadQueue :: IO UpdateEvent
+  , memoWriteQueue :: UpdateEvent -> IO ()
+  }
+
+getDefaultStubConf :: Int -> IO EpochTime -> IO CacheConf
+getDefaultStubConf size getSec = do
+  let noLog _ = pure ()
+  q <- newChan
+  pure $ CacheConf size $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+
+
+-- function update to update cache, and log action
+type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-new :: (Log.Level -> [String] -> IO ()) -> (IO EpochTime, IO ShowS)
-    -> Int
-    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO (), IO (Int, Int))
-new putLines (getSec, getTimeStr) maxCacheSize = do
-  let putLn level = putLines level . (:[])
+new :: CacheConf
+    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
+new CacheConf{..} = do
+  let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
-  let update1 (ts, tstr, u) = do   -- step of single update theard
+  let update1 :: UpdateEvent -> IO ()
+      update1 (uevent, logAction) = do   -- step of single update theard
         cache <- readIORef cacheRef
         let updateRef c = do
               -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
               c `seq` atomicWriteIORef cacheRef c
-              case u of
-                I {}  ->  return ()
-                E     ->  putLn Log.NOTICE $ tstr $ ": some records expired: size = " ++ show (Cache.size c)
-        maybe (pure ()) updateRef $ runUpdate ts u cache
+              logAction c
+        maybe (pure ()) updateRef $ uevent cache
 
-  (updateLoop, enqueueU, readUSize) <- do
-    inQ <- newQueue 8
-    let errorLn = putLn Log.NOTICE . ("UpdateCache.updateLoop: error: " ++) . show
-        body = either errorLn return =<< tryAny (update1 =<< readQueue inQ)
-    return (forever body, writeQueue inQ, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ))
+  (updateLoop, enqueueU) <- do
+    let errorLn = memoErrorLn . ("Memo.updateLoop: error: " ++) . show
+        body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
+    return (forever body, memoWriteQueue)
 
-  let expires1 ts = enqueueU =<< (,,) ts <$> getTimeStr <*> pure E
+  let expires1 ts = enqueueU (Cache.expires ts, expiredLog)
+        where
+          expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
       expireEvsnts = forever body
         where
-          errorLn = putLn Log.NOTICE . ("UpdateCache.expireEvents: error: " ++) . show
+          errorLn = memoErrorLn . ("Memo.expireEvents: error: " ++) . show
           interval = threadDelay $ 1800 * 1000 * 1000  -- when there is no insert for a long time
-          body = either errorLn return =<< tryAny (interval *> (expires1 =<< getSec))
+          body = either errorLn return =<< tryAny (interval *> (expires1 =<< memoGetTime))
 
-  let insert k ttl crs rank =
-        enqueueU =<< (,,) <$> getSec <*> getTimeStr <*> pure (I k ttl crs rank)
+  let insert k ttl crs rank = do
+        t <- memoGetTime
+        let insert_ = Cache.insert t k ttl crs rank
+            evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
+        enqueueU (evInsert, const $ pure ())
 
-  return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1, readUSize)
+  return ([updateLoop, expireEvsnts], insert, readIORef cacheRef, expires1)
 
 -- no caching
 none :: (Insert, IO Cache)
