@@ -6,7 +6,8 @@ module DNS.Do53.Resolve (
     resolve
   ) where
 
-import Control.Concurrent.Async (async, waitAnyCancel)
+import Control.Concurrent.Async (Async, async, cancel, waitCatchSTM, waitSTM)
+import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Types
 
@@ -34,14 +35,17 @@ import DNS.Do53.Types
 -- configuration with any additional overrides from the caller.
 --
 resolve :: ResolvEnv -> Question -> QueryControls -> IO Result
-resolve ResolvEnv{..} q@Question{..} qctl
+resolve _ Question{..} _
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
-  | concurrent    = resolveConcurrent ris resolver q qctl
-  | otherwise     = resolveSequential ris resolver q qctl
+resolve ResolvEnv{..} q qctl = case renvResolvInfos of
+  []   -> error "resolve"
+  [ri] -> resolver ri q qctl
+  ris | concurrent -> resolveConcurrent ris resolver q qctl
+      | otherwise  -> resolveSequential ris resolver q qctl
   where
     concurrent = renvConcurrent
     resolver   = renvResolver
-    ris        = renvResolvInfos
+
 
 resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveSequential ris0 resolver q qctl = loop ris0
@@ -58,6 +62,30 @@ resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO
 resolveConcurrent ris resolver q qctl =
     raceAny $ map (\ri -> resolver ri q qctl) ris
   where
-    raceAny ios = do
-        asyncs <- mapM async ios
-        snd <$> waitAnyCancel asyncs
+    raceAny ios = mapM async ios >>= waitAnyRightCancel
+
+----------------------------------------------------------------
+
+waitAnyRightCancel :: [Async a] -> IO a
+waitAnyRightCancel asyncs =
+  atomically (waitAnyRightSTM asyncs) `finally` mapM_ cancel asyncs
+
+-- The first value is returned and others are canceled at that time.
+-- The last exception is returned when all throws an exception.
+waitAnyRightSTM :: [Async a] -> STM a
+waitAnyRightSTM []     = error "waitAnyRightSTM"
+waitAnyRightSTM (a:as) = do
+    let w  = waitSTM a           -- may throw an exception
+        ws = map waitRightSTM as -- exeptions are ignored
+    -- If "w" is reached, all of the others throw an exception.
+    foldr orElse retry ws `orElse` w
+
+waitRightSTM :: Async b -> STM b
+waitRightSTM a = do
+   r <- waitCatchSTM a
+   -- Here this IO thread is dead.  A value of "Either SomeException
+   -- a" is passed by "putTMVar".  After "retry", "waitCatchSTM" waits
+   -- forever because "putTMVar" is never called again. Yes, the
+   -- thread is dead already.  So, this transaction stays until
+   -- canceled.
+   either (const retry) return r

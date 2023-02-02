@@ -57,6 +57,7 @@ library
         network-udp,
         psqueues,
         random >=1.2,
+        stm,
         unix-time
 
     if impl(ghc >=8)
