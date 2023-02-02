@@ -5,6 +5,7 @@ module IOSpec where
 
 import DNS.Types
 import Test.Hspec
+import System.Timeout
 
 import DNS.Do53.Internal
 
@@ -24,11 +25,13 @@ cloudflare = defaultResolvInfo {
 bad0 :: ResolvInfo
 bad0 = defaultResolvInfo {
     rinfoHostName = "192.0.2.1"
+  , rinfoActions  = defaultResolvActions { ractionTimeout = timeout 100000 }
   }
 
 bad1 :: ResolvInfo
 bad1 = defaultResolvInfo {
     rinfoHostName = "192.0.2.2"
+  , rinfoActions  = defaultResolvActions { ractionTimeout = timeout 100000 }
   }
 
 spec :: Spec
@@ -55,10 +58,12 @@ spec = describe "solvers" $ do
         checkNoErr r
 
     it "resolves well concurrently (2)" $ do
-        let resolver = udpResolver 2
+        let resolver = udpResolver 1
             renv = ResolvEnv resolver True [bad0, bad1]
-        resolve renv q mempty `shouldThrow` anyException
+        resolve renv q mempty `shouldThrow` dnsException
 
+dnsException :: Selector DNSError
+dnsException = const True
 
 checkNoErr :: Result -> Expectation
 checkNoErr Result{..} = takeRcode replyDNSMessage `shouldBe` NoErr
