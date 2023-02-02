@@ -6,7 +6,9 @@ module DNS.Do53.Resolve (
     resolve
   ) where
 
-import Control.Concurrent.Async (async, waitAnyCancel)
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (Async, async, cancel, waitCatchSTM)
+import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Types
 
@@ -58,9 +60,33 @@ resolveSequential ris0 resolver q qctl = loop ris0
           Right res -> return res
 
 resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
-resolveConcurrent ris resolver q qctl =
-    raceAny $ map (\ri -> resolver ri q qctl) ris
+resolveConcurrent ris resolver q qctl = do
+    r <- raceAny $ map (\ri -> resolver ri q qctl) ris
+    if r == dummyResult then throwIO ServerFailure else return r
   where
     raceAny ios = do
-        asyncs <- mapM async ios
-        snd <$> waitAnyCancel asyncs
+        asyncs <- mapM async (sentinel:ios)
+        snd <$> waitAnyRightCancel asyncs
+    dummyResult = Result "" 0 "" (Reply defaultQuery 0 0)
+    sentinel = do
+        threadDelay 3000000 -- fixme
+        return $ dummyResult
+
+----------------------------------------------------------------
+
+waitAnyRight :: [Async a] -> IO (Async a, a)
+waitAnyRight = atomically . waitAnyRightSTM
+
+waitAnyRightCancel :: [Async a] -> IO (Async a, a)
+waitAnyRightCancel asyncs =
+  waitAnyRight asyncs `finally` mapM_ cancel asyncs
+
+waitAnyRightSTM :: [Async a] -> STM (Async a, a)
+waitAnyRightSTM asyncs =
+    foldr orElse retry $
+      map (\a -> do r <- waitRightSTM a; return (a, r)) asyncs
+
+waitRightSTM :: Async b -> STM b
+waitRightSTM a = do
+   r <- waitCatchSTM a
+   either (const retry) return r -- this "retry" is the magic
