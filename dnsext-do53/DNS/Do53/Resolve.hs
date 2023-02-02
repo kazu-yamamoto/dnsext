@@ -34,14 +34,17 @@ import DNS.Do53.Types
 -- configuration with any additional overrides from the caller.
 --
 resolve :: ResolvEnv -> Question -> QueryControls -> IO Result
-resolve ResolvEnv{..} q@Question{..} qctl
+resolve _ Question{..} _
   | qtype == AXFR = E.throwIO InvalidAXFRLookup
-  | concurrent    = resolveConcurrent ris resolver q qctl
-  | otherwise     = resolveSequential ris resolver q qctl
+resolve ResolvEnv{..} q qctl = case renvResolvInfos of
+  []   -> error "resolve"
+  [ri] -> resolver ri q qctl
+  ris | concurrent -> resolveConcurrent ris resolver q qctl
+      | otherwise  -> resolveSequential ris resolver q qctl
   where
     concurrent = renvConcurrent
     resolver   = renvResolver
-    ris        = renvResolvInfos
+
 
 resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveSequential ris0 resolver q qctl = loop ris0
