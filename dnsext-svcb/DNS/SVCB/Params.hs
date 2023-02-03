@@ -34,8 +34,8 @@ showValue SPK_DoHPath v = case decodeSvcParamValue v of
   Just x@(SPV_DoHPath _) -> show x
 showValue _ v = show v
 
-lookupSvcParams :: SvcParamKey -> SvcParams -> Maybe SvcParamValue
-lookupSvcParams key (SvcParams m) = M.lookup k m
+lookupSvcParam :: SvcParamKey -> SvcParams -> Maybe SvcParamValue
+lookupSvcParam key (SvcParams m) = M.lookup k m
   where
     k = fromIntegral $ fromSvcParamKey key
 

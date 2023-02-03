@@ -42,7 +42,7 @@ check vector key value =
           case fromRData rd of
             Nothing -> error "this is not HTTPS RR"
             Just https -> do
-                case lookupSvcParams key $ https_params https of
+                case lookupSvcParam key $ https_params https of
                   Nothing -> error "no such parameter"
                   Just o -> case decodeSvcParamValue o of
                     Nothing -> error "value cannot be decoded"

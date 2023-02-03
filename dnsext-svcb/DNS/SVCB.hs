@@ -17,7 +17,8 @@ module DNS.SVCB (
   , get_https
   -- * Service parameters
   , SvcParams
-  , lookupSvcParams
+  , lookupSvcParam
+  , extractSvcParam
   -- ** Service parameter keys
   , SvcParamKey (
     SPK_Mandatory
@@ -34,6 +35,7 @@ module DNS.SVCB (
   , SvcParamValue
   , SPV(..)
   , SPV_Mandatory(..)
+  , SPV_ALPN(..)
   , SPV_Port(..)
   , SPV_IPv4Hint(..)
   , SPV_IPv6Hint(..)
@@ -120,3 +122,9 @@ addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
   extendRR SVCB  "SVCB"  (\len -> toRData <$> get_svcb  len)
   extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)
+
+----------------------------------------------------------------
+
+-- | Look up and decode a parameter value.
+extractSvcParam :: SPV v => SvcParamKey -> SvcParams -> Maybe v
+extractSvcParam key params = lookupSvcParam key params >>= decodeSvcParamValue

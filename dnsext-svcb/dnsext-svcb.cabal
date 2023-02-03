@@ -34,7 +34,8 @@ library
         bytestring,
         containers,
         dnsext-types,
-        iproute
+        iproute,
+        network
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

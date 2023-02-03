@@ -8,6 +8,7 @@ import qualified DNS.Types.Opaque as Opaque
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.IP
+import Network.Socket (PortNumber)
 
 import DNS.SVCB.Imports
 import DNS.SVCB.Key
@@ -35,7 +36,9 @@ decodeSPV parser o = case runSGet (parser len) bs of
 
 ----------------------------------------------------------------
 
-newtype SPV_Mandatory = SPV_Mandatory [SvcParamKey] deriving (Eq,Ord)
+newtype SPV_Mandatory = SPV_Mandatory {
+    mandatory_keys :: [SvcParamKey]
+  } deriving (Eq,Ord)
 
 instance Show SPV_Mandatory where
     show (SPV_Mandatory ks) = show ks
@@ -48,18 +51,22 @@ instance SPV SPV_Mandatory where
 
 ----------------------------------------------------------------
 
-newtype SPV_Port = SPV_Port Word16 deriving (Eq,Ord)
+newtype SPV_Port = SPV_Port {
+    port_number :: PortNumber
+  } deriving (Eq,Ord)
 
 instance Show SPV_Port where
     show (SPV_Port p) = show p
 
 instance SPV SPV_Port where
-    encodeSvcParamValue (SPV_Port p) = encodeSPV $ put16 p
-    decodeSvcParamValue = decodeSPV $ \_ -> SPV_Port <$> get16
+    encodeSvcParamValue (SPV_Port p) = encodeSPV $ put16 $ fromIntegral p
+    decodeSvcParamValue = decodeSPV $ \_ -> SPV_Port . fromIntegral <$> get16
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv4Hint = SPV_IPv4Hint [IPv4] deriving (Eq,Ord)
+newtype SPV_IPv4Hint = SPV_IPv4Hint {
+    hint_ipv4s :: [IPv4]
+  } deriving (Eq,Ord)
 
 instance Show SPV_IPv4Hint where
     show (SPV_IPv4Hint is) = show is
@@ -72,7 +79,9 @@ instance SPV SPV_IPv4Hint where
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv6Hint = SPV_IPv6Hint [IPv6] deriving (Eq,Ord)
+newtype SPV_IPv6Hint = SPV_IPv6Hint {
+    hint_ipv6s :: [IPv6]
+  } deriving (Eq,Ord)
 
 instance Show SPV_IPv6Hint where
     show (SPV_IPv6Hint is) = show is
@@ -85,7 +94,9 @@ instance SPV SPV_IPv6Hint where
 
 ----------------------------------------------------------------
 
-newtype SPV_ALPN = SPV_ALPN [ShortByteString] deriving (Eq,Ord)
+newtype SPV_ALPN = SPV_ALPN {
+    alpn_names :: [ShortByteString]
+  } deriving (Eq,Ord)
 
 instance Show SPV_ALPN where
     show (SPV_ALPN as) = show $ map (C8.unpack . Short.fromShort) as
