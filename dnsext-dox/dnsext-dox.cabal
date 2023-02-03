@@ -25,6 +25,7 @@ library
         DNS.DoX.Common
         DNS.DoX.HTTP2
         DNS.DoX.HTTP3
+        DNS.DoX.Imports
         DNS.DoX.QUIC
         DNS.DoX.TLS
 

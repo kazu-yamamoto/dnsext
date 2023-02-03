@@ -12,7 +12,6 @@ import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
-import Data.ByteString.Short (ShortByteString)
 import Data.ByteString.Short (fromShort)
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Char8 as C8
@@ -26,6 +25,7 @@ import qualified System.TimeManager as T
 import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Common
+import DNS.DoX.Imports
 
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->

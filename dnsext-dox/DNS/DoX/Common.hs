@@ -3,7 +3,6 @@
 module DNS.DoX.Common where
 
 import DNS.Do53.Internal (Recv)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as LBS
 import Data.Default.Class (def)
@@ -15,6 +14,8 @@ import Network.TLS hiding (HostName)
 import Network.TLS.Extra
 import System.IO.Error (isEOFError)
 import qualified UnliftIO.Exception as E
+
+import DNS.DoX.Imports
 
 ----------------------------------------------------------------
 
