@@ -15,8 +15,9 @@ module DNS.Do53.Client (
   -- * Lookups returning requested RData
   , lookup
   , lookupAuth
-  , lookup'
-  , lookupAuth'
+  -- * Lookups returning requested resource data
+  , lookupX
+  , lookupAuthX
   -- * Lookups returning DNS Messages
   , lookupRaw
   -- * Lookup configuration for sub resolvers

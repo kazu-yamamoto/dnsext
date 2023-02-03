@@ -5,8 +5,6 @@ module DNS.Do53.Lookup (
   -- * Lookups returning requested RData
     lookup
   , lookupAuth
-  , lookup'
-  , lookupAuth'
   -- * Lookups returning DNS Messages
   , lookupRaw
   -- * DNS Message procesing
@@ -60,22 +58,6 @@ lookupAuth :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookupAuth env dom typ = lookupSection Authority env q
   where
     q = Question dom typ classIN
-
-lookup' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
-lookup' typ env dom = unwrap <$> lookup env dom typ
-
-lookupAuth' :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
-lookupAuth' typ env dom = unwrap <$> lookupAuth env dom typ
-
-unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
-unwrap erds = case erds of
-    Left err  -> Left err
-    Right rds -> mapM unTag rds
-
-unTag :: ResourceData a => RData -> Either DNSError a
-unTag rd = case fromRData rd of
-  Nothing -> Left UnexpectedRDATA
-  Just x  -> Right x
 
 ----------------------------------------------------------------
 

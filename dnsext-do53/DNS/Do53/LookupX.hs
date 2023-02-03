@@ -74,6 +74,8 @@ module DNS.Do53.LookupX (
   , lookupPTR
   , lookupRDNS
   , lookupSRV
+  , lookupX
+  , lookupAuthX
   ) where
 
 import DNS.Types
@@ -100,7 +102,7 @@ import DNS.Do53.Types as DNS
 --   Right [210.155.141.200]
 --
 lookupA :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
-lookupA = lookup' A
+lookupA = lookupX A
 
 -- | Look up all (IPv6) \'AAAA\' records for the given hostname.
 --
@@ -110,7 +112,7 @@ lookupA = lookup' A
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
 --
 lookupAAAA :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
-lookupAAAA = lookup' AAAA
+lookupAAAA = lookupX AAAA
 
 ----------------------------------------------------------------
 
@@ -140,7 +142,7 @@ lookupAAAA = lookup' AAAA
 --   Right []
 --
 lookupMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_MX])
-lookupMX = lookup' MX
+lookupMX = lookupX MX
 
 -- | Look up all \'MX\' records for the given hostname, and then
 --   resolve their hostnames to IPv4 addresses by calling
@@ -206,7 +208,7 @@ lookupXviaMX rlv dom func = do
 --   Right ["ns1.mew.org.","ns2.mew.org."]
 --
 lookupNS :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
-lookupNS = lookup' NS
+lookupNS = lookupX NS
 
 -- | Look up all \'NS\' records for the given hostname. The results
 --   are taken from the AUTHORITY section of the response and not the
@@ -229,7 +231,7 @@ lookupNS = lookup' NS
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
 --
 lookupNSAuth :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
-lookupNSAuth = lookupAuth' NS
+lookupNSAuth = lookupAuthX NS
 
 ----------------------------------------------------------------
 
@@ -245,7 +247,7 @@ lookupNSAuth = lookupAuth' NS
 --   Right ["v=spf1 +mx -all"]
 --
 lookupTXT :: LookupEnv -> Domain -> IO (Either DNSError [RD_TXT])
-lookupTXT = lookup' TXT
+lookupTXT = lookupX TXT
 
 ----------------------------------------------------------------
 
@@ -265,7 +267,7 @@ lookupTXT = lookup' TXT
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
 --
 lookupSOA :: LookupEnv -> Domain -> IO (Either DNSError [RD_SOA])
-lookupSOA = lookup' SOA
+lookupSOA = lookupX SOA
 
 ----------------------------------------------------------------
 
@@ -282,7 +284,7 @@ lookupSOA = lookup' SOA
 --   The 'lookupRDNS' function is more suited to this particular task.
 --
 lookupPTR :: LookupEnv -> Domain -> IO (Either DNSError [RD_PTR])
-lookupPTR = lookup' PTR
+lookupPTR = lookupX PTR
 
 -- | Convenient wrapper around 'lookupPTR' to perform a reverse lookup
 --   on a single IP address.
@@ -330,4 +332,24 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 -- by "doctest".
 
 lookupSRV :: LookupEnv -> Domain -> IO (Either DNSError [RD_SRV])
-lookupSRV = lookup' SRV
+lookupSRV = lookupX SRV
+
+----------------------------------------------------------------
+
+-- | Look up resource data in the answer section.
+lookupX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupX typ env dom = unwrap <$> DNS.lookup env dom typ
+
+-- | Look up resource data in the authority section.
+lookupAuthX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupAuthX typ env dom = unwrap <$> lookupAuth env dom typ
+
+unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
+unwrap erds = case erds of
+    Left err  -> Left err
+    Right rds -> mapM unTag rds
+
+unTag :: ResourceData a => RData -> Either DNSError a
+unTag rd = case fromRData rd of
+  Nothing -> Left UnexpectedRDATA
+  Just x  -> Right x
