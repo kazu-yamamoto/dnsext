@@ -10,7 +10,6 @@ import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
 import Data.List (isPrefixOf, intercalate)
 import qualified Data.UnixTime as T
-import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
@@ -18,7 +17,7 @@ import Text.Read (readMaybe)
 
 import qualified DNS.Cache.Log as Log
 
-import Operation (operate, DoX(..))
+import Operation (operate, DoX(..), toDoX, doxPort)
 import FullResolve (fullResolve)
 import Output (pprResult)
 
@@ -37,24 +36,9 @@ options = [
     (ReqArg (\ port opts -> opts { optPort = Just port }) "<port>")
     "specify port number"
   , Option ['d'] ["dox"]
-    (ReqArg (\ dox opts -> opts { optDoX = toDoX dox }) "dot|doq|doh2|doh3")
+    (ReqArg (\ dox opts -> opts { optDoX = toDoX dox }) "dot|doq|h2|h3")
     "enable DoX (auto if unknown"
   ]
-
-toDoX :: String -> DoX
-toDoX "dot"  = DoT
-toDoX "doq"  = DoQ
-toDoX "doh2" = DoH2
-toDoX "doh3" = DoH3
-toDoX _      = Auto
-
-doxPort :: DoX -> PortNumber
-doxPort Do53 = 53
-doxPort Auto = 53
-doxPort DoT  = 853
-doxPort DoQ  = 853
-doxPort DoH2 = 443
-doxPort DoH3 = 443
 
 data Options = Options {
     optHelp        :: Bool
