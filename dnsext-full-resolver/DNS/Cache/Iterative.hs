@@ -606,6 +606,15 @@ rootNS =
   where
     (ns, as) = rootServers
 
+data MayDelegation
+  = NoDelegation  {- no delegation information -}
+  | HasDelegation Delegation
+
+mayDelegation :: a -> (Delegation -> a) -> MayDelegation -> a
+mayDelegation n h md = case md of
+  NoDelegation     ->  n
+  HasDelegation d  ->  h d
+
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 iterative :: Delegation -> Domain -> DNSQuery Delegation
@@ -615,7 +624,7 @@ iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _  nss []     = return nss
 iterative_ dc nss (x:xs) =
   step nss >>=
-  maybe
+  mayDelegation
   (recurse nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
   (`recurse` xs)
   where
@@ -625,7 +634,7 @@ iterative_ dc nss (x:xs) =
     lookupNX :: ReaderT Context IO Bool
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
-    stepQuery :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
+    stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss_@(srcDom, _) = do
       sa <- selectDelegation dc nss_  -- 親ドメインから同じ NS の情報が引き継がれた場合も、NS のアドレスを選択しなおすことで balancing する.
       lift $ logLn Log.INFO $ "iterative: norec: " ++ show (sa, name, A)
@@ -635,16 +644,16 @@ iterative_ dc nss (x:xs) =
       msg <- norec sa name A
       lift $ delegationWithCache srcDom name msg
 
-    step :: Delegation -> DNSQuery (Maybe Delegation)  -- Nothing のときは委任情報無し
+    step :: Delegation -> DNSQuery MayDelegation
     step nss_ = do
       let withNXC nxc
-            | nxc        =  return Nothing
+            | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss_
       maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
 
 -- If Nothing, it is a miss-hit against the cache.
--- If Just Nothing, cache hit but no delegation information.
-lookupDelegation :: Domain -> ReaderT Context IO (Maybe (Maybe Delegation))
+-- If Just NoDelegation, cache hit but no delegation information.
+lookupDelegation :: Domain -> ReaderT Context IO (Maybe MayDelegation)
 lookupDelegation dom = do
   disableV6NS <- asks disableV6NS_
   let lookupDEs ns = do
@@ -667,24 +676,24 @@ lookupDelegation dom = do
       fromDEs es
         | noCachedV4NS es  =  Nothing
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
-        | otherwise        =  (Just . (,) dom) <$> uncons es
+        | otherwise        =  (HasDelegation . (,) dom) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
-      getDelegation :: ([ResourceRecord], a) -> ReaderT Context IO (Maybe (Maybe Delegation))
+      getDelegation :: ([ResourceRecord], a) -> ReaderT Context IO (Maybe MayDelegation)
       getDelegation (rrs, _) = do {- NS cache hit -}
         let nss = sort $ nsList dom const rrs
         case nss of
-          []    ->  return $ Just Nothing  {- hit null NS list, so no delegation -}
+          []    ->  return $ Just NoDelegation  {- hit null NS list, so no delegation -}
           _:_   ->  fromDEs . concat <$> mapM lookupDEs nss
 
   maybe (return Nothing) getDelegation =<< lookupCache dom NS
 
 -- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO (Maybe Delegation)
+delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO MayDelegation
 delegationWithCache srcDom dom msg =
-  -- 選択可能な NS が有るときだけ Just
+  -- There is delegation information only when there is a selectable NS
   maybe
-  (ncache $> Nothing)
-  (fmap Just . withCache)
+  (ncache $> NoDelegation)
+  (fmap HasDelegation . withCache)
   $ takeDelegation nsps adds
   where
     withCache x = do
