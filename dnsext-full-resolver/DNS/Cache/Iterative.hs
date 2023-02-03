@@ -785,6 +785,95 @@ norec aserver name typ = dnsQueryT $ \cxt -> do
   either (Left . DnsError) (\res -> handleResponseError Left Right $ DNS.replyDNSMessage (DNS.resultReply res)) <$>
     E.try (DNS.resolve renv q qctl)
 
+-- Filter authoritative server addresses from the delegation information.
+-- If the resolution result is NODATA, IllegalDomain is returned.
+delegationIPs :: Int -> Delegation -> DNSQuery [IP]
+delegationIPs dc (srcDom, des) = do
+  lift $ logLn Log.INFO $ ppDelegation des
+  disableV6NS <- lift $ asks disableV6NS_
+
+  let takeDEntryIP (DEonlyNS {})             xs  =  xs
+      takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
+      takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
+        | disableV6NS                            =  xs
+        | otherwise                              =  ip : xs
+      ips = foldr takeDEntryIP [] (fst des : snd des)
+
+      takeNames (DEonlyNS name) xs = name : xs
+      takeNames _               xs = xs
+
+      names = foldr takeNames [] (fst des : snd des)
+
+      result
+        | not (null ips)    =  return ips
+        | not (null names)  =  do
+            mayName <- liftIO $ randomizedSelect names
+            let neverReach = do
+                  lift $ logLn Log.INFO $ "delegationIPs: never reach this action."
+                  throwDnsError DNS.ServerFailure
+            maybe neverReach (fmap ((:[]) . fst) . resolveNS disableV6NS dc) mayName
+        | disableV6NS       =  do
+            lift $ logLn Log.INFO $ "delegationIPs: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
+            throwDnsError DNS.ServerFailure
+        | otherwise         = do
+            lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show srcDom ++ ", delegation is empty."
+            throwDnsError DNS.IllegalDomain
+
+  result
+
+resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
+resolveNS disableV6NS dc ns = do
+  let takeAx :: ResourceRecord -> [(IP, ResourceRecord)] -> [(IP, ResourceRecord)]
+      takeAx rr@ResourceRecord { rrtype = A, rdata = rd } xs
+        | rrname rr == ns, Just v4 <- DNS.rdataField rd DNS.a_ipv4  = (IPv4 v4, rr) : xs
+      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = rd } xs
+        | not disableV6NS && rrname rr == ns,
+          Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = (IPv6 v6, rr) : xs
+      takeAx _         xs  =  xs
+
+      axList = foldr takeAx []
+
+      refinesAx rrs = (ps, map snd ps)
+        where ps = axList rrs
+
+      lookupAx
+        | disableV6NS  =  lk4
+        | otherwise    =  join $ liftIO $ randomizedSelectN (lk46, [lk64])
+        where
+          lk46 = lk4 +? lk6
+          lk64 = lk6 +? lk4
+          lk4 = lookupCache ns A
+          lk6 = lookupCache ns AAAA
+          lx +? ly = maybe ly (return . Just) =<< lx
+
+      query1Ax
+        | disableV6NS  =  q4
+        | otherwise    =  join $ liftIO $ randomizedSelectN (q46, [q64])
+        where
+          q46 = q4 +!? q6 ; q64 = q6 +!? q4
+          q4 = querySection A
+          q6 = querySection AAAA
+          qx +!? qy = do
+            xs <- qx
+            if null xs then qy else pure xs
+          querySection typ = lift . getSectionWithCache rankedAnswer refinesAx . fst
+                             =<< resolveJustDC (succ dc) ns typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
+
+      resolveAXofNS :: DNSQuery (IP, ResourceRecord)
+      resolveAXofNS = do
+        let selectA = randomizedSelect
+            failEmptyAx
+              | disableV6NS = do
+                  lift $ logLn Log.NOTICE $ "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
+                  throwDnsError DNS.ServerFailure
+              | otherwise   = do
+                  lift $ logLn Log.NOTICE $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
+                  throwDnsError DNS.IllegalDomain
+        maybe failEmptyAx pure =<< liftIO . selectA  {- 失敗時: NS に対応する A の返答が空 -}
+          =<< maybe query1Ax (pure . axList . fst) =<< lift lookupAx
+
+  resolveAXofNS
+
 -- Select an authoritative server from the delegation information and resolve to an IP address.
 -- If the resolution result is NODATA, IllegalDomain is returned.
 selectDelegation :: Int -> Delegation -> DNSQuery IP
