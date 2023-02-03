@@ -76,6 +76,7 @@ module DNS.Do53.LookupX (
   , lookupSRV
   , lookupX
   , lookupAuthX
+  , toResourceData
   ) where
 
 import DNS.Types
@@ -338,14 +339,14 @@ lookupSRV = lookupX SRV
 
 -- | Look up resource data in the answer section.
 lookupX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
-lookupX typ env dom = unwrap <$> DNS.lookup env dom typ
+lookupX typ env dom = toResourceData <$> DNS.lookup env dom typ
 
 -- | Look up resource data in the authority section.
 lookupAuthX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
-lookupAuthX typ env dom = unwrap <$> lookupAuth env dom typ
+lookupAuthX typ env dom = toResourceData <$> lookupAuth env dom typ
 
-unwrap :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
-unwrap erds = case erds of
+toResourceData :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
+toResourceData erds = case erds of
     Left err  -> Left err
     Right rds -> mapM unTag rds
 
