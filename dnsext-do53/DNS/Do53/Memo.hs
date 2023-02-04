@@ -7,7 +7,8 @@ module DNS.Do53.Memo (
   , lookupCache
   ) where
 
-import qualified Control.Reaper as R
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
+import qualified DNS.Do53.OneShot as O
 import DNS.Types
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
@@ -22,30 +23,35 @@ type Entry = Either DNSError [RData]
 type DB = OrdPSQ Key Prio Entry
 
 -- | Cache for resource records.
-newtype Cache = Cache (R.Reaper DB (Key,Prio,Entry))
+data Cache = Cache (IORef DB) O.OneShot
 
 newCache :: Int -> IO Cache
-newCache delay = Cache <$> R.mkReaper R.defaultReaperSettings {
-    R.reaperEmpty  = PSQ.empty
-  , R.reaperCons   = \(k, tim, v) psq -> PSQ.insert k tim v psq
-  , R.reaperAction = prune
-  , R.reaperDelay  = delay * 1000000
-  , R.reaperNull   = PSQ.null
+newCache delay = do
+  dbRef <- newIORef PSQ.empty
+  Cache dbRef <$> O.mkOneShot O.defaultOneShotSettings {
+    O.oneShotAction = \registerAgain -> prune dbRef *> onNotNull dbRef registerAgain
+  , O.oneShotDelay = delay * 1000000
   }
 
 lookupCache :: Key -> Cache -> IO (Maybe (Prio, Entry))
-lookupCache key (Cache reaper) = PSQ.lookup key <$> R.reaperRead reaper
+lookupCache key (Cache dbRef _) = PSQ.lookup key <$> readIORef dbRef
 
 insertCache :: Key -> Prio -> Entry -> Cache -> IO ()
-insertCache key tim ent (Cache reaper) = R.reaperAdd reaper (key,tim,ent)
+insertCache key tim ent (Cache dbRef oneShot) = do
+  let ins db = (PSQ.insert key tim ent db, ())
+  atomicModifyIORef' dbRef ins
+  onNotNull dbRef (O.oneShotRegister oneShot)
+
+onNotNull :: IORef DB -> IO () -> IO ()
+onNotNull dbRef action = do
+  nullP <- PSQ.null <$> readIORef dbRef
+  unless nullP action
 
 -- Theoretically speaking, atMostView itself is good enough for pruning.
 -- But auto-update assumes a list based db which does not provide atMost
 -- functions. So, we need to do this redundant way.
-prune :: DB -> IO (DB -> DB)
-prune oldpsq = do
-    tim <- getEpochTime
-    let (_, pruned) = PSQ.atMostView tim oldpsq
-    return $ \newpsq -> foldl' ins pruned $ PSQ.toList newpsq
-  where
-    ins psq (k,p,v) = PSQ.insert k p v psq
+prune :: IORef DB -> IO ()
+prune dbRef = do
+  tim <- getEpochTime
+  let modify oldpsq = (snd $ PSQ.atMostView tim oldpsq, ())
+  atomicModifyIORef' dbRef modify
