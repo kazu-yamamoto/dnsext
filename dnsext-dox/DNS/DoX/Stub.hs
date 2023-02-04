@@ -50,33 +50,35 @@ lookupDoX conf domain typ = do
 
 auto :: HostName -> TYPE -> Int -> ResolvActions -> HostName -> [RD_SVCB] -> IO (Either DNSError Result)
 auto _ _ _ _ _ [] = return $ Left UnknownDNSError
-auto domain typ lim actions server ss0 = loop ss0
+auto domain typ lim actions ip0 ss0 = loop ss0
   where
     loop [] = return $ Left UnknownDNSError
-    loop (RD_SVCB{..}:ss) = do
+    loop (s@RD_SVCB{..}:ss) = do
         let malpns = extractSvcParam SPK_ALPN svcb_params
         case malpns of
           Nothing -> loop ss
           Just alpns -> go $ alpn_names alpns
        where
-         q = Question (fromRepresentation domain) typ classIN
          go [] = loop ss
          go (alpn:alpns) = case makeResolver alpn lim Nothing of
            Nothing -> go alpns
            Just resolver  -> do
-               let port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port svcb_params
-                   v4s = case extractSvcParam SPK_IPv4Hint svcb_params of
-                     Nothing -> []
-                     Just v4 -> show <$> hint_ipv4s v4
-                   v6s = case extractSvcParam SPK_IPv6Hint svcb_params of
-                     Nothing -> []
-                     Just v6 -> show <$> hint_ipv6s v6
-                   ips = case v4s ++ v6s of
-                     [] -> [(server,port)]
-                     xs -> map (,port) xs
-                   rinfos = map (\(x,y) -> ResolvInfo x y actions) ips
-                   renv = ResolvEnv resolver True rinfos
-               mrply <- try $ resolve renv q mempty
+               mrply <- resolveDoX s alpn resolver
                case mrply of
                  Left _ -> go alpns
                  _      -> return mrply
+    q = Question (fromRepresentation domain) typ classIN
+    resolveDoX RD_SVCB{..} alpn resolver = try $ resolve renv q mempty
+      where
+        port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port svcb_params
+        v4s = case extractSvcParam SPK_IPv4Hint svcb_params of
+          Nothing -> []
+          Just v4 -> show <$> hint_ipv4s v4
+        v6s = case extractSvcParam SPK_IPv6Hint svcb_params of
+          Nothing -> []
+          Just v6 -> show <$> hint_ipv6s v6
+        ips = case v4s ++ v6s of
+          [] -> [(ip0,port)]
+          xs -> map (,port) xs
+        rinfos = map (\(x,y) -> ResolvInfo x y actions) ips
+        renv = ResolvEnv resolver True rinfos
