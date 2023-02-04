@@ -1,35 +1,35 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
 module Operation where
 
-import DNS.Do53.Client (QueryControls, LookupConf (..))
+import DNS.Do53.Client (QueryControls, LookupConf(..), Seeds(..))
 import qualified DNS.Do53.Client as DNS
-import DNS.Do53.Internal (withLookupConfAndResolver, udpTcpResolver)
-import qualified DNS.Do53.Internal as DNS
-import DNS.DoX.Internal
-import DNS.Types (TYPE, DNSError)
+import DNS.Do53.Internal (withLookupConfAndResolver, udpTcpResolver, Result(..), Result(..))
+import DNS.DoX.Stub
+import DNS.SVCB
+import DNS.Types (DNSError, Question(..))
 import qualified DNS.Types as DNS
+import Data.ByteString.Short (ShortByteString)
 import Data.IP (IPv4, IPv6)
 import Network.Socket (PortNumber, HostName)
 import Text.Read (readMaybe)
 
-data DoX = Do53 | Auto | DoT | DoQ | DoH2 | DoH3 deriving (Eq, Show)
-
-operate :: [HostName] -> PortNumber -> DoX -> HostName -> TYPE -> QueryControls -> IO (Either DNSError DNS.Result)
-operate mserver port dox domain typ controls = do
+operate :: [HostName] -> PortNumber -> ShortByteString -> HostName -> TYPE -> QueryControls -> IO (Either DNSError Result)
+operate mserver port dox domain typ controls | dox == "auto" = do
   conf <- getCustomConf mserver port controls
-  let lim = DNS.lconfLimit conf
-      retry = DNS.lconfRetry conf
-  let resolver = case dox of
-        DoT  -> tlsResolver lim
-        DoQ  -> quicResolver lim
-        DoH2 -> http2Resolver "/dns-query" lim
-        DoH3 -> http3Resolver "/dns-query" lim
-        _    -> udpTcpResolver retry lim
-  withLookupConfAndResolver conf resolver $ \env -> do
-    let q = DNS.Question (DNS.fromRepresentation domain) typ DNS.classIN
-    DNS.lookupRaw env q
+  lookupDoX conf domain typ
+operate mserver port dox domain typ controls = do
+    conf <- getCustomConf mserver port controls
+    let lim = DNS.lconfLimit conf
+        resolver = case makeResolver dox lim Nothing of
+          Just r -> r
+          Nothing -> let retry = DNS.lconfRetry conf
+                     in udpTcpResolver lim retry
+    withLookupConfAndResolver conf resolver $ \env -> do
+        let q = Question (DNS.fromRepresentation domain) typ DNS.classIN
+        DNS.lookupRaw env q
 
 getCustomConf :: [HostName] -> PortNumber ->  QueryControls -> IO LookupConf
 getCustomConf mserver port controls = case mserver of
@@ -37,7 +37,7 @@ getCustomConf mserver port controls = case mserver of
   hs -> do
       as <- concat <$> mapM toNumeric hs
       let aps = map (,port) as
-      return $ conf { lconfSeeds = DNS.SeedsHostPorts aps }
+      return $ conf { lconfSeeds = SeedsHostPorts aps }
   where
     conf = DNS.defaultLookupConf {
         lconfRetry         = 2

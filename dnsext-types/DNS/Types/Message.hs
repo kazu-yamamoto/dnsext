@@ -642,3 +642,15 @@ getResourceRecord = do
     len <- getInt16
     dat <- getRData typ len
     return $ ResourceRecord dom typ cls ttl dat
+
+----------------------------------------------------------------
+
+data Section = Answer | Authority | Additional deriving (Eq, Ord, Show)
+
+section :: Section -> DNSMessage -> Answers
+section Answer     = answer
+section Authority  = authority
+section Additional = additional
+
+extractResourceData :: ResourceData a => Section -> DNSMessage -> [a]
+extractResourceData sec = catMaybes . map (fromRData . rdata) . section sec

@@ -7,6 +7,8 @@ module DNS.Types.Internal (
   -- * Classes
   , ResourceData(..)
   , OptData(..)
+  -- * Misc
+  , section
   -- * Extension
   , extendRR
   , extendOpt

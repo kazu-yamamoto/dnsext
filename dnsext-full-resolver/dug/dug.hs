@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
@@ -5,12 +6,15 @@ module Main (main) where
 import Control.Monad (when)
 import DNS.Do53.Client (rdFlag, doFlag, QueryControls, FlagOp(..))
 import DNS.Do53.Internal (Result(..), Reply(..))
+import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (TYPE(..), runInitIO)
+import qualified Data.ByteString.Char8 as C8
+import Data.ByteString.Short (ShortByteString)
+import qualified Data.ByteString.Short as Short
 import Data.List (isPrefixOf, intercalate)
 import qualified Data.UnixTime as T
-import Network.Socket (PortNumber)
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
@@ -18,7 +22,7 @@ import Text.Read (readMaybe)
 
 import qualified DNS.Cache.Log as Log
 
-import Operation (operate, DoX(..))
+import Operation (operate)
 import FullResolve (fullResolve)
 import Output (pprResult)
 
@@ -37,31 +41,16 @@ options = [
     (ReqArg (\ port opts -> opts { optPort = Just port }) "<port>")
     "specify port number"
   , Option ['d'] ["dox"]
-    (ReqArg (\ dox opts -> opts { optDoX = toDoX dox }) "dot|doq|doh2|doh3")
-    "enable DoX (auto if unknown"
+    (ReqArg (\ dox opts -> opts { optDoX = Short.toShort (C8.pack dox) }) "auto|dot|doq|h2|h3")
+    "enable DoX"
   ]
-
-toDoX :: String -> DoX
-toDoX "dot"  = DoT
-toDoX "doq"  = DoQ
-toDoX "doh2" = DoH2
-toDoX "doh3" = DoH3
-toDoX _      = Auto
-
-doxPort :: DoX -> PortNumber
-doxPort Do53 = 53
-doxPort Auto = 53
-doxPort DoT  = 853
-doxPort DoQ  = 853
-doxPort DoH2 = 443
-doxPort DoH3 = 443
 
 data Options = Options {
     optHelp        :: Bool
   , optIterative   :: Bool
   , optDisableV6NS :: Bool
   , optPort        :: Maybe String
-  , optDoX         :: DoX
+  , optDoX         :: ShortByteString
   } deriving Show
 
 defaultOptions :: Options
@@ -70,7 +59,7 @@ defaultOptions    = Options {
   , optIterative   = False
   , optDisableV6NS = False
   , optPort        = Nothing
-  , optDoX         = Do53
+  , optDoX         = "do53"
   }
 
 main :: IO ()
@@ -122,7 +111,7 @@ main = do
           Left err -> fail $ show err
           Right Result{..} -> do
               let Reply{..} = resultReply
-              putStr $ ";; " ++ resultHostName ++ "@" ++ show resultPortNumber ++ "/" ++ resultTag
+              putStr $ ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
               putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
               putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
               putStr   ", "

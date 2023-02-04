@@ -6,6 +6,8 @@ module DNS.Types (
   , makeQuery
   , defaultResponse
   , makeResponse
+  , extractResourceData
+  , Section(..)
   -- ** Header
   , DNSHeader(..)
   , Identifier

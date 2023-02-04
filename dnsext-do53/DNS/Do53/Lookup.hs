@@ -17,6 +17,7 @@ module DNS.Do53.Lookup (
 
 import Control.Exception as E
 import DNS.Types hiding (Seconds)
+import DNS.Types.Internal (section)
 import Prelude hiding (lookup)
 import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 
@@ -26,8 +27,6 @@ import DNS.Do53.Memo
 import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types
-
-data Section = Answer | Authority deriving (Eq, Ord, Show)
 
 ----------------------------------------------------------------
 
@@ -70,17 +69,17 @@ lookupSection :: Section
               -> LookupEnv
               -> Question
               -> IO (Either DNSError [RData])
-lookupSection section env q
-  | section == Authority = lookupFreshSection env q section
+lookupSection sec env q
+  | sec == Authority = lookupFreshSection env q sec
   | otherwise = case lenvCache env of
-      Nothing -> lookupFreshSection env q section
+      Nothing -> lookupFreshSection env q sec
       Just _  -> lookupCacheSection env q
 
 lookupFreshSection :: LookupEnv
                    -> Question
                    -> Section
                    -> IO (Either DNSError [RData])
-lookupFreshSection env q@Question{..} section = do
+lookupFreshSection env q@Question{..} sec = do
     eres <- lookupRaw env q
     case eres of
       Left  err -> return $ Left err
@@ -90,10 +89,7 @@ lookupFreshSection env q@Question{..} section = do
           return $ fromDNSMessage replyDNSMessage toRD
   where
     correct ResourceRecord{..} = rrtype == qtype
-    toRD = map rdata . filter correct . sectionF
-    sectionF = case section of
-      Answer    -> answer
-      Authority -> authority
+    toRD = map rdata . filter correct . section sec
 
 lookupCacheSection :: LookupEnv
                    -> Question

@@ -45,6 +45,7 @@ module DNS.Do53.Internal (
   , checkRespM
   , UDPRetry
   , VCLimit
+  , LookupEnv(..)
   , modifyLookupEnv
   , withLookupConfAndResolver
   ) where

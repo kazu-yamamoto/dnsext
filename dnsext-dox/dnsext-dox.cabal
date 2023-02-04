@@ -20,11 +20,14 @@ source-repository head
     location: https://github.com/kazu-yamamoto/dnsext
 
 library
-    exposed-modules:  DNS.DoX.Internal
+    exposed-modules:
+        DNS.DoX.Internal
+        DNS.DoX.Stub
     other-modules:
         DNS.DoX.Common
         DNS.DoX.HTTP2
         DNS.DoX.HTTP3
+        DNS.DoX.Imports
         DNS.DoX.QUIC
         DNS.DoX.TLS
 
@@ -35,10 +38,12 @@ library
         bytestring,
         data-default-class,
         dnsext-do53,
+        dnsext-svcb,
         dnsext-types,
         http-types,
         http2,
         http3,
+        iproute,
         network >=2.3,
         quic,
         recv >=0.1.0,
