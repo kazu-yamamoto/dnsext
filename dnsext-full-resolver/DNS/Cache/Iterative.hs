@@ -584,9 +584,9 @@ nsDomain :: DEntry -> Domain
 nsDomain (DEwithAx dom _)  =  dom
 nsDomain (DEonlyNS dom  )  =  dom
 
-v4DEntryList :: Domain -> [DEntry] -> [DEntry]
-v4DEntryList _      []          =  []
-v4DEntryList _srcDom des@(de:_)  =  concatMap skipAAAA $ byNS des
+v4DEntryList :: [DEntry] -> [DEntry]
+v4DEntryList []          =  []
+v4DEntryList des@(de:_)  =  concatMap skipAAAA $ byNS des
   where
     byNS = groupBy ((==) `on` nsDomain)
     skipAAAA = nullCase . filter (not . aaaaDE)
@@ -672,7 +672,7 @@ lookupDelegation dom = do
             | ns `DNS.isSubDomainOf` dom  ->  []             {- miss-hit with sub-domain case cause iterative loop, so return null to skip this NS -}
             | otherwise               ->  [DEonlyNS ns]  {- the case both A and AAAA are miss-hit -}
           Just as                     ->  as             {- just return address records. null case is wrong cache, so return null to skip this NS -}
-      noCachedV4NS es = disableV6NS && null (v4DEntryList dom es)
+      noCachedV4NS es = disableV6NS && null (v4DEntryList es)
       fromDEs es
         | noCachedV4NS es  =  Nothing
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
@@ -795,7 +795,7 @@ selectDelegation dc (srcDom, des) = do
         lift $ logLn Log.INFO $ "selectDelegation: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
         throwDnsError DNS.ServerFailure
       getDEs
-        | disableV6NS  =  maybe failEmptyDEs pure $ uncons (v4DEntryList srcDom $ fst des : snd des)
+        | disableV6NS  =  maybe failEmptyDEs pure $ uncons (v4DEntryList $ fst des : snd des)
         | otherwise    =  pure des
       selectDE = randomizedSelectN
   dentry <- liftIO . selectDE =<< getDEs
