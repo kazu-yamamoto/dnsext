@@ -57,6 +57,7 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
+import DNS.SEC (RD_DNSKEY, RD_DS)
 import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
@@ -513,7 +514,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
-  (msg, _nss@(srcDom, _)) <- resolveJust bn CNAME
+  (msg, _nss@(srcDom, _, _, _)) <- resolveJust bn CNAME
   lift $ cacheAnswer srcDom bn CNAME msg
   return msg
 
@@ -523,7 +524,7 @@ resolveCNAME bn = do
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
-  (msg, _nss@(srcDom, _)) <- resolveJust bn typ
+  (msg, _nss@(srcDom, _, _, _)) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
@@ -570,8 +571,12 @@ resolveJustDC dc n typ
     where
       mdc = maxNotSublevelDelegation
 
--- ドメインに対する NS 委任情報
-type Delegation = (Domain, NE DEntry)
+{- delegation information for domain -}
+type Delegation =
+  (Domain,      {- destination domain -}
+   NE DEntry,   {- NS infos of destination, get from source NS -}
+   [RD_DS],     {- signature of destination SEP DNSKEY, get from source NS -}
+   [RD_DNSKEY]  {- destination DNSKEY set, get from destination NS -})
 
 data DEntry
   = DEwithAx !Domain !IP
@@ -633,7 +638,7 @@ iterative_ dc nss (x:xs) =
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
-    stepQuery nss_@(srcDom, _) = do
+    stepQuery nss_@(srcDom, _, _, _) = do
       sas <- delegationIPs dc nss_ {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
       lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -669,7 +674,7 @@ lookupDelegation dom = do
       fromDEs es
         | noCachedV4NS es  =  Nothing
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
-        | otherwise        =  (HasDelegation . (,) dom) <$> uncons es
+        | otherwise        =  (\des -> HasDelegation $ (dom, des, [], [])) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
       getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
       getDelegation (rrs, _) = do {- NS cache hit -}
@@ -720,7 +725,7 @@ takeDelegation nsps adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
   ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
-  return (rrname rr, ents)
+  return (rrname rr, ents, [], [])
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
@@ -805,7 +810,7 @@ norec aservers name typ = dnsQueryT $ \cxt -> do
 -- Filter authoritative server addresses from the delegation information.
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc (srcDom, des) = do
+delegationIPs dc (srcDom, des, _, _) = do
   lift $ logLn Log.INFO $ ppDelegation des
   disableV6NS <- lift $ asks disableV6NS_
 
