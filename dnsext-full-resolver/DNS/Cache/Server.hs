@@ -76,7 +76,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
           tstr <- getTimeStr
           putLines Log.NOTICE [tstr $ ": " ++ msg]
         memoActions = UCache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
-    return (UCache.CacheConf maxCacheSize memoActions, Queue.readSizes ucacheQ)
+    return (UCache.MemoConf maxCacheSize memoActions, Queue.readSizes ucacheQ)
   (ucacheLoops, insert, getCache, expires) <- UCache.new cacheConf
   cxt <- newContext putLines disableV6NS (insert, getCache) tcache
 
@@ -140,7 +140,7 @@ workerBenchmark noop gplot workers perWorker size = do
     ucacheQ <- newQueue 8
     let memoLogLn = putLines Log.NOTICE . (:[])
         memoActions = UCache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
-    return (UCache.CacheConf (2 * 1024 * 1024) memoActions)
+    return (UCache.MemoConf (2 * 1024 * 1024) memoActions)
   (ucacheLoops, insert, getCache, _expires) <- UCache.new cacheConf
   cxt <- newContext putLines False (insert, getCache) tcache
 
