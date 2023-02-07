@@ -31,7 +31,7 @@ spec = do
 envSpec :: Spec
 envSpec = describe "env" $ do
   it "rootNS" $ do
-    let sp p = case p of (_,_) -> True  -- check not error
+    let sp p = case p of (_,_,_,_) -> True  -- check not error
     rootNS `shouldSatisfy` sp
 
 cacheStateSpec :: Bool -> Spec
