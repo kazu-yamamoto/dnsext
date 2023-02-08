@@ -567,6 +567,7 @@ resolveJustDC dc n typ
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
   nss <- iterative_ dc rootNS $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
+  lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
   (,) <$> norec sas n typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
@@ -636,6 +637,7 @@ iterative_ dc nss (x:xs) =
     stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss_@(srcDom, _) = do
       sas <- delegationIPs dc nss_ {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
+      lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
