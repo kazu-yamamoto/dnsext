@@ -8,6 +8,8 @@ module DNS.Cache.Cache (
   insert,
   expires,
   size,
+  stubLookup,
+  stubInsert,
 
   Ranking (..),
   rankedAnswer, rankedAuthority, rankedAdditional,
@@ -156,6 +158,12 @@ lookupAlive now mk dom typ cls = lookup_ mkAlive $ Question dom typ cls
        ttl <- alive now eol
        mk ttl v
 
+-- lookup interface for stub resolver
+stubLookup :: Key -> Cache -> Maybe (EpochTime, CRSet)
+stubLookup k = lookup_ result k
+  where
+    result eol (Val crs _) = Just (eol, crs)
+
 lookup_ :: (EpochTime -> Val -> Maybe a)
         -> Key
         -> Cache -> Maybe a
@@ -198,6 +206,20 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
       guard $ rank > r
       inserted  -- replacing rank does not change size
     eol = now <+ ttl
+    inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
+    sized
+      | PSQ.size c < xsz  =  inserted
+      | otherwise         =  do
+          (_, l, _, deleted) <- PSQ.minView c
+          guard $ eol > l  -- Guard if the tried to insert has the smallest lifetime
+          Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
+
+-- insert interface for stub resolver
+stubInsert :: Key -> EpochTime -> CRSet -> Cache -> Maybe Cache
+stubInsert k eol crs (Cache c xsz) =
+  sized
+  where
+    rank = RankAnswer
     inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
     sized
       | PSQ.size c < xsz  =  inserted
