@@ -1,13 +1,28 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.UpdateCache (
-  MemoConf (..),
-  MemoActions (..),
-  getDefaultStubConf,
-  UpdateEvent,
   new,
   none,
   Insert,
+
+  MemoConf (..),
+  MemoActions (..),
+  getDefaultStubConf,
+  getNoCacheConf,
+  UpdateEvent,
+  Memo,
+  getMemo,
+  readMemo,
+  expiresMemo,
+  insertWithExpiresMemo,
+  Prio,
+  Entry,
+  newCache,
+  lookupCache,
+  insertCache,
+  keyForNX,
+
+  module DNS.Cache.Cache,
   ) where
 
 -- GHC packages
