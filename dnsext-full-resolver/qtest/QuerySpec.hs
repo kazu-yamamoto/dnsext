@@ -10,8 +10,7 @@ import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
 import qualified DNS.Types as DNS
 import System.Environment (lookupEnv)
 
-import qualified DNS.Cache.Cache as Cache
-import qualified DNS.Cache.UpdateCache as UCache
+import qualified DNS.Cache.UpdateCache as Cache
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
 import qualified DNS.Cache.Iterative as Iterative
@@ -38,9 +37,11 @@ envSpec = describe "env" $ do
 cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-  (loops, insert, getCache, _) <- runIO $ UCache.new cacheConf
-  runIO $ mapM_ forkIO loops
+  cacheConf <- runIO $ Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+  (updateLoop, memo) <- runIO $ Cache.getMemo cacheConf
+  _ <- runIO $ forkIO updateLoop
+  let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
+      getCache = Cache.readMemo memo
 
   let getResolveCache n ty = do
         cxt <- newContext (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
@@ -70,10 +71,11 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-  (loops, insert, getCache, _) <- runIO $ UCache.new cacheConf
-  runIO $ mapM_ forkIO loops
-  let ucache = (insert, getCache)
+  cacheConf <- runIO $ Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+  (updateLoop, memo) <- runIO $ Cache.getMemo cacheConf
+  _ <- runIO $ forkIO updateLoop
+  let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
+      ucache = (insert, Cache.readMemo memo)
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = Iterative.runIterative cxt ns (fromString n)
