@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.UpdateCache (
-  CacheConf (..),
+  MemoConf (..),
   MemoActions (..),
   getDefaultStubConf,
   UpdateEvent,
@@ -27,7 +27,7 @@ import UnliftIO (tryAny)
 import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
 import qualified DNS.Cache.Cache as Cache
 
-data CacheConf = CacheConf {
+data MemoConf = MemoConf {
     maxCacheSize :: Int
   , memoActions :: MemoActions
   }
@@ -40,11 +40,11 @@ data MemoActions = MemoActions {
   , memoWriteQueue :: UpdateEvent -> IO ()
   }
 
-getDefaultStubConf :: Int -> IO EpochTime -> IO CacheConf
+getDefaultStubConf :: Int -> IO EpochTime -> IO MemoConf
 getDefaultStubConf size getSec = do
   let noLog _ = pure ()
   q <- newChan
-  pure $ CacheConf size $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+  pure $ MemoConf size $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
 
 
 -- function update to update cache, and log action
@@ -52,9 +52,9 @@ type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 
 type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
 
-new :: CacheConf
+new :: MemoConf
     -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
-new CacheConf{..} = do
+new MemoConf{..} = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
