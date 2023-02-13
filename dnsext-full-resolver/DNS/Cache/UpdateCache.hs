@@ -1,10 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.UpdateCache (
-  new,
-  none,
-  Insert,
-
   MemoConf (..),
   MemoActions (..),
   getDefaultStubConf,
@@ -68,60 +64,8 @@ getNoCacheConf = do
   q <- newChan
   pure $ MemoConf 0 1800 $ MemoActions noLog noLog (pure 0) (readChan q) (\_ -> pure ())
 
------
-
 -- function update to update cache, and log action
 type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
-
-type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
-
-new :: MemoConf
-    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
-new MemoConf{..} = do
-  let MemoActions{..} = memoActions
-  cacheRef <- newIORef $ Cache.empty maxCacheSize
-
-  let expires1 ts = memoWriteQueue (Cache.expires ts, expiredLog)
-        where
-          expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
-
-  oneShotExpire <- mkOneShot defaultOneShotSettings
-                   { oneShotAction = const (expires1 =<< memoGetTime)
-                   , oneShotDelay = expiresDelay * 1000 * 1000
-                   }
-
-  let registerExpire c = unless (Cache.null c) $ oneShotRegister oneShotExpire
-      update1 :: UpdateEvent -> IO ()
-      update1 (uevent, logAction) = do   -- step of single update theard
-        cache <- readIORef cacheRef
-        let updateRef c = do
-              -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
-              c `seq` atomicWriteIORef cacheRef c
-              logAction c
-              registerExpire c
-        maybe (registerExpire cache) updateRef $ uevent cache
-
-  updateLoop <- do
-    let errorLn = memoErrorLn . ("Memo.updateLoop: error: " ++) . show
-        body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
-    return $ forever body
-
-
-  let insert k ttl crs rank = do
-        t <- memoGetTime
-        let insert_ = Cache.insert t k ttl crs rank
-            evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
-        memoWriteQueue (evInsert, const $ pure ())
-
-  return ([updateLoop], insert, readIORef cacheRef, expires1)
-
--- no caching
-none :: (Insert, IO Cache)
-none =
-  (\_ _ _ _ -> return (),
-   return $ Cache.empty 0)
-
------
 
 data Memo = Memo MemoConf OneShot (IORef Cache)
 
