@@ -29,6 +29,7 @@ import qualified DNS.Cache.Cache as Cache
 
 data MemoConf = MemoConf {
     maxCacheSize :: Int
+  , expiresDelay :: Int
   , memoActions :: MemoActions
   }
 
@@ -40,11 +41,11 @@ data MemoActions = MemoActions {
   , memoWriteQueue :: UpdateEvent -> IO ()
   }
 
-getDefaultStubConf :: Int -> IO EpochTime -> IO MemoConf
-getDefaultStubConf size getSec = do
+getDefaultStubConf :: Int -> Int -> IO EpochTime -> IO MemoConf
+getDefaultStubConf size delay getSec = do
   let noLog _ = pure ()
   q <- newChan
-  pure $ MemoConf size $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+  pure $ MemoConf size delay $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
 
 
 -- function update to update cache, and log action
@@ -64,7 +65,7 @@ new MemoConf{..} = do
 
   oneShotExpire <- mkOneShot defaultOneShotSettings
                    { oneShotAction = const (expires1 =<< memoGetTime)
-                   , oneShotDelay = 1800 * 1000 * 1000
+                   , oneShotDelay = expiresDelay * 1000 * 1000
                    }
 
   let registerExpire c = unless (Cache.null c) $ oneShotRegister oneShotExpire
