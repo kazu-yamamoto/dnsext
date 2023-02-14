@@ -129,7 +129,7 @@ null (Cache psq _) = PSQ.null psq
 lookup :: EpochTime
        -> Domain -> TYPE -> CLASS
        -> Cache -> Maybe ([ResourceRecord], Ranking)
-lookup now dom typ cls = lookup_ now result dom typ cls
+lookup now dom typ cls = lookupAlive now result dom typ cls
   where
     result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
 
@@ -137,24 +137,31 @@ lookup now dom typ cls = lookup_ now result dom typ cls
 lookupEither :: EpochTime
              -> Domain -> TYPE -> CLASS
              -> Cache -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking)  {- SOA or RRs, ranking -}
-lookupEither now dom typ cls cache = lookup_ now result dom typ cls cache
+lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
   where
     result ttl (Val crs rank) = case crs of
       Left srcDom  ->  do
-        sp <- lookup_ now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
+        sp <- lookupAlive now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache  {- EMPTY hit. empty ranking and SOA result. -}
         return (Left sp, rank)
       _                ->  Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
     soaResult ettl srcDom ttl (Val crs rank) =
       Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl) {- treated as TTL of empty data -} crs, rank)
 
-lookup_ :: EpochTime -> (TTL -> Val -> Maybe a)
-        -> Domain -> TYPE -> CLASS
+lookupAlive :: EpochTime -> (TTL -> Val -> Maybe a)
+            -> Domain -> TYPE -> CLASS
+            -> Cache -> Maybe a
+lookupAlive now mk dom typ cls = lookup_ mkAlive $ Question dom typ cls
+  where
+    mkAlive eol v = do
+       ttl <- alive now eol
+       mk ttl v
+
+lookup_ :: (EpochTime -> Val -> Maybe a)
+        -> Key
         -> Cache -> Maybe a
-lookup_ now mk dom typ cls (Cache cache _) = do
-  let k = Question dom typ cls
+lookup_ mk k (Cache cache _) = do
   (eol, v) <- k `PSQ.lookup` cache
-  ttl <- alive now eol
-  mk ttl v
+  mk eol v
 
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
@@ -185,7 +192,7 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
   maybe sized withOldRank lookupRank
   where
     lookupRank =
-      lookup_ now (\_ (Val _ r) -> Just r)
+      lookupAlive now (\_ (Val _ r) -> Just r)
       dom typ cls cache
     withOldRank r = do
       guard $ rank > r
@@ -231,7 +238,7 @@ nxTYPE = DNS.toTYPE 0xff00
 member :: EpochTime
        -> Domain -> TYPE -> CLASS
        -> Cache -> Bool
-member now dom typ cls = isJust . lookup_ now (\_ _ -> Just ()) dom typ cls
+member now dom typ cls = isJust . lookupAlive now (\_ _ -> Just ()) dom typ cls
 
 dump :: Cache -> [(Key, (EpochTime, Val))]
 dump (Cache c _) = [ (k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c ]
