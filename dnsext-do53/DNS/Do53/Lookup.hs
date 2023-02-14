@@ -23,7 +23,7 @@ import Network.Socket (HostName, PortNumber, HostName, PortNumber)
 
 import DNS.Do53.Do53
 import DNS.Do53.Imports
-import DNS.Do53.Memo
+import DNS.Do53.Memo hiding (lookup)
 import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types
@@ -95,9 +95,18 @@ lookupCacheSection :: LookupEnv
                    -> Question
                    -> IO (Either DNSError [RData])
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
-    mx <- lookupCache q c
-    case mx of
-      Nothing -> do
+    nx <- lookupCache (keyForNX q) c
+    case nx of
+      Just (_, Left _)   -> return $ Left NameError
+      Just (_, Right _)  -> return $ Left UnknownDNSError  {- cache is inconsistent -}
+      Nothing           -> do
+        mx <- lookupCache q c
+        case mx of
+          Nothing             -> notCached
+          Just (_, Left _)    -> return $ Right []  {- NoData -}
+          Just (_, Right rs)  -> return $ Right rs
+  where
+    notCached = do
           eres <- lookupRaw env q
           now <- ractionGetTime lenvActions
           case eres of
@@ -110,23 +119,19 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                     ex = fromDNSMessage ans toRR
                 case ex of
                   Left NameError -> do
-                      let v = Left NameError
-                      cacheNegative cconf c q now v ans
-                      return v
+                      cacheNegative cconf c (keyForNX q) now ans
+                      return $ Left NameError
                   Left e -> return $ Left e
                   Right [] -> do
-                      let v = Right []
-                      cacheNegative cconf c q now v ans
-                      return v
+                      cacheNegative cconf c q now ans
+                      return $ Right []
                   Right rss -> do
                       cachePositive cconf c q now rss
                       return $ Right $ map rdata rss
-      Just (_,x) -> return x
-  where
     toRR = filter (qtype `isTypeOf`) . answer
     (c, cconf) = fromJust lenvCache
 
-cachePositive :: CacheConf -> Cache -> Key -> EpochTime -> [ResourceRecord] -> IO ()
+cachePositive :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
   | ttl == 0  = return () -- does not cache anything
   | otherwise = insertPositive cconf c k now v ttl
@@ -135,21 +140,21 @@ cachePositive cconf c k now rss
     v = Right rds
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
-insertPositive :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertCache k p v c
   where
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
-cacheNegative :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> DNSMessage -> IO ()
-cacheNegative cconf c k now v ans = case soas of
+cacheNegative :: CacheConf -> Memo -> Key -> EpochTime -> DNSMessage -> IO ()
+cacheNegative cconf c k now ans = case soas of
   []    -> return () -- does not cache anything
-  soa:_ -> insertNegative cconf c k now v $ rrttl soa
+  soa:_ -> insertNegative cconf c k now (Left $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
-insertNegative :: CacheConf -> Cache -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertNegative :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertNegative _ c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertCache k p v c
@@ -265,7 +270,8 @@ withLookupConfAndResolver :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO
 withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
-          cache <- newCache (pruningDelay cacheconf)
+          memoConf <- getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
+          cache <- newCache memoConf
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
     ris <- findAddrPorts lconfSeeds
