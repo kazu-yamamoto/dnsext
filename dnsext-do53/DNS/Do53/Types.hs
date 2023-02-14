@@ -163,7 +163,7 @@ defaultLookupConf = LookupConf {
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
 data LookupEnv = LookupEnv {
-    lenvCache         :: Maybe (Cache, CacheConf)
+    lenvCache         :: Maybe (Memo, CacheConf)
   , lenvQueryControls :: QueryControls
   , lenvConcurrent    :: Bool
   , lenvResolvEnv     :: ResolvEnv
