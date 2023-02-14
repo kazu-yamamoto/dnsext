@@ -4,27 +4,38 @@ module DNS.Cache.UpdateCache (
   MemoConf (..),
   MemoActions (..),
   getDefaultStubConf,
+  getNoCacheConf,
   UpdateEvent,
-  new,
-  none,
-  Insert,
+  Memo,
+  getMemo,
+  readMemo,
+  expiresMemo,
+  insertWithExpiresMemo,
+  Prio,
+  Entry,
+  newCache,
+  lookupCache,
+  insertCache,
+  keyForNX,
+
+  module DNS.Cache.Cache,
   ) where
 
 -- GHC packages
-import Control.Monad (forever, unless)
-import Control.Concurrent.Chan (newChan, readChan, writeChan)
-import Data.IORef (newIORef, readIORef, atomicWriteIORef)
+import Control.Monad (forever, unless, void)
+import Control.Concurrent (forkIO, newChan, readChan, writeChan)
+import Data.IORef (IORef, newIORef, readIORef, atomicWriteIORef)
 
 -- dnsext-* packages
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
-import DNS.Do53.OneShot (defaultOneShotSettings, oneShotAction, oneShotDelay, mkOneShot, oneShotRegister)
+import DNS.Do53.OneShot (OneShot, defaultOneShotSettings, oneShotAction, oneShotDelay, mkOneShot, oneShotRegister)
 
 -- other packages
 import UnliftIO (tryAny)
 
 -- this package
-import DNS.Cache.Cache (Cache, Key, CRSet, Ranking)
+import DNS.Cache.Cache
 import qualified DNS.Cache.Cache as Cache
 
 data MemoConf = MemoConf {
@@ -42,29 +53,35 @@ data MemoActions = MemoActions {
   }
 
 getDefaultStubConf :: Int -> Int -> IO EpochTime -> IO MemoConf
-getDefaultStubConf size delay getSec = do
+getDefaultStubConf sz delay getSec = do
   let noLog _ = pure ()
   q <- newChan
-  pure $ MemoConf size delay $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+  pure $ MemoConf sz delay $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
 
+getNoCacheConf :: IO MemoConf
+getNoCacheConf = do
+  let noLog _ = pure ()
+  q <- newChan
+  pure $ MemoConf 0 1800 $ MemoActions noLog noLog (pure 0) (readChan q) (\_ -> pure ())
 
 -- function update to update cache, and log action
 type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 
-type Insert = Key -> TTL -> CRSet -> Ranking -> IO ()
+data Memo = Memo MemoConf OneShot (IORef Cache)
 
-new :: MemoConf
-    -> IO ([IO ()], Insert, IO Cache, EpochTime -> IO ())
-new MemoConf{..} = do
+expires_ :: MemoConf -> EpochTime -> IO ()
+expires_ MemoConf{..} ts = memoWriteQueue (Cache.expires ts, expiredLog)
+  where
+    MemoActions{..} = memoActions
+    expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
+
+getMemo :: MemoConf -> IO (IO (), Memo)
+getMemo conf@MemoConf{..} = do
   let MemoActions{..} = memoActions
   cacheRef <- newIORef $ Cache.empty maxCacheSize
 
-  let expires1 ts = memoWriteQueue (Cache.expires ts, expiredLog)
-        where
-          expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
-
   oneShotExpire <- mkOneShot defaultOneShotSettings
-                   { oneShotAction = const (expires1 =<< memoGetTime)
+                   { oneShotAction = const (expires_ conf =<< memoGetTime)
                    , oneShotDelay = expiresDelay * 1000 * 1000
                    }
 
@@ -84,17 +101,42 @@ new MemoConf{..} = do
         body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
     return $ forever body
 
+  return (updateLoop, Memo conf oneShotExpire cacheRef)
 
-  let insert k ttl crs rank = do
-        t <- memoGetTime
-        let insert_ = Cache.insert t k ttl crs rank
-            evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
-        memoWriteQueue (evInsert, const $ pure ())
+readMemo :: Memo -> IO Cache
+readMemo (Memo _ _ ref) = readIORef ref
 
-  return ([updateLoop], insert, readIORef cacheRef, expires1)
+expiresMemo :: EpochTime -> Memo -> IO ()
+expiresMemo ts (Memo conf _ _) = expires_ conf ts
 
--- no caching
-none :: (Insert, IO Cache)
-none =
-  (\_ _ _ _ -> return (),
-   return $ Cache.empty 0)
+insertWithExpiresMemo :: Key -> TTL -> CRSet -> Ranking -> Memo -> IO ()
+insertWithExpiresMemo k ttl crs rank (Memo MemoConf{..} _ _) = do
+  let MemoActions{..} = memoActions
+  t <- memoGetTime
+  let insert_ = Cache.insert t k ttl crs rank
+      evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
+  memoWriteQueue (evInsert, const $ pure ())
+
+---
+
+type Prio = EpochTime
+
+type Entry = CRSet
+
+newCache :: MemoConf -> IO Memo
+newCache conf = do
+  (updateLoop, memo) <- getMemo conf
+  void $ forkIO updateLoop
+  return memo
+
+lookupCache :: Key -> Memo -> IO (Maybe (Prio, Entry))
+lookupCache k memo = Cache.stubLookup k <$> readMemo memo
+
+insertCache :: Key -> Prio -> Entry -> Memo -> IO ()
+insertCache k tim crs (Memo MemoConf{..} _ _) = do
+  let MemoActions{..} = memoActions
+      evInsert = Cache.stubInsert k tim crs
+  memoWriteQueue (evInsert, const $ pure ())
+
+keyForNX :: Key -> Key
+keyForNX k = k { qtype = Cache.nxTYPE }
