@@ -8,9 +8,9 @@ import Data.Either (isRight)
 import Data.String (fromString)
 import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
 import qualified DNS.Types as DNS
+import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
-import qualified DNS.Cache.UpdateCache as Cache
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
 import qualified DNS.Cache.Iterative as Iterative
