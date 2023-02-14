@@ -30,7 +30,7 @@ setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), 
 setup disableV6NS logOutput logLevel = do
   (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
   tcache@(getSec, _) <- TimeCache.new
-  cacheConf <- UCache.getDefaultStubConf (4 * 1024) getSec
+  cacheConf <- UCache.getDefaultStubConf (4 * 1024) 600 getSec
   (loops, insert, getCache, _) <- UCache.new cacheConf
   let ucache = (insert, getCache)
   cxt <- Iterative.newContext putLines disableV6NS ucache tcache

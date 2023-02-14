@@ -38,7 +38,7 @@ envSpec = describe "env" $ do
 cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) getSec
+  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
   (loops, insert, getCache, _) <- runIO $ UCache.new cacheConf
   runIO $ mapM_ forkIO loops
 
@@ -70,7 +70,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) getSec
+  cacheConf <- runIO $ UCache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
   (loops, insert, getCache, _) <- runIO $ UCache.new cacheConf
   runIO $ mapM_ forkIO loops
   let ucache = (insert, getCache)
