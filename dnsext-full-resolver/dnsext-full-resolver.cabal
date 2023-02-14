@@ -11,8 +11,6 @@ library
     exposed-modules:
         DNS.Cache.Server
         DNS.Cache.Iterative
-        DNS.Cache.UpdateCache
-        DNS.Cache.Cache
         DNS.Cache.TimeCache
         DNS.Cache.Log
         DNS.Cache.Types
