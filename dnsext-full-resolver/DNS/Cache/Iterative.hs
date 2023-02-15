@@ -56,20 +56,20 @@ import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
+import qualified DNS.Types as DNS
 import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
 import qualified DNS.Do53.Internal as DNS
-import qualified DNS.Types as DNS
+import DNS.Do53.Memo
+  (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
+   insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
+import qualified DNS.Do53.Memo as Cache
 
 -- this package
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
-import DNS.Cache.Cache
-  (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
-import qualified DNS.Cache.Cache as Cache
 
 -----
 

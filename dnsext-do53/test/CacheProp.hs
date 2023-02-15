@@ -20,11 +20,13 @@ import DNS.Types.Decode (EpochTime)
 import System.Exit (exitFailure)
 import System.IO.Unsafe (unsafePerformIO)
 
-import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Cache
+import Data.UnixTime (getUnixTime, UnixTime(..))
+import Foreign.C.Types (CTime(..))
+
+import DNS.Do53.Memo
   (Cache, Key, Question(..), Val (Val), CRSet, (<+),
    Ranking (..), takeRRSet, extractRRSet)
-import qualified DNS.Cache.Cache as Cache
+import qualified DNS.Do53.Memo as Cache
 
 
 -----
@@ -63,7 +65,9 @@ nsList =
 
 
 ts0 :: EpochTime
-ts0 = unsafePerformIO $ fst TimeCache.none
+ts0 = unsafePerformIO $ do
+  UnixTime (CTime tim) _ <- getUnixTime
+  return tim
 {-# NOINLINE ts0 #-}
 
 -- avoid limitations imposed by max-size

@@ -3,10 +3,10 @@ module FullResolve where
 import Control.Concurrent (forkIO)
 import Data.String (fromString)
 import qualified DNS.Types as DNS
+import qualified DNS.Do53.Memo as Cache
 
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import qualified DNS.Cache.UpdateCache as Cache
 import DNS.Cache.Iterative (Context (..), QueryError)
 import qualified DNS.Cache.Iterative as Iterative
 

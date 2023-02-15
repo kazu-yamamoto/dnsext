@@ -11,8 +11,6 @@ library
     exposed-modules:
         DNS.Cache.Server
         DNS.Cache.Iterative
-        DNS.Cache.UpdateCache
-        DNS.Cache.Cache
         DNS.Cache.TimeCache
         DNS.Cache.Log
         DNS.Cache.Types
@@ -98,24 +96,6 @@ executable workers-benchmark
     build-depends:
         base,
         dnsext-full-resolver
-
-    if impl(ghc >=8)
-        default-extensions: Strict StrictData
-
-test-suite cache-test
-    type:             exitcode-stdio-1.0
-    main-is:          cache.hs
-    hs-source-dirs:   test
-    other-modules:    CacheProp
-    default-language: Haskell2010
-    ghc-options:      -Wall
-    build-depends:
-        base,
-        bytestring,
-        dnsext-types,
-        dnsext-do53,
-        dnsext-full-resolver,
-        QuickCheck
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

@@ -19,10 +19,11 @@ import Data.List (isInfixOf, find)
 import System.IO (IOMode (ReadWriteMode), Handle, hGetLine, hIsEOF, hPutStr, hPutStrLn, hFlush, hClose, stdin, stdout)
 import Text.Read (readMaybe)
 
--- dns packages
+-- dnsext-* packages
 import Network.Socket (AddrInfo (..), SocketType (Stream), HostName, PortNumber, Socket, SockAddr)
 import qualified Network.Socket as S
 import qualified DNS.Types as DNS
+import qualified DNS.Do53.Memo as Cache
 
 -- other packages
 import UnliftIO (tryAny, waitSTM, withAsync)
@@ -30,7 +31,6 @@ import UnliftIO (tryAny, waitSTM, withAsync)
 -- this package
 import DNS.Cache.SocketUtil (addrInfo)
 import qualified DNS.Cache.Log as Log
-import qualified DNS.Cache.Cache as Cache
 import DNS.Cache.Iterative (Context (..))
 
 

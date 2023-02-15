@@ -1,6 +1,6 @@
 {-# LANGUAGE StrictData #-}
 
-module DNS.Cache.Cache (
+module DNS.Do53.Cache (
   -- * cache interfaces
   empty, null,
   lookup, lookupEither,

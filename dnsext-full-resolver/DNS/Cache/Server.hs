@@ -24,6 +24,7 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
+import qualified DNS.Do53.Memo as Cache
 import Data.IP (IP(..), fromHostAddress, fromHostAddress6)
 import Network.Socket (HostName, PortNumber, getAddrInfo, AddrInfo (..), SockAddr (..), SocketType (Datagram))
 import qualified Network.UDP as UDP
@@ -39,7 +40,6 @@ import qualified DNS.Cache.ServerMonitor as Mon
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import qualified DNS.Cache.UpdateCache as Cache
 import DNS.Cache.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
 
 

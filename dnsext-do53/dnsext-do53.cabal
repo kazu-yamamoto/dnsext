@@ -26,16 +26,17 @@ library
     exposed-modules:
         DNS.Do53.Client
         DNS.Do53.Internal
+        DNS.Do53.Memo
         DNS.Do53.OneShot
 
     other-modules:
+        DNS.Do53.Cache
         DNS.Do53.Do53
         DNS.Do53.Imports
         DNS.Do53.Id
         DNS.Do53.IO
         DNS.Do53.Lookup
         DNS.Do53.LookupX
-        DNS.Do53.Memo
         DNS.Do53.Query
         DNS.Do53.Resolve
         DNS.Do53.System
@@ -51,6 +52,7 @@ library
         base >=4 && <5,
         bytestring,
         containers,
+        deepseq,
         dnsext-types,
         iproute >=1.3.2,
         mtl,
@@ -59,7 +61,8 @@ library
         psqueues,
         random >=1.2,
         stm,
-        unix-time
+        unix-time,
+        unliftio,
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -96,3 +99,21 @@ test-suite doctests
     build-depends:
         base,
         doctest
+
+test-suite cache-test
+    type:             exitcode-stdio-1.0
+    main-is:          cache.hs
+    hs-source-dirs:   test
+    other-modules:    CacheProp
+    default-language: Haskell2010
+    ghc-options:      -Wall
+    build-depends:
+        base,
+        bytestring,
+        dnsext-types,
+        dnsext-do53,
+        QuickCheck,
+        unix-time,
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData
