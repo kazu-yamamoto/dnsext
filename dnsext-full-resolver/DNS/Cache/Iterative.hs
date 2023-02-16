@@ -57,7 +57,7 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.SEC (RD_DNSKEY, RD_DS)
+import DNS.SEC (TYPE (DS, RRSIG), RD_DNSKEY, RD_DS, RD_RRSIG)
 import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
@@ -605,7 +605,7 @@ rootNS :: Delegation
 rootNS =
   fromMaybe
   (error "rootNS: bad configuration.")
-  $ takeDelegation (nsList "." (,) ns) as
+  $ takeDelegationSrc (nsList "." (,) ns) [] as
   where
     (ns, as) = rootServers
 
@@ -692,15 +692,21 @@ delegationWithCache srcDom dom msg =
   maybe
   (ncache $> NoDelegation)
   (fmap HasDelegation . withCache)
-  $ takeDelegation nsps adds
+  $ takeDelegationSrc nsps dss adds
   where
     withCache x = do
+      {- TODO: check DS with RRSIG, and cache DS with RRSIG -}
       cacheNS
       cacheAdds
       return x
 
-    (nsps, cacheNS) = getSection rankedAuthority refinesNS msg
-      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
+    (authRRs, authorityRank) = rankedAuthority msg
+    dss = rrListWith DS DNS.fromRData dom const authRRs
+    _sigrds :: [RD_RRSIG]
+    _sigrds = rrListWith RRSIG DNS.fromRData dom const authRRs
+    cacheNS = cacheSection nsRRs authorityRank
+    (nsps, nsRRs) = unzip $ nsList dom (\ns rr -> ((ns, rr), rr)) authRRs
+
     (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
       where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
             match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
@@ -720,12 +726,16 @@ delegationWithCache srcDom dom msg =
                しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
               where (cns, crrs) = unzip $ cnameList dom (,) rrs
 
-takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delegation
-takeDelegation nsps adds = do
+takeDelegationSrc :: [(Domain, ResourceRecord)]
+                  -> [RD_DS]
+                  -> [ResourceRecord]
+                  -> Maybe Delegation
+takeDelegationSrc nsps dss adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
   ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
-  return (rrname rr, ents, [], [])
+  {- only data from delegation source zone. get DNSKEY from destination zone -}
+  return (rrname rr, ents, dss, [])
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
