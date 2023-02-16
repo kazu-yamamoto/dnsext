@@ -75,17 +75,18 @@ data State workload = NoReaper           -- ^ No reaper thread
 -- for you automatically.
 mkReaper :: ReaperSettings workload item -> IO (Reaper workload item)
 mkReaper settings@ReaperSettings{..} = do
-    stateRef <- newIORef NoReaper
-    tidRef   <- newIORef Nothing
+    stateRef  <- newIORef NoReaper
+    lookupRef <- newIORef NoReaper  {- only allowed after reduced thunk pointer -}
+    tidRef    <- newIORef Nothing
     return Reaper {
-        reaperAdd  = add settings stateRef tidRef
-      , reaperRead = readRef stateRef
+        reaperAdd  = add settings stateRef lookupRef tidRef
+      , reaperRead = readRef lookupRef
       , reaperStop = stop stateRef
       , reaperKill = kill tidRef
       }
   where
-    readRef stateRef = do
-        mx <- readIORef stateRef
+    readRef lookupRef = do
+        mx <- readIORef lookupRef
         case mx of
             NoReaper    -> return reaperEmpty
             Workload wl -> return wl
@@ -100,29 +101,29 @@ mkReaper settings@ReaperSettings{..} = do
             Just tid -> killThread tid
 
 add :: ReaperSettings workload item
-    -> IORef (State workload) -> IORef (Maybe ThreadId)
+    -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
     -> item -> IO ()
-add settings@ReaperSettings{..} stateRef tidRef item =
+add settings@ReaperSettings{..} stateRef lookupRef tidRef item =
     mask_ $ do
       next <- atomicModifyIORef'' stateRef cons
       next
   where
-    cons NoReaper      = let wl = reaperCons item reaperEmpty
-                         in (Workload wl, spawn settings stateRef tidRef)
-    cons (Workload wl) = let wl' = reaperCons item wl
-                         in (Workload wl', return ())
+    cons NoReaper      = let thunk = Workload (reaperCons item reaperEmpty)
+                         in (thunk, writeIORef lookupRef thunk *> spawn settings stateRef lookupRef tidRef )
+    cons (Workload wl) = let thunk = Workload (reaperCons item wl)
+                         in (thunk, writeIORef lookupRef thunk)
 
 spawn :: ReaperSettings workload item
-      -> IORef (State workload) -> IORef (Maybe ThreadId)
+      -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
       -> IO ()
-spawn settings stateRef tidRef = do
-    tid <- forkIO $ reaper settings stateRef tidRef
+spawn settings stateRef lookupRef tidRef = do
+    tid <- forkIO $ reaper settings stateRef lookupRef tidRef
     writeIORef tidRef $ Just tid
 
 reaper :: ReaperSettings workload item
-       -> IORef (State workload) -> IORef (Maybe ThreadId)
+       -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
        -> IO ()
-reaper settings@ReaperSettings{..} stateRef tidRef = do
+reaper settings@ReaperSettings{..} stateRef lookupRef tidRef = do
     threadDelay reaperDelay
     prune <- reaperAction
     next <- atomicModifyIORef'' stateRef (checkPrune prune)
@@ -131,9 +132,10 @@ reaper settings@ReaperSettings{..} stateRef tidRef = do
     checkPrune _ NoReaper   = error "Control.Reaper.reaper: unexpected NoReaper (1)"
     checkPrune prune (Workload wl)
       -- If there is no job, reaper is terminated.
-      | reaperNull wl' = (NoReaper, writeIORef tidRef Nothing)
+      | reaperNull wl' = (NoReaper, writeIORef lookupRef NoReaper *> writeIORef tidRef Nothing )
       -- If there are jobs, carry them out.
-      | otherwise      = (Workload wl', reaper settings stateRef tidRef)
+      | otherwise      = let thunk = Workload wl'
+                         in (thunk, writeIORef lookupRef thunk    *> reaper settings stateRef lookupRef tidRef)
       where
         wl' = prune wl
 
