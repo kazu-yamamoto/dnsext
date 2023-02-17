@@ -60,6 +60,8 @@ defaultReaperSettings = ReaperSettings
 data Reaper workload item = Reaper {
     -- | Adding an item to the workload
     reaperAdd  :: item -> IO ()
+    -- | Updating the workload. require function to update
+  , reaperUpdate :: (workload -> workload) -> IO ()
     -- | Reading workload.
   , reaperRead :: IO workload
     -- | Stopping the reaper thread if exists.
@@ -81,8 +83,10 @@ mkReaper settings@ReaperSettings{..} = do
     stateRef  <- newIORef NoReaper
     lookupRef <- newIORef NoReaper  {- only allowed after reduced thunk pointer -}
     tidRef    <- newIORef Nothing
+    let updateRefs = update settings stateRef lookupRef tidRef
     return Reaper {
-        reaperAdd  = add settings stateRef lookupRef tidRef
+        reaperAdd  = updateRefs . reaperCons
+      , reaperUpdate = updateRefs
       , reaperRead = readRef lookupRef
       , reaperStop = stop stateRef
       , reaperKill = kill tidRef
@@ -103,18 +107,18 @@ mkReaper settings@ReaperSettings{..} = do
             Nothing  -> return ()
             Just tid -> killThread tid
 
-add :: ReaperSettings workload item
-    -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
-    -> item -> IO ()
-add settings@ReaperSettings{..} stateRef lookupRef tidRef item =
+update :: ReaperSettings workload item
+       -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
+       -> (workload -> workload) -> IO ()
+update settings@ReaperSettings{..} stateRef lookupRef tidRef modifyWL =
     mask_ $ do
-      next <- atomicModifyIORef'' stateRef cons
+      next <- atomicModifyIORef'' stateRef modify
       next
   where
-    cons NoReaper      = let thunk = Workload (reaperCons item reaperEmpty)
-                         in (thunk, writeIORef lookupRef thunk *> spawn settings stateRef lookupRef tidRef )
-    cons (Workload wl) = let thunk = Workload (reaperCons item wl)
-                         in (thunk, writeIORef lookupRef thunk)
+    modify NoReaper      = let thunk = Workload (modifyWL reaperEmpty)
+                           in (thunk, writeIORef lookupRef thunk *> spawn settings stateRef lookupRef tidRef )
+    modify (Workload wl) = let thunk = Workload (modifyWL wl)
+                           in (thunk, writeIORef lookupRef thunk)
 
 spawn :: ReaperSettings workload item
       -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
