@@ -11,7 +11,6 @@ module DNS.Do53.ReaperReduced (
     , reaperAction
     , reaperCallback
     , reaperDelay
-    , reaperCons
     , reaperNull
     , reaperEmpty
       -- * Type
@@ -35,33 +34,29 @@ atomicModifyIORef'' ref f = do
         (a',b) -> (a', a' `seq` b)
     b `seq` return b
 
-data ReaperSettings workload item = ReaperSettings
+data ReaperSettings workload = ReaperSettings
     { reaperAction :: IO (workload -> Maybe workload)
     , reaperCallback :: Maybe workload -> IO ()
     , reaperDelay :: Int
-    , reaperCons :: item -> workload -> workload
     , reaperNull :: workload -> Bool
     , reaperEmpty :: workload
     }
 
 -- | Default @ReaperSettings@ value, biased towards having a list of work
 -- items.
-defaultReaperSettings :: ReaperSettings [item] item
+defaultReaperSettings :: ReaperSettings [item]
 defaultReaperSettings = ReaperSettings
     { reaperAction   = return Just
     , reaperCallback = const $ return ()
     , reaperDelay    = 30000000
-    , reaperCons     = (:)
     , reaperNull     = null
     , reaperEmpty    = []
     }
 
 -- | A data structure to hold reaper APIs.
-data Reaper workload item = Reaper {
-    -- | Adding an item to the workload
-    reaperAdd  :: item -> IO ()
+data Reaper workload = Reaper {
     -- | Updating the workload. require function to update
-  , reaperUpdate :: (workload -> workload) -> IO ()
+    reaperUpdate :: (workload -> workload) -> IO ()
     -- | Reading workload.
   , reaperRead :: IO workload
     -- | Stopping the reaper thread if exists.
@@ -78,15 +73,13 @@ data State workload = NoReaper           -- ^ No reaper thread
 -- | Create a reaper addition function. This function can be used to add
 -- new items to the workload. Spawning of reaper threads will be handled
 -- for you automatically.
-mkReaper :: ReaperSettings workload item -> IO (Reaper workload item)
+mkReaper :: ReaperSettings workload -> IO (Reaper workload)
 mkReaper settings@ReaperSettings{..} = do
     stateRef  <- newIORef NoReaper
     lookupRef <- newIORef NoReaper  {- only allowed after reduced thunk pointer -}
     tidRef    <- newIORef Nothing
-    let updateRefs = update settings stateRef lookupRef tidRef
     return Reaper {
-        reaperAdd  = updateRefs . reaperCons
-      , reaperUpdate = updateRefs
+        reaperUpdate = update settings stateRef lookupRef tidRef
       , reaperRead = readRef lookupRef
       , reaperStop = stop stateRef
       , reaperKill = kill tidRef
@@ -107,7 +100,7 @@ mkReaper settings@ReaperSettings{..} = do
             Nothing  -> return ()
             Just tid -> killThread tid
 
-update :: ReaperSettings workload item
+update :: ReaperSettings workload
        -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
        -> (workload -> workload) -> IO ()
 update settings@ReaperSettings{..} stateRef lookupRef tidRef modifyWL =
@@ -120,14 +113,14 @@ update settings@ReaperSettings{..} stateRef lookupRef tidRef modifyWL =
     modify (Workload wl) = let thunk = Workload (modifyWL wl)
                            in (thunk, writeIORef lookupRef thunk)
 
-spawn :: ReaperSettings workload item
+spawn :: ReaperSettings workload
       -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
       -> IO ()
 spawn settings stateRef lookupRef tidRef = do
     tid <- forkIO $ reaper settings stateRef lookupRef tidRef
     writeIORef tidRef $ Just tid
 
-reaper :: ReaperSettings workload item
+reaper :: ReaperSettings workload
        -> IORef (State workload) -> IORef (State workload) -> IORef (Maybe ThreadId)
        -> IO ()
 reaper settings@ReaperSettings{..} stateRef lookupRef tidRef = do
@@ -204,7 +197,6 @@ main = do
                 Just m | Map.null m ->  putStrLn "clean: empty"
                 _                   ->  putStrLn "clean: not empty"
     , reaperDelay = 1000000 * 2 -- Clean 2 seconds after
-    , reaperCons = \(k, v) -> Map.insert k v
     , reaperNull = Map.null
     , reaperEmpty = Map.empty
     }
@@ -218,7 +210,7 @@ main = do
         let fibResult = fib fibArg
         putStrLn $ "Calculating `fib " ++ show fibArg ++ "` " ++ show fibResult
         time <- getCurrentTime
-        reaperAdd reaper (fibArg, (fibResult, time))
+        reaperUpdate reaper $ Map.insert fibArg (fibResult, time)
     threadDelay 1000000 -- 1 second
 
 -- Remove items > 10 seconds old
