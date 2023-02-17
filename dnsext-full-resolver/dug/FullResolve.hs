@@ -30,12 +30,12 @@ setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), 
 setup disableV6NS logOutput logLevel = do
   (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
   tcache@(getSec, _) <- TimeCache.new
-  cacheConf <- Cache.getDefaultStubConf (4 * 1024) 600 getSec
-  (ucacheLoop, memo) <- Cache.getMemo cacheConf
+  let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
+  memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
   cxt <- Iterative.newContext putLines disableV6NS ucache tcache
-  return (putLines, flush, [logLoop, ucacheLoop], cxt)
+  return (putLines, flush, [logLoop], cxt)
 
 resolve :: Context -> String -> TYPE -> IO (Either QueryError DNSMessage)
 resolve cxt n ty = do
