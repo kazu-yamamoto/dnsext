@@ -9,6 +9,7 @@ module DNS.Do53.ReaperReduced (
     , defaultReaperSettings
       -- * Accessors
     , reaperAction
+    , reaperCallback
     , reaperDelay
     , reaperCons
     , reaperNull
@@ -35,7 +36,8 @@ atomicModifyIORef'' ref f = do
     b `seq` return b
 
 data ReaperSettings workload item = ReaperSettings
-    { reaperAction :: IO (workload -> workload)
+    { reaperAction :: IO (workload -> Maybe workload)
+    , reaperCallback :: Maybe workload -> IO ()
     , reaperDelay :: Int
     , reaperCons :: item -> workload -> workload
     , reaperNull :: workload -> Bool
@@ -46,11 +48,12 @@ data ReaperSettings workload item = ReaperSettings
 -- items.
 defaultReaperSettings :: ReaperSettings [item] item
 defaultReaperSettings = ReaperSettings
-    { reaperAction  = return id
-    , reaperDelay   = 30000000
-    , reaperCons    = (:)
-    , reaperNull    = null
-    , reaperEmpty   = []
+    { reaperAction   = return Just
+    , reaperCallback = const $ return ()
+    , reaperDelay    = 30000000
+    , reaperCons     = (:)
+    , reaperNull     = null
+    , reaperEmpty    = []
     }
 
 -- | A data structure to hold reaper APIs.
@@ -130,14 +133,22 @@ reaper settings@ReaperSettings{..} stateRef lookupRef tidRef = do
     next
   where
     checkPrune _ NoReaper   = error "Control.Reaper.reaper: unexpected NoReaper (1)"
-    checkPrune prune (Workload wl)
-      -- If there is no job, reaper is terminated.
-      | reaperNull wl' = (NoReaper, writeIORef lookupRef NoReaper *> writeIORef tidRef Nothing )
-      -- If there are jobs, carry them out.
-      | otherwise      = let thunk = Workload wl'
-                         in (thunk, writeIORef lookupRef thunk    *> reaper settings stateRef lookupRef tidRef)
+    checkPrune prune current@(Workload wl) = case mayWl' of
+      Nothing            ->      (current,  do callback
+                                               reaper settings stateRef lookupRef tidRef )
+      Just wl'
+        -- If there is no job, reaper is terminated.
+        | reaperNull wl' ->      (NoReaper, do callback
+                                               writeIORef lookupRef NoReaper
+                                               writeIORef tidRef Nothing     )
+        -- If there are jobs, carry them out.
+        | otherwise      ->  let thunk = Workload wl'
+                             in  (thunk,    do callback
+                                               writeIORef lookupRef thunk
+                                               reaper settings stateRef lookupRef tidRef )
       where
-        wl' = prune wl
+        mayWl' = prune wl
+        callback = reaperCallback mayWl'
 
 -- | A helper function for creating 'reaperAction' functions. You would
 -- provide this function with a function to process a single work item and
@@ -169,6 +180,7 @@ import Control.Concurrent (threadDelay)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Control.Monad (forever)
+import System.IO (BufferMode (..), hSetBuffering, stdout)
 import System.Random (getStdRandom, randomR)
 
 fib :: Int -> Int
@@ -180,8 +192,13 @@ type Cache = Map Int (Int, UTCTime)
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
   reaper <- mkReaper defaultReaperSettings
     { reaperAction = clean
+    , reaperCallback =
+        \x -> case x of
+                Just m | Map.null m ->  putStrLn "clean: empty"
+                _                   ->  putStrLn "clean: not empty"
     , reaperDelay = 1000000 * 2 -- Clean 2 seconds after
     , reaperCons = \(k, v) -> Map.insert k v
     , reaperNull = Map.null
@@ -201,10 +218,10 @@ main = do
     threadDelay 1000000 -- 1 second
 
 -- Remove items > 10 seconds old
-clean :: IO (Cache -> Cache)
+clean :: IO (Cache -> Maybe Cache)
 clean = do
   currentTime <- getCurrentTime
-  let prune oldMap = Map.filter (\ (_, createdAt) -> currentTime `diffUTCTime` createdAt < 10.0) oldMap
+  let prune oldMap = Just (Map.filter (\ (_, createdAt) -> currentTime `diffUTCTime` createdAt < 10.0) oldMap)
   return prune
 
 -- @
