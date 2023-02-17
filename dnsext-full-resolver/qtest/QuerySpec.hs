@@ -2,7 +2,7 @@ module QuerySpec where
 
 import Test.Hspec
 
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (threadDelay)
 import Data.Maybe (isJust)
 import Data.Either (isRight)
 import Data.String (fromString)
@@ -37,9 +37,8 @@ envSpec = describe "env" $ do
 cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-  (updateLoop, memo) <- runIO $ Cache.getMemo cacheConf
-  _ <- runIO $ forkIO updateLoop
+  let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+  memo <- runIO $ Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       getCache = Cache.readMemo memo
 
@@ -71,9 +70,8 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
-  cacheConf <- runIO $ Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-  (updateLoop, memo) <- runIO $ Cache.getMemo cacheConf
-  _ <- runIO $ forkIO updateLoop
+  let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+  memo <- runIO $ Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
   cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
