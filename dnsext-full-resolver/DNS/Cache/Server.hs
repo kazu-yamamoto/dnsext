@@ -69,14 +69,12 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
             return ([logLoop], putLines, logQSize, pure ())
   (logLoops, putLines, logQSize, flushLog) <- getLogger
   tcache@(getSec, getTimeStr) <- TimeCache.new
-  (cacheConf, ucacheQSize) <- do
-    ucacheQ <- newQueue 8
-    let memoLogLn msg = do
-          tstr <- getTimeStr
-          putLines Log.NOTICE [tstr $ ": " ++ msg]
-        memoActions = Cache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
-    return (Cache.MemoConf maxCacheSize 1800 memoActions, Queue.readSizes ucacheQ)
-  (ucacheLoop, memo) <- Cache.getMemo cacheConf
+  let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
+        where memoLogLn msg = do
+                tstr <- getTimeStr
+                putLines Log.NOTICE [tstr $ ": " ++ msg]
+              memoActions = Cache.MemoActions memoLogLn getSec
+  memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       expires now = Cache.expiresMemo now memo
   cxt <- newContext putLines disableV6NS (insert, Cache.readMemo memo) tcache
@@ -99,9 +97,10 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
   let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts
   putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
 
+  let ucacheQSize = return (0, 0) {- TODO: update ServerMonitor to drop -}
   monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
 
-  return (logLoops ++ [ucacheLoop] ++ pLoops, monLoops)
+  return (logLoops ++ pLoops, monLoops)
 
 getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Context -> PortNumber -> IP
             -> IO ([IO ()], PLStatus)
@@ -137,12 +136,10 @@ workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
   (logLoop, putLines, _logQSize, _) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE
   tcache@(getSec, _) <- TimeCache.new
-  cacheConf <- do
-    ucacheQ <- newQueue 8
-    let memoLogLn = putLines Log.NOTICE . (:[])
-        memoActions = Cache.MemoActions memoLogLn memoLogLn getSec (readQueue ucacheQ) (writeQueue ucacheQ)
-    return (Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions)
-  (ucacheLoop, memo) <- Cache.getMemo cacheConf
+  let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
+        where memoLogLn = putLines Log.NOTICE . (:[])
+              memoActions = Cache.MemoActions memoLogLn getSec
+  memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
   cxt <- newContext putLines False (insert, Cache.readMemo memo) tcache
 
@@ -160,7 +157,7 @@ workerBenchmark noop gplot workers perWorker size = do
             return (workerLoops, enqReq, deqRes)
 
   (workerLoops, enqueueReq, dequeueResp) <- getPipieline
-  _ <- forkIO $ foldr concurrently_ (return ()) $ logLoop : ucacheLoop : concat workerLoops
+  _ <- forkIO $ foldr concurrently_ (return ()) $ logLoop : concat workerLoops
 
   let runQueries qs = do
         let len = length qs
