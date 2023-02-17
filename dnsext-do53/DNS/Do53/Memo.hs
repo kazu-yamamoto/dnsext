@@ -4,8 +4,7 @@ module DNS.Do53.Memo (
   MemoConf (..),
   MemoActions (..),
   getDefaultStubConf,
-  getNoCacheConf,
-  UpdateEvent,
+  noCacheConf,
   Memo,
   getMemo,
   readMemo,
@@ -20,9 +19,6 @@ module DNS.Do53.Memo (
 
   module DNS.Do53.Cache,
   ) where
-
--- GHC packages
-import Control.Concurrent (newChan, readChan, writeChan)
 
 -- dnsext-* packages
 import DNS.Types (TTL)
@@ -41,30 +37,20 @@ data MemoConf = MemoConf {
 
 data MemoActions = MemoActions {
     memoLogLn :: String -> IO ()
-  , memoErrorLn :: String -> IO ()
   , memoGetTime :: IO EpochTime
-  , memoReadQueue :: IO UpdateEvent
-  , memoWriteQueue :: UpdateEvent -> IO ()
   }
 
-getDefaultStubConf :: Int -> Int -> IO EpochTime -> IO MemoConf
-getDefaultStubConf sz delay getSec = do
-  let noLog _ = pure ()
-  q <- newChan
-  pure $ MemoConf sz delay $ MemoActions noLog noLog getSec (readChan q) (writeChan q)
+getDefaultStubConf :: Int -> Int -> IO EpochTime -> MemoConf
+getDefaultStubConf sz delay getSec = MemoConf sz delay $ MemoActions noLog getSec
+  where noLog _ = pure ()
 
-getNoCacheConf :: IO MemoConf
-getNoCacheConf = do
-  let noLog _ = pure ()
-  q <- newChan
-  pure $ MemoConf 0 1800 $ MemoActions noLog noLog (pure 0) (readChan q) (\_ -> pure ())
-
--- function update to update cache, and log action
-type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
+noCacheConf :: MemoConf
+noCacheConf = MemoConf 0 1800 $ MemoActions noLog (pure 0)
+  where noLog _ = pure ()
 
 data Memo = Memo MemoConf (Reaper Cache)
 
-getMemo :: MemoConf -> IO (IO (), Memo)
+getMemo :: MemoConf -> IO Memo
 getMemo conf@MemoConf{..} = do
   let MemoActions{..} = memoActions
       expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
@@ -77,7 +63,7 @@ getMemo conf@MemoConf{..} = do
             , reaperEmpty = Cache.empty maxCacheSize
             }
 
-  return (return (), Memo conf reaper)
+  return (Memo conf reaper)
 
 {- for full-resolver. lookup variants in Cache module
    - with alive checks which requires current EpochTime
@@ -106,7 +92,7 @@ type Prio = EpochTime
 type Entry = CRSet
 
 newCache :: MemoConf -> IO Memo
-newCache conf = snd <$> getMemo conf
+newCache = getMemo
 
 {- for stub. no alive check -}
 lookupCache :: Key -> Memo -> IO (Maybe (Prio, Entry))
