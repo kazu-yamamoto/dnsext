@@ -22,17 +22,12 @@ module DNS.Do53.Memo (
   ) where
 
 -- GHC packages
-import Control.Monad (forever, unless, void)
-import Control.Concurrent (forkIO, newChan, readChan, writeChan)
-import Data.IORef (IORef, newIORef, readIORef, atomicWriteIORef)
+import Control.Concurrent (newChan, readChan, writeChan)
 
 -- dnsext-* packages
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
-import DNS.Do53.OneShot (OneShot, defaultOneShotSettings, oneShotAction, oneShotDelay, mkOneShot, oneShotRegister)
-
--- other packages
-import UnliftIO (tryAny)
+import DNS.Do53.ReaperReduced
 
 -- this package
 import DNS.Do53.Cache
@@ -67,59 +62,41 @@ getNoCacheConf = do
 -- function update to update cache, and log action
 type UpdateEvent = (Cache -> Maybe Cache, Cache -> IO ())
 
-data Memo = Memo MemoConf OneShot (IORef Cache)
-
-expires_ :: MemoConf -> EpochTime -> IO ()
-expires_ MemoConf{..} ts = memoWriteQueue (Cache.expires ts, expiredLog)
-  where
-    MemoActions{..} = memoActions
-    expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
+data Memo = Memo MemoConf (Reaper Cache)
 
 getMemo :: MemoConf -> IO (IO (), Memo)
 getMemo conf@MemoConf{..} = do
   let MemoActions{..} = memoActions
-  cacheRef <- newIORef $ Cache.empty maxCacheSize
+      expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
-  oneShotExpire <- mkOneShot defaultOneShotSettings
-                   { oneShotAction = const (expires_ conf =<< memoGetTime)
-                   , oneShotDelay = expiresDelay * 1000 * 1000
-                   }
+  reaper <- mkReaper defaultReaperSettings
+            { reaperAction = Cache.expires <$> memoGetTime
+            , reaperCallback = maybe (return ()) expiredLog
+            , reaperDelay = expiresDelay * 1000 * 1000
+            , reaperNull = Cache.null
+            , reaperEmpty = Cache.empty maxCacheSize
+            }
 
-  let registerExpire c = unless (Cache.null c) $ oneShotRegister oneShotExpire
-      update1 :: UpdateEvent -> IO ()
-      update1 (uevent, logAction) = do   -- step of single update theard
-        cache <- readIORef cacheRef
-        let updateRef c = do
-              -- use atomicWrite to guard from out-of-order effect. to propagate updates to other CPU
-              c `seq` atomicWriteIORef cacheRef c
-              logAction c
-              registerExpire c
-        maybe (registerExpire cache) updateRef $ uevent cache
-
-  updateLoop <- do
-    let errorLn = memoErrorLn . ("Memo.updateLoop: error: " ++) . show
-        body = either errorLn return =<< tryAny (update1 =<< memoReadQueue)
-    return $ forever body
-
-  return (updateLoop, Memo conf oneShotExpire cacheRef)
+  return (return (), Memo conf reaper)
 
 {- for full-resolver. lookup variants in Cache module
    - with alive checks which requires current EpochTime
    - with rank checks                                   -}
 readMemo :: Memo -> IO Cache
-readMemo (Memo _ _ ref) = readIORef ref
+readMemo (Memo _ reaper) = reaperRead reaper
 
 expiresMemo :: EpochTime -> Memo -> IO ()
-expiresMemo ts (Memo conf _ _) = expires_ conf ts
+expiresMemo ts (Memo _ reaper) = reaperUpdate reaper expires_
+  where expires_ c = maybe c id $ Cache.expires ts c
 
 {- for full-resolver. using current EpochTime -}
 insertWithExpiresMemo :: Key -> TTL -> CRSet -> Ranking -> Memo -> IO ()
-insertWithExpiresMemo k ttl crs rank (Memo MemoConf{..} _ _) = do
+insertWithExpiresMemo k ttl crs rank (Memo MemoConf{..} reaper) = do
   let MemoActions{..} = memoActions
   t <- memoGetTime
-  let insert_ = Cache.insert t k ttl crs rank
-      evInsert cache = maybe (insert_ cache) insert_ $ Cache.expires t cache {- expires before insert -}
-  memoWriteQueue (evInsert, const $ pure ())
+  let ins = Cache.insert t k ttl crs rank
+      withExpire cache = maybe (ins cache) ins $ Cache.expires t cache {- expires before insert -}
+  reaperUpdate reaper $ \ cache -> maybe cache id $ withExpire cache
 
 ---
 {- for stub -}
@@ -129,10 +106,7 @@ type Prio = EpochTime
 type Entry = CRSet
 
 newCache :: MemoConf -> IO Memo
-newCache conf = do
-  (updateLoop, memo) <- getMemo conf
-  void $ forkIO updateLoop
-  return memo
+newCache conf = snd <$> getMemo conf
 
 {- for stub. no alive check -}
 lookupCache :: Key -> Memo -> IO (Maybe (Prio, Entry))
@@ -140,10 +114,9 @@ lookupCache k memo = Cache.stubLookup k <$> readMemo memo
 
 {- for stub. not using current EpochTime -}
 insertCache :: Key -> Prio -> Entry -> Memo -> IO ()
-insertCache k tim crs (Memo MemoConf{..} _ _) = do
-  let MemoActions{..} = memoActions
-      evInsert = Cache.stubInsert k tim crs
-  memoWriteQueue (evInsert, const $ pure ())
+insertCache k tim crs (Memo _ reaper) = do
+  let ins = Cache.stubInsert k tim crs
+  reaperUpdate reaper $ \ cache -> maybe cache id $ ins cache
 
 {- NameError is cached using private nxTYPE, instead of each type -}
 keyForNX :: Key -> Key
