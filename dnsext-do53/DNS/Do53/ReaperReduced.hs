@@ -23,7 +23,16 @@ module DNS.Do53.ReaperReduced (
 
 import Control.Concurrent (forkIO, threadDelay, killThread, ThreadId)
 import Control.Exception (mask_)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
+import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef)
+
+-- traditional semantics about thunk of a',
+-- update pointer to thunk with unlock, then reduce thunk
+atomicModifyIORef'' :: IORef a -> (a -> (a, b)) -> IO b
+atomicModifyIORef'' ref f = do
+    b <- atomicModifyIORef ref $ \a ->
+      case f a of
+        (a',b) -> (a', a' `seq` b)
+    b `seq` return b
 
 data ReaperSettings workload item = ReaperSettings
     { reaperAction :: IO (workload -> workload)
@@ -80,7 +89,7 @@ mkReaper settings@ReaperSettings{..} = do
         case mx of
             NoReaper    -> return reaperEmpty
             Workload wl -> return wl
-    stop stateRef = atomicModifyIORef' stateRef $ \mx ->
+    stop stateRef = atomicModifyIORef'' stateRef $ \mx ->
         case mx of
             NoReaper   -> (NoReaper, reaperEmpty)
             Workload x -> (Workload reaperEmpty, x)
@@ -95,7 +104,7 @@ add :: ReaperSettings workload item
     -> item -> IO ()
 add settings@ReaperSettings{..} stateRef tidRef item =
     mask_ $ do
-      next <- atomicModifyIORef' stateRef cons
+      next <- atomicModifyIORef'' stateRef cons
       next
   where
     cons NoReaper      = let wl = reaperCons item reaperEmpty
@@ -116,7 +125,7 @@ reaper :: ReaperSettings workload item
 reaper settings@ReaperSettings{..} stateRef tidRef = do
     threadDelay reaperDelay
     prune <- reaperAction
-    next <- atomicModifyIORef' stateRef (checkPrune prune)
+    next <- atomicModifyIORef'' stateRef (checkPrune prune)
     next
   where
     checkPrune _ NoReaper   = error "Control.Reaper.reaper: unexpected NoReaper (1)"
