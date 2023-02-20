@@ -36,6 +36,7 @@ module DNS.SVCB (
   , SPV(..)
   , SPV_Mandatory(..)
   , SPV_ALPN(..)
+  , ALPN
   , SPV_Port(..)
   , SPV_IPv4Hint(..)
   , SPV_IPv6Hint(..)

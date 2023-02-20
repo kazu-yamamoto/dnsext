@@ -18,21 +18,30 @@ import Network.Socket (PortNumber, HostName)
 
 import DNS.DoX.Imports
 
-doxPort :: ShortByteString -> PortNumber
+-- | From APLN to its port number.
+--
+-- >>> doxPort "dot"
+-- 853
+doxPort :: ALPN -> PortNumber
 doxPort "dot" = 853
 doxPort "doq" = 853
 doxPort "h2"  = 443
 doxPort "h3"  = 443
 doxPort _     = 53
 
-makeResolver :: ShortByteString -> VCLimit -> Maybe ShortByteString -> Maybe Resolver
-makeResolver dox lim mpath = case dox of
+-- | Making resolver according to ALPN.
+--
+--  The third argument is a path for HTTP query.
+makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe Resolver
+makeResolver alpn lim mpath = case alpn of
   "dot" -> Just $ tlsResolver lim
   "doq" -> Just $ quicResolver lim
   "h2"  -> Just $ http2Resolver (fromMaybe "/dns-query" mpath) lim
   "h3"  -> Just $ http3Resolver (fromMaybe "/dns-query" mpath) lim
   _     -> Nothing
 
+-- | Looking up SVCB RR first and lookup the target automatically
+--   according to the priority of the values of SVCB RR.
 lookupDoX :: LookupConf -> HostName -> TYPE -> IO (Either DNSError Result)
 lookupDoX conf domain typ = do
   let lim = lconfLimit conf

@@ -94,8 +94,11 @@ instance SPV SPV_IPv6Hint where
 
 ----------------------------------------------------------------
 
+-- | Type for application level protocol negotiation.
+type ALPN = ShortByteString
+
 newtype SPV_ALPN = SPV_ALPN {
-    alpn_names :: [ShortByteString]
+    alpn_names :: [ALPN]
   } deriving (Eq,Ord)
 
 instance Show SPV_ALPN where
