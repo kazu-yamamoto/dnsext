@@ -748,19 +748,20 @@ takeDelegation nsps adds = do
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
-nsList dom h = foldr takeNS []
-  where
-    takeNS rr@ResourceRecord { rrtype = NS, rdata = rd } xs
-      | rrname rr == dom, Just ns <- DNS.rdataField rd DNS.ns_domain  =  h ns rr : xs
-    takeNS _         xs   =  xs
+nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
 
 cnameList :: Domain -> (Domain -> ResourceRecord -> a)
           -> [ResourceRecord] -> [a]
-cnameList dom h = foldr takeCNAME []
+cnameList = rrListWith CNAME $ \rd -> DNS.rdataField rd DNS.cname_domain
+
+rrListWith :: TYPE -> (DNS.RData -> Maybe rd)
+           -> Domain -> (rd -> ResourceRecord -> a)
+           -> [ResourceRecord] -> [a]
+rrListWith typ fromRD dom h = foldr takeRR []
   where
-    takeCNAME rr@ResourceRecord { rrtype = CNAME, rdata = rd } xs
-      | rrname rr == dom, Just cn <- DNS.rdataField rd DNS.cname_domain  =  h cn rr : xs
-    takeCNAME _      xs   =  xs
+    takeRR rr@ResourceRecord { rdata = rd } xs
+      | rrname rr == dom, rrtype rr == typ, Just ds <- fromRD rd  =  h ds rr : xs
+    takeRR _                                xs                    =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
