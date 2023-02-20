@@ -1,0 +1,48 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ master, ci ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-10.15, windows-latest]
+        ghc: [ '9.2', '9.4' ]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: haskell/actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: '3.6'
+
+    - name: Cache
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Install dependencies
+      run: |
+        cabal update
+        cabal build --only-dependencies --enable-tests --disable-benchmarks all
+
+    - name: Build
+      run: cabal build --enable-tests --disable-benchmarks all
+
+    - name: Run tests
+      run: cabal test --test-show-details=streaming dnsext-types:spec dnsext-do53:spec dnsext-dnssec:spec dnsext-svcb:spec dnsext-dox:spec dnsext-full-resolver:spec
