@@ -270,7 +270,7 @@ withLookupConfAndResolver :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO
 withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
       Just cacheconf -> do
-          memoConf <- getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
+          let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
           cache <- newCache memoConf
           return $ Just (cache, cacheconf)
       Nothing -> return Nothing
