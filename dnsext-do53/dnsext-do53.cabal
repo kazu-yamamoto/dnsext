@@ -63,7 +63,11 @@ library
         random >=1.2,
         stm,
         unix-time,
-        unliftio,
+        unliftio
+
+    if os(windows)
+        c-sources:       cbits/dns.c
+        extra-libraries: iphlpapi
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -114,7 +118,7 @@ test-suite cache-test
         dnsext-types,
         dnsext-do53,
         QuickCheck,
-        unix-time,
+        unix-time
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
