@@ -40,7 +40,8 @@ import qualified DNS.Cache.ServerMonitor as Mon
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (Context (..), newContext, getReplyCached, getReplyMessage)
+import DNS.Cache.Iterative (Env (..), getReplyCached, getReplyMessage)
+import qualified DNS.Cache.Iterative as Iterative
 
 
 type Request a = (ByteString, a)
@@ -77,7 +78,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       expires now = Cache.expiresMemo now memo
-  cxt <- newContext putLines disableV6NS (insert, Cache.readMemo memo) tcache
+  cxt <- Iterative.newEnv putLines disableV6NS (insert, Cache.readMemo memo) tcache
 
   let getAInfoIPs = do
         ais <- getAddrInfo Nothing Nothing (Just $ show port)
@@ -102,7 +103,7 @@ setup fastLogger logOutput logLevel maxCacheSize disableV6NS workers workerShare
 
   return (logLoops ++ pLoops, monLoops)
 
-getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Context -> PortNumber -> IP
+getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Env -> PortNumber -> IP
             -> IO ([IO ()], PLStatus)
 getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
   sock <- UDP.serverSocket (hostIP, port)
@@ -141,7 +142,7 @@ workerBenchmark noop gplot workers perWorker size = do
               memoActions = Cache.MemoActions memoLogLn getSec
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-  cxt <- newContext putLines False (insert, Cache.readMemo memo) tcache
+  cxt <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
 
   let getPipieline
         | noop       =  do
@@ -193,7 +194,7 @@ type WorkerStatus = (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int
 
 getWorkers :: Show a
            => Int -> Bool -> Int
-           -> IO EpochTime -> Context
+           -> IO EpochTime -> Env
            -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getWorkers workers sharedQueue perWorker getSec cxt
   | perWorker <= 0 = do
@@ -220,7 +221,7 @@ getWorkers workers sharedQueue perWorker getSec cxt
 
 workerPipeline :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize q2)
                => q1 (Request a) -> q2 (Response a)
-               -> Int -> IO EpochTime -> Context
+               -> Int -> IO EpochTime -> Env
                -> IO ([IO ()], WorkerStatus)
 workerPipeline reqQ resQ perWorker getSec cxt = do
   let putLn lv = logLines_ cxt lv . (:[])
@@ -243,7 +244,7 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
 
 recvRequest :: Show a
             => IO (ByteString, a)
-            -> Context
+            -> Env
             -> (Request a -> IO ())
             -> IO ()
 recvRequest recv _cxt enqReq = do
@@ -251,7 +252,7 @@ recvRequest recv _cxt enqReq = do
   enqReq (bs, addr)
 
 cachedWorker :: Show a
-             => Context
+             => Env
              -> IO EpochTime
              -> IO ()
              -> IO ()
@@ -278,7 +279,7 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
     logLn level = logLines_ cxt level . (:[])
 
 resolvWorker :: Show a
-             => Context
+             => Env
              -> IO ()
              -> IO ()
              -> (Response a -> IO ())
@@ -295,7 +296,7 @@ resolvWorker cxt incMiss incFailed enqResp (reqH, qs@(q, _), addr) =
     logLn level = logLines_ cxt level . (:[])
 
 sendResponse :: (ByteString -> a -> IO ())
-             -> Context
+             -> Env
              -> Response a -> IO ()
 sendResponse send _cxt (bs, addr) = send bs addr
 
