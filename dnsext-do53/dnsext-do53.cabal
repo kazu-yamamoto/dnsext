@@ -62,8 +62,7 @@ library
         psqueues,
         random >=1.2,
         stm,
-        unix-time,
-        unliftio
+        unix-time
 
     if os(windows)
         c-sources:       cbits/dns.c
