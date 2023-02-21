@@ -6,7 +6,7 @@ module DNS.Cache.Iterative (
   getReplyCached,
   runResolve,
   runResolveJust,
-  newContext,
+  newEnv,
   runIterative,
   rootNS, Delegation,
   QueryError (..),
@@ -20,7 +20,7 @@ module DNS.Cache.Iterative (
   DNSQuery, runDNSQuery,
   replyMessage, replyResult, replyResultCached,
   resolve, resolveJust, iterative,
-  Context (..),
+  Env (..),
   ) where
 
 -- GHC packages
@@ -73,8 +73,8 @@ import qualified DNS.Cache.Log as Log
 
 -----
 
-data Context =
-  Context
+data Env =
+  Env
   { logLines_ :: Log.Level -> [String] -> IO ()
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
@@ -91,7 +91,7 @@ data QueryError
   | HasError DNS.RCODE DNSMessage
   deriving Show
 
-type ContextT = ReaderT Context
+type ContextT = ReaderT Env
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
 ---
@@ -112,20 +112,20 @@ type UpdateCache =
    IO Cache)
 type TimeCache = (IO EpochTime, IO ShowS)
 
-newContext :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
-           -> IO Context
-newContext putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
+newEnv :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
+       -> IO Env
+newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   genId <- newConcurrentGenId
-  let cxt = Context
+  let cxt = Env
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache
         , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
-dnsQueryT :: (Context -> IO (Either QueryError a)) -> DNSQuery a
+dnsQueryT :: (Env -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT = ExceptT . ReaderT
 
-runDNSQuery :: DNSQuery a -> Context -> IO (Either QueryError a)
+runDNSQuery :: DNSQuery a -> Env -> IO (Either QueryError a)
 runDNSQuery = runReaderT . runExceptT
 
 throwDnsError :: DNSError -> DNSQuery a
@@ -144,7 +144,7 @@ handleResponseError e f msg
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
 -- 返答メッセージを作る
-getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
+getReplyMessage :: Env -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
   <$> runDNSQuery (getResult bn) cxt
@@ -156,7 +156,7 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
 -- キャッシュから返答メッセージを作る
 -- Nothing のときキャッシュ無し
 -- Just Left はエラー
-getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
+getReplyCached :: Env -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
 getReplyCached cxt reqH qs@(DNS.Question bn typ _, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
   <$> runDNSQuery (getResult bn) cxt
@@ -170,16 +170,16 @@ getReplyCached cxt reqH qs@(DNS.Question bn typ _, _) =
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
-runResolve :: Context -> Domain -> TYPE
+runResolve :: Env -> Domain -> TYPE
            -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
 runResolve cxt n typ = runDNSQuery (resolve n typ) cxt
 
 -- 権威サーバーからの解決結果を得る
-runResolveJust :: Context -> Domain -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveJust :: Env -> Domain -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
 runResolveJust cxt n typ = runDNSQuery (resolveJust n typ) cxt
 
 -- 反復後の委任情報を得る
-runIterative :: Context -> Delegation -> Domain -> IO (Either QueryError Delegation)
+runIterative :: Env -> Delegation -> Domain -> IO (Either QueryError Delegation)
 runIterative cxt sa n = runDNSQuery (iterative sa n) cxt
 
 -----
