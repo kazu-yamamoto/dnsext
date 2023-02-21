@@ -91,7 +91,8 @@ data QueryError
   | HasError DNS.RCODE DNSMessage
   deriving Show
 
-type DNSQuery = ExceptT QueryError (ReaderT Context IO)
+type ContextT = ReaderT Context
+type DNSQuery = ExceptT QueryError (ContextT IO)
 
 ---
 
@@ -486,7 +487,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
         where
           mcc = maxCNameChain
 
-    lookupNX :: Domain -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
+    lookupNX :: Domain -> ContextT IO (Maybe ([ResourceRecord], Ranking))
     lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.nxTYPE
       where inconsistent rrs = do
               logLn Log.NOTICE $ "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
@@ -494,7 +495,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
     -- Nothing のときはキャッシュに無し
     -- Just Left のときはキャッシュに有るが CNAME レコード無し
-    lookupCNAME :: Domain -> ReaderT Context IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
+    lookupCNAME :: Domain -> ContextT IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
     lookupCNAME bn = do
       maySOAorCNRRs <- lookupType bn CNAME
       return $ do
@@ -533,7 +534,7 @@ resolveTYPE bn typ = do
       refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
         where ps = cnameList bn (,) rrs
 
-cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ReaderT Context IO ()
+cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ContextT IO ()
 cacheAnswer srcDom dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
@@ -628,7 +629,7 @@ iterative_ dc nss (x:xs) =
     recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
-    lookupNX :: ReaderT Context IO Bool
+    lookupNX :: ContextT IO Bool
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
@@ -650,7 +651,7 @@ iterative_ dc nss (x:xs) =
 
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
-lookupDelegation :: Domain -> ReaderT Context IO (Maybe MayDelegation)
+lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
 lookupDelegation dom = do
   disableV6NS <- asks disableV6NS_
   let lookupDEs ns = do
@@ -675,7 +676,7 @@ lookupDelegation dom = do
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
         | otherwise        =  (HasDelegation . (,) dom) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
-      getDelegation :: ([ResourceRecord], a) -> ReaderT Context IO (Maybe MayDelegation)
+      getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
       getDelegation (rrs, _) = do {- NS cache hit -}
         let nss = sort $ nsList dom const rrs
         case nss of
@@ -685,7 +686,7 @@ lookupDelegation dom = do
   maybe (return Nothing) getDelegation =<< lookupCache dom NS
 
 -- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache :: Domain -> Domain -> DNSMessage -> ReaderT Context IO MayDelegation
+delegationWithCache :: Domain -> Domain -> DNSMessage -> ContextT IO MayDelegation
 delegationWithCache srcDom dom msg =
   -- There is delegation information only when there is a selectable NS
   maybe
@@ -901,7 +902,7 @@ randomizedSelect
 
 ---
 
-lookupCache :: Domain -> TYPE -> ReaderT Context IO (Maybe ([ResourceRecord], Ranking))
+lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = do
   getCache <- asks getCache_
   getSec <- asks currentSeconds_
@@ -915,7 +916,7 @@ lookupCache dom typ = do
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupCacheEither :: String -> Domain -> TYPE
-                  -> ReaderT Context IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
+                  -> ContextT IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
 lookupCacheEither logMark dom typ = do
   getCache <- asks getCache_
   getSec <- asks currentSeconds_
@@ -930,7 +931,7 @@ lookupCacheEither logMark dom typ = do
 
 getSection :: (m -> ([ResourceRecord], Ranking))
            -> ([ResourceRecord] -> (a, [ResourceRecord]))
-           -> m -> (a, ReaderT Context IO ())
+           -> m -> (a, ContextT IO ())
 getSection getRanked refines msg =
   withSection $ getRanked msg
   where
@@ -939,13 +940,13 @@ getSection getRanked refines msg =
 
 getSectionWithCache :: (m -> ([ResourceRecord], Ranking))
                     -> ([ResourceRecord] -> (a, [ResourceRecord]))
-                    -> m -> ReaderT Context IO a
+                    -> m -> ContextT IO a
 getSectionWithCache get refines msg = do
   let (res, doCache) = getSection get refines msg
   doCache
   return res
 
-cacheSection :: [ResourceRecord] -> Ranking -> ReaderT Context IO ()
+cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheSection rs rank = cacheRRSet
   where
     (ncRRSs, rrss) = insertSetFromSection rs rank
@@ -969,7 +970,7 @@ cacheSection rs rank = cacheRRSet
 --   The `getRanked` function returns the section with the empty information.
 cacheEmptySection :: Domain -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
-                  -> DNSMessage -> ReaderT Context IO ()
+                  -> DNSMessage -> ContextT IO ()
 cacheEmptySection srcDom dom typ getRanked msg =
   either ncWarn doCache takePair
   where
@@ -1008,7 +1009,7 @@ cacheEmptySection srcDom dom typ getRanked msg =
 
       where answer = DNS.answer msg
 
-cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ReaderT Context IO ()
+cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheEmpty srcDom dom typ ttl rank = do
   logLn Log.DEBUG $ "cacheEmpty: " ++ show (srcDom, dom, typ, ttl, rank)
   insertRRSet <- asks insert_
@@ -1016,12 +1017,12 @@ cacheEmpty srcDom dom typ ttl rank = do
 
 ---
 
-logLines :: Log.Level -> [String] -> ReaderT Context IO ()
+logLines :: Log.Level -> [String] -> ContextT IO ()
 logLines level xs = do
   putLines <- asks logLines_
   liftIO $ putLines level xs
 
-logLn :: Log.Level -> String -> ReaderT Context IO ()
+logLn :: Log.Level -> String -> ContextT IO ()
 logLn level = logLines level . (:[])
 
 printResult :: Either QueryError DNSMessage -> IO ()
