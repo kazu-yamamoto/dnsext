@@ -12,7 +12,7 @@ import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootHint, Env (..), Delegation (..))
+import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootHint, Env (..), Delegation (..), defaultIterativeControls)
 import qualified DNS.Cache.Iterative as Iterative
 
 data AnswerResult
@@ -44,7 +44,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 
   let getResolveCache n ty = do
         cxt <- newEnv (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
-        eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
+        eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty defaultIterativeControls
         threadDelay $ 1 * 1000 * 1000
         let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Question dom typ _, (_, Cache.Val crs rank)) <- xs ]
         (,) eresult . convert . Cache.dump <$> getCache_ cxt
@@ -76,12 +76,12 @@ querySpec disableV6NS = describe "query" $ do
       ucache = (insert, Cache.readMemo memo)
   cxt <- runIO $ newEnv (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newEnv (\_ _ -> pure ()) True ucache tcache
-  let refreshRoot = runDNSQuery Iterative.refreshRoot cxt
-      runIterative ns n = Iterative.runIterative cxt ns (fromString n)
-      runJust n = Iterative.runResolveJust cxt (fromString n)
-      runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
+  let refreshRoot = runDNSQuery Iterative.refreshRoot cxt defaultIterativeControls
+      runIterative ns n = Iterative.runIterative cxt ns (fromString n) defaultIterativeControls
+      runJust n ty = Iterative.runResolveJust cxt (fromString n) ty defaultIterativeControls
+      runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty defaultIterativeControls
       getReply n ty ident = do
-        e <- runDNSQuery (replyResult (fromString n) ty) cxt
+        e <- runDNSQuery (replyResult (fromString n) ty) cxt defaultIterativeControls
         return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
   let printQueryError :: Show e => Either e a -> IO ()
@@ -151,7 +151,7 @@ querySpec disableV6NS = describe "query" $ do
 
   it "resolve-just - delegation with aa" $ do
     -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-    result <- Iterative.runResolveJust cxt4 (fromString "sc02.alicdn.com.danuoyi.alicdn.com.") A
+    result <- Iterative.runResolveJust cxt4 (fromString "sc02.alicdn.com.danuoyi.alicdn.com.") A defaultIterativeControls
     printQueryError result
     checkResult result `shouldBe` NotEmpty DNS.NoErr
 
