@@ -142,14 +142,11 @@ handleResponseError e f msg
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
-withNormalized :: Domain -> (Domain -> DNSQuery a) -> Context -> IO (Either QueryError a)
-withNormalized n action = runDNSQuery $ action n
-
 -- 返答メッセージを作る
 getReplyMessage :: Context -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> withNormalized bn getResult cxt
+  <$> runDNSQuery (getResult bn) cxt
   where
     getResult n = do
       guardRequestHeader reqH
@@ -161,7 +158,7 @@ getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
 getReplyCached :: Context -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
 getReplyCached cxt reqH qs@(DNS.Question bn typ _, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
-  <$> withNormalized bn getResult cxt
+  <$> runDNSQuery (getResult bn) cxt
   where
     getResult n = do
       guardRequestHeader reqH
@@ -174,15 +171,15 @@ type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 -- 最終的な解決結果を得る
 runResolve :: Context -> Domain -> TYPE
            -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
-runResolve cxt n typ = withNormalized n (`resolve` typ) cxt
+runResolve cxt n typ = runDNSQuery (resolve n typ) cxt
 
 -- 権威サーバーからの解決結果を得る
 runResolveJust :: Context -> Domain -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveJust cxt n typ = withNormalized n (`resolveJust` typ) cxt
+runResolveJust cxt n typ = runDNSQuery (resolveJust n typ) cxt
 
 -- 反復後の委任情報を得る
 runIterative :: Context -> Delegation -> Domain -> IO (Either QueryError Delegation)
-runIterative cxt sa n = withNormalized n (iterative sa) cxt
+runIterative cxt sa n = runDNSQuery (iterative sa n) cxt
 
 -----
 
