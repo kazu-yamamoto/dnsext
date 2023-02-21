@@ -7,7 +7,7 @@ import qualified DNS.Do53.Memo as Cache
 
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (Context (..), QueryError)
+import DNS.Cache.Iterative (Env (..), QueryError)
 import qualified DNS.Cache.Iterative as Iterative
 
 import DNS.Types
@@ -26,7 +26,7 @@ fullResolve disableV6NS logOutput logLevel n ty = do
   flushLog
   return out
 
-setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Context)
+setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Env)
 setup disableV6NS logOutput logLevel = do
   (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
   tcache@(getSec, _) <- TimeCache.new
@@ -34,10 +34,10 @@ setup disableV6NS logOutput logLevel = do
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
-  cxt <- Iterative.newContext putLines disableV6NS ucache tcache
+  cxt <- Iterative.newEnv putLines disableV6NS ucache tcache
   return (putLines, flush, [logLoop], cxt)
 
-resolve :: Context -> String -> TYPE -> IO (Either QueryError DNSMessage)
+resolve :: Env -> String -> TYPE -> IO (Either QueryError DNSMessage)
 resolve cxt n ty = do
   fmap toMessage <$> Iterative.runResolve cxt (fromString n) ty
   where
