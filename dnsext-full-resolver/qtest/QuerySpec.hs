@@ -12,7 +12,7 @@ import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (newContext, runDNSQuery, replyMessage, replyResult, rootNS, Context (..))
+import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootNS, Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 
 data AnswerResult
@@ -43,7 +43,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
       getCache = Cache.readMemo memo
 
   let getResolveCache n ty = do
-        cxt <- newContext (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
+        cxt <- newEnv (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
         eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
         threadDelay $ 1 * 1000 * 1000
         let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Question dom typ _, (_, Cache.Val crs rank)) <- xs ]
@@ -74,8 +74,8 @@ querySpec disableV6NS = describe "query" $ do
   memo <- runIO $ Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
-  cxt <- runIO $ newContext (\_ _ -> pure ()) disableV6NS ucache tcache
-  cxt4 <- runIO $ newContext (\_ _ -> pure ()) True ucache tcache
+  cxt <- runIO $ newEnv (\_ _ -> pure ()) disableV6NS ucache tcache
+  cxt4 <- runIO $ newEnv (\_ _ -> pure ()) True ucache tcache
   let runIterative ns n = Iterative.runIterative cxt ns (fromString n)
       runJust n = Iterative.runResolveJust cxt (fromString n)
       runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty

@@ -31,7 +31,7 @@ import UnliftIO (tryAny, waitSTM, withAsync)
 -- this package
 import DNS.Cache.SocketUtil (addrInfo)
 import qualified DNS.Cache.Log as Log
-import DNS.Cache.Iterative (Context (..))
+import DNS.Cache.Iterative (Env (..))
 
 
 data Params =
@@ -107,7 +107,7 @@ data Command
   | Quit
   deriving Show
 
-monitor :: Bool -> Params -> Context
+monitor :: Bool -> Params -> Env
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
         -> (EpochTime -> IO ()) -> IO () -> IO [IO ()]
 monitor stdConsole params cxt getsSizeInfo expires flushLog = do
@@ -139,8 +139,8 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
             =<< withWait waitQuit (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
       loop
 
-console :: Params -> Context -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-           -> (EpochTime -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
+console :: Params -> Env -> ([PLStatus], IO (Int, Int), IO (Int, Int))
+        -> (EpochTime -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
 console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH
