@@ -110,7 +110,7 @@ test-suite doctests
         base,
         doctest
 
-test-suite query-test
+test-suite spec
     type:             exitcode-stdio-1.0
     main-is:          qtest.hs
     hs-source-dirs:   qtest

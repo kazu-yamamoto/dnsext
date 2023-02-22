@@ -1,0 +1,7 @@
+packages:
+  dnsext-types
+  dnsext-do53
+  dnsext-dnssec
+  dnsext-svcb
+  dnsext-dox
+  dnsext-full-resolver

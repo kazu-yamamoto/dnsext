@@ -1,3 +1,5 @@
+![GitHub Actions status](https://github.com/kazu-yamamoto/dnsext/workflows/Haskell%20CI/badge.svg)
+
 # Extensible DNS libraries written purely in Haskell
 
 This is a new series of DNS libraries based on the experience of the [dns](https://github.com/kazu-yamamoto/dns) library in Haskell. The dns library has two flaws:
