@@ -7,6 +7,7 @@ import Data.Maybe (catMaybes)
 import Data.Monoid (Endo (..))
 
 import DNS.Types
+import qualified DNS.SEC.Verify as Verify
 
 ----------------------------------------------------------------
 
@@ -128,6 +129,8 @@ rr ResourceRecord{..} = do
   string $ show rrtype
   tab
   string $ show rdata
+  let keyTag dnskey = string (" (key_tag: " ++ show (Verify.keyTag dnskey) ++ ")")
+  maybe (pure ()) keyTag $ fromRData rdata
   nl
 
 ----------------------------------------------------------------
