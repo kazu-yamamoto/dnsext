@@ -55,8 +55,8 @@ putRRSIGHeader RD_RRSIG{..} = do
     put16      rrsig_key_tag
     putDomain Canonical rrsig_zone
 
-verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
+verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> [ResourceRecord] -> Either String ()
+verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrs = do
   unless (ZONE `elem` dnskey_flags) $
     {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
        "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -76,9 +76,26 @@ verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rr = do
     Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: " ++ show (keyTag dnskey) ++ " =/= " ++ show rrsig_key_tag
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
-  let str = runSPut (putRRSIGHeader rrsig >> putResourceRecord Canonical rr)
+  {- The RRset MUST be sorted in canonical order.
+     https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
+  canonicalOrdered <- canonicalOrderedRRs rrs
+  let str = runSPut (putRRSIGHeader rrsig >> mapM_ (putResourceRecord Canonical) canonicalOrdered)
   good <- rrsigIVerify pubkey sig str
   unless good $ Left "verifyRRSIGwith: rejected on verification"
+
+{- Canonical RR Ordering within an RRset
+   https://datatracker.ietf.org/doc/html/rfc4034#section-6.3 -}
+canonicalOrderedRRs :: [ResourceRecord] -> Either String [ResourceRecord]
+canonicalOrderedRRs rrs = do
+  (hd,xs) <- maybe (Left "canonicalOrderedRRs: require non-empty RRset") Right $ uncons rrs
+  let eqhd x =
+        ((==) `on` rrname)  hd x && ((==) `on` rrtype) hd x &&
+        ((==) `on` rrclass) hd x && ((==) `on` rrttl)  hd x
+  unless (all eqhd xs) $ Left "canonicalOrderedRRs: requires same ( rrname, rrtype, rrclass, rrttl )"
+  let rdataSorted = sortOn fst [ (runSPut . putRData Canonical $ rdata rr, rr) | rr <- rrs ]
+      rdataGrouped = groupBy ((==) `on` fst) rdataSorted
+  unless (all ((== 1) . length) rdataGrouped) $ Left "canonicalOrderedRRs: requires unique RData set"
+  return $ map snd rdataSorted
 
 rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
@@ -92,13 +109,13 @@ rrsigDicts =
   , (ED448           , ed448)
   ]
 
-verifyRRSIG :: RD_DNSKEY -> RD_RRSIG -> ResourceRecord -> Either String ()
-verifyRRSIG dnskey rrsig rr =
+verifyRRSIG :: RD_DNSKEY -> RD_RRSIG -> [ResourceRecord] -> Either String ()
+verifyRRSIG dnskey rrsig rrs =
   maybe (Left $ "verifyRRSIG: unsupported algorithm: " ++ show alg) verify $
   Map.lookup alg rrsigDicts
   where
     alg = dnskey_pubalg dnskey
-    verify impl = verifyRRSIGwith impl dnskey rrsig rr
+    verify impl = verifyRRSIGwith impl dnskey rrsig rrs
 
 ---
 

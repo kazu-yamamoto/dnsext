@@ -27,6 +27,7 @@ spec = do
     it "SHA384" $ caseDS dsSHA384
   describe "verify RRSIG" $ do
     it "RSA/SHA256" $ caseRRSIG rsaSHA256
+    it "RSA/SHA256 RRset" $ caseRRSIG rsaSHA256_RRset
     it "RSA/SHA512" $ caseRRSIG rsaSHA512
     it "ECDSA/P256" $ caseRRSIG ecdsaP256
     it "ECDSA/P384" $ caseRRSIG ecdsaP384
@@ -138,13 +139,13 @@ dsSHA384 =
 -----
 -- RRSIG cases
 
-type RRSIG_CASE = (ResourceRecord, ResourceRecord, ResourceRecord)
+type RRSIG_CASE = (ResourceRecord, [ResourceRecord], ResourceRecord)
 
 caseRRSIG :: RRSIG_CASE -> Expectation
-caseRRSIG (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pure ()) $ do
+caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure ()) $ do
   dnskey <- takeRData "DNSKEY" dnskeyRR
   rrsig  <- takeRData "RRSIG"  rrsigRR
-  verifyRRSIG dnskey rrsig target
+  verifyRRSIG dnskey rrsig targets
   where
     takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
 
@@ -152,7 +153,7 @@ caseRRSIG (dnskeyRR, target, rrsigRR) = either expectationFailure (const $ pure 
 rsaSHA256 :: RRSIG_CASE
 rsaSHA256 =
   ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
+  , [ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }]
   , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
@@ -165,11 +166,29 @@ rsaSHA256 =
              \ l1sLncJcOKFLJ7GhiUOibu4teYp5VE9RncriShZNz85mwlMgNEa \
              \ cFYK/lPtPiVYP4bwg== "
 
+rsaSHA256_RRset :: RRSIG_CASE
+rsaSHA256_RRset =
+  ( ResourceRecord { rrname = "iij.ad.jp.", rrttl = 86400, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
+  , [ ResourceRecord { rrname = "omgi.iij.ad.jp.", rrttl = 600, rrclass = classIN, rrtype = A, rdata = rd_a "202.214.79.36"  }
+    , ResourceRecord { rrname = "omgi.iij.ad.jp.", rrttl = 600, rrclass = classIN, rrtype = A, rdata = rd_a "202.32.225.116" } ]
+  , ResourceRecord { rrname = "omgi.iij.ad.jp.", rrttl = 600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd } )
+  where
+    key_rd = rd_dnskey' 256 3 8
+             " AwEAAdyl8rJAwIXpgJn4HKW9mIhlJQHjLkq91UL+qcfiFkMmQoIxCuDc \
+             \ RBKgSfdgSavRThrttFGn6qFHSYDr2NmbiDkQwmSksnH13UTUK+hbPUev \
+             \ LOa76MchHxvA+GNkulUcHEFdp+ic2QAvGnahrzz9iMCTsA7y3UOHJS9V \
+             \ sxFwoPhX "
+    sig_rd = rd_rrsig' A 8 4 600 1680189006 1677597006 2508 "iij.ad.jp."
+             " kgV2bxld5SLc3M7kVFl1QD3cKw60T71iaI7OAgcBsgAW84vvRUY/hp0v \
+             \ VLhEg2+vMWoIoYOMpg0qfUKxX6+HANqBJJ7bcvLHQqZQVtyN5A9bnwqs \
+             \ Pi3tNM00LI/iN6CCHzDNBT8N65iQznjCp51GvmlkJ2S2fF83BRsyblVA \
+             \ O4k= "
+
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.2
 rsaSHA512 :: RRSIG_CASE
 rsaSHA512 =
   ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }
+  , [ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.91" }]
   , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
@@ -189,7 +208,7 @@ rsaSHA512 =
 ecdsaP256 :: RRSIG_CASE
 ecdsaP256 =
   ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
+  , [ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }]
   , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
@@ -204,7 +223,7 @@ ecdsaP256 =
 ecdsaP384 :: RRSIG_CASE
 ecdsaP384 =
   ( ResourceRecord { rrname = "example.net.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }
+  , [ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = A, rdata = rd_a $ read "192.0.2.1" }]
   , ResourceRecord { rrname = "www.example.net.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
@@ -221,7 +240,7 @@ ecdsaP384 =
 ed25519 :: RRSIG_CASE
 ed25519 =
   ( ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }
+  , [ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }]
   , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
@@ -235,7 +254,7 @@ ed25519 =
 ed448 :: RRSIG_CASE
 ed448 =
   ( ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = DNSKEY, rdata = key_rd }
-  , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }
+  , [ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = MX, rdata = rd_mx 10 "mail.example.com." }]
   , ResourceRecord { rrname = "example.com.", rrttl = 3600, rrclass = classIN, rrtype = RRSIG, rdata = sig_rd }
   )
   where
