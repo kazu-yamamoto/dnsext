@@ -49,7 +49,7 @@ toPubKey_ECDSA len o
 
 fromPubKey :: PubKey -> Opaque
 fromPubKey (PubKey_RSA _len e n)
-    | elen > 1   = let (x,y) = elen `divMod` 256
+    | elen >= 256 = let (x,y) = elen `divMod` 256
                    in Opaque.concat [ Opaque.singleton 0
                                     , Opaque.singleton $ fromIntegral x
                                     , Opaque.singleton $ fromIntegral y
