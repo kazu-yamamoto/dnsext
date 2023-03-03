@@ -14,7 +14,7 @@ import Data.Word
 import GHC.Exts (the, groupWith)
 import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.QuickCheck (Gen, arbitrary, elements, forAll, frequency)
+import Test.QuickCheck (Gen, arbitrary, choose, elements, forAll, frequency)
 
 import DNS.SEC
 
@@ -25,10 +25,12 @@ spec = do
         let bs = encodeResourceRecord rr
         decodeResourceRecord bs `shouldBe` Right rr
         fmap encodeResourceRecord (decodeResourceRecord bs) `shouldBe` Right bs
-    prop "PubKey_RSA" . forAll genPubKey_RSA $ \ pubkey -> do
+    prop "PubKey_RSA - PubKey iso" . forAll genPubKey_RSA $ \ pubkey -> do
         let o = fromPubKey pubkey
         toPubKey_RSA o `shouldSatisfy` (== pubkey)
-        -- fromPubKey (toPubKey_RSA o) `shouldSatisfy` (== o)
+    prop "PubKey_RSA - bin iso" . forAll genPubKey_RSA_bin $ \ o -> do
+        let pubkey = toPubKey_RSA o
+        fromPubKey pubkey `shouldSatisfy` (== o)
 
 genResourceRecord :: Gen ResourceRecord
 genResourceRecord = frequency
@@ -69,6 +71,30 @@ genPubKey_RSA = pubKey_RSA <$> genBSize <*> genE
     pubKey_RSA bsize e = PubKey_RSA (bsize * 8) e (fromString $ replicate bsize '\xff')
     genBSize = elements [64, 128, 256]
     genE = elements ["\x01\x00\x01", fromString $ "\x01" <> replicate 255 '\x00' <> "\x01"]
+
+genPubKey_RSA_bin :: Gen Opaque
+genPubKey_RSA_bin = pubKey_RSA_bin <$> genBSize <*> genE
+  where
+    pubKey_RSA_bin bsize e
+      | elen >= 256  =  Opaque.concat [ Opaque.singleton 0
+                                      , Opaque.singleton $ fromIntegral x
+                                      , Opaque.singleton $ fromIntegral y
+                                      , e
+                                      , n
+                                      ]
+      | otherwise    =  Opaque.concat [ Opaque.singleton $ fromIntegral elen
+                                      , e
+                                      , n
+                                      ]
+      where elen = Opaque.length e
+            (x,y) = elen `divMod` 256
+            n = fromString $ replicate bsize '\xff'
+
+    genBSize = elements [64, 128, 256, 512]
+    genE = estring <$> choose (1, 512)
+    estring len
+      | len > 1    =  fromString $ "\x01" <> replicate len '\x00' <> "\x01"
+      | otherwise  =  "\x01"
 
 genOpaque :: Gen Opaque
 genOpaque = Opaque.fromByteString <$> elements [ "", "a", "a.b", "abc", "a.b.c", "a\\.b.c", "\\001.a.b", "\\$.a.b" ]
