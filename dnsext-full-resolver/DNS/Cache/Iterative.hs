@@ -57,7 +57,8 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.SEC (TYPE (DS, RRSIG), RD_DNSKEY, RD_DS, RD_RRSIG)
+import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG)
+import qualified DNS.SEC.Verify as SEC
 import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
@@ -763,6 +764,62 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
   where
     an = rrname a
     a = head g
+
+---
+
+{-
+steps to get verified and cached DNSKEY RRset
+1. query DNSKEY from delegatee with DO flag - get DNSKEY RRset and its RRSIG
+2. validate SEP DNSKEY of delegatee with DS
+3. verify DNSKEY RRset of delegatee with RRSIG
+4. cache DNSKEY RRset with RRSIG when validation passes
+ -}
+cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY dss aservers dom = do
+  eresult <- verifiedDNSKEY dss aservers dom
+  let doCache (dnskeys, rrsigs, rank) = do
+        let keyRRs = map snd dnskeys
+            sigRRs = map snd rrsigs
+        withMinTTL (keyRRs ++ sigRRs) (return $ Left $ "cachedDNSKEY: empty DNSKEY list - something wrong") $ \minTTL -> do
+          cacheSection (withTTL minTTL keyRRs) rank {- TODO: cache with RRSIG of DNSKEY -}
+          return $ Right $ map fst dnskeys
+  either (return . Left) (lift . doCache) eresult
+
+verifiedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String ([(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, ResourceRecord)], Ranking))
+verifiedDNSKEY dss aservers dom
+  | null dss   =  return $ Left $ verifyError "no DS entry"
+  | otherwise  =  do
+      msg <- norec True aservers dom DNSKEY
+
+      return $ do
+        let (answer, answerRank) = rankedAnswer msg
+            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+        unless (rcode == DNS.NoErr) $ Left $ verifyError $ "error rcode to get DNSKEY: " ++ show rcode
+
+        let rrsigs = rrListWith RRSIG DNS.fromRData dom (,) answer
+        when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
+
+        let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) answer
+            seps =
+              [ (key, ds)
+              | (key, _) <- dnskeys
+              , ds  <- dss
+              , Right () <- [SEC.verifyDS dom key ds]
+              ]
+        when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
+
+        let keyRRs = map snd dnskeys
+            goodSigs =
+              [ rrsig
+              | rrsig@(sigrd, _) <- rrsigs
+              , (sepkey, _) <- seps
+              , Right () <- [SEC.verifyRRSIG sepkey sigrd keyRRs]
+              ]
+        when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
+
+        return (dnskeys, goodSigs, answerRank)
+      where
+        verifyError s = "verifiedDNSKEY: " ++ s
 
 ---
 
