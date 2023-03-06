@@ -58,7 +58,7 @@ import DNS.Types
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
 import DNS.SEC (TYPE (DS, RRSIG), RD_DNSKEY, RD_DS, RD_RRSIG)
-import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
+import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
 import qualified DNS.Do53.Internal as DNS
@@ -567,7 +567,7 @@ resolveJustDC dc n typ
   nss <- iterative_ dc rootNS $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
   lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
-  (,) <$> norec sas n typ <*> pure nss
+  (,) <$> norec False sas n typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
 
@@ -644,7 +644,7 @@ iterative_ dc nss (x:xs) =
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-      msg <- norec sas name A
+      msg <- norec False sas name A
       lift $ delegationWithCache srcDom name msg
 
     step :: Delegation -> DNSQuery MayDelegation
@@ -795,8 +795,8 @@ axList disableV6NS pdom h = foldr takeAx []
     takeAx _         xs  =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
-norec :: [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec aservers name typ = dnsQueryT $ \cxt -> do
+norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec dnsssecOK aservers name typ = dnsQueryT $ \cxt -> do
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver
@@ -813,7 +813,10 @@ norec aservers name typ = dnsQueryT $ \cxt -> do
         , renvResolvInfos = ris
         }
       q = Question name typ classIN
-      qctl = DNS.rdFlag FlagClear
+      doFlagSet
+        | dnsssecOK  =  FlagSet
+        | otherwise  =  FlagClear
+      qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
   either (Left . DnsError) (\res -> handleResponseError Left Right $ DNS.replyDNSMessage (DNS.resultReply res)) <$>
     E.try (DNS.resolve renv q qctl)
 
