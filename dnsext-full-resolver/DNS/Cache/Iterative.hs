@@ -70,6 +70,7 @@ import qualified DNS.Do53.Memo as Cache
 
 -- this package
 import DNS.Cache.RootServers (rootServers)
+import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 
@@ -768,6 +769,41 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     a = head g
 
 ---
+
+rootPriming :: DNSQuery (Either String Delegation)
+rootPriming = do
+  disableV6NS <- lift $ asks disableV6NS_
+  let ips = takeDEntryIPs disableV6NS hintDes
+  ekeys <- cachedDNSKEY [rootSepDS] ips "."
+  either (return . Left . emsg) (body ips) ekeys
+  where
+    emsg s = "rootPriming: " ++ s
+    body ips dnskeys = do
+      msgNS <- norec True ips "." NS
+      let (ansRRs, answerRank) = rankedAnswer msgNS
+          nsps = nsList "." (,) ansRRs
+          nsRRs = map snd nsps
+          (sigrds, sigRRs) = unzip $ rrListWith RRSIG DNS.fromRData "." (,) ansRRs
+          (addRRs, additionalRank) = rankedAdditional msgNS
+          axRRs = axList False (`elem` map fst nsps) (\_ x -> x) addRRs
+          verified =
+            fst <$> uncons
+            [ sig | key <- dnskeys, sig <- sigrds
+            , Right () <- [SEC.verifyRRSIG key sig nsRRs] ]
+      lift $ case verified of
+        {- adjust cache to minimum TTL -}
+        Nothing     -> withMinTTL (nsRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
+          logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
+          cacheSection (withTTL minTTL nsRRs) answerRank
+          cacheSection (withTTL minTTL axRRs) additionalRank
+          return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
+        Just _rrsig -> withMinTTL (nsRRs ++ sigRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
+          cacheSection (withTTL minTTL nsRRs) answerRank  {- TODO: cache with RRSIG of NS -}
+          cacheSection (withTTL minTTL axRRs) additionalRank
+          let fill (dom, des, dss, _) = (dom, des, dss, dnskeys)
+          return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
+
+    (_dot, hintDes, _, _) = rootHint
 
 {-
 steps to get verified and cached DNSKEY RRset
