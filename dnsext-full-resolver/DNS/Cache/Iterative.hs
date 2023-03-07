@@ -902,12 +902,7 @@ delegationIPs dc (srcDom, des, _, _) = do
   lift $ logLn Log.INFO $ ppDelegation des
   disableV6NS <- lift $ asks disableV6NS_
 
-  let takeDEntryIP (DEonlyNS {})             xs  =  xs
-      takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
-      takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
-        | disableV6NS                            =  xs
-        | otherwise                              =  ip : xs
-      ips = foldr takeDEntryIP [] (fst des : snd des)
+  let ips = takeDEntryIPs disableV6NS des
 
       takeNames (DEonlyNS name) xs = name : xs
       takeNames _               xs = xs
@@ -930,6 +925,15 @@ delegationIPs dc (srcDom, des, _, _) = do
             throwDnsError DNS.IllegalDomain
 
   result
+
+takeDEntryIPs :: Bool -> NE DEntry -> [IP]
+takeDEntryIPs disableV6NS des = foldr takeDEntryIP [] (fst des : snd des)
+  where
+    takeDEntryIP (DEonlyNS {})             xs  =  xs
+    takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
+    takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
+      | disableV6NS                            =  xs
+      | otherwise                              =  ip : xs
 
 resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS disableV6NS dc ns = do
