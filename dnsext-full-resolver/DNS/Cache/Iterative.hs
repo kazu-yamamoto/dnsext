@@ -569,7 +569,8 @@ resolveJustDC dc n typ
                  *> throwDnsError DNS.ServerFailure
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
-  nss <- iterative_ dc rootNS $ reverse $ DNS.superDomains n
+  root <- refreshRoot
+  nss <- iterative_ dc root $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
   lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
   (,) <$> norec False sas n typ <*> pure nss
@@ -794,6 +795,12 @@ refreshRoot = do
             return rootHint
       either fallback return =<< rootPriming
 
+{-
+steps of root priming
+1. get DNSKEY RRset of root-domain using `cachedDNSKEY` steps
+2. query NS from root-domain with DO flag - get NS RRset and RRSIG
+3. verify NS RRset of root-domain with RRSIGa
+ -}
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
   disableV6NS <- lift $ asks disableV6NS_
