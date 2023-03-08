@@ -19,7 +19,7 @@ module DNS.Cache.Iterative (
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, replyResult, replyResultCached,
-  resolve, resolveJust, iterative,
+  refreshRoot, resolve, resolveJust, iterative,
   Env (..),
   ) where
 
@@ -38,6 +38,7 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Functor (($>))
+import Data.IORef (IORef, newIORef, readIORef, atomicWriteIORef)
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import qualified Data.List as L
 import Data.Map (Map)
@@ -82,6 +83,7 @@ data Env =
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , getCache_ :: IO Cache
+  , currentRoot_ :: IORef (Maybe Delegation)
   , currentSeconds_ :: IO EpochTime
   , timeString_ :: IO ShowS
   , idGen_ :: IO DNS.Identifier
@@ -119,9 +121,10 @@ newEnv :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
        -> IO Env
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   genId <- newConcurrentGenId
+  rootRef <- newIORef Nothing
   let cxt = Env
         { logLines_ = putLines, disableV6NS_ = disableV6NS
-        , insert_ = ins, getCache_ = getCache
+        , insert_ = ins, getCache_ = getCache, currentRoot_ = rootRef
         , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
@@ -769,6 +772,27 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     a = head g
 
 ---
+
+refreshRoot :: DNSQuery Delegation
+refreshRoot = do
+  curRef <- lift $ asks currentRoot_
+  let refresh = do
+        n <- getRoot
+        liftIO $ atomicWriteIORef curRef $ Just n
+        return n
+      keep = do
+        current <- liftIO $ readIORef curRef
+        maybe refresh return current
+      checkLife = do
+        nsc <- lift $ lookupCache "." NS
+        maybe refresh (const keep) nsc
+  checkLife
+  where
+    getRoot = do
+      let fallback s = lift $ do  {- fallback to rootHint -}
+            logLn Log.NOTICE $ "refreshRoot: " ++ s
+            return rootHint
+      either fallback return =<< rootPriming
 
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
