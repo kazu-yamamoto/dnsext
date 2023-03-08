@@ -18,6 +18,7 @@ library
     other-modules:
         DNS.Cache.ServerMonitor
         DNS.Cache.RootServers
+        DNS.Cache.RootTrustAnchors
         DNS.Cache.SocketUtil
         DNS.Cache.Queue
 
