@@ -8,7 +8,7 @@ module DNS.Cache.Iterative (
   runResolveJust,
   newEnv,
   runIterative,
-  rootNS, Delegation,
+  rootHint, rootNS, Delegation,
   QueryError (..),
   printResult,
   -- * types
@@ -600,12 +600,14 @@ v4DEntryList des@(de:_)  =  concatMap skipAAAA $ byNS des
         nullCase     []    =  [DEonlyNS (nsDomain de)]
         nullCase es@(_:_)  =  es
 
--- {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
--- {-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
 rootNS :: Delegation
-rootNS =
+rootNS = rootHint
+
+-- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
+rootHint :: Delegation
+rootHint =
   fromMaybe
-  (error "rootNS: bad configuration.")
+  (error "rootHint: bad configuration.")
   $ takeDelegationSrc (nsList "." (,) ns) [] as
   where
     (ns, as) = rootServers
