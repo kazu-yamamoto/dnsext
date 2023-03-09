@@ -724,7 +724,10 @@ takeDelegation nsps adds = do
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
-    dentries d as@(_:_)   =  axList False (const True {- paired by rrnamePairs -}) (\ip _ -> DEwithAx d ip) as
+    dentries d as@(_:_)
+      | null axs          =  [DEonlyNS d]
+      | otherwise         =  axs
+      where axs = axList False (const True {- paired by rrnamePairs -}) (\ip _ -> DEwithAx d ip) as
 
 -- | pairing correspond rrname domain data
 --
