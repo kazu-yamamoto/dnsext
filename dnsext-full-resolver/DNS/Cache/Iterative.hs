@@ -724,7 +724,7 @@ takeDelegation nsps adds = do
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
-    dentries d as@(_:_)   =  axList False d (\ip _ -> DEwithAx d ip) as
+    dentries d as@(_:_)   =  axList False (const True {- paired by rrnamePairs -}) (\ip _ -> DEwithAx d ip) as
 
 -- | pairing correspond rrname domain data
 --
@@ -764,15 +764,15 @@ rrListWith typ fromRD dom h = foldr takeRR []
     takeRR _                                xs                    =  xs
 
 axList :: Bool
-       -> Domain -> (IP -> ResourceRecord -> a)
+       -> (Domain -> Bool) -> (IP -> ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
-axList disableV6NS dom h = foldr takeAx []
+axList disableV6NS pdom h = foldr takeAx []
   where
     takeAx rr@ResourceRecord { rrtype = A, rdata = rd } xs
-      | rrname rr == dom,
+      | pdom (rrname rr),
         Just v4 <- DNS.rdataField rd DNS.a_ipv4    = h (IPv4 v4) rr : xs
     takeAx rr@ResourceRecord { rrtype = AAAA, rdata = rd } xs
-      | not disableV6NS && rrname rr == dom,
+      | not disableV6NS && pdom (rrname rr),
         Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = h (IPv6 v6) rr : xs
     takeAx _         xs  =  xs
 
@@ -837,7 +837,7 @@ delegationIPs dc (srcDom, des) = do
 
 resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS disableV6NS dc ns = do
-  let axPairs = axList disableV6NS ns (,)
+  let axPairs = axList disableV6NS (== ns) (,)
 
       refinesAx rrs = (ps, map snd ps)
         where ps = axPairs rrs
