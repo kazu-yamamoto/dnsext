@@ -54,7 +54,7 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
 import qualified Data.IP as IP
 import DNS.Types
   (Domain, DNSError, TTL,
-   TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (ResourceRecord, rrname, rrtype, rdata),
+   TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
 import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
@@ -320,7 +320,7 @@ runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
     soa EmbedInAddr  = soaRR dom "." 0 28800 7200 604800 86400
     soa EmbedIp6     = soaRR dom "." 0 28800 7200 604800 86400
     soaRR mname mail ser refresh retry expire ncttl =
-      ResourceRecord { rrname = dom, rrtype = SOA, DNS.rrclass = DNS.classIN, DNS.rrttl = ncttl
+      ResourceRecord { rrname = dom, rrtype = SOA, rrclass = classIN, rrttl = ncttl
                      , rdata = DNS.rd_soa mname mail ser refresh retry expire ncttl }
 
 -- detect embedded result for special IP-address block from reverse lookup domain
@@ -731,7 +731,7 @@ takeDelegation nsps adds = do
 
 -- | pairing correspond rrname domain data
 --
--- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, DNS.rrclass = DNS.classIN, DNS.rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
+-- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, rrclass = classIN, rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
 -- >>> rrnamePairs ["s", "t", "u"] [agroup "s", agroup "t", agroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
 -- True
 -- >>> rrnamePairs ["t"] [agroup "s", agroup "t", agroup "u"] == [("t", agroup "t")]
@@ -996,7 +996,7 @@ cacheEmptySection srcDom dom typ getRanked msg =
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
             https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA soa rr = (rrname rr, minimum [DNS.soa_minimum soa, DNS.rrttl rr, maxNCacheTTL])
+        fromSOA soa rr = (rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
         single list = case list of
           []    ->  Left "no SOA records found"
