@@ -726,6 +726,15 @@ takeDelegation nsps adds = do
     dentries d     []     =  [DEonlyNS d]
     dentries d as@(_:_)   =  axList False d (\ip _ -> DEwithAx d ip) as
 
+-- | pairing correspond rrname domain data
+--
+-- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, DNS.rrclass = DNS.classIN, DNS.rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
+-- >>> rrnamePairs ["s", "t", "u"] [agroup "s", agroup "t", agroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
+-- True
+-- >>> rrnamePairs ["t"] [agroup "s", agroup "t", agroup "u"] == [("t", agroup "t")]
+-- True
+-- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
+-- True
 rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
 rrnamePairs []     _gs        =  []
 rrnamePairs (d:ds)  []        =  (d, []) : rrnamePairs ds  []
