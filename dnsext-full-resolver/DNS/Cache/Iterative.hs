@@ -733,14 +733,7 @@ takeDelegation nsps adds = do
         an = rrname a
         a = head g
     dentries d     []     =  [DEonlyNS d]
-    dentries d as@(_:_)   =  foldr takeAxDE [] as
-      where
-        takeAxDE a xs = case a of
-          ResourceRecord { rrtype = A   , rdata = rd }
-            | Just v4 <- DNS.rdataField rd DNS.a_ipv4    ->  DEwithAx d (IPv4 v4) : xs
-          ResourceRecord { rrtype = AAAA, rdata = rd }
-            | Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 ->  DEwithAx d (IPv6 v6) : xs
-          _                                                     ->  xs
+    dentries d as@(_:_)   =  axList False d (\ip _ -> DEwithAx d ip) as
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
@@ -758,6 +751,19 @@ rrListWith typ fromRD dom h = foldr takeRR []
     takeRR rr@ResourceRecord { rdata = rd } xs
       | rrname rr == dom, rrtype rr == typ, Just ds <- fromRD rd  =  h ds rr : xs
     takeRR _                                xs                    =  xs
+
+axList :: Bool
+       -> Domain -> (IP -> ResourceRecord -> a)
+       -> [ResourceRecord] -> [a]
+axList disableV6NS dom h = foldr takeAx []
+  where
+    takeAx rr@ResourceRecord { rrtype = A, rdata = rd } xs
+      | rrname rr == dom,
+        Just v4 <- DNS.rdataField rd DNS.a_ipv4    = h (IPv4 v4) rr : xs
+    takeAx rr@ResourceRecord { rrtype = AAAA, rdata = rd } xs
+      | not disableV6NS && rrname rr == dom,
+        Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = h (IPv6 v6) rr : xs
+    takeAx _         xs  =  xs
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
@@ -820,18 +826,10 @@ delegationIPs dc (srcDom, des) = do
 
 resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS disableV6NS dc ns = do
-  let takeAx :: ResourceRecord -> [(IP, ResourceRecord)] -> [(IP, ResourceRecord)]
-      takeAx rr@ResourceRecord { rrtype = A, rdata = rd } xs
-        | rrname rr == ns, Just v4 <- DNS.rdataField rd DNS.a_ipv4  = (IPv4 v4, rr) : xs
-      takeAx rr@ResourceRecord { rrtype = AAAA, rdata = rd } xs
-        | not disableV6NS && rrname rr == ns,
-          Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = (IPv6 v6, rr) : xs
-      takeAx _         xs  =  xs
-
-      axList = foldr takeAx []
+  let axPairs = axList disableV6NS ns (,)
 
       refinesAx rrs = (ps, map snd ps)
-        where ps = axList rrs
+        where ps = axPairs rrs
 
       lookupAx
         | disableV6NS  =  lk4
@@ -867,7 +865,7 @@ resolveNS disableV6NS dc ns = do
                   lift $ logLn Log.NOTICE $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
                   throwDnsError DNS.IllegalDomain
         maybe failEmptyAx pure =<< liftIO . selectA  {- 失敗時: NS に対応する A の返答が空 -}
-          =<< maybe query1Ax (pure . axList . fst) =<< lift lookupAx
+          =<< maybe query1Ax (pure . axPairs . fst) =<< lift lookupAx
 
   resolveAXofNS
 
