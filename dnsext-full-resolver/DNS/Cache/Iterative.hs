@@ -840,6 +840,24 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
+fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY d@Delegation{delegationDS = []}                           =  return d  {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = _:_}  =  return d  {- already filled -}
+fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = [], ..} =
+  maybe query (lift . fill . toDNSKEYs) =<< lift (lookupCache delegationZoneDomain DNSKEY)
+
+  where
+    toDNSKEYs (rrs, _) = rrListWith DNSKEY DNS.fromRData delegationZoneDomain const rrs
+    fill dnskeys = return d { delegationDNSKEY = dnskeys }
+    query = do
+      disableV6NS <- lift $ asks disableV6NS_
+      let ips = takeDEntryIPs disableV6NS delegationNS
+          nullIPs = logLn Log.NOTICE "fillDelegationDNSKEY: ip list is null" *> return d
+          verifyFailed es = logLn Log.NOTICE ("fillDelegationDNSKEY: " ++ es) *> return d
+      if null ips
+        then lift nullIPs
+        else lift . either verifyFailed fill =<< cachedDNSKEY (delegationDS d) ips delegationZoneDomain
+
 ---
 
 refreshRoot :: DNSQuery Delegation
