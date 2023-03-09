@@ -719,21 +719,32 @@ takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delega
 takeDelegation nsps adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
-  ents <- uncons $ concatMap (uncurry dentries) $ nsPairs (sort nss) addgroups
+  ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
   return (rrname rr, ents)
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
-    nsPairs []     _gs            =  []
-    nsPairs (d:ds)  []            =  (d, []) : nsPairs ds  []
-    nsPairs (d:ds) (g:gs)
-      | d <  an                   =  (d, []) : nsPairs ds (g:gs)
-      | d == an                   =  (d, g)  : nsPairs ds  gs
-      | otherwise {- d >  an  -}  =            nsPairs ds  gs  -- unknown additional RRs. just skip
-      where
-        an = rrname a
-        a = head g
     dentries d     []     =  [DEonlyNS d]
     dentries d as@(_:_)   =  axList False d (\ip _ -> DEwithAx d ip) as
+
+-- | pairing correspond rrname domain data
+--
+-- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, DNS.rrclass = DNS.classIN, DNS.rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
+-- >>> rrnamePairs ["s", "t", "u"] [agroup "s", agroup "t", agroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
+-- True
+-- >>> rrnamePairs ["t"] [agroup "s", agroup "t", agroup "u"] == [("t", agroup "t")]
+-- True
+-- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
+-- True
+rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
+rrnamePairs []     _gs        =  []
+rrnamePairs (d:ds)  []        =  (d, []) : rrnamePairs ds  []
+rrnamePairs dds@(d:ds) ggs@(g:gs)
+  | d <  an                   =  (d, []) : rrnamePairs ds  ggs
+  | d == an                   =  (d, g)  : rrnamePairs ds  gs
+  | otherwise {- d >  an  -}  =            rrnamePairs dds gs  -- unknown additional RRs. just skip
+  where
+    an = rrname a
+    a = head g
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
