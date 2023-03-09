@@ -719,21 +719,23 @@ takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delega
 takeDelegation nsps adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
-  ents <- uncons $ concatMap (uncurry dentries) $ nsPairs (sort nss) addgroups
+  ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
   return (rrname rr, ents)
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
-    nsPairs []     _gs            =  []
-    nsPairs (d:ds)  []            =  (d, []) : nsPairs ds  []
-    nsPairs (d:ds) (g:gs)
-      | d <  an                   =  (d, []) : nsPairs ds (g:gs)
-      | d == an                   =  (d, g)  : nsPairs ds  gs
-      | otherwise {- d >  an  -}  =            nsPairs ds  gs  -- unknown additional RRs. just skip
-      where
-        an = rrname a
-        a = head g
     dentries d     []     =  [DEonlyNS d]
     dentries d as@(_:_)   =  axList False d (\ip _ -> DEwithAx d ip) as
+
+rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
+rrnamePairs []     _gs        =  []
+rrnamePairs (d:ds)  []        =  (d, []) : rrnamePairs ds  []
+rrnamePairs (d:ds) (g:gs)
+  | d <  an                   =  (d, []) : rrnamePairs ds (g:gs)
+  | d == an                   =  (d, g)  : rrnamePairs ds  gs
+  | otherwise {- d >  an  -}  =            rrnamePairs ds  gs  -- unknown additional RRs. just skip
+  where
+    an = rrname a
+    a = head g
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
