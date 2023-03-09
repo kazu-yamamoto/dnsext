@@ -741,7 +741,7 @@ rrnamePairs (d:ds)  []        =  (d, []) : rrnamePairs ds  []
 rrnamePairs (d:ds) (g:gs)
   | d <  an                   =  (d, []) : rrnamePairs ds (g:gs)
   | d == an                   =  (d, g)  : rrnamePairs ds  gs
-  | otherwise {- d >  an  -}  =            rrnamePairs ds  gs  -- unknown additional RRs. just skip
+  | otherwise {- d >  an  -}  =            rrnamePairs (d:ds) gs  -- unknown additional RRs. just skip
   where
     an = rrname a
     a = head g
