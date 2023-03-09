@@ -655,16 +655,11 @@ lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
 lookupDelegation dom = do
   disableV6NS <- asks disableV6NS_
   let lookupDEs ns = do
-        let takeA    ResourceRecord { rrtype = A, rdata = rd }    xs
-              | Just v4 <- DNS.rdataField rd DNS.a_ipv4    = DEwithAx ns (IPv4 v4) : xs
-            takeA    _ xs = xs
-            takeAAAA ResourceRecord { rrtype = AAAA, rdata = rd } xs
-              | Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = DEwithAx ns (IPv6 v6) : xs
-            takeAAAA _ xs = xs
-            lookupAxList typ takeAx = fmap (foldr takeAx [] . fst) <$> lookupCache ns typ
+        let deListA    = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns (\v4 _ -> DEwithAx ns (IPv4 v4))
+            deListAAAA = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns (\v6 _ -> DEwithAx ns (IPv6 v6))
 
-        lk4 <- lookupAxList A takeA
-        lk6 <- lookupAxList AAAA takeAAAA
+        lk4 <- fmap (deListA . fst)    <$> lookupCache ns A
+        lk6 <- fmap (deListAAAA . fst) <$> lookupCache ns AAAA
         return $ case lk4 <> lk6 of
           Nothing
             | ns `DNS.isSubDomainOf` dom  ->  []             {- miss-hit with sub-domain case cause iterative loop, so return null to skip this NS -}
