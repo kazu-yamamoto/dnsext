@@ -738,10 +738,10 @@ takeDelegation nsps adds = do
 rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
 rrnamePairs []     _gs        =  []
 rrnamePairs (d:ds)  []        =  (d, []) : rrnamePairs ds  []
-rrnamePairs (d:ds) (g:gs)
-  | d <  an                   =  (d, []) : rrnamePairs ds (g:gs)
+rrnamePairs dds@(d:ds) ggs@(g:gs)
+  | d <  an                   =  (d, []) : rrnamePairs ds  ggs
   | d == an                   =  (d, g)  : rrnamePairs ds  gs
-  | otherwise {- d >  an  -}  =            rrnamePairs (d:ds) gs  -- unknown additional RRs. just skip
+  | otherwise {- d >  an  -}  =            rrnamePairs dds gs  -- unknown additional RRs. just skip
   where
     an = rrname a
     a = head g
