@@ -764,6 +764,20 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
+---
+
+withMinTTL :: [ResourceRecord] -> a -> (TTL -> a) -> a
+withMinTTL rrs failed action =
+  maybe failed action
+  $ uncons rrs *> Just (minimum [ rrttl x | x <- rrs ])
+
+withTTL :: TTL -> [ResourceRecord] -> [ResourceRecord]
+withTTL ttl rrs = map update rrs
+  where
+    update rr
+      | ttl < rrttl rr  =  rr { rrttl = ttl }
+      | otherwise       =  rr
+
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
 nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
@@ -793,6 +807,8 @@ axList disableV6NS pdom h = foldr takeAx []
       | not disableV6NS && pdom (rrname rr),
         Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = h (IPv6 v6) rr : xs
     takeAx _         xs  =  xs
+
+---
 
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
