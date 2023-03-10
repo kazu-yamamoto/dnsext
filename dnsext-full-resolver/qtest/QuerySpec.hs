@@ -12,7 +12,7 @@ import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootNS, Env (..))
+import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootHint, Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 
 data AnswerResult
@@ -30,9 +30,9 @@ spec = do
 
 envSpec :: Spec
 envSpec = describe "env" $ do
-  it "rootNS" $ do
+  it "rootHint" $ do
     let sp p = case p of (_,_,_,_) -> True  -- check not error
-    rootNS `shouldSatisfy` sp
+    rootHint `shouldSatisfy` sp
 
 cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
@@ -76,7 +76,8 @@ querySpec disableV6NS = describe "query" $ do
       ucache = (insert, Cache.readMemo memo)
   cxt <- runIO $ newEnv (\_ _ -> pure ()) disableV6NS ucache tcache
   cxt4 <- runIO $ newEnv (\_ _ -> pure ()) True ucache tcache
-  let runIterative ns n = Iterative.runIterative cxt ns (fromString n)
+  let refreshRoot = runDNSQuery Iterative.refreshRoot cxt
+      runIterative ns n = Iterative.runIterative cxt ns (fromString n)
       runJust n = Iterative.runResolveJust cxt (fromString n)
       runResolve n ty = (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty
       getReply n ty ident = do
@@ -92,13 +93,20 @@ querySpec disableV6NS = describe "query" $ do
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) (checkAnswer . fst)
 
+  it "root-priming" $ do
+    result <- refreshRoot
+    printQueryError result
+    result `shouldSatisfy` isRight
+
+  root <- runIO $ either (fail . ("root-priming error: " ++) . show) return =<< refreshRoot
+
   it "iterative" $ do
-    result <- runIterative rootNS "iij.ad.jp."
+    result <- runIterative root "iij.ad.jp."
     printQueryError result
     result `shouldSatisfy` isRight
 
   it "iterative - long" $ do
-    result <- runIterative rootNS "c.b.a.pt.dns-oarc.net."
+    result <- runIterative root "c.b.a.pt.dns-oarc.net."
     printQueryError result
     result `shouldSatisfy` isRight
 
