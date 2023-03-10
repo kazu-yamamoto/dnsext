@@ -8,7 +8,7 @@ module DNS.Cache.Iterative (
   runResolveJust,
   newEnv,
   runIterative,
-  rootHint, rootNS, Delegation,
+  rootHint, Delegation,
   QueryError (..),
   printResult,
   -- * types
@@ -604,9 +604,6 @@ v4DEntryList des@(de:_)  =  concatMap skipAAAA $ byNS des
         aaaaDE _                      = False
         nullCase     []    =  [DEonlyNS (nsDomain de)]
         nullCase es@(_:_)  =  es
-
-rootNS :: Delegation
-rootNS = rootHint
 
 -- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
 rootHint :: Delegation
