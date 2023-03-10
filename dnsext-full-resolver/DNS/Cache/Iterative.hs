@@ -723,7 +723,7 @@ iterative_ dc nss0 (x:xs) =
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec dnssecOK sas name A
-      lift $ delegationWithCache delegationZoneDomain name msg
+      lift $ delegationWithCache delegationZoneDomain delegationDNSKEY name msg
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
@@ -766,44 +766,57 @@ lookupDelegation dom = do
   maybe (return Nothing) getDelegation =<< lookupCache dom NS
 
 -- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache :: Domain -> Domain -> DNSMessage -> ContextT IO MayDelegation
-delegationWithCache zoneDom dom msg =
+delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO MayDelegation
+delegationWithCache zoneDom dnskeys dom msg = do
   -- There is delegation information only when there is a selectable NS
-  maybe
-  (ncache $> NoDelegation)
-  (fmap HasDelegation . withCache)
-  $ takeDelegationSrc nsps dss adds
-  where
-    withCache x = do
-      {- TODO: check DS with RRSIG, and cache DS with RRSIG -}
-      cacheNS
-      cacheAdds
-      return x
+  (putVerifyLog, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+    let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
+    (RRset{..}, cacheDS) <- verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
+    let verifyLog
+          | null nsps         =  logWithDomain "no delegation."
+          | null dsrds        =  logWithDomain "no DS, so no verify."
+          | null rrsGoodSigs  =  logWithDomain "verification failed."
+          | otherwise         =  logWithDomain "success: verifying RRSIG of DS"
+    return (verifyLog, if null rrsGoodSigs then [] else dsrds, cacheDS)
 
-    (dss, nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
-      let nsps_ = nsList dom (,) rrs
-          _sigrds :: [RD_RRSIG]
-          _sigrds = rrListWith RRSIG (sigrdWith DS <=< DNS.fromRData) dom const rrs
-      in (rrListWith DS DNS.fromRData dom const rrs, nsps_, cacheSection (map snd nsps_) rank)
+  (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
+    {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
+       However, without querying the NS of the CNAME destination,
+       you cannot obtain the record of rank that can be used for the reply. -}
+    let crrs = cnameList dom (\_ rr -> rr) rrs
+    (_cnameRRset, cacheCNAME_) <- verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
+    return (not $ null crrs, cacheCNAME_)
+
+  let ncache
+        | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dom NS rankedAuthority msg
+        | rcode == DNS.NameErr  =
+          if hasCNAME then      do cacheCNAME
+                                   cacheEmptySection zoneDom dom NS rankedAuthority msg
+          else                     cacheEmptySection zoneDom dom Cache.nxTYPE rankedAuthority msg
+        | otherwise             =  pure ()
+        where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+
+  let withCache x = do
+        cacheDS
+        cacheNS
+        cacheAdds
+        return x
+
+  putVerifyLog
+  maybe
+    (ncache $> NoDelegation)
+    (fmap HasDelegation . withCache)
+    $ takeDelegationSrc nsps dss adds
+  where
+    logWithDomain s = logLn Log.INFO $ "delegationWithCache: " ++ show zoneDom ++ " -> " ++ show dom ++ ", " ++ s
+
+    (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
+      let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
 
     (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
       let axs = filter match rrs in (axs, cacheSection axs rank)
       where match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
             nsSet = Set.fromList $ map fst nsps
-
-    ncache
-      | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dom NS rankedAuthority msg
-      | rcode == DNS.NameErr  =
-        if hasCNAME then      do cacheCNAME
-                                 cacheEmptySection zoneDom dom NS rankedAuthority msg
-        else                     cacheEmptySection zoneDom dom Cache.nxTYPE rankedAuthority msg
-      | otherwise             =  pure ()
-      where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-    (hasCNAME, cacheCNAME) = withSection rankedAnswer msg $ \rrs rank ->
-      {- CNAME 先の NX をキャッシュしたいならここで返す.
-         しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
-      {- TODO: check CNAME with RRSIG, and cache CNAME with RRSIG -}
-      let (cns, crrs) = unzip $ cnameList dom (,) rrs in (not $ null cns, cacheSection crrs rank)
 
 takeDelegationSrc :: [(Domain, ResourceRecord)]
                   -> [RD_DS]
