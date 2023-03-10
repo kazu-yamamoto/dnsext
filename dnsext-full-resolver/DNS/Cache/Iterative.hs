@@ -715,14 +715,15 @@ iterative_ dc nss0 (x:xs) =
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
-    stepQuery nss = do
+    stepQuery nss@Delegation{..} = do
       sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
       lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
+      let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-      msg <- norec False sas name A
-      lift $ delegationWithCache (delegationZoneDomain nss) name msg
+      msg <- norec dnssecOK sas name A
+      lift $ delegationWithCache delegationZoneDomain name msg
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
