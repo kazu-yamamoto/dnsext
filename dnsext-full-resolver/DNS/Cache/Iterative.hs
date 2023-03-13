@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative (
   -- * resolve interfaces
@@ -8,7 +9,7 @@ module DNS.Cache.Iterative (
   runResolveJust,
   newEnv,
   runIterative,
-  rootNS, Delegation,
+  rootHint, Delegation (..),
   QueryError (..),
   printResult,
   -- * types
@@ -19,7 +20,7 @@ module DNS.Cache.Iterative (
   -- * low-level interfaces
   DNSQuery, runDNSQuery,
   replyMessage, replyResult, replyResultCached,
-  resolve, resolveJust, iterative,
+  refreshRoot, resolve, resolveJust, iterative,
   Env (..),
   ) where
 
@@ -38,6 +39,7 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Functor (($>))
+import Data.IORef (IORef, newIORef, readIORef, atomicWriteIORef)
 import Data.List (uncons, groupBy, sortOn, sort, intercalate)
 import qualified Data.List as L
 import Data.Map (Map)
@@ -57,7 +59,9 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.Do53.Client (FlagOp (FlagClear), defaultResolvActions, ractionGenId, ractionGetTime )
+import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG)
+import qualified DNS.SEC.Verify as SEC
+import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, defaultResolvInfo, newConcurrentGenId)
 import qualified DNS.Do53.Internal as DNS
@@ -68,6 +72,7 @@ import qualified DNS.Do53.Memo as Cache
 
 -- this package
 import DNS.Cache.RootServers (rootServers)
+import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 
@@ -79,6 +84,7 @@ data Env =
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , getCache_ :: IO Cache
+  , currentRoot_ :: IORef (Maybe Delegation)
   , currentSeconds_ :: IO EpochTime
   , timeString_ :: IO ShowS
   , idGen_ :: IO DNS.Identifier
@@ -116,9 +122,10 @@ newEnv :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
        -> IO Env
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   genId <- newConcurrentGenId
+  rootRef <- newIORef Nothing
   let cxt = Env
         { logLines_ = putLines, disableV6NS_ = disableV6NS
-        , insert_ = ins, getCache_ = getCache
+        , insert_ = ins, getCache_ = getCache, currentRoot_ = rootRef
         , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
@@ -513,8 +520,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
-  (msg, _nss@(srcDom, _)) <- resolveJust bn CNAME
-  lift $ cacheAnswer srcDom bn CNAME msg
+  (msg, _nss@Delegation{..}) <- resolveJust bn CNAME
+  lift $ cacheAnswer delegationZoneDomain bn CNAME msg
   return msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
@@ -523,12 +530,12 @@ resolveCNAME bn = do
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
-  (msg, _nss@(srcDom, _)) <- resolveJust bn typ
+  (msg, _nss@Delegation{..}) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift $ cacheAnswer srcDom bn typ msg) (const checkTypeRR) cname
+  maybe (lift $ cacheAnswer delegationZoneDomain bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
     where
       refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
@@ -563,15 +570,22 @@ resolveJustDC dc n typ
                  *> throwDnsError DNS.ServerFailure
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
-  nss <- iterative_ dc rootNS $ reverse $ DNS.superDomains n
+  root <- refreshRoot
+  nss <- iterative_ dc root $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
   lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
-  (,) <$> norec sas n typ <*> pure nss
+  (,) <$> norec False sas n typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
 
--- ドメインに対する NS 委任情報
-type Delegation = (Domain, NE DEntry)
+{- delegation information for domain -}
+data Delegation =
+  Delegation
+  { delegationZoneDomain  :: Domain       {- destination zone domain -}
+  , delegationNS          :: NE DEntry    {- NS infos of destination zone, get from source zone NS -}
+  , delegationDS          :: [RD_DS]      {- SEP DNSKEY signature of destination zone, get from source zone NS -}
+  , delegationDNSKEY      :: [RD_DNSKEY]  {- destination DNSKEY set, get from destination NS -}
+  } deriving Show
 
 data DEntry
   = DEwithAx !Domain !IP
@@ -594,13 +608,12 @@ v4DEntryList des@(de:_)  =  concatMap skipAAAA $ byNS des
         nullCase     []    =  [DEonlyNS (nsDomain de)]
         nullCase es@(_:_)  =  es
 
--- {-# ANN rootNS ("HLint: ignore Use fromMaybe") #-}
--- {-# ANN rootNS ("HLint: ignore Use tuple-section") #-}
-rootNS :: Delegation
-rootNS =
+-- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
+rootHint :: Delegation
+rootHint =
   fromMaybe
-  (error "rootNS: bad configuration.")
-  $ takeDelegation (nsList "." (,) ns) as
+  (error "rootHint: bad configuration.")
+  $ takeDelegationSrc (nsList "." (,) ns) [] as
   where
     (ns, as) = rootServers
 
@@ -633,14 +646,14 @@ iterative_ dc nss (x:xs) =
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
-    stepQuery nss_@(srcDom, _) = do
+    stepQuery nss_ = do
       sas <- delegationIPs dc nss_ {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
       lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-      msg <- norec sas name A
-      lift $ delegationWithCache srcDom name msg
+      msg <- norec False sas name A
+      lift $ delegationWithCache (delegationZoneDomain nss_) name msg
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss_ = do
@@ -669,7 +682,7 @@ lookupDelegation dom = do
       fromDEs es
         | noCachedV4NS es  =  Nothing
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
-        | otherwise        =  (HasDelegation . (,) dom) <$> uncons es
+        | otherwise        =  (\des -> HasDelegation $ Delegation dom des [] []) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
       getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
       getDelegation (rrs, _) = do {- NS cache hit -}
@@ -687,15 +700,21 @@ delegationWithCache srcDom dom msg =
   maybe
   (ncache $> NoDelegation)
   (fmap HasDelegation . withCache)
-  $ takeDelegation nsps adds
+  $ takeDelegationSrc nsps dss adds
   where
     withCache x = do
+      {- TODO: check DS with RRSIG, and cache DS with RRSIG -}
       cacheNS
       cacheAdds
       return x
 
-    (nsps, cacheNS) = getSection rankedAuthority refinesNS msg
-      where refinesNS = unzip . nsList dom (\ns rr -> ((ns, rr), rr))
+    (authRRs, authorityRank) = rankedAuthority msg
+    dss = rrListWith DS DNS.fromRData dom const authRRs
+    _sigrds :: [RD_RRSIG]
+    _sigrds = rrListWith RRSIG DNS.fromRData dom const authRRs
+    cacheNS = cacheSection nsRRs authorityRank
+    (nsps, nsRRs) = unzip $ nsList dom (\ns rr -> ((ns, rr), rr)) authRRs
+
     (adds, cacheAdds) = getSection rankedAdditional refinesAofNS msg
       where refinesAofNS rrs = (rrs, sortOn (rrname &&& rrtype) $ filter match rrs)
             match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
@@ -715,12 +734,16 @@ delegationWithCache srcDom dom msg =
                しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
               where (cns, crrs) = unzip $ cnameList dom (,) rrs
 
-takeDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe Delegation
-takeDelegation nsps adds = do
+takeDelegationSrc :: [(Domain, ResourceRecord)]
+                  -> [RD_DS]
+                  -> [ResourceRecord]
+                  -> Maybe Delegation
+takeDelegationSrc nsps dss adds = do
   (p@(_, rr), ps) <- uncons nsps
   let nss = map fst (p:ps)
   ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
-  return (rrname rr, ents)
+  {- only data from delegation source zone. get DNSKEY from destination zone -}
+  return $ Delegation (rrname rr) ents dss []
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
@@ -748,6 +771,138 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
   where
     an = rrname a
     a = head g
+
+---
+
+refreshRoot :: DNSQuery Delegation
+refreshRoot = do
+  curRef <- lift $ asks currentRoot_
+  let refresh = do
+        n <- getRoot
+        liftIO $ atomicWriteIORef curRef $ Just n
+        return n
+      keep = do
+        current <- liftIO $ readIORef curRef
+        maybe refresh return current
+      checkLife = do
+        nsc <- lift $ lookupCache "." NS
+        maybe refresh (const keep) nsc
+  checkLife
+  where
+    getRoot = do
+      let fallback s = lift $ do  {- fallback to rootHint -}
+            logLn Log.NOTICE $ "refreshRoot: " ++ s
+            return rootHint
+      either fallback return =<< rootPriming
+
+{-
+steps of root priming
+1. get DNSKEY RRset of root-domain using `cachedDNSKEY` steps
+2. query NS from root-domain with DO flag - get NS RRset and RRSIG
+3. verify NS RRset of root-domain with RRSIGa
+ -}
+rootPriming :: DNSQuery (Either String Delegation)
+rootPriming = do
+  disableV6NS <- lift $ asks disableV6NS_
+  let ips = takeDEntryIPs disableV6NS hintDes
+  ekeys <- cachedDNSKEY [rootSepDS] ips "."
+  either (return . Left . emsg) (body ips) ekeys
+  where
+    emsg s = "rootPriming: " ++ s
+    body ips dnskeys = do
+      msgNS <- norec True ips "." NS
+      let (ansRRs, answerRank) = rankedAnswer msgNS
+          nsps = nsList "." (,) ansRRs
+          nsRRs = map snd nsps
+          (sigrds, sigRRs) = unzip $ rrListWith RRSIG DNS.fromRData "." (,) ansRRs
+          (addRRs, additionalRank) = rankedAdditional msgNS
+          axRRs = axList False (`elem` map fst nsps) (\_ x -> x) addRRs
+          verified =
+            fst <$> uncons
+            [ sig | key <- dnskeys, sig <- sigrds
+            , Right () <- [SEC.verifyRRSIG key sig nsRRs] ]
+      lift $ case verified of
+        {- adjust cache to minimum TTL -}
+        Nothing     -> withMinTTL (nsRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
+          logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
+          cacheSection (withTTL minTTL nsRRs) answerRank
+          cacheSection (withTTL minTTL axRRs) additionalRank
+          return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
+        Just _rrsig -> withMinTTL (nsRRs ++ sigRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
+          cacheSection (withTTL minTTL nsRRs) answerRank  {- TODO: cache with RRSIG of NS -}
+          cacheSection (withTTL minTTL axRRs) additionalRank
+          let fill (Delegation dom des dss _) = Delegation dom des dss dnskeys
+          return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
+
+    Delegation _dot hintDes _ _ = rootHint
+
+{-
+steps to get verified and cached DNSKEY RRset
+1. query DNSKEY from delegatee with DO flag - get DNSKEY RRset and its RRSIG
+2. validate SEP DNSKEY of delegatee with DS
+3. verify DNSKEY RRset of delegatee with RRSIG
+4. cache DNSKEY RRset with RRSIG when validation passes
+ -}
+cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY dss aservers dom = do
+  eresult <- verifiedDNSKEY dss aservers dom
+  let doCache (dnskeys, rrsigs, rank) = do
+        let keyRRs = map snd dnskeys
+            sigRRs = map snd rrsigs
+        withMinTTL (keyRRs ++ sigRRs) (return $ Left $ "cachedDNSKEY: empty DNSKEY list - something wrong") $ \minTTL -> do
+          cacheSection (withTTL minTTL keyRRs) rank {- TODO: cache with RRSIG of DNSKEY -}
+          return $ Right $ map fst dnskeys
+  either (return . Left) (lift . doCache) eresult
+
+verifiedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String ([(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, ResourceRecord)], Ranking))
+verifiedDNSKEY dss aservers dom
+  | null dss   =  return $ Left $ verifyError "no DS entry"
+  | otherwise  =  do
+      msg <- norec True aservers dom DNSKEY
+
+      return $ do
+        let (answer, answerRank) = rankedAnswer msg
+            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+        unless (rcode == DNS.NoErr) $ Left $ verifyError $ "error rcode to get DNSKEY: " ++ show rcode
+
+        let rrsigs = rrListWith RRSIG DNS.fromRData dom (,) answer
+        when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
+
+        let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) answer
+            seps =
+              [ (key, ds)
+              | (key, _) <- dnskeys
+              , ds  <- dss
+              , Right () <- [SEC.verifyDS dom key ds]
+              ]
+        when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
+
+        let keyRRs = map snd dnskeys
+            goodSigs =
+              [ rrsig
+              | rrsig@(sigrd, _) <- rrsigs
+              , (sepkey, _) <- seps
+              , Right () <- [SEC.verifyRRSIG sepkey sigrd keyRRs]
+              ]
+        when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
+
+        return (dnskeys, goodSigs, answerRank)
+      where
+        verifyError s = "verifiedDNSKEY: " ++ s
+
+---
+
+withMinTTL :: [ResourceRecord] -> a -> (TTL -> a) -> a
+withMinTTL rrs failed action =
+  maybe failed action
+  $ uncons rrs *> Just (minimum [ rrttl x | x <- rrs ])
+
+withTTL :: TTL -> [ResourceRecord] -> [ResourceRecord]
+withTTL ttl rrs = map update rrs
+  where
+    update rr
+      | ttl < rrttl rr  =  rr { rrttl = ttl }
+      | otherwise       =  rr
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
@@ -779,9 +934,11 @@ axList disableV6NS pdom h = foldr takeAx []
         Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 = h (IPv6 v6) rr : xs
     takeAx _         xs  =  xs
 
+---
+
 -- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
-norec :: [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec aservers name typ = dnsQueryT $ \cxt -> do
+norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec dnsssecOK aservers name typ = dnsQueryT $ \cxt -> do
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver
@@ -798,28 +955,26 @@ norec aservers name typ = dnsQueryT $ \cxt -> do
         , renvResolvInfos = ris
         }
       q = Question name typ classIN
-      qctl = DNS.rdFlag FlagClear
+      doFlagSet
+        | dnsssecOK  =  FlagSet
+        | otherwise  =  FlagClear
+      qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
   either (Left . DnsError) (\res -> handleResponseError Left Right $ DNS.replyDNSMessage (DNS.resultReply res)) <$>
     E.try (DNS.resolve renv q qctl)
 
 -- Filter authoritative server addresses from the delegation information.
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc (srcDom, des) = do
-  lift $ logLn Log.INFO $ ppDelegation des
+delegationIPs dc Delegation{..} = do
+  lift $ logLn Log.INFO $ ppDelegation delegationNS
   disableV6NS <- lift $ asks disableV6NS_
 
-  let takeDEntryIP (DEonlyNS {})             xs  =  xs
-      takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
-      takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
-        | disableV6NS                            =  xs
-        | otherwise                              =  ip : xs
-      ips = foldr takeDEntryIP [] (fst des : snd des)
+  let ips = takeDEntryIPs disableV6NS delegationNS
 
       takeNames (DEonlyNS name) xs = name : xs
       takeNames _               xs = xs
 
-      names = foldr takeNames [] (fst des : snd des)
+      names = foldr takeNames [] $ uncurry (:) delegationNS
 
       result
         | not (null ips)    =  return ips
@@ -830,13 +985,22 @@ delegationIPs dc (srcDom, des) = do
                   throwDnsError DNS.ServerFailure
             maybe neverReach (fmap ((:[]) . fst) . resolveNS disableV6NS dc) mayName
         | disableV6NS       =  do
-            lift $ logLn Log.INFO $ "delegationIPs: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
+            lift $ logLn Log.INFO $ "delegationIPs: server-fail: domain: " ++ show delegationZoneDomain ++ ", delegation is empty."
             throwDnsError DNS.ServerFailure
         | otherwise         = do
-            lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show srcDom ++ ", delegation is empty."
+            lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show delegationZoneDomain ++ ", delegation is empty."
             throwDnsError DNS.IllegalDomain
 
   result
+
+takeDEntryIPs :: Bool -> NE DEntry -> [IP]
+takeDEntryIPs disableV6NS des = foldr takeDEntryIP [] (fst des : snd des)
+  where
+    takeDEntryIP (DEonlyNS {})             xs  =  xs
+    takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
+    takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
+      | disableV6NS                            =  xs
+      | otherwise                              =  ip : xs
 
 resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS disableV6NS dc ns = do
