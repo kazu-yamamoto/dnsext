@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative (
   -- * resolve interfaces
@@ -8,7 +9,7 @@ module DNS.Cache.Iterative (
   runResolveJust,
   newEnv,
   runIterative,
-  rootHint, Delegation,
+  rootHint, Delegation (..),
   QueryError (..),
   printResult,
   -- * types
@@ -519,8 +520,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
-  (msg, _nss@(srcDom, _, _, _)) <- resolveJust bn CNAME
-  lift $ cacheAnswer srcDom bn CNAME msg
+  (msg, _nss@Delegation{..}) <- resolveJust bn CNAME
+  lift $ cacheAnswer delegationZoneDomain bn CNAME msg
   return msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
@@ -529,12 +530,12 @@ resolveCNAME bn = do
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
-  (msg, _nss@(srcDom, _, _, _)) <- resolveJust bn typ
+  (msg, _nss@Delegation{..}) <- resolveJust bn typ
   cname <- lift $ getSectionWithCache rankedAnswer refinesCNAME msg
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift $ cacheAnswer srcDom bn typ msg) (const checkTypeRR) cname
+  maybe (lift $ cacheAnswer delegationZoneDomain bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
     where
       refinesCNAME rrs = (fst <$> uncons ps, map snd ps)
@@ -578,11 +579,13 @@ resolveJustDC dc n typ
       mdc = maxNotSublevelDelegation
 
 {- delegation information for domain -}
-type Delegation =
-  (Domain,      {- destination domain -}
-   NE DEntry,   {- NS infos of destination, get from source NS -}
-   [RD_DS],     {- signature of destination SEP DNSKEY, get from source NS -}
-   [RD_DNSKEY]  {- destination DNSKEY set, get from destination NS -})
+data Delegation =
+  Delegation
+  { delegationZoneDomain  :: Domain       {- destination zone domain -}
+  , delegationNS          :: NE DEntry    {- NS infos of destination zone, get from source zone NS -}
+  , delegationDS          :: [RD_DS]      {- SEP DNSKEY signature of destination zone, get from source zone NS -}
+  , delegationDNSKEY      :: [RD_DNSKEY]  {- destination DNSKEY set, get from destination NS -}
+  } deriving Show
 
 data DEntry
   = DEwithAx !Domain !IP
@@ -643,14 +646,14 @@ iterative_ dc nss (x:xs) =
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
-    stepQuery nss_@(srcDom, _, _, _) = do
+    stepQuery nss_ = do
       sas <- delegationIPs dc nss_ {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
       lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec False sas name A
-      lift $ delegationWithCache srcDom name msg
+      lift $ delegationWithCache (delegationZoneDomain nss_) name msg
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss_ = do
@@ -679,7 +682,7 @@ lookupDelegation dom = do
       fromDEs es
         | noCachedV4NS es  =  Nothing
         {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
-        | otherwise        =  (\des -> HasDelegation $ (dom, des, [], [])) <$> uncons es
+        | otherwise        =  (\des -> HasDelegation $ Delegation dom des [] []) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
       getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
       getDelegation (rrs, _) = do {- NS cache hit -}
@@ -740,7 +743,7 @@ takeDelegationSrc nsps dss adds = do
   let nss = map fst (p:ps)
   ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
   {- only data from delegation source zone. get DNSKEY from destination zone -}
-  return (rrname rr, ents, dss, [])
+  return $ Delegation (rrname rr) ents dss []
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d     []     =  [DEonlyNS d]
@@ -828,10 +831,10 @@ rootPriming = do
         Just _rrsig -> withMinTTL (nsRRs ++ sigRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
           cacheSection (withTTL minTTL nsRRs) answerRank  {- TODO: cache with RRSIG of NS -}
           cacheSection (withTTL minTTL axRRs) additionalRank
-          let fill (dom, des, dss, _) = (dom, des, dss, dnskeys)
+          let fill (Delegation dom des dss _) = Delegation dom des dss dnskeys
           return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
 
-    (_dot, hintDes, _, _) = rootHint
+    Delegation _dot hintDes _ _ = rootHint
 
 {-
 steps to get verified and cached DNSKEY RRset
@@ -962,16 +965,16 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt -> do
 -- Filter authoritative server addresses from the delegation information.
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc (srcDom, des, _, _) = do
-  lift $ logLn Log.INFO $ ppDelegation des
+delegationIPs dc Delegation{..} = do
+  lift $ logLn Log.INFO $ ppDelegation delegationNS
   disableV6NS <- lift $ asks disableV6NS_
 
-  let ips = takeDEntryIPs disableV6NS des
+  let ips = takeDEntryIPs disableV6NS delegationNS
 
       takeNames (DEonlyNS name) xs = name : xs
       takeNames _               xs = xs
 
-      names = foldr takeNames [] (fst des : snd des)
+      names = foldr takeNames [] $ uncurry (:) delegationNS
 
       result
         | not (null ips)    =  return ips
@@ -982,10 +985,10 @@ delegationIPs dc (srcDom, des, _, _) = do
                   throwDnsError DNS.ServerFailure
             maybe neverReach (fmap ((:[]) . fst) . resolveNS disableV6NS dc) mayName
         | disableV6NS       =  do
-            lift $ logLn Log.INFO $ "delegationIPs: server-fail: domain: " ++ show srcDom ++ ", delegation is empty."
+            lift $ logLn Log.INFO $ "delegationIPs: server-fail: domain: " ++ show delegationZoneDomain ++ ", delegation is empty."
             throwDnsError DNS.ServerFailure
         | otherwise         = do
-            lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show srcDom ++ ", delegation is empty."
+            lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show delegationZoneDomain ++ ", delegation is empty."
             throwDnsError DNS.IllegalDomain
 
   result
