@@ -542,11 +542,11 @@ resolveTYPE bn typ = do
         where ps = cnameList bn (,) rrs
 
 cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ContextT IO ()
-cacheAnswer srcDom dom typ msg
+cacheAnswer zoneDom dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
-        DNS.NoErr    ->  cacheEmptySection srcDom dom typ rankedAnswer msg
-        DNS.NameErr  ->  cacheEmptySection srcDom dom Cache.nxTYPE rankedAnswer msg
+        DNS.NoErr    ->  cacheEmptySection zoneDom dom typ rankedAnswer msg
+        DNS.NameErr  ->  cacheEmptySection zoneDom dom Cache.nxTYPE rankedAnswer msg
         _            ->  return ()
   | otherwise              =  do
       getSectionWithCache rankedAnswer refinesX msg
@@ -632,11 +632,11 @@ iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ reverse $ DNS.superDomains n
 
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
-iterative_ _  nss []     = return nss
-iterative_ dc nss (x:xs) =
-  step nss >>=
+iterative_ _  nss0 []     = return nss0
+iterative_ dc nss0 (x:xs) =
+  step nss0 >>=
   mayDelegation
-  (recurse nss xs)   -- NS が返らない場合は同じ NS の情報で子ドメインへ. 通常のホスト名もこのケース. ex. or.jp, ad.jp
+  (recurse nss0 xs)   {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
   (`recurse` xs)
   where
     recurse = iterative_ dc  {- sub-level delegation. increase dc only not sub-level case. -}
@@ -646,20 +646,20 @@ iterative_ dc nss (x:xs) =
     lookupNX = isJust <$> lookupCache name Cache.nxTYPE
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
-    stepQuery nss_ = do
-      sas <- delegationIPs dc nss_ {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
+    stepQuery nss = do
+      sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
       lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec False sas name A
-      lift $ delegationWithCache (delegationZoneDomain nss_) name msg
+      lift $ delegationWithCache (delegationZoneDomain nss) name msg
 
     step :: Delegation -> DNSQuery MayDelegation
-    step nss_ = do
+    step nss = do
       let withNXC nxc
             | nxc        =  return NoDelegation
-            | otherwise  =  stepQuery nss_
+            | otherwise  =  stepQuery nss
       maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
 
 -- If Nothing, it is a miss-hit against the cache.
@@ -695,7 +695,7 @@ lookupDelegation dom = do
 
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache :: Domain -> Domain -> DNSMessage -> ContextT IO MayDelegation
-delegationWithCache srcDom dom msg =
+delegationWithCache zoneDom dom msg =
   -- There is delegation information only when there is a selectable NS
   maybe
   (ncache $> NoDelegation)
@@ -721,11 +721,11 @@ delegationWithCache srcDom dom msg =
             nsSet = Set.fromList $ map fst nsps
 
     ncache
-      | rcode == DNS.NoErr    =  cacheEmptySection srcDom dom NS rankedAuthority msg
+      | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dom NS rankedAuthority msg
       | rcode == DNS.NameErr  =
         if hasCNAME then      do cacheCNAME
-                                 cacheEmptySection srcDom dom NS rankedAuthority msg
-        else                     cacheEmptySection srcDom dom Cache.nxTYPE rankedAuthority msg
+                                 cacheEmptySection zoneDom dom NS rankedAuthority msg
+        else                     cacheEmptySection zoneDom dom Cache.nxTYPE rankedAuthority msg
       | otherwise             =  pure ()
       where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
     (hasCNAME, cacheCNAME) = getSection rankedAnswer refinesCNAME msg
@@ -1135,14 +1135,14 @@ cacheSection rs rank = cacheRRSet
       insertRRSet <- asks insert_
       liftIO $ mapM_ ($ insertRRSet) rrss
 
--- | The `cacheEmptySection srcDom dom typ getRanked msg` caches two pieces of information from `msg`.
+-- | The `cacheEmptySection zoneDom dom typ getRanked msg` caches two pieces of information from `msg`.
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
---   the sub-domains under `srcDom`.
+--   the sub-domains under `zoneDom`.
 --   The `getRanked` function returns the section with the empty information.
 cacheEmptySection :: Domain -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
                   -> DNSMessage -> ContextT IO ()
-cacheEmptySection srcDom dom typ getRanked msg =
+cacheEmptySection zoneDom dom typ getRanked msg =
   either ncWarn doCache takePair
   where
     doCache (soaDom, ncttl) = do
@@ -1153,7 +1153,7 @@ cacheEmptySection srcDom dom typ getRanked msg =
       where
         refinesSOA srrs = (single ps, take 1 rrs)  where (ps, rrs) = unzip $ foldr takeSOA [] srrs
         takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
-          | rrname rr `DNS.isSubDomainOf` srcDom,
+          | rrname rr `DNS.isSubDomainOf` zoneDom,
             Just soa <- DNS.fromRData rd   =  (fromSOA soa rr, rr) : xs
           | otherwise                      =  xs
         takeSOA _         xs     =  xs
@@ -1168,12 +1168,12 @@ cacheEmptySection srcDom dom typ getRanked msg =
           _:_:_ ->  Left "multiple SOA records found"
     ncWarn s
       | not $ null answer  =  logLines Log.DEBUG $
-                              [ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                              [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
                               , "  because of non empty answers:"
                               ] ++
                               map (("  " ++) . show) answer
       | otherwise          =  logLines Log.NOTICE $
-                              [ "cacheEmptySection: from-domain=" ++ show srcDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                              [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
                               , "  authority section:"
                               ] ++
                               map (("  " ++) . show) (DNS.authority msg)
@@ -1181,10 +1181,10 @@ cacheEmptySection srcDom dom typ getRanked msg =
       where answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
-cacheEmpty srcDom dom typ ttl rank = do
-  logLn Log.DEBUG $ "cacheEmpty: " ++ show (srcDom, dom, typ, ttl, rank)
+cacheEmpty zoneDom dom typ ttl rank = do
+  logLn Log.DEBUG $ "cacheEmpty: " ++ show (zoneDom, dom, typ, ttl, rank)
   insertRRSet <- asks insert_
-  liftIO $ insertSetEmpty srcDom dom typ ttl rank insertRRSet
+  liftIO $ insertSetEmpty zoneDom dom typ ttl rank insertRRSet
 
 ---
 
