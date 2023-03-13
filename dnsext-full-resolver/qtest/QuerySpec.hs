@@ -12,7 +12,7 @@ import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootHint, Env (..))
+import DNS.Cache.Iterative (newEnv, runDNSQuery, replyMessage, replyResult, rootHint, Env (..), Delegation (..))
 import qualified DNS.Cache.Iterative as Iterative
 
 data AnswerResult
@@ -31,7 +31,7 @@ spec = do
 envSpec :: Spec
 envSpec = describe "env" $ do
   it "rootHint" $ do
-    let sp p = case p of (_,_,_,_) -> True  -- check not error
+    let sp p = case p of Delegation _ _ _ _ -> True  -- check not error
     rootHint `shouldSatisfy` sp
 
 cacheStateSpec :: Bool -> Spec
