@@ -447,6 +447,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
   where
     special result = return ((id, n0), Left result)
     notSpecial
+      | typ == Cache.nxTYPE = called *> return ((id, n0), Left (DNS.NoErr, [], []))
       | typ == CNAME  =  called *> justCNAME n0
       | otherwise     =  called *> recCNAMEs 0 n0 id
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
