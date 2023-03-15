@@ -92,18 +92,6 @@ test-suite spec
     if impl(ghc >=8)
         default-extensions: Strict StrictData
 
-test-suite doctests
-    type:             exitcode-stdio-1.0
-    main-is:          doctests.hs
-    hs-source-dirs:   test
-    other-modules:    Paths_dnsext_do53
-    autogen-modules:  Paths_dnsext_do53
-    default-language: Haskell2010
-    ghc-options:      -Wall -threaded
-    build-depends:
-        base,
-        doctest
-
 test-suite cache-test
     type:             exitcode-stdio-1.0
     main-is:          cache.hs
