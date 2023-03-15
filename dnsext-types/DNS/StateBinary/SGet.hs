@@ -56,7 +56,7 @@ data PState = PState {
     pstDomain   :: IntMap [RawDomain]
   , pstPosition :: Position
   , pstAtTime   :: EpochTime
-  }
+  } deriving (Eq, Show)
 
 initialState :: EpochTime -> PState
 initialState t = PState IM.empty 0 t
