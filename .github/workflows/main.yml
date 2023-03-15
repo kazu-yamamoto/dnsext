@@ -2,9 +2,9 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ main, ci ]
+    branches: [ 'master', 'ci' ]
   pull_request:
-    branches: [ main ]
+    branches: [ 'master' ]
 
 jobs:
   build:
@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macOS-10.15 ]
+        os:  [ 'ubuntu-latest', 'macOS-10.15' ]
         ghc: [ '9.2', '9.4' ]
 
     steps:
@@ -22,7 +22,7 @@ jobs:
     - uses: haskell/actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.6'
+        cabal-version: '3.8'
 
     - name: Cache
       uses: actions/cache@v3
@@ -45,4 +45,13 @@ jobs:
       run: cabal build --enable-tests --disable-benchmarks all
 
     - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming dnsext-types:spec dnsext-do53:spec dnsext-dnssec:spec dnsext-svcb:spec dnsext-dox:spec dnsext-full-resolver:spec
+      run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming all
+
+    - name: Run doctest
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        cabal install doctest --overwrite-policy=always
+        for package in `cat cabal.project | sed 's/packages://g'`
+        do
+          env DISABLE_V6_NS=1 cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
+        done
