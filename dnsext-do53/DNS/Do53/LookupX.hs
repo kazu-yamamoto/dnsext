@@ -87,6 +87,9 @@ import Data.String (fromString)
 import DNS.Do53.Lookup as DNS
 import DNS.Do53.Types as DNS
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 ----------------------------------------------------------------
 
 -- | Look up all \'A\' records for the given hostname.

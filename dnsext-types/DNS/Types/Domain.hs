@@ -33,14 +33,14 @@ import DNS.Types.Imports
 import DNS.Types.Parser (Parser, Builder)
 import qualified DNS.Types.Parser as P
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 class IsRepresentation a b where
     fromRepresentation :: b -> a
     toRepresentation   :: a -> b
     fromWireLabels     :: [b] -> a
     toWireLabels       :: a -> [b]
-
--- $setup
--- >>> :set -XOverloadedStrings
 
 -- | The type for domain names. This holds both the
 -- /presentation format/ and the /wire format/ internally.
@@ -361,13 +361,11 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- The case below fails to point far enough back, and triggers the loop
 -- prevention code-path.
 --
--- >>> :{
--- let input = "\3foo\192\0\3bar\0"
---     parser = getDomain' True 0
---     Left (DecodeError err) = runSGet parser input
---  in err
--- :}
--- "invalid pointer: self pointing"
+-- >>> let parser = getDomain' True 0
+-- >>> let input = "\3foo\192\0\3bar\0"
+-- >>> runSGet parser input
+-- Left (DecodeError "invalid pointer: self pointing")
+--
 
 -- | Get a domain name.
 --

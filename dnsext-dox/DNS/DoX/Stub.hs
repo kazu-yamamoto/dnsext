@@ -18,6 +18,9 @@ import Network.Socket (PortNumber, HostName)
 
 import DNS.DoX.Imports
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 -- | From APLN to its port number.
 --
 -- >>> doxPort "dot"

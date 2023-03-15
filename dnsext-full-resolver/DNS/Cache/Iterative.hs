@@ -76,6 +76,9 @@ import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
 import qualified DNS.Cache.Log as Log
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 -----
 
 data Env =
