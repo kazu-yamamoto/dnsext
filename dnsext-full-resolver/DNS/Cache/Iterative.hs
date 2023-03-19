@@ -367,7 +367,10 @@ takeSpecialRevDomainResult dom = fmap (uncurry runEmbedResult) $ fst <$> v4Embed
 -----
 
 guardRequestHeader :: DNSHeader -> EDNSheader -> DNSQuery ()
-guardRequestHeader reqH _reqEH = unless rd $ throwE $ HasError DNS.Refused DNS.defaultResponse
+guardRequestHeader reqH reqEH
+  | reqEH == DNS.InvalidEDNS  =  throwE $ InvalidEDNS DNS.InvalidEDNS DNS.defaultResponse
+  | not rd                    =  throwE $ HasError DNS.Refused DNS.defaultResponse
+  | otherwise                 =  pure ()
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
