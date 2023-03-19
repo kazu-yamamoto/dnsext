@@ -57,7 +57,7 @@ import qualified Data.IP as IP
 import DNS.Types
   (Domain, DNSError, TTL,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
-   RCODE, DNSHeader, DNSMessage, classIN, Question(..))
+   RCODE, DNSHeader, EDNSheader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
 import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG (..))
 import qualified DNS.SEC.Verify as SEC
@@ -154,25 +154,25 @@ handleResponseError e f msg
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
 -- 返答メッセージを作る
-getReplyMessage :: Env -> DNSHeader -> NE DNS.Question -> IO (Either String DNSMessage)
-getReplyMessage cxt reqH qs@(DNS.Question bn typ _, _) =
+getReplyMessage :: Env -> DNSHeader -> EDNSheader -> NE DNS.Question -> IO (Either String DNSMessage)
+getReplyMessage cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
   <$> runDNSQuery (getResult bn) cxt
   where
     getResult n = do
-      guardRequestHeader reqH
+      guardRequestHeader reqH reqEH
       replyResult n typ
 
 -- キャッシュから返答メッセージを作る
 -- Nothing のときキャッシュ無し
 -- Just Left はエラー
-getReplyCached :: Env -> DNSHeader -> (DNS.Question, [DNS.Question]) -> IO (Maybe (Either String DNSMessage))
-getReplyCached cxt reqH qs@(DNS.Question bn typ _, _) =
+getReplyCached :: Env -> DNSHeader -> EDNSheader -> NE DNS.Question -> IO (Maybe (Either String DNSMessage))
+getReplyCached cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
   <$> runDNSQuery (getResult bn) cxt
   where
     getResult n = do
-      guardRequestHeader reqH
+      guardRequestHeader reqH reqEH
       replyResultCached n typ
     mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
 
@@ -366,8 +366,8 @@ takeSpecialRevDomainResult dom = fmap (uncurry runEmbedResult) $ fst <$> v4Embed
 
 -----
 
-guardRequestHeader :: DNSHeader -> DNSQuery ()
-guardRequestHeader reqH = unless rd $ throwE $ HasError DNS.Refused DNS.defaultResponse
+guardRequestHeader :: DNSHeader -> EDNSheader -> DNSQuery ()
+guardRequestHeader reqH _reqEH = unless rd $ throwE $ HasError DNS.Refused DNS.defaultResponse
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
