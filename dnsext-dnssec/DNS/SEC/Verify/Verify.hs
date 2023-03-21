@@ -78,24 +78,34 @@ verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrs = do
   sig    <- rrsigIGetSig rrsig_signature
   {- The RRset MUST be sorted in canonical order.
      https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
-  canonicalOrdered <- canonicalOrderedRRs rrs
-  let str = runSPut (putRRSIGHeader rrsig >> mapM_ (putResourceRecord Canonical) canonicalOrdered)
+  canonicalOrderedWires <- ($ \_ _ _ _ sorted -> [ wire | (wire, _) <- sorted ]) <$> canonicalRRlist rrs
+  let str = runSPut (putRRSIGHeader rrsig >> sequence_ canonicalOrderedWires)
+  {- `Data.List.sort` is linear for sorted case -}
   good <- rrsigIVerify pubkey sig str
   unless good $ Left "verifyRRSIGwith: rejected on verification"
 
 {- Canonical RR Ordering within an RRset
-   https://datatracker.ietf.org/doc/html/rfc4034#section-6.3 -}
-canonicalOrderedRRs :: [ResourceRecord] -> Either String [ResourceRecord]
-canonicalOrderedRRs rrs = do
-  (hd,xs) <- maybe (Left "canonicalOrderedRRs: require non-empty RRset") Right $ uncons rrs
+   https://datatracker.ietf.org/doc/html/rfc4034#section-6.3
+   generalized RRset with CPS, available for wire-format, RR-list, RRset -}
+canonicalRRlist :: [ResourceRecord]
+                -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [(SPut (), ResourceRecord)] -> a) -> a)
+canonicalRRlist rrs = do
+  (hd,xs) <- maybe (Left "canonicalRRlist: require non-empty RRset") Right $ uncons rrs
   let eqhd x =
         ((==) `on` rrname)  hd x && ((==) `on` rrtype) hd x &&
         ((==) `on` rrclass) hd x && ((==) `on` rrttl)  hd x
-  unless (all eqhd xs) $ Left "canonicalOrderedRRs: requires same ( rrname, rrtype, rrclass, rrttl )"
-  let rdataSorted = sortOn fst [ (runSPut . putRData Canonical $ rdata rr, rr) | rr <- rrs ]
-      rdataGrouped = groupBy ((==) `on` fst) rdataSorted
-  unless (all ((== 1) . length) rdataGrouped) $ Left "canonicalOrderedRRs: requires unique RData set"
-  return $ map snd rdataSorted
+  unless (all eqhd xs) $ Left "canonicalRRlist: requires same ( rrname, rrtype, rrclass, rrttl )"
+  let rdataSorted = sortOn fst [ (runSPut sput, (sput, rr)) | rr <- rrs, let sput = putResourceRecord Canonical rr ]
+      {- same order between RData and RR, under same ( rrname, rrtype, rrclass, rrttl ) -}
+      rdataGrouped = group [ wire | (wire, _) <- rdataSorted ]
+  unless (all ((== 1) . length) rdataGrouped) $ Left "canonicalRRlist: requires unique RData set"
+  return $ \h -> h (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) [ pair | (_, pair) <- rdataSorted ]
+
+canonicalRRset :: [ResourceRecord]
+               -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRset rrs = do
+  cps <- canonicalRRlist rrs
+  return $ cps $ \dom typ cls ttl ps -> \h -> h dom typ cls ttl [rdata rr | (_, rr) <- ps]
 
 rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
