@@ -640,10 +640,11 @@ resolveJustDC dc n typ
   | otherwise  = do
   lift $ logLn Log.INFO $ "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
   root <- refreshRoot
-  nss <- iterative_ dc root $ reverse $ DNS.superDomains n
+  nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
   lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
-  (,) <$> norec False sas n typ <*> pure nss
+  let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
+  (,) <$> norec dnssecOK sas n typ <*> pure nss
     where
       mdc = maxNotSublevelDelegation
 
