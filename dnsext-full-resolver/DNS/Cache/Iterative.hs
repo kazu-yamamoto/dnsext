@@ -28,7 +28,7 @@ module DNS.Cache.Iterative (
 import Control.Applicative ((<|>))
 import Control.Arrow ((&&&), first)
 import qualified Control.Exception as E
-import Control.Monad (when, unless, join, guard)
+import Control.Monad (when, unless, join, guard, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -59,7 +59,7 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG)
+import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG (..))
 import qualified DNS.SEC.Verify as SEC
 import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
@@ -715,7 +715,7 @@ delegationWithCache zoneDom dom msg =
     (authRRs, authorityRank) = rankedAuthority msg
     dss = rrListWith DS DNS.fromRData dom const authRRs
     _sigrds :: [RD_RRSIG]
-    _sigrds = rrListWith RRSIG DNS.fromRData dom const authRRs
+    _sigrds = rrListWith RRSIG (sigrdWith DS <=< DNS.fromRData) dom const authRRs
     cacheNS = cacheSection nsRRs authorityRank
     (nsps, nsRRs) = unzip $ nsList dom (\ns rr -> ((ns, rr), rr)) authRRs
 
@@ -818,7 +818,7 @@ rootPriming = do
       let (ansRRs, answerRank) = rankedAnswer msgNS
           nsps = nsList "." (,) ansRRs
           nsRRs = map snd nsps
-          (sigrds, sigRRs) = unzip $ rrListWith RRSIG DNS.fromRData "." (,) ansRRs
+          (sigrds, sigRRs) = unzip $ rrListWith RRSIG (sigrdWith NS <=< DNS.fromRData) "." (,) ansRRs
           (addRRs, additionalRank) = rankedAdditional msgNS
           axRRs = axList False (`elem` map fst nsps) (\_ x -> x) addRRs
           verified =
@@ -869,7 +869,7 @@ verifiedDNSKEY dss aservers dom
             rcode = DNS.rcode $ DNS.flags $ DNS.header msg
         unless (rcode == DNS.NoErr) $ Left $ verifyError $ "error rcode to get DNSKEY: " ++ show rcode
 
-        let rrsigs = rrListWith RRSIG DNS.fromRData dom (,) answer
+        let rrsigs = rrListWith RRSIG (sigrdWith DNSKEY <=< DNS.fromRData) dom (,) answer
         when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
 
         let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) answer
@@ -924,6 +924,9 @@ rrListWith typ fromRD dom h = foldr takeRR []
     takeRR rr@ResourceRecord { rdata = rd } xs
       | rrname rr == dom, rrtype rr == typ, Just ds <- fromRD rd  =  h ds rr : xs
     takeRR _                                xs                    =  xs
+
+sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
+sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd
 
 axList :: Bool
        -> (Domain -> Bool) -> (IP -> ResourceRecord -> a)
