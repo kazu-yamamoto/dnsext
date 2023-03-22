@@ -45,7 +45,7 @@ import qualified DNS.Cache.Iterative as Iterative
 
 
 type Request a = (ByteString, a)
-type Decoded a = (DNS.DNSHeader, NE DNS.Question, a)
+type Decoded a = (DNS.DNSHeader, DNS.EDNSheader, NE DNS.Question, a)
 type Response a = (ByteString, a)
 
 run :: Bool -> Log.Output -> Log.Level -> Int -> Bool -> Int -> Bool -> Int
@@ -268,13 +268,14 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
         return (qs, msg)
   (qs@(q, _), reqM) <- decode
   let reqH = DNS.header reqM
-      enqueueDec = liftIO $ reqH `seq` qs `seq` enqDec (reqH, qs, addr)
+      reqEH = DNS.ednsHeader reqM
+      enqueueDec = liftIO $ reqH `seq` reqEH `seq` qs `seq` enqDec (reqH, reqEH, qs, addr)
       noResponse replyErr = liftIO incFailed >> throwE ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
       enqueue respM = liftIO $ do
         incHit
         let rbs = DNS.encode respM
         rbs `seq` enqResp (rbs, addr)
-  maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH qs)
+  maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH reqEH qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
@@ -284,14 +285,14 @@ resolvWorker :: Show a
              -> IO ()
              -> (Response a -> IO ())
              -> Decoded a -> IO ()
-resolvWorker cxt incMiss incFailed enqResp (reqH, qs@(q, _), addr) =
+resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
   either (logLn Log.NOTICE) return <=< runExceptT $ do
   let noResponse replyErr = liftIO incFailed >> throwE ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
       enqueue respM = liftIO $ do
         incMiss
         let rbs = DNS.encode respM
         rbs `seq` enqResp (rbs, addr)
-  either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH qs)
+  either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH reqEH qs)
   where
     logLn level = logLines_ cxt level . (:[])
 
