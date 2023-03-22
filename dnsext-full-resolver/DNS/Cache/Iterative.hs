@@ -818,6 +818,8 @@ rootPriming = do
     emsg s = "rootPriming: " ++ s
     body ips dnskeys = do
       msgNS <- norec True ips "." NS
+      now <- liftIO =<< lift (asks currentSeconds_)
+
       let (ansRRs, answerRank) = rankedAnswer msgNS
           nsps = nsList "." (,) ansRRs
           nsRRs = map snd nsps
@@ -827,7 +829,7 @@ rootPriming = do
           verified =
             fst <$> uncons
             [ sig | key <- dnskeys, sig <- sigrds
-            , Right () <- [SEC.verifyRRSIG key sig nsRRs] ]
+            , Right () <- [SEC.verifyRRSIG now "." key "." sig nsRRs] ]
       lift $ case verified of
         {- adjust cache to minimum TTL -}
         Nothing     -> withMinTTL (nsRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
@@ -866,6 +868,7 @@ verifiedDNSKEY dss aservers dom
   | null dss   =  return $ Left $ verifyError "no DS entry"
   | otherwise  =  do
       msg <- norec True aservers dom DNSKEY
+      now <- liftIO =<< lift (asks currentSeconds_)
 
       return $ do
         let (answer, answerRank) = rankedAnswer msg
@@ -889,7 +892,7 @@ verifiedDNSKEY dss aservers dom
               [ rrsig
               | rrsig@(sigrd, _) <- rrsigs
               , (sepkey, _) <- seps
-              , Right () <- [SEC.verifyRRSIG sepkey sigrd keyRRs]
+              , Right () <- [SEC.verifyRRSIG now dom sepkey dom sigrd keyRRs]
               ]
         when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
 
