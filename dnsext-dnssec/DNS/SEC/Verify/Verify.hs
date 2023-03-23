@@ -55,8 +55,11 @@ putRRSIGHeader RD_RRSIG{..} = do
     put16      rrsig_key_tag
     putDomain Canonical rrsig_zone
 
-verifyRRSIGwith :: RRSIGImpl -> RD_DNSKEY -> RD_RRSIG -> [ResourceRecord] -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrs = do
+verifyRRSIGwith :: RRSIGImpl -> DNSTime
+                -> Domain -> RD_DNSKEY
+                -> Domain -> RD_RRSIG
+                -> [ResourceRecord] -> Either String ()
+verifyRRSIGwith RRSIGImpl{..} now zoneDom dnskey@RD_DNSKEY{..} owner rrsig@RD_RRSIG{..} rrs = do
   unless (ZONE `elem` dnskey_flags) $
     {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
        "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -74,11 +77,25 @@ verifyRRSIGwith RRSIGImpl{..} dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrs = do
     Left $ "verifyRRSIGwith: pubkey algorithm mismatch between DNSKEY and RRSIG: " ++ show dnskey_pubalg ++ " =/= " ++ show rrsig_pubalg
   unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
     Left $ "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: " ++ show (keyTag dnskey) ++ " =/= " ++ show rrsig_key_tag
-  pubkey <- rrsigIGetKey dnskey_public_key
-  sig    <- rrsigIGetSig rrsig_signature
+  {- TODO: check rrsig_num_labels -}
+  unless (rrsig_inception <= now && now < rrsig_expiration) $
+    Left $ "verifyRRSIGwith: not valid period of RRSIG: to be valid,  time " ++ show now ++
+    " must be between " ++ show rrsig_inception ++ " and " ++ show rrsig_expiration
+  unless (rrsig_zone == zoneDom) $
+    Left $ "verifyRRSIGwith: RRSIG zone mismatch: " ++ show rrsig_zone ++ " =/= " ++ show zoneDom
+
   {- The RRset MUST be sorted in canonical order.
      https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
-  canonicalOrderedWires <- ($ \_ _ _ _ sorted -> [ wire | (wire, _) <- sorted ]) <$> canonicalRRlist rrs
+  (rrset_dom, rrset_type, rrset_ttl, canonicalOrderedWires) <- ($ \dom typ _ ttl sorted -> (dom, typ, ttl, [ wire | (wire, _) <- sorted ])) <$> canonicalRRlist rrs
+  unless (rrset_dom == owner) $
+    Left $ "verifyRRSIGwith: RRset domain mismatch with owner-domain: " ++ show rrset_dom ++ " =/= " ++ show owner
+  unless (rrset_type == rrsig_type) $
+    Left $ "verifyRRSIGwith: TYPE mismatch between RRset and RRSIG: " ++ show rrset_type ++ " =/= " ++ show rrsig_type
+  unless (rrset_ttl == rrsig_ttl) $
+    Left $ "verifyRRSIGwith: TTL mismatch between RRset and RRSIG: " ++ show rrset_ttl ++ " =/= " ++ show rrsig_ttl
+
+  pubkey <- rrsigIGetKey dnskey_public_key
+  sig    <- rrsigIGetSig rrsig_signature
   let str = runSPut (putRRSIGHeader rrsig >> sequence_ canonicalOrderedWires)
   {- `Data.List.sort` is linear for sorted case -}
   good <- rrsigIVerify pubkey sig str
@@ -119,13 +136,16 @@ rrsigDicts =
   , (ED448           , ed448)
   ]
 
-verifyRRSIG :: RD_DNSKEY -> RD_RRSIG -> [ResourceRecord] -> Either String ()
-verifyRRSIG dnskey rrsig rrs =
+verifyRRSIG :: DNSTime
+            -> Domain -> RD_DNSKEY
+            -> Domain -> RD_RRSIG
+            -> [ResourceRecord] -> Either String ()
+verifyRRSIG now zoneDom dnskey owner rrsig rrs =
   maybe (Left $ "verifyRRSIG: unsupported algorithm: " ++ show alg) verify $
   Map.lookup alg rrsigDicts
   where
     alg = dnskey_pubalg dnskey
-    verify impl = verifyRRSIGwith impl dnskey rrsig rrs
+    verify impl = verifyRRSIGwith impl now zoneDom dnskey owner rrsig rrs
 
 ---
 
