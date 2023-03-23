@@ -28,7 +28,7 @@ module DNS.Cache.Iterative (
 import Control.Applicative ((<|>))
 import Control.Arrow ((&&&), first)
 import qualified Control.Exception as E
-import Control.Monad (when, unless, join, guard, (<=<))
+import Control.Monad (when, join, guard, (<=<))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -853,52 +853,51 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY []  _        _   = return $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = do
-  eresult <- verifiedDNSKEY dss aservers dom
-  let doCache (dnskeys, rrsigs, rank) = do
-        let keyRRs = map snd dnskeys
-            sigRRs = map snd rrsigs
-        withMinTTL (keyRRs ++ sigRRs) (return $ Left $ "cachedDNSKEY: empty DNSKEY list - something wrong") $ \minTTL -> do
-          cacheSection (withTTL minTTL keyRRs) rank {- TODO: cache with RRSIG of DNSKEY -}
-          return $ Right $ map fst dnskeys
-  either (return . Left) (lift . doCache) eresult
+  msg <- norec True aservers dom DNSKEY
+  let rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+  case rcode of
+    DNS.NoErr  ->  lift $ do
+      let (rrs, rank) = rankedAnswer msg
+      either (return . Left) (doCache rank) =<< verifyDNSKEY dss dom rrs
+    _          ->  return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
+  where
+    doCache rank (dnskeys, rrsigs) = do
+      let keyRRs = map snd dnskeys
+          sigRRs = map snd rrsigs
+      withMinTTL (keyRRs ++ sigRRs) (return $ Left $ "cachedDNSKEY: empty DNSKEY list - something wrong") $ \minTTL -> do
+        cacheSection (withTTL minTTL keyRRs) rank {- TODO: cache with RRSIG of DNSKEY -}
+        return $ Right $ map fst dnskeys
 
-verifiedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String ([(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, ResourceRecord)], Ranking))
-verifiedDNSKEY dss aservers dom
-  | null dss   =  return $ Left $ verifyError "no DS entry"
-  | otherwise  =  do
-      msg <- norec True aservers dom DNSKEY
-      now <- liftIO =<< lift (asks currentSeconds_)
+verifyDNSKEY :: [RD_DS] -> Domain -> [ResourceRecord] -> ContextT IO (Either String ([(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, ResourceRecord)]))
+verifyDNSKEY dss dom rrs  =  do
+  now <- liftIO =<< asks currentSeconds_
+  return $ do
+    let rrsigs = rrListWith RRSIG (sigrdWith DNSKEY <=< DNS.fromRData) dom (,) rrs
+    when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
 
-      return $ do
-        let (answer, answerRank) = rankedAnswer msg
-            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-        unless (rcode == DNS.NoErr) $ Left $ verifyError $ "error rcode to get DNSKEY: " ++ show rcode
+    let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
+        seps =
+          [ (key, ds)
+          | (key, _) <- dnskeys
+          , ds  <- dss
+          , Right () <- [SEC.verifyDS dom key ds]
+          ]
+    when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
 
-        let rrsigs = rrListWith RRSIG (sigrdWith DNSKEY <=< DNS.fromRData) dom (,) answer
-        when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
+    let keyRRs = map snd dnskeys
+        goodSigs =
+          [ rrsig
+          | rrsig@(sigrd, _) <- rrsigs
+          , (sepkey, _) <- seps
+          , Right () <- [SEC.verifyRRSIG now dom sepkey dom sigrd keyRRs]
+          ]
+    when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
 
-        let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) answer
-            seps =
-              [ (key, ds)
-              | (key, _) <- dnskeys
-              , ds  <- dss
-              , Right () <- [SEC.verifyDS dom key ds]
-              ]
-        when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
-
-        let keyRRs = map snd dnskeys
-            goodSigs =
-              [ rrsig
-              | rrsig@(sigrd, _) <- rrsigs
-              , (sepkey, _) <- seps
-              , Right () <- [SEC.verifyRRSIG now dom sepkey dom sigrd keyRRs]
-              ]
-        when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
-
-        return (dnskeys, goodSigs, answerRank)
-      where
-        verifyError s = "verifiedDNSKEY: " ++ s
+    return (dnskeys, goodSigs)
+  where
+    verifyError s = "verifiedDNSKEY: " ++ s
 
 ---
 
