@@ -814,35 +814,33 @@ rootPriming = do
     emsg s = "rootPriming: " ++ s
     body ips dnskeys = do
       msgNS <- norec True ips "." NS
-      now <- liftIO =<< lift (asks currentSeconds_)
 
-      (nsps, nsSet, nsRRs, cacheNS, sigrds, sigRRs) <- withSection rankedAnswer msgNS $ \rrs rank -> do
-        let nsps_ = nsList "." (,) rrs
-            (nss, nsRRs_) = unzip nsps_
-            (sigrds_, sigRRs_) = unzip $ rrListWith RRSIG (sigrdWith NS <=< DNS.fromRData) "." (,) rrs
-        return (nsps_, Set.fromList nss, nsRRs_, \ttl -> cacheSection (withTTL ttl nsRRs_) rank, sigrds_, sigRRs_)
+      (nsps, nsSet, cacheNS, verified) <- withSection rankedAnswer msgNS $ \rrs rank -> do
+        now <- liftIO =<< lift (asks currentSeconds_)
+        let nsps = nsList "." (,) rrs
+            (nss, nsRRs) = unzip nsps
+            (sigrds, _sigRRs) = unzip $ rrListWith RRSIG (sigrdWith NS <=< DNS.fromRData) "." (,) rrs
+            verified = [ sig | key <- dnskeys, sig <- sigrds, Right () <- [SEC.verifyRRSIG now "." key "." sig nsRRs] ]
+            cacheNS = case verified of
+              []   ->  cacheSection nsRRs rank
+              _:_  ->  cacheSection nsRRs rank  {- TODO: cache with RRSIG of NS -}
+        return (nsps, Set.fromList nss, cacheNS, verified)
 
       (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
-        let axRRs_ = axList False (`Set.member` nsSet) (\_ x -> x) rrs
-        return (axRRs_, \ttl -> cacheSection (withTTL ttl axRRs_) rank)
+        let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
+        return (axRRs, cacheSection axRRs rank)
 
-      let verified =
-            fst <$> uncons
-            [ sig | key <- dnskeys, sig <- sigrds
-            , Right () <- [SEC.verifyRRSIG now "." key "." sig nsRRs] ]
-      lift $ case verified of
-        {- adjust cache to minimum TTL -}
-        Nothing     -> withMinTTL (nsRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
-          logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
-          cacheNS minTTL
-          cacheAX minTTL
-          return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
-        Just _rrsig -> withMinTTL (nsRRs ++ sigRRs ++ axRRs) (return $ Left $ emsg "empty delegation") $ \minTTL -> do
-          logLn Log.DEBUG $ "rootPriming: DNSSEC verification success"
-          cacheNS minTTL  {- TODO: cache with RRSIG of NS -}
-          cacheAX minTTL
-          let fill (Delegation dom des dss _) = Delegation dom des dss dnskeys
-          return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
+      lift $ do
+        cacheNS
+        cacheAX
+        case verified of
+          []     ->  do
+            logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
+            return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
+          _:_    ->  do
+            logLn Log.DEBUG $ "rootPriming: DNSSEC verification success"
+            let fill (Delegation dom des dss _) = Delegation dom des dss dnskeys
+            return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
 
     Delegation _dot hintDes _ _ = rootHint
 
