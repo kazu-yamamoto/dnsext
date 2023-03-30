@@ -145,7 +145,8 @@ caseRRSIG :: RRSIG_CASE -> Expectation
 caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure ()) $ do
   dnskey <- takeRData "DNSKEY" dnskeyRR
   rrsig  <- takeRData "RRSIG"  rrsigRR
-  verifyRRSIG dnskey rrsig targets
+  let ts = (rrsig_inception rrsig + rrsig_expiration rrsig) `div` 2
+  verifyRRSIG ts (rrname dnskeyRR) dnskey (rrname rrsigRR) rrsig targets
   where
     takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
 
