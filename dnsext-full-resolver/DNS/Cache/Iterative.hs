@@ -879,16 +879,12 @@ rootPriming = do
     body ips dnskeys = do
       msgNS <- norec True ips "." NS
 
-      (nsps, nsSet, cacheNS, verified) <- withSection rankedAnswer msgNS $ \rrs rank -> do
-        now <- liftIO =<< lift (asks currentSeconds_)
+      (nsps, nsSet, cacheNS, nsGoodSigs) <- withSection rankedAnswer msgNS $ \rrs rank -> do
         let nsps = nsList "." (,) rrs
             (nss, nsRRs) = unzip nsps
-            (sigrds, _sigRRs) = unzip $ rrListWith RRSIG (sigrdWith NS <=< DNS.fromRData) "." (,) rrs
-            verified = [ sig | key <- dnskeys, sig <- sigrds, Right () <- [SEC.verifyRRSIG now "." key "." sig nsRRs] ]
-            cacheNS = case verified of
-              []   ->  cacheSection nsRRs rank
-              _:_  ->  cacheSection nsRRs rank  {- TODO: cache with RRSIG of NS -}
-        return (nsps, Set.fromList nss, cacheNS, verified)
+            rrsigs = rrsigList "." NS rrs
+        (RRset{..}, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
+        return (nsps, Set.fromList nss, cacheNS, rrsGoodSigs)
 
       (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
         let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
@@ -897,7 +893,7 @@ rootPriming = do
       lift $ do
         cacheNS
         cacheAX
-        case verified of
+        case nsGoodSigs of
           []     ->  do
             logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
             return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
