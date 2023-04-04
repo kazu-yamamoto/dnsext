@@ -29,7 +29,7 @@ module DNS.Cache.Iterative (
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Arrow ((&&&), first)
+import Control.Arrow (first)
 import qualified Control.Exception as E
 import Control.Monad (when, join, guard, (<=<))
 import Control.Monad.IO.Class (liftIO)
@@ -784,7 +784,7 @@ delegationWithCache zoneDom dom msg =
       in (rrListWith DS DNS.fromRData dom const rrs, nsps_, cacheSection (map snd nsps_) rank)
 
     (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
-      let axs = filter match rrs in (axs, cacheSection (sortOn (rrname &&& rrtype) axs) rank)
+      let axs = filter match rrs in (axs, cacheSection axs rank)
       where match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
             nsSet = Set.fromList $ map fst nsps
 
@@ -799,6 +799,7 @@ delegationWithCache zoneDom dom msg =
     (hasCNAME, cacheCNAME) = withSection rankedAnswer msg $ \rrs rank ->
       {- CNAME 先の NX をキャッシュしたいならここで返す.
          しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
+      {- TODO: check CNAME with RRSIG, and cache CNAME with RRSIG -}
       let (cns, crrs) = unzip $ cnameList dom (,) rrs in (not $ null cns, cacheSection crrs rank)
 
 takeDelegationSrc :: [(Domain, ResourceRecord)]
