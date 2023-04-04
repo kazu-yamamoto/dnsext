@@ -1021,18 +1021,6 @@ recoverRRset rrs =
 
 ---
 
-withMinTTL :: [ResourceRecord] -> a -> (TTL -> a) -> a
-withMinTTL rrs failed action =
-  maybe failed action
-  $ uncons rrs *> Just (minimum [ rrttl x | x <- rrs ])
-
-withTTL :: TTL -> [ResourceRecord] -> [ResourceRecord]
-withTTL ttl rrs = map update rrs
-  where
-    update rr
-      | ttl < rrttl rr  =  rr { rrttl = ttl }
-      | otherwise       =  rr
-
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
 nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
