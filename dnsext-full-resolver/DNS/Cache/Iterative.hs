@@ -70,7 +70,7 @@ import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, default
 import qualified DNS.Do53.Internal as DNS
 import DNS.Do53.Memo
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
+   insertSetEmpty, Key, CRSet, Cache)
 import qualified DNS.Do53.Memo as Cache
 
 -- this package
@@ -1249,22 +1249,10 @@ cacheNoRRSIG rrs0 rank = do
     (_, sortedRRs) = unzip $ SEC.sortCanonical rrs0
 
 cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
-cacheSection rs rank = cacheRRSet
+cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
   where
-    (ncRRSs, rrss) = insertSetFromSection rs rank
-    putRRSet putk = putk $ \key ttl crs r ->
-      logLines Log.DEBUG
-      [ "cacheRRSet: " ++ show ((key, ttl), r)
-      , "  " ++ show crs ]
-    putNoCacheRRS rrs =
-      logLines Log.NOTICE $
-      "cacheSection: no caching RR set:" :
-      map (("  " ++) . show) rrs
-    cacheRRSet = do
-      mapM_ putNoCacheRRS ncRRSs
-      mapM_ putRRSet rrss
-      insertRRSet <- asks insert_
-      liftIO $ mapM_ ($ insertRRSet) rrss
+    rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
+    rrsList = groupBy ((==) `on` rrsKey) . sortOn rrsKey
 
 -- | The `cacheEmptySection zoneDom dom typ getRanked msg` caches two pieces of information from `msg`.
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
