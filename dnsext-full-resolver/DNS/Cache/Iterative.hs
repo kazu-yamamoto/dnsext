@@ -604,7 +604,9 @@ resolveTYPE bn typ = do
   (msg, _nss@Delegation{..}) <- resolveJust bn typ
   cname <- withSection rankedAnswer msg $ \rrs rank -> do
     let ps = cnameList bn (,) rrs
-    lift $ cacheSection (map snd ps) rank
+    lift $ do
+      (_cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY (map snd ps) (rrsigList bn CNAME rrs) rank
+      cacheCNAME
     return $ fst <$> uncons ps
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
@@ -622,7 +624,8 @@ cacheAnswer zoneDom dnskeys dom typ msg
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
         let isX rr = rrname rr == dom && rrtype rr == typ
-        cacheSection (filter isX rrs) rank
+        (_xRRset, cacheX) <- verifyAndCache dnskeys (filter isX rrs) (rrsigList dom typ rrs) rank
+        cacheX
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
