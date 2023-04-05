@@ -108,7 +108,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
             case mx of
                 Nothing -> notCached
                 Just (_, Left _) -> return $ Right [] {- NoData -}
-                Just (_, Right rs) -> return $ Right rs
+                Just (_, Right (rs, _)) -> return $ Right rs
   where
     notCached = do
         eres <- lookupRaw env q
@@ -142,7 +142,7 @@ cachePositive cconf c k now rss
     | otherwise = insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
-    v = Right rds
+    v = Right (rds, Nothing)
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
 insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
