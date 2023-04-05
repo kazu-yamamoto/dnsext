@@ -52,6 +52,7 @@ import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 
 -- dnsext packages
+import DNS.SEC (RD_RRSIG, TYPE (RRSIG))
 import DNS.Types (
     CLASS,
     DNSMessage,
@@ -67,8 +68,10 @@ import DNS.Types.Internal (TYPE (..))
 
 {- CRSet
    -  Left  - NXDOMAIN or NODATA, hold zone-domain delegation from
-   -  Right - not empty RRSET                                 -}
-type CRSet = Either Domain [RData]
+   -  Right (_:_, Nothing) - not empty RRSET, not verified
+   -  Right (_:_, Just []) - not empty RRSET, verification failed
+   -  Right (_:_, Just (_:_)) - not empty RRSET, verification succeeded -}
+type CRSet = Either Domain ([RData], Maybe [RD_RRSIG])
 
 ---
 
@@ -333,13 +336,13 @@ now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
-toRDatas :: CRSet -> [RData]
-toRDatas (Left _) = []
-toRDatas (Right rs) = rs
+toRDatas :: CRSet -> ([RData], [RD_RRSIG])
+toRDatas (Left _) = ([], [])
+toRDatas (Right (rs, sigs)) = (rs, maybe [] id sigs)
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas [] = Nothing
-fromRDatas rds = rds `listseq` Just (Right rds)
+fromRDatas rds = rds `listseq` Just (Right (rds, Nothing))
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())
@@ -362,8 +365,14 @@ takeRRSet rrs@(_ : _) = do
     rds <- fromRDatas $ map DNS.rdata rrs
     return $ \h -> uncurry h k' rds
 
+{- FOURMOLU_DISABLE -}
 extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
-extractRRSet dom ty cls ttl = map (ResourceRecord dom ty cls ttl) . toRDatas
+extractRRSet dom ty cls ttl crs =
+    [ResourceRecord dom ty cls ttl rd | rd <- rds] ++
+    [ResourceRecord dom RRSIG cls ttl $ DNS.toRData sig | sig <- sigs]
+  where
+    (rds, sigs) = toRDatas crs
+{- FOURMOLU_ENABLE -}
 
 insertSetFromSection
     :: [ResourceRecord]
