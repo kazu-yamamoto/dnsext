@@ -592,7 +592,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 resolveCNAME :: Domain -> DNSQuery DNSMessage
 resolveCNAME bn = do
   (msg, _nss@Delegation{..}) <- resolveJust bn CNAME
-  lift $ cacheAnswer delegationZoneDomain bn CNAME msg
+  lift $ cacheAnswer delegationZoneDomain delegationDNSKEY bn CNAME msg
   return msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
@@ -609,15 +609,15 @@ resolveTYPE bn typ = do
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift $ cacheAnswer delegationZoneDomain bn typ msg) (const checkTypeRR) cname
+  maybe (lift $ cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg) (const checkTypeRR) cname
   return (msg, cname)
 
-cacheAnswer :: Domain -> Domain -> TYPE -> DNSMessage -> ContextT IO ()
-cacheAnswer zoneDom dom typ msg
+cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT IO ()
+cacheAnswer zoneDom dnskeys dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
-        DNS.NoErr    ->  cacheEmptySection zoneDom dom typ rankedAnswer msg
-        DNS.NameErr  ->  cacheEmptySection zoneDom dom Cache.nxTYPE rankedAnswer msg
+        DNS.NoErr    ->  cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg
+        DNS.NameErr  ->  cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg
         _            ->  return ()
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
@@ -788,11 +788,11 @@ delegationWithCache zoneDom dnskeys dom msg = do
     return (not $ null crrs, cacheCNAME_)
 
   let ncache
-        | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dom NS rankedAuthority msg
+        | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
         | rcode == DNS.NameErr  =
           if hasCNAME then      do cacheCNAME
-                                   cacheEmptySection zoneDom dom NS rankedAuthority msg
-          else                     cacheEmptySection zoneDom dom Cache.nxTYPE rankedAuthority msg
+                                   cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+          else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg
         | otherwise             =  pure ()
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
@@ -1324,32 +1324,35 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
 --   the sub-domains under `zoneDom`.
 --   The `getRanked` function returns the section with the empty information.
-cacheEmptySection :: Domain -> Domain -> TYPE
+cacheEmptySection :: Domain -> [RD_DNSKEY] -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
                   -> DNSMessage -> ContextT IO ()
-cacheEmptySection zoneDom dom typ getRanked msg =
+cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
+  (takePair, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
+    let (ps, soaRRs) = unzip $ foldr takeSOA [] rrs
+    (_soaRRset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
+    return (single ps, cacheSOA_)
+  let doCache (soaDom, ncttl) = do
+        cacheSOA
+        withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
+
   either ncWarn doCache takePair
   where
-    doCache (soaDom, ncttl) = do
-      cacheSOA
-      withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
-    (takePair, cacheSOA) = withSection rankedAuthority msg $ \rrs rank ->
-      let (ps, soaRRs) = unzip $ foldr takeSOA [] rrs in (single ps, cacheSection soaRRs rank)
+    takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
+      | rrname rr `DNS.isSubDomainOf` zoneDom,
+        Just soa <- DNS.fromRData rd   =  (fromSOA soa, rr) : xs
+      | otherwise                      =  xs
       where
-        takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
-          | rrname rr `DNS.isSubDomainOf` zoneDom,
-            Just soa <- DNS.fromRData rd   =  (fromSOA soa rr, rr) : xs
-          | otherwise                      =  xs
-        takeSOA _         xs     =  xs
         {- the minimum of the SOA.MINIMUM field and SOA's TTL
             https://datatracker.ietf.org/doc/html/rfc2308#section-3
             https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA soa rr = (rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL])
+        fromSOA soa = (rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
-        single list = case list of
-          []    ->  Left "no SOA records found"
-          [x]   ->  Right x
-          _:_:_ ->  Left "multiple SOA records found"
+    takeSOA _         xs     =  xs
+    single list = case list of
+      []    ->  Left "no SOA records found"
+      [x]   ->  Right x
+      _:_:_ ->  Left "multiple SOA records found"
     ncWarn s
       | not $ null answer  =  logLines Log.DEBUG $
                               [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
