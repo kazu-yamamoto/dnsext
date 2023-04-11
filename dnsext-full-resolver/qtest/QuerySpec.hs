@@ -91,6 +91,10 @@ querySpec disableV6NS = describe "query" $ do
         | null (DNS.answer msg)  =  Empty    rcode
         | otherwise              =  NotEmpty rcode
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+      checkVAnswer (msg, (vans, _))
+        | null vans  =  Empty    rcode
+        | otherwise  =  NotEmpty rcode
+        where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) (checkAnswer . fst)
 
   it "root-priming" $ do
@@ -161,7 +165,7 @@ querySpec disableV6NS = describe "query" $ do
     let cached (rcode, rrs, _)
           | null rrs   =  Empty rcode
           | otherwise  =  NotEmpty rcode
-    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty DNS.NoErr
+    either (const Failed) (either cached checkVAnswer) result `shouldBe` NotEmpty DNS.NoErr
 
   it "resolve - a via cname" $ do
     result <- runResolve "clients4.google.com." A
