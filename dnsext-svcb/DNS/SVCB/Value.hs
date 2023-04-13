@@ -20,13 +20,13 @@ type SvcParamValue = Opaque
 ----------------------------------------------------------------
 
 class SPV a where
-    encodeSvcParamValue :: a -> Opaque
-    decodeSvcParamValue :: Opaque -> Maybe a
+    encodeSvcParamValue :: a -> SvcParamValue
+    decodeSvcParamValue :: SvcParamValue -> Maybe a
 
-encodeSPV :: SPut () -> Opaque
+encodeSPV :: SPut () -> SvcParamValue
 encodeSPV = Opaque.fromByteString . runSPut
 
-decodeSPV :: (Int -> SGet a) -> Opaque -> Maybe a
+decodeSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
 decodeSPV parser o = case runSGet (parser len) bs of
     Right (r,_) -> Just r
     _           -> Nothing
