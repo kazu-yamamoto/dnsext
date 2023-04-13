@@ -77,7 +77,7 @@ instance ResourceData RD_SVCB where
         -- "the uncompressed, fully-qualified TargetName"
         putDomain cf svcb_target
         let SvcParams m = svcb_params
-        void $ M.foldrWithKey f (return ())  m
+        void $ M.foldrWithKey f (return ()) m
       where
         f k v x = encodekv k v >> x
         encodekv k (SvcParamValue v) = do
