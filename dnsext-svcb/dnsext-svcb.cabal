@@ -20,12 +20,15 @@ source-repository head
     location: https://github.com/kazu-yamamoto/dnsext
 
 library
-    exposed-modules:  DNS.SVCB
+    exposed-modules:
+        DNS.SVCB
+        DNS.SVCB.Internal
     other-modules:
         DNS.SVCB.Imports
         DNS.SVCB.Key
-        DNS.SVCB.Value
         DNS.SVCB.Params
+        DNS.SVCB.SVCB
+        DNS.SVCB.Value
 
     default-language: Haskell2010
     ghc-options:      -Wall
