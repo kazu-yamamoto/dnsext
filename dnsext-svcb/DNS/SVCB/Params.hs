@@ -16,19 +16,19 @@ instance Show SvcParams where
         f k v xs = showkv k v : xs
 
 showValue :: SvcParamKey -> SvcParamValue -> String
-showValue SPK_Port v = case decodeSvcParamValue v of
+showValue SPK_Port v = case fromSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_Port _) -> show x
-showValue SPK_IPv4Hint v = case decodeSvcParamValue v of
+showValue SPK_IPv4Hint v = case fromSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_IPv4Hint _) -> show x
-showValue SPK_IPv6Hint v = case decodeSvcParamValue v of
+showValue SPK_IPv6Hint v = case fromSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_IPv6Hint _) -> show x
-showValue SPK_ALPN v = case decodeSvcParamValue v of
+showValue SPK_ALPN v = case fromSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_ALPN _) -> show x
-showValue SPK_DoHPath v = case decodeSvcParamValue v of
+showValue SPK_DoHPath v = case fromSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_DoHPath _) -> show x
 showValue _ v = show v

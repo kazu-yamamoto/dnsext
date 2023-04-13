@@ -128,4 +128,4 @@ addResourceDataForSVCB = do
 
 -- | Look up and decode a parameter value.
 extractSvcParam :: SPV v => SvcParamKey -> SvcParams -> Maybe v
-extractSvcParam key params = lookupSvcParam key params >>= decodeSvcParamValue
+extractSvcParam key params = lookupSvcParam key params >>= fromSvcParamValue
