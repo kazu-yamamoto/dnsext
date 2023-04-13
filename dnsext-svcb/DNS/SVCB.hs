@@ -10,8 +10,6 @@ module DNS.SVCB (
   -- ** Resource data
   , RD_SVCB(..)
   , RD_HTTPS(..)
-  , get_svcb
-  , get_https
   -- * Service parameters
   , SvcParams
   , lookupSvcParam
