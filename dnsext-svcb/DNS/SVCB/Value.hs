@@ -15,19 +15,19 @@ import DNS.SVCB.Key
 
 ----------------------------------------------------------------
 
-type SvcParamValue = Opaque
+newtype SvcParamValue = SvcParamValue Opaque deriving (Show, Eq, Ord)
 
 ----------------------------------------------------------------
 
 class SPV a where
-    encodeSvcParamValue :: a -> SvcParamValue
     decodeSvcParamValue :: SvcParamValue -> Maybe a
+    encodeSvcParamValue :: a -> SvcParamValue
 
 encodeSPV :: SPut () -> SvcParamValue
-encodeSPV = Opaque.fromByteString . runSPut
+encodeSPV = SvcParamValue . Opaque.fromByteString . runSPut
 
 decodeSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
-decodeSPV parser o = case runSGet (parser len) bs of
+decodeSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
     Right (r,_) -> Just r
     _           -> Nothing
   where
@@ -122,8 +122,8 @@ instance SPV SPV_ALPN where
 newtype SPV_Opaque = SPV_Opaque Opaque deriving (Eq,Ord,Show)
 
 instance SPV SPV_Opaque where
-    encodeSvcParamValue (SPV_Opaque o) = o
-    decodeSvcParamValue o = Just $ SPV_Opaque o
+    encodeSvcParamValue (SPV_Opaque o) = SvcParamValue o
+    decodeSvcParamValue (SvcParamValue o) = Just $ SPV_Opaque o
 
 ----------------------------------------------------------------
 

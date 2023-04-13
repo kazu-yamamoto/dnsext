@@ -80,7 +80,7 @@ instance ResourceData RD_SVCB where
         void $ M.foldrWithKey f (return ())  m
       where
         f k v x = encodekv k v >> x
-        encodekv k v = do
+        encodekv k (SvcParamValue v) = do
             putInt16 k
             putInt16 $ Opaque.length v
             putOpaque v
@@ -98,7 +98,7 @@ get_svcb len = do
         key <- getInt16 -- intestinally parsing as Int
         lng <- getInt16
         val <- getOpaque lng
-        return (key, val)
+        return (key, SvcParamValue val)
 
 ----------------------------------------------------------------
 

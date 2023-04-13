@@ -1,6 +1,5 @@
 module DNS.SVCB.Params where
 
-import DNS.Types
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as M
 
@@ -16,7 +15,7 @@ instance Show SvcParams where
         showkv k v = show (toSvcParamKey $ fromIntegral k) ++ "=" ++ showValue (toSvcParamKey $ fromIntegral k) v
         f k v xs = showkv k v : xs
 
-showValue :: SvcParamKey -> Opaque -> String
+showValue :: SvcParamKey -> SvcParamValue -> String
 showValue SPK_Port v = case decodeSvcParamValue v of
   Nothing -> ""
   Just x@(SPV_Port _) -> show x
