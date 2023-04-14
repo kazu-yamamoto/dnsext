@@ -21,10 +21,9 @@ spec = describe "lookup" $ do
             addrs <- DNS.lookupAAAA resolver "google.com"
             fmap null addrs `shouldBe` Right False
 
-    it "lookupAAAA with emty result" $ do
+    it "lookupAAAA with empty result" $ do
         withLookupConf defaultLookupConf $ \resolver -> do
             addrs <- DNS.lookupAAAA resolver "ipv4.tlund.se"
-            -- mew.org does not have any IPv6 addresses
             fmap null addrs `shouldBe` Right True
 
     it "lookupMX" $ do
