@@ -21,6 +21,9 @@ import System.Exit (exitSuccess, exitFailure)
 import Text.Read (readMaybe)
 
 import qualified DNS.Cache.Log as Log
+import DNS.Cache.Iterative
+  (RequestDO (..), RequestCD (..), RequestAD (..), setRequestDO, setRequestCD, setRequestAD,
+   IterativeControls (..), defaultIterativeControls)
 
 import Operation (operate)
 import FullResolve (fullResolve)
@@ -99,7 +102,14 @@ main = do
     let mserver = map (drop 1) at
         ctl = mconcat $ map toFlag plus
     if optIterative then do
-        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO dom typ
+        let ustep tbl f s = maybe f id $ lookup s tbl
+            uflag tbl d = foldl (ustep tbl) d plus
+            update get set tbl s = set (uflag tbl $ get s) s
+            flagDO = update requestDO setRequestDO tblFlagDO
+            flagCD = update requestCD setRequestCD tblFlagCD
+            flagAD = update requestAD setRequestAD tblFlagAD
+            ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
+        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO ictl dom typ
         case ex of
           Left err -> fail $ show err
           Right rs -> putStr $ pprResult rs
@@ -138,6 +148,15 @@ toFlag "+norecurse" = rdFlag FlagClear
 toFlag "+dnssec"    = doFlag FlagSet
 toFlag "+nodnssec"  = doFlag FlagClear
 toFlag _            = mempty -- fixme
+
+tblFlagDO :: [(String, RequestDO)]
+tblFlagDO = [("+dnssec", DnssecOK), ("+nodnssec", NoDnssecOK)]
+
+tblFlagCD :: [(String, RequestCD)]
+tblFlagCD = [("+cdflag", CheckDisabled), ("+nocdflag", NoCheckDisabled)]
+
+tblFlagAD :: [(String, RequestAD)]
+tblFlagAD = [("+adflag", AuthenticatedData), ("+noadflag", NoAuthenticatedData)]
 
 help :: String
 help = intercalate "\n"
