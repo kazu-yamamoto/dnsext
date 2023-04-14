@@ -61,10 +61,11 @@ resolveSequential ris0 resolver q qctl = loop ris0
 resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent ris resolver q qctl =
     raceAny $ map (\ri -> resolver ri q qctl) ris
-  where
-    raceAny ios = mapM async ios >>= waitAnyRightCancel
 
 ----------------------------------------------------------------
+
+raceAny :: [IO a] -> IO a
+raceAny ios = mapM async ios >>= waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
 waitAnyRightCancel asyncs =
