@@ -157,7 +157,10 @@ cacheRRset
     -> [RData]
     -> MayVerifiedRRS
     -> ContextT IO ()
-cacheRRset rank dom typ cls ttl rds _sigrds = do
-    insertRRSet <- asks insert_
-    logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
-    liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank {- TODO: cache with RD_RRSIG -}
+cacheRRset rank dom typ cls ttl rds mv =
+    mayVerifiedRRS (doCache Nothing) (const $ pure ()) (doCache . Just) mv
+  where
+    doCache goodSigs = do
+        insertRRSet <- asks insert_
+        logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
+        liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right (rds, goodSigs)) rank

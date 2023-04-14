@@ -94,7 +94,7 @@ cacheNoRRSIG rrs0 rank = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
             plogLn Log.DEBUG . unwords $ ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
-            liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
+            liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right (rds, Nothing)) rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
 cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
