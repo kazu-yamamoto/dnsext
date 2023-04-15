@@ -510,7 +510,7 @@ resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 resolveLogic :: String
              -> (Domain -> DNSQuery a)
-             -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, ResourceRecord)))
+             -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset)))
              -> Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
 resolveLogic logMark cnameHandler typeHandler n0 typ =
   maybe notSpecial special $ takeSpecialRevDomainResult n0
@@ -543,7 +543,11 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
       | otherwise = do
       let recCNAMEs_ (cn, cnRR) = recCNAMEs (succ cc) cn (aRRs . (cnRR :))
           noCache = do
-            (msg, cname) <- typeHandler bn typ
+            (msg, cnames) <- typeHandler bn typ
+            let cname = do
+                  (cn, cnRRset) <- cnames
+                  rr <- listToMaybe $ rrListFromRRset NoDnssecOK cnRRset
+                  return (cn, rr)
             maybe (pure ((aRRs, bn), Right msg)) recCNAMEs_ cname
 
           withNXC (soa, _rank) = pure ((aRRs, bn), Left (DNS.NameErr, [], soa))
@@ -599,20 +603,24 @@ resolveCNAME bn = do
    結果が CNAME なら、その RR も返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
 resolveTYPE :: Domain -> TYPE
-            -> DNSQuery (DNSMessage, Maybe (Domain, ResourceRecord))  {- result msg and cname RR involved in -}
+            -> DNSQuery (DNSMessage, Maybe (Domain, RRset))   {- result msg and cname RR involved in -}
 resolveTYPE bn typ = do
   (msg, _nss@Delegation{..}) <- resolveJust bn typ
-  cname <- withSection rankedAnswer msg $ \rrs rank -> do
-    let ps = cnameList bn (,) rrs
-    lift $ do
-      (_cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY (map snd ps) (rrsigList bn CNAME rrs) rank
-      cacheCNAME
-    return $ fst <$> uncons ps
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift (cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg) *> return ()) (const checkTypeRR) cname
-  return (msg, cname)
+  withSection rankedAnswer msg $ \rrs rank -> do
+    let (cnames, cnameRRs) = unzip $ cnameList bn (,) rrs
+        noCNAME   = do
+          cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg
+          return (msg, Nothing)
+        withCNAME cn = do
+          (cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY cnameRRs (rrsigList bn CNAME rrs) rank
+          cacheCNAME
+          return (msg, Just (cn, cnameRRset))
+    case cnames of
+      []    ->  lift noCNAME
+      cn:_  ->  checkTypeRR *> lift (withCNAME cn)
 
 cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
 cacheAnswer zoneDom dnskeys dom typ msg
