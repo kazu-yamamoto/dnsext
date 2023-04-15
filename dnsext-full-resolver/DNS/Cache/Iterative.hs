@@ -499,7 +499,7 @@ maxCNameChain = 16
 type DRRList = [ResourceRecord] -> [ResourceRecord]
 
 resolveByCache :: Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result ())
-resolveByCache = resolveLogic "cache" (\_ -> pure ()) (\_ _ -> pure ((), Nothing, ([], [])))
+resolveByCache = resolveLogic "cache" (\_ -> pure ((), ([], []))) (\_ _ -> pure ((), Nothing, ([], [])))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
@@ -509,7 +509,7 @@ resolve :: Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result DNSMessa
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 resolveLogic :: String
-             -> (Domain -> DNSQuery a)
+             -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
              -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
              -> Domain -> TYPE -> DNSQuery ((DRRList, Domain), Either Result a)
 resolveLogic logMark cnameHandler typeHandler n0 typ =
@@ -523,7 +523,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
     justCNAME bn = do
       let noCache = do
-            msg <- cnameHandler bn
+            (msg, _verified) <- cnameHandler bn
             pure ((id, bn), Right msg)
 
           withNXC (soa, _rank) = pure ((id, bn), Left (DNS.NameErr, [], soa))
@@ -593,11 +593,10 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
       | otherwise               =  Just x
 
 {- CNAME のレコードを取得し、キャッシュする -}
-resolveCNAME :: Domain -> DNSQuery DNSMessage
+resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
 resolveCNAME bn = do
   (msg, _nss@Delegation{..}) <- resolveJust bn CNAME
-  lift $ cacheAnswer delegationZoneDomain delegationDNSKEY bn CNAME msg
-  return msg
+  lift $ (,) msg <$> cacheAnswer delegationZoneDomain delegationDNSKEY bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
