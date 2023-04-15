@@ -611,21 +611,22 @@ resolveTYPE bn typ = do
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
-  maybe (lift $ cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg) (const checkTypeRR) cname
+  maybe (lift (cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg) *> return ()) (const checkTypeRR) cname
   return (msg, cname)
 
-cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT IO ()
+cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
 cacheAnswer zoneDom dnskeys dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
-        DNS.NoErr    ->  cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg *> return ()
-        DNS.NameErr  ->  cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg *> return ()
-        _            ->  return ()
+        DNS.NoErr    ->  (,) [] <$> cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg
+        DNS.NameErr  ->  (,) [] <$> cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg
+        _            ->  return ([], [])
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
         let isX rr = rrname rr == dom && rrtype rr == typ
-        (_xRRset, cacheX) <- verifyAndCache dnskeys (filter isX rrs) (rrsigList dom typ rrs) rank
+        (xRRset, cacheX) <- verifyAndCache dnskeys (filter isX rrs) (rrsigList dom typ rrs) rank
         cacheX
+        return ([xRRset], [])
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
