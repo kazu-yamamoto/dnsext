@@ -618,8 +618,8 @@ cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT
 cacheAnswer zoneDom dnskeys dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
-        DNS.NoErr    ->  cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg
-        DNS.NameErr  ->  cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg
+        DNS.NoErr    ->  cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg *> return ()
+        DNS.NameErr  ->  cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg *> return ()
         _            ->  return ()
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
@@ -797,7 +797,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
           if hasCNAME then      do cacheCNAME
                                    cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
           else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg
-        | otherwise             =  pure ()
+        | otherwise             =  pure []
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
   let withCache x = do
@@ -1330,15 +1330,16 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 cacheEmptySection :: Domain -> [RD_DNSKEY] -> Domain -> TYPE
                   -> (DNSMessage -> ([ResourceRecord], Ranking))
-                  -> DNSMessage -> ContextT IO ()
+                  -> DNSMessage -> ContextT IO [RRset]  {- returns verified authority section -}
 cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
-  (takePair, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
+  (takePair, soaRRset, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
     let (ps, soaRRs) = unzip $ foldr takeSOA [] rrs
-    (_soaRRset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
-    return (single ps, cacheSOA_)
+    (rrset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
+    return (single ps, rrset, cacheSOA_)
   let doCache (soaDom, ncttl) = do
         cacheSOA
         withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
+        return [soaRRset]
 
   either ncWarn doCache takePair
   where
@@ -1358,17 +1359,18 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
       [x]   ->  Right x
       _:_:_ ->  Left "multiple SOA records found"
     ncWarn s
-      | not $ null answer  =  logLines Log.DEBUG $
-                              [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
-                              , "  because of non empty answers:"
-                              ] ++
-                              map (("  " ++) . show) answer
-      | otherwise          =  logLines Log.NOTICE $
-                              [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
-                              , "  authority section:"
-                              ] ++
-                              map (("  " ++) . show) (DNS.authority msg)
-
+      | not $ null answer  =  do logLines Log.DEBUG $
+                                   [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                                   , "  because of non empty answers:"
+                                   ] ++
+                                   map (("  " ++) . show) answer
+                                 return []
+      | otherwise          =  do logLines Log.NOTICE $
+                                   [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
+                                   , "  authority section:"
+                                   ] ++
+                                   map (("  " ++) . show) (DNS.authority msg)
+                                 return []
       where answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
