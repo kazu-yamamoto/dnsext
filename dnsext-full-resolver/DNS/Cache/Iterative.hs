@@ -1004,8 +1004,9 @@ delegationIPs dc Delegation{..} = do
   result
 
 takeDEntryIPs :: Bool -> NE DEntry -> [IP]
-takeDEntryIPs disableV6NS des = foldr takeDEntryIP [] (fst des : snd des)
+takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] (fst des : snd des)
   where
+    unique = Set.toList . Set.fromList
     takeDEntryIP (DEonlyNS {})             xs  =  xs
     takeDEntryIP (DEwithAx _ ip@(IPv4 {})) xs  =  ip : xs
     takeDEntryIP (DEwithAx _ ip@(IPv6 {})) xs
