@@ -62,7 +62,7 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, EDNSheader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.SEC (TYPE (DNSKEY, DS, RRSIG), RD_DNSKEY, RD_DS (..), RD_RRSIG (..))
+import DNS.SEC (TYPE (DNSKEY, DS, RRSIG, NSEC, NSEC3), RD_DNSKEY, RD_DS (..), RD_RRSIG (..))
 import qualified DNS.SEC.Verify as SEC
 import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
@@ -480,20 +480,39 @@ replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((cnrrs, _rn), etm) <- resolve n typ
   reqDO <- lift . lift $ asks requestDO
-  let fromMessage (msg, _verified) = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, allowAuthority $ DNS.authority msg)
-      makeResult (rcode, ans, auth) = (rcode, concat $ map (rrListFromRRset reqDO) cnrrs ++ [ans], auth)
-  return $ makeResult $ either id fromMessage etm
-    where
-      allowAuthority = foldr takeSOA []
-      takeSOA rr@ResourceRecord { rrtype = SOA } xs  =  rr : xs
-      takeSOA _                                  xs  =  xs
+  let fromMessage (msg, _verified) = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+  return $ makeResult reqDO cnrrs $ either id fromMessage etm
 
 replyResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
 replyResultCached n typ = do
   ((cnrrs, _rn), e) <- resolveByCache n typ
   reqDO <- lift . lift $ asks requestDO
-  let makeResult (rcode, ans, auth) = (rcode, concat $ map (rrListFromRRset reqDO) cnrrs ++ [ans], auth)
-  return $ either (Just . makeResult) (const Nothing) e
+  return $ either (Just . makeResult reqDO cnrrs) (const Nothing) e
+
+makeResult :: RequestDO -> [RRset] -> Result -> Result
+makeResult reqDO cnRRset (rcode, ans, auth) =
+  (rcode, denyAnswer reqDO $ concat $ map (rrListFromRRset reqDO) cnRRset ++ [ans], allowAuthority reqDO auth)
+  where
+    denyAnswer DnssecOK   rrs  =  rrs
+    denyAnswer NoDnssecOK rrs  =  foldr takeNODNSSEC [] rrs
+      where
+        takeNODNSSEC rr@ResourceRecord{..} xs
+          | rrtype `elem` dnssecTypes  =  xs
+          | otherwise                  =  rr : xs
+
+    allowAuthority NoDnssecOK = foldr takeSOA []
+      where
+        takeSOA rr@ResourceRecord { rrtype = SOA } xs  =  rr : xs
+        takeSOA _                                  xs  =  xs
+    allowAuthority DnssecOK   = foldr takeAuth []
+      where
+        allowTypes = SOA : dnssecTypes
+        takeAuth rr@ResourceRecord{..} xs
+          | rrtype `elem` allowTypes  =  rr : xs
+          | otherwise                 =  xs
+
+    dnssecTypes = [ DNSKEY, DS, RRSIG, NSEC, NSEC3 ]
+
 
 maxCNameChain :: Int
 maxCNameChain = 16
