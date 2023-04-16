@@ -56,10 +56,11 @@ putRRSIGHeader RD_RRSIG{..} = do
     putDomain Canonical rrsig_zone
 
 verifyRRSIGwith :: RRSIGImpl -> DNSTime
-                -> Domain -> RD_DNSKEY
-                -> Domain -> RD_RRSIG
-                -> [ResourceRecord] -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} now zoneDom dnskey@RD_DNSKEY{..} owner rrsig@RD_RRSIG{..} rrs = do
+                -> RD_DNSKEY
+                -> RD_RRSIG
+                -> TYPE -> TTL -> [SPut ()]
+                -> Either String ()
+verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_type rrset_ttl sortedWires = do
   unless (ZONE `elem` dnskey_flags) $
     {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
        "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -81,14 +82,7 @@ verifyRRSIGwith RRSIGImpl{..} now zoneDom dnskey@RD_DNSKEY{..} owner rrsig@RD_RR
   unless (rrsig_inception <= now && now < rrsig_expiration) $
     Left $ "verifyRRSIGwith: not valid period of RRSIG: to be valid,  time " ++ show now ++
     " must be between " ++ show rrsig_inception ++ " and " ++ show rrsig_expiration
-  unless (rrsig_zone == zoneDom) $
-    Left $ "verifyRRSIGwith: RRSIG zone mismatch: " ++ show rrsig_zone ++ " =/= " ++ show zoneDom
 
-  {- The RRset MUST be sorted in canonical order.
-     https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
-  (rrset_dom, rrset_type, rrset_ttl, canonicalOrderedWires) <- ($ \dom typ _ ttl sorted -> (dom, typ, ttl, [ wire | (wire, _) <- sorted ])) <$> canonicalRRlist rrs
-  unless (rrset_dom == owner) $
-    Left $ "verifyRRSIGwith: RRset domain mismatch with owner-domain: " ++ show rrset_dom ++ " =/= " ++ show owner
   unless (rrset_type == rrsig_type) $
     Left $ "verifyRRSIGwith: TYPE mismatch between RRset and RRSIG: " ++ show rrset_type ++ " =/= " ++ show rrsig_type
   unless (rrset_ttl == rrsig_ttl) $
@@ -96,33 +90,35 @@ verifyRRSIGwith RRSIGImpl{..} now zoneDom dnskey@RD_DNSKEY{..} owner rrsig@RD_RR
 
   pubkey <- rrsigIGetKey dnskey_public_key
   sig    <- rrsigIGetSig rrsig_signature
-  let str = runSPut (putRRSIGHeader rrsig >> sequence_ canonicalOrderedWires)
+  let str = runSPut (putRRSIGHeader rrsig >> sequence_ sortedWires)
   {- `Data.List.sort` is linear for sorted case -}
   good <- rrsigIVerify pubkey sig str
   unless good $ Left "verifyRRSIGwith: rejected on verification"
 
 {- Canonical RR Ordering within an RRset
-   https://datatracker.ietf.org/doc/html/rfc4034#section-6.3
-   generalized RRset with CPS, available for wire-format, RR-list, RRset -}
-canonicalRRlist :: [ResourceRecord]
-                -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [(SPut (), ResourceRecord)] -> a) -> a)
-canonicalRRlist rrs = do
-  (hd,xs) <- maybe (Left "canonicalRRlist: require non-empty RRset") Right $ uncons rrs
+   https://datatracker.ietf.org/doc/html/rfc4034#section-6.3 -}
+sortCanonical :: [ResourceRecord] -> [(SPut (), ResourceRecord)]
+sortCanonical rrs = map snd sorted
+  where sorted = sortOn fst [ (runSPut sput, (sput, rr)) | rr <- rrs, let sput = putResourceRecord Canonical rr ]
+  {- same order between RData and RR, under same ( rrname, rrtype, rrclass, rrttl ) -}
+
+{- assume sorted input. generalized RRset with CPS -}
+canonicalRRsetSorted :: [ResourceRecord]
+                     -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRsetSorted rrs = do
+  (hd,xs) <- maybe (Left "canonicalRRsetSorted: require non-empty RRset") Right $ uncons rrs
   let eqhd x =
         ((==) `on` rrname)  hd x && ((==) `on` rrtype) hd x &&
         ((==) `on` rrclass) hd x && ((==) `on` rrttl)  hd x
-  unless (all eqhd xs) $ Left "canonicalRRlist: requires same ( rrname, rrtype, rrclass, rrttl )"
-  let rdataSorted = sortOn fst [ (runSPut sput, (sput, rr)) | rr <- rrs, let sput = putResourceRecord Canonical rr ]
-      {- same order between RData and RR, under same ( rrname, rrtype, rrclass, rrttl ) -}
-      rdataGrouped = group [ wire | (wire, _) <- rdataSorted ]
-  unless (all ((== 1) . length) rdataGrouped) $ Left "canonicalRRlist: requires unique RData set"
-  return $ \h -> h (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) [ pair | (_, pair) <- rdataSorted ]
+  unless (all eqhd xs) $ Left "canonicalRRsetSorted: requires same ( rrname, rrtype, rrclass, rrttl )"
+  let rds = [ rdata rr | rr <- rrs ]
+  unless (all ((== 1) . length) $ group rds) $ Left "canonicalRRsetSorted: requires unique RData set"
+  return $ \h -> h (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) rds
 
+{- generalized RRset with CPS -}
 canonicalRRset :: [ResourceRecord]
                -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
-canonicalRRset rrs = do
-  cps <- canonicalRRlist rrs
-  return $ cps $ \dom typ cls ttl ps -> \h -> h dom typ cls ttl [rdata rr | (_, rr) <- ps]
+canonicalRRset rrs = canonicalRRsetSorted [ rr | (_, rr) <- sortCanonical rrs ]
 
 rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
@@ -136,16 +132,32 @@ rrsigDicts =
   , (ED448           , ed448)
   ]
 
+verifyRRSIGsorted :: DNSTime
+                  -> RD_DNSKEY
+                  -> RD_RRSIG
+                  -> TYPE -> TTL -> [SPut ()] -> Either String ()
+verifyRRSIGsorted now dnskey rrsig typ ttl sortedWires =
+  maybe (Left $ "verifyRRSIGsorted: unsupported algorithm: " ++ show alg) verify $
+  Map.lookup alg rrsigDicts
+  where
+    alg = dnskey_pubalg dnskey
+    verify impl = verifyRRSIGwith impl now dnskey rrsig typ ttl sortedWires
+
 verifyRRSIG :: DNSTime
             -> Domain -> RD_DNSKEY
             -> Domain -> RD_RRSIG
             -> [ResourceRecord] -> Either String ()
-verifyRRSIG now zoneDom dnskey owner rrsig rrs =
-  maybe (Left $ "verifyRRSIG: unsupported algorithm: " ++ show alg) verify $
-  Map.lookup alg rrsigDicts
-  where
-    alg = dnskey_pubalg dnskey
-    verify impl = verifyRRSIGwith impl now zoneDom dnskey owner rrsig rrs
+verifyRRSIG now zoneDom dnskey owner rrsig@RD_RRSIG{..} rrs = do
+  unless (rrsig_zone == zoneDom) $
+    Left $ "verifyRRSIG: RRSIG zone mismatch: " ++ show rrsig_zone ++ " =/= " ++ show zoneDom
+  let (sortedWires, sortedRRs) = unzip $ sortCanonical rrs
+  {- The RRset MUST be sorted in canonical order.
+     https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
+  h <- canonicalRRsetSorted sortedRRs
+  h $ \rrset_dom typ _cls ttl _rds -> do
+    unless (rrset_dom == owner) $
+      Left $ "verifyRRSIG: RRset domain mismatch with owner-domain: " ++ show rrset_dom ++ " =/= " ++ show owner
+    verifyRRSIGsorted now dnskey rrsig typ ttl sortedWires
 
 ---
 
