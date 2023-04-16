@@ -228,7 +228,7 @@ type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
 runResolve :: Env -> Domain -> TYPE -> IterativeControls
-           -> IO (Either QueryError (([RRset], Domain), Either Result DNSMessage))
+           -> IO (Either QueryError (([RRset], Domain), Either Result (DNSMessage, ([RRset], [RRset]))))
 runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt cd
 
 -- 権威サーバーからの解決結果を得る
@@ -480,7 +480,7 @@ replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((cnrrs, _rn), etm) <- resolve n typ
   reqDO <- lift . lift $ asks requestDO
-  let fromMessage msg = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, allowAuthority $ DNS.authority msg)
+  let fromMessage (msg, _verified) = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, allowAuthority $ DNS.authority msg)
       makeResult (rcode, ans, auth) = (rcode, concat $ map (rrListFromRRset reqDO) cnrrs ++ [ans], auth)
   return $ makeResult $ either id fromMessage etm
     where
@@ -498,20 +498,20 @@ replyResultCached n typ = do
 maxCNameChain :: Int
 maxCNameChain = 16
 
-resolveByCache :: Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result ())
+resolveByCache :: Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result ((), ([RRset], [RRset])))
 resolveByCache = resolveLogic "cache" (\_ -> pure ((), ([], []))) (\_ _ -> pure ((), Nothing, ([], [])))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードをキャッシュする. -}
-resolve :: Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result DNSMessage)
+resolve :: Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result (DNSMessage, ([RRset], [RRset])))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 resolveLogic :: String
              -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
              -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
-             -> Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result a)
+             -> Domain -> TYPE -> DNSQuery (([RRset], Domain), Either Result (a, ([RRset], [RRset])))
 resolveLogic logMark cnameHandler typeHandler n0 typ =
   maybe notSpecial special $ takeSpecialRevDomainResult n0
   where
@@ -523,8 +523,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
     justCNAME bn = do
       let noCache = do
-            (msg, _verified) <- cnameHandler bn
-            pure (([], bn), Right msg)
+            result <- cnameHandler bn
+            pure (([], bn), Right result)
 
           withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], soa))
 
@@ -543,8 +543,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
       | otherwise = do
       let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
           noCache = do
-            (msg, cname, _verified) <- typeHandler bn typ
-            maybe (pure ((dcnRRsets [], bn), Right msg)) recCNAMEs_ cname
+            (msg, cname, vsec) <- typeHandler bn typ
+            maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
 
           withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], soa))
 
