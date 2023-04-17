@@ -24,12 +24,12 @@ module DNS.Cache.Iterative (
   IterativeControls (..), defaultIterativeControls,
   RequestDO (..), RequestCD (..), RequestAD (..),
   setRequestDO, setRequestCD, setRequestAD,
-  Env (..),
+  Env (..), RRset (..), rrListFromRRset, rrsetNull, rrsetVerified,
   ) where
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Arrow ((&&&), first)
+import Control.Arrow (first)
 import qualified Control.Exception as E
 import Control.Monad (when, join, guard, (<=<))
 import Control.Monad.IO.Class (liftIO)
@@ -58,7 +58,7 @@ import System.Random (randomR, getStdRandom)
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
 import qualified Data.IP as IP
 import DNS.Types
-  (Domain, DNSError, TTL,
+  (Domain, DNSError, TTL, CLASS, RData,
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, EDNSheader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
@@ -70,7 +70,7 @@ import DNS.Do53.Internal (ResolvInfo(..), ResolvEnv(..), udpTcpResolver, default
 import qualified DNS.Do53.Internal as DNS
 import DNS.Do53.Memo
   (Ranking (RankAdditional), rankedAnswer, rankedAuthority, rankedAdditional,
-   insertSetFromSection, insertSetEmpty, Key, CRSet, Cache)
+   insertSetEmpty, Key, CRSet, Cache)
 import qualified DNS.Do53.Memo as Cache
 
 -- this package
@@ -784,7 +784,7 @@ delegationWithCache zoneDom dom msg =
       in (rrListWith DS DNS.fromRData dom const rrs, nsps_, cacheSection (map snd nsps_) rank)
 
     (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
-      let axs = filter match rrs in (axs, cacheSection (sortOn (rrname &&& rrtype) axs) rank)
+      let axs = filter match rrs in (axs, cacheSection axs rank)
       where match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
             nsSet = Set.fromList $ map fst nsps
 
@@ -799,6 +799,7 @@ delegationWithCache zoneDom dom msg =
     (hasCNAME, cacheCNAME) = withSection rankedAnswer msg $ \rrs rank ->
       {- CNAME 先の NX をキャッシュしたいならここで返す.
          しかしCNAME 先の NS に問い合わせないと返答で使える rank のレコードは得られない. -}
+      {- TODO: check CNAME with RRSIG, and cache CNAME with RRSIG -}
       let (cns, crrs) = unzip $ cnameList dom (,) rrs in (not $ null cns, cacheSection crrs rank)
 
 takeDelegationSrc :: [(Domain, ResourceRecord)]
@@ -879,16 +880,12 @@ rootPriming = do
     body ips dnskeys = do
       msgNS <- norec True ips "." NS
 
-      (nsps, nsSet, cacheNS, verified) <- withSection rankedAnswer msgNS $ \rrs rank -> do
-        now <- liftIO =<< lift (asks currentSeconds_)
+      (nsps, nsSet, cacheNS, nsGoodSigs) <- withSection rankedAnswer msgNS $ \rrs rank -> do
         let nsps = nsList "." (,) rrs
             (nss, nsRRs) = unzip nsps
-            (sigrds, _sigRRs) = unzip $ rrListWith RRSIG (sigrdWith NS <=< DNS.fromRData) "." (,) rrs
-            verified = [ sig | key <- dnskeys, sig <- sigrds, Right () <- [SEC.verifyRRSIG now "." key "." sig nsRRs] ]
-            cacheNS = case verified of
-              []   ->  cacheSection nsRRs rank
-              _:_  ->  cacheSection nsRRs rank  {- TODO: cache with RRSIG of NS -}
-        return (nsps, Set.fromList nss, cacheNS, verified)
+            rrsigs = rrsigList "." NS rrs
+        (RRset{..}, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
+        return (nsps, Set.fromList nss, cacheNS, rrsGoodSigs)
 
       (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
         let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
@@ -897,7 +894,7 @@ rootPriming = do
       lift $ do
         cacheNS
         cacheAX
-        case verified of
+        case nsGoodSigs of
           []     ->  do
             logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
             return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
@@ -911,7 +908,7 @@ rootPriming = do
 {-
 steps to get verified and cached DNSKEY RRset
 1. query DNSKEY from delegatee with DO flag - get DNSKEY RRset and its RRSIG
-2. validate SEP DNSKEY of delegatee with DS
+2. verify SEP DNSKEY of delegatee with DS
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
@@ -922,58 +919,104 @@ cachedDNSKEY dss aservers dom = do
   let rcode = DNS.rcode $ DNS.flags $ DNS.header msg
   case rcode of
     DNS.NoErr  ->  lift $ withSection rankedAnswer msg $ \rrs rank ->
-      either (return . Left) (doCache rank) =<< verifyDNSKEY dss dom rrs
+      either (return . Left) (doCache rank) $ verifySEP dss dom rrs
     _          ->  return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
-    doCache rank (dnskeys, rrsigs) = do
-      let keyRRs = map snd dnskeys
-          sigRRs = map snd rrsigs
-      withMinTTL (keyRRs ++ sigRRs) (return $ Left $ "cachedDNSKEY: empty DNSKEY list - something wrong") $ \minTTL -> do
-        cacheSection (withTTL minTTL keyRRs) rank {- TODO: cache with RRSIG of DNSKEY -}
-        return $ Right $ map fst dnskeys
+    doCache rank (seps, dnskeys, rrsigs) = do
+      (RRset{..}, cacheDNSKEY) <- verifyAndCache (map fst seps) (map snd dnskeys) rrsigs rank
+      if null rrsGoodSigs  {- only cache DNSKEY RRset on verification successs -}
+        then return $ Left "cachedDNSKEY: no verified RRSIG found"
+        else cacheDNSKEY *> return (Right $ map fst dnskeys)
 
-verifyDNSKEY :: [RD_DS] -> Domain -> [ResourceRecord] -> ContextT IO (Either String ([(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, ResourceRecord)]))
-verifyDNSKEY dss dom rrs  =  do
-  now <- liftIO =<< asks currentSeconds_
-  return $ do
-    let rrsigs = rrListWith RRSIG (sigrdWith DNSKEY <=< DNS.fromRData) dom (,) rrs
-    when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
+verifySEP :: [RD_DS] -> Domain -> [ResourceRecord] -> Either String ([(RD_DNSKEY, RD_DS)], [(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, TTL)])
+verifySEP dss dom rrs = do
+  let rrsigs = rrsigList dom DNSKEY rrs
+  when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
 
-    let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
-        seps =
-          [ (key, ds)
-          | (key, _) <- dnskeys
-          , ds  <- dss
-          , Right () <- [SEC.verifyDS dom key ds]
-          ]
-    when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
+  let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
+      seps =
+        [ (key, ds)
+        | (key, _) <- dnskeys
+        , ds  <- dss
+        , Right () <- [SEC.verifyDS dom key ds]
+        ]
+  when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
 
-    let keyRRs = map snd dnskeys
+  return (seps, dnskeys, rrsigs)
+  where
+    verifyError s = "verifySEP: " ++ s
+
+{- `left` is not RRset case. `right` is just RRset case.
+   `[RD_RRSIG]` is not null on verification success case. -}
+withVerifiedRRset :: EpochTime
+                  -> [RD_DNSKEY] -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
+                  -> ([ResourceRecord] -> String -> a)
+                  -> ([ResourceRecord] -> Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> a) -> a
+withVerifiedRRset now dnskeys rrs sigs left right =
+  either (left sortedRRs) ($ rightK) $ SEC.canonicalRRsetSorted sortedRRs
+  where
+    rightK dom typ cls ttl rds = right sortedRRs dom typ cls minTTL rds sigrds
+      where
         goodSigs =
           [ rrsig
-          | rrsig@(sigrd, _) <- rrsigs
-          , (sepkey, _) <- seps
-          , Right () <- [SEC.verifyRRSIG now dom sepkey dom sigrd keyRRs]
+          | rrsig@(sigrd, _) <- sigs, key <- dnskeys
+          , Right () <- [SEC.verifyRRSIGsorted now key sigrd typ ttl sortedWires]
           ]
-    when (null goodSigs) $ Left $ verifyError "no verified RRSIG found"
+        (sigrds, sigTTLs) = unzip goodSigs
+        expireTTLs = [ exttl | sig <- sigrds, let exttl = rrsig_expiration sig - now, exttl > 0 ]
+        minTTL = minimum $ ttl : sigTTLs ++ map fromIntegral expireTTLs
+    (sortedWires, sortedRRs) = unzip $ SEC.sortCanonical rrs
 
-    return (dnskeys, goodSigs)
+data RRset =
+  RRset
+  { rrsName      :: Domain
+  , rrsType      :: TYPE
+  , rrsClass     :: CLASS
+  , rrsTTL       :: TTL
+  , rrsRDatas    :: [RData]
+  , rrsGoodSigs  :: [RD_RRSIG]
+  } deriving Show
+
+rrsetEmpty :: RRset
+rrsetEmpty = RRset "" (DNS.toTYPE 0) 0 0 [] []
+
+rrsetNull :: RRset -> Bool
+rrsetNull = null . rrsRDatas
+
+rrsetVerified :: RRset -> Bool
+rrsetVerified = not . null . rrsGoodSigs
+
+rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
+rrListFromRRset reqDO RRset{..} = case reqDO of
+  NoDnssecOK      ->  map fromRD rrsRDatas
+  DnssecOK    ->  case rrsRDatas of
+    []            ->  []
+    _:_           ->  map fromRD $ rrsRDatas ++ map DNS.toRData rrsGoodSigs
   where
-    verifyError s = "verifiedDNSKEY: " ++ s
+    fromRD = ResourceRecord rrsName rrsType rrsClass rrsTTL
+
+verifyAndCache :: [RD_DNSKEY] -> [ResourceRecord] -> [(RD_RRSIG, TTL)] -> Ranking
+               -> ContextT IO (RRset, ContextT IO ())
+verifyAndCache _            []   _    _    = return (rrsetEmpty, return ())
+verifyAndCache dnskeys rrs@(_:_) sigs rank = do
+  now <- liftIO =<< asks currentSeconds_
+  let crrsError []                          _           =    return (rrsetEmpty, return ())
+      crrsError sortedRRs@(ResourceRecord{..}:_) _ = do
+        logLines Log.NOTICE $ "verifyAndCache: no caching RR set:" : map (("  " ++) . show) rrs
+        return (RRset rrname rrtype rrclass rrttl [DNS.rdata x | x <- sortedRRs] [], return ())
+  withVerifiedRRset now dnskeys rrs sigs crrsError $
+    \_sortedRRs dom typ cls minTTL rds sigrds ->
+      return (RRset dom typ cls minTTL rds sigrds, cacheRRset rank dom typ cls minTTL rds sigrds)
+
+{-# WARNING recoverRRset "remove this definition after supporting lookups of rrset from cache" #-}
+recoverRRset :: [ResourceRecord] -> Maybe RRset
+recoverRRset rrs =
+  either (const Nothing) (\cps -> Just $ cps k) $ SEC.canonicalRRsetSorted sortedRRs
+  where
+    k dom typ cls ttl rds = RRset dom typ cls ttl rds []
+    (_, sortedRRs) = unzip $ SEC.sortCanonical rrs
 
 ---
-
-withMinTTL :: [ResourceRecord] -> a -> (TTL -> a) -> a
-withMinTTL rrs failed action =
-  maybe failed action
-  $ uncons rrs *> Just (minimum [ rrttl x | x <- rrs ])
-
-withTTL :: TTL -> [ResourceRecord] -> [ResourceRecord]
-withTTL ttl rrs = map update rrs
-  where
-    update rr
-      | ttl < rrttl rr  =  rr { rrttl = ttl }
-      | otherwise       =  rr
 
 nsList :: Domain -> (Domain ->  ResourceRecord -> a)
        -> [ResourceRecord] -> [a]
@@ -994,6 +1037,10 @@ rrListWith typ fromRD dom h = foldr takeRR []
 
 sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
 sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd
+
+rrsigList :: Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
+rrsigList dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom pair rrs
+  where pair rd rr = (rd, rrttl rr)
 
 axList :: Bool
        -> (Domain -> Bool) -> (IP -> ResourceRecord -> a)
@@ -1183,23 +1230,30 @@ withSection :: (m -> ([ResourceRecord], Ranking)) -> m
             -> ([ResourceRecord] -> Ranking -> a) -> a
 withSection getRanked msg body = uncurry body $ getRanked msg
 
-cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
-cacheSection rs rank = cacheRRSet
+cacheRRset :: Ranking  -> Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> ContextT IO ()
+cacheRRset rank dom typ cls ttl rds _sigrds = do
+  insertRRSet <- asks insert_
+  logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
+  liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
+  {- TODO: cache with RD_RRSIG -}
+
+cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheNoRRSIG rrs0 rank = do
+  either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
-    (ncRRSs, rrss) = insertSetFromSection rs rank
-    putRRSet putk = putk $ \key ttl crs r ->
-      logLines Log.DEBUG
-      [ "cacheRRSet: " ++ show ((key, ttl), r)
-      , "  " ++ show crs ]
-    putNoCacheRRS rrs =
-      logLines Log.NOTICE $
-      "cacheSection: no caching RR set:" :
-      map (("  " ++) . show) rrs
-    cacheRRSet = do
-      mapM_ putNoCacheRRS ncRRSs
-      mapM_ putRRSet rrss
+    crrsError _ = logLines Log.NOTICE $ "cacheNoRRSIG: no caching RR set:" : map (("  " ++) . show) rrs0
+    insert hrrs = do
       insertRRSet <- asks insert_
-      liftIO $ mapM_ ($ insertRRSet) rrss
+      hrrs $ \dom typ cls ttl rds -> do
+        logLn Log.DEBUG $ "cacheNoRRSIG: RRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
+        liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
+    (_, sortedRRs) = unzip $ SEC.sortCanonical rrs0
+
+cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
+  where
+    rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
+    rrsList = groupBy ((==) `on` rrsKey) . sortOn rrsKey
 
 -- | The `cacheEmptySection zoneDom dom typ getRanked msg` caches two pieces of information from `msg`.
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
