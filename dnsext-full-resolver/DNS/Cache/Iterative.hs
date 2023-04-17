@@ -21,6 +21,9 @@ module DNS.Cache.Iterative (
   DNSQuery, runDNSQuery,
   replyMessage, replyResult, replyResultCached,
   refreshRoot, resolve, resolveJust, iterative,
+  IterativeControls (..), defaultIterativeControls,
+  RequestDO (..), RequestCD (..), RequestAD (..),
+  setRequestDO, setRequestCD, setRequestAD,
   Env (..),
   ) where
 
@@ -93,6 +96,50 @@ data Env =
   , idGen_ :: IO DNS.Identifier
   }
 
+{- datatypes to propagate request flags -}
+
+data RequestDO
+  = DnssecOK
+  | NoDnssecOK
+  deriving Show
+
+data RequestCD
+  = CheckDisabled
+  | NoCheckDisabled
+  deriving Show
+
+data RequestAD
+  = AuthenticatedData
+  | NoAuthenticatedData
+  deriving Show
+
+{- request flags to pass iterative query.
+  * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
+    * https://datatracker.ietf.org/doc/html/rfc4035#section-3.2.1
+  * CD (Checking Disabled)
+  * AD (Authenticated Data)
+    * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7
+      "setting the AD bit in a query as a signal indicating that the requester understands and is interested in the value of the AD bit in the response" -}
+data IterativeControls =
+  IterativeControls
+  { requestDO :: RequestDO
+  , requestCD :: RequestCD
+  , requestAD :: RequestAD
+  } deriving Show
+
+defaultIterativeControls :: IterativeControls
+defaultIterativeControls =
+  IterativeControls NoDnssecOK NoCheckDisabled NoAuthenticatedData
+
+setRequestDO :: RequestDO -> IterativeControls -> IterativeControls
+setRequestDO x ic = ic { requestDO = x }
+
+setRequestCD :: RequestCD -> IterativeControls -> IterativeControls
+setRequestCD x ic = ic { requestCD = x }
+
+setRequestAD :: RequestAD -> IterativeControls -> IterativeControls
+setRequestAD x ic = ic { requestAD = x }
+
 data QueryError
   = DnsError DNSError
   | NotResponse DNS.QorR DNSMessage
@@ -100,7 +147,7 @@ data QueryError
   | HasError DNS.RCODE DNSMessage
   deriving Show
 
-type ContextT = ReaderT Env
+type ContextT m = ReaderT Env (ReaderT IterativeControls m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
 ---
@@ -132,11 +179,11 @@ newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
         , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
   return cxt
 
-dnsQueryT :: (Env -> IO (Either QueryError a)) -> DNSQuery a
-dnsQueryT = ExceptT . ReaderT
+dnsQueryT :: (Env -> IterativeControls -> IO (Either QueryError a)) -> DNSQuery a
+dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
 
-runDNSQuery :: DNSQuery a -> Env -> IO (Either QueryError a)
-runDNSQuery = runReaderT . runExceptT
+runDNSQuery :: DNSQuery a -> Env -> IterativeControls -> IO (Either QueryError a)
+runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwE . DnsError
@@ -157,7 +204,7 @@ handleResponseError e f msg
 getReplyMessage :: Env -> DNSHeader -> EDNSheader -> NE DNS.Question -> IO (Either String DNSMessage)
 getReplyMessage cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
   (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-  <$> runDNSQuery (getResult bn) cxt
+  <$> runDNSQuery (getResult bn) cxt (ctrlFromRequestHeader reqH reqEH)
   where
     getResult n = do
       guardRequestHeader reqH reqEH
@@ -169,7 +216,7 @@ getReplyMessage cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
 getReplyCached :: Env -> DNSHeader -> EDNSheader -> NE DNS.Question -> IO (Maybe (Either String DNSMessage))
 getReplyCached cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
   fmap mkReply . either (Just . Left) (Right <$>)
-  <$> runDNSQuery (getResult bn) cxt
+  <$> runDNSQuery (getResult bn) cxt (ctrlFromRequestHeader reqH reqEH)
   where
     getResult n = do
       guardRequestHeader reqH reqEH
@@ -180,17 +227,19 @@ getReplyCached cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
-runResolve :: Env -> Domain -> TYPE
+runResolve :: Env -> Domain -> TYPE -> IterativeControls
            -> IO (Either QueryError (([ResourceRecord] -> [ResourceRecord], Domain), Either Result DNSMessage))
-runResolve cxt n typ = runDNSQuery (resolve n typ) cxt
+runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt cd
 
 -- 権威サーバーからの解決結果を得る
-runResolveJust :: Env -> Domain -> TYPE -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveJust cxt n typ = runDNSQuery (resolveJust n typ) cxt
+runResolveJust :: Env -> Domain -> TYPE -> IterativeControls
+               -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
 
 -- 反復後の委任情報を得る
-runIterative :: Env -> Delegation -> Domain -> IO (Either QueryError Delegation)
-runIterative cxt sa n = runDNSQuery (iterative sa n) cxt
+runIterative :: Env -> Delegation -> Domain -> IterativeControls
+             -> IO (Either QueryError Delegation)
+runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
 
 -----
 
@@ -365,6 +414,21 @@ takeSpecialRevDomainResult :: Domain -> Maybe Result
 takeSpecialRevDomainResult dom = fmap (uncurry runEmbedResult) $ fst <$> v4EmbeddedResult dom <|> fst <$> v6EmbeddedResult dom
 
 -----
+
+ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> IterativeControls
+ctrlFromRequestHeader reqH reqEH = IterativeControls doFlag cdFlag adFlag
+  where
+    doFlag = case reqEH of
+      DNS.EDNSheader edns | DNS.ednsDnssecOk edns  ->  DnssecOK
+      _                                            ->  NoDnssecOK
+
+    cdFlag
+      | DnssecOK <- doFlag, DNS.chkDisable flags  =  CheckDisabled      {- only check when DNSSEC OK -}
+      | otherwise                                 =  NoCheckDisabled
+    adFlag
+      | DnssecOK <- doFlag, DNS.authenData flags  =  AuthenticatedData  {- only check when DNSSEC OK -}
+      | otherwise                                 =  NoAuthenticatedData
+    flags = DNS.flags reqH
 
 guardRequestHeader :: DNSHeader -> EDNSheader -> DNSQuery ()
 guardRequestHeader reqH reqEH
@@ -946,9 +1010,12 @@ axList disableV6NS pdom h = foldr takeAx []
 
 ---
 
--- 権威サーバーから答えの DNSMessage を得る. 再起検索フラグを落として問い合わせる.
+{- Get the answer DNSMessage from the authoritative server.
+   Note about flags in request to an authoritative server.
+  * RD (Recursion Desired) must be 0 for request to authoritative server
+  * EDNS must be enable for DNSSEC OK request -}
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec dnsssecOK aservers name typ = dnsQueryT $ \cxt -> do
+norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver

@@ -39,7 +39,7 @@ setup disableV6NS logOutput logLevel = do
 
 resolve :: Env -> String -> TYPE -> IO (Either QueryError DNSMessage)
 resolve cxt n ty = do
-  fmap toMessage <$> Iterative.runResolve cxt (fromString n) ty
+  fmap toMessage <$> Iterative.runResolve cxt (fromString n) ty Iterative.defaultIterativeControls
   where
     toMessage ((cnRRs, _), e) = either cached response e
       where
