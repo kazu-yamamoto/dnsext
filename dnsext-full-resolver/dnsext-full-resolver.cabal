@@ -112,6 +112,7 @@ test-suite spec
         base,
         hspec,
         dnsext-types,
+        dnsext-dnssec,
         dnsext-do53,
         dnsext-full-resolver
 
