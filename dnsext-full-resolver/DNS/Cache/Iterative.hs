@@ -840,6 +840,37 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
+fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
+fillDelegationDS src dest
+  | null $ delegationDNSKEY src     =  return dest  {- no DNSKEY, not chained -}
+  | null $ delegationDS src         =  return dest  {- no DS, not chained -}
+  | not $ null $ delegationDS dest  =  return dest  {- already filled -}
+  | otherwise                       = do
+      maybe query (lift . fill . toDSs) =<< lift (lookupCache (delegationZoneDomain dest) DS)
+  where
+    toDSs (rrs, _rank) = rrListWith DS DNS.fromRData (delegationZoneDomain dest) const rrs
+    fill dss = return dest { delegationDS = dss }
+    query = do
+      disableV6NS <- lift $ asks disableV6NS_
+      let ips = takeDEntryIPs disableV6NS (delegationNS src)
+          nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
+          verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
+      if null ips
+        then lift nullIPs
+        else lift . either verifyFailed fill =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
+
+queryDS :: [RD_DNSKEY] -> [IP] -> Domain -> DNSQuery (Either String [RD_DS])
+queryDS dnskeys ips dom = do
+  msg <- norec True ips dom DS
+  withSection rankedAnswer msg $ \rrs rank -> do
+    let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
+        rrsigs = rrsigList dom DS rrs
+    (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
+    if not $ rrsetVerified rrset
+      then return $ Left "queryDS: RRSIG of DS verification failed."
+      else lift cacheDS *> return (Right dsrds)
+
+
 fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY d@Delegation{delegationDS = []}                           =  return d  {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = _:_}  =  return d  {- already filled -}
