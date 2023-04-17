@@ -8,6 +8,7 @@ import Data.Either (isRight)
 import Data.String (fromString)
 import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
 import qualified DNS.Types as DNS
+import qualified DNS.SEC as DNS
 import qualified DNS.Do53.Memo as Cache
 import System.Environment (lookupEnv)
 
@@ -19,6 +20,17 @@ data AnswerResult
   = Empty    DNS.RCODE
   | NotEmpty DNS.RCODE
   | Failed
+  deriving (Eq, Show)
+
+data VerifyResult
+  = Verified
+  | NotVerified
+  deriving (Eq, Show)
+
+data VAnswerResult
+  = VEmpty    DNS.RCODE
+  | VNotEmpty DNS.RCODE VerifyResult
+  | VFailed
   deriving (Eq, Show)
 
 spec :: Spec
@@ -69,6 +81,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
+  runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
   tcache@(getSec, _) <- runIO TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
   memo <- runIO $ Cache.getMemo cacheConf
@@ -86,10 +99,22 @@ querySpec disableV6NS = describe "query" $ do
 
   let printQueryError :: Show e => Either e a -> IO ()
       printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
+      _pprResult (msg, (ans, auth)) =
+        unlines $
+        ("rcode: " ++ show (DNS.rcode $ DNS.flags $ DNS.header msg)) :
+        "answer:" : map (("  " ++) . show) ans ++
+        "authority:" : map (("  " ++) . show) auth
 
       checkAnswer msg
         | null (DNS.answer msg)  =  Empty    rcode
         | otherwise              =  NotEmpty rcode
+        where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+      verified rrsets
+        | all Iterative.rrsetVerified rrsets  =  Verified
+        | otherwise                           =  NotVerified
+      checkVAnswer (msg, (vans, _))
+        | null vans  =  VEmpty    rcode
+        | otherwise  =  VNotEmpty rcode (verified vans)
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
       checkResult = either (const Failed) (checkAnswer . fst)
 
@@ -159,14 +184,23 @@ querySpec disableV6NS = describe "query" $ do
     result <- runResolve "porttest.dns-oarc.net." CNAME
     printQueryError result
     let cached (rcode, rrs, _)
-          | null rrs   =  Empty rcode
-          | otherwise  =  NotEmpty rcode
-    either (const Failed) (either cached checkAnswer) result `shouldBe` NotEmpty DNS.NoErr
+          | null rrs   =  VEmpty rcode
+          | otherwise  =  VNotEmpty rcode NotVerified
+    either (const VFailed) (either cached checkVAnswer) result `shouldBe` VNotEmpty DNS.NoErr Verified
 
   it "resolve - a via cname" $ do
     result <- runResolve "clients4.google.com." A
     printQueryError result
     isRight result `shouldBe` True
+
+  it "resolve - a with DNSSEC_OK" $ do
+    result <- runResolve "iij.ad.jp." A
+    printQueryError result
+    isRight result `shouldBe` True
+    let cached (rcode, rrs, _)
+          | null rrs   =  VEmpty rcode
+          | otherwise  =  VNotEmpty rcode NotVerified
+    either (const VFailed) (either cached checkVAnswer) result `shouldBe` VNotEmpty DNS.NoErr Verified
 
   it "get-reply - nx via cname" $ do
     result <- getReply "media.yahoo.com." A 0

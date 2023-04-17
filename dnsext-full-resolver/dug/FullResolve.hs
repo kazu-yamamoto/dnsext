@@ -7,7 +7,7 @@ import qualified DNS.Do53.Memo as Cache
 
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (Env (..), QueryError)
+import DNS.Cache.Iterative (Env (..), QueryError, IterativeControls)
 import qualified DNS.Cache.Iterative as Iterative
 
 import DNS.Types
@@ -15,13 +15,14 @@ import DNS.Types
 fullResolve :: Bool
             -> Log.Output
             -> Log.Level
+            -> IterativeControls
             -> String
             -> TYPE
             -> IO (Either QueryError DNSMessage)
-fullResolve disableV6NS logOutput logLevel n ty = do
+fullResolve disableV6NS logOutput logLevel ctl n ty = do
   (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel
   mapM_ forkIO $ loops
-  out <- resolve cxt n ty
+  out <- resolve cxt ctl n ty
   putLines Log.INFO ["--------------------"]
   flushLog
   return out
@@ -37,14 +38,12 @@ setup disableV6NS logOutput logLevel = do
   cxt <- Iterative.newEnv putLines disableV6NS ucache tcache
   return (putLines, flush, [logLoop], cxt)
 
-resolve :: Env -> String -> TYPE -> IO (Either QueryError DNSMessage)
-resolve cxt n ty = do
-  fmap toMessage <$> Iterative.runResolve cxt (fromString n) ty Iterative.defaultIterativeControls
+resolve :: Env -> IterativeControls -> String -> TYPE -> IO (Either QueryError DNSMessage)
+resolve cxt ictl n ty =
+  fmap toMessage <$>
+  Iterative.runDNSQuery (Iterative.replyResult (fromString n) ty) cxt ictl
   where
-    toMessage ((cnRRs, _), e) = either cached response e
+    toMessage (rc, ans, auth) = defaultResponse { DNS.header = h { DNS.flags = f }, DNS.answer = ans, DNS.authority = auth }
       where
-        cached (rc, ans, auth) = defaultResponse { DNS.header = h { DNS.flags = f }, DNS.answer = cnRRs ans, DNS.authority = auth }
-          where
-            h = DNS.header defaultResponse
-            f = (DNS.flags h) { DNS.rcode = rc }
-        response msg = msg { DNS.answer = cnRRs $ DNS.answer msg }
+        h = DNS.header defaultResponse
+        f = (DNS.flags h) { DNS.rcode = rc }
