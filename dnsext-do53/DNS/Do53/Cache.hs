@@ -52,7 +52,7 @@ import qualified DNS.Types as DNS
 -- this package
 
 {- CRSet
-   -  Left  - NXDOMAIN or NODATA, hold domain delegatoin from
+   -  Left  - NXDOMAIN or NODATA, hold zone-domain delegation from
    -  Right - not empty RRSET                                 -}
 type CRSet = Either Domain [RData]
 
