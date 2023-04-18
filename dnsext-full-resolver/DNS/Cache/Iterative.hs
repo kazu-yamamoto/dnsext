@@ -1082,12 +1082,13 @@ rrsetVerified = not . null . rrsGoodSigs
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO RRset{..} = case reqDO of
-  NoDnssecOK      ->  map fromRD rrsRDatas
+  NoDnssecOK      ->  rrs
   DnssecOK    ->  case rrsRDatas of
     []            ->  []
-    _:_           ->  map fromRD $ rrsRDatas ++ map DNS.toRData rrsGoodSigs
+    _:_           ->  rrs ++ sigs
   where
-    fromRD = ResourceRecord rrsName rrsType rrsClass rrsTTL
+    rrs  = [ ResourceRecord rrsName rrsType rrsClass rrsTTL   rd              | rd  <- rrsRDatas ]
+    sigs = [ ResourceRecord rrsName RRSIG   rrsClass rrsTTL (DNS.toRData sig) | sig <- rrsGoodSigs ]
 
 verifyAndCache :: [RD_DNSKEY] -> [ResourceRecord] -> [(RD_RRSIG, TTL)] -> Ranking
                -> ContextT IO (RRset, ContextT IO ())
