@@ -36,6 +36,7 @@ data VAnswerResult
 spec :: Spec
 spec = do
   disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
+  runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
   envSpec
   cacheStateSpec disableV6NS
   querySpec disableV6NS
@@ -81,7 +82,6 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
 
 querySpec :: Bool -> Spec
 querySpec disableV6NS = describe "query" $ do
-  runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
   tcache@(getSec, _) <- runIO TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
   memo <- runIO $ Cache.getMemo cacheConf
