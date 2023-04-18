@@ -480,7 +480,8 @@ replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((cnrrs, _rn), etm) <- resolve n typ
   reqDO <- lift . lift $ asks requestDO
-  let fromMessage (msg, _verified) = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+  let fromRRsets = concatMap $ rrListFromRRset reqDO
+      fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
   return $ makeResult reqDO cnrrs $ either id fromMessage etm
 
 replyResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
