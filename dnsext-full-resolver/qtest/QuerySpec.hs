@@ -35,11 +35,13 @@ data VAnswerResult
 
 spec :: Spec
 spec = do
-  disableV6NS <- runIO $ maybe False ((== "1") . take 1) <$> lookupEnv "DISABLE_V6_NS"
+  let getEnvBool n = runIO $ maybe False ((== "1") . take 1) <$> lookupEnv n
+  disableV6NS <- getEnvBool "DISABLE_V6_NS"
+  debug <- getEnvBool "QTEST_DEBUG"
   runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
   envSpec
   cacheStateSpec disableV6NS
-  querySpec disableV6NS
+  querySpec disableV6NS debug
 
 envSpec :: Spec
 envSpec = describe "env" $ do
@@ -80,14 +82,17 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
     (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
     check cs "arpa." SOA `shouldSatisfy` isJust
 
-querySpec :: Bool -> Spec
-querySpec disableV6NS = describe "query" $ do
+querySpec :: Bool -> Bool -> Spec
+querySpec disableV6NS debug = describe "query" $ do
   tcache@(getSec, _) <- runIO TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
   memo <- runIO $ Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
-  cxt <- runIO $ newEnv (\_ _ -> pure ()) disableV6NS ucache tcache
+      putLines
+        | debug     =  \lv xs -> putStr $ unlines [ show lv ++ ": " ++ x | x <- xs ]
+        | otherwise =  \_ _ -> pure ()
+  cxt <- runIO $ newEnv putLines disableV6NS ucache tcache
   cxt4 <- runIO $ newEnv (\_ _ -> pure ()) True ucache tcache
   let refreshRoot = runDNSQuery Iterative.refreshRoot cxt defaultIterativeControls
       runIterative ns n = Iterative.runIterative cxt ns (fromString n) defaultIterativeControls
