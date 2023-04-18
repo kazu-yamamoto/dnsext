@@ -480,7 +480,8 @@ replyResult :: Domain -> TYPE -> DNSQuery Result
 replyResult n typ = do
   ((cnrrs, _rn), etm) <- resolve n typ
   reqDO <- lift . lift $ asks requestDO
-  let fromMessage (msg, _verified) = (DNS.rcode $ DNS.flags $ DNS.header msg, DNS.answer msg, DNS.authority msg)
+  let fromRRsets = concatMap $ rrListFromRRset reqDO
+      fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
   return $ makeResult reqDO cnrrs $ either id fromMessage etm
 
 replyResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
@@ -1082,12 +1083,13 @@ rrsetVerified = not . null . rrsGoodSigs
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO RRset{..} = case reqDO of
-  NoDnssecOK      ->  map fromRD rrsRDatas
+  NoDnssecOK      ->  rrs
   DnssecOK    ->  case rrsRDatas of
     []            ->  []
-    _:_           ->  map fromRD $ rrsRDatas ++ map DNS.toRData rrsGoodSigs
+    _:_           ->  rrs ++ sigs
   where
-    fromRD = ResourceRecord rrsName rrsType rrsClass rrsTTL
+    rrs  = [ ResourceRecord rrsName rrsType rrsClass rrsTTL   rd              | rd  <- rrsRDatas ]
+    sigs = [ ResourceRecord rrsName RRSIG   rrsClass rrsTTL (DNS.toRData sig) | sig <- rrsGoodSigs ]
 
 verifyAndCache :: [RD_DNSKEY] -> [ResourceRecord] -> [(RD_RRSIG, TTL)] -> Ranking
                -> ContextT IO (RRset, ContextT IO ())
