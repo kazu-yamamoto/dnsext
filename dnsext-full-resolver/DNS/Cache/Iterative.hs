@@ -32,7 +32,7 @@ import Control.Applicative ((<|>))
 import Control.Arrow (first)
 import qualified Control.Exception as E
 import Control.Monad (when, join, guard, (<=<))
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
@@ -1199,7 +1199,7 @@ delegationIPs dc Delegation{..} = do
       result
         | not (null ips)    =  return ips
         | not (null names)  =  do
-            mayName <- liftIO $ randomizedSelect names
+            mayName <- randomizedSelect names
             let neverReach = do
                   lift $ logLn Log.INFO $ "delegationIPs: never reach this action."
                   throwDnsError DNS.ServerFailure
@@ -1229,7 +1229,7 @@ resolveNS disableV6NS dc ns = do
 
       lookupAx
         | disableV6NS  =  lk4
-        | otherwise    =  join $ liftIO $ randomizedSelectN (lk46, [lk64])
+        | otherwise    =  join $ randomizedSelectN (lk46, [lk64])
         where
           lk46 = lk4 +? lk6
           lk64 = lk6 +? lk4
@@ -1239,7 +1239,7 @@ resolveNS disableV6NS dc ns = do
 
       query1Ax
         | disableV6NS  =  q4
-        | otherwise    =  join $ liftIO $ randomizedSelectN (q46, [q64])
+        | otherwise    =  join $ randomizedSelectN (q46, [q64])
         where
           q46 = q4 +!? q6 ; q64 = q6 +!? q4
           q4 = querySection A
@@ -1256,15 +1256,14 @@ resolveNS disableV6NS dc ns = do
 
       resolveAXofNS :: DNSQuery (IP, ResourceRecord)
       resolveAXofNS = do
-        let selectA = randomizedSelect
-            failEmptyAx
+        let failEmptyAx
               | disableV6NS = do
                   lift $ logLn Log.NOTICE $ "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
                   throwDnsError DNS.ServerFailure
               | otherwise   = do
                   lift $ logLn Log.NOTICE $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
                   throwDnsError DNS.IllegalDomain
-        maybe failEmptyAx pure =<< liftIO . selectA  {- 失敗時: NS に対応する A の返答が空 -}
+        maybe failEmptyAx pure =<< randomizedSelect  {- 失敗時: NS に対応する A の返答が空 -}
           =<< maybe query1Ax (pure . axPairs . fst) =<< lift lookupAx
 
   resolveAXofNS
@@ -1272,25 +1271,31 @@ resolveNS disableV6NS dc ns = do
 randomSelect :: Bool
 randomSelect = True
 
-randomizedSelectN :: NE a -> IO a
+randomizedIndex :: MonadIO m => [a] -> m Int
+randomizedIndex xs
+  | randomSelect  =  getStdRandom $ randomR (0, length xs - 1)
+  | otherwise     =  return 0
+
+randomizedSelectN :: MonadIO m => NE a -> m a
 randomizedSelectN
   | randomSelect  =  d
   | otherwise     =  return . fst  -- naive implementation
   where
     d (x, []) = return x
-    d (x, xs) = do
-      ix <- getStdRandom $ randomR (0, length xs)
-      return $ (x:xs) !! ix
+    d (x, xs@(_:_)) = do
+      let xxs = x:xs
+      ix <- randomizedIndex xxs
+      return $ xxs !! ix
 
-randomizedSelect :: [a] -> IO (Maybe a)
+randomizedSelect :: MonadIO m => [a] -> m (Maybe a)
 randomizedSelect
   | randomSelect  =  d
   | otherwise     =  return . listToMaybe  -- naive implementation
   where
     d []   =  return Nothing
     d [x]  =  return $ Just x
-    d xs   =  do
-      ix <- getStdRandom $ randomR (0, length xs - 1)
+    d xs@(_:_:_)  =  do
+      ix <- randomizedIndex xs
       return $ Just $ xs !! ix
 
 ---
