@@ -1159,6 +1159,7 @@ axList disableV6NS pdom h = foldr takeAx []
   * EDNS must be enable for DNSSEC OK request -}
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
+  logLines_ cxt Log.DEBUG $ ["norec: " ++ show name ++ ", " ++ show typ ++ ", " ++ show aservers]
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver
