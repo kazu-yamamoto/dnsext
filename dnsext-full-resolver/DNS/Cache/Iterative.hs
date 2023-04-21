@@ -1215,6 +1215,14 @@ delegationIPs dc Delegation{..} = do
 
   result
 
+selectIPs :: MonadIO m => Int -> [IP] -> m [IP]
+selectIPs num ips
+  | len <= num  = return ips
+  | otherwise   = do
+      ix <- randomizedIndex (0, len - 1)
+      return $ take num $ drop ix $ ips ++ ips
+  where len = length ips
+
 takeDEntryIPs :: Bool -> NE DEntry -> [IP]
 takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] (fst des : snd des)
   where
@@ -1273,9 +1281,9 @@ resolveNS disableV6NS dc ns = do
 randomSelect :: Bool
 randomSelect = True
 
-randomizedIndex :: MonadIO m => [a] -> m Int
-randomizedIndex xs
-  | randomSelect  =  getStdRandom $ randomR (0, length xs - 1)
+randomizedIndex :: MonadIO m => (Int, Int) -> m Int
+randomizedIndex range
+  | randomSelect  =  getStdRandom $ randomR range
   | otherwise     =  return 0
 
 randomizedSelectN :: MonadIO m => NE a -> m a
@@ -1286,7 +1294,7 @@ randomizedSelectN
     d (x, []) = return x
     d (x, xs@(_:_)) = do
       let xxs = x:xs
-      ix <- randomizedIndex xxs
+      ix <- randomizedIndex (0, length xxs - 1)
       return $ xxs !! ix
 
 randomizedSelect :: MonadIO m => [a] -> m (Maybe a)
@@ -1297,7 +1305,7 @@ randomizedSelect
     d []   =  return Nothing
     d [x]  =  return $ Just x
     d xs@(_:_:_)  =  do
-      ix <- randomizedIndex xs
+      ix <- randomizedIndex (0, length xs - 1)
       return $ Just $ xs !! ix
 
 ---
