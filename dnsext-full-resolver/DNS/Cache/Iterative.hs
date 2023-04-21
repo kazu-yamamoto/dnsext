@@ -898,8 +898,8 @@ fillDelegationDS src dest
     fill dss = return dest { delegationDS = dss }
     query = do
       disableV6NS <- lift $ asks disableV6NS_
-      let ips = takeDEntryIPs disableV6NS (delegationNS src)
-          nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
+      ips <- selectIPs 4 $ takeDEntryIPs disableV6NS (delegationNS src)
+      let nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
       if null ips
         then lift nullIPs
@@ -928,8 +928,8 @@ fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = [], ..}
     fill dnskeys = return d { delegationDNSKEY = dnskeys }
     query = do
       disableV6NS <- lift $ asks disableV6NS_
-      let ips = takeDEntryIPs disableV6NS delegationNS
-          nullIPs = logLn Log.NOTICE "fillDelegationDNSKEY: ip list is null" *> return d
+      ips <- selectIPs 4 $ takeDEntryIPs disableV6NS delegationNS
+      let nullIPs = logLn Log.NOTICE "fillDelegationDNSKEY: ip list is null" *> return d
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDNSKEY: " ++ es) *> return d
       if null ips
         then lift nullIPs
@@ -967,7 +967,7 @@ steps of root priming
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
   disableV6NS <- lift $ asks disableV6NS_
-  let ips = takeDEntryIPs disableV6NS hintDes
+  ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
   lift $ logLines Log.INFO $ "root-server addresses for priming:" : [ "\t" ++ show ip | ip <- ips ]
   ekeys <- cachedDNSKEY [rootSepDS] ips "."
   either (return . Left . emsg) (body ips) ekeys
@@ -1191,7 +1191,8 @@ delegationIPs dc Delegation{..} = do
   lift $ logLn Log.INFO $ "zone: " ++ show delegationZoneDomain ++ ":\n" ++ ppDelegation delegationNS
   disableV6NS <- lift $ asks disableV6NS_
 
-  let ips = takeDEntryIPs disableV6NS delegationNS
+  let ipnum = 4
+      ips = takeDEntryIPs disableV6NS delegationNS
 
       takeNames (DEonlyNS name) xs = name : xs
       takeNames _               xs = xs
@@ -1199,7 +1200,7 @@ delegationIPs dc Delegation{..} = do
       names = foldr takeNames [] $ uncurry (:) delegationNS
 
       result
-        | not (null ips)    =  return ips
+        | not (null ips)    =  selectIPs ipnum ips
         | not (null names)  =  do
             mayName <- randomizedSelect names
             let neverReach = do
