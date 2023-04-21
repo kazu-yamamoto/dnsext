@@ -671,7 +671,7 @@ resolveJustDC dc n typ
   root <- refreshRoot
   nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
   sas <- delegationIPs dc nss
-  lift $ logLines Log.INFO $ [ "resolve-just: selected addrs: " ++ show (sa, n, typ) | sa <- sas ]
+  lift $ logLines Log.INFO $ "resolve-just: selected addresses:" : [ "\t" ++ show (sa, n, typ) | sa <- sas ]
   let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
   (,) <$> norec dnssecOK sas n typ <*> pure nss
     where
@@ -747,7 +747,7 @@ iterative_ dc nss0 (x:xs) =
     stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss@Delegation{..} = do
       sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-      lift $ logLines Log.INFO $ [ "iterative: selected addrs: " ++ show (sa, name, A) | sa <- sas ]
+      lift $ logLines Log.INFO $ "iterative: selected addresses:" : [ "\t" ++ show (sa, name, A) | sa <- sas ]
       let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
       {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
          See the following document:
@@ -968,6 +968,7 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
   disableV6NS <- lift $ asks disableV6NS_
   let ips = takeDEntryIPs disableV6NS hintDes
+  lift $ logLines Log.INFO $ "root-server addresses for priming:" : [ "\t" ++ show ip | ip <- ips ]
   ekeys <- cachedDNSKEY [rootSepDS] ips "."
   either (return . Left . emsg) (body ips) ekeys
   where
@@ -1098,7 +1099,7 @@ verifyAndCache dnskeys rrs@(_:_) sigs rank = do
   now <- liftIO =<< asks currentSeconds_
   let crrsError []                          _           =    return (rrsetEmpty, return ())
       crrsError sortedRRs@(ResourceRecord{..}:_) _ = do
-        logLines Log.NOTICE $ "verifyAndCache: no caching RR set:" : map (("  " ++) . show) rrs
+        logLines Log.NOTICE $ "verifyAndCache: no caching RR set:" : map (("\t" ++) . show) rrs
         return (RRset rrname rrtype rrclass rrttl [DNS.rdata x | x <- sortedRRs] [], return ())
   withVerifiedRRset now dnskeys rrs sigs crrsError $
     \_sortedRRs dom typ cls minTTL rds sigrds ->
@@ -1187,7 +1188,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
 delegationIPs dc Delegation{..} = do
-  lift $ logLn Log.INFO $ ppDelegation delegationNS
+  lift $ logLn Log.INFO $ "zone: " ++ show delegationZoneDomain ++ ":\n" ++ ppDelegation delegationNS
   disableV6NS <- lift $ asks disableV6NS_
 
   let ips = takeDEntryIPs disableV6NS delegationNS
@@ -1343,7 +1344,7 @@ cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
   either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
-    crrsError _ = logLines Log.NOTICE $ "cacheNoRRSIG: no caching RR set:" : map (("  " ++) . show) rrs0
+    crrsError _ = logLines Log.NOTICE $ "cacheNoRRSIG: no caching RR set:" : map (("\t" ++) . show) rrs0
     insert hrrs = do
       insertRRSet <- asks insert_
       hrrs $ \dom typ cls ttl rds -> do
@@ -1394,15 +1395,15 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
     ncWarn s
       | not $ null answer  =  do logLines Log.DEBUG $
                                    [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
-                                   , "  because of non empty answers:"
+                                   , "\tbecause of non empty answers:"
                                    ] ++
-                                   map (("  " ++) . show) answer
+                                   map (("\t" ++) . show) answer
                                  return []
       | otherwise          =  do logLines Log.NOTICE $
                                    [ "cacheEmptySection: from-domain=" ++ show zoneDom ++ ", domain=" ++ show dom ++ ": " ++ s
-                                   , "  authority section:"
+                                   , "\tauthority section:"
                                    ] ++
-                                   map (("  " ++) . show) (DNS.authority msg)
+                                   map (("\t" ++) . show) (DNS.authority msg)
                                  return []
       where answer = DNS.answer msg
 
