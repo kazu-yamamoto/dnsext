@@ -49,9 +49,8 @@ type PutLines = Level -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
 type Flush = IO ()
 
-newFastLogger :: Output -> Level -> IO (PutLines, GetQueueSize, Flush)
-newFastLogger out loggerLevel = do
-  let demoFlag = DisableDemo
+newFastLogger :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Flush)
+newFastLogger out loggerLevel demoFlag = do
   loggerSet <- newLoggerSet bufsize
   let enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
       logLines lv = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
@@ -67,9 +66,8 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
-new outFh loggerLevel = do
-  let demoFlag = DisableDemo
+new :: Handle -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
+new outFh loggerLevel demoFlag = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8

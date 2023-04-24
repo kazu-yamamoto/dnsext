@@ -114,7 +114,8 @@ main = do
             flagCD = update requestCD setRequestCD tblFlagCD
             flagAD = update requestAD setRequestAD tblFlagAD
             ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
-        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO ictl dom typ
+            demoFlag = if optDemo then Log.EnableDemo else Log.DisableDemo
+        ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO demoFlag ictl dom typ
         case ex of
           Left err -> fail err
           Right rs -> putStr $ pprResult rs

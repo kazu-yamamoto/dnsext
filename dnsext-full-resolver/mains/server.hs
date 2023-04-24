@@ -111,7 +111,7 @@ parseOptions args
 run :: ServerOptions -> IO ()
 run opts =
   Server.run
-  (fastLogger opts) (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
+  (fastLogger opts) (logOutput opts) (logLevel opts) (logDemo opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
   (workers opts) (workerSharedQueue opts) (qsizePerWorker opts)
   (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 

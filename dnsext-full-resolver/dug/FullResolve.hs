@@ -14,21 +14,22 @@ import DNS.Types
 fullResolve :: Bool
             -> Log.Output
             -> Log.Level
+            -> Log.DemoFlag
             -> IterativeControls
             -> String
             -> TYPE
             -> IO (Either String DNSMessage)
-fullResolve disableV6NS logOutput logLevel ctl n ty = do
-  (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel
+fullResolve disableV6NS logOutput logLevel logDemo ctl n ty = do
+  (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel logDemo
   mapM_ forkIO $ loops
   out <- resolve cxt ctl n ty
   putLines Log.INFO ["--------------------"]
   flushLog
   return out
 
-setup :: Bool -> Log.Output -> Log.Level -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Env)
-setup disableV6NS logOutput logLevel = do
-  (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel
+setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Env)
+setup disableV6NS logOutput logLevel logDemo = do
+  (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel logDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
   memo <- Cache.getMemo cacheConf
