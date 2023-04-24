@@ -15,6 +15,7 @@ data ServerOptions =
   ServerOptions
   { logOutput :: Log.Output
   , logLevel :: Log.Level
+  , logDemo :: Log.DemoFlag
   , maxKibiEntries :: Int
   , disableV6NS :: Bool
   , workers :: Int
@@ -32,6 +33,7 @@ defaultOptions =
   ServerOptions
   { logOutput = Log.Stdout
   , logLevel = Log.NOTICE
+  , logDemo = Log.DisableDemo
   , maxKibiEntries = 2 * 1024
   , disableV6NS = False
   , workers = 2
@@ -54,6 +56,9 @@ descs =
   , Option ['l'] ["log-level"]
     (ReqArg (\s opts -> readEither (map toUpper s) >>= \x -> return opts { logLevel = x }) "{WARN|NOTICE|INFO|DEBUG}")
     "server log-level"
+  , Option [] ["demo"]
+    (NoArg $ \opts -> return opts { logDemo = Log.EnableDemo })
+    "enable demo-log output"
   , Option ['M'] ["max-cache-entries"]
     (ReqArg (\s opts -> readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts { maxKibiEntries = x }) "POSITIVE_INTEGER")
     ("max K-entries in cache (1024 entries per 1). default is " ++ show (maxKibiEntries defaultOptions) ++ " K-entries")
