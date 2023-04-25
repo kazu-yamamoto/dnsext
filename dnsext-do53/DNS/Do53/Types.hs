@@ -183,6 +183,7 @@ data ResolvInfo = ResolvInfo {
     rinfoHostName      :: HostName
   , rinfoPortNumber    :: PortNumber
   , rinfoActions       :: ResolvActions
+  , rinfoDebug         :: Bool
   }
 
 defaultResolvInfo :: ResolvInfo
@@ -190,6 +191,7 @@ defaultResolvInfo = ResolvInfo {
     rinfoHostName      = "127.0.0.1"
   , rinfoPortNumber    = 53
   , rinfoActions       = defaultResolvActions
+  , rinfoDebug         = False
   }
 
 data Result = Result {
