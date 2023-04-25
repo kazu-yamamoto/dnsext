@@ -364,7 +364,7 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- >>> let parser = getDomain' True 0
 -- >>> let input = "\3foo\192\0\3bar\0"
 -- >>> runSGet parser input
--- Left (DecodeError "invalid pointer: self pointing")
+-- Left (DecodeError "invalid pointer 0 at 4: self pointing")
 --
 
 -- | Get a domain name.
