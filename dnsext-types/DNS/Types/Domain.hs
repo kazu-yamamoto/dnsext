@@ -382,7 +382,9 @@ getDomain' allowCompression ptrLimit = do
     getdomain pos c n
   where
     getdomain pos c n
-      | c == 0 = return []
+      | c == 0 = do
+          pushDomain pos []
+          return []
       -- As for now, extended labels have no use.
       -- This may change some time in the future.
       | isExtLabel c = return []
