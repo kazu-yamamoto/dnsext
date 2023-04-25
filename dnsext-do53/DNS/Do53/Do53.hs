@@ -18,6 +18,7 @@ import DNS.Types
 import DNS.Types.Decode
 import Network.Socket (HostName, close)
 import qualified Network.UDP as UDP
+import System.IO (hPutStrLn, stderr, hFlush)
 import System.IO.Error (annotateIOError)
 
 import DNS.Do53.IO
@@ -104,15 +105,27 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
         ans <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
-            Left  e -> E.throwIO e
+            Left  e -> do
+                let showHex8 w
+                      | w >= 16    =  showHex w
+                      | otherwise  =  ('0' :) . showHex w
+                    dumpBS = ("\"" ++) . (++ "\"" ) . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
+                debugLn $ "udpResolver.getAnswer: decodeAt Left: " ++ rinfoHostName ++ ", " ++ dumpBS ans
+                E.throwIO e
             Right msg
               | checkResp q ident msg -> do
                     let rx = BS.length ans
                     return $ Reply msg tx rx
               -- Just ignoring a wrong answer.
-              | otherwise             -> getAnswer ident recv tx
+              | otherwise             -> do
+                    debugLn $ "udpResolver.getAnswer: checkResp error: " ++ rinfoHostName ++ ", " ++ show msg
+                    getAnswer ident recv tx
 
     open = UDP.clientSocket rinfoHostName (show rinfoPortNumber) True -- connected
+
+    debugLn s
+      | rinfoDebug  =  hPutStrLn stderr s *> hFlush stderr
+      | otherwise   =  pure ()
 
 ----------------------------------------------------------------
 
