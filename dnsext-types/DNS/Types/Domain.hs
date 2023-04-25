@@ -390,13 +390,11 @@ getDomain' allowCompression ptrLimit = do
       | isPointer c = do
           d <- getInt8
           let offset = n * 256 + d
-          when (offset == ptrLimit) $
-              failSGet "invalid pointer: self pointing"
-          when (offset > ptrLimit) $
-              failSGet "invalid pointer: forward pointing"
+          when (offset == ptrLimit) $ failure "self pointing" pos offset
+          when (offset > ptrLimit)  $ failure "forward pointing" pos offset
           mx <- popDomain offset
           case mx of
-            Nothing -> failSGet "invalid pointer: invalid area"
+            Nothing -> failure "invalid area" pos offset
             Just lls -> do
                 -- Supporting double pointers.
                 pushDomain pos lls
@@ -412,6 +410,7 @@ getDomain' allowCompression ptrLimit = do
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
     isExtLabel c = not (testBit c 7) && testBit c 6
+    failure msg pos offset = failSGet $ "invalid pointer " ++ show offset ++ " at " ++ show pos ++ ": " ++ msg
 
 ----------------------------------------------------------------
 
