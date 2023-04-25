@@ -92,5 +92,5 @@ auto domain typ lim actions ip0 ss0 = loop ss0
         ips = case v4s ++ v6s of
           [] -> [(ip0,port)]
           xs -> map (,port) xs
-        rinfos = map (\(x,y) -> ResolvInfo x y actions) ips
+        rinfos = map (\(x,y) -> defaultResolvInfo {rinfoHostName = x, rinfoPortNumber = y, rinfoActions = actions}) ips
         renv = ResolvEnv resolver True rinfos

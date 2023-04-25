@@ -287,7 +287,7 @@ resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
 resolvInfos :: ResolvActions -> [(HostName, PortNumber)] -> [ResolvInfo]
 resolvInfos actions hps = map mk hps
   where
-    mk (h,p) = ResolvInfo {
+    mk (h,p) = defaultResolvInfo {
             rinfoHostName   = h
           , rinfoPortNumber = p
           , rinfoActions    = actions
