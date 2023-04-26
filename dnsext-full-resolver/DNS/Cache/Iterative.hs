@@ -771,7 +771,12 @@ iterative_ dc nss0 (x:xs) =
             | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss
       md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
-      let fills d = fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+      let fills d = do
+            filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+            when (not (null delegationDS) && null delegationDNSKEY) $ do
+              lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
+              throwDnsError DNS.ServerFailure
+            return filled
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
 
 -- If Nothing, it is a miss-hit against the cache.
