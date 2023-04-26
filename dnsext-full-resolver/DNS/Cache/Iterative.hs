@@ -799,15 +799,15 @@ lookupDelegation dom = do
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
   -- There is delegation information only when there is a selectable NS
-  (putVerifyLog, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+  (verifyMsg, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
     let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
     (RRset{..}, cacheDS) <- verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
-    let verifyLog
-          | null nsps         =  logWithDomain "no delegation."
-          | null dsrds        =  logWithDomain "no DS, so no verify."
-          | null rrsGoodSigs  =  logWithDomain "verification failed."
-          | otherwise         =  logWithDomain "success: verifying RRSIG of DS"
-    return (verifyLog, if null rrsGoodSigs then [] else dsrds, cacheDS)
+    let verifyMsg
+          | null nsps         =  "no delegation"
+          | null dsrds        =  "delegation - no DS, so no verify"
+          | null rrsGoodSigs  =  "delegation - verification failed - RRSIG of DS"
+          | otherwise         =  "delegation - verification success - RRSIG of DS"
+    return (verifyMsg, if null rrsGoodSigs then [] else dsrds, cacheDS)
 
   (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -832,13 +832,13 @@ delegationWithCache zoneDom dnskeys dom msg = do
         cacheAdds
         return x
 
-  putVerifyLog
+  logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
   maybe
     (ncache $> NoDelegation)
     (fmap HasDelegation . withCache)
     $ takeDelegationSrc nsps dss adds
   where
-    logWithDomain s = logLn Log.INFO $ "delegationWithCache: " ++ show zoneDom ++ " -> " ++ show dom ++ ", " ++ s
+    domTraceMsg = show zoneDom ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
       let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
