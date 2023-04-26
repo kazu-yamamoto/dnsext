@@ -661,6 +661,7 @@ cacheAnswer Delegation{..} dom typ msg
               | rrsetVerified xRRset  =  ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, pure ())
               | otherwise             =  ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, throwDnsError DNS.ServerFailure)
         lift $ logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
+        lift $ logLn Log.DEMO verifyMsg
         raiseOnVerifyFailure
         return ([xRRset], [])
   where
