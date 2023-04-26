@@ -614,8 +614,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
 resolveCNAME bn = do
-  (msg, _nss@Delegation{..}) <- resolveJust bn CNAME
-  lift $ (,) msg <$> cacheAnswer delegationZoneDomain delegationDNSKEY bn CNAME msg
+  (msg, d) <- resolveJust bn CNAME
+  lift $ (,) msg <$> cacheAnswer d bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
@@ -623,14 +623,14 @@ resolveCNAME bn = do
 resolveTYPE :: Domain -> TYPE
             -> DNSQuery (DNSMessage, Maybe (Domain, RRset), ([RRset], [RRset]))  {- result msg, cname, verified answer, verified authority -}
 resolveTYPE bn typ = do
-  (msg, _nss@Delegation{..}) <- resolveJust bn typ
+  (msg, delegation@Delegation{..}) <- resolveJust bn typ
   let checkTypeRR =
         when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
           throwDnsError DNS.UnexpectedRDATA  -- CNAME と目的の TYPE が同時に存在した場合はエラー
   withSection rankedAnswer msg $ \rrs rank -> do
     let (cnames, cnameRRs) = unzip $ cnameList bn (,) rrs
         noCNAME   = do
-          (,,) msg Nothing <$> cacheAnswer delegationZoneDomain delegationDNSKEY bn typ msg
+          (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
         withCNAME cn = do
           (cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY cnameRRs (rrsigList bn CNAME rrs) rank
           cacheCNAME
@@ -639,18 +639,24 @@ resolveTYPE bn typ = do
       []    ->  lift noCNAME
       cn:_  ->  checkTypeRR *> lift (withCNAME cn)
 
-cacheAnswer :: Domain -> [RD_DNSKEY] -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
-cacheAnswer zoneDom dnskeys dom typ msg
+cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
+cacheAnswer Delegation{..} dom typ msg
   | null $ DNS.answer msg  =  do
       case rcode of
-        DNS.NoErr    ->  (,) [] <$> cacheEmptySection zoneDom dnskeys dom typ rankedAnswer msg
-        DNS.NameErr  ->  (,) [] <$> cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAnswer msg
+        DNS.NoErr    ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom typ rankedAnswer msg
+        DNS.NameErr  ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom Cache.nxTYPE rankedAnswer msg
         _            ->  return ([], [])
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
         let isX rr = rrname rr == dom && rrtype rr == typ
-        (xRRset, cacheX) <- verifyAndCache dnskeys (filter isX rrs) (rrsigList dom typ rrs) rank
+            sigs = rrsigList dom typ rrs
+        (xRRset, cacheX) <- verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
         cacheX
+        let verifyMsg
+              | null delegationDS     =  "no verification - no DS, " ++ show dom ++ " " ++ show typ
+              | rrsetVerified xRRset  =  "verification success - RRSIG of " ++ show dom ++ " " ++ show typ
+              | otherwise             =  "verification failed - RRSIG of " ++ show dom ++ " " ++ show typ
+        logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
         return ([xRRset], [])
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
