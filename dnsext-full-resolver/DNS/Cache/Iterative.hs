@@ -841,16 +841,18 @@ delegationWithCache zoneDom dnskeys dom msg = do
           else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg
         | otherwise             =  pure []
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+      demoNoDelegation =  logLn Log.DEMO $ "no delegation: " ++ domTraceMsg
 
   let withCache x = do
         cacheDS
         cacheNS
         cacheAdds
+        logLn Log.DEMO $ verifyMsg ++ ": " ++ domTraceMsg ++ "\n" ++ ppDelegation (delegationNS x)
         return x
 
   logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
   maybe
-    (ncache $> NoDelegation)
+    (ncache *> demoNoDelegation $> NoDelegation)
     (fmap HasDelegation . withCache)
     $ takeDelegationSrc nsps dss adds
   where
