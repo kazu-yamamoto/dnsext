@@ -2,12 +2,11 @@ module FullResolve where
 
 import Control.Concurrent (forkIO)
 import Data.String (fromString)
-import qualified DNS.Types as DNS
 import qualified DNS.Do53.Memo as Cache
 
 import qualified DNS.Cache.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Iterative (Env (..), QueryError, IterativeControls)
+import DNS.Cache.Iterative (Env (..), IterativeControls)
 import qualified DNS.Cache.Iterative as Iterative
 
 import DNS.Types
@@ -18,7 +17,7 @@ fullResolve :: Bool
             -> IterativeControls
             -> String
             -> TYPE
-            -> IO (Either QueryError DNSMessage)
+            -> IO (Either String DNSMessage)
 fullResolve disableV6NS logOutput logLevel ctl n ty = do
   (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel
   mapM_ forkIO $ loops
@@ -38,12 +37,10 @@ setup disableV6NS logOutput logLevel = do
   cxt <- Iterative.newEnv putLines disableV6NS ucache tcache
   return (putLines, flush, [logLoop], cxt)
 
-resolve :: Env -> IterativeControls -> String -> TYPE -> IO (Either QueryError DNSMessage)
+resolve :: Env -> IterativeControls -> String -> TYPE -> IO (Either String DNSMessage)
 resolve cxt ictl n ty =
-  fmap toMessage <$>
-  Iterative.runDNSQuery (Iterative.replyResult (fromString n) ty) cxt ictl
+  toMessage <$>
+  Iterative.runDNSQuery (Iterative.replyResult domain ty) cxt ictl
   where
-    toMessage (rc, ans, auth) = defaultResponse { DNS.header = h { DNS.flags = f }, DNS.answer = ans, DNS.authority = auth }
-      where
-        h = DNS.header defaultResponse
-        f = (DNS.flags h) { DNS.rcode = rc }
+    domain = fromString n
+    toMessage er = Iterative.replyMessage er 0 {- dummy id -} [Question domain ty classIN]

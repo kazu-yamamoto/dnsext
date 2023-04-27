@@ -111,7 +111,7 @@ main = do
             ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
         ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO ictl dom typ
         case ex of
-          Left err -> fail $ show err
+          Left err -> fail err
           Right rs -> putStr $ pprResult rs
       else do
         t0 <- T.getUnixTime
