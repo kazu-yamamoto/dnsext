@@ -777,6 +777,7 @@ iterative_ dc nss0 (x:xs) =
             filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
             when (not (null delegationDS) && null delegationDNSKEY) $ do
               lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
+              lift $ logLn Log.DEMO $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
               throwDnsError DNS.ServerFailure
             return filled
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
