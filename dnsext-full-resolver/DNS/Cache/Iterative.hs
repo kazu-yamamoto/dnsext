@@ -1205,7 +1205,10 @@ delegationIPs dc Delegation{..} = do
   let ipnum = 4
       ips = takeDEntryIPs disableV6NS delegationNS
 
-      takeNames (DEonlyNS name) xs = name : xs
+      takeNames (DEonlyNS name) xs
+        | not $
+          name `DNS.isSubDomainOf`
+          delegationZoneDomain     = name : xs  {- skip sub-domain without glue to avoid loop -}
       takeNames _               xs = xs
 
       names = foldr takeNames [] $ uncurry (:) delegationNS
@@ -1223,7 +1226,14 @@ delegationIPs dc Delegation{..} = do
             throwDnsError DNS.ServerFailure
         | otherwise         = do
             lift $ logLn Log.INFO $ "delegationIPs: illegal-domain: " ++ show delegationZoneDomain ++ ", delegation is empty."
+              ++ " without glue sub-domains: " ++ show subNames
             throwDnsError DNS.IllegalDomain
+
+      takeSubNames (DEonlyNS name) xs
+        | name `DNS.isSubDomainOf`
+          delegationZoneDomain        = name : xs  {- sub-domain name without glue -}
+      takeSubNames _               xs = xs
+      subNames = foldr takeSubNames [] $ uncurry (:) delegationNS
 
   result
 
