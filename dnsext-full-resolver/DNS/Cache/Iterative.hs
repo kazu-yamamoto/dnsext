@@ -771,7 +771,7 @@ iterative_ dc nss0 (x:xs) =
             | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss
       md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
-      let fills d = fillDelegationDNSKEY =<< fillDelegationDS nss d
+      let fills d = fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
 
 -- If Nothing, it is a miss-hit against the cache.
@@ -896,8 +896,8 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
-fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
-fillDelegationDS src dest
+fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillDelegationDS dc src dest
   | null $ delegationDNSKEY src     =  return dest  {- no DNSKEY, not chained -}
   | null $ delegationDS src         =  return dest  {- no DS, not chained -}
   | not $ null $ delegationDS dest  =  return dest  {- already filled -}
@@ -907,8 +907,7 @@ fillDelegationDS src dest
     toDSs (rrs, _rank) = rrListWith DS DNS.fromRData (delegationZoneDomain dest) const rrs
     fill dss = return dest { delegationDS = dss }
     query = do
-      disableV6NS <- lift $ asks disableV6NS_
-      ips <- selectIPs 4 $ takeDEntryIPs disableV6NS (delegationNS src)
+      ips <- delegationIPs dc src
       let nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
       if null ips
@@ -927,18 +926,17 @@ queryDS dnskeys ips dom = do
       else lift cacheDS *> return (Right dsrds)
 
 
-fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY d@Delegation{delegationDS = []}                           =  return d  {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = _:_}  =  return d  {- already filled -}
-fillDelegationDNSKEY d@Delegation{delegationDS = _:_, delegationDNSKEY = [], ..} =
+fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY _  d@Delegation{delegationDS = []}                           =  return d  {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY _  d@Delegation{delegationDS = _:_, delegationDNSKEY = _:_}  =  return d  {- already filled -}
+fillDelegationDNSKEY dc d@Delegation{delegationDS = _:_, delegationDNSKEY = [], ..} =
   maybe query (lift . fill . toDNSKEYs) =<< lift (lookupCache delegationZoneDomain DNSKEY)
 
   where
     toDNSKEYs (rrs, _) = rrListWith DNSKEY DNS.fromRData delegationZoneDomain const rrs
     fill dnskeys = return d { delegationDNSKEY = dnskeys }
     query = do
-      disableV6NS <- lift $ asks disableV6NS_
-      ips <- selectIPs 4 $ takeDEntryIPs disableV6NS delegationNS
+      ips <- delegationIPs dc d
       let nullIPs = logLn Log.NOTICE "fillDelegationDNSKEY: ip list is null" *> return d
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDNSKEY: " ++ es) *> return d
       if null ips
