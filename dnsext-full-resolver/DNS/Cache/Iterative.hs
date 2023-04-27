@@ -1179,6 +1179,7 @@ axList disableV6NS pdom h = foldr takeAx []
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
   logLines_ cxt Log.DEBUG $ ["norec: " ++ show name ++ ", " ++ show typ ++ ", " ++ show aservers]
+  logLines_ cxt Log.DEMO $ ["query " ++ show name ++ " " ++ show typ ++ " to " ++ show aservers]
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver
