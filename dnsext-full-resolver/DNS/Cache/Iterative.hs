@@ -619,7 +619,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
 resolveCNAME bn = do
   (msg, d) <- resolveJust bn CNAME
-  lift $ (,) msg <$> cacheAnswer d bn CNAME msg
+  (,) msg <$> cacheAnswer d bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
@@ -640,12 +640,12 @@ resolveTYPE bn typ = do
           cacheCNAME
           return (msg, Just (cn, cnameRRset), ([], []))
     case cnames of
-      []    ->  lift noCNAME
+      []    ->  noCNAME
       cn:_  ->  checkTypeRR *> lift (withCNAME cn)
 
-cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
+cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer Delegation{..} dom typ msg
-  | null $ DNS.answer msg  =  do
+  | null $ DNS.answer msg  = lift $ do
       case rcode of
         DNS.NoErr    ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom typ rankedAnswer msg
         DNS.NameErr  ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom Cache.nxTYPE rankedAnswer msg
@@ -654,13 +654,14 @@ cacheAnswer Delegation{..} dom typ msg
       withSection rankedAnswer msg $ \rrs rank -> do
         let isX rr = rrname rr == dom && rrtype rr == typ
             sigs = rrsigList dom typ rrs
-        (xRRset, cacheX) <- verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
-        cacheX
-        let verifyMsg
-              | null delegationDS     =  "no verification - no DS, " ++ show dom ++ " " ++ show typ
-              | rrsetVerified xRRset  =  "verification success - RRSIG of " ++ show dom ++ " " ++ show typ
-              | otherwise             =  "verification failed - RRSIG of " ++ show dom ++ " " ++ show typ
-        logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
+        (xRRset, cacheX) <- lift $ verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
+        lift cacheX
+        let (verifyMsg, raiseOnVerifyFailure)
+              | null delegationDS     =  ("no verification - no DS, " ++ show dom ++ " " ++ show typ, pure ())
+              | rrsetVerified xRRset  =  ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, pure ())
+              | otherwise             =  ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, throwDnsError DNS.ServerFailure)
+        lift $ logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
+        raiseOnVerifyFailure
         return ([xRRset], [])
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
