@@ -50,6 +50,7 @@ import qualified Data.Map as Map
 import Data.Maybe (listToMaybe, isJust, fromMaybe)
 import qualified Data.Set as Set
 import Numeric (readDec, readHex, showHex)
+import System.Environment (lookupEnv)
 
 -- other packages
 import System.Random (randomR, getStdRandom)
@@ -94,6 +95,7 @@ data Env =
   , currentSeconds_ :: IO EpochTime
   , timeString_ :: IO ShowS
   , idGen_ :: IO DNS.Identifier
+  , dnsextDebug_ :: !Bool
   }
 
 {- datatypes to propagate request flags -}
@@ -173,10 +175,12 @@ newEnv :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   genId <- newConcurrentGenId
   rootRef <- newIORef Nothing
+  dnsextDebug <- maybe False ((== "1") . take 1) <$> lookupEnv "DNSEXT_DEBUG"
   let cxt = Env
         { logLines_ = putLines, disableV6NS_ = disableV6NS
         , insert_ = ins, getCache_ = getCache, currentRoot_ = rootRef
-        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId }
+        , currentSeconds_ = curSec, timeString_ = timeStr, idGen_ = genId
+        , dnsextDebug_ = dnsextDebug }
   return cxt
 
 dnsQueryT :: (Env -> IterativeControls -> IO (Either QueryError a)) -> DNSQuery a
@@ -1174,6 +1178,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
               ractionGenId   = idGen_ cxt
             , ractionGetTime = currentSeconds_ cxt
             }
+          , rinfoDebug = dnsextDebug_ cxt
           }
         | aserver <- aservers
         ]
