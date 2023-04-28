@@ -44,11 +44,11 @@ check vector key value =
             Just https -> do
                 case lookupSvcParam key $ https_params https of
                   Nothing -> error "no such parameter"
-                  Just o -> case decodeSvcParamValue o of
+                  Just o -> case fromSvcParamValue o of
                     Nothing -> error "value cannot be decoded"
                     Just v  -> do
                         v `shouldBe` value
-                        encodeSvcParamValue v `shouldBe` o
+                        toSvcParamValue v `shouldBe` o
 
 testVectors :: [ByteString]
 testVectors = [ vectorAliasMode

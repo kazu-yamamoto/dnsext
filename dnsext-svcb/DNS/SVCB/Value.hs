@@ -15,19 +15,19 @@ import DNS.SVCB.Key
 
 ----------------------------------------------------------------
 
-type SvcParamValue = Opaque
+newtype SvcParamValue = SvcParamValue Opaque deriving (Show, Eq, Ord)
 
 ----------------------------------------------------------------
 
 class SPV a where
-    encodeSvcParamValue :: a -> Opaque
-    decodeSvcParamValue :: Opaque -> Maybe a
+    fromSvcParamValue :: SvcParamValue -> Maybe a
+    toSvcParamValue :: a -> SvcParamValue
 
-encodeSPV :: SPut () -> Opaque
-encodeSPV = Opaque.fromByteString . runSPut
+toSPV :: SPut () -> SvcParamValue
+toSPV = SvcParamValue . Opaque.fromByteString . runSPut
 
-decodeSPV :: (Int -> SGet a) -> Opaque -> Maybe a
-decodeSPV parser o = case runSGet (parser len) bs of
+fromSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
+fromSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
     Right (r,_) -> Just r
     _           -> Nothing
   where
@@ -44,9 +44,9 @@ instance Show SPV_Mandatory where
     show (SPV_Mandatory ks) = show ks
 
 instance SPV SPV_Mandatory where
-    encodeSvcParamValue (SPV_Mandatory ks) = encodeSPV $
+    toSvcParamValue (SPV_Mandatory ks) = toSPV $
         mapM_ (put16 . fromSvcParamKey) ks
-    decodeSvcParamValue = decodeSPV $ \len -> do
+    fromSvcParamValue = fromSPV $ \len -> do
         SPV_Mandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
 
 ----------------------------------------------------------------
@@ -59,8 +59,8 @@ instance Show SPV_Port where
     show (SPV_Port p) = show p
 
 instance SPV SPV_Port where
-    encodeSvcParamValue (SPV_Port p) = encodeSPV $ put16 $ fromIntegral p
-    decodeSvcParamValue = decodeSPV $ \_ -> SPV_Port . fromIntegral <$> get16
+    toSvcParamValue (SPV_Port p) = toSPV $ put16 $ fromIntegral p
+    fromSvcParamValue = fromSPV $ \_ -> SPV_Port . fromIntegral <$> get16
 
 ----------------------------------------------------------------
 
@@ -72,9 +72,9 @@ instance Show SPV_IPv4Hint where
     show (SPV_IPv4Hint is) = show is
 
 instance SPV SPV_IPv4Hint where
-    encodeSvcParamValue (SPV_IPv4Hint is) = encodeSPV $ do
+    toSvcParamValue (SPV_IPv4Hint is) = toSPV $ do
         mapM_ (mapM_ putInt8 . fromIPv4) is
-    decodeSvcParamValue = decodeSPV $ \len -> do
+    fromSvcParamValue = fromSPV $ \len -> do
         SPV_IPv4Hint <$> sGetMany "IPv4Hint" len (toIPv4 <$> getNBytes 4)
 
 ----------------------------------------------------------------
@@ -87,9 +87,9 @@ instance Show SPV_IPv6Hint where
     show (SPV_IPv6Hint is) = show is
 
 instance SPV SPV_IPv6Hint where
-    encodeSvcParamValue (SPV_IPv6Hint is) = encodeSPV $ do
+    toSvcParamValue (SPV_IPv6Hint is) = toSPV $ do
         mapM_ (mapM_ putInt8 . fromIPv6b) is
-    decodeSvcParamValue = decodeSPV $ \len -> do
+    fromSvcParamValue = fromSPV $ \len -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
 
 ----------------------------------------------------------------
@@ -105,12 +105,12 @@ instance Show SPV_ALPN where
     show (SPV_ALPN as) = show $ map (C8.unpack . Short.fromShort) as
 
 instance SPV SPV_ALPN where
-    encodeSvcParamValue (SPV_ALPN as) = encodeSPV $ mapM_ alpn as
+    toSvcParamValue (SPV_ALPN as) = toSPV $ mapM_ alpn as
       where
         alpn bs = do
             putInt8 $ Short.length bs
             putShortByteString bs
-    decodeSvcParamValue = decodeSPV $ \len -> do
+    fromSvcParamValue = fromSPV $ \len -> do
         SPV_ALPN <$> sGetMany "ALPN" len alpn
       where
         alpn = do
@@ -122,8 +122,8 @@ instance SPV SPV_ALPN where
 newtype SPV_Opaque = SPV_Opaque Opaque deriving (Eq,Ord,Show)
 
 instance SPV SPV_Opaque where
-    encodeSvcParamValue (SPV_Opaque o) = o
-    decodeSvcParamValue o = Just $ SPV_Opaque o
+    toSvcParamValue (SPV_Opaque o) = SvcParamValue o
+    fromSvcParamValue (SvcParamValue o) = Just $ SPV_Opaque o
 
 ----------------------------------------------------------------
 
@@ -133,5 +133,5 @@ instance Show SPV_DoHPath where
     show (SPV_DoHPath p) = show $ C8.unpack $ Short.fromShort p
 
 instance SPV SPV_DoHPath where
-    encodeSvcParamValue (SPV_DoHPath p) = encodeSPV $ putShortByteString p
-    decodeSvcParamValue = decodeSPV $ \len -> SPV_DoHPath <$> getNShortByteString len
+    toSvcParamValue (SPV_DoHPath p) = toSPV $ putShortByteString p
+    fromSvcParamValue = fromSPV $ \len -> SPV_DoHPath <$> getNShortByteString len
