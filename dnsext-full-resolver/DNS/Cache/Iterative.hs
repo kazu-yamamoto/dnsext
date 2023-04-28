@@ -619,7 +619,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
 resolveCNAME bn = do
   (msg, d) <- resolveJust bn CNAME
-  lift $ (,) msg <$> cacheAnswer d bn CNAME msg
+  (,) msg <$> cacheAnswer d bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
@@ -640,12 +640,12 @@ resolveTYPE bn typ = do
           cacheCNAME
           return (msg, Just (cn, cnameRRset), ([], []))
     case cnames of
-      []    ->  lift noCNAME
+      []    ->  noCNAME
       cn:_  ->  checkTypeRR *> lift (withCNAME cn)
 
-cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> ContextT IO ([RRset], [RRset])
+cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer Delegation{..} dom typ msg
-  | null $ DNS.answer msg  =  do
+  | null $ DNS.answer msg  = lift $ do
       case rcode of
         DNS.NoErr    ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom typ rankedAnswer msg
         DNS.NameErr  ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom Cache.nxTYPE rankedAnswer msg
@@ -654,13 +654,15 @@ cacheAnswer Delegation{..} dom typ msg
       withSection rankedAnswer msg $ \rrs rank -> do
         let isX rr = rrname rr == dom && rrtype rr == typ
             sigs = rrsigList dom typ rrs
-        (xRRset, cacheX) <- verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
-        cacheX
-        let verifyMsg
-              | null delegationDS     =  "no verification - no DS, " ++ show dom ++ " " ++ show typ
-              | rrsetVerified xRRset  =  "verification success - RRSIG of " ++ show dom ++ " " ++ show typ
-              | otherwise             =  "verification failed - RRSIG of " ++ show dom ++ " " ++ show typ
-        logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
+        (xRRset, cacheX) <- lift $ verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
+        lift cacheX
+        let (verifyMsg, raiseOnVerifyFailure)
+              | null delegationDS     =  ("no verification - no DS, " ++ show dom ++ " " ++ show typ, pure ())
+              | rrsetVerified xRRset  =  ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, pure ())
+              | otherwise             =  ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, throwDnsError DNS.ServerFailure)
+        lift $ logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
+        lift $ logLn Log.DEMO verifyMsg
+        raiseOnVerifyFailure
         return ([xRRset], [])
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
@@ -771,7 +773,13 @@ iterative_ dc nss0 (x:xs) =
             | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss
       md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
-      let fills d = fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+      let fills d = do
+            filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+            when (not (null delegationDS) && null delegationDNSKEY) $ do
+              lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
+              lift $ logLn Log.DEMO $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
+              throwDnsError DNS.ServerFailure
+            return filled
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
 
 -- If Nothing, it is a miss-hit against the cache.
@@ -835,16 +843,18 @@ delegationWithCache zoneDom dnskeys dom msg = do
           else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg
         | otherwise             =  pure []
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+      demoNoDelegation =  logLn Log.DEMO $ "no delegation: " ++ domTraceMsg
 
   let withCache x = do
         cacheDS
         cacheNS
         cacheAdds
+        logLn Log.DEMO $ verifyMsg ++ ": " ++ domTraceMsg ++ "\n" ++ ppDelegation (delegationNS x)
         return x
 
   logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
   maybe
-    (ncache $> NoDelegation)
+    (ncache *> demoNoDelegation $> NoDelegation)
     (fmap HasDelegation . withCache)
     $ takeDelegationSrc nsps dss adds
   where
@@ -1169,6 +1179,7 @@ axList disableV6NS pdom h = foldr takeAx []
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
   logLines_ cxt Log.DEBUG $ ["norec: " ++ show name ++ ", " ++ show typ ++ ", " ++ show aservers]
+  logLines_ cxt Log.DEMO $ ["query " ++ show name ++ " " ++ show typ ++ " to " ++ show aservers]
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver

@@ -1,5 +1,6 @@
 module DNS.Cache.Log (
   Level (..),
+  DemoFlag (..),
   Output (..),
   ThreadLoop,
   PutLines,
@@ -26,11 +27,17 @@ import qualified DNS.Cache.Queue as Queue
 
 
 data Level
-  = DEBUG
+  = DEMO  {- special level to specify demo output -}
+  | DEBUG
   | INFO
   | NOTICE
   | WARN
   deriving (Eq, Ord, Show, Read)
+
+data DemoFlag
+  = DisableDemo
+  | EnableDemo
+  deriving (Eq, Show)
 
 data Output
   = Stdout
@@ -42,10 +49,11 @@ type PutLines = Level -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
 type Flush = IO ()
 
-newFastLogger :: Output -> Level -> IO (PutLines, GetQueueSize, Flush)
-newFastLogger out level = do
+newFastLogger :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Flush)
+newFastLogger out loggerLevel demoFlag = do
   loggerSet <- newLoggerSet bufsize
-  let logLines lv = when (level <= lv) . pushLogStr loggerSet . toLogStr . unlines
+  let enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
+      logLines lv = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
   return (logLines, return (-1, -1), flushLogStr loggerSet)
   where
     bufsize = 4096
@@ -58,8 +66,8 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
-new outFh level = do
+new :: Handle -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
+new outFh loggerLevel demoFlag = do
   hSetBuffering outFh LineBuffering
 
   inQ <- newQueue 8
@@ -67,10 +75,16 @@ new outFh level = do
   let body = do
         let action = maybe (putMVar flushMutex ()) (hPutStr outFh . unlines)
         either (const $ return ()) return =<< tryAny (action =<< readQueue inQ)
-      logLines lv = when (level <= lv) . writeQueue inQ . Just
+      enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
+      logLines lv = when (enabled lv) . writeQueue inQ . Just
       flush = writeQueue inQ Nothing *> takeMVar flushMutex
 
   return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), flush)
+
+checkEnabledLevelWithDemo :: Level -> DemoFlag -> Level -> Bool
+checkEnabledLevelWithDemo loggerLevel demoFlag lv = case demoFlag of
+  DisableDemo  ->  loggerLevel <= lv
+  EnableDemo   ->  lv == DEMO
 
 -- no logging
 none :: Level -> [String] -> IO ()
