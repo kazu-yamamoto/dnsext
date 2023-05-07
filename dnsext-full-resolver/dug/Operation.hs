@@ -26,7 +26,7 @@ operate mserver port dox domain typ controls = do
         resolver = case makeResolver dox lim Nothing of
           Just r -> r
           Nothing -> let retry = DNS.lconfRetry conf
-                     in udpTcpResolver lim retry
+                     in udpTcpResolver retry lim
     withLookupConfAndResolver conf resolver $ \env -> do
         let q = Question (DNS.fromRepresentation domain) typ DNS.classIN
         DNS.lookupRaw env q
