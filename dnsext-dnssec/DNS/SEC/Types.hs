@@ -4,6 +4,8 @@
 {-# LANGUAGE TransformListComp #-}
 
 module DNS.SEC.Types (
+  -- * Resource data
+  -- ** Types
     TYPE (
     RRSIG
   , DS
@@ -14,21 +16,30 @@ module DNS.SEC.Types (
   , CDS
   , CDNSKEY
   )
+  -- ** DNSEC resource data
+  -- *** RRSIG RR
   , RD_RRSIG(..)
-  , RD_DS(..)
-  , RD_NSEC(..)
-  , RD_DNSKEY(..)
-  , RD_NSEC3(..)
-  , RD_NSEC3PARAM(..)
-  , RD_CDS(..)
-  , RD_CDNSKEY(..)
   , rd_rrsig
+  -- *** DS RR
+  , RD_DS(..)
   , rd_ds
+  -- *** NSEC RR
+  , RD_NSEC(..)
   , rd_nsec
+  -- *** DNSKEY RR
+  , RD_DNSKEY(..)
   , rd_dnskey
+  -- *** NSEC3 RR
+  , RD_NSEC3(..)
   , rd_nsec3
+  -- *** NSEC3PARAM RR
+  , RD_NSEC3PARAM(..)
   , rd_nsec3param
+  -- *** CDS RR
+  , RD_CDS(..)
   , rd_cds
+  -- *** CDNSKEY RR
+  , RD_CDNSKEY(..)
   , rd_cdnskey
   , get_rrsig
   , get_ds
