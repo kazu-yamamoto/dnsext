@@ -56,7 +56,8 @@ recvVC lim recvN = do
     (l2,b2) <- recvManyNN recvN 2
     when (l2 /= 2) $ E.throwIO $ DecodeError "length is broken"
     let len = decodeVCLength $ BS.concat b2
-    when (len > lim) $ E.throwIO $ DecodeError "length is over the limit"
+    when (len > lim) $ E.throwIO $ DecodeError
+      $ "length is over the limit: should be len <= lim, but (len: " ++ show len ++ ") > (lim: " ++ show lim ++ ") "
     (len', bss) <- recvManyNN recvN len
     case compare len' len of
       LT -> E.throwIO $ DecodeError "message length is not enough"
