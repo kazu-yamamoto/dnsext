@@ -8,12 +8,17 @@ module DNS.SVCB (
   , HTTPS
   )
   -- ** Resource data
-  , RD_SVCB(..)
-  , RD_HTTPS(..)
+  -- *** SVCB RR
+  , RD_SVCB
+  , rd_svcb
+  -- *** HTTPS RR
+  , RD_HTTPS
+  , rd_https
   -- * Service parameters
   , SvcParams
   , lookupSvcParam
   , extractSvcParam
+  , toSvcParams
   -- ** Service parameter keys
   , SvcParamKey (
     SPK_Mandatory
@@ -29,13 +34,35 @@ module DNS.SVCB (
   -- ** Service parameter values
   , SvcParamValue
   , SPV(..)
-  , SPV_Mandatory(..)
-  , SPV_ALPN(..)
+  --- *** Mandatory
+  , SPV_Mandatory
+  , mandatory_keys
+  , spv_mandatory
+  --- *** ALPN
+  , SPV_ALPN
+  , alpn_names
+  , spv_alpn
   , ALPN
-  , SPV_Port(..)
-  , SPV_IPv4Hint(..)
-  , SPV_IPv6Hint(..)
-  , SPV_Opaque(..)
+  --- *** Port
+  , SPV_Port
+  , port_number
+  , spv_port
+  --- *** IPv4Hint
+  , SPV_IPv4Hint
+  , hint_ipv4s
+  , spv_ipv4hint
+  --- *** IPv6Hint
+  , SPV_IPv6Hint
+  , hint_ipv6s
+  , spv_ipv6hint
+  --- *** DoHPath
+  , SPV_DoHPath
+  , dohpath
+  , spv_dohpath
+  --- *** Others
+  , SPV_Opaque
+  , opaque_value
+  , spv_opaque
   ) where
 
 import DNS.Types

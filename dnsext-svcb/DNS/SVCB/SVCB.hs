@@ -60,6 +60,9 @@ get_svcb len = do
         val <- getOpaque lng
         return (key, SvcParamValue val)
 
+rd_svcb :: Word16 -> Domain -> SvcParams -> RData
+rd_svcb p d s = toRData $ RD_SVCB p d s
+
 ----------------------------------------------------------------
 
 data RD_HTTPS = RD_HTTPS {
@@ -76,6 +79,9 @@ get_https :: Int -> SGet RD_HTTPS
 get_https len = do
     RD_SVCB x y z <- get_svcb len
     return $ RD_HTTPS x y z
+
+rd_https :: Word16 -> Domain -> SvcParams -> RData
+rd_https p d s = toRData $ RD_HTTPS p d s
 
 ----------------------------------------------------------------
 

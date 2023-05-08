@@ -49,6 +49,9 @@ instance SPV SPV_Mandatory where
     fromSvcParamValue = fromSPV $ \len -> do
         SPV_Mandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
 
+spv_mandatory :: [SvcParamKey] -> SvcParamValue
+spv_mandatory keys = toSvcParamValue $ SPV_Mandatory keys
+
 ----------------------------------------------------------------
 
 newtype SPV_Port = SPV_Port {
@@ -61,6 +64,9 @@ instance Show SPV_Port where
 instance SPV SPV_Port where
     toSvcParamValue (SPV_Port p) = toSPV $ put16 $ fromIntegral p
     fromSvcParamValue = fromSPV $ \_ -> SPV_Port . fromIntegral <$> get16
+
+spv_port :: PortNumber -> SvcParamValue
+spv_port p = toSvcParamValue $ SPV_Port p
 
 ----------------------------------------------------------------
 
@@ -77,6 +83,9 @@ instance SPV SPV_IPv4Hint where
     fromSvcParamValue = fromSPV $ \len -> do
         SPV_IPv4Hint <$> sGetMany "IPv4Hint" len (toIPv4 <$> getNBytes 4)
 
+spv_ipv4hint :: [IPv4] -> SvcParamValue
+spv_ipv4hint is = toSvcParamValue $ SPV_IPv4Hint is
+
 ----------------------------------------------------------------
 
 newtype SPV_IPv6Hint = SPV_IPv6Hint {
@@ -91,6 +100,9 @@ instance SPV SPV_IPv6Hint where
         mapM_ (mapM_ putInt8 . fromIPv6b) is
     fromSvcParamValue = fromSPV $ \len -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
+
+spv_ipv6hint :: [IPv6] -> SvcParamValue
+spv_ipv6hint is = toSvcParamValue $ SPV_IPv6Hint is
 
 ----------------------------------------------------------------
 
@@ -117,17 +129,27 @@ instance SPV SPV_ALPN where
             len <- getInt8
             getNShortByteString len
 
+spv_alpn :: [ALPN] -> SvcParamValue
+spv_alpn as = toSvcParamValue $ SPV_ALPN as
+
 ----------------------------------------------------------------
 
-newtype SPV_Opaque = SPV_Opaque Opaque deriving (Eq,Ord,Show)
+newtype SPV_Opaque = SPV_Opaque {
+    opaque_value :: Opaque
+  } deriving (Eq,Ord,Show)
 
 instance SPV SPV_Opaque where
     toSvcParamValue (SPV_Opaque o) = SvcParamValue o
     fromSvcParamValue (SvcParamValue o) = Just $ SPV_Opaque o
 
+spv_opaque :: Opaque -> SvcParamValue
+spv_opaque as = toSvcParamValue $ SPV_Opaque as
+
 ----------------------------------------------------------------
 
-newtype SPV_DoHPath = SPV_DoHPath ShortByteString deriving (Eq,Ord)
+newtype SPV_DoHPath = SPV_DoHPath {
+    dohpath :: ShortByteString
+  } deriving (Eq,Ord)
 
 instance Show SPV_DoHPath where
     show (SPV_DoHPath p) = show $ C8.unpack $ Short.fromShort p
@@ -135,3 +157,6 @@ instance Show SPV_DoHPath where
 instance SPV SPV_DoHPath where
     toSvcParamValue (SPV_DoHPath p) = toSPV $ putShortByteString p
     fromSvcParamValue = fromSPV $ \len -> SPV_DoHPath <$> getNShortByteString len
+
+spv_dohpath :: ShortByteString -> SvcParamValue
+spv_dohpath as = toSvcParamValue $ SPV_DoHPath as

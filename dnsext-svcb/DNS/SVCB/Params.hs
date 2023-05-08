@@ -42,3 +42,8 @@ newSvcParams :: [(Int,SvcParamValue)] -> SvcParams
 newSvcParams kvs = SvcParams $ foldr ins M.empty kvs
   where
     ins (k,v) = M.insert k v
+
+toSvcParams :: [(SvcParamKey,SvcParamValue)] -> SvcParams
+toSvcParams kvs = SvcParams $ foldr ins M.empty kvs
+  where
+    ins (SvcParamKey k,v) = M.insert (fromIntegral k) v
