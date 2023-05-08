@@ -10,7 +10,7 @@ import DNS.SEC
 {- import trust-anchor DS RData from
    https://data.iana.org/root-anchors/root-anchors.xml -}
 rootSepDS :: RD_DS
-rootSepDS = RD_DS 20326 (PubAlg 8) (DigestAlg 2) digest
+rootSepDS = RD_DS 20326 RSASHA256 SHA256 digest
   where
     digest =
       either (error . ("rootSepDS: bad configuration: " ++)) id
