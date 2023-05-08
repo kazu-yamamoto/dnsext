@@ -17,6 +17,7 @@ import Test.Hspec.QuickCheck
 import Test.QuickCheck (Gen, arbitrary, choose, elements, forAll, frequency)
 
 import DNS.SEC
+import DNS.SEC.Internal
 
 spec :: Spec
 spec = do

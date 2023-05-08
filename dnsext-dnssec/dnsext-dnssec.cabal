@@ -19,6 +19,7 @@ source-repository head
 library
     exposed-modules:
         DNS.SEC
+        DNS.SEC.Internal
         DNS.SEC.Verify
 
     other-modules:

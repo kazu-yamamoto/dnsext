@@ -3,53 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TransformListComp #-}
 
-module DNS.SEC.Types (
-  -- * Resource data
-  -- ** Types
-    TYPE (
-    RRSIG
-  , DS
-  , NSEC
-  , DNSKEY
-  , NSEC3
-  , NSEC3PARAM
-  , CDS
-  , CDNSKEY
-  )
-  -- ** DNSEC resource data
-  -- *** RRSIG RR
-  , RD_RRSIG(..)
-  , rd_rrsig
-  -- *** DS RR
-  , RD_DS(..)
-  , rd_ds
-  -- *** NSEC RR
-  , RD_NSEC(..)
-  , rd_nsec
-  -- *** DNSKEY RR
-  , RD_DNSKEY(..)
-  , rd_dnskey
-  -- *** NSEC3 RR
-  , RD_NSEC3(..)
-  , rd_nsec3
-  -- *** NSEC3PARAM RR
-  , RD_NSEC3PARAM(..)
-  , rd_nsec3param
-  -- *** CDS RR
-  , RD_CDS(..)
-  , rd_cds
-  -- *** CDNSKEY RR
-  , RD_CDNSKEY(..)
-  , rd_cdnskey
-  , get_rrsig
-  , get_ds
-  , get_nsec
-  , get_dnskey
-  , get_nsec3
-  , get_nsec3param
-  , get_cds
-  , get_cdnskey
-  ) where
+module DNS.SEC.Types where
 
 import GHC.Exts (the, groupWith)
 import DNS.Types
