@@ -190,7 +190,7 @@ verifyDS owner dnskey ds =
   maybe (Left $ "verifyDS: unsupported algorithm: " ++ show alg) verify $
   Map.lookup alg dsDicts
   where
-    alg = ds_hashalg ds
+    alg = ds_digestalg ds
     verify impl = verifyDSwith impl owner dnskey ds
 
 ---
