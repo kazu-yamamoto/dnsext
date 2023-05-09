@@ -3,12 +3,14 @@
 module RoundTripSpec (spec) where
 
 import Control.Monad
-import DNS.SVCB
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
 import Data.ByteString
 import Test.Hspec
+
+import DNS.SVCB
+import DNS.SVCB.Internal
 
 spec :: Spec
 spec = do

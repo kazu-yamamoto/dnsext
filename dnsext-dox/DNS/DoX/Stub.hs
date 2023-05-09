@@ -65,8 +65,8 @@ auto _ _ _ _ _ [] = return $ Left UnknownDNSError
 auto domain typ lim actions ip0 ss0 = loop ss0
   where
     loop [] = return $ Left UnknownDNSError
-    loop (s@RD_SVCB{..}:ss) = do
-        let malpns = extractSvcParam SPK_ALPN svcb_params
+    loop (s:ss) = do
+        let malpns = extractSvcParam SPK_ALPN $ svcb_params s
         case malpns of
           Nothing -> loop ss
           Just alpns -> go $ alpn_names alpns
@@ -80,13 +80,13 @@ auto domain typ lim actions ip0 ss0 = loop ss0
                  Left _ -> go alpns
                  _      -> return mrply
     q = Question (fromRepresentation domain) typ classIN
-    resolveDoX RD_SVCB{..} alpn resolver = try $ resolve renv q mempty
+    resolveDoX s alpn resolver = try $ resolve renv q mempty
       where
-        port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port svcb_params
-        v4s = case extractSvcParam SPK_IPv4Hint svcb_params of
+        port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
+        v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
           Nothing -> []
           Just v4 -> show <$> hint_ipv4s v4
-        v6s = case extractSvcParam SPK_IPv6Hint svcb_params of
+        v6s = case extractSvcParam SPK_IPv6Hint $ svcb_params s of
           Nothing -> []
           Just v6 -> show <$> hint_ipv6s v6
         ips = case v4s ++ v6s of

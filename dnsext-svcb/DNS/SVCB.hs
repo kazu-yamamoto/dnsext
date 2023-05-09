@@ -10,9 +10,15 @@ module DNS.SVCB (
   -- ** Resource data
   -- *** SVCB RR
   , RD_SVCB
+  , svcb_priority
+  , svcb_target
+  , svcb_params
   , rd_svcb
   -- *** HTTPS RR
   , RD_HTTPS
+  , https_priority
+  , https_target
+  , https_params
   , rd_https
   -- * Service parameters
   , SvcParams
