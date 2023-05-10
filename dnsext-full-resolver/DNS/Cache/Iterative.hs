@@ -1011,11 +1011,18 @@ rootPriming = do
         case nsGoodSigs of
           []     ->  do
             logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
-            return $ maybe (Left $ emsg "no delegation") Right $ takeDelegationSrc nsps [] axRRs
+            case takeDelegationSrc nsps [] axRRs of
+              Nothing  -> return $ Left $ emsg "no delegation"
+              Just d   -> do
+                logLn Log.DEMO $ "root-priming: verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation (delegationNS d)
+                return $ Right d
           _:_    ->  do
             logLn Log.DEBUG $ "rootPriming: DNSSEC verification success"
-            let fill (Delegation dom des dss _) = Delegation dom des dss dnskeys
-            return $ maybe (Left $ emsg "no delegation") (Right . fill) $ takeDelegationSrc nsps [rootSepDS] axRRs
+            case takeDelegationSrc nsps [rootSepDS] axRRs of
+              Nothing                          -> return $ Left $ emsg "no delegation"
+              Just (Delegation dom des dss _)  -> do
+                logLn Log.DEMO $ "root-priming: verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
+                return $ Right $ Delegation dom des dss dnskeys
 
     Delegation _dot hintDes _ _ = rootHint
 
