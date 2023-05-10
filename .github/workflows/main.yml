@@ -17,12 +17,14 @@ jobs:
         ghc: [ '9.2', '9.4', '9.6' ]
 
     steps:
+    - run: git config --global core.autocrlf false
+
     - uses: actions/checkout@v3
 
     - uses: haskell/actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
-        cabal-version: '3.8'
+        cabal-version: latest
 
     - name: Cache
       uses: actions/cache@v3
