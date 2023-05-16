@@ -52,7 +52,7 @@ h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
 doHTTP :: String -> Identifier -> ShortByteString -> VCLimit -> ResolvInfo -> Question -> QueryControls -> Client Result
 doHTTP tag ident path lim ri@ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
     let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-    (rx,bss) <- recvHTTP lim
+    (rx,bss) <- recvHTTP $ unVCLimit lim
     now <- getTime
     case decodeChunks now bss of
         Left  e       -> E.throwIO e
