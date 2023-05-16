@@ -44,7 +44,7 @@ module DNS.Do53.Internal (
     -- * Misc
   , checkRespM
   , UDPRetry
-  , VCLimit
+  , VCLimit (..)
   , LookupEnv(..)
   , modifyLookupEnv
   , withLookupConfAndResolver
