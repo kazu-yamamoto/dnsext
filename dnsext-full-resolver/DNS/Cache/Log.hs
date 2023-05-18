@@ -18,6 +18,8 @@ import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
 
 -- other packages
+import System.Console.ANSI (hSetSGR)
+import System.Console.ANSI.Types
 import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
 import UnliftIO (tryAny)
 
@@ -45,7 +47,7 @@ data Output
   deriving Show
 
 type ThreadLoop = IO ()
-type PutLines = Level -> [String] -> IO ()
+type PutLines = Level -> Maybe Color -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
 type Flush = IO ()
 
@@ -53,7 +55,7 @@ newFastLogger :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Flus
 newFastLogger out loggerLevel demoFlag = do
   loggerSet <- newLoggerSet bufsize
   let enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
-      logLines lv = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
+      logLines lv _ = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
   return (logLines, return (-1, -1), flushLogStr loggerSet)
   where
     bufsize = 4096
@@ -73,10 +75,14 @@ new outFh loggerLevel demoFlag = do
   inQ <- newQueue 8
   flushMutex <- newEmptyMVar
   let body = do
-        let action = maybe (putMVar flushMutex ()) (hPutStr outFh . unlines)
+        let abody (color, xs) = do
+              maybe (pure ()) (\c -> hSetSGR outFh [SetColor Foreground Vivid c]) $ color
+              hPutStr outFh $ unlines xs
+              maybe (pure ()) (const $ hSetSGR outFh [Reset]) $ color
+            action  = maybe (putMVar flushMutex ()) abody
         either (const $ return ()) return =<< tryAny (action =<< readQueue inQ)
       enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
-      logLines lv = when (enabled lv) . writeQueue inQ . Just
+      logLines lv color xs = when (enabled lv) $ writeQueue inQ $ Just (color, xs)
       flush = writeQueue inQ Nothing *> takeMVar flushMutex
 
   return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), flush)
