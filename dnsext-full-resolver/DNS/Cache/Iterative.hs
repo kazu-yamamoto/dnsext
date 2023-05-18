@@ -54,6 +54,7 @@ import System.Environment (lookupEnv)
 
 -- other packages
 import System.Random (randomR, getStdRandom)
+import System.Console.ANSI.Types
 
 -- dns packages
 import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4 , toIPv6b)
@@ -87,7 +88,7 @@ import qualified DNS.Cache.Log as Log
 
 data Env =
   Env
-  { logLines_ :: Log.Level -> [String] -> IO ()
+  { logLines_ :: Log.PutLines
   , disableV6NS_ :: !Bool
   , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
   , getCache_ :: IO Cache
@@ -170,7 +171,7 @@ type UpdateCache =
    IO Cache)
 type TimeCache = (IO EpochTime, IO ShowS)
 
-newEnv :: (Log.Level -> [String] -> IO ()) -> Bool -> UpdateCache -> TimeCache
+newEnv :: Log.PutLines -> Bool -> UpdateCache -> TimeCache
        -> IO Env
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
   genId <- newConcurrentGenId
@@ -656,12 +657,12 @@ cacheAnswer Delegation{..} dom typ msg
             sigs = rrsigList dom typ rrs
         (xRRset, cacheX) <- lift $ verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
         lift cacheX
-        let (verifyMsg, raiseOnVerifyFailure)
-              | null delegationDS     =  ("no verification - no DS, " ++ show dom ++ " " ++ show typ, pure ())
-              | rrsetVerified xRRset  =  ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, pure ())
-              | otherwise             =  ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, throwDnsError DNS.ServerFailure)
+        let (verifyMsg, verifyColor, raiseOnVerifyFailure)
+              | null delegationDS     =  ("no verification - no DS, " ++ show dom ++ " " ++ show typ, Just Yellow, pure ())
+              | rrsetVerified xRRset  =  ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, Just Green, pure ())
+              | otherwise             =  ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, Just Red, throwDnsError DNS.ServerFailure)
         lift $ logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
-        lift $ logLn Log.DEMO verifyMsg
+        lift $ clogLn Log.DEMO verifyColor verifyMsg
         raiseOnVerifyFailure
         return ([xRRset], [])
   where
@@ -777,7 +778,7 @@ iterative_ dc nss0 (x:xs) =
             filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
             when (not (null delegationDS) && null delegationDNSKEY) $ do
               lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
-              lift $ logLn Log.DEMO $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
+              lift $ clogLn Log.DEMO (Just Red) $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
               throwDnsError DNS.ServerFailure
             return filled
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
@@ -817,15 +818,15 @@ lookupDelegation dom = do
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
   -- There is delegation information only when there is a selectable NS
-  (verifyMsg, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+  (verifyMsg, verifyColor, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
     let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
     (RRset{..}, cacheDS) <- verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
-    let verifyMsg
-          | null nsps         =  "no delegation"
-          | null dsrds        =  "delegation - no DS, so no verify"
-          | null rrsGoodSigs  =  "delegation - verification failed - RRSIG of DS"
-          | otherwise         =  "delegation - verification success - RRSIG of DS"
-    return (verifyMsg, if null rrsGoodSigs then [] else dsrds, cacheDS)
+    let (verifyMsg, verifyColor)
+          | null nsps         =  ("no delegation", Nothing)
+          | null dsrds        =  ("delegation - no DS, so no verify", Just Yellow)
+          | null rrsGoodSigs  =  ("delegation - verification failed - RRSIG of DS", Just Red)
+          | otherwise         =  ("delegation - verification success - RRSIG of DS", Just Green)
+    return (verifyMsg, verifyColor, if null rrsGoodSigs then [] else dsrds, cacheDS)
 
   (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -849,7 +850,8 @@ delegationWithCache zoneDom dnskeys dom msg = do
         cacheDS
         cacheNS
         cacheAdds
-        logLn Log.DEMO $ verifyMsg ++ ": " ++ domTraceMsg ++ "\n" ++ ppDelegation (delegationNS x)
+        clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
+        clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
         return x
 
   logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
@@ -1185,8 +1187,8 @@ axList disableV6NS pdom h = foldr takeAx []
   * EDNS must be enable for DNSSEC OK request -}
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
-  logLines_ cxt Log.DEBUG $ ["norec: " ++ show name ++ ", " ++ show typ ++ ", " ++ show aservers]
-  logLines_ cxt Log.DEMO $ ["query " ++ show name ++ " " ++ show typ ++ " to " ++ show aservers]
+  logLines_ cxt Log.DEBUG Nothing $ ["norec: " ++ show name ++ ", " ++ show typ ++ ", " ++ show aservers]
+  logLines_ cxt Log.DEMO Nothing $ ["query " ++ show name ++ " " ++ show typ ++ " to " ++ show aservers]
   let ris =
         [ defaultResolvInfo {
             rinfoHostName   = show aserver
@@ -1464,10 +1466,15 @@ cacheEmpty zoneDom dom typ ttl rank = do
 logLines :: Log.Level -> [String] -> ContextT IO ()
 logLines level xs = do
   putLines <- asks logLines_
-  liftIO $ putLines level xs
+  liftIO $ putLines level Nothing xs
 
 logLn :: Log.Level -> String -> ContextT IO ()
 logLn level = logLines level . (:[])
+
+clogLn :: Log.Level -> Maybe Color -> String -> ContextT IO ()
+clogLn level color s = do
+  putLines <- asks logLines_
+  liftIO $ putLines level color [s]
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print pmsg
