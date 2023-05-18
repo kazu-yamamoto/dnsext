@@ -19,6 +19,8 @@ import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitSuccess, exitFailure)
 import Text.Read (readMaybe)
+import System.Console.ANSI (setSGR)
+import System.Console.ANSI.Types
 
 import qualified DNS.Cache.Log as Log
 import DNS.Cache.Iterative
@@ -127,6 +129,7 @@ main = do
           Left err -> fail $ show err
           Right Result{..} -> do
               let Reply{..} = resultReply
+              setSGR [SetColor Foreground Vivid Green]
               putStr $ ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
               putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
               putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
@@ -134,6 +137,7 @@ main = do
               let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
               when (s /= 0) $ putStr $ show s ++ "sec "
               putStr $ show (u `div` 1000) ++ "usec"
+              setSGR [Reset]
               putStr "\n\n"
               putStr $ pprResult replyDNSMessage
 
