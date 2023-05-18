@@ -33,6 +33,7 @@ library
         stm,
         time,
         word8,
+        ansi-terminal,
         async,
         auto-update,
         network,
