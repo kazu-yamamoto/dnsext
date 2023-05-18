@@ -73,7 +73,7 @@ setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers wo
   let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
         where memoLogLn msg = do
                 tstr <- getTimeStr
-                putLines Log.NOTICE [tstr $ ": " ++ msg]
+                putLines Log.NOTICE Nothing [tstr $ ": " ++ msg]
               memoActions = Cache.MemoActions memoLogLn getSec
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
@@ -96,7 +96,7 @@ setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers wo
 
   caps <- getNumCapabilities
   let params = Mon.makeParams caps logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts
-  putLines Log.NOTICE $ map ("params: " ++) $ Mon.showParams params
+  putLines Log.NOTICE Nothing $ map ("params: " ++) $ Mon.showParams params
 
   let ucacheQSize = return (0, 0) {- TODO: update ServerMonitor to drop -}
   monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
@@ -107,7 +107,7 @@ getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Env -> PortNumber -> IP
             -> IO ([IO ()], PLStatus)
 getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
   sock <- UDP.serverSocket (hostIP, port)
-  let putLn lv = logLines_ cxt lv . (:[])
+  let putLn lv = logLines_ cxt lv Nothing . (:[])
 
   (workerPipelines, enqueueReq, dequeueResp) <- getWorkers workers sharedQueue perWorker getSec cxt
   (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
@@ -138,7 +138,7 @@ workerBenchmark noop gplot workers perWorker size = do
   (logLoop, putLines, _logQSize, _) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE Log.DisableDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
-        where memoLogLn = putLines Log.NOTICE . (:[])
+        where memoLogLn = putLines Log.NOTICE Nothing . (:[])
               memoActions = Cache.MemoActions memoLogLn getSec
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
@@ -224,7 +224,7 @@ workerPipeline :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize 
                -> Int -> IO EpochTime -> Env
                -> IO ([IO ()], WorkerStatus)
 workerPipeline reqQ resQ perWorker getSec cxt = do
-  let putLn lv = logLines_ cxt lv . (:[])
+  let putLn lv = logLines_ cxt lv Nothing . (:[])
       resolvWorkers = 8
   (getHit, incHit) <- counter
   (getMiss, incMiss) <- counter
@@ -277,7 +277,7 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
         rbs `seq` enqResp (rbs, addr)
   maybe enqueueDec (either noResponse enqueue) =<< liftIO (getReplyCached cxt reqH reqEH qs)
   where
-    logLn level = logLines_ cxt level . (:[])
+    logLn level = logLines_ cxt level Nothing . (:[])
 
 resolvWorker :: Show a
              => Env
@@ -294,7 +294,7 @@ resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
         rbs `seq` enqResp (rbs, addr)
   either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH reqEH qs)
   where
-    logLn level = logLines_ cxt level . (:[])
+    logLn level = logLines_ cxt level Nothing . (:[])
 
 sendResponse :: (ByteString -> a -> IO ())
              -> Env
