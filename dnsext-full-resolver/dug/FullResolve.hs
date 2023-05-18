@@ -23,11 +23,11 @@ fullResolve disableV6NS logOutput logLevel logDemo ctl n ty = do
   (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel logDemo
   mapM_ forkIO $ loops
   out <- resolve cxt ctl n ty
-  putLines Log.INFO ["--------------------"]
+  putLines Log.INFO Nothing ["--------------------"]
   flushLog
   return out
 
-setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.Level -> [String] -> IO (), IO (), [IO ()], Env)
+setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.PutLines, IO (), [IO ()], Env)
 setup disableV6NS logOutput logLevel logDemo = do
   (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel logDemo
   tcache@(getSec, _) <- TimeCache.new
