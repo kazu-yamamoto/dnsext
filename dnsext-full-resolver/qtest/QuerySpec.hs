@@ -58,7 +58,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
       getCache = Cache.readMemo memo
 
   let getResolveCache n ty = do
-        cxt <- newEnv (\_ _ -> pure ()) disableV6NS (insert, getCache) tcache
+        cxt <- newEnv (\_ _ _ -> pure ()) disableV6NS (insert, getCache) tcache
         eresult <- (snd  <$>) <$> Iterative.runResolve cxt (fromString n) ty defaultIterativeControls
         threadDelay $ 1 * 1000 * 1000
         let convert xs = [ ((dom, typ), (crs, rank)) |  (Cache.Question dom typ _, (_, Cache.Val crs rank)) <- xs ]
@@ -90,10 +90,10 @@ querySpec disableV6NS debug = describe "query" $ do
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
       putLines
-        | debug     =  \lv xs -> putStr $ unlines [ show lv ++ ": " ++ x | x <- xs ]
-        | otherwise =  \_ _ -> pure ()
+        | debug     =  \lv _ xs -> putStr $ unlines [ show lv ++ ": " ++ x | x <- xs ]
+        | otherwise =  \_ _ _ -> pure ()
   cxt <- runIO $ newEnv putLines disableV6NS ucache tcache
-  cxt4 <- runIO $ newEnv (\_ _ -> pure ()) True ucache tcache
+  cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True ucache tcache
   let refreshRoot = runDNSQuery Iterative.refreshRoot cxt defaultIterativeControls
       runIterative ns n = Iterative.runIterative cxt ns (fromString n) defaultIterativeControls
       runJust n ty = Iterative.runResolveJust cxt (fromString n) ty defaultIterativeControls
