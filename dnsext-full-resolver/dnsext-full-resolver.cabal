@@ -33,6 +33,7 @@ library
         stm,
         time,
         word8,
+        ansi-terminal,
         async,
         auto-update,
         network,
@@ -84,6 +85,7 @@ executable dug
         network,
         random,
         transformers,
+        ansi-terminal,
         unix-time
 
     if impl(ghc >=8)

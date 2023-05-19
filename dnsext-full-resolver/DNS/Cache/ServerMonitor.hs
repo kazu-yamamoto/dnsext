@@ -125,7 +125,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
     runStdConsole monQuit = do
       let repl = console params cxt getsSizeInfo expires flushLog monQuit stdin stdout "<std>"
       void $ forkIO repl
-    logLn level = logLines_ cxt level . (:[])
+    logLn level = logLines_ cxt level Nothing . (:[])
     handle onError = either onError return <=< tryAny
     monitorServer monQuit@(_, waitQuit) s = do
       let step = do
