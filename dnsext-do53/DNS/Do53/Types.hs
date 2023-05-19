@@ -122,7 +122,6 @@ type VCLimit = Int
 data LookupConf = LookupConf {
    -- | Server information.
     lconfSeeds         :: Seeds
-   -- | Timeout in micro seconds.
    -- | The number of UDP retries including the first try.
   , lconfRetry         :: UDPRetry
    -- | How many bytes are allowed to be received on a virtual circuit.
