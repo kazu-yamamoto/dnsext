@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Types (
@@ -6,7 +7,7 @@ module DNS.Do53.Types (
     LookupConf(..)
   , defaultLookupConf
   , UDPRetry
-  , VCLimit
+  , VCLimit (unVCLimit)
   , LookupEnv(..)
   -- ** Specifying DNS servers
   , Seeds(..)
@@ -80,8 +81,9 @@ defaultCacheConf = CacheConf 300 0 10
 
 ----------------------------------------------------------------
 
-type UDPRetry = Int
-type VCLimit = Int
+newtype UDPRetry = UDPRetry Int deriving (Eq, Num, Show)
+newtype VCLimit = VCLimit { unVCLimit :: Int } deriving (Eq, Ord, Num, Show)
+
 
 -- | Type for resolver configuration.
 --  Use 'defaultLookupConf' to create a new value.

@@ -58,7 +58,7 @@ lookupDoX conf domain typ = do
         Right Result{..} -> do
             let Reply{..} = resultReply
                 ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
-            auto domain typ lim (lenvActions lenv) resultHostName ss
+            auto domain typ (unVCLimit lim) (lenvActions lenv) resultHostName ss
 
 auto :: HostName -> TYPE -> Int -> ResolvActions -> HostName -> [RD_SVCB] -> IO (Either DNSError Result)
 auto _ _ _ _ _ [] = return $ Left UnknownDNSError
@@ -72,7 +72,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
           Just alpns -> go $ alpn_names alpns
        where
          go [] = loop ss
-         go (alpn:alpns) = case makeResolver alpn lim Nothing of
+         go (alpn:alpns) = case makeResolver alpn (fromIntegral lim) Nothing of
            Nothing -> go alpns
            Just resolver  -> do
                mrply <- resolveDoX s alpn resolver
