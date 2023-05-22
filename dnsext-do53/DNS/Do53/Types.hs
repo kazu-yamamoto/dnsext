@@ -81,7 +81,7 @@ defaultCacheConf = CacheConf 300 0 10
 
 ----------------------------------------------------------------
 
-newtype UDPRetry = UDPRetry Int deriving (Eq, Num)
+newtype UDPRetry = UDPRetry Int deriving (Eq, Num, Show)
 newtype VCLimit = VCLimit { unVCLimit :: Int } deriving (Eq, Ord, Num, Show)
 
 
