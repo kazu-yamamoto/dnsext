@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -34,7 +35,10 @@ module DNS.Do53.Types (
 
 import DNS.Types
 import DNS.Types.Decode
-import Network.Socket (HostName, PortNumber, HostName, PortNumber)
+import Network.Socket (HostName, PortNumber, HostName, PortNumber, Socket)
+#ifdef mingw32_HOST_OS
+import Network.Socket (setSocketOption, SocketOption(..))
+#endif
 import Prelude
 import System.Timeout (timeout)
 
@@ -214,16 +218,22 @@ type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
 ----------------------------------------------------------------
 
 data ResolvActions = ResolvActions {
-    ractionTimeout :: IO Reply -> IO (Maybe Reply)
-  , ractionGenId   :: IO Identifier
-  , ractionGetTime :: IO EpochTime
+    ractionTimeout    :: IO Reply -> IO (Maybe Reply)
+  , ractionGenId      :: IO Identifier
+  , ractionGetTime    :: IO EpochTime
+  , ractionSetSockOpt :: Socket -> IO ()
   }
 
 defaultResolvActions :: ResolvActions
 defaultResolvActions = ResolvActions {
-    ractionTimeout = timeout 3000000
-  , ractionGenId   = singleGenId
-  , ractionGetTime = getEpochTime
+    ractionTimeout    = timeout 3000000
+  , ractionGenId      = singleGenId
+  , ractionGetTime    = getEpochTime
+#ifdef mingw32_HOST_OS
+  , ractionSetSockOpt = \sock -> setSocketOption sock RecvTimeOut 3000000
+#else
+  , ractionSetSockOpt = \_ -> return ()
+#endif
   }
 
 ----------------------------------------------------------------

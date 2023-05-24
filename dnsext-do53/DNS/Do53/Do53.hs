@@ -71,6 +71,7 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
   where
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
+        ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
         let send = UDP.send sock
             recv = UDP.recv sock
         ident <- ractionGenId rinfoActions
@@ -135,6 +136,7 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
+        ractionSetSockOpt rinfoActions sock
         let send = sendVC $ sendTCP sock
             recv = recvVC lim $ recvTCP sock
         solve send recv
