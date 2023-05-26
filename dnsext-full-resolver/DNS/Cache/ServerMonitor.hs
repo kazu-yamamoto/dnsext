@@ -180,7 +180,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
         []     ->  Just $ Expire 0
         x : _  ->  Expire <$> readMaybe x
       "exit" : _  ->  Just Exit
-      "quit" : _  ->  Just Quit
+      "quit-server" : _  ->  Just Quit
       _           ->  Nothing
 
     runCmd Quit  =  flushLog *> atomically issueQuit $> True
