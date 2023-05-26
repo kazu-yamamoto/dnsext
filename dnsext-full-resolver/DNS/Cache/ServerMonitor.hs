@@ -105,6 +105,7 @@ data Command
   | Noop
   | Exit
   | Quit
+  | Help (Maybe String)
   deriving Show
 
 monitor :: Bool -> Params -> Env
@@ -181,13 +182,16 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
         x : _  ->  Expire <$> readMaybe x
       "exit" : _  ->  Just Exit
       "quit-server" : _  ->  Just Quit
+      "help" : w : _     ->  Just $ Help $ Just w
+      "help" : []        ->  Just $ Help Nothing
       _           ->  Nothing
+
+    outLn = hPutStrLn outH
 
     runCmd Quit  =  flushLog *> atomically issueQuit $> True
     runCmd Exit  =  return True
     runCmd cmd   =  dispatch cmd $> False
       where
-        outLn = hPutStrLn outH
         dispatch Param            =  mapM_ outLn $ showParams params
         dispatch Noop             =  return ()
         dispatch (Find s)         =  mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ cxt
@@ -199,10 +203,10 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
                 hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status           =  printStatus
         dispatch (Expire offset)  =  expires . (+ offset) =<< currentSeconds_ cxt
+        dispatch (Help  w)        =  printHelp w
         dispatch x                =  outLn $ "command: unknown state: " ++ show x
 
     printStatus = do
-      let outLn = hPutStrLn outH
       outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
       let psize s getSize = do
             (cur, mx) <- getSize
@@ -229,6 +233,22 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
       outLn $ "hit rate: " ++ show hits ++ " / " ++ show replies
       outLn $ "reply rate: " ++ show replies ++ " / " ++ show total
 
+    printHelp mw = case mw of
+      Nothing  ->  hPutStr outH $ unlines [ showHelp h | (_, h) <- helps ]
+      Just w   ->  maybe (outLn $ "unknown command: " ++ w) (outLn . showHelp) $ lookup w helps
+      where
+        showHelp (syn, msg) = syn ++ replicate (width - length syn) ' ' ++ " - " ++ msg
+        width = 20
+        helps =
+          [ ("param",       ("param",               "show server parameters"))
+          , ("find",        ("find STRING",         "find sub-string from dumped cache"))
+          , ("lookup",      ("lookup DOMAIN TYPE",  "lookup cache"))
+          , ("status",      ("status",              "show current server status"))
+          , ("expire",      ("expire [SECONDS]",    "expire cache at the time SECONDS later"))
+          , ("exit",        ("exit",                "exit this management session"))
+          , ("quit-server", ("quit-server",         "quit this server"))
+          , ("help",        ("help",                "show this help"))
+          ]
 
 withWait :: STM a -> IO b -> IO (Either a b)
 withWait qstm blockAct =
