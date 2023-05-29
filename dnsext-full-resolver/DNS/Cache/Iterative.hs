@@ -933,10 +933,11 @@ queryDS dnskeys ips dom = do
     let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
         rrsigs = rrsigList dom DS rrs
     (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
-    if not $ rrsetVerified rrset
-      then return $ Left "queryDS: RRSIG of DS verification failed."
-      else lift cacheDS *> return (Right dsrds)
-
+    let verifyResult
+          | null dsrds           =  return (Right [])                     {- no DS, so no verify -}
+          | rrsetVerified rrset  =  lift cacheDS *> return (Right dsrds)  {- verification success -}
+          | otherwise            =  return $ Left "queryDS: verification failed - RRSIG of DS"
+    verifyResult
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY _  d@Delegation{delegationDS = []}                           =  return d  {- DS(Delegation Signer) does not exist -}
