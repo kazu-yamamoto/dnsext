@@ -76,7 +76,7 @@ descs =
     "queue size per worker. default is 16. positive integer or 0. 0 means not limited size queue"
   , Option ['p'] ["port"]
     (ReqArg (\s opts -> readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts { port = x }) "PORT_NUMBER")
-    "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023"
+    "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023.\nyou can connect to the monitor with `telnet localhost <monitor port>`. for more information, connect to monitor and type `help<Enter>`."
   , Option ['s'] ["std-console"]
     (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
