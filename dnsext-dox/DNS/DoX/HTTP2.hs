@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -35,7 +36,14 @@ http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock -
         ident <- ractionGenId rinfoActions
         h2resolver ctx ident path lim ri q qctl
   where
+#if defined(mingw32_HOST_OS)
+    open = do
+        s <- openTCP rinfoHostName rinfoPortNumber
+        setSocketOption s RecvTimeOut 3000000
+        return s
+#else
     open = openTCP rinfoHostName rinfoPortNumber
+#endif
     params = getTLSParams rinfoHostName "h2" False
 
 h2resolver :: Context -> Identifier -> ShortByteString -> VCLimit -> Resolver
