@@ -30,7 +30,7 @@ import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
 import DNS.Cache.SocketUtil (addrInfo)
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import DNS.Cache.Iterative (Env (..))
 
 

@@ -38,7 +38,7 @@ import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.ServerMonitor (monitor, PLStatus)
 import qualified DNS.Cache.ServerMonitor as Mon
 import DNS.Cache.Types (NE)
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Iterative (Env (..), getReplyCached, getReplyMessage)
 import qualified DNS.Cache.Iterative as Iterative
