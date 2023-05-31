@@ -1,5 +1,6 @@
 packages:
   dnsext-types
+  dnsext-log
   dnsext-do53
   dnsext-dnssec
   dnsext-svcb
