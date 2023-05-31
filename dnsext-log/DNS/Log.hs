@@ -20,7 +20,7 @@ import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, st
 -- other packages
 import System.Console.ANSI (hSetSGR)
 import System.Console.ANSI.Types
-import System.Log.FastLogger (newStdoutLoggerSet, newStderrLoggerSet, pushLogStr, toLogStr, flushLogStr)
+import System.Log.FastLogger (newStdoutLoggerSetN, newStderrLoggerSetN, pushLogStr, toLogStr, flushLogStr)
 import UnliftIO (tryAny)
 
 -- this package
@@ -53,15 +53,15 @@ type Flush = IO ()
 
 newFastLogger :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Flush)
 newFastLogger out loggerLevel demoFlag = do
-  loggerSet <- newLoggerSet bufsize
+  loggerSet <- newLoggerSetN bufsize $ Just 1
   let enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
       logLines lv _ = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
   return (logLines, return (-1, -1), flushLogStr loggerSet)
   where
     bufsize = 4096
-    newLoggerSet = case out of
-      Stdout  ->  newStdoutLoggerSet
-      Stderr  ->  newStderrLoggerSet
+    newLoggerSetN = case out of
+      Stdout  ->  newStdoutLoggerSetN
+      Stderr  ->  newStderrLoggerSetN
 
 outputHandle :: Output -> Handle
 outputHandle o = case o of
