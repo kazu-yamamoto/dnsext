@@ -3,14 +3,20 @@
 module DNS.SEC.Time where
 
 import DNS.Types.Internal
+import qualified Data.ByteString.Char8 as C8
 import Data.Int (Int64)
+import Data.UnixTime
+import Foreign.C.Types(CTime(..))
 
 import DNS.SEC.Imports
 
-newtype DNSTime = DNSTime { fromDNSTime :: Int64 } deriving (Eq, Ord, Show, Num)
+newtype DNSTime = DNSTime { fromDNSTime :: Int64 } deriving (Eq, Ord, Num)
 
 toDNSTime :: Int64 -> DNSTime
 toDNSTime = DNSTime
+
+instance Show DNSTime where
+    show (DNSTime i32) = C8.unpack $ formatUnixTimeGMT webDateFormat $ UnixTime (CTime i32) 0
 
 -- | Given a 32-bit circle-arithmetic DNS time, and the current absolute epoch
 -- time, return the epoch time corresponding to the DNS timestamp.
