@@ -64,7 +64,7 @@ import DNS.Types
    TYPE(A, NS, AAAA, CNAME, SOA), ResourceRecord (..),
    RCODE, DNSHeader, EDNSheader, DNSMessage, classIN, Question(..))
 import qualified DNS.Types as DNS
-import DNS.SEC (TYPE (DNSKEY, DS, RRSIG, NSEC, NSEC3), RD_DNSKEY, RD_DS (..), RD_RRSIG (..))
+import DNS.SEC (TYPE (DNSKEY, DS, RRSIG, NSEC, NSEC3), RD_DNSKEY, RD_DS (..), RD_RRSIG (..), toDNSTime, fromDNSTime)
 import qualified DNS.SEC.Verify as SEC
 import DNS.Do53.Client (FlagOp (..), defaultResolvActions, ractionGenId, ractionGetTime )
 import qualified DNS.Do53.Client as DNS
@@ -1084,10 +1084,10 @@ withVerifiedRRset now dnskeys rrs sigs left right =
         goodSigs =
           [ rrsig
           | rrsig@(sigrd, _) <- sigs, key <- dnskeys
-          , Right () <- [SEC.verifyRRSIGsorted now key sigrd typ ttl sortedWires]
+          , Right () <- [SEC.verifyRRSIGsorted (toDNSTime now) key sigrd typ ttl sortedWires]
           ]
         (sigrds, sigTTLs) = unzip goodSigs
-        expireTTLs = [ exttl | sig <- sigrds, let exttl = rrsig_expiration sig - now, exttl > 0 ]
+        expireTTLs = [ exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0 ]
         minTTL = minimum $ ttl : sigTTLs ++ map fromIntegral expireTTLs
     (sortedWires, sortedRRs) = unzip $ SEC.sortCanonical rrs
 
