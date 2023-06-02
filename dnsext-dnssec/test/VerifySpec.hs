@@ -7,7 +7,6 @@ import Test.Hspec
 
 import Control.Monad (unless)
 import Data.String (fromString)
-import Data.Int
 import Data.Word
 import Data.ByteString (ByteString)
 
@@ -145,8 +144,8 @@ caseRRSIG :: RRSIG_CASE -> Expectation
 caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure ()) $ do
   dnskey <- takeRData "DNSKEY" dnskeyRR
   rrsig  <- takeRData "RRSIG"  rrsigRR
-  let ts = (rrsig_inception rrsig + rrsig_expiration rrsig) `div` 2
-  verifyRRSIG ts (rrname dnskeyRR) dnskey (rrname rrsigRR) rrsig targets
+  let ts = (fromDNSTime (rrsig_inception rrsig) + fromDNSTime (rrsig_expiration rrsig)) `div` 2
+  verifyRRSIG (toDNSTime ts) (rrname dnskeyRR) dnskey (rrname rrsigRR) rrsig targets
   where
     takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd  where rd = rdata rr
 
@@ -586,7 +585,7 @@ rd_dnskey' kflags proto walg pubkey = rd_dnskey (toDNSKEYflags kflags) proto alg
 rd_ds' :: Word16 -> Word8 -> Word8 -> String -> RData
 rd_ds' keytag pubalg digalg digest = rd_ds keytag (toPubAlg pubalg) (toDigestAlg digalg) (opaqueFromB16Hex digest)
 
-rd_rrsig' :: TYPE -> Word8 -> Word8 -> TTL -> Int64 -> Int64 -> Word16 -> String -> String -> RData
+rd_rrsig' :: TYPE -> Word8 -> Word8 -> TTL -> DNSTime -> DNSTime -> Word16 -> String -> String -> RData
 rd_rrsig' typ alg a b c d e dom = rd_rrsig typ (toPubAlg alg) a b c d e (fromString dom) . opaqueFromB64
 
 rd_nsec3' :: Word8 -> Word8 -> Word16 -> String -> String -> [TYPE] -> RData

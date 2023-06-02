@@ -5,9 +5,9 @@
 
 module DNS.SEC.Types where
 
-import GHC.Exts (the, groupWith)
 import DNS.Types
 import DNS.Types.Internal
+import GHC.Exts (the, groupWith)
 
 import DNS.SEC.Flags
 import DNS.SEC.HashAlg

@@ -13,7 +13,7 @@ import qualified DNS.Types.Opaque as Opaque
 
 -- this package
 import DNS.SEC.Imports
-import DNS.SEC.Time (putDNSTime)
+import DNS.SEC.Time (putDNSTime, DNSTime)
 import DNS.SEC.Flags (DNSKEY_Flag (ZONE, REVOKE))
 import DNS.SEC.PubAlg
 import DNS.SEC.HashAlg
