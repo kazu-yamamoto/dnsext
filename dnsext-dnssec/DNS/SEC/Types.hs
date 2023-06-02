@@ -84,8 +84,8 @@ instance ResourceData RD_RRSIG where
         putPubAlg  rrsig_pubalg
         put8       rrsig_num_labels
         putSeconds rrsig_ttl
-        putDnsTime rrsig_expiration
-        putDnsTime rrsig_inception
+        putDNSTime rrsig_expiration
+        putDNSTime rrsig_inception
         put16      rrsig_key_tag
         putDomain  cf rrsig_zone
         putOpaque  rrsig_signature
@@ -103,8 +103,8 @@ get_rrsig lim = do
     alg <- getPubAlg
     cnt <- get8
     ttl <- getSeconds
-    tex <- getDnsTime
-    tin <- getDnsTime
+    tex <- getDNSTime
+    tin <- getDNSTime
     tag <- get16
     dom <- getDomain -- XXX: Enforce no compression?
     pos <- parserPosition

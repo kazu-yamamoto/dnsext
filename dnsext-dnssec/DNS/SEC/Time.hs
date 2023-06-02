@@ -19,11 +19,11 @@ dnsTime tdns tnow =
 -- | Helper to find position of RData end, that is, the offset of the first
 -- byte /after/ the current RData.
 --
-getDnsTime :: SGet DNSTime
-getDnsTime   = do
+getDNSTime :: SGet DNSTime
+getDNSTime   = do
     tnow <- getAtTime
     tdns <- get32
     return $ dnsTime tdns tnow
 
-putDnsTime :: DNSTime -> SPut ()
-putDnsTime = put32 . fromIntegral
+putDNSTime :: DNSTime -> SPut ()
+putDNSTime = put32 . fromIntegral
