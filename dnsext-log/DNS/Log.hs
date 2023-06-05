@@ -70,22 +70,37 @@ outputHandle o = case o of
 
 new :: Handle -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
 new outFh loggerLevel demoFlag = do
-  hSetBuffering outFh LineBuffering
+    hSetBuffering outFh LineBuffering
+    inQ <- newQueue 8
+    flushMutex <- newEmptyMVar
+    return ( logLoop inQ flushMutex
+           , logLines inQ
+           , getQSize inQ
+           , flush inQ flushMutex)
+  where
+    flush inQ flushMutex = writeQueue inQ Nothing >> takeMVar flushMutex
 
-  inQ <- newQueue 8
-  flushMutex <- newEmptyMVar
-  let body = do
-        let abody (color, xs) = do
-              maybe (pure ()) (\c -> hSetSGR outFh [SetColor Foreground Vivid c]) $ color
-              hPutStr outFh $ unlines xs
-              maybe (pure ()) (const $ hSetSGR outFh [Reset]) $ color
-            action  = maybe (putMVar flushMutex ()) abody
-        either (const $ return ()) return =<< tryAny (action =<< readQueue inQ)
-      enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
-      logLines lv color xs = when (enabled lv) $ writeQueue inQ $ Just (color, xs)
-      flush = writeQueue inQ Nothing *> takeMVar flushMutex
+    logLines inQ lv color xs = when (enabled lv) $
+        writeQueue inQ $ Just (color, xs)
+    enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
 
-  return (forever body, logLines, (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ), flush)
+    getQSize inQ = do
+        s <- fst <$> Queue.readSizes inQ
+        let m = Queue.sizeMaxBound inQ
+        return (s,m)
+
+    logLoop inQ flushMutex = forever $ do
+        _ex <- tryAny (readQueue inQ >>= logit flushMutex)
+        return ()
+    logit flushMutex mx = case mx of
+      Nothing -> putMVar flushMutex ()
+      Just x  -> case x of
+        (Nothing, xs) -> do
+            hPutStr outFh $ unlines xs
+        (Just c, xs)  -> do
+            hSetSGR outFh [SetColor Foreground Vivid c]
+            hPutStr outFh $ unlines xs
+            hSetSGR outFh [Reset]
 
 checkEnabledLevelWithDemo :: Level -> DemoFlag -> Level -> Bool
 checkEnabledLevelWithDemo loggerLevel demoFlag lv = case demoFlag of
