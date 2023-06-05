@@ -22,8 +22,8 @@ module DNS.SEC.Internal (
   , getDNSKEYflags
   , putNSEC3flags
   , getNSEC3flags
-  , putDnsTime
-  , getDnsTime
+  , putDNSTime
+  , getDNSTime
   , toPubKey_RSA
   ) where
 

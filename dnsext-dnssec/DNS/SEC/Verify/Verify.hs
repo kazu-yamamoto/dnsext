@@ -13,7 +13,7 @@ import qualified DNS.Types.Opaque as Opaque
 
 -- this package
 import DNS.SEC.Imports
-import DNS.SEC.Time (putDnsTime)
+import DNS.SEC.Time (putDNSTime, DNSTime)
 import DNS.SEC.Flags (DNSKEY_Flag (ZONE, REVOKE))
 import DNS.SEC.PubAlg
 import DNS.SEC.HashAlg
@@ -50,8 +50,8 @@ putRRSIGHeader RD_RRSIG{..} = do
     putPubAlg  rrsig_pubalg
     put8       rrsig_num_labels
     putSeconds rrsig_ttl
-    putDnsTime rrsig_expiration
-    putDnsTime rrsig_inception
+    putDNSTime rrsig_expiration
+    putDNSTime rrsig_inception
     put16      rrsig_key_tag
     putDomain Canonical rrsig_zone
 

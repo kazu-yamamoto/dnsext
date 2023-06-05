@@ -14,7 +14,6 @@ module DNS.SEC.Imports (
   , module Data.Word
   , module Numeric
   , EpochTime
-  , DNSTime
   ) where
 
 import Control.Applicative
@@ -23,7 +22,6 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (ShortByteString)
 import Data.Function
-import Data.Int (Int64)
 import Data.List
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
@@ -34,5 +32,3 @@ import Data.Word
 import Numeric
 
 import DNS.Types.Decode (EpochTime)
-
-type DNSTime = Int64

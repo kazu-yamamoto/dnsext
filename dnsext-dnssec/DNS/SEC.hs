@@ -104,6 +104,8 @@ module DNS.SEC (
   , toNSEC3flags
     -- * DNS time
   , DNSTime
+  , fromDNSTime
+  , toDNSTime
   , dnsTime
   ) where
 
@@ -112,7 +114,6 @@ import DNS.Types.Internal
 
 import DNS.SEC.Flags
 import DNS.SEC.HashAlg
-import DNS.SEC.Imports
 import DNS.SEC.Opts
 import DNS.SEC.PubAlg
 import DNS.SEC.PubKey
