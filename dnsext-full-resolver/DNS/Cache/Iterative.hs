@@ -1455,7 +1455,7 @@ cacheEmptySection :: Domain -> [RD_DNSKEY] -> Domain -> TYPE
                   -> DNSMessage -> ContextT IO [RRset]  {- returns verified authority section -}
 cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
   (takePair, soaRRset, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
-    let (ps, soaRRs) = unzip $ foldr takeSOA [] rrs
+    let (ps, soaRRs) = unzip $ rrListWith SOA DNS.fromRData zoneDom fromSOA rrs
     (rrset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
     return (single ps, rrset, cacheSOA_)
   let doCache (soaDom, ncttl) = do
@@ -1465,17 +1465,12 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
 
   either ncWarn doCache takePair
   where
-    takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
-      | rrname rr `DNS.isSubDomainOf` zoneDom,
-        Just soa <- DNS.fromRData rd   =  (fromSOA soa, rr) : xs
-      | otherwise                      =  xs
+    fromSOA soa rr = ((rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL]), rr)
+    {- the minimum of the SOA.MINIMUM field and SOA's TTL
+       https://datatracker.ietf.org/doc/html/rfc2308#section-3
+       https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
       where
-        {- the minimum of the SOA.MINIMUM field and SOA's TTL
-            https://datatracker.ietf.org/doc/html/rfc2308#section-3
-            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA soa = (rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
-    takeSOA _         xs     =  xs
     single list = case list of
       []    ->  Left "no SOA records found"
       [x]   ->  Right x
