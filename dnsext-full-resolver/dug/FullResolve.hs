@@ -29,7 +29,7 @@ fullResolve disableV6NS logOutput logLevel logDemo ctl n ty = do
 
 setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.PutLines, IO (), [IO ()], Env)
 setup disableV6NS logOutput logLevel logDemo = do
-  (logLoop, putLines, _, flush) <- Log.new (Log.outputHandle logOutput) logLevel logDemo
+  (logLoop, putLines, _, flush) <- Log.new logOutput logLevel logDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
   memo <- Cache.getMemo cacheConf

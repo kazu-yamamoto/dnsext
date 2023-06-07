@@ -66,7 +66,7 @@ setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers wo
             (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel demoFlag
             return ([], putLines, logQSize, flushLog)
         | otherwise  = do
-            (logLoop, putLines, logQSize, _waitQuit) <- Log.new (Log.outputHandle logOutput) logLevel demoFlag
+            (logLoop, putLines, logQSize, _waitQuit) <- Log.new logOutput logLevel demoFlag
             return ([logLoop], putLines, logQSize, pure ())
   (logLoops, putLines, logQSize, flushLog) <- getLogger
   tcache@(getSec, getTimeStr) <- TimeCache.new
@@ -135,7 +135,7 @@ benchQueries =
 
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
-  (logLoop, putLines, _logQSize, _) <- Log.new (Log.outputHandle Log.Stdout) Log.NOTICE Log.DisableDemo
+  (logLoop, putLines, _logQSize, _) <- Log.new Log.Stdout Log.NOTICE Log.DisableDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
         where memoLogLn = putLines Log.NOTICE Nothing . (:[])

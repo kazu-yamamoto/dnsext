@@ -7,7 +7,6 @@ module DNS.Log (
   GetQueueSize,
   Flush,
   newFastLogger,
-  outputHandle,
   new,
   none,
   ) where
@@ -68,8 +67,8 @@ outputHandle o = case o of
   Stdout  ->  stdout
   Stderr  ->  stderr
 
-new :: Handle -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
-new outFh loggerLevel demoFlag = do
+new :: Output -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
+new out loggerLevel demoFlag = do
     hSetBuffering outFh LineBuffering
     inQ <- newQueue 8
     flushMutex <- newEmptyMVar
@@ -78,6 +77,7 @@ new outFh loggerLevel demoFlag = do
            , getQSize inQ
            , flush inQ flushMutex)
   where
+    outFh = outputHandle out
     flush inQ flushMutex = writeQueue inQ Nothing >> takeMVar flushMutex
 
     logLines inQ lv color xs = when (enabled lv) $
