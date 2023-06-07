@@ -1,17 +1,17 @@
 module DNS.Log (
-  Level (..),
-  DemoFlag (..),
+  new,
   Output (..),
-  ThreadLoop,
+  FileLogSpec(..),
+  BufSize,
   PutLines,
   GetQueueSize,
-  Flush,
-  newFastLogger,
-  new,
-  none,
+  Terminate,
+  Level (..),
+  DemoFlag (..)
   ) where
 
 -- GHC packages
+import Control.Concurrent (forkIO, killThread)
 import Control.Concurrent.MVar (newEmptyMVar, takeMVar, putMVar)
 import Control.Monad (forever, when)
 import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, stdout, stderr)
@@ -19,13 +19,12 @@ import System.IO (Handle, hSetBuffering, BufferMode (LineBuffering), hPutStr, st
 -- other packages
 import System.Console.ANSI (hSetSGR)
 import System.Console.ANSI.Types
-import System.Log.FastLogger (newStdoutLoggerSetN, newStderrLoggerSetN, pushLogStr, toLogStr, flushLogStr)
+import System.Log.FastLogger (newFastLogger1, toLogStr, LogType'(..), FileLogSpec(..), BufSize, LogType)
 import UnliftIO (tryAny)
 
 -- this package
 import DNS.Queue (newQueue, readQueue, writeQueue)
 import qualified DNS.Queue as Queue
-
 
 data Level
   = DEMO  {- special level to specify demo output -}
@@ -43,43 +42,36 @@ data DemoFlag
 data Output
   = Stdout
   | Stderr
-  deriving Show
+  | RouteFile FileLogSpec BufSize
 
-type ThreadLoop = IO ()
 type PutLines = Level -> Maybe Color -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
-type Flush = IO ()
+type Terminate = IO ()
 
-newFastLogger :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Flush)
-newFastLogger out loggerLevel demoFlag = do
-  loggerSet <- newLoggerSetN bufsize $ Just 1
-  let enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
-      logLines lv _ = when (enabled lv) . pushLogStr loggerSet . toLogStr . unlines
-  return (logLines, return (-1, -1), flushLogStr loggerSet)
+new :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
+new Stdout            = newHandleLogger stdout
+new Stderr            = newHandleLogger stderr
+new (RouteFile fs sz) = newFileLogger $ LogFile fs sz
+
+newFileLogger :: LogType -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
+newFileLogger lt loggerLevel demoFlag = do
+    (put, kill) <- newFastLogger1 lt
+    return (logLines put, getQSize, kill)
   where
-    bufsize = 4096
-    newLoggerSetN = case out of
-      Stdout  ->  newStdoutLoggerSetN
-      Stderr  ->  newStderrLoggerSetN
+    logLines put lv _ xs = when (enabled lv) $
+        put $ toLogStr $ unlines xs
+    enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
 
-outputHandle :: Output -> Handle
-outputHandle o = case o of
-  Stdout  ->  stdout
-  Stderr  ->  stderr
+    getQSize = return (-1, -1)
 
-new :: Output -> Level -> DemoFlag -> IO (ThreadLoop, PutLines, GetQueueSize, Flush)
-new out loggerLevel demoFlag = do
+newHandleLogger :: Handle -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
+newHandleLogger outFh loggerLevel demoFlag = do
     hSetBuffering outFh LineBuffering
     inQ <- newQueue 8
     flushMutex <- newEmptyMVar
-    return ( logLoop inQ flushMutex
-           , logLines inQ
-           , getQSize inQ
-           , flush inQ flushMutex)
+    tid <- forkIO $ logLoop inQ flushMutex
+    return (logLines inQ, getQSize inQ, kill inQ flushMutex tid)
   where
-    outFh = outputHandle out
-    flush inQ flushMutex = writeQueue inQ Nothing >> takeMVar flushMutex
-
     logLines inQ lv color xs = when (enabled lv) $
         writeQueue inQ $ Just (color, xs)
     enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
@@ -88,6 +80,10 @@ new out loggerLevel demoFlag = do
         s <- fst <$> Queue.readSizes inQ
         let m = Queue.sizeMaxBound inQ
         return (s,m)
+
+    kill inQ flushMutex tid = do
+        () <- writeQueue inQ Nothing >> takeMVar flushMutex
+        killThread tid
 
     logLoop inQ flushMutex = forever $ do
         _ex <- tryAny (readQueue inQ >>= logit flushMutex)
@@ -106,7 +102,3 @@ checkEnabledLevelWithDemo :: Level -> DemoFlag -> Level -> Bool
 checkEnabledLevelWithDemo loggerLevel demoFlag lv = case demoFlag of
   DisableDemo  ->  loggerLevel <= lv
   EnableDemo   ->  lv == DEMO
-
--- no logging
-none :: Level -> [String] -> IO ()
-none _ _ = return ()
