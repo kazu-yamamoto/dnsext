@@ -1,6 +1,5 @@
 module FullResolve where
 
-import Control.Concurrent (forkIO)
 import Data.String (fromString)
 import qualified DNS.Do53.Memo as Cache
 
@@ -20,23 +19,22 @@ fullResolve :: Bool
             -> TYPE
             -> IO (Either String DNSMessage)
 fullResolve disableV6NS logOutput logLevel logDemo ctl n ty = do
-  (putLines, flushLog, loops, cxt) <- setup disableV6NS logOutput logLevel logDemo
-  mapM_ forkIO $ loops
+  (putLines, terminate, cxt) <- setup disableV6NS logOutput logLevel logDemo
   out <- resolve cxt ctl n ty
   putLines Log.INFO Nothing ["--------------------"]
-  flushLog
+  terminate
   return out
 
-setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.PutLines, IO (), [IO ()], Env)
+setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> IO (Log.PutLines, IO (), Env)
 setup disableV6NS logOutput logLevel logDemo = do
-  (logLoop, putLines, _, flush) <- Log.new logOutput logLevel logDemo
+  (putLines, _, terminate) <- Log.new logOutput logLevel logDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
   memo <- Cache.getMemo cacheConf
   let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
       ucache = (insert, Cache.readMemo memo)
   cxt <- Iterative.newEnv putLines disableV6NS ucache tcache
-  return (putLines, flush, [logLoop], cxt)
+  return (putLines, terminate, cxt)
 
 resolve :: Env -> IterativeControls -> String -> TYPE -> IO (Either String DNSMessage)
 resolve cxt ictl n ty =

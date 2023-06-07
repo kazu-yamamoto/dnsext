@@ -48,27 +48,20 @@ type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSHeader, DNS.EDNSheader, NE DNS.Question, a)
 type Response a = (ByteString, a)
 
-run :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> Int -> Bool -> Int -> Bool -> Int
+run :: Log.Output -> Log.Level -> Log.DemoFlag -> Int -> Bool -> Int -> Bool -> Int
     -> PortNumber -> [HostName] -> Bool -> IO ()
-run fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+run logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
   DNS.runInitIO DNS.addResourceDataForDNSSEC
-  (serverLoops, monLoops) <- setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
+  (serverLoops, monLoops) <- setup logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole
   race_
     (foldr concurrently_ (return ()) serverLoops)
     (foldr concurrently_ (return ()) monLoops)
 
-setup :: Bool -> Log.Output -> Log.Level -> Log.DemoFlag -> Int -> Bool -> Int -> Bool -> Int
+setup :: Log.Output -> Log.Level -> Log.DemoFlag -> Int -> Bool -> Int -> Bool -> Int
      -> PortNumber -> [HostName] -> Bool
      -> IO ([IO ()], [IO ()])
-setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
-  let getLogger
-        | fastLogger = do
-            (putLines, logQSize, flushLog) <- Log.newFastLogger logOutput logLevel demoFlag
-            return ([], putLines, logQSize, flushLog)
-        | otherwise  = do
-            (logLoop, putLines, logQSize, _waitQuit) <- Log.new logOutput logLevel demoFlag
-            return ([logLoop], putLines, logQSize, pure ())
-  (logLoops, putLines, logQSize, flushLog) <- getLogger
+setup logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+  (putLines, logQSize, terminate) <- Log.new logOutput logLevel demoFlag
   tcache@(getSec, getTimeStr) <- TimeCache.new
   let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
         where memoLogLn msg = do
@@ -99,9 +92,9 @@ setup fastLogger logOutput logLevel demoFlag maxCacheSize disableV6NS workers wo
   putLines Log.NOTICE Nothing $ map ("params: " ++) $ Mon.showParams params
 
   let ucacheQSize = return (0, 0) {- TODO: update ServerMonitor to drop -}
-  monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires flushLog
+  monLoops <- monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires terminate
 
-  return (logLoops ++ pLoops, monLoops)
+  return (pLoops, monLoops)
 
 getPipeline :: Int -> Bool -> Int -> IO EpochTime -> Env -> PortNumber -> IP
             -> IO ([IO ()], PLStatus)
@@ -135,7 +128,7 @@ benchQueries =
 
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
-  (logLoop, putLines, _logQSize, _) <- Log.new Log.Stdout Log.NOTICE Log.DisableDemo
+  (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.NOTICE Log.DisableDemo
   tcache@(getSec, _) <- TimeCache.new
   let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
         where memoLogLn = putLines Log.NOTICE Nothing . (:[])
@@ -158,7 +151,7 @@ workerBenchmark noop gplot workers perWorker size = do
             return (workerLoops, enqReq, deqRes)
 
   (workerLoops, enqueueReq, dequeueResp) <- getPipieline
-  _ <- forkIO $ foldr concurrently_ (return ()) $ logLoop : concat workerLoops
+  _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
 
   let runQueries qs = do
         let len = length qs

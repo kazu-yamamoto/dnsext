@@ -19,7 +19,6 @@ data BenchmarkOptions =
   , qsizePerWorker :: Int
   , requests :: Int
   }
-  deriving Show
 
 defaultOptions :: BenchmarkOptions
 defaultOptions =
