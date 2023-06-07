@@ -74,13 +74,13 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
     (_, cs) <- getResolveCache "iij.ad.jp." A
     check cs "ad.jp." NS `shouldSatisfy` isJust
 
-  it "sub-domain - nodata - ns" $ do
-    (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
-    check cs "arpa." NS `shouldSatisfy` isJust
+  it "no zone sub-domain - nodata - ns" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    check cs "ad.jp." NS `shouldSatisfy` isJust
 
-  it "sub-domain - soa" $ do
-    (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
-    check cs "arpa." SOA `shouldSatisfy` isJust
+  it "no zone sub-domain - soa" $ do
+    (_, cs) <- getResolveCache "iij.ad.jp." A
+    check cs "jp." SOA `shouldSatisfy` isJust
 
 querySpec :: Bool -> Bool -> Spec
 querySpec disableV6NS debug = describe "query" $ do
