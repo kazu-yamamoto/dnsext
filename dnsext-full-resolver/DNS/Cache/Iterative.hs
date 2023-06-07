@@ -766,7 +766,8 @@ iterative_ dc nss0 (x:xs) =
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec dnssecOK sas name A
-      lift $ delegationWithCache delegationZoneDomain delegationDNSKEY name msg
+      let sharedFallback = mayDelegation (subdomainShared dc nss name msg) (return . HasDelegation)
+      sharedFallback =<< lift (delegationWithCache delegationZoneDomain delegationDNSKEY name msg)
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
