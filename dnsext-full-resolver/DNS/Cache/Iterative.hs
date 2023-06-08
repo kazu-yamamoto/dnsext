@@ -775,13 +775,7 @@ iterative_ dc nss0 (x:xs) =
             | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss
       md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
-      let fills d = do
-            filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
-            when (not (null delegationDS) && null delegationDNSKEY) $ do
-              lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
-              lift $ clogLn Log.DEMO (Just Red) $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
-              throwDnsError DNS.ServerFailure
-            return filled
+      let fills d = fillsDNSSEC dc nss d
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
 
 -- If Nothing, it is a miss-hit against the cache.
