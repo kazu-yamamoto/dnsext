@@ -542,7 +542,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
   where
     special result = return (([], n0), Left result)
     notSpecial
-      | typ == Cache.nxTYPE = called *> return (([], n0), Left (DNS.NoErr, [], []))
+      | typ == Cache.NX = called *> return (([], n0), Left (DNS.NoErr, [], []))
       | typ == CNAME  =  called *> justCNAME n0
       | otherwise     =  called *> recCNAMEs 0 n0 id
     called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
@@ -593,7 +593,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
           mcc = maxCNameChain
 
     lookupNX :: Domain -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-    lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.nxTYPE
+    lookupNX bn = maybe (return Nothing) (either (return . Just) inconsistent) =<< lookupType bn Cache.NX
       where inconsistent rrs = do
               logLn Log.NOTICE $ "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
               return Nothing
@@ -649,7 +649,7 @@ cacheAnswer Delegation{..} dom typ msg
   | null $ DNS.answer msg  = lift $ do
       case rcode of
         DNS.NoErr    ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom typ rankedAnswer msg
-        DNS.NameErr  ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom Cache.nxTYPE rankedAnswer msg
+        DNS.NameErr  ->  (,) [] <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom Cache.NX rankedAnswer msg
         _            ->  return ([], [])
   | otherwise              =  do
       withSection rankedAnswer msg $ \rrs rank -> do
@@ -755,7 +755,7 @@ iterative_ dc nss0 (x:xs) =
     name = x
 
     lookupNX :: ContextT IO Bool
-    lookupNX = isJust <$> lookupCache name Cache.nxTYPE
+    lookupNX = isJust <$> lookupCache name Cache.NX
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss@Delegation{..} = do
@@ -842,7 +842,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
           if hasCNAME then      do cacheCNAME
                                    _ <- cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
                                    demoNoDelegation
-          else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg *> demoNoDelegation
+          else                     cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg *> demoNoDelegation
         | otherwise             =  pure ()
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
               demoNoDelegation =  logLn Log.DEMO $ "no delegation: " ++ domTraceMsg

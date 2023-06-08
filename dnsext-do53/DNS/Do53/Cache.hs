@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module DNS.Do53.Cache (
   -- * cache interfaces
   empty, null,
@@ -15,7 +17,7 @@ module DNS.Do53.Cache (
   insertSetFromSection,
   insertSetEmpty,
 
-  nxTYPE,
+  TYPE(NX),
 
   -- * handy interface
   insertRRs,
@@ -33,6 +35,7 @@ import Control.DeepSeq (liftRnf)
 import Control.Monad (guard)
 import DNS.Types (Question(..))
 import DNS.Types.Decode (EpochTime)
+import DNS.Types.Internal (TYPE(..))
 import Data.Either (partitionEithers)
 import Data.Function (on)
 import Data.List (group, groupBy, sortOn, uncons)
@@ -43,7 +46,7 @@ import Prelude hiding (lookup, null)
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 import DNS.Types
-  (Domain, CLASS, TTL, TYPE (..), RData,
+  (Domain, CLASS, TTL, RData,
    ResourceRecord (ResourceRecord), DNSMessage)
 import qualified DNS.Types as DNS
 
@@ -249,8 +252,9 @@ size (Cache c _) = PSQ.size c
 
 -- code from Reserved for Private Use (section 3.1 of RFC6895)
 -- <https://datatracker.ietf.org/doc/html/rfc6895#section-3.1>
-nxTYPE :: TYPE
-nxTYPE = DNS.toTYPE 0xff00
+-- | Key for NameError
+pattern NX :: TYPE
+pattern NX = TYPE 0xff00
 
 ---
 {- debug interfaces -}
