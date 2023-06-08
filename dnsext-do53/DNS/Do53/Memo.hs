@@ -104,6 +104,6 @@ insertCache k tim crs (Memo _ reaper) = do
   let ins = Cache.stubInsert k tim crs
   reaperUpdate reaper $ \ cache -> maybe cache id $ ins cache
 
-{- NameError is cached using private nxTYPE, instead of each type -}
+{- NameError is cached using private NX, instead of each type -}
 keyForNX :: Key -> Key
-keyForNX k = k { qtype = Cache.nxTYPE }
+keyForNX k = k { qtype = Cache.NX }
