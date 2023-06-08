@@ -1,5 +1,3 @@
-{-# LANGUAGE StrictData #-}
-
 module DNS.Do53.Cache (
   -- * cache interfaces
   empty, null,
