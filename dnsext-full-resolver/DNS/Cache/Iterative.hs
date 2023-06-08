@@ -960,12 +960,19 @@ fillDelegationDS dc src dest
     query = do
       ips <- delegationIPs dc src
       let nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
+          domTraceMsg = show (delegationZoneDomain src) ++ " -> " ++ show (delegationZoneDomain dest)
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
+          result (e, vinfo) = do
+            let traceLog (verifyColor, verifyMsg) = do
+                  logLn Log.INFO $ "fillDelegationDS: " ++ domTraceMsg ++ ", fill delegation - " ++ verifyMsg
+                  clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
+            maybe (pure ()) traceLog vinfo
+            either verifyFailed fill e
       if null ips
         then lift nullIPs
-        else lift . either verifyFailed fill =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
+        else lift . result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
 
-queryDS :: [RD_DNSKEY] -> [IP] -> Domain -> DNSQuery (Either String [RD_DS])
+queryDS :: [RD_DNSKEY] -> [IP] -> Domain -> DNSQuery (Either String [RD_DS], (Maybe (Color, String)))
 queryDS dnskeys ips dom = do
   msg <- norec True ips dom DS
   withSection rankedAnswer msg $ \rrs rank -> do
@@ -973,9 +980,9 @@ queryDS dnskeys ips dom = do
         rrsigs = rrsigList dom DS rrs
     (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
     let verifyResult
-          | null dsrds           =  return (Right [])                     {- no DS, so no verify -}
-          | rrsetVerified rrset  =  lift cacheDS *> return (Right dsrds)  {- verification success -}
-          | otherwise            =  return $ Left "queryDS: verification failed - RRSIG of DS"
+          | null dsrds           =  return (Right [], Nothing)   {- no DS, so no verify -}
+          | rrsetVerified rrset  =  lift cacheDS *> return (Right dsrds, Just (Green, "verification success - RRSIG of DS"))
+          | otherwise            =  return (Left "queryDS: verification failed - RRSIG of DS", Just (Red, "verification failed - RRSIG of DS"))
     verifyResult
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
