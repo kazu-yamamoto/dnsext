@@ -909,6 +909,43 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
+{- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
+subdomainShared :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
+  let soaRRs = rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
+      getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
+      verifySOA = do
+        d <- getWorkaround
+        let dnskey = delegationDNSKEY d
+        case dnskey of
+          []   ->  return $ HasDelegation d
+          _:_  ->  do
+            (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
+            if rrsetVerified rrset
+              then  return $ HasDelegation d
+              else  do
+              lift $ logLn Log.NOTICE $ "subdomainShared: " ++ show dom ++ ": " ++ "verification error. invalid SOA: " ++ show soaRRs
+              lift $ clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
+              throwDnsError DNS.ServerFailure
+
+  case soaRRs of
+    []       ->  return NoDelegation  {- not workaround fallbacks -}
+                                      {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
+    [_]      ->  verifySOA
+    _:_:_    ->  do
+      lift $ logLn Log.NOTICE $ "subdomainShared: " ++ show dom ++ ": " ++ "multiple SOAs are found: " ++ show soaRRs
+      lift $ logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
+      throwDnsError DNS.ServerFailure
+
+fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC dc nss d = do
+  filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+  when (not (null delegationDS) && null delegationDNSKEY) $ do
+    lift $ logLn Log.NOTICE $ "fillsDNSSEC: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
+    lift $ clogLn Log.DEMO (Just Red) $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
+    throwDnsError DNS.ServerFailure
+  return filled
+
 fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillDelegationDS dc src dest
   | null $ delegationDNSKEY src     =  return dest  {- no DNSKEY, not chained -}
