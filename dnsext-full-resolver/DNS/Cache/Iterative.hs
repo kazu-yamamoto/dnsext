@@ -836,17 +836,18 @@ delegationWithCache zoneDom dnskeys dom msg = do
     (_cnameRRset, cacheCNAME_) <- verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
     return (not $ null crrs, cacheCNAME_)
 
-  let ncache
-        | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+  let notFound
+        | rcode == DNS.NoErr    =  cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg *> demoNoDelegation
         | rcode == DNS.NameErr  =
           if hasCNAME then      do cacheCNAME
-                                   cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-          else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg
-        | otherwise             =  pure []
+                                   _ <- cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+                                   demoNoDelegation
+          else                     cacheEmptySection zoneDom dnskeys dom Cache.nxTYPE rankedAuthority msg *> demoNoDelegation
+        | otherwise             =  pure ()
         where rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-      demoNoDelegation =  logLn Log.DEMO $ "no delegation: " ++ domTraceMsg
+              demoNoDelegation =  logLn Log.DEMO $ "no delegation: " ++ domTraceMsg
 
-  let withCache x = do
+  let found x = do
         cacheDS
         cacheNS
         cacheAdds
@@ -856,8 +857,8 @@ delegationWithCache zoneDom dnskeys dom msg = do
 
   logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
   maybe
-    (ncache *> demoNoDelegation $> NoDelegation)
-    (fmap HasDelegation . withCache)
+    (notFound $> NoDelegation)
+    (fmap HasDelegation . found)
     $ takeDelegationSrc nsps dss adds
   where
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
