@@ -5,7 +5,7 @@ import System.Console.GetOpt
    usageInfo, getOpt)
 import System.Environment (getArgs)
 
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import qualified DNS.Cache.Server as Server
 
 data BenchmarkOptions =
@@ -19,7 +19,6 @@ data BenchmarkOptions =
   , qsizePerWorker :: Int
   , requests :: Int
   }
-  deriving Show
 
 defaultOptions :: BenchmarkOptions
 defaultOptions =

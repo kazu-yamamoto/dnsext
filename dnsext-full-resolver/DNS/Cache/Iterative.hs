@@ -79,7 +79,7 @@ import qualified DNS.Do53.Memo as Cache
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 
 -- $setup
 -- >>> :set -XOverloadedStrings

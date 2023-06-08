@@ -30,7 +30,7 @@ import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
 import DNS.Cache.SocketUtil (addrInfo)
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import DNS.Cache.Iterative (Env (..))
 
 
@@ -87,6 +87,7 @@ showParams params =
     field label get = field_ label (show . get)
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
+    showOut _          = "rotate file"
     hosts = dnsHosts params
 
 type PLStatus = [(IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)]
@@ -111,7 +112,7 @@ data Command
 monitor :: Bool -> Params -> Env
         -> ([PLStatus], IO (Int, Int), IO (Int, Int))
         -> (EpochTime -> IO ()) -> IO () -> IO [IO ()]
-monitor stdConsole params cxt getsSizeInfo expires flushLog = do
+monitor stdConsole params cxt getsSizeInfo expires terminate = do
   ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
   let ss = map fst ps
   sequence_ [ S.setSocketOption sock S.ReuseAddr 1 | sock <- ss ]
@@ -124,7 +125,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
   return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do
-      let repl = console params cxt getsSizeInfo expires flushLog monQuit stdin stdout "<std>"
+      let repl = console params cxt getsSizeInfo expires terminate monQuit stdin stdout "<std>"
       void $ forkIO repl
     logLn level = logLines_ cxt level Nothing . (:[])
     handle onError = either onError return <=< tryAny
@@ -133,7 +134,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
             socketWaitRead s
             (sock, addr) <- S.accept s
             sockh <- S.socketToHandle sock ReadWriteMode
-            let repl = console params cxt getsSizeInfo expires flushLog monQuit sockh sockh $ show addr
+            let repl = console params cxt getsSizeInfo expires terminate monQuit sockh sockh $ show addr
             void $ forkFinally repl (\_ -> hClose sockh)
           loop =
             either (const $ return ()) (const loop)
@@ -142,7 +143,7 @@ monitor stdConsole params cxt getsSizeInfo expires flushLog = do
 
 console :: Params -> Env -> ([PLStatus], IO (Int, Int), IO (Int, Int))
         -> (EpochTime -> IO ()) -> IO () -> (STM (), STM ()) -> Handle -> Handle -> String -> IO ()
-console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQuit, waitQuit) inH outH ainfo = do
+console params cxt (pQSizeList, ucacheQSize, logQSize) expires terminate (issueQuit, waitQuit) inH outH ainfo = do
   let input = do
         s <- hGetLine inH
         let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -188,7 +189,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires flushLog (issueQu
 
     outLn = hPutStrLn outH
 
-    runCmd Quit  =  flushLog *> atomically issueQuit $> True
+    runCmd Quit  =  terminate *> atomically issueQuit $> True
     runCmd Exit  =  return True
     runCmd cmd   =  dispatch cmd $> False
       where

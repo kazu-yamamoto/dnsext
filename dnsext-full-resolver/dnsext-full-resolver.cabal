@@ -12,7 +12,6 @@ library
         DNS.Cache.Server
         DNS.Cache.Iterative
         DNS.Cache.TimeCache
-        DNS.Cache.Log
         DNS.Cache.Types
 
     other-modules:
@@ -42,9 +41,9 @@ library
         iproute,
         dnsext-dnssec,
         dnsext-do53,
+        dnsext-log,
         dnsext-types,
         random,
-        fast-logger,
         unliftio
 
     if impl(ghc >=8)
@@ -59,6 +58,7 @@ executable cache-server
         ghc-options: -with-rtsopts=--io-manager=native
     build-depends:
         base,
+        dnsext-log,
         dnsext-full-resolver
 
     if impl(ghc >=8)
@@ -83,6 +83,7 @@ executable dug
         dnsext-do53,
         dnsext-dox,
         dnsext-full-resolver,
+        dnsext-log,
         dnsext-svcb,
         dnsext-types,
         iproute,
@@ -104,6 +105,7 @@ executable workers-benchmark
         ghc-options: -with-rtsopts=--io-manager=native
     build-depends:
         base,
+        dnsext-log,
         dnsext-full-resolver
 
     if impl(ghc >=8)

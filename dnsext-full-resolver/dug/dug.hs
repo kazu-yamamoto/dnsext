@@ -22,7 +22,7 @@ import Text.Read (readMaybe)
 import System.Console.ANSI (setSGR)
 import System.Console.ANSI.Types
 
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import DNS.Cache.Iterative
   (RequestDO (..), RequestCD (..), RequestAD (..), setRequestDO, setRequestCD, setRequestAD,
    IterativeControls (..), defaultIterativeControls)

@@ -8,7 +8,7 @@ import System.Console.GetOpt
    usageInfo, getOpt)
 import System.Environment (getArgs)
 
-import qualified DNS.Cache.Log as Log
+import qualified DNS.Log as Log
 import qualified DNS.Cache.Server as Server
 
 data ServerOptions =
@@ -24,9 +24,7 @@ data ServerOptions =
   , port :: Word16
   , bindHosts :: [String]
   , stdConsole :: Bool
-  , fastLogger :: Bool
   }
-  deriving Show
 
 defaultOptions :: ServerOptions
 defaultOptions =
@@ -42,7 +40,6 @@ defaultOptions =
   , port = 53
   , bindHosts = []
   , stdConsole = False
-  , fastLogger = False
   }
 
 descs :: [OptDescr (ServerOptions -> Either String ServerOptions)]
@@ -80,9 +77,6 @@ descs =
   , Option ['s'] ["std-console"]
     (NoArg $ \opts -> return opts { stdConsole = True, logOutput = Log.Stderr })
     "open console using stdin and stdout. also set log-output to stderr"
-  , Option ['f'] ["fast-logger"]
-    (NoArg $ \opts -> return opts { fastLogger = True })
-    ""
   ]
   where
     readIntWith p em s = do
@@ -111,7 +105,7 @@ parseOptions args
 run :: ServerOptions -> IO ()
 run opts =
   Server.run
-  (fastLogger opts) (logOutput opts) (logLevel opts) (logDemo opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
+  (logOutput opts) (logLevel opts) (logDemo opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
   (workers opts) (workerSharedQueue opts) (qsizePerWorker opts)
   (fromIntegral $ port opts) (bindHosts opts) (stdConsole opts)
 
