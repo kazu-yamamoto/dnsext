@@ -3,7 +3,7 @@ module QuerySpec where
 import Test.Hspec
 
 import Control.Concurrent (threadDelay)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import Data.Either (isRight)
 import Data.String (fromString)
 import DNS.Types (TYPE(NS, A, AAAA, MX, CNAME, PTR, SOA))
@@ -81,6 +81,10 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
   it "no zone sub-domain - soa" $ do
     (_, cs) <- getResolveCache "iij.ad.jp." A
     check cs "jp." SOA `shouldSatisfy` isJust
+
+  it "shared child zone - ns" $ do
+    (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
+    check cs "arpa." NS `shouldSatisfy` isNothing
 
 querySpec :: Bool -> Bool -> Spec
 querySpec disableV6NS debug = describe "query" $ do
