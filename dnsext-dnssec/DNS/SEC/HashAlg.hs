@@ -27,12 +27,14 @@ pattern GOST = DigestAlg 3
 pattern SHA384 :: DigestAlg
 pattern SHA384 = DigestAlg 4
 
+{- FOURMOLU_DISABLE -}
 instance Show DigestAlg where
-    show SHA1 = "SHA1"
-    show SHA256 = "SHA256"
-    show GOST = "GOST"
-    show SHA384 = "SHA384"
+    show SHA1          = "SHA1"
+    show SHA256        = "SHA256"
+    show GOST          = "GOST"
+    show SHA384        = "SHA384"
     show (DigestAlg n) = "DigestAlg " ++ show n
+{- FOURMOLU_ENABLE -}
 
 putDigestAlg :: DigestAlg -> SPut ()
 putDigestAlg = put8 . fromDigestAlg

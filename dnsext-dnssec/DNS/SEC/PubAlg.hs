@@ -65,25 +65,27 @@ pattern PRIVATEDNS = PubAlg 253
 pattern PRIVATEOID :: PubAlg
 pattern PRIVATEOID = PubAlg 254
 
+{- FOURMOLU_DISABLE -}
 instance Show PubAlg where
-    show DELETE = "DELETE"
-    show RSAMD5 = "RSAMD5"
-    show DH = "DH"
-    show DSA = "DSA"
-    show RSASHA1 = "RSASHA1"
-    show DSA_NSEC3_SHA1 = "DSA_NSEC3_SHA1"
+    show DELETE             = "DELETE"
+    show RSAMD5             = "RSAMD5"
+    show DH                 = "DH"
+    show DSA                = "DSA"
+    show RSASHA1            = "RSASHA1"
+    show DSA_NSEC3_SHA1     = "DSA_NSEC3_SHA1"
     show RSASHA1_NSEC3_SHA1 = "RSASHA1_NSEC3_SHA1"
-    show RSASHA256 = "RSASHA256"
-    show RSASHA512 = "RSASHA512"
-    show ECC_GOST = "ECC_GOST"
-    show ECDSAP256SHA256 = "ECDSAP256SHA256"
-    show ECDSAP384SHA384 = "ECDSAP384SHA384"
-    show ED25519 = "ED25519"
-    show ED448 = "ED448"
-    show INDIRECT = "INDIRECT"
-    show PRIVATEDNS = "PRIVATEDNS"
-    show PRIVATEOID = "PRIVATEOID"
-    show (PubAlg n) = "PubAlg " ++ show n
+    show RSASHA256          = "RSASHA256"
+    show RSASHA512          = "RSASHA512"
+    show ECC_GOST           = "ECC_GOST"
+    show ECDSAP256SHA256    = "ECDSAP256SHA256"
+    show ECDSAP384SHA384    = "ECDSAP384SHA384"
+    show ED25519            = "ED25519"
+    show ED448              = "ED448"
+    show INDIRECT           = "INDIRECT"
+    show PRIVATEDNS         = "PRIVATEDNS"
+    show PRIVATEOID         = "PRIVATEOID"
+    show (PubAlg n)         = "PubAlg " ++ show n
+{- FOURMOLU_ENABLE -}
 
 putPubAlg :: PubAlg -> SPut ()
 putPubAlg = put8 . fromPubAlg

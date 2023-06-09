@@ -9,16 +9,18 @@ newtype SvcParamKey = SvcParamKey
     }
     deriving (Eq, Ord)
 
+{- FOURMOLU_DISABLE -}
 instance Show SvcParamKey where
-    show SPK_Mandatory = "mandatory"
-    show SPK_ALPN = "alpn"
+    show SPK_Mandatory     = "mandatory"
+    show SPK_ALPN          = "alpn"
     show SPK_NoDefaultALPN = "no-adefault-alpn"
-    show SPK_Port = "port"
-    show SPK_IPv4Hint = "ipv4hint"
-    show SPK_ECH = "ech"
-    show SPK_IPv6Hint = "ipv6hint"
-    show SPK_DoHPath = "dohpath"
-    show (SvcParamKey n) = "SvcParamKey" ++ show n -- no space
+    show SPK_Port          = "port"
+    show SPK_IPv4Hint      = "ipv4hint"
+    show SPK_ECH           = "ech"
+    show SPK_IPv6Hint      = "ipv6hint"
+    show SPK_DoHPath       = "dohpath"
+    show (SvcParamKey n)   = "SvcParamKey" ++ show n -- no space
+{- FOURMOLU_ENABLE -}
 
 toSvcParamKey :: Word16 -> SvcParamKey
 toSvcParamKey = SvcParamKey

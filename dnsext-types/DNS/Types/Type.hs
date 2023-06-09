@@ -133,6 +133,32 @@ pattern CAA = TYPE 257 -- RFC 6844
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
+typeAndNames :: [(TYPE, String)]
+typeAndNames =
+    [ (A,     "A")
+    , (NS,    "NS")
+    , (CNAME, "CNAME")
+    , (SOA,   "SOA")
+    , (NULL,  "NULL")
+    , (PTR,   "PTR")
+    , (MX,    "MX")
+    , (TXT,   "TXT")
+    , (RP,    "RP")
+    , (AAAA,  "AAAA")
+    , (SRV,   "SRV")
+    , (DNAME, "DNAME")
+    , (OPT,   "OPT")
+    , (TLSA,  "TLSA")
+    , (CSYNC, "CSYNC")
+    , (AXFR,  "AXFR")
+    , (ANY,   "ANY")
+    , (CAA,   "CAA")
+    ]
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
 instance Show TYPE where
     show (TYPE w) = case IM.lookup i dict of
         Nothing -> "TYPE" ++ show w
@@ -149,28 +175,8 @@ insertTypeShowDict (TYPE w) name dict = IM.insert i name dict
     i = fromIntegral w
 
 defaultTypeShowDict :: TypeShowDict
-defaultTypeShowDict =
-    insertTypeShowDict A "A" $
-        insertTypeShowDict NS "NS" $
-            insertTypeShowDict CNAME "CNAME" $
-                insertTypeShowDict SOA "SOA" $
-                    insertTypeShowDict NULL "NULL" $
-                        insertTypeShowDict PTR "PTR" $
-                            insertTypeShowDict MX "MX" $
-                                insertTypeShowDict TXT "TXT" $
-                                    insertTypeShowDict RP "RP" $
-                                        insertTypeShowDict AAAA "AAAA" $
-                                            insertTypeShowDict SRV "SRV" $
-                                                insertTypeShowDict DNAME "DNAME" $
-                                                    insertTypeShowDict OPT "OPT" $
-                                                        insertTypeShowDict TLSA "TLSA" $
-                                                            insertTypeShowDict CSYNC "CSYNC" $
-                                                                insertTypeShowDict AXFR "AXFR" $
-                                                                    insertTypeShowDict ANY "ANY" $
-                                                                        insertTypeShowDict
-                                                                            CAA
-                                                                            "CAA"
-                                                                            IM.empty
+defaultTypeShowDict = foldr (uncurry insertTypeShowDict) IM.empty typeAndNames
+  where
 
 {-# NOINLINE globalTypeShowDict #-}
 globalTypeShowDict :: IORef TypeShowDict
@@ -200,28 +206,7 @@ insertTypeReadDict :: TYPE -> String -> TypeReadDict -> TypeReadDict
 insertTypeReadDict t name dict = M.insert name t dict
 
 defaultTypeReadDict :: TypeReadDict
-defaultTypeReadDict =
-    insertTypeReadDict A "A" $
-        insertTypeReadDict NS "NS" $
-            insertTypeReadDict CNAME "CNAME" $
-                insertTypeReadDict SOA "SOA" $
-                    insertTypeReadDict NULL "NULL" $
-                        insertTypeReadDict PTR "PTR" $
-                            insertTypeReadDict MX "MX" $
-                                insertTypeReadDict TXT "TXT" $
-                                    insertTypeReadDict RP "RP" $
-                                        insertTypeReadDict AAAA "AAAA" $
-                                            insertTypeReadDict SRV "SRV" $
-                                                insertTypeReadDict DNAME "DNAME" $
-                                                    insertTypeReadDict OPT "OPT" $
-                                                        insertTypeReadDict TLSA "TLSA" $
-                                                            insertTypeReadDict CSYNC "CSYNC" $
-                                                                insertTypeReadDict AXFR "AXFR" $
-                                                                    insertTypeReadDict ANY "ANY" $
-                                                                        insertTypeReadDict
-                                                                            CAA
-                                                                            "CAA"
-                                                                            M.empty
+defaultTypeReadDict = foldr (uncurry insertTypeReadDict) M.empty typeAndNames
 
 {-# NOINLINE globalTypeReadDict #-}
 globalTypeReadDict :: IORef TypeReadDict

@@ -63,13 +63,15 @@ putFlags DNSFlags{..} = sepBy string (string ", ") $ catMaybes xs
         , jst chkDisable "Checking Disabled"
         ]
 
+{- FOURMOLU_DISABLE -}
 opcd :: OPCODE -> String
-opcd OP_STD = "Standard query"
-opcd OP_INV = "Inverse query"
-opcd OP_SSR = "Server status request"
+opcd OP_STD    = "Standard query"
+opcd OP_INV    = "Inverse query"
+opcd OP_SSR    = "Server status request"
 opcd OP_NOTIFY = "Change notification"
 opcd OP_UPDATE = "Update request"
 opcd x = show x
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
