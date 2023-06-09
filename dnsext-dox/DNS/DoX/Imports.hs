@@ -1,19 +1,20 @@
 module DNS.DoX.Imports (
-    ByteString
-  , ShortByteString
-  , module Control.Applicative
-  , module Control.Monad
-  , module Data.Bits
-  , module Data.Function
-  , module Data.List
-  , module Data.Maybe
-  , module Data.Monoid
-  , module Data.Ord
-  , module Data.String
-  , module Data.Typeable
-  , module Data.Word
-  , module Numeric
-  ) where
+    ByteString,
+    ShortByteString,
+    module Control.Applicative,
+    module Control.Monad,
+    module Data.Bits,
+    module Data.Function,
+    module Data.List,
+    module Data.Maybe,
+    module Data.Monoid,
+    module Data.Ord,
+    module Data.String,
+    module Data.Typeable,
+    module Data.Word,
+    module Numeric,
+)
+where
 
 import Control.Applicative
 import Control.Monad
