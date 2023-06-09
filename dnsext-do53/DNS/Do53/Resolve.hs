@@ -3,16 +3,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module DNS.Do53.Resolve (
-    resolve
-  ) where
+    resolve,
+)
+where
 
 import Control.Concurrent.Async (Async, async, cancel, waitCatchSTM, waitSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
-import DNS.Types
-
 import DNS.Do53.Query
 import DNS.Do53.Types
+import DNS.Types
 
 ----------------------------------------------------------------
 
@@ -36,29 +36,31 @@ import DNS.Do53.Types
 --
 resolve :: ResolvEnv -> Question -> QueryControls -> IO Result
 resolve _ Question{..} _
-  | qtype == AXFR = E.throwIO InvalidAXFRLookup
+    | qtype == AXFR = E.throwIO InvalidAXFRLookup
 resolve ResolvEnv{..} q qctl = case renvResolvInfos of
-  []   -> error "resolve"
-  [ri] -> resolver ri q qctl
-  ris | concurrent -> resolveConcurrent ris resolver q qctl
-      | otherwise  -> resolveSequential ris resolver q qctl
+    [] -> error "resolve"
+    [ri] -> resolver ri q qctl
+    ris
+        | concurrent -> resolveConcurrent ris resolver q qctl
+        | otherwise -> resolveSequential ris resolver q qctl
   where
     concurrent = renvConcurrent
-    resolver   = renvResolver
+    resolver = renvResolver
 
-
-resolveSequential :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
+resolveSequential
+    :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveSequential ris0 resolver q qctl = loop ris0
   where
-    loop []       = error "resolveSequential:loop"
-    loop [ri]     = resolver ri q qctl
-    loop (ri:ris) = do
+    loop [] = error "resolveSequential:loop"
+    loop [ri] = resolver ri q qctl
+    loop (ri : ris) = do
         eres <- E.try $ resolver ri q qctl
         case eres of
-          Left (_ :: DNSError) -> loop ris
-          Right res -> return res
+            Left (_ :: DNSError) -> loop ris
+            Right res -> return res
 
-resolveConcurrent :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
+resolveConcurrent
+    :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent ris resolver q qctl =
     raceAny $ map (\ri -> resolver ri q qctl) ris
 
@@ -69,24 +71,24 @@ raceAny ios = mapM async ios >>= waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
 waitAnyRightCancel asyncs =
-  atomically (waitAnyRightSTM asyncs) `finally` mapM_ cancel asyncs
+    atomically (waitAnyRightSTM asyncs) `finally` mapM_ cancel asyncs
 
 -- The first value is returned and others are canceled at that time.
 -- The last exception is returned when all throws an exception.
 waitAnyRightSTM :: [Async a] -> STM a
-waitAnyRightSTM []     = error "waitAnyRightSTM"
-waitAnyRightSTM (a:as) = do
-    let w  = waitSTM a           -- may throw an exception
+waitAnyRightSTM [] = error "waitAnyRightSTM"
+waitAnyRightSTM (a : as) = do
+    let w = waitSTM a -- may throw an exception
         ws = map waitRightSTM as -- exeptions are ignored
-    -- If "w" is reached, all of the others throw an exception.
+        -- If "w" is reached, all of the others throw an exception.
     foldr orElse retry ws `orElse` w
 
 waitRightSTM :: Async b -> STM b
 waitRightSTM a = do
-   r <- waitCatchSTM a
-   -- Here this IO thread is dead.  A value of "Either SomeException
-   -- a" is passed by "putTMVar".  After "retry", "waitCatchSTM" waits
-   -- forever because "putTMVar" is never called again. Yes, the
-   -- thread is dead already.  So, this transaction stays until
-   -- canceled.
-   either (const retry) return r
+    r <- waitCatchSTM a
+    -- Here this IO thread is dead.  A value of "Either SomeException
+    -- a" is passed by "putTMVar".  After "retry", "waitCatchSTM" waits
+    -- forever because "putTMVar" is never called again. Yes, the
+    -- thread is dead already.  So, this transaction stays until
+    -- canceled.
+    either (const retry) return r

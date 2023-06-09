@@ -1,26 +1,26 @@
 {-# LANGUAGE CPP #-}
 
 module DNS.Do53.Query (
-    QueryControls(..)
-  , FlagOp(..)
-  , rdFlag
-  , adFlag
-  , cdFlag
-  , doFlag
-  , ednsEnabled
-  , ednsSetVersion
-  , ednsSetUdpSize
-  , ednsSetOptions
-  , modifyQuery
-  , encodeQuery
-  , ODataOp(..)
-  ) where
+    QueryControls (..),
+    FlagOp (..),
+    rdFlag,
+    adFlag,
+    cdFlag,
+    doFlag,
+    ednsEnabled,
+    ednsSetVersion,
+    ednsSetUdpSize,
+    ednsSetOptions,
+    modifyQuery,
+    encodeQuery,
+    ODataOp (..),
+)
+where
 
+import DNS.Do53.Imports
 import DNS.Types
 import DNS.Types.Encode
 import qualified Data.Semigroup as Sem
-
-import DNS.Do53.Imports
 
 ----------------------------------------------------------------
 
@@ -62,10 +62,9 @@ import DNS.Do53.Imports
 --         ]
 -- :}
 -- edns.version:1,edns.options:[NSID,ClientSubnet]
-
 data QueryControls = QueryControls
     { qctlHeader :: HeaderControls
-    , qctlEdns   :: EdnsControls
+    , qctlEdns :: EdnsControls
     }
     deriving (Eq)
 
@@ -82,7 +81,7 @@ instance Monoid QueryControls where
 #endif
 
 instance Show QueryControls where
-    show (QueryControls fl ex) = _showOpts [ show fl, show ex ]
+    show (QueryControls fl ex) = _showOpts [show fl, show ex]
 
 ----------------------------------------------------------------
 
@@ -91,21 +90,21 @@ instance Show QueryControls where
 -- >>> rdFlag FlagClear
 -- rd:0
 rdFlag :: FlagOp -> QueryControls
-rdFlag rd = mempty { qctlHeader = mempty { rdBit = rd } }
+rdFlag rd = mempty{qctlHeader = mempty{rdBit = rd}}
 
 -- | Generator of 'QueryControls' that adjusts the AD (Authentic Data) bit.
 --
 -- >>> adFlag FlagSet
 -- ad:1
 adFlag :: FlagOp -> QueryControls
-adFlag ad = mempty { qctlHeader = mempty { adBit = ad } }
+adFlag ad = mempty{qctlHeader = mempty{adBit = ad}}
 
 -- | Generator of 'QueryControls' that adjusts the CD (Checking Disabled) bit.
 --
 -- >>> cdFlag FlagSet
 -- cd:1
 cdFlag :: FlagOp -> QueryControls
-cdFlag cd = mempty { qctlHeader = mempty { cdBit = cd } }
+cdFlag cd = mempty{qctlHeader = mempty{cdBit = cd}}
 
 -- | Generator of 'QueryControls' that enables or disables EDNS support.
 --   When EDNS is disabled, the rest of the 'EDNS' controls are ignored.
@@ -113,7 +112,7 @@ cdFlag cd = mempty { qctlHeader = mempty { cdBit = cd } }
 -- >>> ednsHeader $ modifyQuery (ednsEnabled FlagClear <> doFlag FlagSet) defaultQuery
 -- NoEDNS
 ednsEnabled :: FlagOp -> QueryControls
-ednsEnabled en = mempty { qctlEdns = mempty { extEn = en } }
+ednsEnabled en = mempty{qctlEdns = mempty{extEn = en}}
 
 -- | Generator of 'QueryControls' that adjusts the 'EDNS' version.
 -- A value of 'Nothing' makes no changes, while 'Just' @v@ sets
@@ -122,7 +121,7 @@ ednsEnabled en = mempty { qctlEdns = mempty { extEn = en } }
 -- >>> ednsSetVersion (Just 1)
 -- edns.version:1
 ednsSetVersion :: Maybe Word8 -> QueryControls
-ednsSetVersion vn = mempty { qctlEdns = mempty { extVn = vn } }
+ednsSetVersion vn = mempty{qctlEdns = mempty{extVn = vn}}
 
 -- | Generator of 'QueryControls' that adjusts the 'EDNS' UDP buffer size.
 -- A value of 'Nothing' makes no changes, while 'Just' @n@ sets the EDNS UDP
@@ -131,14 +130,14 @@ ednsSetVersion vn = mempty { qctlEdns = mempty { extVn = vn } }
 -- >>> ednsSetUdpSize (Just 2048)
 -- edns.udpsize:2048
 ednsSetUdpSize :: Maybe Word16 -> QueryControls
-ednsSetUdpSize sz = mempty { qctlEdns = mempty { extSz = sz } }
+ednsSetUdpSize sz = mempty{qctlEdns = mempty{extSz = sz}}
 
 -- | Generator of 'QueryControls' that adjusts the 'EDNS' DO (DNSSEC OK) bit.
 --
 -- >>> doFlag FlagSet
 -- edns.dobit:1
 doFlag :: FlagOp -> QueryControls
-doFlag d0 = mempty { qctlEdns = mempty { extDO = d0 } }
+doFlag d0 = mempty{qctlEdns = mempty{extDO = d0}}
 
 -- | Generator of 'QueryControls' that adjusts the list of 'EDNS' options.
 --
@@ -146,13 +145,12 @@ doFlag d0 = mempty { qctlEdns = mempty { extDO = d0 } }
 -- >>> ednsSetOptions (ODataAdd [od_nsid ""])
 -- edns.options:[NSID]
 ednsSetOptions :: ODataOp -> QueryControls
-ednsSetOptions od = mempty { qctlEdns = mempty { extOd = od } }
+ednsSetOptions od = mempty{qctlEdns = mempty{extOd = od}}
 
 ----------------------------------------------------------------
 
 -- | Control over query-related DNS header flags. As with function composition,
 -- the left-most value has the last say.
---
 data HeaderControls = HeaderControls
     { rdBit :: FlagOp
     , adBit :: FlagOp
@@ -175,22 +173,24 @@ instance Monoid HeaderControls where
 instance Show HeaderControls where
     show (HeaderControls rd ad cd) =
         _showOpts
-             [ _showFlag "rd" rd
-             , _showFlag "ad" ad
-             , _showFlag "cd" cd ]
+            [ _showFlag "rd" rd
+            , _showFlag "ad" ad
+            , _showFlag "cd" cd
+            ]
 
 ----------------------------------------------------------------
 
 -- | The default EDNS Option list is empty.  We define two operations, one to
 -- prepend a list of options, and another to set a specific list of options.
---
-data ODataOp = ODataAdd [OData] -- ^ Add the specified options to the list.
-             | ODataSet [OData] -- ^ Set the option list as specified.
-             deriving (Eq)
+data ODataOp
+    = -- | Add the specified options to the list.
+      ODataAdd [OData]
+    | -- | Set the option list as specified.
+      ODataSet [OData]
+    deriving (Eq)
 
 -- | Since any given option code can appear at most once in the list, we
 -- de-duplicate by the OPTION CODE when combining lists.
---
 _odataDedup :: ODataOp -> [OData]
 _odataDedup op =
     nubBy ((==) `on` odataToOptCode) $
@@ -235,18 +235,27 @@ instance Monoid ODataOp where
 -- >>> ednsHeader $ modifyQuery (ednsEnabled FlagClear <> doFlag FlagSet) defaultQuery
 -- NoEDNS
 data EdnsControls = EdnsControls
-    { extEn :: FlagOp       -- ^ Enabled
-    , extVn :: Maybe Word8  -- ^ Version
-    , extSz :: Maybe Word16 -- ^ UDP Size
-    , extDO :: FlagOp       -- ^ DNSSEC OK (DO) bit
-    , extOd :: ODataOp      -- ^ EDNS option list tweaks
+    { extEn :: FlagOp
+    -- ^ Enabled
+    , extVn :: Maybe Word8
+    -- ^ Version
+    , extSz :: Maybe Word16
+    -- ^ UDP Size
+    , extDO :: FlagOp
+    -- ^ DNSSEC OK (DO) bit
+    , extOd :: ODataOp
+    -- ^ EDNS option list tweaks
     }
     deriving (Eq)
 
 instance Sem.Semigroup EdnsControls where
     (EdnsControls en1 vn1 sz1 do1 od1) <> (EdnsControls en2 vn2 sz2 do2 od2) =
-        EdnsControls (en1 <> en2) (vn1 <|> vn2) (sz1 <|> sz2)
-                    (do1 <> do2) (od1 <> od2)
+        EdnsControls
+            (en1 <> en2)
+            (vn1 <|> vn2)
+            (sz1 <|> sz2)
+            (do1 <> do2)
+            (od1 <> od2)
 
 instance Monoid EdnsControls where
     mempty = EdnsControls FlagKeep Nothing Nothing FlagKeep mempty
@@ -262,9 +271,11 @@ instance Show EdnsControls where
             [ _showFlag "edns.enabled" en
             , _showWord "edns.version" vn
             , _showWord "edns.udpsize" sz
-            , _showFlag "edns.dobit"   d0
-            , _showOdOp "edns.options" $ map (show . odataToOptCode)
-                                       $ _odataDedup od ]
+            , _showFlag "edns.dobit" d0
+            , _showOdOp "edns.options" $
+                map (show . odataToOptCode) $
+                    _odataDedup od
+            ]
       where
         _showWord :: Show a => String -> Maybe a -> String
         _showWord nm w = maybe _skipDefault (\s -> nm ++ ":" ++ show s) w
@@ -272,7 +283,7 @@ instance Show EdnsControls where
         _showOdOp :: String -> [String] -> String
         _showOdOp nm os = case os of
             [] -> ""
-            _  -> nm ++ ":[" ++ intercalate "," os ++ "]"
+            _ -> nm ++ ":[" ++ intercalate "," os ++ "]"
 
 ----------------------------------------------------------------
 
@@ -288,11 +299,16 @@ instance Show EdnsControls where
 -- FlagClear
 -- >>> FlagReset <> FlagClear <> FlagSet <> mempty
 -- FlagReset
-data FlagOp = FlagSet   -- ^ Set the flag to 1
-            | FlagClear -- ^ Clear the flag to 0
-            | FlagReset -- ^ Reset the flag to its default value
-            | FlagKeep  -- ^ Leave the flag unchanged
-            deriving (Eq, Show)
+data FlagOp
+    = -- | Set the flag to 1
+      FlagSet
+    | -- | Clear the flag to 0
+      FlagClear
+    | -- | Reset the flag to its default value
+      FlagReset
+    | -- | Leave the flag unchanged
+      FlagKeep
+    deriving (Eq, Show)
 
 -- $
 -- Test associativity of the semigroup operation:
@@ -300,10 +316,10 @@ data FlagOp = FlagSet   -- ^ Set the flag to 1
 -- >>> let ops = [FlagSet, FlagClear, FlagReset, FlagKeep]
 -- >>> foldl (&&) True [(a<>b)<>c == a<>(b<>c) | a <- ops, b <- ops, c <- ops]
 -- True
---
+
 instance Sem.Semigroup FlagOp where
     FlagKeep <> op = op
-    op       <> _  = op
+    op <> _ = op
 
 instance Monoid FlagOp where
     mempty = FlagKeep
@@ -314,20 +330,17 @@ instance Monoid FlagOp where
 #endif
 
 -- | We don't show options left at their default value.
---
 _skipDefault :: String
 _skipDefault = ""
 
 -- | Show non-default flag values
---
 _showFlag :: String -> FlagOp -> String
-_showFlag nm FlagSet   = nm ++ ":1"
+_showFlag nm FlagSet = nm ++ ":1"
 _showFlag nm FlagClear = nm ++ ":0"
-_showFlag _  FlagReset = _skipDefault
-_showFlag _  FlagKeep  = _skipDefault
+_showFlag _ FlagReset = _skipDefault
+_showFlag _ FlagKeep = _skipDefault
 
 -- | Combine a list of options for display, skipping default values
---
 _showOpts :: [String] -> String
 _showOpts os = intercalate "," $ filter (/= _skipDefault) os
 
@@ -339,47 +352,54 @@ _showOpts os = intercalate "," $ filter (/= _skipDefault) os
 --
 -- The caller is responsible for generating the ID via a securely seeded
 -- CSPRNG.
---
-encodeQuery :: Identifier     -- ^ Crypto random request id
-            -> Question      -- ^ Query name and type
-            -> QueryControls -- ^ Query flag and EDNS overrides
-            -> ByteString
+encodeQuery
+    :: Identifier
+    -- ^ Crypto random request id
+    -> Question
+    -- ^ Query name and type
+    -> QueryControls
+    -- ^ Query flag and EDNS overrides
+    -> ByteString
 encodeQuery idt q ctls = encode $ modifyQuery ctls $ makeQuery idt q
 
-modifyQuery :: QueryControls -- ^ Flag and EDNS overrides
-            -> DNSMessage
-            -> DNSMessage
-modifyQuery ctls query = query {
-      header = header'
-    , ednsHeader = queryEdns ehctls
-    }
+modifyQuery
+    :: QueryControls
+    -- ^ Flag and EDNS overrides
+    -> DNSMessage
+    -> DNSMessage
+modifyQuery ctls query =
+    query
+        { header = header'
+        , ednsHeader = queryEdns ehctls
+        }
   where
     hctls = qctlHeader ctls
     ehctls = qctlEdns ctls
-    header' = (header query) { flags = queryDNSFlags hctls }
+    header' = (header query){flags = queryDNSFlags hctls}
 
-    -- | Apply the given 'FlagOp' to a default boolean value to produce the final
+    -- \| Apply the given 'FlagOp' to a default boolean value to produce the final
     -- setting.
-    --
     applyFlag :: FlagOp -> Bool -> Bool
-    applyFlag FlagSet   _ = True
+    applyFlag FlagSet _ = True
     applyFlag FlagClear _ = False
-    applyFlag _         v = v
+    applyFlag _ v = v
 
-    -- | Construct a list of 0 or 1 EDNS OPT RRs based on EdnsControls setting.
-    --
+    -- \| Construct a list of 0 or 1 EDNS OPT RRs based on EdnsControls setting.
     queryEdns :: EdnsControls -> EDNSheader
     queryEdns (EdnsControls en vn sz d0 od) =
-        let d  = defaultEDNS -- fixme: ednsHeader query?
+        let d = defaultEDNS -- fixme: ednsHeader query?
          in if en == FlagClear
-            then NoEDNS
-            else EDNSheader $ d { ednsVersion = fromMaybe (ednsVersion d) vn
-                                , ednsUdpSize = fromMaybe (ednsUdpSize d) sz
-                                , ednsDnssecOk = applyFlag d0 (ednsDnssecOk d)
-                                , ednsOptions  = _odataDedup od
-                                }
+                then NoEDNS
+                else
+                    EDNSheader $
+                        d
+                            { ednsVersion = fromMaybe (ednsVersion d) vn
+                            , ednsUdpSize = fromMaybe (ednsUdpSize d) sz
+                            , ednsDnssecOk = applyFlag d0 (ednsDnssecOk d)
+                            , ednsOptions = _odataDedup od
+                            }
 
-    -- | Apply all the query flag, returning the
+    -- \| Apply all the query flag, returning the
     -- resulting 'DNSFlags' suitable for making queries with the requested flag
     -- settings.  This is only needed if you're creating your own 'DNSMessage',
     -- the 'DNS.Do53.lookupRawCtl' function takes a 'QueryControls'
@@ -392,12 +412,12 @@ modifyQuery ctls query = query {
     -- resolvers based on the resulting configuration, with the exception of
     -- 'DNS.Do53.lookupRawCtl' which takes an additional
     -- 'QueryControls' argument to augment the default overrides.
-    --
     queryDNSFlags :: HeaderControls -> DNSFlags
-    queryDNSFlags (HeaderControls rd ad cd) = d {
-          recDesired = applyFlag rd $ recDesired d
-        , authenData = applyFlag ad $ authenData d
-        , chkDisable = applyFlag cd $ chkDisable d
-        }
+    queryDNSFlags (HeaderControls rd ad cd) =
+        d
+            { recDesired = applyFlag rd $ recDesired d
+            , authenData = applyFlag ad $ authenData d
+            , chkDisable = applyFlag cd $ chkDisable d
+            }
       where
         d = flags $ header query
