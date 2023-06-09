@@ -2,41 +2,41 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 module DNS.Types.EDNS (
-    EDNS(..)
-  , defaultEDNS
-  , OptCode (
-    OptCode
-  , NSID
-  , ClientSubnet
-  , Padding
-  )
-  , fromOptCode
-  , toOptCode
-  , odataToOptCode
-  , OptData(..)
-  , fromOData
-  , toOData
-  , putOData
-  , OData(..)
-  , OD_NSID(..)
-  , OD_ClientSubnet(..)
-  , OD_Padding(..)
-  , get_nsid
-  , get_clientSubnet
-  , get_padding
-  , od_nsid
-  , od_clientSubnet
-  , od_ecsGeneric
-  , od_padding
-  , od_unknown
-  , addOpt
-  ) where
+    EDNS (..),
+    defaultEDNS,
+    OptCode (
+        OptCode,
+        NSID,
+        ClientSubnet,
+        Padding
+    ),
+    fromOptCode,
+    toOptCode,
+    odataToOptCode,
+    OptData (..),
+    fromOData,
+    toOData,
+    putOData,
+    OData (..),
+    OD_NSID (..),
+    OD_ClientSubnet (..),
+    OD_Padding (..),
+    get_nsid,
+    get_clientSubnet,
+    get_padding,
+    od_nsid,
+    od_clientSubnet,
+    od_ecsGeneric,
+    od_padding,
+    od_unknown,
+    addOpt,
+) where
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.Char (toUpper)
-import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
-import Data.IP (IP(..), fromIPv4, toIPv4, fromIPv6b, toIPv6b, makeAddrRange)
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.IP (IP (..), fromIPv4, fromIPv6b, makeAddrRange, toIPv4, toIPv6b)
 import qualified Data.IP (addr)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
@@ -55,21 +55,22 @@ import qualified DNS.Types.Opaque.Internal as Opaque
 ----------------------------------------------------------------
 
 -- | EDNS information defined in RFC 6891.
-data EDNS = EDNS {
-    -- | EDNS version, presently only version 0 is defined.
-    ednsVersion  :: Word8
-    -- | Supported UDP payload size.
-  , ednsUdpSize  :: Word16
-    -- | Request DNSSEC replies (with RRSIG and NSEC records as as appropriate)
+data EDNS = EDNS
+    { ednsVersion :: Word8
+    -- ^ EDNS version, presently only version 0 is defined.
+    , ednsUdpSize :: Word16
+    -- ^ Supported UDP payload size.
+    , ednsDnssecOk :: Bool
+    -- ^ Request DNSSEC replies (with RRSIG and NSEC records as as appropriate)
     -- from the server.  Generally, not needed (except for diagnostic purposes)
     -- unless the signatures will be validated.  Just setting the 'AD' bit in
     -- the query and checking it in the response is sufficient (but often
     -- subject to man-in-the-middle forgery) if all that's wanted is whether
     -- the server validated the response.
-  , ednsDnssecOk :: Bool
-    -- | EDNS options (e.g. 'OD_NSID', 'OD_ClientSubnet', ...)
-  , ednsOptions  :: [OData]
-  } deriving (Eq, Show)
+    , ednsOptions :: [OData]
+    -- ^ EDNS options (e.g. 'OD_NSID', 'OD_ClientSubnet', ...)
+    }
+    deriving (Eq, Show)
 
 -- | The default EDNS pseudo-header for queries.  The UDP buffer size is set to
 --   1216 bytes, which should result in replies that fit into the 1280 byte
@@ -86,22 +87,23 @@ data EDNS = EDNS {
 --     , ednsOptions = []     -- No EDNS options by default
 --     }
 -- @
---
 defaultEDNS :: EDNS
-defaultEDNS = EDNS
-    { ednsVersion = 0      -- The default EDNS version is 0
-    , ednsUdpSize = 1232   -- IPv6-safe UDP MTU (1280 - 40 - 8)
-    , ednsDnssecOk = False -- We don't do DNSSEC validation
-    , ednsOptions = []     -- No EDNS options by default
-    }
+defaultEDNS =
+    EDNS
+        { ednsVersion = 0 -- The default EDNS version is 0
+        , ednsUdpSize = 1232 -- IPv6-safe UDP MTU (1280 - 40 - 8)
+        , ednsDnssecOk = False -- We don't do DNSSEC validation
+        , ednsOptions = [] -- No EDNS options by default
+        }
 
 ----------------------------------------------------------------
 
 -- | EDNS Option Code (RFC 6891).
-newtype OptCode = OptCode {
-    -- | From option code to number.
-    fromOptCode :: Word16
-  } deriving (Eq,Ord)
+newtype OptCode = OptCode
+    { fromOptCode :: Word16
+    -- ^ From option code to number.
+    }
+    deriving (Eq, Ord)
 
 -- | From number to option code.
 toOptCode :: Word16 -> OptCode
@@ -109,7 +111,7 @@ toOptCode = OptCode
 
 -- | NSID (RFC5001, section 2.3)
 pattern NSID :: OptCode
-pattern NSID  = OptCode 3
+pattern NSID = OptCode 3
 
 -- | Client subnet (RFC7871)
 pattern ClientSubnet :: OptCode
@@ -123,8 +125,8 @@ pattern Padding = OptCode 12
 
 instance Show OptCode where
     show (OptCode w) = case IM.lookup i dict of
-      Nothing   -> "OptCode " ++ show w
-      Just name -> name
+        Nothing -> "OptCode " ++ show w
+        Just name -> name
       where
         i = fromIntegral w
         dict = unsafePerformIO $ readIORef globalOptShowDict
@@ -138,9 +140,11 @@ insertOptShowDict (OptCode w) name dict = IM.insert i name dict
 
 defaultOptShowDict :: OptShowDict
 defaultOptShowDict =
-    insertOptShowDict NSID "NSID"
-  $ insertOptShowDict ClientSubnet "ClientSubnet"
-   IM.empty
+    insertOptShowDict NSID "NSID" $
+        insertOptShowDict
+            ClientSubnet
+            "ClientSubnet"
+            IM.empty
 
 {-# NOINLINE globalOptShowDict #-}
 globalOptShowDict :: IORef OptShowDict
@@ -151,14 +155,14 @@ instance Read OptCode where
     readPrec = do
         ms <- lexP
         let str0 = case ms of
-              Ident  s -> s
-              String s -> s
-              _        -> fail "Read OptCode"
+                Ident s -> s
+                String s -> s
+                _ -> fail "Read OptCode"
             str = map toUpper str0
             dict = unsafePerformIO $ readIORef globalOptReadDict
         case M.lookup str dict of
-          Just t -> return t
-          _      -> fail "Read OptCode"
+            Just t -> return t
+            _ -> fail "Read OptCode"
 
 type OptReadDict = Map String OptCode
 
@@ -167,9 +171,11 @@ insertOptReadDict o name dict = M.insert name o dict
 
 defaultOptReadDict :: OptReadDict
 defaultOptReadDict =
-    insertOptReadDict NSID "NSID"
-  $ insertOptReadDict ClientSubnet "ClientSubnet"
-   M.empty
+    insertOptReadDict NSID "NSID" $
+        insertOptReadDict
+            ClientSubnet
+            "ClientSubnet"
+            M.empty
 
 {-# NOINLINE globalOptReadDict #-}
 globalOptReadDict :: IORef OptReadDict
@@ -186,13 +192,13 @@ addOpt code name = do
 ---------------------------------------------------------------
 
 class (Typeable a, Eq a, Show a) => OptData a where
-    optDataCode   :: a -> OptCode
+    optDataCode :: a -> OptCode
     putOptData :: a -> SPut ()
 
 ---------------------------------------------------------------
 
 -- | A type to uniform 'OptData' 'a'.
-data OData = forall a . (Typeable a, Eq a, Show a, OptData a) => OData a
+data OData = forall a. (Typeable a, Eq a, Show a, OptData a) => OData a
 
 -- | Extracting the original type.
 fromOData :: Typeable a => OData -> Maybe a
@@ -238,16 +244,16 @@ od_nsid = toOData . OD_NSID
 ---------------------------------------------------------------
 
 -- | ECS(EDNS client subnet) (RFC7871).
-data OD_ClientSubnet =
-  -- | Valid client subnet.
-  --   Bidirectional. (source bits, scope bits, address).
-  --   The address is masked and truncated when encoding queries.
-  --   The address is zero-padded when decoding.
-    OD_ClientSubnet Word8 Word8 IP
-  -- | Unsupported or malformed IP client subnet option.  Bidirectional.
-  --   (address family, source bits, scope bits, opaque address).
-    | OD_ECSgeneric Word16 Word8 Word8 Opaque
-                     deriving (Eq)
+data OD_ClientSubnet
+    = -- | Valid client subnet.
+      --   Bidirectional. (source bits, scope bits, address).
+      --   The address is masked and truncated when encoding queries.
+      --   The address is zero-padded when decoding.
+      OD_ClientSubnet Word8 Word8 IP
+    | -- | Unsupported or malformed IP client subnet option.  Bidirectional.
+      --   (address family, source bits, scope bits, opaque address).
+      OD_ECSgeneric Word16 Word8 Word8 Opaque
+    deriving (Eq)
 
 instance Show OD_ClientSubnet where
     show (OD_ClientSubnet b1 b2 ip@(IPv4 _)) = _showECS 1 b1 b2 $ show ip
@@ -276,15 +282,16 @@ put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
     let octets = fromIntegral $ (srcBits + 7) `div` 8
         prefix addr = Data.IP.addr $ makeAddrRange addr $ fromIntegral srcBits
         (family, raw) = case ip of
-                        IPv4 ip4 -> (1, take octets $ fromIPv4  $ prefix ip4)
-                        IPv6 ip6 -> (2, take octets $ fromIPv6b $ prefix ip6)
+            IPv4 ip4 -> (1, take octets $ fromIPv4 $ prefix ip4)
+            IPv6 ip6 -> (2, take octets $ fromIPv6b $ prefix ip6)
         dataLen = 2 + 2 + octets
-     in do put16 $ fromOptCode ClientSubnet
-           putInt16 dataLen
-           put16 family
-           put8 srcBits
-           put8 scpBits
-           mapM_ putInt8 raw
+     in do
+            put16 $ fromOptCode ClientSubnet
+            putInt16 dataLen
+            put16 family
+            put8 srcBits
+            put8 scpBits
+            mapM_ putInt8 raw
 put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
     put16 $ fromOptCode ClientSubnet
     putInt16 $ 4 + Opaque.length addr
@@ -295,50 +302,51 @@ put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
 
 get_clientSubnet :: Int -> SGet OD_ClientSubnet
 get_clientSubnet len = do
-        family  <- get16
-        srcBits <- get8
-        scpBits <- get8
-        addr    <- getOpaque (len - 4) -- 4 = 2 + 1 + 1
-        --
-        -- https://tools.ietf.org/html/rfc7871#section-6
-        --
-        -- o  ADDRESS, variable number of octets, contains either an IPv4 or
-        --    IPv6 address, depending on FAMILY, which MUST be truncated to the
-        --    number of bits indicated by the SOURCE PREFIX-LENGTH field,
-        --    padding with 0 bits to pad to the end of the last octet needed.
-        --
-        -- o  A server receiving an ECS option that uses either too few or too
-        --    many ADDRESS octets, or that has non-zero ADDRESS bits set beyond
-        --    SOURCE PREFIX-LENGTH, SHOULD return FORMERR to reject the packet,
-        --    as a signal to the software developer making the request to fix
-        --    their implementation.
-        --
-        -- In order to avoid needless decoding errors, when the ECS encoding
-        -- requirements are violated, we construct an OD_ECSgeneric OData,
-        -- instread of an IP-specific OD_ClientSubnet OData, which will only
-        -- be used for valid inputs.  When the family is neither IPv4(1) nor
-        -- IPv6(2), or the address prefix is not correctly encoded (too long
-        -- or too short), the OD_ECSgeneric data contains the verbatim input
-        -- from the peer.
-        --
-        let addrbs = Opaque.toShortByteString addr
-        case Short.length addrbs == (fromIntegral srcBits + 7) `div` 8 of
-            True | Just ip <- bstoip family addrbs srcBits scpBits
-                -> pure $ OD_ClientSubnet srcBits scpBits ip
-            _   -> pure $ OD_ECSgeneric family srcBits scpBits addr
+    family <- get16
+    srcBits <- get8
+    scpBits <- get8
+    addr <- getOpaque (len - 4) -- 4 = 2 + 1 + 1
+    --
+    -- https://tools.ietf.org/html/rfc7871#section-6
+    --
+    -- o  ADDRESS, variable number of octets, contains either an IPv4 or
+    --    IPv6 address, depending on FAMILY, which MUST be truncated to the
+    --    number of bits indicated by the SOURCE PREFIX-LENGTH field,
+    --    padding with 0 bits to pad to the end of the last octet needed.
+    --
+    -- o  A server receiving an ECS option that uses either too few or too
+    --    many ADDRESS octets, or that has non-zero ADDRESS bits set beyond
+    --    SOURCE PREFIX-LENGTH, SHOULD return FORMERR to reject the packet,
+    --    as a signal to the software developer making the request to fix
+    --    their implementation.
+    --
+    -- In order to avoid needless decoding errors, when the ECS encoding
+    -- requirements are violated, we construct an OD_ECSgeneric OData,
+    -- instread of an IP-specific OD_ClientSubnet OData, which will only
+    -- be used for valid inputs.  When the family is neither IPv4(1) nor
+    -- IPv6(2), or the address prefix is not correctly encoded (too long
+    -- or too short), the OD_ECSgeneric data contains the verbatim input
+    -- from the peer.
+    --
+    let addrbs = Opaque.toShortByteString addr
+    case Short.length addrbs == (fromIntegral srcBits + 7) `div` 8 of
+        True
+            | Just ip <- bstoip family addrbs srcBits scpBits ->
+                pure $ OD_ClientSubnet srcBits scpBits ip
+        _ -> pure $ OD_ECSgeneric family srcBits scpBits addr
   where
     prefix addr bits = Data.IP.addr $ makeAddrRange addr $ fromIntegral bits
     zeropad = (++ repeat 0) . map fromIntegral . Short.unpack
     checkBits fromBytes toIP srcBits scpBits bytes =
-        let addr       = fromBytes bytes
+        let addr = fromBytes bytes
             maskedAddr = prefix addr srcBits
-            maxBits    = fromIntegral $ 8 * length bytes
+            maxBits = fromIntegral $ 8 * length bytes
          in if addr == maskedAddr && scpBits <= maxBits
-            then Just $ toIP addr
-            else Nothing
+                then Just $ toIP addr
+                else Nothing
     bstoip :: Word16 -> ShortByteString -> Word8 -> Word8 -> Maybe IP
     bstoip family bs srcBits scpBits = case family of
-        1 -> checkBits toIPv4  IPv4 srcBits scpBits $ take 4  $ zeropad bs
+        1 -> checkBits toIPv4 IPv4 srcBits scpBits $ take 4 $ zeropad bs
         2 -> checkBits toIPv6b IPv6 srcBits scpBits $ take 16 $ zeropad bs
         _ -> Nothing
 
@@ -386,18 +394,24 @@ od_unknown code o = toOData $ OD_Unknown code o
 ---------------------------------------------------------------
 
 _showNSID :: OD_NSID -> String
-_showNSID (OD_NSID nsid) = "NSID "
-                        ++ C8.unpack (Opaque.toBase16 nsid)
-                        ++ ";"
-                        ++ printable bs
+_showNSID (OD_NSID nsid) =
+    "NSID "
+        ++ C8.unpack (Opaque.toBase16 nsid)
+        ++ ";"
+        ++ printable bs
   where
     bs = Opaque.toByteString nsid
     printable = map (\c -> if c < ' ' || c > '~' then '?' else c) . C8.unpack
 
 _showECS :: Word16 -> Word8 -> Word8 -> String -> String
 _showECS family srcBits scpBits address =
-    show family ++ " " ++ show srcBits
-                ++ " " ++ show scpBits ++ " " ++ address
+    show family
+        ++ " "
+        ++ show srcBits
+        ++ " "
+        ++ show scpBits
+        ++ " "
+        ++ address
 
 ---------------------------------------------------------------
 

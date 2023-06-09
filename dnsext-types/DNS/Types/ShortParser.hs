@@ -12,15 +12,16 @@ import Data.Word8
 
 ----------------------------------------------------------------
 
-newtype Parser a = Parser {
-  -- | Getting the internal parser.
-    runParser :: ShortByteString -> (Result a, ShortByteString)
-  }
+newtype Parser a = Parser
+    { runParser :: ShortByteString -> (Result a, ShortByteString)
+    -- ^ Getting the internal parser.
+    }
 
-data Result a = Match a
-              | Unmatch
-              | Fail String
-              deriving (Eq, Show)
+data Result a
+    = Match a
+    | Unmatch
+    | Fail String
+    deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
@@ -28,32 +29,33 @@ instance Functor Parser where
     f `fmap` p = return f <*> p
 
 instance Applicative Parser where
-    pure a = Parser (Match a, )
-    (<*>)  = ap
+    pure a = Parser (Match a,)
+    (<*>) = ap
 
 instance Monad Parser where
-    return   = pure
-    p >>= f  = Parser $ \bs -> case runParser p bs of
+    return = pure
+    p >>= f = Parser $ \bs -> case runParser p bs of
         (Unmatch, bs') -> (Unmatch, bs')
         (Match a, bs') -> runParser (f a) bs'
-        (Fail s,  bs') -> (Fail s, bs')
+        (Fail s, bs') -> (Fail s, bs')
 
 instance MonadFail Parser where
-    fail s = Parser (Fail s, )
+    fail s = Parser (Fail s,)
 
 -- no 'try'
 instance MonadPlus Parser where
-    mzero       = Parser (Unmatch, )
+    mzero = Parser (Unmatch,)
     p `mplus` q = Parser $ \bs -> case runParser p bs of
-        (Unmatch, _)    -> runParser q bs
-        (Match a,  bs') -> (Match a, bs')
-        (Fail s,   bs') -> (Fail s,  bs')
+        (Unmatch, _) -> runParser q bs
+        (Match a, bs') -> (Match a, bs')
+        (Fail s, bs') -> (Fail s, bs')
 
 instance Alternative Parser where
     empty = mzero
     (<|>) = mplus
 
 ----------------------------------------------------------------
+
 -- | The parser @satisfy f@ succeeds for any character for which the
 --   supplied function @f@ returns 'True'. Returns the character that is
 --   actually parsed.
@@ -61,10 +63,10 @@ satisfy :: (Word8 -> Bool) -> Parser Word8
 satisfy predicate = Parser sat
   where
     sat bs = case Short.uncons bs of
-      Nothing         -> (Unmatch, "")
-      Just (b,bs')
-        | predicate b -> (Match b, bs')
-        | otherwise   -> (Unmatch, bs)
+        Nothing -> (Unmatch, "")
+        Just (b, bs')
+            | predicate b -> (Match b, bs')
+            | otherwise -> (Unmatch, bs)
 
 eof :: Parser ()
 eof = Parser $ \bs -> if bs == "" then (Match (), "") else (Unmatch, bs)
@@ -80,15 +82,14 @@ skip = void . satisfy
 
 -- | @string s@ parses a sequence of characters given by @s@. Returns
 --   the parsed string
-
 string :: ShortByteString -> Parser ShortByteString
 string bs0 = loop bs0 >> pure bs0
- where
-     loop bs = case Short.uncons bs of
-       Nothing      -> pure ()
-       Just (b,bs') -> do
-           void $ char b
-           void $ string bs'
+  where
+    loop bs = case Short.uncons bs of
+        Nothing -> pure ()
+        Just (b, bs') -> do
+            void $ char b
+            void $ string bs'
 
 ----------------------------------------------------------------
 
@@ -164,9 +165,10 @@ manyTill p end = scan
 
 match :: Parser a -> Parser (ShortByteString, a)
 match p = Parser $ \bs -> case runParser p bs of
-  (Unmatch, _)   -> (Unmatch, bs)
-  (Match a, bs') -> let len  = Short.length bs
-                        len' = Short.length bs'
-                        bs'' = Short.take (len - len') bs
-                    in (Match (bs'', a),  bs')
-  (Fail s, _)    -> (Fail s, bs)
+    (Unmatch, _) -> (Unmatch, bs)
+    (Match a, bs') ->
+        let len = Short.length bs
+            len' = Short.length bs'
+            bs'' = Short.take (len - len') bs
+         in (Match (bs'', a), bs')
+    (Fail s, _) -> (Fail s, bs)

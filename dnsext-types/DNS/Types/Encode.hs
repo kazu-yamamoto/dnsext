@@ -1,15 +1,16 @@
 module DNS.Types.Encode (
-  -- * Main encoder
-    encode
-  -- * Encoders for parts
-  , encodeDNSHeader
-  , encodeDNSFlags
-  , encodeQuestion
-  , encodeResourceRecord
-  , encodeRData
-  , encodeDomain
-  , encodeMailbox
-  ) where
+    -- * Main encoder
+    encode,
+
+    -- * Encoders for parts
+    encodeDNSHeader,
+    encodeDNSFlags,
+    encodeQuestion,
+    encodeResourceRecord,
+    encodeRData,
+    encodeDomain,
+    encodeMailbox,
+) where
 
 import DNS.StateBinary
 import DNS.Types.Domain
