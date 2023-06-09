@@ -1218,16 +1218,18 @@ fillDelegationDS dc src dest
         ips <- delegationIPs dc src
         let nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
             domTraceMsg = show (delegationZoneDomain src) ++ " -> " ++ show (delegationZoneDomain dest)
-            verifyFailed es = logLn Log.WARN ("fillDelegationDS: " ++ es) *> return dest
+            verifyFailed es = do
+                lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
+                throwDnsError DNS.ServerFailure
             result (e, vinfo) = do
-                let traceLog (verifyColor, verifyMsg) = do
-                        clogLn Log.DEMO (Just verifyColor) $
+                let traceLog (verifyColor, verifyMsg) =
+                        lift . clogLn Log.DEMO (Just verifyColor) $
                             "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 maybe (pure ()) traceLog vinfo
                 either verifyFailed fill e
         if null ips
             then lift nullIPs
-            else lift . result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
+            else result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
 
 queryDS
     :: [RD_DNSKEY]
