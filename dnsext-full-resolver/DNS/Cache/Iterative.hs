@@ -766,7 +766,8 @@ iterative_ dc nss0 (x:xs) =
          See the following document:
          QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
       msg <- norec dnssecOK sas name A
-      lift $ delegationWithCache delegationZoneDomain delegationDNSKEY name msg
+      let sharedFallback = mayDelegation (subdomainShared dc nss name msg) (return . HasDelegation)
+      sharedFallback =<< lift (delegationWithCache delegationZoneDomain delegationDNSKEY name msg)
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
@@ -774,13 +775,7 @@ iterative_ dc nss0 (x:xs) =
             | nxc        =  return NoDelegation
             | otherwise  =  stepQuery nss
       md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
-      let fills d = do
-            filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
-            when (not (null delegationDS) && null delegationDNSKEY) $ do
-              lift $ logLn Log.NOTICE $ "iterative_.step: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
-              lift $ clogLn Log.DEMO (Just Red) $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
-              throwDnsError DNS.ServerFailure
-            return filled
+      let fills d = fillsDNSSEC dc nss d
       mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
 
 -- If Nothing, it is a miss-hit against the cache.
@@ -909,6 +904,43 @@ rrnamePairs dds@(d:ds) ggs@(g:gs)
     an = rrname a
     a = head g
 
+{- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
+subdomainShared :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
+  let soaRRs = rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
+      getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
+      verifySOA = do
+        d <- getWorkaround
+        let dnskey = delegationDNSKEY d
+        case dnskey of
+          []   ->  return $ HasDelegation d
+          _:_  ->  do
+            (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
+            if rrsetVerified rrset
+              then  return $ HasDelegation d
+              else  do
+              lift $ logLn Log.NOTICE $ "subdomainShared: " ++ show dom ++ ": " ++ "verification error. invalid SOA: " ++ show soaRRs
+              lift $ clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
+              throwDnsError DNS.ServerFailure
+
+  case soaRRs of
+    []       ->  return NoDelegation  {- not workaround fallbacks -}
+                                      {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
+    [_]      ->  verifySOA
+    _:_:_    ->  do
+      lift $ logLn Log.NOTICE $ "subdomainShared: " ++ show dom ++ ": " ++ "multiple SOAs are found: " ++ show soaRRs
+      lift $ logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
+      throwDnsError DNS.ServerFailure
+
+fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC dc nss d = do
+  filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+  when (not (null delegationDS) && null delegationDNSKEY) $ do
+    lift $ logLn Log.NOTICE $ "fillsDNSSEC: " ++ show delegationZoneDomain ++ ": " ++ "DS is not null, and DNSKEY is null"
+    lift $ clogLn Log.DEMO (Just Red) $ show delegationZoneDomain ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
+    throwDnsError DNS.ServerFailure
+  return filled
+
 fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillDelegationDS dc src dest
   | null $ delegationDNSKEY src     =  return dest  {- no DNSKEY, not chained -}
@@ -922,12 +954,19 @@ fillDelegationDS dc src dest
     query = do
       ips <- delegationIPs dc src
       let nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
+          domTraceMsg = show (delegationZoneDomain src) ++ " -> " ++ show (delegationZoneDomain dest)
           verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
+          result (e, vinfo) = do
+            let traceLog (verifyColor, verifyMsg) = do
+                  logLn Log.INFO $ "fillDelegationDS: " ++ domTraceMsg ++ ", fill delegation - " ++ verifyMsg
+                  clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
+            maybe (pure ()) traceLog vinfo
+            either verifyFailed fill e
       if null ips
         then lift nullIPs
-        else lift . either verifyFailed fill =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
+        else lift . result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
 
-queryDS :: [RD_DNSKEY] -> [IP] -> Domain -> DNSQuery (Either String [RD_DS])
+queryDS :: [RD_DNSKEY] -> [IP] -> Domain -> DNSQuery (Either String [RD_DS], (Maybe (Color, String)))
 queryDS dnskeys ips dom = do
   msg <- norec True ips dom DS
   withSection rankedAnswer msg $ \rrs rank -> do
@@ -935,9 +974,9 @@ queryDS dnskeys ips dom = do
         rrsigs = rrsigList dom DS rrs
     (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
     let verifyResult
-          | null dsrds           =  return (Right [])                     {- no DS, so no verify -}
-          | rrsetVerified rrset  =  lift cacheDS *> return (Right dsrds)  {- verification success -}
-          | otherwise            =  return $ Left "queryDS: verification failed - RRSIG of DS"
+          | null dsrds           =  return (Right [], Nothing)   {- no DS, so no verify -}
+          | rrsetVerified rrset  =  lift cacheDS *> return (Right dsrds, Just (Green, "verification success - RRSIG of DS"))
+          | otherwise            =  return (Left "queryDS: verification failed - RRSIG of DS", Just (Red, "verification failed - RRSIG of DS"))
     verifyResult
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
@@ -1417,7 +1456,7 @@ cacheEmptySection :: Domain -> [RD_DNSKEY] -> Domain -> TYPE
                   -> DNSMessage -> ContextT IO [RRset]  {- returns verified authority section -}
 cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
   (takePair, soaRRset, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
-    let (ps, soaRRs) = unzip $ foldr takeSOA [] rrs
+    let (ps, soaRRs) = unzip $ rrListWith SOA DNS.fromRData zoneDom fromSOA rrs
     (rrset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
     return (single ps, rrset, cacheSOA_)
   let doCache (soaDom, ncttl) = do
@@ -1427,17 +1466,12 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
 
   either ncWarn doCache takePair
   where
-    takeSOA rr@ResourceRecord { rrtype = SOA, rdata = rd } xs
-      | rrname rr `DNS.isSubDomainOf` zoneDom,
-        Just soa <- DNS.fromRData rd   =  (fromSOA soa, rr) : xs
-      | otherwise                      =  xs
+    fromSOA soa rr = ((rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL]), rr)
+    {- the minimum of the SOA.MINIMUM field and SOA's TTL
+       https://datatracker.ietf.org/doc/html/rfc2308#section-3
+       https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
       where
-        {- the minimum of the SOA.MINIMUM field and SOA's TTL
-            https://datatracker.ietf.org/doc/html/rfc2308#section-3
-            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        fromSOA soa = (rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL])
         maxNCacheTTL = 21600
-    takeSOA _         xs     =  xs
     single list = case list of
       []    ->  Left "no SOA records found"
       [x]   ->  Right x
