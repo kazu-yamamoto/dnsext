@@ -1034,18 +1034,27 @@ lookupDelegation dom = do
 delegationWithCache
     :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
-    (verifyMsg, verifyColor, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+    (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
         let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
         (RRset{..}, cacheDS) <-
             lift $ verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
-        let (verifyMsg, verifyColor)
-                | null nsps = ("no delegation", Nothing)
-                | null dsrds = ("delegation - no DS, so no verify", Just Yellow)
+        let (verifyMsg, verifyColor, raiseOnFailure)
+                | null nsps = ("no delegation", Nothing, pure ())
+                | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
                 | null rrsGoodSigs =
-                    ("delegation - verification failed - RRSIG of DS", Just Red)
+                    ( "delegation - verification failed - RRSIG of DS"
+                    , Just Red
+                    , throwDnsError DNS.ServerFailure
+                    )
                 | otherwise =
-                    ("delegation - verification success - RRSIG of DS", Just Green)
-        return (verifyMsg, verifyColor, if null rrsGoodSigs then [] else dsrds, cacheDS)
+                    ("delegation - verification success - RRSIG of DS", Just Green, pure ())
+        return
+            ( verifyMsg
+            , verifyColor
+            , raiseOnFailure
+            , if null rrsGoodSigs then [] else dsrds
+            , cacheDS
+            )
 
     (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
         {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -1078,6 +1087,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
 
     lift . clogLn Log.DEMO verifyColor $
         "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
+    raiseOnFailure
     lift . maybe (notFound $> NoDelegation) (fmap HasDelegation . found) $
         takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
   where
