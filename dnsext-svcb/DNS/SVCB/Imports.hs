@@ -1,21 +1,22 @@
 module DNS.SVCB.Imports (
-    ByteString
-  , ShortByteString
-  , Int64
-  , NonEmpty(..)
-  , module Control.Applicative
-  , module Control.Monad
-  , module Data.Bits
-  , module Data.Function
-  , module Data.List
-  , module Data.Maybe
-  , module Data.Monoid
-  , module Data.Ord
-  , module Data.String
-  , module Data.Typeable
-  , module Data.Word
-  , module Numeric
-  ) where
+    ByteString,
+    ShortByteString,
+    Int64,
+    NonEmpty (..),
+    module Control.Applicative,
+    module Control.Monad,
+    module Data.Bits,
+    module Data.Function,
+    module Data.List,
+    module Data.Maybe,
+    module Data.Monoid,
+    module Data.Ord,
+    module Data.String,
+    module Data.Typeable,
+    module Data.Word,
+    module Numeric,
+)
+where
 
 import Control.Applicative
 import Control.Monad
@@ -25,7 +26,7 @@ import Data.ByteString.Short (ShortByteString)
 import Data.Function
 import Data.Int (Int64)
 import Data.List
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
