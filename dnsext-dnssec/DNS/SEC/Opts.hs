@@ -2,35 +2,37 @@
 
 module DNS.SEC.Opts (
     OptCode (
-    DAU
-  , DHU
-  , N3U
-  )
-  , OD_DAU(..)
-  , OD_DHU(..)
-  , OD_N3U(..)
-  , od_dau
-  , od_dhu
-  , od_n3u
-  , get_dau
-  , get_dhu
-  , get_n3u
-  ) where
-
-import DNS.Types
-import DNS.Types.Internal
+        DAU,
+        DHU,
+        N3U
+    ),
+    OD_DAU (..),
+    OD_DHU (..),
+    OD_N3U (..),
+    od_dau,
+    od_dhu,
+    od_n3u,
+    get_dau,
+    get_dhu,
+    get_n3u,
+)
+where
 
 import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
+import DNS.Types
+import DNS.Types.Internal
 
 -- | DNSSEC algorithm support (RFC6975, section 3)
-pattern DAU  :: OptCode
-pattern DAU   = OptCode 5
-pattern DHU  :: OptCode
-pattern DHU   = OptCode 6
-pattern N3U  :: OptCode
-pattern N3U   = OptCode 7
+pattern DAU :: OptCode
+pattern DAU = OptCode 5
+
+pattern DHU :: OptCode
+pattern DHU = OptCode 6
+
+pattern N3U :: OptCode
+pattern N3U = OptCode 7
 
 ---------------------------------------------------------------
 
@@ -58,7 +60,7 @@ od_dau a = toOData $ OD_DAU a
 newtype OD_DHU = OD_DHU [HashAlg] deriving (Eq)
 
 instance Show OD_DHU where
-    show (OD_DHU hs)    = _showAlgList "DHU" hs
+    show (OD_DHU hs) = _showAlgList "DHU" hs
 
 instance OptData OD_DHU where
     optDataCode _ = DHU
@@ -77,7 +79,7 @@ od_dhu a = toOData $ OD_DHU a
 newtype OD_N3U = OD_N3U [HashAlg] deriving (Eq)
 
 instance Show OD_N3U where
-    show (OD_N3U hs)    = _showAlgList "N3U" hs
+    show (OD_N3U hs) = _showAlgList "N3U" hs
 
 instance OptData OD_N3U where
     optDataCode _ = N3U
