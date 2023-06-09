@@ -82,15 +82,15 @@ test-suite spec
 
     default-language:   Haskell2010
     ghc-options:        -Wall -threaded
-    if os(windows) && impl(ghc >=9.0)
-        ghc-options: -with-rtsopts=--io-manager=native
-
     build-depends:
         dnsext-do53,
         dnsext-types,
         base,
         hspec,
         network
+
+    if (os(windows) && impl(ghc >=9.0))
+        ghc-options: -with-rtsopts=--io-manager=native
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

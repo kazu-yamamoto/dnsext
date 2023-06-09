@@ -23,6 +23,7 @@ library
     exposed-modules:
         DNS.SVCB
         DNS.SVCB.Internal
+
     other-modules:
         DNS.SVCB.Imports
         DNS.SVCB.Key

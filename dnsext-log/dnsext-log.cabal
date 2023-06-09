@@ -8,11 +8,8 @@ build-type:         Simple
 extra-source-files: CHANGELOG.md
 
 library
-    exposed-modules:
-        DNS.Log
-    other-modules:
-        DNS.Queue
-
+    exposed-modules:  DNS.Log
+    other-modules:    DNS.Queue
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:
