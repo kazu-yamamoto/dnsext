@@ -94,8 +94,8 @@ verify n3s domain qtype = do
                     | otherwise = Left $ "NSEC3.verify: wildcard name is not matched or covered."
             ( Right . n3r_nameError closest nextCloser
                     <$> takeWildcardCover
-                    <|> takeWildcardNoData
-                    <|> pure unsignedDelegation
+                        <|> takeWildcardNoData
+                        <|> pure unsignedDelegation
                 )
 
         stepWE :: [RangeProp] -> Maybe (Either String NSEC3_Result)

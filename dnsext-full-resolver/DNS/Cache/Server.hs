@@ -189,8 +189,8 @@ getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
     let respLoop =
             readLoop
                 dequeueResp
-                (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show) $
-                sendResponse (UDP.sendTo sock) cxt
+                (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show)
+                $ sendResponse (UDP.sendTo sock) cxt
 
     return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
 
@@ -329,13 +329,13 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
     (resolvLoop, enqueueDec, decQSize) <-
         consumeLoop
             perWorker
-            (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show) $
-            resolvWorker cxt incMiss incFailed enqueueResp
+            (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show)
+            $ resolvWorker cxt incMiss incFailed enqueueResp
     let cachedLoop =
             readLoop
                 (readQueue reqQ)
-                (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show) $
-                cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+                (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show)
+                $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
         reqQSize = (,) <$> (fst <$> Queue.readSizes reqQ) <*> pure (Queue.sizeMaxBound reqQ)
         resolvLoops = replicate resolvWorkers resolvLoop
 

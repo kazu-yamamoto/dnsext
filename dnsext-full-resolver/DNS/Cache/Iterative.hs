@@ -397,8 +397,8 @@ parseV6RevDomain dom = do
             _ : _ -> throw $ "ambiguous parse result of hexadecimal part: " ++ show s
         maybe
             (throw $ "hexadecimal part '" ++ showHex h "" ++ "' is out of range")
-            Right $
-            guard (0 <= h && h < 0x10)
+            Right
+            $ guard (0 <= h && h < 0x10)
         return h
     sufV6 = ["arpa", "ip6"]
 
@@ -722,7 +722,15 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
             withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], soa))
 
-            cachedCNAME (rrs, soa) = pure (([], bn), Left (DNS.NoErr, rrs, soa {- target RR is not CNAME destination but CNAME, so NoErr -}))
+            cachedCNAME (rrs, soa) =
+                pure
+                    ( ([], bn)
+                    , Left
+                        ( DNS.NoErr
+                        , rrs
+                        , soa {- target RR is not CNAME destination but CNAME, so NoErr -}
+                        )
+                    )
 
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
@@ -758,7 +766,11 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
             maybe
                 noTypeCache
-                (cachedType . either (\(soa, _rank) -> ([], soa)) (\tyRRs -> (tyRRs, [] {- return cached result with target typ -})))
+                ( cachedType
+                    . either
+                        (\(soa, _rank) -> ([], soa))
+                        (\tyRRs -> (tyRRs, [] {- return cached result with target typ -}))
+                )
                 =<< lift (lookupType bn typ)
       where
         mcc = maxCNameChain
@@ -804,7 +816,11 @@ resolveCNAME bn = do
 resolveTYPE
     :: Domain
     -> TYPE
-    -> DNSQuery (DNSMessage, Maybe (Domain, RRset), ([RRset], [RRset {- result msg, cname, verified answer, verified authority -}]))
+    -> DNSQuery
+        ( DNSMessage
+        , Maybe (Domain, RRset)
+        , ([RRset], [RRset {- result msg, cname, verified answer, verified authority -}])
+        )
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveJust bn typ
     let checkTypeRR =
@@ -905,8 +921,10 @@ resolveJustDC dc n typ
 data Delegation = Delegation
     { delegationZoneDomain :: Domain {- destination zone domain -}
     , delegationNS :: NE DEntry {- NS infos of destination zone, get from source zone NS -}
-    , delegationDS :: [RD_DS {- SEP DNSKEY signature of destination zone, get from source zone NS -}]
-    , delegationDNSKEY :: [RD_DNSKEY {- destination DNSKEY set, get from destination NS -}]
+    , delegationDS
+        :: [RD_DS {- SEP DNSKEY signature of destination zone, get from source zone NS -}]
+    , delegationDNSKEY
+        :: [RD_DNSKEY {- destination DNSKEY set, get from destination NS -}]
     }
     deriving (Show)
 
@@ -959,7 +977,8 @@ iterative_ _ nss0 [] = return nss0
 iterative_ dc nss0 (x : xs) =
     step nss0
         >>= mayDelegation
-            (recurse nss0 xs {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -})
+            ( recurse nss0 xs {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
+            )
             (`recurse` xs)
   where
     recurse = iterative_ dc {- sub-level delegation. increase dc only not sub-level case. -}
