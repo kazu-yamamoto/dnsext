@@ -19,23 +19,21 @@ fullResolve
     -> TYPE
     -> IO (Either String DNSMessage)
 fullResolve disableV6NS logOutput logLevel ctl n ty = do
-    (putLines, terminate, cxt) <- setup disableV6NS logOutput logLevel
+    (putLines, _, terminate) <- Log.new logOutput logLevel
+    cxt <- setup disableV6NS putLines
     out <- resolve cxt ctl n ty
     putLines Log.DEMO Nothing ["--------------------"]
     terminate
     return out
 
-setup
-    :: Bool -> Log.Output -> Log.Level -> IO (Log.PutLines, IO (), Env)
-setup disableV6NS logOutput logLevel = do
-    (putLines, _, terminate) <- Log.new logOutput logLevel
+setup :: Bool -> Log.PutLines -> IO Env
+setup disableV6NS putLines = do
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
     memo <- Cache.getMemo cacheConf
     let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
         ucache = (insert, Cache.readMemo memo)
-    cxt <- Iterative.newEnv putLines disableV6NS ucache tcache
-    return (putLines, terminate, cxt)
+    Iterative.newEnv putLines disableV6NS ucache tcache
 
 resolve
     :: Env -> IterativeControls -> String -> TYPE -> IO (Either String DNSMessage)
