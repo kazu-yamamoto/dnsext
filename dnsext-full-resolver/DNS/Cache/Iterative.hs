@@ -68,7 +68,6 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import qualified Data.Set as Set
 import Numeric (readDec, readHex, showHex)
-import System.Environment (lookupEnv)
 
 -- other packages
 
@@ -82,6 +81,7 @@ import DNS.Do53.Client (
     defaultResolvActions,
     ractionGenId,
     ractionGetTime,
+    ractionLog,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -151,7 +151,6 @@ data Env = Env
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
-    , dnsextDebug_ :: !Bool
     }
 
 {- datatypes to propagate request flags -}
@@ -236,7 +235,6 @@ newEnv
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
-    dnsextDebug <- maybe False ((== "1") . take 1) <$> lookupEnv "DNSEXT_DEBUG"
     let cxt =
             Env
                 { logLines_ = putLines
@@ -247,7 +245,6 @@ newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
                 , currentSeconds_ = curSec
                 , timeString_ = timeStr
                 , idGen_ = genId
-                , dnsextDebug_ = dnsextDebug
                 }
     return cxt
 
@@ -1596,8 +1593,8 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                     defaultResolvActions
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
+                        , ractionLog = logLines_ cxt
                         }
-                , rinfoDebug = dnsextDebug_ cxt
                 }
             | aserver <- aservers
             ]

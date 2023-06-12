@@ -55,6 +55,7 @@ module DNS.Do53.Client (
     ractionTimeout,
     ractionGenId,
     ractionGetTime,
+    ractionLog,
     Reply,
 
     -- ** Query control
