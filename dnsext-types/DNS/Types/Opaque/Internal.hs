@@ -3,9 +3,9 @@ module DNS.Types.Opaque.Internal where
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 
+import qualified DNS.Types.Base32Hex as B32H
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64 as B64
-import qualified DNS.Types.Base32Hex as B32H
 
 import DNS.StateBinary
 import DNS.Types.Imports
@@ -14,6 +14,7 @@ import DNS.Types.Imports
 
 -- | Opaque data.
 newtype Opaque = Opaque ShortByteString deriving (Eq, Ord)
+
 -- 8bit bytes. Don't use 'Text' since UTF8 uses the leftmost bit.
 
 ----------------------------------------------------------------
@@ -26,10 +27,11 @@ instance Show Opaque where
 
 -- | RFC3597
 showOpaque :: Opaque -> String
-showOpaque (Opaque o) = "\\# "
-                     ++ show (Short.length o)
-                     ++ " "
-                     ++ C8.unpack (B16.encode $ Short.fromShort o)
+showOpaque (Opaque o) =
+    "\\# "
+        ++ show (Short.length o)
+        ++ " "
+        ++ C8.unpack (B16.encode $ Short.fromShort o)
 
 ----------------------------------------------------------------
 
@@ -80,12 +82,12 @@ concat ss = Opaque $ Short.concat $ map toShortByteString ss
 splitAt :: Int -> Opaque -> (Opaque, Opaque)
 splitAt n (Opaque sbs) = (Opaque x, Opaque y)
   where
-    (x,y) = Short.splitAt n sbs
+    (x, y) = Short.splitAt n sbs
 
 uncons :: Opaque -> Maybe (Word8, Opaque)
 uncons (Opaque sbs) = case Short.uncons sbs of
-  Just (x,sbs') -> Just (x, Opaque sbs')
-  Nothing       -> Nothing
+    Just (x, sbs') -> Just (x, Opaque sbs')
+    Nothing -> Nothing
 
 length :: Opaque -> Int
 length (Opaque sbs) = Short.length sbs

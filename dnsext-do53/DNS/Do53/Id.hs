@@ -1,13 +1,19 @@
 module DNS.Do53.Id (
-    singleGenId
-  , newConcurrentGenId
-  ) where
+    singleGenId,
+    newConcurrentGenId,
+)
+where
 
-import Data.Array
 import Control.Concurrent
 import Control.Monad
 import DNS.Types
-import System.Random.Stateful (globalStdGen, uniformWord16, newAtomicGenM, initStdGen)
+import Data.Array
+import System.Random.Stateful (
+    globalStdGen,
+    initStdGen,
+    newAtomicGenM,
+    uniformWord16,
+ )
 
 singleGenId :: IO Identifier
 singleGenId = uniformWord16 globalStdGen

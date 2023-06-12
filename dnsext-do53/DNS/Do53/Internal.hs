@@ -1,54 +1,65 @@
 module DNS.Do53.Internal (
     -- * IO types
-    Recv
-  , RecvN
-  , RecvMany
-  , RecvManyN
-  , Send
-  , SendMany
+    Recv,
+    RecvN,
+    RecvMany,
+    RecvManyN,
+    Send,
+    SendMany,
+
     -- * TCP related
-  , openTCP
-  , sendTCP
-  , recvTCP
+    openTCP,
+    sendTCP,
+    recvTCP,
+
     -- * Virtual circuit
-  , sendVC
-  , recvVC
-  , encodeVCLength
-  , decodeVCLength
+    sendVC,
+    recvVC,
+    encodeVCLength,
+    decodeVCLength,
+
     -- * Making recvMany
-  , recvManyN
-  , recvManyNN
+    recvManyN,
+    recvManyNN,
+
     -- * Resolv
-  , resolve
-  , ResolvEnv(..)
+    resolve,
+    ResolvEnv (..),
+
     -- * Resolver information
-  , ResolvInfo(..)
-  , defaultResolvInfo
-  , ResolvActions(..)
-  , defaultResolvActions
+    ResolvInfo (..),
+    defaultResolvInfo,
+    ResolvActions (..),
+    defaultResolvActions,
+
     -- * Resolver: DNS over X
-  , Result(..)
-  , toResult
-  , Reply(..)
-  , Resolver
-  , udpTcpResolver
-  , udpResolver
-  , tcpResolver
+    Result (..),
+    toResult,
+    Reply (..),
+    Resolver,
+    udpTcpResolver,
+    udpResolver,
+    tcpResolver,
+
     -- * Resolver for virtual circuit
-  , vcResolver
+    vcResolver,
+
     -- * Query
-  , encodeQuery
+    encodeQuery,
+
     -- * Generating identifier
-  , singleGenId
-  , newConcurrentGenId
+    singleGenId,
+    newConcurrentGenId,
+
     -- * Misc
-  , checkRespM
-  , UDPRetry
-  , VCLimit (..)
-  , LookupEnv(..)
-  , modifyLookupEnv
-  , withLookupConfAndResolver
-  ) where
+    checkRespM,
+    UDPRetry,
+    VCLimit (..),
+    LookupEnv (..),
+    modifyLookupEnv,
+    withLookupConfAndResolver,
+)
+where
 
 import DNS.Do53.Do53
 import DNS.Do53.IO

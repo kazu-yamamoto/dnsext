@@ -1,50 +1,56 @@
 module DNS.Types.Internal (
-  -- * Types
-    TYPE(..)
-  , OptCode(..)
-  , RCODE(..)
-  , CanonicalFlag (..)
-  -- * Classes
-  , ResourceData(..)
-  , OptData(..)
-  -- * Misc
-  , section
-  -- * Extension
-  , extendRR
-  , extendOpt
-  -- * High level
-  , putDNSMessage
-  , getDNSMessage
-  , putHeader
-  , getHeader
-  , putDNSFlags
-  , getDNSFlags
-  , putQuestion
-  , getQuestion
-  , putResourceRecord
-  , getResourceRecord
-  , putRData
-  , getRData
-  -- * Middle level
-  , putDomain
-  , putDomainRFC1035
-  , getDomain
-  , getDomainRFC1035
-  , putMailbox
-  , putMailboxRFC1035
-  , getMailbox
-  , getMailboxRFC1035
-  , putOpaque
-  , putLenOpaque
-  , getOpaque
-  , getLenOpaque
-  , putTYPE
-  , getTYPE
-  , putSeconds
-  , getSeconds
-  -- * Low level
-  , module DNS.StateBinary
-  ) where
+    -- * Types
+    TYPE (..),
+    OptCode (..),
+    RCODE (..),
+    CanonicalFlag (..),
+
+    -- * Classes
+    ResourceData (..),
+    OptData (..),
+
+    -- * Misc
+    section,
+
+    -- * Extension
+    extendRR,
+    extendOpt,
+
+    -- * High level
+    putDNSMessage,
+    getDNSMessage,
+    putHeader,
+    getHeader,
+    putDNSFlags,
+    getDNSFlags,
+    putQuestion,
+    getQuestion,
+    putResourceRecord,
+    getResourceRecord,
+    putRData,
+    getRData,
+
+    -- * Middle level
+    putDomain,
+    putDomainRFC1035,
+    getDomain,
+    getDomainRFC1035,
+    putMailbox,
+    putMailboxRFC1035,
+    getMailbox,
+    getMailboxRFC1035,
+    putOpaque,
+    putLenOpaque,
+    getOpaque,
+    getLenOpaque,
+    putTYPE,
+    getTYPE,
+    putSeconds,
+    getSeconds,
+
+    -- * Low level
+    module DNS.StateBinary,
+) where
 
 import DNS.StateBinary
 import DNS.Types.Dict

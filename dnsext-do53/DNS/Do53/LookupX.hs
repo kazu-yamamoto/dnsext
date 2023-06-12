@@ -60,32 +60,31 @@
 --
 --   All lookup functions eventually call 'lookupRaw'. See its documentation
 --   to understand the concrete lookup behavior.
-
 module DNS.Do53.LookupX (
-    lookupA
-  , lookupAAAA
-  , lookupMX
-  , lookupAviaMX
-  , lookupAAAAviaMX
-  , lookupNS
-  , lookupNSAuth
-  , lookupTXT
-  , lookupSOA
-  , lookupPTR
-  , lookupRDNS
-  , lookupSRV
-  , lookupX
-  , lookupAuthX
-  , toResourceData
-  ) where
+    lookupA,
+    lookupAAAA,
+    lookupMX,
+    lookupAviaMX,
+    lookupAAAAviaMX,
+    lookupNS,
+    lookupNSAuth,
+    lookupTXT,
+    lookupSOA,
+    lookupPTR,
+    lookupRDNS,
+    lookupSRV,
+    lookupX,
+    lookupAuthX,
+    toResourceData,
+)
+where
 
+import DNS.Do53.Lookup as DNS
+import DNS.Do53.Types as DNS
 import DNS.Types
 import qualified Data.ByteString.Short as Short
 import Data.IP
 import Data.String (fromString)
-
-import DNS.Do53.Lookup as DNS
-import DNS.Do53.Types as DNS
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -104,7 +103,6 @@ import DNS.Do53.Types as DNS
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupA env "www.kame.net"
 --   Right [210.155.141.200]
---
 lookupA :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
 lookupA = lookupX A
 
@@ -114,7 +112,6 @@ lookupA = lookupX A
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupAAAA env "www.wide.ad.jp"
 --   Right [2001:200:0:180c:20c:29ff:fec9:9d61]
---
 lookupAAAA :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAA = lookupX AAAA
 
@@ -144,7 +141,6 @@ lookupAAAA = lookupX AAAA
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupMX env "mail.mew.org"
 --   Right []
---
 lookupMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_MX])
 lookupMX = lookupX MX
 
@@ -161,37 +157,36 @@ lookupMX = lookupX MX
 --
 --   Since there is more than one result, it is necessary to sort the
 --   list in order to check for equality.
---
 lookupAviaMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_A])
 lookupAviaMX rlv dom = lookupXviaMX rlv dom (lookupA rlv)
 
 -- | Look up all \'MX\' records for the given hostname, and then
 --   resolve their hostnames to IPv6 addresses by calling
 --   'lookupAAAA'. The priorities are not retained.
---
 lookupAAAAviaMX :: LookupEnv -> Domain -> IO (Either DNSError [RD_AAAA])
 lookupAAAAviaMX rlv dom = lookupXviaMX rlv dom (lookupAAAA rlv)
 
-lookupXviaMX :: LookupEnv
-             -> Domain
-             -> (Domain -> IO (Either DNSError [a]))
-             -> IO (Either DNSError [a])
+lookupXviaMX
+    :: LookupEnv
+    -> Domain
+    -> (Domain -> IO (Either DNSError [a]))
+    -> IO (Either DNSError [a])
 lookupXviaMX rlv dom func = do
     edps <- lookupMX rlv dom
     case edps of
-      -- We have to deconstruct and reconstruct the error so that the
-      -- typechecker does not conclude that a ~ (Domain, Int).
-      Left err -> return (Left err)
-      Right dps -> do
-        -- We'll get back a [Either DNSError a] here.
-        responses <- mapM (func . mx_exchange) dps
-        -- We can use 'sequence' to join all of the Eithers
-        -- together. If any of them are (Left _), we'll get a Left
-        -- overall. Otherwise, we'll get Right [a].
-        let overall = sequence responses
-        -- Finally, we use (fmap concat) to concatenate the responses
-        -- if there were no errors.
-        return $ fmap concat overall
+        -- We have to deconstruct and reconstruct the error so that the
+        -- typechecker does not conclude that a ~ (Domain, Int).
+        Left err -> return (Left err)
+        Right dps -> do
+            -- We'll get back a [Either DNSError a] here.
+            responses <- mapM (func . mx_exchange) dps
+            -- We can use 'sequence' to join all of the Eithers
+            -- together. If any of them are (Left _), we'll get a Left
+            -- overall. Otherwise, we'll get Right [a].
+            let overall = sequence responses
+            -- Finally, we use (fmap concat) to concatenate the responses
+            -- if there were no errors.
+            return $ fmap concat overall
 
 ----------------------------------------------------------------
 
@@ -210,7 +205,6 @@ lookupXviaMX rlv dom func = do
 --   >>> ns <- withLookupConf defaultLookupConf $ \env -> lookupNS env "mew.org"
 --   >>> fmap sort ns
 --   Right ["ns1.mew.org.","ns2.mew.org."]
---
 lookupNS :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNS = lookupX NS
 
@@ -233,7 +227,6 @@ lookupNS = lookupX NS
 --   >>> ns <- withLookupConf rc $ \env -> lookupNSAuth env "example.com"
 --   >>> fmap sort ns
 --   Right ["a.iana-servers.net.","b.iana-servers.net."]
---
 lookupNSAuth :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNSAuth = lookupAuthX NS
 
@@ -249,7 +242,6 @@ lookupNSAuth = lookupAuthX NS
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupTXT env "mew.org"
 --   Right ["v=spf1 +mx -all"]
---
 lookupTXT :: LookupEnv -> Domain -> IO (Either DNSError [RD_TXT])
 lookupTXT = lookupX TXT
 
@@ -269,7 +261,6 @@ lookupTXT = lookupX TXT
 --   >>> soa <- withLookupConf defaultLookupConf $ \env -> lookupSOA env "mew.org"
 --   >>> map (\x -> (soa_mname x, soa_rname x)) <$> soa
 --   Right [("ns1.mew.org.","kazu@mew.org.")]
---
 lookupSOA :: LookupEnv -> Domain -> IO (Either DNSError [RD_SOA])
 lookupSOA = lookupX SOA
 
@@ -286,7 +277,6 @@ lookupSOA = lookupX SOA
 --   Right ["www.iij.ad.jp."]
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
---
 lookupPTR :: LookupEnv -> Domain -> IO (Either DNSError [RD_PTR])
 lookupPTR = lookupX PTR
 
@@ -298,11 +288,10 @@ lookupPTR = lookupX PTR
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupRDNS env "202.232.2.180"
 --   Right ["www.iij.ad.jp."]
---
 lookupRDNS :: LookupEnv -> IPv4 -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
-    octets = map (fromString . show ) $ fromIPv4 ip
+    octets = map (fromString . show) $ fromIPv4 ip
     reverse_ip = Short.intercalate "." (reverse octets)
     dom = fromRepresentation (reverse_ip <> ".in-addr.arpa")
 
@@ -341,19 +330,22 @@ lookupSRV = lookupX SRV
 ----------------------------------------------------------------
 
 -- | Look up resource data in the answer section.
-lookupX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupX
+    :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
 lookupX typ env dom = toResourceData <$> DNS.lookup env dom typ
 
 -- | Look up resource data in the authority section.
-lookupAuthX :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
+lookupAuthX
+    :: ResourceData a => TYPE -> LookupEnv -> Domain -> IO (Either DNSError [a])
 lookupAuthX typ env dom = toResourceData <$> lookupAuth env dom typ
 
-toResourceData :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
+toResourceData
+    :: ResourceData a => Either DNSError [RData] -> Either DNSError [a]
 toResourceData erds = case erds of
-    Left err  -> Left err
+    Left err -> Left err
     Right rds -> mapM unTag rds
 
 unTag :: ResourceData a => RData -> Either DNSError a
 unTag rd = case fromRData rd of
-  Nothing -> Left UnexpectedRDATA
-  Just x  -> Right x
+    Nothing -> Left UnexpectedRDATA
+    Just x -> Right x

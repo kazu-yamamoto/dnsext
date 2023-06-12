@@ -3,31 +3,31 @@
 
 module DNS.SVCB.SVCB where
 
+import DNS.SVCB.Imports
+import DNS.SVCB.Key
+import DNS.SVCB.Params
+import DNS.SVCB.Value
 import DNS.Types
 import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
 import qualified Data.IntMap as M
 
-import DNS.SVCB.Imports
-import DNS.SVCB.Key
-import DNS.SVCB.Params
-import DNS.SVCB.Value
-
 ----------------------------------------------------------------
 
 pattern SVCB :: TYPE
-pattern SVCB  = TYPE 64
+pattern SVCB = TYPE 64
 
 pattern HTTPS :: TYPE
 pattern HTTPS = TYPE 65
 
 ----------------------------------------------------------------
 
-data RD_SVCB = RD_SVCB {
-    svcb_priority :: Word16
-  , svcb_target   :: Domain
-  , svcb_params   :: SvcParams
-  } deriving (Eq,Ord,Show)
+data RD_SVCB = RD_SVCB
+    { svcb_priority :: Word16
+    , svcb_target :: Domain
+    , svcb_params :: SvcParams
+    }
+    deriving (Eq, Ord, Show)
 
 instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
@@ -47,11 +47,11 @@ instance ResourceData RD_SVCB where
 
 get_svcb :: Int -> SGet RD_SVCB
 get_svcb len = do
-    end      <- (+) len <$> parserPosition
+    end <- (+) len <$> parserPosition
     priority <- get16
-    target   <- getDomain
-    pos      <- parserPosition
-    params   <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
+    target <- getDomain
+    pos <- parserPosition
+    params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
     return $ RD_SVCB priority target params
   where
     svcparam = do
@@ -65,11 +65,12 @@ rd_svcb p d s = toRData $ RD_SVCB p d s
 
 ----------------------------------------------------------------
 
-data RD_HTTPS = RD_HTTPS {
-    https_priority :: Word16
-  , https_target   :: Domain
-  , https_params   :: SvcParams
-  } deriving (Eq,Ord,Show)
+data RD_HTTPS = RD_HTTPS
+    { https_priority :: Word16
+    , https_target :: Domain
+    , https_params :: SvcParams
+    }
+    deriving (Eq, Ord, Show)
 
 instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
@@ -87,8 +88,8 @@ rd_https p d s = toRData $ RD_HTTPS p d s
 
 addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
-  extendRR SVCB  "SVCB"  (\len -> toRData <$> get_svcb  len)
-  extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)
+    extendRR SVCB "SVCB" (\len -> toRData <$> get_svcb len)
+    extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)
 
 ----------------------------------------------------------------
 

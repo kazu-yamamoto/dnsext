@@ -1,30 +1,19 @@
 {-# LANGUAGE CPP #-}
 
 module DNS.Do53.System (
-      getDefaultDnsServers
-    ) where
+    getDefaultDnsServers,
+)
+where
 
 import DNS.Do53.Imports
 
-#if !defined(mingw32_HOST_OS)
-#define POSIX
-#else
-#define WIN
-#endif
-
-#if defined(WIN)
+#ifdef mingw32_HOST_OS
 import Foreign.C.String
 import Foreign.Marshal.Alloc (allocaBytes)
-#else
-import Data.Char (isSpace)
-#endif
-
-getDefaultDnsServers :: FilePath -> IO [String]
-
-#if defined(WIN)
 
 foreign import ccall "getWindowsDefDnsServers" getWindowsDefDnsServers :: CString -> Int -> IO Word32
 
+getDefaultDnsServers :: FilePath -> IO [String]
 getDefaultDnsServers _ = do
   allocaBytes 256 $ \cString -> do
      res <- getWindowsDefDnsServers cString 256
@@ -43,6 +32,9 @@ getDefaultDnsServers _ = do
 
 #else
 
+import Data.Char (isSpace)
+
+getDefaultDnsServers :: FilePath -> IO [String]
 getDefaultDnsServers file = toAddresses <$> readFile file
   where
     toAddresses :: String -> [String]

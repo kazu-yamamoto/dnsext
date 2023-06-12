@@ -2,31 +2,34 @@
 {-# LANGUAGE TupleSections #-}
 
 module DNS.Do53.Lookup (
-  -- * Lookups returning requested RData
-    lookup
-  , lookupAuth
-  -- * Lookups returning DNS Messages
-  , lookupRaw
-  -- * DNS Message procesing
-  , fromDNSMessage
-  -- * Misc
-  , withLookupConf
-  , withLookupConfAndResolver
-  , modifyLookupEnv
-  ) where
+    -- * Lookups returning requested RData
+    lookup,
+    lookupAuth,
+
+    -- * Lookups returning DNS Messages
+    lookupRaw,
+
+    -- * DNS Message procesing
+    fromDNSMessage,
+
+    -- * Misc
+    withLookupConf,
+    withLookupConfAndResolver,
+    modifyLookupEnv,
+)
+where
 
 import Control.Exception as E
-import DNS.Types hiding (Seconds)
-import DNS.Types.Internal (section)
-import Prelude hiding (lookup)
-import Network.Socket (HostName, PortNumber, HostName, PortNumber)
-
 import DNS.Do53.Do53
 import DNS.Do53.Imports
 import DNS.Do53.Memo hiding (lookup)
 import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types
+import DNS.Types hiding (Seconds)
+import DNS.Types.Internal (section)
+import Network.Socket (HostName, PortNumber)
+import Prelude hiding (lookup)
 
 ----------------------------------------------------------------
 
@@ -41,7 +44,6 @@ import DNS.Do53.Types
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookup env "www.example.com" A
 --   Right [93.184.216.34]
---
 lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookup env dom typ = lookupSection Answer env q
   where
@@ -64,53 +66,55 @@ lookupAuth env dom typ = lookupSection Authority env q
 --   the field accessors of the 'DNSMessage' type -- this allows you to
 --   choose which section (answer, authority, or additional) you would like
 --   to inspect for the result.
-
-lookupSection :: Section
-              -> LookupEnv
-              -> Question
-              -> IO (Either DNSError [RData])
+lookupSection
+    :: Section
+    -> LookupEnv
+    -> Question
+    -> IO (Either DNSError [RData])
 lookupSection sec env q
-  | sec == Authority = lookupFreshSection env q sec
-  | otherwise = case lenvCache env of
-      Nothing -> lookupFreshSection env q sec
-      Just _  -> lookupCacheSection env q
+    | sec == Authority = lookupFreshSection env q sec
+    | otherwise = case lenvCache env of
+        Nothing -> lookupFreshSection env q sec
+        Just _ -> lookupCacheSection env q
 
-lookupFreshSection :: LookupEnv
-                   -> Question
-                   -> Section
-                   -> IO (Either DNSError [RData])
+lookupFreshSection
+    :: LookupEnv
+    -> Question
+    -> Section
+    -> IO (Either DNSError [RData])
 lookupFreshSection env q@Question{..} sec = do
     eres <- lookupRaw env q
     case eres of
-      Left  err -> return $ Left err
-      Right res -> do
-          let Result{..} = res
-              Reply{..}  = resultReply
-          return $ fromDNSMessage replyDNSMessage toRD
+        Left err -> return $ Left err
+        Right res -> do
+            let Result{..} = res
+                Reply{..} = resultReply
+            return $ fromDNSMessage replyDNSMessage toRD
   where
     correct ResourceRecord{..} = rrtype == qtype
     toRD = map rdata . filter correct . section sec
 
-lookupCacheSection :: LookupEnv
-                   -> Question
-                   -> IO (Either DNSError [RData])
+lookupCacheSection
+    :: LookupEnv
+    -> Question
+    -> IO (Either DNSError [RData])
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     nx <- lookupCache (keyForNX q) c
     case nx of
-      Just (_, Left _)   -> return $ Left NameError
-      Just (_, Right _)  -> return $ Left UnknownDNSError  {- cache is inconsistent -}
-      Nothing           -> do
-        mx <- lookupCache q c
-        case mx of
-          Nothing             -> notCached
-          Just (_, Left _)    -> return $ Right []  {- NoData -}
-          Just (_, Right rs)  -> return $ Right rs
+        Just (_, Left _) -> return $ Left NameError
+        Just (_, Right _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
+        Nothing -> do
+            mx <- lookupCache q c
+            case mx of
+                Nothing -> notCached
+                Just (_, Left _) -> return $ Right [] {- NoData -}
+                Just (_, Right rs) -> return $ Right rs
   where
     notCached = do
-          eres <- lookupRaw env q
-          now <- ractionGetTime lenvActions
-          case eres of
-            Left  err ->
+        eres <- lookupRaw env q
+        now <- ractionGetTime lenvActions
+        case eres of
+            Left err ->
                 -- Probably a network error happens.
                 -- We do not cache anything.
                 return $ Left err
@@ -118,23 +122,24 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                 let ans = replyDNSMessage resultReply
                     ex = fromDNSMessage ans toRR
                 case ex of
-                  Left NameError -> do
-                      cacheNegative cconf c (keyForNX q) now ans
-                      return $ Left NameError
-                  Left e -> return $ Left e
-                  Right [] -> do
-                      cacheNegative cconf c q now ans
-                      return $ Right []
-                  Right rss -> do
-                      cachePositive cconf c q now rss
-                      return $ Right $ map rdata rss
+                    Left NameError -> do
+                        cacheNegative cconf c (keyForNX q) now ans
+                        return $ Left NameError
+                    Left e -> return $ Left e
+                    Right [] -> do
+                        cacheNegative cconf c q now ans
+                        return $ Right []
+                    Right rss -> do
+                        cachePositive cconf c q now rss
+                        return $ Right $ map rdata rss
     toRR = filter (qtype `isTypeOf`) . answer
     (c, cconf) = fromJust lenvCache
 
-cachePositive :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
+cachePositive
+    :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
-  | ttl == 0  = return () -- does not cache anything
-  | otherwise = insertPositive cconf c k now v ttl
+    | ttl == 0 = return () -- does not cache anything
+    | otherwise = insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
     v = Right rds
@@ -149,8 +154,8 @@ insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
 
 cacheNegative :: CacheConf -> Memo -> Key -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
-  []    -> return () -- does not cache anything
-  soa:_ -> insertNegative cconf c k now (Left $ rrname soa) $ rrttl soa
+    [] -> return () -- does not cache anything
+    soa : _ -> insertNegative cconf c k now (Left $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
@@ -238,10 +243,11 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
 --   Left InvalidAXFRLookup
---
-lookupRaw :: LookupEnv      -- ^ LookupEnv obtained via 'withLookupConf'
-          -> Question
-          -> IO (Either DNSError Result)
+lookupRaw
+    :: LookupEnv
+    -- ^ LookupEnv obtained via 'withLookupConf'
+    -> Question
+    -> IO (Either DNSError Result)
 lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 
 ----------------------------------------------------------------
@@ -250,12 +256,12 @@ lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
 dnsPort :: PortNumber
 dnsPort = 53
 
-findAddrPorts :: Seeds -> IO [(HostName,PortNumber)]
-findAddrPorts (SeedsHostName  nh)   = return [(nh, dnsPort)]
-findAddrPorts (SeedsHostPort  nh p) = return [(nh, p)]
-findAddrPorts (SeedsHostNames nss)  = return $ map (,dnsPort) nss
+findAddrPorts :: Seeds -> IO [(HostName, PortNumber)]
+findAddrPorts (SeedsHostName nh) = return [(nh, dnsPort)]
+findAddrPorts (SeedsHostPort nh p) = return [(nh, p)]
+findAddrPorts (SeedsHostNames nss) = return $ map (,dnsPort) nss
 findAddrPorts (SeedsHostPorts nhps) = return nhps
-findAddrPorts (SeedsFilePath  file) = map (,dnsPort) <$> getDefaultDnsServers file
+findAddrPorts (SeedsFilePath file) = map (,dnsPort) <$> getDefaultDnsServers file
 
 ----------------------------------------------------------------
 
@@ -266,20 +272,22 @@ withLookupConf lconf@LookupConf{..} f = do
     let resolver = udpTcpResolver lconfRetry lconfLimit
     withLookupConfAndResolver lconf resolver f
 
-withLookupConfAndResolver :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
+withLookupConfAndResolver
+    :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
 withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
-      Just cacheconf -> do
-          let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
-          cache <- newCache memoConf
-          return $ Just (cache, cacheconf)
-      Nothing -> return Nothing
+        Just cacheconf -> do
+            let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
+            cache <- newCache memoConf
+            return $ Just (cache, cacheconf)
+        Nothing -> return Nothing
     ris <- findAddrPorts lconfSeeds
     let renv = resolvEnv resolver lconfConcurrent lconfActions ris
         lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
-resolvEnv :: Resolver -> Bool -> ResolvActions -> [(HostName, PortNumber)] -> ResolvEnv
+resolvEnv
+    :: Resolver -> Bool -> ResolvActions -> [(HostName, PortNumber)] -> ResolvEnv
 resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
   where
     ris = resolvInfos actions hps
@@ -287,15 +295,18 @@ resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
 resolvInfos :: ResolvActions -> [(HostName, PortNumber)] -> [ResolvInfo]
 resolvInfos actions hps = map mk hps
   where
-    mk (h,p) = defaultResolvInfo {
-            rinfoHostName   = h
-          , rinfoPortNumber = p
-          , rinfoActions    = actions
-          }
+    mk (h, p) =
+        defaultResolvInfo
+            { rinfoHostName = h
+            , rinfoPortNumber = p
+            , rinfoActions = actions
+            }
 
-modifyLookupEnv :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
-modifyLookupEnv resolver hps lenv@LookupEnv{..} = lenv {
-    lenvResolvEnv = renv
-  }
+modifyLookupEnv
+    :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
+modifyLookupEnv resolver hps lenv@LookupEnv{..} =
+    lenv
+        { lenvResolvEnv = renv
+        }
   where
     renv = resolvEnv resolver lenvConcurrent lenvActions hps

@@ -2,6 +2,8 @@
 
 module DNS.SVCB.Value where
 
+import DNS.SVCB.Imports
+import DNS.SVCB.Key
 import DNS.Types
 import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
@@ -9,9 +11,6 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.IP
 import Network.Socket (PortNumber)
-
-import DNS.SVCB.Imports
-import DNS.SVCB.Key
 
 ----------------------------------------------------------------
 
@@ -28,24 +27,26 @@ toSPV = SvcParamValue . Opaque.fromByteString . runSPut
 
 fromSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
 fromSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
-    Right (r,_) -> Just r
-    _           -> Nothing
+    Right (r, _) -> Just r
+    _ -> Nothing
   where
     bs = Opaque.toByteString o
     len = Opaque.length o
 
 ----------------------------------------------------------------
 
-newtype SPV_Mandatory = SPV_Mandatory {
-    mandatory_keys :: [SvcParamKey]
-  } deriving (Eq,Ord)
+newtype SPV_Mandatory = SPV_Mandatory
+    { mandatory_keys :: [SvcParamKey]
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_Mandatory where
     show (SPV_Mandatory ks) = show ks
 
 instance SPV SPV_Mandatory where
-    toSvcParamValue (SPV_Mandatory ks) = toSPV $
-        mapM_ (put16 . fromSvcParamKey) ks
+    toSvcParamValue (SPV_Mandatory ks) =
+        toSPV $
+            mapM_ (put16 . fromSvcParamKey) ks
     fromSvcParamValue = fromSPV $ \len -> do
         SPV_Mandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
 
@@ -54,9 +55,10 @@ spv_mandatory keys = toSvcParamValue $ SPV_Mandatory keys
 
 ----------------------------------------------------------------
 
-newtype SPV_Port = SPV_Port {
-    port_number :: PortNumber
-  } deriving (Eq,Ord)
+newtype SPV_Port = SPV_Port
+    { port_number :: PortNumber
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_Port where
     show (SPV_Port p) = show p
@@ -70,9 +72,10 @@ spv_port p = toSvcParamValue $ SPV_Port p
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv4Hint = SPV_IPv4Hint {
-    hint_ipv4s :: [IPv4]
-  } deriving (Eq,Ord)
+newtype SPV_IPv4Hint = SPV_IPv4Hint
+    { hint_ipv4s :: [IPv4]
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_IPv4Hint where
     show (SPV_IPv4Hint is) = show is
@@ -88,9 +91,10 @@ spv_ipv4hint is = toSvcParamValue $ SPV_IPv4Hint is
 
 ----------------------------------------------------------------
 
-newtype SPV_IPv6Hint = SPV_IPv6Hint {
-    hint_ipv6s :: [IPv6]
-  } deriving (Eq,Ord)
+newtype SPV_IPv6Hint = SPV_IPv6Hint
+    { hint_ipv6s :: [IPv6]
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_IPv6Hint where
     show (SPV_IPv6Hint is) = show is
@@ -109,9 +113,10 @@ spv_ipv6hint is = toSvcParamValue $ SPV_IPv6Hint is
 -- | Type for application level protocol negotiation.
 type ALPN = ShortByteString
 
-newtype SPV_ALPN = SPV_ALPN {
-    alpn_names :: [ALPN]
-  } deriving (Eq,Ord)
+newtype SPV_ALPN = SPV_ALPN
+    { alpn_names :: [ALPN]
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_ALPN where
     show (SPV_ALPN as) = show $ map (C8.unpack . Short.fromShort) as
@@ -134,9 +139,10 @@ spv_alpn as = toSvcParamValue $ SPV_ALPN as
 
 ----------------------------------------------------------------
 
-newtype SPV_Opaque = SPV_Opaque {
-    opaque_value :: Opaque
-  } deriving (Eq,Ord,Show)
+newtype SPV_Opaque = SPV_Opaque
+    { opaque_value :: Opaque
+    }
+    deriving (Eq, Ord, Show)
 
 instance SPV SPV_Opaque where
     toSvcParamValue (SPV_Opaque o) = SvcParamValue o
@@ -147,9 +153,10 @@ spv_opaque as = toSvcParamValue $ SPV_Opaque as
 
 ----------------------------------------------------------------
 
-newtype SPV_DoHPath = SPV_DoHPath {
-    dohpath :: ShortByteString
-  } deriving (Eq,Ord)
+newtype SPV_DoHPath = SPV_DoHPath
+    { dohpath :: ShortByteString
+    }
+    deriving (Eq, Ord)
 
 instance Show SPV_DoHPath where
     show (SPV_DoHPath p) = show $ C8.unpack $ Short.fromShort p

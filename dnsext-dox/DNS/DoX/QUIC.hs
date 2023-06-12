@@ -4,10 +4,9 @@
 module DNS.DoX.QUIC where
 
 import DNS.Do53.Internal
+import DNS.DoX.Common
 import Network.QUIC
 import Network.QUIC.Client
-
-import DNS.DoX.Common
 
 quicResolver :: VCLimit -> Resolver
 quicResolver lim ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl

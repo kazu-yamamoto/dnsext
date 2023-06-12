@@ -3,40 +3,42 @@
 
 module IOSpec where
 
-import DNS.Types
-import Test.Hspec
-import System.Timeout
-
 import DNS.Do53.Internal
+import DNS.Types
+import System.Timeout
+import Test.Hspec
 
 q :: Question
 q = Question "www.mew.org" A classIN
 
 google :: ResolvInfo
-google = defaultResolvInfo {
-    rinfoHostName = "8.8.8.8"
-  }
+google =
+    defaultResolvInfo
+        { rinfoHostName = "8.8.8.8"
+        }
 
 cloudflare :: ResolvInfo
-cloudflare = defaultResolvInfo {
-    rinfoHostName = "1.1.1.1"
-  }
+cloudflare =
+    defaultResolvInfo
+        { rinfoHostName = "1.1.1.1"
+        }
 
 bad0 :: ResolvInfo
-bad0 = defaultResolvInfo {
-    rinfoHostName = "192.0.2.1"
-  , rinfoActions  = defaultResolvActions { ractionTimeout = timeout 100000 }
-  }
+bad0 =
+    defaultResolvInfo
+        { rinfoHostName = "192.0.2.1"
+        , rinfoActions = defaultResolvActions{ractionTimeout = timeout 100000}
+        }
 
 bad1 :: ResolvInfo
-bad1 = defaultResolvInfo {
-    rinfoHostName = "192.0.2.2"
-  , rinfoActions  = defaultResolvActions { ractionTimeout = timeout 100000 }
-  }
+bad1 =
+    defaultResolvInfo
+        { rinfoHostName = "192.0.2.2"
+        , rinfoActions = defaultResolvActions{ractionTimeout = timeout 100000}
+        }
 
 spec :: Spec
 spec = describe "solvers" $ do
-
     it "resolves well with UDP" $ do
         r <- udpResolver 1 google q mempty
         checkNoErr r

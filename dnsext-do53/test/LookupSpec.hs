@@ -2,13 +2,11 @@
 
 module LookupSpec where
 
-import Test.Hspec
-
 import DNS.Do53.Client as DNS
+import Test.Hspec
 
 spec :: Spec
 spec = describe "lookup" $ do
-
     it "lookupA" $ do
         withLookupConf defaultLookupConf $ \resolver -> do
             addrs <- DNS.lookupA resolver "mew.org"

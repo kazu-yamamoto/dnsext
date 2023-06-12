@@ -5,21 +5,21 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 module DNS.Types.Domain (
-    IsRepresentation(..)
-  , Domain
-  , superDomains
-  , isSubDomainOf
-  , Mailbox
-  , getDomain
-  , getDomainRFC1035
-  , putDomain
-  , putDomainRFC1035
-  , putMailbox
-  , putMailboxRFC1035
-  , getMailbox
-  , getMailboxRFC1035
-  , CanonicalFlag (..)
-  ) where
+    IsRepresentation (..),
+    Domain,
+    superDomains,
+    isSubDomainOf,
+    Mailbox,
+    getDomain,
+    getDomainRFC1035,
+    putDomain,
+    putDomainRFC1035,
+    putMailbox,
+    putMailboxRFC1035,
+    getMailbox,
+    getMailboxRFC1035,
+    CanonicalFlag (..),
+) where
 
 import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
@@ -30,7 +30,7 @@ import Data.Word8
 import DNS.StateBinary
 import DNS.Types.Error
 import DNS.Types.Imports
-import DNS.Types.Parser (Parser, Builder)
+import DNS.Types.Parser (Builder, Parser)
 import qualified DNS.Types.Parser as P
 
 -- $setup
@@ -38,9 +38,9 @@ import qualified DNS.Types.Parser as P
 
 class IsRepresentation a b where
     fromRepresentation :: b -> a
-    toRepresentation   :: a -> b
-    fromWireLabels     :: [b] -> a
-    toWireLabels       :: a -> [b]
+    toRepresentation :: a -> b
+    fromWireLabels :: [b] -> a
+    toWireLabels :: a -> [b]
 
 -- | The type for domain names. This holds both the
 -- /presentation format/ and the /wire format/ internally.
@@ -68,45 +68,48 @@ class IsRepresentation a b where
 -- \\001.exotic.example.       -- First label is Ctrl-A!
 -- just\\.one\\.label.example. -- First label is \"just.one.label\"
 -- @
---
-
-data Domain = Domain {
-    -- The representation format. Case-sensitive, escaped.
-    representation  :: ShortByteString
-    -- Labels in wire format. Case-sensitive, not escaped.
-  , wireLabels      :: [ShortByteString]
-  -- | Eq and Ord key for Canonical DNS Name Order.
-  --   Lower cases, not escaped.
-  --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
-  , canonicalLabels :: ~[ShortByteString]
-  }
+data Domain = Domain
+    { -- The representation format. Case-sensitive, escaped.
+      representation :: ShortByteString
+    , -- Labels in wire format. Case-sensitive, not escaped.
+      wireLabels :: [ShortByteString]
+    , canonicalLabels :: ~[ShortByteString]
+    -- ^ Eq and Ord key for Canonical DNS Name Order.
+    --   Lower cases, not escaped.
+    --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
+    }
 
 domain :: ShortByteString -> Domain
-domain o = validateDomain $ Domain {
-    representation  = addRoot o
-  , wireLabels      = ls
-  , canonicalLabels = reverse ls
-  }
+domain o =
+    validateDomain $
+        Domain
+            { representation = addRoot o
+            , wireLabels = ls
+            , canonicalLabels = reverse ls
+            }
   where
     ~l = Short.map toLower o
     ~ls = unfoldr step l
     step x = case parseLabel _period x of
-      Nothing        -> Nothing
-      just@(Just (p, _))
-        | p == ""    -> Nothing
-        | otherwise  -> just
+        Nothing -> Nothing
+        just@(Just (p, _))
+            | p == "" -> Nothing
+            | otherwise -> just
 
 domainFromWireLabels :: [ShortByteString] -> Domain
-domainFromWireLabels [] = Domain {
-    representation  = "."
-  , wireLabels      = []
-  , canonicalLabels = []
-  }
-domainFromWireLabels ls = validateDomain $ Domain {
-    representation  = rep
-  , wireLabels      = ls
-  , canonicalLabels = map (Short.map toLower) $ reverse ls
-  }
+domainFromWireLabels [] =
+    Domain
+        { representation = "."
+        , wireLabels = []
+        , canonicalLabels = []
+        }
+domainFromWireLabels ls =
+    validateDomain $
+        Domain
+            { representation = rep
+            , wireLabels = ls
+            , canonicalLabels = map (Short.map toLower) $ reverse ls
+            }
   where
     rep = foldr (\l r -> escapeLabel _period l <> "." <> r) "" ls
 
@@ -141,39 +144,39 @@ instance Semigroup Domain where
 
 instance IsRepresentation Domain ShortByteString where
     fromRepresentation = domain
-    toRepresentation   = representation
-    fromWireLabels     = domainFromWireLabels
-    toWireLabels       = wireLabels
+    toRepresentation = representation
+    fromWireLabels = domainFromWireLabels
+    toWireLabels = wireLabels
 
 instance IsRepresentation Domain ByteString where
     fromRepresentation = domain . Short.toShort
-    toRepresentation   = Short.fromShort . representation
-    fromWireLabels     = domainFromWireLabels . map Short.toShort
-    toWireLabels       = map Short.fromShort . wireLabels
+    toRepresentation = Short.fromShort . representation
+    fromWireLabels = domainFromWireLabels . map Short.toShort
+    toWireLabels = map Short.fromShort . wireLabels
 
 instance IsRepresentation Domain String where
     fromRepresentation = domain . fromString
-    toRepresentation   = shortToString . representation
-    fromWireLabels     = domainFromWireLabels . map fromString
-    toWireLabels       = map shortToString . wireLabels
+    toRepresentation = shortToString . representation
+    fromWireLabels = domainFromWireLabels . map fromString
+    toWireLabels = map shortToString . wireLabels
 
 addRoot :: RawDomain -> RawDomain
 addRoot o
-  | Short.null o            = "."
-  | Short.last o == _period = o
-  | otherwise               = o <> "."
+    | Short.null o = "."
+    | Short.last o == _period = o
+    | otherwise = o <> "."
 
 ----------------------------------------------------------------
 
 validateDomain :: Domain -> Domain
 validateDomain d
-  | isIllegal (wireLabels d) = E.throw IllegalDomain
-  | otherwise                = d
+    | isIllegal (wireLabels d) = E.throw IllegalDomain
+    | otherwise = d
 
 validateMailbox :: Mailbox -> Mailbox
 validateMailbox m@(Mailbox d)
-  | isIllegal (wireLabels d) = E.throw IllegalDomain
-  | otherwise                = m
+    | isIllegal (wireLabels d) = E.throw IllegalDomain
+    | otherwise = m
 
 isIllegal :: [ShortByteString] -> Bool
 isIllegal ls = sum is > 255 || any (> 63) is
@@ -190,9 +193,7 @@ isIllegal ls = sum is > 255 || any (> 63) is
 -- hostmaster\@example.org.  -- First label is simply @hostmaster@
 -- john.smith\@examle.com.   -- First label is @john.smith@
 -- @
---
-
-newtype Mailbox = Mailbox { fromMailbox :: Domain }
+newtype Mailbox = Mailbox {fromMailbox :: Domain}
 
 toMailbox :: Domain -> Mailbox
 toMailbox = Mailbox
@@ -210,55 +211,62 @@ instance IsString Mailbox where
     fromString = fromRepresentation
 
 instance Semigroup Mailbox where
-   Mailbox d0 <> Mailbox d1 = Mailbox (d0 <> d1)
+    Mailbox d0 <> Mailbox d1 = Mailbox (d0 <> d1)
 
 mailbox :: ShortByteString -> Mailbox
 mailbox o
-  | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
-mailbox o = validateMailbox $ Mailbox $ Domain {
-    representation  = addRoot o
-  , wireLabels      = ls
-  , canonicalLabels = reverse ls
-  }
+    | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
+mailbox o =
+    validateMailbox $
+        Mailbox $
+            Domain
+                { representation = addRoot o
+                , wireLabels = ls
+                , canonicalLabels = reverse ls
+                }
   where
     ~l = Short.map toLower o
-    ~ls = unfoldr step (l,0::Int)
-    step (x,n) = case parseLabel sep x of
-      Nothing        -> Nothing
-      Just (p', x')
-        | p' == ""    -> Nothing
-        | otherwise   -> Just (p', (x', n+1))
+    ~ls = unfoldr step (l, 0 :: Int)
+    step (x, n) = case parseLabel sep x of
+        Nothing -> Nothing
+        Just (p', x')
+            | p' == "" -> Nothing
+            | otherwise -> Just (p', (x', n + 1))
       where
-        sep | n == 0    = _at
+        sep
+            | n == 0 = _at
             | otherwise = _period
 
 mailboxFromWireLabels :: [ShortByteString] -> Mailbox
 mailboxFromWireLabels [] = E.throw $ DecodeError "Broken mailbox"
-mailboxFromWireLabels lls@(l:ls) = validateMailbox $ Mailbox $ Domain {
-    representation  = rep
-  , wireLabels      = lls
-  , canonicalLabels = map (Short.map toLower) $ reverse lls
-  }
+mailboxFromWireLabels lls@(l : ls) =
+    validateMailbox $
+        Mailbox $
+            Domain
+                { representation = rep
+                , wireLabels = lls
+                , canonicalLabels = map (Short.map toLower) $ reverse lls
+                }
   where
     rep = l <> "@" <> foldr (\x y -> escapeLabel _period x <> "." <> y) "" ls
 
 instance IsRepresentation Mailbox ShortByteString where
     fromRepresentation = mailbox
-    toRepresentation   = toRepresentation . fromMailbox
-    fromWireLabels     = toMailbox . domainFromWireLabels
-    toWireLabels       = wireLabels . fromMailbox
+    toRepresentation = toRepresentation . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels
+    toWireLabels = wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox ByteString where
     fromRepresentation = mailbox . Short.toShort
-    toRepresentation   = toRepresentation . fromMailbox
-    fromWireLabels     = toMailbox . domainFromWireLabels . map Short.toShort
-    toWireLabels       = map Short.fromShort . wireLabels . fromMailbox
+    toRepresentation = toRepresentation . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels . map Short.toShort
+    toWireLabels = map Short.fromShort . wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox String where
     fromRepresentation = mailbox . fromString
-    toRepresentation   = toRepresentation . fromMailbox
-    fromWireLabels     = toMailbox . domainFromWireLabels . map fromString
-    toWireLabels       = map shortToString . wireLabels . fromMailbox
+    toRepresentation = toRepresentation . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels . map fromString
+    toWireLabels = map shortToString . wireLabels . fromMailbox
 
 ----------------------------------------------------------------
 
@@ -267,16 +275,18 @@ instance IsRepresentation Mailbox String where
 --
 -- ref. https://datatracker.ietf.org/doc/html/rfc4034#section-6.2 - Canonical RR Form
 data CanonicalFlag
-  = Original  -- ^ Original name
-  | Canonical -- ^ Lower name without compressoin
-  deriving (Eq, Show)
+    = -- | Original name
+      Original
+    | -- | Lower name without compressoin
+      Canonical
+    deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
 -- | Putting a domain name.
 --   No name compression for new RRs.
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain Original  Domain{..} = do
+putDomain Original Domain{..} = do
     mapM_ putPartialDomain wireLabels
     put8 0
 putDomain Canonical Domain{..} = do
@@ -293,12 +303,12 @@ putCompressedDomain Domain{..} = putCompress wireLabels
 
 putCompress :: [RawDomain] -> SPut ()
 putCompress [] = put8 0
-putCompress dom@(d:ds) = do
+putCompress dom@(d : ds) = do
     mpos <- popPointer dom
-    cur  <- builderPosition
+    cur <- builderPosition
     case mpos of
         Just pos -> putPointer pos
-        _        -> do
+        _ -> do
             -- Pointers are limited to 14-bits!
             when (cur <= 0x3fff) $ pushPointer dom cur
             putPartialDomain d
@@ -311,7 +321,7 @@ putPointer pos = putInt16 (pos .|. 0xc000)
 --   Names are compressed if possible.
 --   This should be used only for CNAME, MX, NS, PTR and SOA.
 putDomainRFC1035 :: CanonicalFlag -> Domain -> SPut ()
-putDomainRFC1035 Original  dom = putCompressedDomain dom
+putDomainRFC1035 Original dom = putCompressedDomain dom
 putDomainRFC1035 Canonical dom = putDomain Canonical dom
 
 ----------------------------------------------------------------
@@ -365,7 +375,6 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- >>> let input = "\3foo\192\0\3bar\0"
 -- >>> runSGet parser input
 -- Left (DecodeError "invalid pointer 0 at 4: self pointing")
---
 
 -- | Get a domain name.
 --
@@ -373,7 +382,6 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- that precedes the start of the current domain name.  The starting
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
---
 getDomain' :: Bool -> Int -> SGet [ShortByteString]
 getDomain' allowCompression ptrLimit = do
     pos <- parserPosition
@@ -382,37 +390,40 @@ getDomain' allowCompression ptrLimit = do
     getdomain pos c n
   where
     getdomain pos c n
-      | c == 0 = do
-          pushDomain pos []
-          return []
-      -- As for now, extended labels have no use.
-      -- This may change some time in the future.
-      | isExtLabel c = return []
-      | isPointer c && not allowCompression = failSGet "name compression is not allowed"
-      | isPointer c = do
-          d <- getInt8
-          let offset = n * 256 + d
-          when (offset == ptrLimit) $ failure "self pointing" pos offset
-          when (offset > ptrLimit)  $ failure "forward pointing" pos offset
-          mx <- popDomain offset
-          case mx of
-            Nothing -> failure "invalid area" pos offset
-            Just lls -> do
-                -- Supporting double pointers.
-                pushDomain pos lls
-                return lls
-      | otherwise = do
-          l <- getNShortByteString n
-          -- Registering super domains
-          ls <- getDomain' allowCompression ptrLimit
-          let lls = l:ls
-          pushDomain pos lls
-          return lls
+        | c == 0 = do
+            pushDomain pos []
+            return []
+        -- As for now, extended labels have no use.
+        -- This may change some time in the future.
+        | isExtLabel c = return []
+        | isPointer c && not allowCompression =
+            failSGet "name compression is not allowed"
+        | isPointer c = do
+            d <- getInt8
+            let offset = n * 256 + d
+            when (offset == ptrLimit) $ failure "self pointing" pos offset
+            when (offset > ptrLimit) $ failure "forward pointing" pos offset
+            mx <- popDomain offset
+            case mx of
+                Nothing -> failure "invalid area" pos offset
+                Just lls -> do
+                    -- Supporting double pointers.
+                    pushDomain pos lls
+                    return lls
+        | otherwise = do
+            l <- getNShortByteString n
+            -- Registering super domains
+            ls <- getDomain' allowCompression ptrLimit
+            let lls = l : ls
+            pushDomain pos lls
+            return lls
     -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
     isExtLabel c = not (testBit c 7) && testBit c 6
-    failure msg pos offset = failSGet $ "invalid pointer " ++ show offset ++ " at " ++ show pos ++ ": " ++ msg
+    failure msg pos offset =
+        failSGet $
+            "invalid pointer " ++ show offset ++ " at " ++ show pos ++ ": " ++ msg
 
 ----------------------------------------------------------------
 
@@ -437,25 +448,27 @@ getDomain' allowCompression ptrLimit = do
 -- Nothing
 -- >>> parseLabel _period "\\513.xyz"
 -- Nothing
-parseLabel :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
+parseLabel
+    :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
 parseLabel sep dom
-  | hasBackslash dom = case P.parse (labelParser sep mempty) dom of
-      (Just hd, tl) -> check (hd, tl)
-      _             -> Nothing
-  | otherwise        = case Short.break (== sep) dom of
-      r@(_,"")      -> Just r
-      (hd,tl)       -> check (hd, Short.drop 1 tl)
+    | hasBackslash dom = case P.parse (labelParser sep mempty) dom of
+        (Just hd, tl) -> check (hd, tl)
+        _ -> Nothing
+    | otherwise = case Short.break (== sep) dom of
+        r@(_, "") -> Just r
+        (hd, tl) -> check (hd, Short.drop 1 tl)
   where
     hasBackslash = Short.any (== _backslash)
-    check r@(hd, tl) | not (Short.null hd) || Short.null tl = Just r
-                     | otherwise = Nothing
+    check r@(hd, tl)
+        | not (Short.null hd) || Short.null tl = Just r
+        | otherwise = Nothing
 
 labelParser :: Word8 -> Builder -> Parser Builder
 labelParser sep bld =
-      (P.eof $> bld)
-  <|> (P.satisfy (== sep) $> bld)
-  <|> (simple  >>= \b -> labelParser sep (bld <> b))
-  <|> (escaped >>= \b -> labelParser sep (bld <> b))
+    (P.eof $> bld)
+        <|> (P.satisfy (== sep) $> bld)
+        <|> (simple >>= \b -> labelParser sep (bld <> b))
+        <|> (escaped >>= \b -> labelParser sep (bld <> b))
   where
     simple = P.toBuilder . fst <$> P.match skipUnescaped
       where
@@ -472,7 +485,9 @@ labelParser sep bld =
             y <- digit <|> fail "an digit is expected (1)"
             z <- digit <|> fail "an digit is expected (2)"
             let d = 100 * x + 10 * y + z
-            if d > 255 then fail "DDD should be less than 256" else pure (P.toBuilder (fromIntegral d :: Word8))
+            if d > 255
+                then fail "DDD should be less than 256"
+                else pure (P.toBuilder (fromIntegral d :: Word8))
         digit :: Parser Int -- Word8 is not good enough for "d > 255"
         digit = fromIntegral . subtract _0 <$> P.satisfy isDigit
 
@@ -496,37 +511,41 @@ labelParser sep bld =
 -- "f\\127o"
 escapeLabel :: Word8 -> ShortByteString -> ShortByteString
 escapeLabel sep label
-  | isAllPlain label = label
-  | otherwise        = toResult $ P.parse (labelEscaper sep mempty) label
+    | isAllPlain label = label
+    | otherwise = toResult $ P.parse (labelEscaper sep mempty) label
   where
     isAllPlain = Short.all (isPlain sep)
     toResult (Just r, _) = r
     toResult _ = E.throw UnknownDNSError -- can't happen
 
 labelEscaper :: Word8 -> Builder -> Parser Builder
-labelEscaper sep bld0 = (P.eof $> bld0)
-                     <|> (asis >>= \b -> labelEscaper sep (bld0 <> b))
-                     <|> (esc  >>= \b -> labelEscaper sep (bld0 <> b))
+labelEscaper sep bld0 =
+    (P.eof $> bld0)
+        <|> (asis >>= \b -> labelEscaper sep (bld0 <> b))
+        <|> (esc >>= \b -> labelEscaper sep (bld0 <> b))
   where
     -- Non-printables are escaped as decimal trigraphs, while printable
     -- specials just get a backslash prefix.
     esc = do
         w <- P.anyChar
         if w <= _space || w >= _del
-        then let (q100, r100) = w `divMod` 100
-                 (q10, r10)   = r100 `divMod` 10
-              in pure (P.toBuilder _backslash  <>
-                       P.toBuilder (_0 + q100) <>
-                       P.toBuilder (_0 + q10)  <>
-                       P.toBuilder (_0 + r10))
-        else pure (P.toBuilder _backslash <> P.toBuilder w)
+            then
+                let (q100, r100) = w `divMod` 100
+                    (q10, r10) = r100 `divMod` 10
+                 in pure
+                        ( P.toBuilder _backslash
+                            <> P.toBuilder (_0 + q100)
+                            <> P.toBuilder (_0 + q10)
+                            <> P.toBuilder (_0 + r10)
+                        )
+            else pure (P.toBuilder _backslash <> P.toBuilder w)
 
     -- Runs of plain bytes are recognized as a single chunk, which is then
     -- returned as-is.
     asis :: Parser Builder
     asis = do
-       (r, _) <- P.match $ P.skipSome $ P.satisfy (isPlain sep)
-       return $ P.toBuilder r
+        (r, _) <- P.match $ P.skipSome $ P.satisfy (isPlain sep)
+        return $ P.toBuilder r
 
 -- | In the presentation form of DNS labels, these characters are escaped by
 -- prepending a backlash. (They have special meaning in zone files). Whitespace
@@ -546,13 +565,14 @@ isSpecial sep w = w == sep || elem w escSpecials
 -- Note: the separator is assumed to be either '.' or '@' and so not matched by
 -- any of the first three fast-path 'True' cases.
 isPlain :: Word8 -> Word8 -> Bool
-isPlain sep w | w >= _del                    = False -- <DEL> + non-ASCII
-              | w >= _bracketright           = True  -- ']'..'_'..'a'..'z'..'~'
-              | w >= _A && w <= _bracketleft = True  -- 'A'..'Z'..'['
-              | w >= _0 && w <= _colon       = True  -- '0'..'9'..':'
-              | w <= _space                  = False -- non-printables
-              | isSpecial sep w              = False -- one of the specials
-              | otherwise                    = True  -- plain punctuation
+isPlain sep w
+    | w >= _del = False -- <DEL> + non-ASCII
+    | w >= _bracketright = True -- ']'..'_'..'a'..'z'..'~'
+    | w >= _A && w <= _bracketleft = True -- 'A'..'Z'..'['
+    | w >= _0 && w <= _colon = True -- '0'..'9'..':'
+    | w <= _space = False -- non-printables
+    | isSpecial sep w = False -- one of the specials
+    | otherwise = True -- plain punctuation
 
 ----------------------------------------------------------------
 
@@ -573,9 +593,9 @@ shortToString = C8.unpack . Short.fromShort
 -- []
 superDomains :: Domain -> [Domain]
 superDomains d = case wireLabels d of
-  []   -> []
-  [_]  -> [d]
-  _:ls -> d : map domainFromWireLabels (init $ tails ls)
+    [] -> []
+    [_] -> [d]
+    _ : ls -> d : map domainFromWireLabels (init $ tails ls)
 
 -- | Sub-domain or not.
 --
@@ -591,4 +611,4 @@ superDomains d = case wireLabels d of
 -- False
 isSubDomainOf :: Domain -> Domain -> Bool
 _ `isSubDomainOf` "." = True
-x `isSubDomainOf` y   = y `elem` superDomains x
+x `isSubDomainOf` y = y `elem` superDomains x

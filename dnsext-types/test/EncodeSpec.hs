@@ -43,100 +43,197 @@ defaultHeader :: DNSHeader
 defaultHeader = header defaultQuery
 
 testQueryA :: DNSMessage
-testQueryA = defaultQuery {
-    header = defaultHeader {
-         identifier = 1000
-       }
-  , question = [Question "www.mew.org." A classIN]
-  }
+testQueryA =
+    defaultQuery
+        { header =
+            defaultHeader
+                { identifier = 1000
+                }
+        , question = [Question "www.mew.org." A classIN]
+        }
 
 testQueryAAAA :: DNSMessage
-testQueryAAAA = defaultQuery {
-    header = defaultHeader {
-         identifier = 1001
-       }
-  , question = [Question "www.mew.org." AAAA classIN]
-  }
+testQueryAAAA =
+    defaultQuery
+        { header =
+            defaultHeader
+                { identifier = 1001
+                }
+        , question = [Question "www.mew.org." AAAA classIN]
+        }
 
 testResponseA :: DNSMessage
-testResponseA = DNSMessage {
-    header = DNSHeader {
-         identifier = 61046
-       , flags = DNSFlags {
-           qOrR = QR_Response
-         , opcode = OP_STD
-         , authAnswer = False
-         , trunCation = False
-         , recDesired = True
-         , recAvailable = True
-         , rcode = NoErr
-         , authenData = False
-         , chkDisable = False
-         }
-       }
-  , ednsHeader = NoEDNS
-  , question = [Question {
-                     qname = "492056364.qzone.qq.com."
-                   , qtype = A
-                   , qclass = classIN
-                   }
-                ]
-  , answer =
-        [ ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [119, 147, 15, 122])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [119, 147, 79, 106])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [183, 60, 55, 43])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [183, 60, 55, 107])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [113, 108, 7, 172])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [113, 108, 7, 174])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [113, 108, 7, 175])
-        , ResourceRecord "492056364.qzone.qq.com." A classIN 568 (rd_a $ toIPv4 [119, 147, 15, 100])
-        ]
-  , authority =
-        [ ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel2.qq.com.")
-        , ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel1.qq.com.")
-        ]
-  , additional =
-        [ ResourceRecord "ns-tel1.qq.com." A classIN 46520 (rd_a $ toIPv4 [121, 14, 73, 115])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [222, 73, 76, 226])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [183, 60, 3, 202])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [218, 30, 72, 180])
-        ]
-  }
+testResponseA =
+    DNSMessage
+        { header =
+            DNSHeader
+                { identifier = 61046
+                , flags =
+                    DNSFlags
+                        { qOrR = QR_Response
+                        , opcode = OP_STD
+                        , authAnswer = False
+                        , trunCation = False
+                        , recDesired = True
+                        , recAvailable = True
+                        , rcode = NoErr
+                        , authenData = False
+                        , chkDisable = False
+                        }
+                }
+        , ednsHeader = NoEDNS
+        , question =
+            [ Question
+                { qname = "492056364.qzone.qq.com."
+                , qtype = A
+                , qclass = classIN
+                }
+            ]
+        , answer =
+            [ ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [119, 147, 15, 122])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [119, 147, 79, 106])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [183, 60, 55, 43])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [183, 60, 55, 107])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [113, 108, 7, 172])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [113, 108, 7, 174])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [113, 108, 7, 175])
+            , ResourceRecord
+                "492056364.qzone.qq.com."
+                A
+                classIN
+                568
+                (rd_a $ toIPv4 [119, 147, 15, 100])
+            ]
+        , authority =
+            [ ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel2.qq.com.")
+            , ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel1.qq.com.")
+            ]
+        , additional =
+            [ ResourceRecord
+                "ns-tel1.qq.com."
+                A
+                classIN
+                46520
+                (rd_a $ toIPv4 [121, 14, 73, 115])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [222, 73, 76, 226])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [183, 60, 3, 202])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [218, 30, 72, 180])
+            ]
+        }
 
 testResponseTXT :: DNSMessage
-testResponseTXT = DNSMessage {
-    header = DNSHeader {
-         identifier = 48724
-       , flags = DNSFlags {
-           qOrR = QR_Response
-         , opcode = OP_STD
-         , authAnswer = False
-         , trunCation = False
-         , recDesired = True
-         , recAvailable = True
-         , rcode = NoErr
-         , authenData = False
-         , chkDisable = False
-         }
-       }
-  , ednsHeader = EDNSheader defaultEDNS
-  , question = [Question {
-                     qname = "492056364.qzone.qq.com."
-                   , qtype = TXT
-                   , qclass = classIN
-                   }
-                ]
-  , answer =
-        [ ResourceRecord "492056364.qzone.qq.com." TXT classIN 0 (rd_txt "simple txt line")
-        ]
-  , authority =
-        [ ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel2.qq.com.")
-        , ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel1.qq.com.")
-        ]
-  , additional =
-        [ ResourceRecord "ns-tel1.qq.com." A classIN 46520 (rd_a $ toIPv4 [121, 14, 73, 115])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [222, 73, 76, 226])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [183, 60, 3, 202])
-        , ResourceRecord "ns-tel2.qq.com." A classIN 2890 (rd_a $ toIPv4 [218, 30, 72, 180])
-        ]
-  }
+testResponseTXT =
+    DNSMessage
+        { header =
+            DNSHeader
+                { identifier = 48724
+                , flags =
+                    DNSFlags
+                        { qOrR = QR_Response
+                        , opcode = OP_STD
+                        , authAnswer = False
+                        , trunCation = False
+                        , recDesired = True
+                        , recAvailable = True
+                        , rcode = NoErr
+                        , authenData = False
+                        , chkDisable = False
+                        }
+                }
+        , ednsHeader = EDNSheader defaultEDNS
+        , question =
+            [ Question
+                { qname = "492056364.qzone.qq.com."
+                , qtype = TXT
+                , qclass = classIN
+                }
+            ]
+        , answer =
+            [ ResourceRecord
+                "492056364.qzone.qq.com."
+                TXT
+                classIN
+                0
+                (rd_txt "simple txt line")
+            ]
+        , authority =
+            [ ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel2.qq.com.")
+            , ResourceRecord "qzone.qq.com." NS classIN 45919 (rd_ns "ns-tel1.qq.com.")
+            ]
+        , additional =
+            [ ResourceRecord
+                "ns-tel1.qq.com."
+                A
+                classIN
+                46520
+                (rd_a $ toIPv4 [121, 14, 73, 115])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [222, 73, 76, 226])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [183, 60, 3, 202])
+            , ResourceRecord
+                "ns-tel2.qq.com."
+                A
+                classIN
+                2890
+                (rd_a $ toIPv4 [218, 30, 72, 180])
+            ]
+        }
