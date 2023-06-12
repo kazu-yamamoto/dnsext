@@ -1,4 +1,4 @@
-module FullResolve where
+module Iterative (iterativeQuery) where
 
 import qualified DNS.Do53.Memo as Cache
 import Data.String (fromString)
@@ -10,7 +10,7 @@ import qualified DNS.Log as Log
 
 import DNS.Types
 
-fullResolve
+iterativeQuery
     :: Bool
     -> Log.Output
     -> Log.Level
@@ -18,7 +18,7 @@ fullResolve
     -> String
     -> TYPE
     -> IO (Either String DNSMessage)
-fullResolve disableV6NS logOutput logLevel ctl n ty = do
+iterativeQuery disableV6NS logOutput logLevel ctl n ty = do
     (putLines, _, terminate) <- Log.new logOutput logLevel
     cxt <- setup disableV6NS putLines
     out <- resolve cxt ctl n ty

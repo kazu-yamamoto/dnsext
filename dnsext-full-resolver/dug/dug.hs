@@ -34,9 +34,9 @@ import DNS.Cache.Iterative (
  )
 import qualified DNS.Log as Log
 
-import FullResolve (fullResolve)
-import Operation (operate)
+import Iterative (iterativeQuery)
 import Output (pprResult)
+import Recursive (recursiveQeury)
 
 options :: [OptDescr (Options -> Options)]
 options =
@@ -151,13 +151,13 @@ main = do
                 flagCD = update requestCD setRequestCD tblFlagCD
                 flagAD = update requestAD setRequestAD tblFlagAD
                 ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
-            ex <- fullResolve optDisableV6NS Log.Stdout optLogLevel ictl dom typ
+            ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
             case ex of
                 Left err -> fail err
                 Right rs -> putStr $ pprResult rs
         else do
             t0 <- T.getUnixTime
-            ex <- operate mserver port optDoX dom typ ctl
+            ex <- recursiveQeury mserver port optDoX dom typ ctl
             t1 <- T.getUnixTime
             case ex of
                 Left err -> fail $ show err

@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-module Operation where
+module Recursive (recursiveQeury) where
 
 import DNS.Do53.Client (LookupConf (..), QueryControls, Seeds (..))
 import qualified DNS.Do53.Client as DNS
@@ -20,7 +20,7 @@ import Data.IP (IPv4, IPv6)
 import Network.Socket (HostName, PortNumber)
 import Text.Read (readMaybe)
 
-operate
+recursiveQeury
     :: [HostName]
     -> PortNumber
     -> ShortByteString
@@ -28,10 +28,10 @@ operate
     -> TYPE
     -> QueryControls
     -> IO (Either DNSError Result)
-operate mserver port dox domain typ controls | dox == "auto" = do
+recursiveQeury mserver port dox domain typ controls | dox == "auto" = do
     conf <- getCustomConf mserver port controls
     lookupDoX conf domain typ
-operate mserver port dox domain typ controls = do
+recursiveQeury mserver port dox domain typ controls = do
     conf <- getCustomConf mserver port controls
     let lim = DNS.lconfLimit conf
         resolver = case makeResolver dox lim Nothing of
