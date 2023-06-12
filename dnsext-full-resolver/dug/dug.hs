@@ -71,17 +71,17 @@ options =
     , Option
         []
         ["debug"]
-        (NoArg (\opts -> opts{optLogLevel= Log.DEBUG}))
+        (NoArg (\opts -> opts{optLogLevel = Log.DEBUG}))
         "set the log level to DEBUG"
     , Option
         []
         ["warn"]
-        (NoArg (\opts -> opts{optLogLevel= Log.WARN}))
+        (NoArg (\opts -> opts{optLogLevel = Log.WARN}))
         "set the log level to WARN"
     , Option
         []
         ["demo"]
-        (NoArg (\opts -> opts{optLogLevel= Log.DEMO}))
+        (NoArg (\opts -> opts{optLogLevel = Log.DEMO}))
         "set the log level to DEMO"
     ]
 

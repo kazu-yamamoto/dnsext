@@ -18,9 +18,9 @@ import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Query
 import DNS.Do53.Types
+import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
-import qualified DNS.Log as Log
 import qualified Data.ByteString as BS
 import Network.Socket (HostName, close)
 import qualified Network.UDP as UDP
