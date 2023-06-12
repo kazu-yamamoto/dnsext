@@ -8,7 +8,26 @@ module CacheProp (
 )
 where
 
+-- GHC packages
 import Control.Monad (unless)
+import Data.Char (toLower, toUpper)
+import Data.List (sort)
+import Data.Maybe (mapMaybe)
+import Data.String (IsString)
+import Data.UnixTime (UnixTime (..), getUnixTime)
+import Foreign.C.Types (CTime (..))
+import System.Exit (exitFailure)
+import System.IO.Unsafe (unsafePerformIO)
+
+-- others
+import Test.QuickCheck
+
+-- dnsext packages
+import DNS.Types (Domain, Seconds (..), TTL, TYPE (..))
+import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
+
+-- this package
 import DNS.Do53.Memo (
     CRSet,
     Cache,
@@ -21,18 +40,6 @@ import DNS.Do53.Memo (
     (<+),
  )
 import qualified DNS.Do53.Memo as Cache
-import DNS.Types (Domain, Seconds (..), TTL, TYPE (..))
-import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
-import Data.Char (toLower, toUpper)
-import Data.List (sort)
-import Data.Maybe (mapMaybe)
-import Data.String (IsString)
-import Data.UnixTime (UnixTime (..), getUnixTime)
-import Foreign.C.Types (CTime (..))
-import System.Exit (exitFailure)
-import System.IO.Unsafe (unsafePerformIO)
-import Test.QuickCheck
 
 -----
 

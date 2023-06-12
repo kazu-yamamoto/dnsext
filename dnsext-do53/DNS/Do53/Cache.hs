@@ -41,9 +41,17 @@ where
 -- GHC packages
 import Control.DeepSeq (liftRnf)
 import Control.Monad (guard)
+import Data.Either (partitionEithers)
+import Data.Function (on)
+import Data.List (group, groupBy, sortOn, uncons)
+import Data.Maybe (isJust)
+import Prelude hiding (lookup, null)
 
--- dns packages
+-- others
+import Data.OrdPSQ (OrdPSQ)
+import qualified Data.OrdPSQ as PSQ
 
+-- dnsext packages
 import DNS.Types (
     CLASS,
     DNSMessage,
@@ -56,15 +64,6 @@ import DNS.Types (
 import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
-import Data.Either (partitionEithers)
-import Data.Function (on)
-import Data.List (group, groupBy, sortOn, uncons)
-import Data.Maybe (isJust)
-import Data.OrdPSQ (OrdPSQ)
-import qualified Data.OrdPSQ as PSQ
-import Prelude hiding (lookup, null)
-
--- this package
 
 {- CRSet
    -  Left  - NXDOMAIN or NODATA, hold zone-domain delegation from
