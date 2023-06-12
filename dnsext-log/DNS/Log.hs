@@ -7,7 +7,6 @@ module DNS.Log (
     GetQueueSize,
     Terminate,
     Level (..),
-    DemoFlag (..),
 ) where
 
 -- GHC packages
@@ -41,17 +40,10 @@ import DNS.Queue (newQueue, readQueue, writeQueue)
 import qualified DNS.Queue as Queue
 
 data Level
-    = DEMO {- special level to specify demo output -}
-    | DEBUG
-    | INFO
-    | NOTICE
+    = DEBUG
+    | DEMO
     | WARN
     deriving (Eq, Ord, Show, Read)
-
-data DemoFlag
-    = DisableDemo
-    | EnableDemo
-    deriving (Eq, Show)
 
 data Output
     = Stdout
@@ -62,29 +54,28 @@ type PutLines = Level -> Maybe Color -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
 type Terminate = IO ()
 
-new :: Output -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
+new :: Output -> Level -> IO (PutLines, GetQueueSize, Terminate)
 new Stdout = newHandleLogger stdout
 new Stderr = newHandleLogger stderr
 new (RouteFile fs sz) = newFileLogger $ LogFile fs sz
 
 newFileLogger
-    :: LogType -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
-newFileLogger lt loggerLevel demoFlag = do
+    :: LogType -> Level -> IO (PutLines, GetQueueSize, Terminate)
+newFileLogger lt loggerLevel = do
     (put, kill) <- newFastLogger1 lt
     return (logLines put, getQSize, kill)
   where
     logLines put lv _ xs =
-        when (enabled lv) $
+        when (loggerLevel <= lv) $
             put $
                 toLogStr $
                     unlines xs
-    enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
 
     getQSize = return (-1, -1)
 
 newHandleLogger
-    :: Handle -> Level -> DemoFlag -> IO (PutLines, GetQueueSize, Terminate)
-newHandleLogger outFh loggerLevel demoFlag = do
+    :: Handle -> Level -> IO (PutLines, GetQueueSize, Terminate)
+newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     inQ <- newQueue 8
     flushMutex <- newEmptyMVar
@@ -92,10 +83,9 @@ newHandleLogger outFh loggerLevel demoFlag = do
     return (logLines inQ, getQSize inQ, kill inQ flushMutex tid)
   where
     logLines inQ lv color xs =
-        when (enabled lv) $
+        when (loggerLevel <= lv) $
             writeQueue inQ $
                 Just (color, xs)
-    enabled lv = checkEnabledLevelWithDemo loggerLevel demoFlag lv
 
     getQSize inQ = do
         s <- fst <$> Queue.readSizes inQ
@@ -118,8 +108,3 @@ newHandleLogger outFh loggerLevel demoFlag = do
                 hSetSGR outFh [SetColor Foreground Vivid c]
                 hPutStr outFh $ unlines xs
                 hSetSGR outFh [Reset]
-
-checkEnabledLevelWithDemo :: Level -> DemoFlag -> Level -> Bool
-checkEnabledLevelWithDemo loggerLevel demoFlag lv = case demoFlag of
-    DisableDemo -> loggerLevel <= lv
-    EnableDemo -> lv == DEMO

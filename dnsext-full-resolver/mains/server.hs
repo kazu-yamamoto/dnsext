@@ -18,7 +18,6 @@ import qualified DNS.Log as Log
 data ServerOptions = ServerOptions
     { logOutput :: Log.Output
     , logLevel :: Log.Level
-    , logDemo :: Log.DemoFlag
     , maxKibiEntries :: Int
     , disableV6NS :: Bool
     , workers :: Int
@@ -33,8 +32,7 @@ defaultOptions :: ServerOptions
 defaultOptions =
     ServerOptions
         { logOutput = Log.Stdout
-        , logLevel = Log.NOTICE
-        , logDemo = Log.DisableDemo
+        , logLevel = Log.WARN
         , maxKibiEntries = 2 * 1024
         , disableV6NS = False
         , workers = 2
@@ -67,11 +65,6 @@ descs =
             "{WARN|NOTICE|INFO|DEBUG}"
         )
         "server log-level"
-    , Option
-        []
-        ["demo"]
-        (NoArg $ \opts -> return opts{logDemo = Log.EnableDemo})
-        "enable demo-log output"
     , Option
         ['M']
         ["max-cache-entries"]
@@ -161,7 +154,6 @@ run opts =
     Server.run
         (logOutput opts)
         (logLevel opts)
-        (logDemo opts)
         (maxKibiEntries opts * 1024)
         (disableV6NS opts)
         (workers opts)

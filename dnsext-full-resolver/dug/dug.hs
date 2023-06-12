@@ -51,11 +51,6 @@ options =
         (NoArg (\opts -> opts{optIterative = True}))
         "resolve iteratively"
     , Option
-        []
-        ["demo"]
-        (NoArg (\opts -> opts{optDemo = True}))
-        "demo logging outputs for iteratively resolve"
-    , Option
         ['4']
         ["ipv4"]
         (NoArg (\opts -> opts{optDisableV6NS = True}))
@@ -73,15 +68,30 @@ options =
             "auto|dot|doq|h2|h3"
         )
         "enable DoX"
+    , Option
+        []
+        ["debug"]
+        (NoArg (\opts -> opts{optLogLevel= Log.DEBUG}))
+        "set the log level to DEBUG"
+    , Option
+        []
+        ["warn"]
+        (NoArg (\opts -> opts{optLogLevel= Log.WARN}))
+        "set the log level to WARN"
+    , Option
+        []
+        ["demo"]
+        (NoArg (\opts -> opts{optLogLevel= Log.DEMO}))
+        "set the log level to DEMO"
     ]
 
 data Options = Options
     { optHelp :: Bool
     , optIterative :: Bool
-    , optDemo :: Bool
     , optDisableV6NS :: Bool
     , optPort :: Maybe String
     , optDoX :: ShortByteString
+    , optLogLevel :: Log.Level
     }
     deriving (Show)
 
@@ -90,10 +100,10 @@ defaultOptions =
     Options
         { optHelp = False
         , optIterative = False
-        , optDemo = False
         , optDisableV6NS = False
         , optPort = Nothing
         , optDoX = "do53"
+        , optLogLevel = Log.WARN
         }
 
 main :: IO ()
@@ -141,8 +151,7 @@ main = do
                 flagCD = update requestCD setRequestCD tblFlagCD
                 flagAD = update requestAD setRequestAD tblFlagAD
                 ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
-                demoFlag = if optDemo then Log.EnableDemo else Log.DisableDemo
-            ex <- fullResolve optDisableV6NS Log.Stdout Log.INFO demoFlag ictl dom typ
+            ex <- fullResolve optDisableV6NS Log.Stdout optLogLevel ictl dom typ
             case ex of
                 Left err -> fail err
                 Right rs -> putStr $ pprResult rs

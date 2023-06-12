@@ -27,7 +27,7 @@ defaultOptions :: BenchmarkOptions
 defaultOptions =
     BenchmarkOptions
         { logOutput = Log.Stdout
-        , logLevel = Log.NOTICE
+        , logLevel = Log.WARN
         , maxKibiEntries = 2 * 1024
         , noopMode = False
         , gplotMode = False
