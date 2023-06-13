@@ -1755,15 +1755,14 @@ lookupCache dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookup ts dom typ DNS.classIN cache
-    logLn Log.DEBUG $
-        "lookupCache: "
-            ++ unwords
-                [ show dom
-                , show typ
-                , show DNS.classIN
-                , ":"
-                , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-                ]
+    logLn Log.DEBUG . unwords $
+        [ "lookupCache:"
+        , show dom
+        , show typ
+        , show DNS.classIN
+        , ":"
+        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+        ]
     return result
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
@@ -1781,17 +1780,15 @@ lookupCacheEither logMark dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookupEither ts dom typ DNS.classIN cache
-    logLn Log.DEBUG $
-        "lookupCacheEither: "
-            ++ logMark
-            ++ ": "
-            ++ unwords
-                [ show dom
-                , show typ
-                , show DNS.classIN
-                , ":"
-                , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-                ]
+    logLn Log.DEBUG . unwords $
+        [ "lookupCacheEither:"
+        , logMark ++ ":"
+        , show dom
+        , show typ
+        , show DNS.classIN
+        , ":"
+        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+        ]
     return result
 
 withSection
@@ -1879,30 +1876,20 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
         _ : _ : _ -> Left "multiple SOA records found"
     ncWarn s
         | not $ null answer = do
-            logLines Log.DEBUG $
-                [ "cacheEmptySection: from-domain="
-                    ++ show zoneDom
-                    ++ ", domain="
-                    ++ show dom
-                    ++ ": "
-                    ++ s
-                , "\tbecause of non empty answers:"
-                ]
-                    ++ map (("\t" ++) . show) answer
+            logLines Log.DEBUG . (unwords withDom :) $
+                map ("\t" ++) ("because of non empty answers:" : map show answer)
             return []
         | otherwise = do
-            logLines Log.WARN $
-                [ "cacheEmptySection: from-domain="
-                    ++ show zoneDom
-                    ++ ", domain="
-                    ++ show dom
-                    ++ ": "
-                    ++ s
-                , "\tauthority section:"
-                ]
-                    ++ map (("\t" ++) . show) (DNS.authority msg)
+            logLines Log.WARN . (unwords withDom :) $
+                map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
             return []
       where
+        withDom =
+            [ "cacheEmptySection:"
+            , "from-domain=" ++ show zoneDom ++ ","
+            , "domain=" ++ show dom ++ ":"
+            , s
+            ]
         answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
