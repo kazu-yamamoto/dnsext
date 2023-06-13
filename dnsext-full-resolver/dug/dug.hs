@@ -140,23 +140,17 @@ main = do
             Nothing -> do
                 putStrLn $ "Port " ++ x ++ " is illegal"
                 exitFailure
-    let mserver = map (drop 1) at
-        ctl = mconcat $ map toFlag plus
     t0 <- T.getUnixTime
     ex <- if optIterative
         then do
-            let ustep tbl f s = maybe f id $ lookup s tbl
-                uflag tbl d = foldl (ustep tbl) d plus
-                update get set tbl s = set (uflag tbl $ get s) s
-                flagDO = update requestDO setRequestDO tblFlagDO
-                flagCD = update requestCD setRequestCD tblFlagCD
-                flagAD = update requestAD setRequestAD tblFlagAD
-                ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
+            let ictl = mkIctrl plus
             ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
             setSGR [SetColor Foreground Vivid Green]
             putStr ";; "
             return ex
         else do
+            let mserver = map (drop 1) at
+                ctl = mconcat $ map toFlag plus
             ex <- recursiveQeury mserver port optDoX dom typ ctl
             case ex of
               Left e -> return $ Left $ show e
@@ -198,6 +192,16 @@ toFlag "+dnssec" = doFlag FlagSet
 toFlag "+nodnssec" = doFlag FlagClear
 toFlag _ = mempty -- fixme
 
+mkIctrl :: Foldable t => t String -> IterativeControls
+mkIctrl plus = flagAD . flagCD . flagDO $ defaultIterativeControls
+  where
+    ustep tbl f s = maybe f id $ lookup s tbl
+    uflag tbl d = foldl (ustep tbl) d plus
+    update get set tbl s = set (uflag tbl $ get s) s
+    flagDO = update requestDO setRequestDO tblFlagDO
+    flagCD = update requestCD setRequestCD tblFlagCD
+    flagAD = update requestAD setRequestAD tblFlagAD
+
 tblFlagDO :: [(String, RequestDO)]
 tblFlagDO = [("+dnssec", DnssecOK), ("+nodnssec", NoDnssecOK)]
 
@@ -206,6 +210,7 @@ tblFlagCD = [("+cdflag", CheckDisabled), ("+nocdflag", NoCheckDisabled)]
 
 tblFlagAD :: [(String, RequestAD)]
 tblFlagAD = [("+adflag", AuthenticatedData), ("+noadflag", NoAuthenticatedData)]
+
 
 help :: String
 help =
