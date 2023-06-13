@@ -839,27 +839,17 @@ resolveTYPE bn typ = do
 cacheAnswer
     :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer Delegation{..} dom typ msg
-    | null $ DNS.answer msg = lift $ do
-        case rcode of
-            DNS.NoErr ->
-                (,) []
-                    <$> cacheEmptySection delegationZoneDomain delegationDNSKEY dom typ rankedAnswer msg
-            DNS.NameErr ->
-                (,) []
-                    <$> cacheEmptySection
-                        delegationZoneDomain
-                        delegationDNSKEY
-                        dom
-                        Cache.NX
-                        rankedAnswer
-                        msg
-            _ -> return ([], [])
+    | null $ DNS.answer msg =
+        lift . fmap ((,) []) $ case rcode of
+            {- authority sections for null answer -}
+            DNS.NoErr -> cacheEmptySection zone dnskeys dom typ rankedAnswer msg
+            DNS.NameErr -> cacheEmptySection zone dnskeys dom Cache.NX rankedAnswer msg
+            _ -> return []
     | otherwise = do
         withSection rankedAnswer msg $ \rrs rank -> do
             let isX rr = rrname rr == dom && rrtype rr == typ
                 sigs = rrsigList dom typ rrs
-            (xRRset, cacheX) <-
-                lift $ verifyAndCache delegationDNSKEY (filter isX rrs) sigs rank
+            (xRRset, cacheX) <- lift $ verifyAndCache dnskeys (filter isX rrs) sigs rank
             lift cacheX
             let (verifyMsg, verifyColor, raiseOnVerifyFailure)
                     | null delegationDS =
@@ -882,6 +872,8 @@ cacheAnswer Delegation{..} dom typ msg
             return ([xRRset], [])
   where
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    zone = delegationZoneDomain
+    dnskeys = delegationDNSKEY
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
