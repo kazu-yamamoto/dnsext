@@ -1055,7 +1055,7 @@ delegationWithCache
     :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
     -- There is delegation information only when there is a selectable NS
-    (verifyMsg, _verifyColor, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+    (verifyMsg, verifyColor, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
         let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
         (RRset{..}, cacheDS) <- verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
         let (verifyMsg, verifyColor)
@@ -1100,7 +1100,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    logLn Log.DEMO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
+    clogLn Log.DEMO verifyColor $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
     maybe
         (notFound $> NoDelegation)
         (fmap HasDelegation . found)
