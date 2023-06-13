@@ -28,6 +28,7 @@ import Network.Socket.BufferPool
 import Network.TLS hiding (HostName)
 import qualified System.TimeManager as T
 import qualified UnliftIO.Exception as E
+import qualified DNS.Log as Log
 
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
@@ -70,16 +71,21 @@ doHTTP
     -> Question
     -> QueryControls
     -> Client Result
-doHTTP tag ident path lim ri@ResolvInfo{..} q qctl sendRequest = sendRequest req $ \rsp -> do
-    let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-    (rx, bss) <- recvHTTP $ unVCLimit lim
-    now <- getTime
-    case decodeChunks now bss of
-        Left e -> E.throwIO e
-        Right (msg, _) -> case checkRespM q ident msg of -- fixme
-            Nothing -> return $ toResult ri tag $ Reply msg tx rx
-            Just err -> E.throwIO err
+doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    sendRequest req $ \rsp -> do
+        let recvHTTP = recvManyN $ getResponseBodyChunk rsp
+        (rx, bss) <- recvHTTP $ unVCLimit lim
+        now <- getTime
+        case decodeChunks now bss of
+            Left e -> E.throwIO e
+            Right (msg, _) -> case checkRespM q ident msg of -- fixme
+                Nothing -> do
+                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
+                    return $ toResult ri proto $ Reply msg tx rx
+                Just err -> E.throwIO err
   where
+    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/" ++ proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire

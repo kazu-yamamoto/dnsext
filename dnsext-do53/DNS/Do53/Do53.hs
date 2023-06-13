@@ -72,7 +72,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
-    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber
+    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/UDP"
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
@@ -147,9 +147,11 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
-vcResolver proto perform ri@ResolvInfo{..} q _qctl =
+vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
+    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/" ++ proto
     go qctl0 = do
         rply <- perform $ solve qctl0
         let ans = replyDNSMessage rply
@@ -181,7 +183,9 @@ vcResolver proto perform ri@ResolvInfo{..} q _qctl =
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right (msg, _) -> case checkRespM q ident msg of
-                Nothing -> return $ Reply msg tx rx
+                Nothing -> do
+                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
+                    return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
 toResult :: ResolvInfo -> String -> Reply -> Result
