@@ -179,7 +179,7 @@ monitor stdConsole params cxt getsSizeInfo expires terminate = do
                 either (const $ return ()) (const loop)
                     =<< withWait
                         waitQuit
-                        (handle (logLn Log.NOTICE . ("monitor io-error: " ++) . show) step)
+                        (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
         loop
 
 console

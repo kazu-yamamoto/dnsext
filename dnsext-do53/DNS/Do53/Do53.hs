@@ -18,12 +18,12 @@ import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Query
 import DNS.Do53.Types
+import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
 import Network.Socket (HostName, close)
 import qualified Network.UDP as UDP
-import System.IO (hFlush, hPutStrLn, stderr)
 import System.IO.Error (annotateIOError)
 
 -- | Check response for a matching identifier and question.  If we ever do
@@ -112,8 +112,8 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
                         | w >= 16 = showHex w
                         | otherwise = ('0' :) . showHex w
                     dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
-                debugLn $
-                    "udpResolver.getAnswer: decodeAt Left: " ++ rinfoHostName ++ ", " ++ dumpBS ans
+                ractionLog rinfoActions Log.DEBUG Nothing $
+                    ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
                 E.throwIO e
             Right msg
                 | checkResp q ident msg -> do
@@ -121,14 +121,11 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
                     return $ Reply msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
-                    debugLn $
-                        "udpResolver.getAnswer: checkResp error: " ++ rinfoHostName ++ ", " ++ show msg
+                    ractionLog rinfoActions Log.DEBUG Nothing $
+                        ["udpResolver.getAnswer: checkResp error: ", rinfoHostName, ", ", show msg]
                     getAnswer ident recv tx
 
     open = UDP.clientSocket rinfoHostName (show rinfoPortNumber) True -- connected
-    debugLn s
-        | rinfoDebug = hPutStrLn stderr s *> hFlush stderr
-        | otherwise = pure ()
 
 ----------------------------------------------------------------
 

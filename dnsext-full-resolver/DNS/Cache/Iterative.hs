@@ -68,7 +68,6 @@ import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import qualified Data.Set as Set
 import Numeric (readDec, readHex, showHex)
-import System.Environment (lookupEnv)
 
 -- other packages
 
@@ -82,6 +81,7 @@ import DNS.Do53.Client (
     defaultResolvActions,
     ractionGenId,
     ractionGetTime,
+    ractionLog,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -151,7 +151,6 @@ data Env = Env
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
-    , dnsextDebug_ :: !Bool
     }
 
 {- datatypes to propagate request flags -}
@@ -236,7 +235,6 @@ newEnv
 newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
-    dnsextDebug <- maybe False ((== "1") . take 1) <$> lookupEnv "DNSEXT_DEBUG"
     let cxt =
             Env
                 { logLines_ = putLines
@@ -247,7 +245,6 @@ newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
                 , currentSeconds_ = curSec
                 , timeString_ = timeStr
                 , idGen_ = genId
-                , dnsextDebug_ = dnsextDebug
                 }
     return cxt
 
@@ -742,7 +739,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     recCNAMEs cc bn dcnRRsets
         | cc > mcc =
             lift
-                (logLn Log.NOTICE $ "query: cname chain limit exceeded: " ++ show (n0, typ))
+                (logLn Log.WARN $ "query: cname chain limit exceeded: " ++ show (n0, typ))
                 *> throwDnsError DNS.ServerFailure
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
@@ -781,7 +778,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
             =<< lookupType bn Cache.NX
       where
         inconsistent rrs = do
-            logLn Log.NOTICE $
+            logLn Log.WARN $
                 "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
             return Nothing
 
@@ -880,7 +877,6 @@ cacheAnswer Delegation{..} dom typ msg
                         , Just Red
                         , throwDnsError DNS.ServerFailure
                         )
-            lift $ logLn Log.INFO $ "cacheAnswer: " ++ verifyMsg
             lift $ clogLn Log.DEMO verifyColor verifyMsg
             raiseOnVerifyFailure
             return ([xRRset], [])
@@ -898,19 +894,19 @@ resolveJustDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveJustDC dc n typ
     | dc > mdc =
         lift
-            ( logLn Log.NOTICE $
+            ( logLn Log.WARN $
                 "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ)
             )
             *> throwDnsError DNS.ServerFailure
     | otherwise = do
         lift $
-            logLn Log.INFO $
+            logLn Log.DEMO $
                 "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
         lift $
-            logLines Log.INFO $
+            logLines Log.DEMO $
                 "resolve-just: selected addresses:" : ["\t" ++ show (sa, n, typ) | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
@@ -991,7 +987,7 @@ iterative_ dc nss0 (x : xs) =
     stepQuery nss@Delegation{..} = do
         sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         lift $
-            logLines Log.INFO $
+            logLines Log.DEMO $
                 "iterative: selected addresses:" : ["\t" ++ show (sa, name, A) | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -1101,11 +1097,10 @@ delegationWithCache zoneDom dnskeys dom msg = do
             cacheDS
             cacheNS
             cacheAdds
-            clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    logLn Log.INFO $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
+    clogLn Log.DEMO verifyColor $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
     maybe
         (notFound $> NoDelegation)
         (fmap HasDelegation . found)
@@ -1185,7 +1180,7 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
                         then return $ HasDelegation d
                         else do
                             lift $
-                                logLn Log.NOTICE $
+                                logLn Log.WARN $
                                     "subdomainShared: "
                                         ++ show dom
                                         ++ ": "
@@ -1202,7 +1197,7 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
         [_] -> verifySOA
         _ : _ : _ -> do
             lift $
-                logLn Log.NOTICE $
+                logLn Log.WARN $
                     "subdomainShared: "
                         ++ show dom
                         ++ ": "
@@ -1216,7 +1211,7 @@ fillsDNSSEC dc nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
     when (not (null delegationDS) && null delegationDNSKEY) $ do
         lift $
-            logLn Log.NOTICE $
+            logLn Log.WARN $
                 "fillsDNSSEC: "
                     ++ show delegationZoneDomain
                     ++ ": "
@@ -1241,13 +1236,11 @@ fillDelegationDS dc src dest
     fill dss = return dest{delegationDS = dss}
     query = do
         ips <- delegationIPs dc src
-        let nullIPs = logLn Log.NOTICE "fillDelegationDS: ip list is null" *> return dest
+        let nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
             domTraceMsg = show (delegationZoneDomain src) ++ " -> " ++ show (delegationZoneDomain dest)
-            verifyFailed es = logLn Log.NOTICE ("fillDelegationDS: " ++ es) *> return dest
+            verifyFailed es = logLn Log.WARN ("fillDelegationDS: " ++ es) *> return dest
             result (e, vinfo) = do
                 let traceLog (verifyColor, verifyMsg) = do
-                        logLn Log.INFO $
-                            "fillDelegationDS: " ++ domTraceMsg ++ ", fill delegation - " ++ verifyMsg
                         clogLn Log.DEMO (Just verifyColor) $
                             "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 maybe (pure ()) traceLog vinfo
@@ -1290,8 +1283,8 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = _ : _, delegationDNSKEY = []
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
     query = do
         ips <- delegationIPs dc d
-        let nullIPs = logLn Log.NOTICE "fillDelegationDNSKEY: ip list is null" *> return d
-            verifyFailed es = logLn Log.NOTICE ("fillDelegationDNSKEY: " ++ es) *> return d
+        let nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
+            verifyFailed es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
         if null ips
             then lift nullIPs
             else
@@ -1318,7 +1311,7 @@ refreshRoot = do
     getRoot = do
         let fallback s = lift $ do
                 {- fallback to rootHint -}
-                logLn Log.NOTICE $ "refreshRoot: " ++ s
+                logLn Log.WARN $ "refreshRoot: " ++ s
                 return rootHint
         either fallback return =<< rootPriming
 
@@ -1333,7 +1326,7 @@ rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
     lift $
-        logLines Log.INFO $
+        logLines Log.DEMO $
             "root-server addresses for priming:" : ["\t" ++ show ip | ip <- ips]
     ekeys <- cachedDNSKEY [rootSepDS] ips "."
     either (return . Left . emsg) (body ips) ekeys
@@ -1358,7 +1351,7 @@ rootPriming = do
             cacheAX
             case nsGoodSigs of
                 [] -> do
-                    logLn Log.NOTICE $ "rootPriming: DNSSEC verification failed"
+                    logLn Log.WARN $ "rootPriming: DNSSEC verification failed"
                     case takeDelegationSrc nsps [] axRRs of
                         Nothing -> return $ Left $ emsg "no delegation"
                         Just d -> do
@@ -1503,7 +1496,7 @@ verifyAndCache dnskeys rrs@(_ : _) sigs rank = do
     now <- liftIO =<< asks currentSeconds_
     let crrsError [] _ = return (rrsetEmpty, return ())
         crrsError sortedRRs@(ResourceRecord{..} : _) _ = do
-            logLines Log.NOTICE $
+            logLines Log.WARN $
                 "verifyAndCache: no caching RR set:" : map (("\t" ++) . show) rrs
             return
                 (RRset rrname rrtype rrclass rrttl [DNS.rdata x | x <- sortedRRs] [], return ())
@@ -1600,8 +1593,8 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                     defaultResolvActions
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
+                        , ractionLog = logLines_ cxt
                         }
-                , rinfoDebug = dnsextDebug_ cxt
                 }
             | aserver <- aservers
             ]
@@ -1627,7 +1620,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
 delegationIPs dc Delegation{..} = do
     lift $
-        logLn Log.INFO $
+        logLn Log.DEMO $
             "zone: " ++ show delegationZoneDomain ++ ":\n" ++ ppDelegation delegationNS
     disableV6NS <- lift $ asks disableV6NS_
 
@@ -1648,19 +1641,19 @@ delegationIPs dc Delegation{..} = do
             | not (null names) = do
                 mayName <- randomizedSelect names
                 let neverReach = do
-                        lift $ logLn Log.INFO $ "delegationIPs: never reach this action."
+                        lift $ logLn Log.DEMO $ "delegationIPs: never reach this action."
                         throwDnsError DNS.ServerFailure
                 maybe neverReach (fmap ((: []) . fst) . resolveNS disableV6NS dc) mayName
             | disableV6NS = do
                 lift $
-                    logLn Log.INFO $
+                    logLn Log.DEMO $
                         "delegationIPs: server-fail: domain: "
                             ++ show delegationZoneDomain
                             ++ ", delegation is empty."
                 throwDnsError DNS.ServerFailure
             | otherwise = do
                 lift $
-                    logLn Log.INFO $
+                    logLn Log.DEMO $
                         "delegationIPs: illegal-domain: "
                             ++ show delegationZoneDomain
                             ++ ", delegation is empty."
@@ -1734,12 +1727,12 @@ resolveNS disableV6NS dc ns = do
             let failEmptyAx
                     | disableV6NS = do
                         lift $
-                            logLn Log.NOTICE $
+                            logLn Log.WARN $
                                 "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
                         lift $
-                            logLn Log.NOTICE $
+                            logLn Log.WARN $
                                 "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
                         throwDnsError DNS.IllegalDomain
             maybe failEmptyAx pure
@@ -1857,7 +1850,7 @@ cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
     crrsError _ =
-        logLines Log.NOTICE $
+        logLines Log.WARN $
             "cacheNoRRSIG: no caching RR set:" : map (("\t" ++) . show) rrs0
     insert hrrs = do
         insertRRSet <- asks insert_
@@ -1925,7 +1918,7 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
                     ++ map (("\t" ++) . show) answer
             return []
         | otherwise = do
-            logLines Log.NOTICE $
+            logLines Log.WARN $
                 [ "cacheEmptySection: from-domain="
                     ++ show zoneDom
                     ++ ", domain="

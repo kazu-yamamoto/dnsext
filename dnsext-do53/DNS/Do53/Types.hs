@@ -48,6 +48,7 @@ import DNS.Do53.Id
 import DNS.Do53.Imports
 import DNS.Do53.Memo
 import DNS.Do53.Query
+import DNS.Log (PutLines)
 import System.Timeout (timeout)
 import Prelude
 
@@ -197,7 +198,6 @@ data ResolvInfo = ResolvInfo
     { rinfoHostName :: HostName
     , rinfoPortNumber :: PortNumber
     , rinfoActions :: ResolvActions
-    , rinfoDebug :: Bool
     }
 
 defaultResolvInfo :: ResolvInfo
@@ -206,7 +206,6 @@ defaultResolvInfo =
         { rinfoHostName = "127.0.0.1"
         , rinfoPortNumber = 53
         , rinfoActions = defaultResolvActions
-        , rinfoDebug = False
         }
 
 data Result = Result
@@ -234,6 +233,7 @@ data ResolvActions = ResolvActions
     , ractionGenId :: IO Identifier
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
+    , ractionLog :: PutLines
     }
 
 defaultResolvActions :: ResolvActions
@@ -243,6 +243,7 @@ defaultResolvActions =
         , ractionGenId = singleGenId
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
+        , ractionLog = \_ _ _ -> return ()
         }
 
 rsso :: Socket -> IO ()

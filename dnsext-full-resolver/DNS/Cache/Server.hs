@@ -67,7 +67,6 @@ type Response a = (ByteString, a)
 run
     :: Log.Output
     -> Log.Level
-    -> Log.DemoFlag
     -> Int
     -> Bool
     -> Int
@@ -77,13 +76,12 @@ run
     -> [HostName]
     -> Bool
     -> IO ()
-run logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+run logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     (serverLoops, monLoops) <-
         setup
             logOutput
             logLevel
-            demoFlag
             maxCacheSize
             disableV6NS
             workers
@@ -99,7 +97,6 @@ run logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQue
 setup
     :: Log.Output
     -> Log.Level
-    -> Log.DemoFlag
     -> Int
     -> Bool
     -> Int
@@ -109,14 +106,14 @@ setup
     -> [HostName]
     -> Bool
     -> IO ([IO ()], [IO ()])
-setup logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
-    (putLines, logQSize, terminate) <- Log.new logOutput logLevel demoFlag
+setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+    (putLines, logQSize, terminate) <- Log.new logOutput logLevel
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn msg = do
                 tstr <- getTimeStr
-                putLines Log.NOTICE Nothing [tstr $ ": " ++ msg]
+                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     memo <- Cache.getMemo cacheConf
     let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
@@ -157,7 +154,7 @@ setup logOutput logLevel demoFlag maxCacheSize disableV6NS workers workerSharedQ
                 qsizePerWorker
                 port
                 hosts
-    putLines Log.NOTICE Nothing $ map ("params: " ++) $ Mon.showParams params
+    putLines Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
     monLoops <-
@@ -183,13 +180,13 @@ getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
     (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
     let reqLoop =
-            handledLoop (putLn Log.NOTICE . ("Server.recvRequest: error: " ++) . show) $
+            handledLoop (putLn Log.WARN . ("Server.recvRequest: error: " ++) . show) $
                 recvRequest (UDP.recvFrom sock) cxt enqueueReq
 
     let respLoop =
             readLoop
                 dequeueResp
-                (putLn Log.NOTICE . ("Server.sendResponse: error: " ++) . show)
+                (putLn Log.WARN . ("Server.sendResponse: error: " ++) . show)
                 $ sendResponse (UDP.sendTo sock) cxt
 
     return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
@@ -214,11 +211,11 @@ benchQueries =
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
     (putLines, _logQSize, _terminate) <-
-        Log.new Log.Stdout Log.NOTICE Log.DisableDemo
+        Log.new Log.Stdout Log.WARN
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
           where
-            memoLogLn = putLines Log.NOTICE Nothing . (: [])
+            memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec
     memo <- Cache.getMemo cacheConf
     let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
@@ -329,12 +326,12 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
     (resolvLoop, enqueueDec, decQSize) <-
         consumeLoop
             perWorker
-            (putLn Log.NOTICE . ("Server.resolvWorker: error: " ++) . show)
+            (putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show)
             $ resolvWorker cxt incMiss incFailed enqueueResp
     let cachedLoop =
             readLoop
                 (readQueue reqQ)
-                (putLn Log.NOTICE . ("Server.cachedWorker: error: " ++) . show)
+                (putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show)
                 $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
         reqQSize = (,) <$> (fst <$> Queue.readSizes reqQ) <*> pure (Queue.sizeMaxBound reqQ)
         resolvLoops = replicate resolvWorkers resolvLoop
@@ -365,7 +362,7 @@ cachedWorker
     -> Request a
     -> IO ()
 cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
-    either (logLn Log.NOTICE) return <=< runExceptT $ do
+    either (logLn Log.WARN) return <=< runExceptT $ do
         let decode = do
                 now <- liftIO getSec
                 msg <-
@@ -401,7 +398,7 @@ resolvWorker
     -> Decoded a
     -> IO ()
 resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
-    either (logLn Log.NOTICE) return <=< runExceptT $ do
+    either (logLn Log.WARN) return <=< runExceptT $ do
         let noResponse replyErr =
                 liftIO incFailed
                     >> throwE
