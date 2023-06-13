@@ -68,9 +68,11 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: UDPRetry -> Resolver
-udpResolver retry ri@ResolvInfo{..} q _qctl =
+udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
+    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
@@ -118,6 +120,7 @@ udpResolver retry ri@ResolvInfo{..} q _qctl =
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
+                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
                     return $ Reply msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
