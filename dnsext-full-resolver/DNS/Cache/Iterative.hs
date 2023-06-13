@@ -1914,19 +1914,13 @@ clogLn level color s = do
     liftIO $ putLines level color [s]
 
 printResult :: Either QueryError DNSMessage -> IO ()
-printResult = either print pmsg
+printResult = either print (putStr . unlines . concat . result)
   where
-    pmsg msg =
-        putStr . unlines $
-            ["answer:"]
-                ++ map show (DNS.answer msg)
-                ++ [""]
-                ++ ["authority:"]
-                ++ map show (DNS.authority msg)
-                ++ [""]
-                ++ ["additional:"]
-                ++ map show (DNS.additional msg)
-                ++ [""]
+    result msg =
+        [ "answer:" : map show (DNS.answer msg) ++ [""]
+        , "authority:" : map show (DNS.authority msg) ++ [""]
+        , "additional:" : map show (DNS.additional msg) ++ [""]
+        ]
 
 ppDelegation :: NE DEntry -> String
 ppDelegation des =
