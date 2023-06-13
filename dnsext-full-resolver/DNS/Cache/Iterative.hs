@@ -1065,20 +1065,16 @@ delegationWithCache zoneDom dnskeys dom msg = do
 
     let notFound
             | rcode == DNS.NoErr =
-                cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg *> demoNoDelegation
+                cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
             | rcode == DNS.NameErr =
                 if hasCNAME
                     then do
                         cacheCNAME
-                        _ <- cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-                        demoNoDelegation
-                    else
-                        cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
-                            *> demoNoDelegation
-            | otherwise = pure ()
+                        cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+                    else cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
+            | otherwise = pure []
           where
             rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-            demoNoDelegation = logLn Log.DEMO $ "no delegation: " ++ domTraceMsg
 
     let found x = do
             cacheDS
