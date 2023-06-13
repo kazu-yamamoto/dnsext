@@ -1100,7 +1100,8 @@ delegationWithCache zoneDom dnskeys dom msg = do
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    clogLn Log.DEMO verifyColor $ "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
+    clogLn Log.DEMO verifyColor $
+        "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
     maybe
         (notFound $> NoDelegation)
         (fmap HasDelegation . found)
