@@ -8,13 +8,14 @@ import DNS.Do53.Client (FlagOp (..), QueryControls, doFlag, rdFlag)
 import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
-import DNS.SVCB (addResourceDataForSVCB)
+import DNS.SVCB (ALPN, addResourceDataForSVCB)
 import DNS.Types (TYPE (..), runInitIO)
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.List (intercalate, isPrefixOf)
 import qualified Data.UnixTime as T
+import Network.Socket (PortNumber)
 import System.Console.ANSI (setSGR)
 import System.Console.ANSI.Types
 import System.Console.GetOpt
@@ -108,71 +109,53 @@ defaultOptions =
 
 main :: IO ()
 main = do
-    args <- getArgs
-    (args', Options{..}) <- case getOpt Permute options args of
-        (o, n, []) -> return (n, foldl (flip id) defaultOptions o)
-        (_, _, errs) -> do
-            mapM_ putStr errs
-            exitFailure
+    (args, Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
         exitSuccess
+    let (at, plus, targets) = divide args
+    (dom, typ) <- getDomTyp targets
+    port <- getPort optPort optDoX
     runInitIO $ do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    let (at, plus, targets) = divide args'
-    (dom, typ) <- case targets of
-        [h] -> return (h, A)
-        [h, t] -> do
-            let mtyp' = readMaybe t
-            case mtyp' of
-                Just typ' -> return (h, typ')
-                Nothing -> do
-                    putStrLn $ "Type " ++ t ++ " is not supported"
-                    exitFailure
-        _ -> do
-            putStrLn "One or two arguments are necessary"
-            exitFailure
-    port <- case optPort of
-        Nothing -> return $ doxPort optDoX
-        Just x -> case readMaybe x of
-            Just p -> return p
-            Nothing -> do
-                putStrLn $ "Port " ++ x ++ " is illegal"
-                exitFailure
+    ----
     t0 <- T.getUnixTime
-    ex <- if optIterative
-        then do
-            let ictl = mkIctrl plus
-            ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
-            setSGR [SetColor Foreground Vivid Green]
-            putStr ";; "
-            return ex
-        else do
-            let mserver = map (drop 1) at
-                ctl = mconcat $ map toFlag plus
-            ex <- recursiveQeury mserver port optDoX dom typ ctl
-            case ex of
-              Left e -> return $ Left $ show e
-              Right Result{..} -> do
-                  let Reply{..} = resultReply
-                  setSGR [SetColor Foreground Vivid Green]
-                  putStr $
-                      ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
-                  putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
-                  putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
-                  putStr ", "
-                  return $ Right $ replyDNSMessage
+    msg <-
+        if optIterative
+            then do
+                let ictl = mkIctrl plus
+                ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
+                case ex of
+                    Left e -> fail e
+                    Right msg -> do
+                        setSGR [SetColor Foreground Vivid Green]
+                        putStr ";; "
+                        return msg
+            else do
+                let mserver = map (drop 1) at
+                    ctl = mconcat $ map toFlag plus
+                ex <- recursiveQeury mserver port optDoX dom typ ctl
+                case ex of
+                    Left e -> fail $ show e
+                    Right Result{..} -> do
+                        let Reply{..} = resultReply
+                        setSGR [SetColor Foreground Vivid Green]
+                        putStr $
+                            ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
+                        putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
+                        putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
+                        putStr ", "
+                        return $ replyDNSMessage
     t1 <- T.getUnixTime
-    case ex of
-        Left err -> fail err
-        Right msg -> do
-            let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
-            when (s /= 0) $ putStr $ show s ++ "sec "
-            putStr $ show (u `div` 1000) ++ "usec"
-            putStr "\n\n"
-            setSGR [Reset]
-            putStr $ pprResult msg
+    let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
+    when (s /= 0) $ putStr $ show s ++ "sec "
+    putStr $ show (u `div` 1000) ++ "usec"
+    putStr "\n\n"
+    setSGR [Reset]
+    putStr $ pprResult msg
+
+----------------------------------------------------------------
 
 divide :: [String] -> ([String], [String], [String])
 divide ls = loop ls (id, id, id)
@@ -183,6 +166,38 @@ divide ls = loop ls (id, id, id)
         | "+" `isPrefixOf` x = loop xs (b0, b1 . (x :), b2)
         | otherwise = loop xs (b0, b1, b2 . (x :))
 
+----------------------------------------------------------------
+
+getArgsOpts :: [String] -> IO ([String], Options)
+getArgsOpts args = case getOpt Permute options args of
+    (o, n, []) -> return (n, foldl (flip id) defaultOptions o)
+    (_, _, errs) -> do
+        mapM_ putStr errs
+        exitFailure
+
+getDomTyp :: [String] -> IO (String, TYPE)
+getDomTyp [h] = return (h, A)
+getDomTyp [h, t] = do
+    let mtyp' = readMaybe t
+    case mtyp' of
+        Just typ' -> return (h, typ')
+        Nothing -> do
+            putStrLn $ "Type " ++ t ++ " is not supported"
+            exitFailure
+getDomTyp _ = do
+    putStrLn "One or two arguments are necessary"
+    exitFailure
+
+getPort :: Maybe String -> ALPN -> IO PortNumber
+getPort Nothing optDoX = return $ doxPort optDoX
+getPort (Just x) _ = case readMaybe x of
+    Just p -> return p
+    Nothing -> do
+        putStrLn $ "Port " ++ x ++ " is illegal"
+        exitFailure
+
+----------------------------------------------------------------
+
 toFlag :: String -> QueryControls
 toFlag "+rec" = rdFlag FlagSet
 toFlag "+recurse" = rdFlag FlagSet
@@ -191,6 +206,8 @@ toFlag "+norecurse" = rdFlag FlagClear
 toFlag "+dnssec" = doFlag FlagSet
 toFlag "+nodnssec" = doFlag FlagClear
 toFlag _ = mempty -- fixme
+
+----------------------------------------------------------------
 
 mkIctrl :: Foldable t => t String -> IterativeControls
 mkIctrl plus = flagAD . flagCD . flagDO $ defaultIterativeControls
@@ -211,6 +228,7 @@ tblFlagCD = [("+cdflag", CheckDisabled), ("+nocdflag", NoCheckDisabled)]
 tblFlagAD :: [(String, RequestAD)]
 tblFlagAD = [("+adflag", AuthenticatedData), ("+noadflag", NoAuthenticatedData)]
 
+----------------------------------------------------------------
 
 help :: String
 help =
