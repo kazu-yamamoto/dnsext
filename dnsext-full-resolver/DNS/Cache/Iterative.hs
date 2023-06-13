@@ -1167,12 +1167,12 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
                     if rrsetVerified rrset
                         then return $ HasDelegation d
                         else do
-                            lift . logLn Log.WARN $
-                                "subdomainShared: "
-                                    ++ show dom
-                                    ++ ": "
-                                    ++ "verification error. invalid SOA: "
-                                    ++ show soaRRs
+                            lift . logLn Log.WARN . unwords $
+                                [ "subdomainShared:"
+                                , show dom ++ ":"
+                                , "verification error. invalid SOA:"
+                                , show soaRRs
+                                ]
                             lift . clogLn Log.DEMO (Just Red) $
                                 show dom ++ ": verification error. invalid SOA"
                             throwDnsError DNS.ServerFailure
@@ -1182,12 +1182,12 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
         {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
         [_] -> verifySOA
         _ : _ : _ -> do
-            lift . logLn Log.WARN $
-                "subdomainShared: "
-                    ++ show dom
-                    ++ ": "
-                    ++ "multiple SOAs are found: "
-                    ++ show soaRRs
+            lift . logLn Log.WARN . unwords $
+                [ "subdomainShared:"
+                , show dom ++ ":"
+                , "multiple SOAs are found:"
+                , show soaRRs
+                ]
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             throwDnsError DNS.ServerFailure
 
@@ -1195,11 +1195,11 @@ fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC dc nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
     when (not (null delegationDS) && null delegationDNSKEY) $ do
-        lift . logLn Log.WARN $
-            "fillsDNSSEC: "
-                ++ show delegationZoneDomain
-                ++ ": "
-                ++ "DS is not null, and DNSKEY is null"
+        lift . logLn Log.WARN . unwords $
+            [ "fillsDNSSEC:"
+            , show delegationZoneDomain ++ ":"
+            , "DS is not null, and DNSKEY is null"
+            ]
         lift . clogLn Log.DEMO (Just Red) $
             show delegationZoneDomain
                 ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
@@ -1622,18 +1622,20 @@ delegationIPs dc Delegation{..} = do
                         throwDnsError DNS.ServerFailure
                 maybe neverReach (fmap ((: []) . fst) . resolveNS disableV6NS dc) mayName
             | disableV6NS = do
-                lift . logLn Log.DEMO $
-                    "delegationIPs: server-fail: domain: "
-                        ++ show delegationZoneDomain
-                        ++ ", delegation is empty."
+                lift . logLn Log.DEMO . concat $
+                    [ "delegationIPs: server-fail: domain: "
+                    , show delegationZoneDomain
+                    , ", delegation is empty."
+                    ]
                 throwDnsError DNS.ServerFailure
             | otherwise = do
-                lift . logLn Log.DEMO $
-                    "delegationIPs: illegal-domain: "
-                        ++ show delegationZoneDomain
-                        ++ ", delegation is empty."
-                        ++ " without glue sub-domains: "
-                        ++ show subNames
+                lift . logLn Log.DEMO . concat $
+                    [ "delegationIPs: illegal-domain: "
+                    , show delegationZoneDomain
+                    , ", delegation is empty."
+                    , " without glue sub-domains: "
+                    , show subNames
+                    ]
                 throwDnsError DNS.IllegalDomain
 
         takeSubNames (DEonlyNS name) xs
@@ -1825,11 +1827,11 @@ cacheNoRRSIG rrs0 rank = do
     insert hrrs = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
-            logLn Log.DEBUG $
-                "cacheNoRRSIG: RRset: "
-                    ++ show (((dom, typ, cls), ttl), rank)
-                    ++ "  "
-                    ++ show rds
+            logLn Log.DEBUG . unwords $
+                [ "cacheNoRRSIG: RRset:"
+                , show (((dom, typ, cls), ttl), rank)
+                , ' ' : show rds
+                ]
             liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
     (_, sortedRRs) = unzip $ SEC.sortCanonical rrs0
 
