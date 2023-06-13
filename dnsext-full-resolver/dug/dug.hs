@@ -206,7 +206,7 @@ toFlag _ = mempty -- fixme
 
 ----------------------------------------------------------------
 
-mkIctrl :: Foldable t => t String -> IterativeControls
+mkIctrl :: [String] -> IterativeControls
 mkIctrl plus = flagAD . flagCD . flagDO $ defaultIterativeControls
   where
     ustep tbl f s = maybe f id $ lookup s tbl
