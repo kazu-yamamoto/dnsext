@@ -2,9 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-module Operation where
+module Recursive (recursiveQeury) where
 
-import DNS.Do53.Client (LookupConf (..), QueryControls, Seeds (..))
+import DNS.Do53.Client (
+    LookupConf (..),
+    QueryControls,
+    ResolvActions (..),
+    Seeds (..),
+ )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
     Result (..),
@@ -12,6 +17,7 @@ import DNS.Do53.Internal (
     withLookupConfAndResolver,
  )
 import DNS.DoX.Stub
+import qualified DNS.Log as Log
 import DNS.SVCB
 import DNS.Types (DNSError, Question (..))
 import qualified DNS.Types as DNS
@@ -20,19 +26,20 @@ import Data.IP (IPv4, IPv6)
 import Network.Socket (HostName, PortNumber)
 import Text.Read (readMaybe)
 
-operate
+recursiveQeury
     :: [HostName]
     -> PortNumber
     -> ShortByteString
+    -> Log.PutLines
+    -> QueryControls
     -> HostName
     -> TYPE
-    -> QueryControls
     -> IO (Either DNSError Result)
-operate mserver port dox domain typ controls | dox == "auto" = do
-    conf <- getCustomConf mserver port controls
+recursiveQeury mserver port dox putLines ctl domain typ | dox == "auto" = do
+    conf <- getCustomConf mserver port ctl putLines
     lookupDoX conf domain typ
-operate mserver port dox domain typ controls = do
-    conf <- getCustomConf mserver port controls
+recursiveQeury mserver port dox putLines ctl domain typ = do
+    conf <- getCustomConf mserver port ctl putLines
     let lim = DNS.lconfLimit conf
         resolver = case makeResolver dox lim Nothing of
             Just r -> r
@@ -43,8 +50,9 @@ operate mserver port dox domain typ controls = do
         let q = Question (DNS.fromRepresentation domain) typ DNS.classIN
         DNS.lookupRaw env q
 
-getCustomConf :: [HostName] -> PortNumber -> QueryControls -> IO LookupConf
-getCustomConf mserver port controls = case mserver of
+getCustomConf
+    :: [HostName] -> PortNumber -> QueryControls -> Log.PutLines -> IO LookupConf
+getCustomConf mserver port ctl putLines = case mserver of
     [] -> return conf
     hs -> do
         as <- concat <$> mapM toNumeric hs
@@ -54,8 +62,12 @@ getCustomConf mserver port controls = case mserver of
     conf =
         DNS.defaultLookupConf
             { lconfRetry = 2
-            , lconfQueryControls = controls
+            , lconfQueryControls = ctl
             , lconfConcurrent = True
+            , lconfActions =
+                DNS.defaultResolvActions
+                    { ractionLog = putLines
+                    }
             }
 
     toNumeric :: HostName -> IO [HostName]
