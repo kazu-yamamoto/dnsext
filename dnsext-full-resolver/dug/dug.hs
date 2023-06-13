@@ -119,15 +119,16 @@ main = do
     runInitIO $ do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
+    (putLines, _, terminate) <- Log.new Log.Stdout optLogLevel
     ----
     t0 <- T.getUnixTime
     msg <-
         if optIterative
             then do
                 let ictl = mkIctrl plus
-                ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
+                ex <- iterativeQuery optDisableV6NS putLines ictl dom typ
                 case ex of
-                    Left e -> fail e
+                    Left e -> terminate >> fail e
                     Right msg -> do
                         setSGR [SetColor Foreground Vivid Green]
                         putStr ";; "
@@ -135,9 +136,9 @@ main = do
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
-                ex <- recursiveQeury mserver port optDoX dom typ ctl
+                ex <- recursiveQeury mserver port optDoX putLines ctl dom typ
                 case ex of
-                    Left e -> fail $ show e
+                    Left e -> terminate >> fail (show e)
                     Right Result{..} -> do
                         let Reply{..} = resultReply
                         setSGR [SetColor Foreground Vivid Green]
@@ -154,6 +155,7 @@ main = do
     putStr "\n\n"
     setSGR [Reset]
     putStr $ pprResult msg
+    terminate
 
 ----------------------------------------------------------------
 

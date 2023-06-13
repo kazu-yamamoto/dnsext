@@ -7,23 +7,20 @@ import DNS.Cache.Iterative (Env (..), IterativeControls)
 import qualified DNS.Cache.Iterative as Iterative
 import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
+import Network.Socket (HostName)
 
 import DNS.Types
 
 iterativeQuery
     :: Bool
-    -> Log.Output
-    -> Log.Level
+    -> Log.PutLines
     -> IterativeControls
-    -> String
+    -> HostName
     -> TYPE
     -> IO (Either String DNSMessage)
-iterativeQuery disableV6NS logOutput logLevel ctl n ty = do
-    (putLines, _, terminate) <- Log.new logOutput logLevel
+iterativeQuery disableV6NS putLines ctl domain typ = do
     cxt <- setup disableV6NS putLines
-    out <- resolve cxt ctl n ty
-    terminate
-    return out
+    resolve cxt ctl domain typ
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
