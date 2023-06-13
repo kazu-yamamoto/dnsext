@@ -16,7 +16,6 @@ import qualified Data.ByteString.Short as Short
 import Data.List (intercalate, isPrefixOf)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
-import System.Console.ANSI (setSGR)
 import System.Console.ANSI.Types
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -122,17 +121,14 @@ main = do
     (putLines, _, terminate) <- Log.new Log.Stdout optLogLevel
     ----
     t0 <- T.getUnixTime
-    msg <-
+    (msg,header) <-
         if optIterative
             then do
                 let ictl = mkIctrl plus
                 ex <- iterativeQuery optDisableV6NS putLines ictl dom typ
                 case ex of
                     Left e -> terminate >> fail e
-                    Right msg -> do
-                        setSGR [SetColor Foreground Vivid Green]
-                        putStr ";; "
-                        return msg
+                    Right msg -> return (msg, ";; ")
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
@@ -141,20 +137,19 @@ main = do
                     Left e -> terminate >> fail (show e)
                     Right Result{..} -> do
                         let Reply{..} = resultReply
-                        setSGR [SetColor Foreground Vivid Green]
-                        putStr $
-                            ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
-                        putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
-                        putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
-                        putStr ", "
-                        return $ replyDNSMessage
+                        let h =  ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag ++
+                                 ", Tx:" ++ show replyTxBytes ++ "bytes" ++
+                                 ", Rx:" ++ show replyRxBytes ++ "bytes" ++
+                                 ", "
+                        return (replyDNSMessage, h)
     t1 <- T.getUnixTime
     let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
-    when (s /= 0) $ putStr $ show s ++ "sec "
-    putStr $ show (u `div` 1000) ++ "usec"
-    putStr "\n\n"
-    setSGR [Reset]
-    putStr $ pprResult msg
+    let tm = header
+             ++ if s /= 0 then show s ++ "sec " else ""
+             ++  show (u `div` 1000) ++ "usec"
+             ++ "\n"
+    putLines Log.WARN (Just Green) [tm]
+    putLines Log.WARN Nothing [pprResult msg]
     terminate
 
 ----------------------------------------------------------------
