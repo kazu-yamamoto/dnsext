@@ -142,7 +142,8 @@ main = do
                 exitFailure
     let mserver = map (drop 1) at
         ctl = mconcat $ map toFlag plus
-    if optIterative
+    t0 <- T.getUnixTime
+    ex <- if optIterative
         then do
             let ustep tbl f s = maybe f id $ lookup s tbl
                 uflag tbl d = foldl (ustep tbl) d plus
@@ -152,29 +153,32 @@ main = do
                 flagAD = update requestAD setRequestAD tblFlagAD
                 ictl = flagAD . flagCD . flagDO $ defaultIterativeControls
             ex <- iterativeQuery optDisableV6NS Log.Stdout optLogLevel ictl dom typ
-            case ex of
-                Left err -> fail err
-                Right rs -> putStr $ pprResult rs
+            setSGR [SetColor Foreground Vivid Green]
+            putStr ";; "
+            return ex
         else do
-            t0 <- T.getUnixTime
             ex <- recursiveQeury mserver port optDoX dom typ ctl
-            t1 <- T.getUnixTime
             case ex of
-                Left err -> fail $ show err
-                Right Result{..} -> do
-                    let Reply{..} = resultReply
-                    setSGR [SetColor Foreground Vivid Green]
-                    putStr $
-                        ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
-                    putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
-                    putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
-                    putStr ", "
-                    let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
-                    when (s /= 0) $ putStr $ show s ++ "sec "
-                    putStr $ show (u `div` 1000) ++ "usec"
-                    setSGR [Reset]
-                    putStr "\n\n"
-                    putStr $ pprResult replyDNSMessage
+              Left e -> return $ Left $ show e
+              Right Result{..} -> do
+                  let Reply{..} = resultReply
+                  setSGR [SetColor Foreground Vivid Green]
+                  putStr $
+                      ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag
+                  putStr $ ", Tx:" ++ show replyTxBytes ++ "bytes"
+                  putStr $ ", Rx:" ++ show replyRxBytes ++ "bytes"
+                  putStr ", "
+                  return $ Right $ replyDNSMessage
+    t1 <- T.getUnixTime
+    case ex of
+        Left err -> fail err
+        Right msg -> do
+            let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
+            when (s /= 0) $ putStr $ show s ++ "sec "
+            putStr $ show (u `div` 1000) ++ "usec"
+            putStr "\n\n"
+            setSGR [Reset]
+            putStr $ pprResult msg
 
 divide :: [String] -> ([String], [String], [String])
 divide ls = loop ls (id, id, id)

@@ -22,7 +22,6 @@ iterativeQuery disableV6NS logOutput logLevel ctl n ty = do
     (putLines, _, terminate) <- Log.new logOutput logLevel
     cxt <- setup disableV6NS putLines
     out <- resolve cxt ctl n ty
-    putLines Log.DEMO Nothing ["--------------------"]
     terminate
     return out
 
