@@ -4,7 +4,7 @@
 module Main (main) where
 
 import Control.Monad (when)
-import DNS.Do53.Client (FlagOp (..), QueryControls, doFlag, rdFlag)
+import DNS.Do53.Client (FlagOp (..), QueryControls, doFlag, rdFlag, cdFlag, adFlag)
 import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
@@ -22,16 +22,6 @@ import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
 import Text.Read (readMaybe)
 
-import DNS.Cache.Iterative (
-    IterativeControls (..),
-    RequestAD (..),
-    RequestCD (..),
-    RequestDO (..),
-    defaultIterativeControls,
-    setRequestAD,
-    setRequestCD,
-    setRequestDO,
- )
 import qualified DNS.Log as Log
 
 import Iterative (iterativeQuery)
@@ -124,8 +114,8 @@ main = do
     (msg,header) <-
         if optIterative
             then do
-                let ictl = mkIctrl plus
-                ex <- iterativeQuery optDisableV6NS putLines ictl dom typ
+                let ctl = mconcat $ map toFlag plus
+                ex <- iterativeQuery optDisableV6NS putLines ctl dom typ
                 case ex of
                     Left e -> terminate >> fail e
                     Right msg -> return (msg, ";; ")
@@ -202,28 +192,11 @@ toFlag "+norec" = rdFlag FlagClear
 toFlag "+norecurse" = rdFlag FlagClear
 toFlag "+dnssec" = doFlag FlagSet
 toFlag "+nodnssec" = doFlag FlagClear
+toFlag "+cdflag" = cdFlag FlagSet
+toFlag "+nocdflag" = cdFlag FlagClear
+toFlag "+adflag" = adFlag FlagSet
+toFlag "+noadflag" = adFlag FlagClear
 toFlag _ = mempty -- fixme
-
-----------------------------------------------------------------
-
-mkIctrl :: [String] -> IterativeControls
-mkIctrl plus = flagAD . flagCD . flagDO $ defaultIterativeControls
-  where
-    ustep tbl f s = maybe f id $ lookup s tbl
-    uflag tbl d = foldl (ustep tbl) d plus
-    update get set tbl s = set (uflag tbl $ get s) s
-    flagDO = update requestDO setRequestDO tblFlagDO
-    flagCD = update requestCD setRequestCD tblFlagCD
-    flagAD = update requestAD setRequestAD tblFlagAD
-
-tblFlagDO :: [(String, RequestDO)]
-tblFlagDO = [("+dnssec", DnssecOK), ("+nodnssec", NoDnssecOK)]
-
-tblFlagCD :: [(String, RequestCD)]
-tblFlagCD = [("+cdflag", CheckDisabled), ("+nocdflag", NoCheckDisabled)]
-
-tblFlagAD :: [(String, RequestAD)]
-tblFlagAD = [("+adflag", AuthenticatedData), ("+noadflag", NoAuthenticatedData)]
 
 ----------------------------------------------------------------
 
