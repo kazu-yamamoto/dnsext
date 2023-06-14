@@ -30,14 +30,6 @@ module DNS.Cache.Iterative (
     resolve,
     resolveJust,
     iterative,
-    IterativeControls (..),
-    defaultIterativeControls,
-    RequestDO (..),
-    RequestCD (..),
-    RequestAD (..),
-    setRequestDO,
-    setRequestCD,
-    setRequestAD,
     Env (..),
     RRset (..),
     rrListFromRRset,
@@ -77,7 +69,10 @@ import System.Random (getStdRandom, randomR)
 -- dns packages
 
 import DNS.Do53.Client (
+    EdnsControls (..),
     FlagOp (..),
+    HeaderControls (..),
+    QueryControls (..),
     defaultResolvActions,
     ractionGenId,
     ractionGetTime,
@@ -177,25 +172,20 @@ data RequestAD
   * AD (Authenticated Data)
     * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7
       "setting the AD bit in a query as a signal indicating that the requester understands and is interested in the value of the AD bit in the response" -}
-data IterativeControls = IterativeControls
-    { requestDO :: RequestDO
-    , requestCD :: RequestCD
-    , requestAD :: RequestAD
-    }
-    deriving (Show)
+requestDO :: QueryControls -> RequestDO
+requestDO ic = case extDO $ qctlEdns ic of
+    FlagSet -> DnssecOK
+    _ -> NoDnssecOK
 
-defaultIterativeControls :: IterativeControls
-defaultIterativeControls =
-    IterativeControls NoDnssecOK NoCheckDisabled NoAuthenticatedData
+_requestCD :: QueryControls -> RequestCD
+_requestCD ic = case cdBit $ qctlHeader ic of
+    FlagSet -> CheckDisabled
+    _ -> NoCheckDisabled
 
-setRequestDO :: RequestDO -> IterativeControls -> IterativeControls
-setRequestDO x ic = ic{requestDO = x}
-
-setRequestCD :: RequestCD -> IterativeControls -> IterativeControls
-setRequestCD x ic = ic{requestCD = x}
-
-setRequestAD :: RequestAD -> IterativeControls -> IterativeControls
-setRequestAD x ic = ic{requestAD = x}
+_requestAD :: QueryControls -> RequestAD
+_requestAD ic = case adBit $ qctlHeader ic of
+    FlagSet -> AuthenticatedData
+    _ -> NoAuthenticatedData
 
 data QueryError
     = DnsError DNSError
@@ -204,7 +194,7 @@ data QueryError
     | HasError DNS.RCODE DNSMessage
     deriving (Show)
 
-type ContextT m = ReaderT Env (ReaderT IterativeControls m)
+type ContextT m = ReaderT Env (ReaderT QueryControls m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
 ---
@@ -249,11 +239,11 @@ newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
     return cxt
 
 dnsQueryT
-    :: (Env -> IterativeControls -> IO (Either QueryError a)) -> DNSQuery a
+    :: (Env -> QueryControls -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
 
 runDNSQuery
-    :: DNSQuery a -> Env -> IterativeControls -> IO (Either QueryError a)
+    :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
@@ -315,7 +305,7 @@ runResolve
     :: Env
     -> Domain
     -> TYPE
-    -> IterativeControls
+    -> QueryControls
     -> IO
         ( Either
             QueryError
@@ -328,7 +318,7 @@ runResolveJust
     :: Env
     -> Domain
     -> TYPE
-    -> IterativeControls
+    -> QueryControls
     -> IO (Either QueryError (DNSMessage, Delegation))
 runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
 
@@ -337,7 +327,7 @@ runIterative
     :: Env
     -> Delegation
     -> Domain
-    -> IterativeControls
+    -> QueryControls
     -> IO (Either QueryError Delegation)
 runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
 
@@ -564,20 +554,23 @@ takeSpecialRevDomainResult dom =
 
 -----
 
-ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> IterativeControls
-ctrlFromRequestHeader reqH reqEH = IterativeControls doFlag cdFlag adFlag
+ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
+ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
   where
-    doFlag = case reqEH of
-        DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> DnssecOK
-        _ -> NoDnssecOK
+    doOp
+        | dnssecOK = FlagSet
+        | otherwise = FlagClear
+    cdOp
+        | dnssecOK, DNS.chkDisable flags = FlagSet {- only check when DNSSEC OK -}
+        | otherwise = FlagClear
+    adOp
+        | dnssecOK, DNS.authenData flags = FlagSet {- only check when DNSSEC OK -}
+        | otherwise = FlagClear
 
-    cdFlag
-        | DnssecOK <- doFlag, DNS.chkDisable flags = CheckDisabled {- only check when DNSSEC OK -}
-        | otherwise = NoCheckDisabled
-    adFlag
-        | DnssecOK <- doFlag, DNS.authenData flags = AuthenticatedData {- only check when DNSSEC OK -}
-        | otherwise = NoAuthenticatedData
     flags = DNS.flags reqH
+    dnssecOK = case reqEH of
+        DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> True
+        _ -> False
 
 guardRequestHeader :: DNSHeader -> EDNSheader -> DNSQuery ()
 guardRequestHeader reqH reqEH
