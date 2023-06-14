@@ -1610,7 +1610,7 @@ delegationIPs dc Delegation{..} = do
                         lift $ logLn Log.DEMO $ "delegationIPs: never reach this action."
                         throwDnsError DNS.ServerFailure
                 maybe neverReach (fmap ((: []) . fst) . resolveNS disableV6NS dc) mayName
-            | disableV6NS = do
+            | disableV6NS && not (null allIPs) = do
                 lift . logLn Log.DEMO . concat $
                     [ "delegationIPs: server-fail: domain: "
                     , show delegationZoneDomain
@@ -1626,6 +1626,8 @@ delegationIPs dc Delegation{..} = do
                     , show subNames
                     ]
                 throwDnsError DNS.IllegalDomain
+          where
+            allIPs = takeDEntryIPs False delegationNS
 
         takeSubNames (DEonlyNS name) xs
             | name
