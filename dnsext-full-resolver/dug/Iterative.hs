@@ -1,9 +1,10 @@
 module Iterative (iterativeQuery) where
 
+import DNS.Do53.Client (QueryControls)
 import qualified DNS.Do53.Memo as Cache
 import Data.String (fromString)
 
-import DNS.Cache.Iterative (Env (..), IterativeControls)
+import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
@@ -14,7 +15,7 @@ import DNS.Types
 iterativeQuery
     :: Bool
     -> Log.PutLines
-    -> IterativeControls
+    -> QueryControls
     -> HostName
     -> TYPE
     -> IO (Either String DNSMessage)
@@ -32,7 +33,7 @@ setup disableV6NS putLines = do
     Iterative.newEnv putLines disableV6NS ucache tcache
 
 resolve
-    :: Env -> IterativeControls -> String -> TYPE -> IO (Either String DNSMessage)
+    :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
 resolve cxt ictl n ty =
     toMessage
         <$> Iterative.runDNSQuery (Iterative.replyResult domain ty) cxt ictl

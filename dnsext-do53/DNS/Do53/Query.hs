@@ -2,6 +2,8 @@
 
 module DNS.Do53.Query (
     QueryControls (..),
+    HeaderControls (..),
+    EdnsControls (..),
     FlagOp (..),
     rdFlag,
     adFlag,
