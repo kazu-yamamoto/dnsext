@@ -105,6 +105,11 @@ defaultOptions =
 
 main :: IO ()
 main = do
+    runInitIO $ do
+        {- Override the parser behavior to accept the extended TYPE.
+           Therefore, this action is required prior to reading the TYPE. -}
+        addResourceDataForDNSSEC
+        addResourceDataForSVCB
     (args, Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
@@ -112,9 +117,6 @@ main = do
     let (at, plus, targets) = divide args
     (dom, typ) <- getDomTyp targets
     port <- getPort optPort optDoX
-    runInitIO $ do
-        addResourceDataForDNSSEC
-        addResourceDataForSVCB
     (putLines, _, terminate) <- Log.new Log.Stdout optLogLevel
     ----
     t0 <- T.getUnixTime
