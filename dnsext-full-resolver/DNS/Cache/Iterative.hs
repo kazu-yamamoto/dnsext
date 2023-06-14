@@ -1804,9 +1804,7 @@ cacheRRset rank dom typ cls ttl rds _sigrds = do
     insertRRSet <- asks insert_
     logLn Log.DEBUG $
         "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
-    liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
-
-{- TODO: cache with RD_RRSIG -}
+    liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank {- TODO: cache with RD_RRSIG -}
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
