@@ -106,6 +106,8 @@ defaultOptions =
 main :: IO ()
 main = do
     runInitIO $ do
+        {- Override the parser behavior to accept the extended TYPE.
+           Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
     (args, Options{..}) <- getArgs >>= getArgsOpts
