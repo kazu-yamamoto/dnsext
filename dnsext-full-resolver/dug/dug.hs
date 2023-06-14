@@ -235,8 +235,10 @@ help =
         , "query-type: a | aaaa | ns | txt | ptr | ..."
         , ""
         , "query-option:"
-        , "  +[no]rec[urse]  (Recursive mode)"
-        , "  +[no]dnssec     (DNSSEC)"
+        , "  +[no]rdflag: [un]set RD (Recursion Desired) bit, +[no]rec[curse]"
+        , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
+        , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
+        , "  +[no]adflag: [un]set AD (Authentic Data) bit"
         , ""
         , "options:"
         ]
