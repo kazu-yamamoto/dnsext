@@ -205,18 +205,20 @@ getPort (Just x) _ = case readMaybe x of
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 toFlag :: String -> QueryControls
-toFlag "+rec" = rdFlag FlagSet
-toFlag "+recurse" = rdFlag FlagSet
-toFlag "+norec" = rdFlag FlagClear
+toFlag "+rec"       = rdFlag FlagSet
+toFlag "+recurse"   = rdFlag FlagSet
+toFlag "+norec"     = rdFlag FlagClear
 toFlag "+norecurse" = rdFlag FlagClear
-toFlag "+dnssec" = doFlag FlagSet
-toFlag "+nodnssec" = doFlag FlagClear
-toFlag "+cdflag" = cdFlag FlagSet
-toFlag "+nocdflag" = cdFlag FlagClear
-toFlag "+adflag" = adFlag FlagSet
-toFlag "+noadflag" = adFlag FlagClear
-toFlag _ = mempty -- fixme
+toFlag "+dnssec"    = doFlag FlagSet
+toFlag "+nodnssec"  = doFlag FlagClear
+toFlag "+cdflag"    = cdFlag FlagSet
+toFlag "+nocdflag"  = cdFlag FlagClear
+toFlag "+adflag"    = adFlag FlagSet
+toFlag "+noadflag"  = adFlag FlagClear
+toFlag _            = mempty -- fixme
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
