@@ -13,6 +13,7 @@ import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Common
 import DNS.DoX.Imports
+import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
@@ -28,7 +29,6 @@ import Network.Socket.BufferPool
 import Network.TLS hiding (HostName)
 import qualified System.TimeManager as T
 import qualified UnliftIO.Exception as E
-import qualified DNS.Log as Log
 
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
@@ -85,7 +85,17 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
                     return $ toResult ri proto $ Reply msg tx rx
                 Just err -> E.throwIO err
   where
-    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/" ++ proto
+    ~tag =
+        "query "
+            ++ show qname
+            ++ " "
+            ++ show qtype
+            ++ " to "
+            ++ rinfoHostName
+            ++ "#"
+            ++ show rinfoPortNumber
+            ++ "/"
+            ++ proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire

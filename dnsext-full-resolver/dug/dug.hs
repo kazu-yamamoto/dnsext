@@ -4,7 +4,14 @@
 module Main (main) where
 
 import Control.Monad (when)
-import DNS.Do53.Client (FlagOp (..), QueryControls, doFlag, rdFlag, cdFlag, adFlag)
+import DNS.Do53.Client (
+    FlagOp (..),
+    QueryControls,
+    adFlag,
+    cdFlag,
+    doFlag,
+    rdFlag,
+ )
 import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
@@ -111,7 +118,7 @@ main = do
     (putLines, _, terminate) <- Log.new Log.Stdout optLogLevel
     ----
     t0 <- T.getUnixTime
-    (msg,header) <-
+    (msg, header) <-
         if optIterative
             then do
                 let ctl = mconcat $ map toFlag plus
@@ -127,17 +134,30 @@ main = do
                     Left e -> terminate >> fail (show e)
                     Right Result{..} -> do
                         let Reply{..} = resultReply
-                        let h =  ";; " ++ resultHostName ++ "#" ++ show resultPortNumber ++ "/" ++ resultTag ++
-                                 ", Tx:" ++ show replyTxBytes ++ "bytes" ++
-                                 ", Rx:" ++ show replyRxBytes ++ "bytes" ++
-                                 ", "
+                        let h =
+                                ";; "
+                                    ++ resultHostName
+                                    ++ "#"
+                                    ++ show resultPortNumber
+                                    ++ "/"
+                                    ++ resultTag
+                                    ++ ", Tx:"
+                                    ++ show replyTxBytes
+                                    ++ "bytes"
+                                    ++ ", Rx:"
+                                    ++ show replyRxBytes
+                                    ++ "bytes"
+                                    ++ ", "
                         return (replyDNSMessage, h)
     t1 <- T.getUnixTime
     let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
-    let tm = header
-             ++ if s /= 0 then show s ++ "sec " else ""
-             ++  show (u `div` 1000) ++ "usec"
-             ++ "\n"
+    let sec = if s /= 0 then show s ++ "sec " else ""
+        tm =
+            header
+                ++ sec
+                ++ show (u `div` 1000)
+                ++ "usec"
+                ++ "\n"
     putLines Log.WARN (Just Green) [tm]
     putLines Log.WARN Nothing [pprResult msg]
     terminate

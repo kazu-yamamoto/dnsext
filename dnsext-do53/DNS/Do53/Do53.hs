@@ -72,7 +72,16 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
-    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/UDP"
+    ~tag =
+        "query "
+            ++ show qname
+            ++ " "
+            ++ show qtype
+            ++ " to "
+            ++ rinfoHostName
+            ++ "#"
+            ++ show rinfoPortNumber
+            ++ "/UDP"
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
@@ -151,7 +160,17 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
-    ~tag = "query " ++ show qname ++ " " ++ show qtype ++ " to "++ rinfoHostName ++ "#" ++ show rinfoPortNumber ++ "/" ++ proto
+    ~tag =
+        "query "
+            ++ show qname
+            ++ " "
+            ++ show qtype
+            ++ " to "
+            ++ rinfoHostName
+            ++ "#"
+            ++ show rinfoPortNumber
+            ++ "/"
+            ++ proto
     go qctl0 = do
         rply <- perform $ solve qctl0
         let ans = replyDNSMessage rply
