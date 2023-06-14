@@ -15,7 +15,6 @@ import System.Environment (lookupEnv)
 import DNS.Cache.Iterative (
     Delegation (..),
     Env (..),
-    defaultIterativeControls,
     newEnv,
     replyMessage,
     replyResult,
@@ -70,7 +69,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
             cxt <- newEnv (\_ _ _ -> pure ()) disableV6NS (insert, getCache) tcache
             eresult <-
                 (snd <$>)
-                    <$> Iterative.runResolve cxt (fromString n) ty defaultIterativeControls
+                    <$> Iterative.runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -112,14 +111,14 @@ querySpec disableV6NS debug = describe "query" $ do
             | otherwise = \_ _ _ -> pure ()
     cxt <- runIO $ newEnv putLines disableV6NS ucache tcache
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True ucache tcache
-    let refreshRoot = runDNSQuery Iterative.refreshRoot cxt defaultIterativeControls
-        runIterative ns n = Iterative.runIterative cxt ns (fromString n) defaultIterativeControls
-        runJust n ty = Iterative.runResolveJust cxt (fromString n) ty defaultIterativeControls
+    let refreshRoot = runDNSQuery Iterative.refreshRoot cxt mempty
+        runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
+        runJust n ty = Iterative.runResolveJust cxt (fromString n) ty mempty
         runResolve n ty =
             (snd <$>)
-                <$> Iterative.runResolve cxt (fromString n) ty defaultIterativeControls
+                <$> Iterative.runResolve cxt (fromString n) ty mempty
         getReply n ty ident = do
-            e <- runDNSQuery (replyResult (fromString n) ty) cxt defaultIterativeControls
+            e <- runDNSQuery (replyResult (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
     let printQueryError :: Show e => Either e a -> IO ()
@@ -212,7 +211,7 @@ querySpec disableV6NS debug = describe "query" $ do
                 cxt4
                 (fromString "sc02.alicdn.com.danuoyi.alicdn.com.")
                 A
-                defaultIterativeControls
+                mempty
         printQueryError result
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
