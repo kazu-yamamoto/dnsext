@@ -965,6 +965,8 @@ iterative_ dc nss0 (x : xs) =
 
     stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss@Delegation{..} = do
+        let zone = delegationZone
+            dnskeys = delegationDNSKEY
         sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         lift . logLines Log.DEMO $
             "iterative: selected addresses:" : ["\t" ++ show (sa, name, A) | sa <- sas]
@@ -973,9 +975,12 @@ iterative_ dc nss0 (x : xs) =
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         msg <- norec dnssecOK sas name A
-        let sharedFallback = mayDelegation (subdomainShared dc nss name msg) (return . HasDelegation)
-        sharedFallback
-            =<< delegationWithCache delegationZone delegationDNSKEY name msg
+        let withNoDelegation handler = mayDelegation handler (return . HasDelegation)
+            sharedHandler = subdomainShared dc nss name msg
+            cacheHandler = cacheNoDelegation zone dnskeys name msg $> NoDelegation
+        delegationWithCache zone dnskeys name msg
+            >>= withNoDelegation sharedHandler
+            >>= lift . withNoDelegation cacheHandler
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
@@ -1055,28 +1060,6 @@ delegationWithCache zoneDom dnskeys dom msg = do
             , cacheDS
             )
 
-    (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
-        {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
-           However, without querying the NS of the CNAME destination,
-           you cannot obtain the record of rank that can be used for the reply. -}
-        let crrs = cnameList dom (\_ rr -> rr) rrs
-        (_cnameRRset, cacheCNAME_) <-
-            lift $ verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
-        return (not $ null crrs, cacheCNAME_)
-
-    let notFound
-            | rcode == DNS.NoErr =
-                cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-            | rcode == DNS.NameErr =
-                if hasCNAME
-                    then do
-                        cacheCNAME
-                        cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-                    else cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
-            | otherwise = pure []
-          where
-            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-
     let found x = do
             cacheDS
             cacheNS
@@ -1087,7 +1070,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
     lift . clogLn Log.DEMO verifyColor $
         "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
     raiseOnFailure
-    lift . maybe (notFound $> NoDelegation) (fmap HasDelegation . found) $
+    lift . maybe (pure NoDelegation) (fmap HasDelegation . found) $
         takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
   where
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
@@ -1186,6 +1169,33 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
                 ]
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             throwDnsError DNS.ServerFailure
+
+cacheNoDelegation
+    :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
+cacheNoDelegation zoneDom dnskeys dom msg = do
+    (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
+        {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
+           However, without querying the NS of the CNAME destination,
+           you cannot obtain the record of rank that can be used for the reply. -}
+        let crrs = cnameList dom (\_ rr -> rr) rrs
+        (_cnameRRset, cacheCNAME_) <-
+            verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
+        return (not $ null crrs, cacheCNAME_)
+
+    let doCacheEmpty
+            | rcode == DNS.NoErr =
+                cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+            | rcode == DNS.NameErr =
+                if hasCNAME
+                    then do
+                        cacheCNAME
+                        cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+                    else cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
+            | otherwise = pure []
+          where
+            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+
+    doCacheEmpty $> ()
 
 fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC dc nss d = do
