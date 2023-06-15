@@ -1384,11 +1384,11 @@ cachedDNSKEY dss aservers dom = do
             return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
     doCache rank (seps, dnskeys, rrsigs) = do
-        (RRset{..}, cacheDNSKEY) <-
+        (rrset, cacheDNSKEY) <-
             verifyAndCache (map fst seps) (map snd dnskeys) rrsigs rank
-        if null rrsGoodSigs {- only cache DNSKEY RRset on verification successs -}
-            then return $ Left "cachedDNSKEY: no verified RRSIG found"
-            else cacheDNSKEY *> return (Right $ map fst dnskeys)
+        if rrsetVerified rrset {- only cache DNSKEY RRset on verification successs -}
+            then cacheDNSKEY *> return (Right $ map fst dnskeys)
+            else return $ Left "cachedDNSKEY: no verified RRSIG found"
 
 verifySEP
     :: [RD_DS]
