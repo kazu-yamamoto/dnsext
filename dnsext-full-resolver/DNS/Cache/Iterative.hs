@@ -809,8 +809,8 @@ resolveTYPE
     -> DNSQuery
         ( DNSMessage
         , Maybe (Domain, RRset)
-        , ([RRset], [RRset {- result msg, cname, verified answer, verified authority -}])
-        )
+        , ([RRset], [RRset])
+        ) {- result msg, cname, verified answer, verified authority -}
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveJust bn typ
     let checkTypeRR =
@@ -894,16 +894,16 @@ resolveJustDC dc n typ
   where
     mdc = maxNotSublevelDelegation
 
+{- FOURMOLU_DISABLE -}
 {- delegation information for domain -}
 data Delegation = Delegation
     { delegationZoneDomain :: Domain {- destination zone domain -}
     , delegationNS :: NE DEntry {- NS infos of destination zone, get from source zone NS -}
-    , delegationDS
-        :: [RD_DS {- SEP DNSKEY signature of destination zone, get from source zone NS -}]
-    , delegationDNSKEY
-        :: [RD_DNSKEY {- destination DNSKEY set, get from destination NS -}]
+    , delegationDS :: [RD_DS] {- SEP DNSKEY signature of destination zone, get from source zone NS -}
+    , delegationDNSKEY :: [RD_DNSKEY] {- destination DNSKEY set, get from destination NS -}
     }
     deriving (Show)
+{- FOURMOLU_ENABLE -}
 
 data DEntry
     = DEwithAx !Domain !IP
@@ -952,11 +952,8 @@ iterative sa n = iterative_ 0 sa $ reverse $ DNS.superDomains n
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _ nss0 [] = return nss0
 iterative_ dc nss0 (x : xs) =
-    step nss0
-        >>= mayDelegation
-            ( recurse nss0 xs {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
-            )
-            (`recurse` xs)
+    {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
+    step nss0 >>= mayDelegation (recurse nss0 xs) (`recurse` xs)
   where
     recurse = iterative_ dc {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
@@ -1864,13 +1861,13 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
 
     either ncWarn doCache takePair
   where
+    {- the minimum of the SOA.MINIMUM field and SOA's TTL
+       https://datatracker.ietf.org/doc/html/rfc2308#section-3
+       https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
     fromSOA soa rr = ((rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL]), rr)
       where
-        {- the minimum of the SOA.MINIMUM field and SOA's TTL
-           https://datatracker.ietf.org/doc/html/rfc2308#section-3
-           https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-
         maxNCacheTTL = 21600
+
     single list = case list of
         [] -> Left "no SOA records found"
         [x] -> Right x
