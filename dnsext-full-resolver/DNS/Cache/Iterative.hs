@@ -1044,23 +1044,23 @@ delegationWithCache
 delegationWithCache zoneDom dnskeys dom msg = do
     (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
         let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
-        (RRset{..}, cacheDS) <-
+        (rrset, cacheDS) <-
             lift $ verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
         let (verifyMsg, verifyColor, raiseOnFailure)
                 | null nsps = ("no delegation", Nothing, pure ())
                 | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
-                | null rrsGoodSigs =
+                | rrsetVerified rrset =
+                    ("delegation - verification success - RRSIG of DS", Just Green, pure ())
+                | otherwise =
                     ( "delegation - verification failed - RRSIG of DS"
                     , Just Red
                     , throwDnsError DNS.ServerFailure
                     )
-                | otherwise =
-                    ("delegation - verification success - RRSIG of DS", Just Green, pure ())
         return
             ( verifyMsg
             , verifyColor
             , raiseOnFailure
-            , if null rrsGoodSigs then [] else dsrds
+            , if rrsetVerified rrset then dsrds else []
             , cacheDS
             )
 
