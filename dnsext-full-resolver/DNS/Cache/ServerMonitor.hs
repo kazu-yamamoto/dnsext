@@ -1,9 +1,12 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DNS.Cache.ServerMonitor (
     monitor,
     Params,
     makeParams,
     showParams,
     PLStatus,
+    WorkerStatus(..),
 ) where
 
 -- GHC packages
@@ -117,8 +120,16 @@ showParams params =
     showOut _ = "rotate file"
     hosts = dnsHosts params
 
-type PLStatus =
-    [(IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)]
+data WorkerStatus = WorkerStatus {
+    reqQSize :: IO (Int, Int)
+  , decQSize :: IO (Int, Int)
+  , resQSize :: IO (Int, Int)
+  , getHit :: IO Int
+  , getMiss :: IO Int
+  , getFailed :: IO Int
+  }
+
+type PLStatus = [WorkerStatus]
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -272,7 +283,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires terminate (issueQ
                 psize ("decoded queue " ++ index) decQSize
                 psize ("response queue " ++ index) resQSize
             | (i, workerStatusList) <- zip [0 :: Int ..] pQSizeList
-            , (j, (reqQSize, decQSize, resQSize, _, _, _)) <-
+            , (j, WorkerStatus{..}) <-
                 zip [0 :: Int ..] workerStatusList
             , let index = show i ++ "," ++ show j
             ]
@@ -284,7 +295,7 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires terminate (issueQ
             sequence
                 [ (,,) <$> getHit <*> getMiss <*> getFailed
                 | workerStatusList <- pQSizeList
-                , (_, _, _, getHit, getMiss, getFailed) <- workerStatusList
+                , WorkerStatus{..} <- workerStatusList
                 ]
         let hits = sum [hit | (hit, _, _) <- ts]
             replies = hits + sum [miss | (_, miss, _) <- ts]

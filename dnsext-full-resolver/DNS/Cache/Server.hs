@@ -54,7 +54,7 @@ import DNS.Cache.Queue (
     writeQueue,
  )
 import qualified DNS.Cache.Queue as Queue
-import DNS.Cache.ServerMonitor (PLStatus, monitor)
+import DNS.Cache.ServerMonitor (PLStatus, WorkerStatus(WorkerStatus), monitor)
 import qualified DNS.Cache.ServerMonitor as Mon
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Types (NE)
@@ -268,9 +268,6 @@ workerBenchmark noop gplot workers perWorker size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-type WorkerStatus =
-    (IO (Int, Int), IO (Int, Int), IO (Int, Int), IO Int, IO Int, IO Int)
-
 getWorkers
     :: Show a
     => Int
@@ -338,7 +335,7 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
 
     return
         ( resolvLoops ++ [cachedLoop]
-        , (reqQSize, decQSize, resQSize, getHit, getMiss, getFailed)
+        , WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
         )
 
 recvRequest
