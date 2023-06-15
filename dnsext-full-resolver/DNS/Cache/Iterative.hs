@@ -976,7 +976,7 @@ iterative_ dc nss0 (x : xs) =
         msg <- norec dnssecOK sas name A
         let sharedFallback = mayDelegation (subdomainShared dc nss name msg) (return . HasDelegation)
         sharedFallback
-            =<< lift (delegationWithCache delegationZoneDomain delegationDNSKEY name msg)
+            =<< delegationWithCache delegationZoneDomain delegationDNSKEY name msg
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
@@ -1032,20 +1032,29 @@ lookupDelegation dom = do
 
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache
-    :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO MayDelegation
+    :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
-    -- There is delegation information only when there is a selectable NS
-    (verifyMsg, verifyColor, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
+    (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
         let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
-        (RRset{..}, cacheDS) <- verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
-        let (verifyMsg, verifyColor)
-                | null nsps = ("no delegation", Nothing)
-                | null dsrds = ("delegation - no DS, so no verify", Just Yellow)
+        (RRset{..}, cacheDS) <-
+            lift $ verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
+        let (verifyMsg, verifyColor, raiseOnFailure)
+                | null nsps = ("no delegation", Nothing, pure ())
+                | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
                 | null rrsGoodSigs =
-                    ("delegation - verification failed - RRSIG of DS", Just Red)
+                    ( "delegation - verification failed - RRSIG of DS"
+                    , Just Red
+                    , throwDnsError DNS.ServerFailure
+                    )
                 | otherwise =
-                    ("delegation - verification success - RRSIG of DS", Just Green)
-        return (verifyMsg, verifyColor, if null rrsGoodSigs then [] else dsrds, cacheDS)
+                    ("delegation - verification success - RRSIG of DS", Just Green, pure ())
+        return
+            ( verifyMsg
+            , verifyColor
+            , raiseOnFailure
+            , if null rrsGoodSigs then [] else dsrds
+            , cacheDS
+            )
 
     (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
         {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -1053,7 +1062,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
            you cannot obtain the record of rank that can be used for the reply. -}
         let crrs = cnameList dom (\_ rr -> rr) rrs
         (_cnameRRset, cacheCNAME_) <-
-            verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
+            lift $ verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
         return (not $ null crrs, cacheCNAME_)
 
     let notFound
@@ -1076,12 +1085,11 @@ delegationWithCache zoneDom dnskeys dom msg = do
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    clogLn Log.DEMO verifyColor $
+    lift . clogLn Log.DEMO verifyColor $
         "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
-    maybe
-        (notFound $> NoDelegation)
-        (fmap HasDelegation . found)
-        $ takeDelegationSrc nsps dss adds
+    raiseOnFailure
+    lift . maybe (notFound $> NoDelegation) (fmap HasDelegation . found) $
+        takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
   where
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
 
@@ -1210,16 +1218,18 @@ fillDelegationDS dc src dest
         ips <- delegationIPs dc src
         let nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
             domTraceMsg = show (delegationZoneDomain src) ++ " -> " ++ show (delegationZoneDomain dest)
-            verifyFailed es = logLn Log.WARN ("fillDelegationDS: " ++ es) *> return dest
+            verifyFailed es = do
+                lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
+                throwDnsError DNS.ServerFailure
             result (e, vinfo) = do
-                let traceLog (verifyColor, verifyMsg) = do
-                        clogLn Log.DEMO (Just verifyColor) $
+                let traceLog (verifyColor, verifyMsg) =
+                        lift . clogLn Log.DEMO (Just verifyColor) $
                             "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 maybe (pure ()) traceLog vinfo
                 either verifyFailed fill e
         if null ips
             then lift nullIPs
-            else lift . result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
+            else result =<< queryDS (delegationDNSKEY src) ips (delegationZoneDomain dest)
 
 queryDS
     :: [RD_DNSKEY]
