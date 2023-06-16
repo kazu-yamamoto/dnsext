@@ -207,87 +207,6 @@ getPipeline workers sharedQueue perWorker getSec env port hostIP = do
 
 ----------------------------------------------------------------
 
-benchQueries :: [ByteString]
-benchQueries =
-    [ DNS.encode $ setId mid rootA {- TODO: seq ByteString ? -}
-    | mid <- cycle [0 .. maxBound]
-    | rootA <- cycle rootAs
-    ]
-  where
-    setId mid qm = qm{DNS.header = dh{DNS.identifier = mid}}
-    dh = DNS.header DNS.defaultQuery
-    rootAs =
-        [ DNS.defaultQuery
-            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN]
-            }
-        | c1 <- ["a", "b", "c", "d"]
-        , let name = c1 ++ ".root-servers.net."
-        ]
-
-----------------------------------------------------------------
-
-workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
-workerBenchmark noop gplot workers perWorker size = do
-    (putLines, _logQSize, _terminate) <-
-        Log.new Log.Stdout Log.WARN
-    tcache@(getSec, _) <- TimeCache.new
-    let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
-          where
-            memoLogLn = putLines Log.WARN Nothing . (: [])
-            memoActions = Cache.MemoActions memoLogLn getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
-
-    let getPipieline
-            | noop = do
-                let qsize = perWorker * workers
-                reqQ <- newQueue qsize
-                resQ <- newQueue qsize
-                let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
-                return (pipelines, writeQueue reqQ, readQueue resQ)
-            | otherwise = do
-                (workerPipelines, enqReq, deqRes) <-
-                    getWorkers workers True perWorker getSec env
-                        :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
-                (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
-                return (workerLoops, enqReq, deqRes)
-
-    (workerLoops, enqueueReq, dequeueResp) <- getPipieline
-    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
-
-    let runQueries qs = do
-            let len = length qs
-            _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
-            replicateM len dequeueResp
-        (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
-
-    ds `deepseq` return ()
-
-    -----
-    _ <- runQueries initD
-    before <- getCurrentTime
-    _ <- runQueries ds
-    after <- getCurrentTime
-
-    let elapsed = after `diffUTCTime` before
-        toDouble = fromRational . toRational :: NominalDiffTime -> Double
-        rate = toDouble $ fromIntegral size / after `diffUTCTime` before
-
-    if gplot
-        then do
-            putStrLn $ unwords [show workers, show rate]
-        else do
-            putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show workers
-            putStrLn $ "perWorker: " ++ show perWorker
-            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
-            putStrLn $ "requests: " ++ show size
-            putStrLn $ "elapsed: " ++ show elapsed
-            putStrLn $ "rate: " ++ show rate
-
-----------------------------------------------------------------
-
 getWorkers
     :: Show a
     => Int
@@ -479,3 +398,87 @@ counter :: IO (IO Int, IO ())
 counter = do
     ref <- newIORef 0
     return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+-- Benchmark
+
+benchQueries :: [ByteString]
+benchQueries =
+    [ DNS.encode $ setId mid rootA {- TODO: seq ByteString ? -}
+    | mid <- cycle [0 .. maxBound]
+    | rootA <- cycle rootAs
+    ]
+  where
+    setId mid qm = qm{DNS.header = dh{DNS.identifier = mid}}
+    dh = DNS.header DNS.defaultQuery
+    rootAs =
+        [ DNS.defaultQuery
+            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN]
+            }
+        | c1 <- ["a", "b", "c", "d"]
+        , let name = c1 ++ ".root-servers.net."
+        ]
+
+----------------------------------------------------------------
+
+workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
+workerBenchmark noop gplot workers perWorker size = do
+    (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
+    tcache@(getSec, _) <- TimeCache.new
+    let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
+          where
+            memoLogLn = putLines Log.WARN Nothing . (: [])
+            memoActions = Cache.MemoActions memoLogLn getSec
+    memo <- Cache.getMemo cacheConf
+    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
+    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
+
+    let getPipieline
+            | noop = do
+                let qsize = perWorker * workers
+                reqQ <- newQueue qsize
+                resQ <- newQueue qsize
+                let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
+                return (pipelines, writeQueue reqQ, readQueue resQ)
+            | otherwise = do
+                (workerPipelines, enqReq, deqRes) <-
+                    getWorkers workers True perWorker getSec env
+                        :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
+                (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
+                return (workerLoops, enqReq, deqRes)
+
+    (workerLoops, enqueueReq, dequeueResp) <- getPipieline
+    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
+
+    let runQueries qs = do
+            let len = length qs
+            _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
+            replicateM len dequeueResp
+        (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
+
+    ds `deepseq` return ()
+
+    -----
+    _ <- runQueries initD
+    before <- getCurrentTime
+    _ <- runQueries ds
+    after <- getCurrentTime
+
+    let elapsed = after `diffUTCTime` before
+        toDouble = fromRational . toRational :: NominalDiffTime -> Double
+        rate = toDouble $ fromIntegral size / after `diffUTCTime` before
+
+    if gplot
+        then do
+            putStrLn $ unwords [show workers, show rate]
+        else do
+            putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
+            putStrLn $ "workers: " ++ show workers
+            putStrLn $ "perWorker: " ++ show perWorker
+            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
+            putStrLn $ "requests: " ++ show size
+            putStrLn $ "elapsed: " ++ show elapsed
+            putStrLn $ "rate: " ++ show rate
+
