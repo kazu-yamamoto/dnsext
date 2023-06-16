@@ -426,44 +426,18 @@ benchQueries =
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
     (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
-    tcache@(getSec, _) <- TimeCache.new
-    let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
-          where
-            memoLogLn = putLines Log.WARN Nothing . (: [])
-            memoActions = Cache.MemoActions memoLogLn getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
+    (env, getSec) <- getEnvB putLines
 
-    let getPipieline
-            | noop = do
-                let qsize = perWorker * workers
-                reqQ <- newQueue qsize
-                resQ <- newQueue qsize
-                let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
-                return (pipelines, writeQueue reqQ, readQueue resQ)
-            | otherwise = do
-                (workerPipelines, enqReq, deqRes) <-
-                    getWorkers workers True perWorker getSec env
-                        :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
-                (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
-                return (workerLoops, enqReq, deqRes)
-
-    (workerLoops, enqueueReq, dequeueResp) <- getPipieline
+    (workerLoops, enqueueReq, dequeueResp) <- getPipelineB noop workers perWorker env getSec
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
 
-    let runQueries qs = do
-            let len = length qs
-            _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
-            replicateM len dequeueResp
-        (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
-
+    let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
     ds `deepseq` return ()
 
     -----
-    _ <- runQueries initD
+    _ <- runQueriesB initD enqueueReq dequeueResp
     before <- getCurrentTime
-    _ <- runQueries ds
+    _ <- runQueriesB ds enqueueReq dequeueResp
     after <- getCurrentTime
 
     let elapsed = after `diffUTCTime` before
@@ -482,3 +456,37 @@ workerBenchmark noop gplot workers perWorker size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
+
+getEnvB :: Log.PutLines -> IO (Env, IO EpochTime)
+getEnvB putLines = do
+    tcache@(getSec, _) <- TimeCache.new
+    let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
+          where
+            memoLogLn = putLines Log.WARN Nothing . (: [])
+            memoActions = Cache.MemoActions memoLogLn getSec
+    memo <- Cache.getMemo cacheConf
+    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
+    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
+    return (env, getSec)
+
+getPipelineB :: Bool -> Int -> Int -> Env -> IO EpochTime -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
+getPipelineB True workers perWorker _ _ = do
+    let qsize = perWorker * workers
+    reqQ <- newQueue qsize
+    resQ <- newQueue qsize
+    let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
+    return (pipelines, writeQueue reqQ, readQueue resQ)
+getPipelineB _ workers perWorker env getSec = do
+    (workerPipelines, enqReq, deqRes) <-
+        getWorkers workers True perWorker getSec env
+            :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
+    (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
+    return (workerLoops, enqReq, deqRes)
+
+
+runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
+runQueriesB qs enqueueReq dequeueResp = do
+    _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
+    replicateM len dequeueResp
+  where
+    len = length qs
