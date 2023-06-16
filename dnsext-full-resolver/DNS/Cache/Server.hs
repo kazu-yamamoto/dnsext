@@ -311,32 +311,31 @@ workerPipeline
     -> Env
     -> IO ([IO ()], WorkerStatus)
 workerPipeline reqQ resQ perWorker getSec cxt = do
-    let putLn lv = logLines_ cxt lv Nothing . (: [])
-        resolvWorkers = 8
     (getHit, incHit) <- counter
     (getMiss, incMiss) <- counter
     (getFailed, incFailed) <- counter
 
-    let enqueueResp = writeQueue resQ
-        resQSize = queueSize resQ
-        reqQSize = queueSize reqQ
-
+    let logr = putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show
+        rslvWrkr = resolvWorker cxt incMiss incFailed enqueueResp
     (resolvLoop, enqueueDec, decQSize) <-
-        consumeLoop
-            perWorker
-            (putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show)
-            $ resolvWorker cxt incMiss incFailed enqueueResp
-    let cachedLoop =
-            readLoop
-                (readQueue reqQ)
-                (putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show)
-                $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
-        resolvLoops = replicate resolvWorkers resolvLoop
+        consumeLoop perWorker logr rslvWrkr
 
-    return
-        ( resolvLoops ++ [cachedLoop]
-        , WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
-        )
+    let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
+        ccWrkr = cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+        cachedLoop = readLoop (readQueue reqQ) logc ccWrkr
+
+        resolvLoops = replicate resolvWorkers resolvLoop
+        loops = resolvLoops ++ [cachedLoop]
+
+        workerStatus = WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
+
+    return ( loops, workerStatus )
+  where
+    resolvWorkers = 8
+    putLn lv = logLines_ cxt lv Nothing . (: [])
+    enqueueResp = writeQueue resQ
+    resQSize = queueSize resQ
+    reqQSize = queueSize reqQ
 
 recvRequest
     :: Show a
