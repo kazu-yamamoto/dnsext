@@ -319,7 +319,7 @@ sizeNewInserted (ACRPair (k, crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
         Cache.insert ts0 k ttl_ crs rank rcache
   where
     checkSize ins = Cache.size ins === Cache.size rcache + 1
-    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
 
 -- forall ((k, crs) :: ACRPair) ttl cache rs . (rs == extractRRSet k ttl crs) ->
 -- (       member k cache  -> size inserted == size cache   \/
@@ -349,7 +349,7 @@ lookupNewInserted (ACRRec (k@(Question _dom typ cls), crs, ulDom)) (ATTL ttl_) (
     (Cache.lookup ts0 ulDom typ cls =<< Cache.insert ts0 k ttl_ crs rank rcache)
         =/= Nothing
   where
-    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
 
 lookupInserted :: ACRPair -> ATTL -> ARanking -> AUpdates -> Property
 lookupInserted (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) (AUpdates us) =
@@ -364,7 +364,7 @@ lookupTTL (ACRPair (k@(Question dom typ cls), crs)) (ATTL ttl_) (ARanking rank) 
     maybe (property Discard) checkTTL $
         Cache.insert ts0 k ttl_ crs rank rcache
   where
-    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
     checkTTL ins =
         case map DNS.rrttl . fst <$> Cache.lookup ts1 dom typ cls ins of
             Nothing -> life === Nothing
@@ -390,7 +390,7 @@ rankingOrdered :: ACR2 -> ATTL -> ATTL -> ARankOrds -> AUpdates -> Property
 rankingOrdered (ACR2 (k@(Question dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
     maybe (property False) id action
   where
-    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
     action = do
         c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
         c1 <- Cache.insert ts0 k ttl1 crs1 r1 c2
@@ -402,7 +402,7 @@ rankingNotOrdered
 rankingNotOrdered (ACR2 (k, (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrdsCo (r1, r2)) (AUpdates us) =
     action === Nothing
   where
-    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- 挿入する Key を除去
+    rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
     action = do
         c2 <- Cache.insert ts0 k ttl2 crs2 r2 rcache
         _ <- Cache.insert ts0 k ttl1 crs1 r1 c2

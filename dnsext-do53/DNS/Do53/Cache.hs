@@ -356,9 +356,9 @@ rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
 takeRRSet [] = Nothing
 takeRRSet rrs@(_ : _) = do
-    ps <- mapM rrSetKey rrs -- それぞれ RR で、rrtype と rdata が整合している
-    guard $ length (group ps) == 1 -- query のキーと TTL がすべて一致
-    (k', _) <- uncons ps -- rrs が空でないので必ず成功するはず
+    ps <- mapM rrSetKey rrs -- rrtype and rdata are consistent for each RR
+    guard $ length (group ps) == 1 -- query key and TLL are equal for each elements
+    (k', _) <- uncons ps -- always success because rrs is not null.
     rds <- fromRDatas $ map DNS.rdata rrs
     return $ \h -> uncurry h k' rds
 
