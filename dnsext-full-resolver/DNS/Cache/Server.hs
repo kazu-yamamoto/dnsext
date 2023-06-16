@@ -118,7 +118,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
     memo <- Cache.getMemo cacheConf
     let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
         expires now = Cache.expiresMemo now memo
-    cxt <-
+    env <-
         Iterative.newEnv putLines disableV6NS (insert, Cache.readMemo memo) tcache
 
     hostIPs <-
@@ -126,11 +126,8 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             then getAInfoIPs port
             else return $ map fromString hosts
 
-    (loopsList, qsizes) <-
-        unzip
-            <$> mapM
-                (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port)
-                hostIPs
+    let getP = getPipeline workers workerSharedQueue qsizePerWorker getSec env port
+    (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
     let pLoops = concat loopsList
 
     caps <- getNumCapabilities
@@ -140,7 +137,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
     monLoops <-
-        monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires terminate
+        monitor stdConsole params env (qsizes, ucacheQSize, logQSize) expires terminate
 
     return (pLoops, monLoops)
   where
@@ -165,6 +162,7 @@ getAInfoIPs port = do
         dgramIP _ = Nothing
     return $
         mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
+
 getPipeline
     :: Int
     -> Bool
@@ -174,23 +172,23 @@ getPipeline
     -> PortNumber
     -> IP
     -> IO ([IO ()], PLStatus)
-getPipeline workers sharedQueue perWorker getSec cxt port hostIP = do
+getPipeline workers sharedQueue perWorker getSec env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
-    let putLn lv = logLines_ cxt lv Nothing . (: [])
+    let putLn lv = logLines_ env lv Nothing . (: [])
 
     (workerPipelines, enqueueReq, dequeueResp) <-
-        getWorkers workers sharedQueue perWorker getSec cxt
+        getWorkers workers sharedQueue perWorker getSec env
     (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
     let reqLoop =
             handledLoop (putLn Log.WARN . ("Server.recvRequest: error: " ++) . show) $
-                recvRequest (UDP.recvFrom sock) cxt enqueueReq
+                recvRequest (UDP.recvFrom sock) env enqueueReq
 
     let respLoop =
             readLoop
                 dequeueResp
                 (putLn Log.WARN . ("Server.sendResponse: error: " ++) . show)
-                $ sendResponse (UDP.sendTo sock) cxt
+                $ sendResponse (UDP.sendTo sock) env
 
     return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
 
@@ -222,7 +220,7 @@ workerBenchmark noop gplot workers perWorker size = do
             memoActions = Cache.MemoActions memoLogLn getSec
     memo <- Cache.getMemo cacheConf
     let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-    cxt <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
+    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
 
     let getPipieline
             | noop = do
@@ -233,7 +231,7 @@ workerBenchmark noop gplot workers perWorker size = do
                 return (pipelines, writeQueue reqQ, readQueue resQ)
             | otherwise = do
                 (workerPipelines, enqReq, deqRes) <-
-                    getWorkers workers True perWorker getSec cxt
+                    getWorkers workers True perWorker getSec env
                         :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
                 (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
                 return (workerLoops, enqReq, deqRes)
@@ -266,7 +264,7 @@ workerBenchmark noop gplot workers perWorker size = do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
             putStrLn $ "workers: " ++ show workers
             putStrLn $ "perWorker: " ++ show perWorker
-            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
+            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
@@ -279,19 +277,19 @@ getWorkers
     -> IO EpochTime
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers workers sharedQueue perWorker getSec cxt
+getWorkers workers sharedQueue perWorker getSec env
     | perWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate workers $ workerPipeline reqQ resQ 8 getSec cxt
+        let wps = replicate workers $ workerPipeline reqQ resQ 8 getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | sharedQueue = do
         let qsize = perWorker * workers
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec cxt
+        let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM workers $ newQueue perWorker
@@ -299,7 +297,7 @@ getWorkers workers sharedQueue perWorker getSec cxt
         resQs <- replicateM workers $ newQueue perWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ workerPipeline reqQ resQ perWorker getSec cxt
+                [ workerPipeline reqQ resQ perWorker getSec env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -313,18 +311,18 @@ workerPipeline
     -> IO EpochTime
     -> Env
     -> IO ([IO ()], WorkerStatus)
-workerPipeline reqQ resQ perWorker getSec cxt = do
+workerPipeline reqQ resQ perWorker getSec env = do
     (getHit, incHit) <- counter
     (getMiss, incMiss) <- counter
     (getFailed, incFailed) <- counter
 
     let logr = putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show
-        rslvWrkr = resolvWorker cxt incMiss incFailed enqueueResp
+        rslvWrkr = resolvWorker env incMiss incFailed enqueueResp
     (resolvLoop, enqueueDec, decQSize) <-
         consumeLoop perWorker logr rslvWrkr
 
     let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
-        ccWrkr = cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
+        ccWrkr = cachedWorker env getSec incHit incFailed enqueueDec enqueueResp
         cachedLoop = readLoop (readQueue reqQ) logc ccWrkr
 
         resolvLoops = replicate resolvWorkers resolvLoop
@@ -335,7 +333,7 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
     return (loops, workerStatus)
   where
     resolvWorkers = 8
-    putLn lv = logLines_ cxt lv Nothing . (: [])
+    putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
     resQSize = queueSize resQ
     reqQSize = queueSize reqQ
@@ -346,7 +344,7 @@ recvRequest
     -> Env
     -> (Request a -> IO ())
     -> IO ()
-recvRequest recv _cxt enqReq = do
+recvRequest recv _env enqReq = do
     (bs, addr) <- recv
     enqReq (bs, addr)
 
@@ -360,7 +358,7 @@ cachedWorker
     -> (Response a -> IO ())
     -> Request a
     -> IO ()
-cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
+cachedWorker env getSec incHit incFailed enqDec enqResp (bs, addr) =
     either (logLn Log.WARN) return <=< runExceptT $ do
         (qs@(q, _), reqM) <- decode
         let reqH = DNS.header reqM
@@ -375,9 +373,9 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
                 let rbs = DNS.encode respM
                 rbs `seq` enqResp (rbs, addr)
         maybe enqueueDec (either noResponse enqueue)
-            =<< liftIO (getReplyCached cxt reqH reqEH qs)
+            =<< liftIO (getReplyCached env reqH reqEH qs)
   where
-    logLn level = logLines_ cxt level Nothing . (: [])
+    logLn level = logLines_ env level Nothing . (: [])
     decode = do
         now <- liftIO getSec
         msg <-
@@ -396,11 +394,11 @@ resolvWorker
     -> (Response a -> IO ())
     -> Decoded a
     -> IO ()
-resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
+resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
     either (logLn Log.WARN) return <=< runExceptT $ do
-        either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH reqEH qs)
+        either noResponse enqueue =<< liftIO (getReplyMessage env reqH reqEH qs)
   where
-    logLn level = logLines_ cxt level Nothing . (: [])
+    logLn level = logLines_ env level Nothing . (: [])
     noResponse replyErr = do
         liftIO incFailed
         throwE
@@ -415,7 +413,7 @@ sendResponse
     -> Env
     -> Response a
     -> IO ()
-sendResponse send _cxt (bs, addr) = send bs addr
+sendResponse send _env (bs, addr) = send bs addr
 
 ---
 
