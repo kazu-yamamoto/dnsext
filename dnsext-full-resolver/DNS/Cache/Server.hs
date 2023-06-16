@@ -134,18 +134,8 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
     let pLoops = concat loopsList
 
     caps <- getNumCapabilities
-    let params =
-            Mon.makeParams
-                caps
-                logOutput
-                logLevel
-                maxCacheSize
-                disableV6NS
-                workers
-                workerSharedQueue
-                qsizePerWorker
-                port
-                hosts
+    let params = mkParams caps
+
     putLines Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
@@ -153,6 +143,20 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
         monitor stdConsole params cxt (qsizes, ucacheQSize, logQSize) expires terminate
 
     return (pLoops, monLoops)
+  where
+    mkParams caps =
+        Mon.makeParams
+            caps
+            logOutput
+            logLevel
+            maxCacheSize
+            disableV6NS
+            workers
+            workerSharedQueue
+            qsizePerWorker
+            port
+            hosts
+
 
 getAInfoIPs :: PortNumber -> IO [IP]
 getAInfoIPs port = do
