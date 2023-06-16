@@ -401,16 +401,16 @@ resolvWorker
 resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
     ex <- getReplyMessage env reqH reqEH qs
     case ex of
-      Right x -> enqueue x
-      Left e -> do
-          incFailed
-          logLn Log.WARN $ "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
+        Right x -> do
+            incMiss
+            let rbs = DNS.encode x
+            rbs `seq` enqResp (rbs, addr)
+        Left e -> do
+            incFailed
+            logLn Log.WARN $
+                "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
-    enqueue respM = do
-        incMiss
-        let rbs = DNS.encode respM
-        rbs `seq` enqResp (rbs, addr)
 
 sendResponse
     :: (ByteString -> a -> IO ())
