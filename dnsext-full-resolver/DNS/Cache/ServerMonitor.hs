@@ -6,7 +6,7 @@ module DNS.Cache.ServerMonitor (
     makeParams,
     showParams,
     PLStatus,
-    WorkerStatus(..),
+    WorkerStatus (..),
 ) where
 
 -- GHC packages
@@ -120,14 +120,14 @@ showParams params =
     showOut _ = "rotate file"
     hosts = dnsHosts params
 
-data WorkerStatus = WorkerStatus {
-    reqQSize :: IO (Int, Int)
-  , decQSize :: IO (Int, Int)
-  , resQSize :: IO (Int, Int)
-  , getHit :: IO Int
-  , getMiss :: IO Int
-  , getFailed :: IO Int
-  }
+data WorkerStatus = WorkerStatus
+    { reqQSize :: IO (Int, Int)
+    , decQSize :: IO (Int, Int)
+    , resQSize :: IO (Int, Int)
+    , getHit :: IO Int
+    , getMiss :: IO Int
+    , getFailed :: IO Int
+    }
 
 type PLStatus = [WorkerStatus]
 

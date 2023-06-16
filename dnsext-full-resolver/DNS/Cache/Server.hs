@@ -38,7 +38,7 @@ import Network.Socket (
 import qualified Network.UDP as UDP
 
 -- other packages
-import UnliftIO (SomeException, concurrently_, race_, handle)
+import UnliftIO (SomeException, concurrently_, handle, race_)
 
 -- this package
 
@@ -54,7 +54,7 @@ import DNS.Cache.Queue (
     writeQueue,
  )
 import qualified DNS.Cache.Queue as Queue
-import DNS.Cache.ServerMonitor (PLStatus, WorkerStatus(WorkerStatus), monitor)
+import DNS.Cache.ServerMonitor (PLStatus, WorkerStatus (WorkerStatus), monitor)
 import qualified DNS.Cache.ServerMonitor as Mon
 import qualified DNS.Cache.TimeCache as TimeCache
 import DNS.Cache.Types (NE)
@@ -329,7 +329,7 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
 
         workerStatus = WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
 
-    return ( loops, workerStatus )
+    return (loops, workerStatus)
   where
     resolvWorkers = 8
     putLn lv = logLines_ cxt lv Nothing . (: [])
@@ -365,7 +365,8 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
             enqueueDec = liftIO $ reqH `seq` reqEH `seq` qs `seq` enqDec (reqH, reqEH, qs, addr)
             noResponse replyErr = do
                 liftIO incFailed
-                throwE ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
+                throwE
+                    ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
             enqueue respM = liftIO $ do
                 incHit
                 let rbs = DNS.encode respM
@@ -376,7 +377,8 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
     logLn level = logLines_ cxt level Nothing . (: [])
     decode = do
         now <- liftIO getSec
-        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
+        msg <-
+            either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
         qs <-
             maybe (throwE $ "empty question ignored: " ++ show addr) return $
                 uncons $
@@ -398,7 +400,8 @@ resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
     logLn level = logLines_ cxt level Nothing . (: [])
     noResponse replyErr = do
         liftIO incFailed
-        throwE ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
+        throwE
+            ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
     enqueue respM = liftIO $ do
         incMiss
         let rbs = DNS.encode respM
