@@ -191,19 +191,19 @@ getPipeline n sharedQueue perWorker getSec env port hostIP = do
 
     (workerPipelines, enqueueReq, dequeueResp) <-
         getWorkers n sharedQueue perWorker getSec env
-    (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
+    (workers, getsStatus) <- unzip <$> sequence workerPipelines
 
-    let reqLoop =
+    let receiver =
             handledLoop (putLn Log.WARN . ("Server.recvRequest: error: " ++) . show) $
                 recvRequest (UDP.recvFrom sock) env enqueueReq
 
-    let respLoop =
+    let sender =
             readLoop
                 dequeueResp
                 (putLn Log.WARN . ("Server.sendResponse: error: " ++) . show)
                 $ sendResponse (UDP.sendTo sock) env
 
-    return (respLoop : reqLoop : concat workerLoops, getsStatus)
+    return (receiver : sender : concat workers, getsStatus)
 
 ----------------------------------------------------------------
 
@@ -264,14 +264,14 @@ workerPipeline reqQ resQ perWorker getSec env = do
         ccWrkr = cachedWorker env getSec incHit incFailed enqueueDec enqueueResp
         cachedLoop = readLoop (readQueue reqQ) logc ccWrkr
 
-        resolvLoops = replicate resolvWorkers resolvLoop
+        resolvLoops = replicate nOfResolvWorkers resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
         workerStatus = WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
 
     return (loops, workerStatus)
   where
-    resolvWorkers = 8
+    nOfResolvWorkers = 8
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
     resQSize = queueSize resQ
@@ -427,9 +427,9 @@ workerBenchmark noop gplot n perWorker size = do
     (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
     (env, getSec) <- getEnvB putLines
 
-    (workerLoops, enqueueReq, dequeueResp) <-
+    (workers, enqueueReq, dequeueResp) <-
         getPipelineB noop n perWorker env getSec
-    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
+    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
     ds `deepseq` return ()
@@ -485,8 +485,8 @@ getPipelineB _ n perWorker env getSec = do
     (workerPipelines, enqReq, deqRes) <-
         getWorkers n True perWorker getSec env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
-    (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
-    return (workerLoops, enqReq, deqRes)
+    (workers, _getsStatus) <- unzip <$> sequence workerPipelines
+    return (workers, enqReq, deqRes)
 
 runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueriesB qs enqueueReq dequeueResp = do
