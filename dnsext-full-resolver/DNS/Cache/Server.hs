@@ -77,7 +77,7 @@ run
     -> [HostName]
     -> Bool
     -> IO ()
-run logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+run logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWorker port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     (serverLoops, monLoops) <-
         setup
@@ -85,7 +85,7 @@ run logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizeP
             logLevel
             maxCacheSize
             disableV6NS
-            workers
+            n
             workerSharedQueue
             qsizePerWorker
             port
@@ -109,12 +109,12 @@ setup
     -> [HostName]
     -> Bool
     -> IO ([IO ()], [IO ()])
-setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
+setup logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWorker port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
     (env, getSec, expires) <- getEnv maxCacheSize disableV6NS putLines
     hostIPs <- getHostIPs hosts port
 
-    let getP = getPipeline workers workerSharedQueue qsizePerWorker getSec env port
+    let getP = getPipeline n workerSharedQueue qsizePerWorker getSec env port
     (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
     let pLoops = concat loopsList
 
@@ -138,7 +138,7 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             logLevel
             maxCacheSize
             disableV6NS
-            workers
+            n
             workerSharedQueue
             qsizePerWorker
             port
@@ -185,12 +185,12 @@ getPipeline
     -> PortNumber
     -> IP
     -> IO ([IO ()], PLStatus)
-getPipeline workers sharedQueue perWorker getSec env port hostIP = do
+getPipeline n sharedQueue perWorker getSec env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
     (workerPipelines, enqueueReq, dequeueResp) <-
-        getWorkers workers sharedQueue perWorker getSec env
+        getWorkers n sharedQueue perWorker getSec env
     (workerLoops, getsStatus) <- unzip <$> sequence workerPipelines
 
     let reqLoop =
@@ -215,24 +215,24 @@ getWorkers
     -> IO EpochTime
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers workers sharedQueue perWorker getSec env
+getWorkers n sharedQueue perWorker getSec env
     | perWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate workers $ workerPipeline reqQ resQ 8 getSec env
+        let wps = replicate n $ workerPipeline reqQ resQ 8 getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | sharedQueue = do
-        let qsize = perWorker * workers
+        let qsize = perWorker * n
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate workers $ workerPipeline reqQ resQ perWorker getSec env
+        let wps = replicate n $ workerPipeline reqQ resQ perWorker getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM workers $ newQueue perWorker
+        reqQs <- replicateM n $ newQueue perWorker
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM workers $ newQueue perWorker
+        resQs <- replicateM n $ newQueue perWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
                 [ workerPipeline reqQ resQ perWorker getSec env
@@ -423,12 +423,12 @@ benchQueries =
 ----------------------------------------------------------------
 
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
-workerBenchmark noop gplot workers perWorker size = do
+workerBenchmark noop gplot n perWorker size = do
     (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
     (env, getSec) <- getEnvB putLines
 
     (workerLoops, enqueueReq, dequeueResp) <-
-        getPipelineB noop workers perWorker env getSec
+        getPipelineB noop n perWorker env getSec
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -446,10 +446,10 @@ workerBenchmark noop gplot workers perWorker size = do
 
     if gplot
         then do
-            putStrLn $ unwords [show workers, show rate]
+            putStrLn $ unwords [show n, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show workers
+            putStrLn $ "workers: " ++ show n
             putStrLn $ "perWorker: " ++ show perWorker
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
@@ -475,15 +475,15 @@ getPipelineB
     -> Env
     -> IO EpochTime
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-getPipelineB True workers perWorker _ _ = do
-    let qsize = perWorker * workers
+getPipelineB True n perWorker _ _ = do
+    let qsize = perWorker * n
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
-    let pipelines = replicate workers [forever $ writeQueue resQ =<< readQueue reqQ]
+    let pipelines = replicate n [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
-getPipelineB _ workers perWorker env getSec = do
+getPipelineB _ n perWorker env getSec = do
     (workerPipelines, enqReq, deqRes) <-
-        getWorkers workers True perWorker getSec env
+        getWorkers n True perWorker getSec env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workerLoops, enqReq, deqRes)
