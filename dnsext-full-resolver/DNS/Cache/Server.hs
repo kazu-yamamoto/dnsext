@@ -321,8 +321,7 @@ workerPipeline reqQ resQ perWorker getSec env = do
 
     let logr = putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show
         rslvWrkr = resolvWorker env incMiss incFailed enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <-
-        consumeLoop perWorker logr rslvWrkr
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker logr rslvWrkr
 
     let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
         ccWrkr = cachedWorker env getSec incHit incFailed enqueueDec enqueueResp
