@@ -318,7 +318,8 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
     (getFailed, incFailed) <- counter
 
     let enqueueResp = writeQueue resQ
-        resQSize = (,) <$> (fst <$> Queue.readSizes resQ) <*> pure (Queue.sizeMaxBound resQ)
+        resQSize = queueSize resQ
+        reqQSize = queueSize reqQ
 
     (resolvLoop, enqueueDec, decQSize) <-
         consumeLoop
@@ -330,7 +331,6 @@ workerPipeline reqQ resQ perWorker getSec cxt = do
                 (readQueue reqQ)
                 (putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show)
                 $ cachedWorker cxt getSec incHit incFailed enqueueDec enqueueResp
-        reqQSize = (,) <$> (fst <$> Queue.readSizes reqQ) <*> pure (Queue.sizeMaxBound reqQ)
         resolvLoops = replicate resolvWorkers resolvLoop
 
     return
@@ -425,8 +425,13 @@ consumeLoop
 consumeLoop qsize onError body = do
     inQ <- newQueue qsize
     let loop = readLoop (readQueue inQ) onError body
-        sizeInfo = (,) <$> (fst <$> Queue.readSizes inQ) <*> pure (Queue.sizeMaxBound inQ)
-    return (loop, writeQueue inQ, sizeInfo)
+    return (loop, writeQueue inQ, queueSize inQ)
+
+queueSize :: QueueSize q => q a -> IO (Int, Int)
+queueSize q = do
+    a <- fst <$> Queue.readSizes q
+    let b = Queue.sizeMaxBound q
+    return (a, b)
 
 readLoop
     :: IO a
