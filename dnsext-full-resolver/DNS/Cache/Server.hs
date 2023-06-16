@@ -359,23 +359,13 @@ cachedWorker
     -> IO ()
 cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
     either (logLn Log.WARN) return <=< runExceptT $ do
-        let decode = do
-                now <- liftIO getSec
-                msg <-
-                    either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
-                qs <-
-                    maybe (throwE $ "empty question ignored: " ++ show addr) return $
-                        uncons $
-                            DNS.question msg
-                return (qs, msg)
         (qs@(q, _), reqM) <- decode
         let reqH = DNS.header reqM
             reqEH = DNS.ednsHeader reqM
             enqueueDec = liftIO $ reqH `seq` reqEH `seq` qs `seq` enqDec (reqH, reqEH, qs, addr)
-            noResponse replyErr =
+            noResponse replyErr = do
                 liftIO incFailed
-                    >> throwE
-                        ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
+                throwE ("cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
             enqueue respM = liftIO $ do
                 incHit
                 let rbs = DNS.encode respM
@@ -384,6 +374,14 @@ cachedWorker cxt getSec incHit incFailed enqDec enqResp (bs, addr) =
             =<< liftIO (getReplyCached cxt reqH reqEH qs)
   where
     logLn level = logLines_ cxt level Nothing . (: [])
+    decode = do
+        now <- liftIO getSec
+        msg <- either (throwE . ("decode-error: " ++) . show) return $ DNS.decodeAt now bs
+        qs <-
+            maybe (throwE $ "empty question ignored: " ++ show addr) return $
+                uncons $
+                    DNS.question msg
+        return (qs, msg)
 
 resolvWorker
     :: Show a
@@ -395,17 +393,16 @@ resolvWorker
     -> IO ()
 resolvWorker cxt incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
     either (logLn Log.WARN) return <=< runExceptT $ do
-        let noResponse replyErr =
-                liftIO incFailed
-                    >> throwE
-                        ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
-            enqueue respM = liftIO $ do
-                incMiss
-                let rbs = DNS.encode respM
-                rbs `seq` enqResp (rbs, addr)
         either noResponse enqueue =<< liftIO (getReplyMessage cxt reqH reqEH qs)
   where
     logLn level = logLines_ cxt level Nothing . (: [])
+    noResponse replyErr = do
+        liftIO incFailed
+        throwE ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
+    enqueue respM = liftIO $ do
+        incMiss
+        let rbs = DNS.encode respM
+        rbs `seq` enqResp (rbs, addr)
 
 sendResponse
     :: (ByteString -> a -> IO ())
