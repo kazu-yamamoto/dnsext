@@ -399,7 +399,6 @@ counter = do
     ref <- newIORef 0
     return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
-
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 -- Benchmark
@@ -428,7 +427,8 @@ workerBenchmark noop gplot workers perWorker size = do
     (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
     (env, getSec) <- getEnvB putLines
 
-    (workerLoops, enqueueReq, dequeueResp) <- getPipelineB noop workers perWorker env getSec
+    (workerLoops, enqueueReq, dequeueResp) <-
+        getPipelineB noop workers perWorker env getSec
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workerLoops
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -456,7 +456,6 @@ workerBenchmark noop gplot workers perWorker size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-
 getEnvB :: Log.PutLines -> IO (Env, IO EpochTime)
 getEnvB putLines = do
     tcache@(getSec, _) <- TimeCache.new
@@ -469,7 +468,13 @@ getEnvB putLines = do
     env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
     return (env, getSec)
 
-getPipelineB :: Bool -> Int -> Int -> Env -> IO EpochTime -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
+getPipelineB
+    :: Bool
+    -> Int
+    -> Int
+    -> Env
+    -> IO EpochTime
+    -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
 getPipelineB True workers perWorker _ _ = do
     let qsize = perWorker * workers
     reqQ <- newQueue qsize
@@ -482,7 +487,6 @@ getPipelineB _ workers perWorker env getSec = do
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workerLoops, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workerLoops, enqReq, deqRes)
-
 
 runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueriesB qs enqueueReq dequeueResp = do
