@@ -63,6 +63,8 @@ type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSHeader, DNS.EDNSheader, NE DNS.Question, a)
 type Response a = (ByteString, a)
 
+----------------------------------------------------------------
+
 run
     :: Log.Output
     -> Log.Level
@@ -92,6 +94,8 @@ run logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizeP
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
+
+----------------------------------------------------------------
 
 setup
     :: Log.Output
@@ -140,6 +144,8 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             port
             hosts
 
+----------------------------------------------------------------
+
 getEnv
     :: Int -> Bool -> Log.PutLines -> IO (Env, IO EpochTime, EpochTime -> IO ())
 getEnv maxCacheSize disableV6NS putLines = do
@@ -157,6 +163,8 @@ getEnv maxCacheSize disableV6NS putLines = do
     env <- Iterative.newEnv putLines disableV6NS (insert, read') tcache
     return (env, getSec, expires)
 
+----------------------------------------------------------------
+
 getAInfoIPs :: PortNumber -> IO [IP]
 getAInfoIPs port = do
     ais <- getAddrInfo Nothing Nothing (Just $ show port)
@@ -165,6 +173,8 @@ getAInfoIPs port = do
         dgramIP _ = Nothing
     return $
         mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
+
+----------------------------------------------------------------
 
 getPipeline
     :: Int
@@ -195,6 +205,8 @@ getPipeline workers sharedQueue perWorker getSec env port hostIP = do
 
     return (respLoop : reqLoop : concat workerLoops, getsStatus)
 
+----------------------------------------------------------------
+
 benchQueries :: [ByteString]
 benchQueries =
     [ DNS.encode $ setId mid rootA {- TODO: seq ByteString ? -}
@@ -211,6 +223,8 @@ benchQueries =
         | c1 <- ["a", "b", "c", "d"]
         , let name = c1 ++ ".root-servers.net."
         ]
+
+----------------------------------------------------------------
 
 workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
 workerBenchmark noop gplot workers perWorker size = do
@@ -272,6 +286,8 @@ workerBenchmark noop gplot workers perWorker size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
+----------------------------------------------------------------
+
 getWorkers
     :: Show a
     => Int
@@ -305,6 +321,8 @@ getWorkers workers sharedQueue perWorker getSec env
                 | resQ <- resQs
                 ]
         return (wps, enqueueReq, dequeueResp)
+
+----------------------------------------------------------------
 
 workerPipeline
     :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize q2)
@@ -340,6 +358,8 @@ workerPipeline reqQ resQ perWorker getSec env = do
     resQSize = queueSize resQ
     reqQSize = queueSize reqQ
 
+----------------------------------------------------------------
+
 recvRequest
     :: Show a
     => IO (ByteString, a)
@@ -349,6 +369,8 @@ recvRequest
 recvRequest recv _env enqReq = do
     (bs, addr) <- recv
     enqReq (bs, addr)
+
+----------------------------------------------------------------
 
 cachedWorker
     :: Show a
@@ -384,6 +406,8 @@ cachedWorker env getSec incHit incFailed enqDec enqResp (bs, addr) = do
   where
     logLn level = logLines_ env level Nothing . (: [])
 
+----------------------------------------------------------------
+
 resolvWorker
     :: Show a
     => Env
@@ -406,6 +430,8 @@ resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
   where
     logLn level = logLines_ env level Nothing . (: [])
 
+----------------------------------------------------------------
+
 sendResponse
     :: (ByteString -> a -> IO ())
     -> Env
@@ -413,7 +439,7 @@ sendResponse
     -> IO ()
 sendResponse send _env (bs, addr) = send bs addr
 
----
+----------------------------------------------------------------
 
 consumeLoop
     :: Int
@@ -425,11 +451,15 @@ consumeLoop qsize onError body = do
     let loop = readLoop (readQueue inQ) onError body
     return (loop, writeQueue inQ, queueSize inQ)
 
+----------------------------------------------------------------
+
 queueSize :: QueueSize q => q a -> IO (Int, Int)
 queueSize q = do
     a <- fst <$> Queue.readSizes q
     let b = Queue.sizeMaxBound q
     return (a, b)
+
+----------------------------------------------------------------
 
 readLoop
     :: IO a
@@ -438,8 +468,12 @@ readLoop
     -> IO ()
 readLoop readQ onError body = forever $ handle onError (readQ >>= body)
 
+----------------------------------------------------------------
+
 handledLoop :: (SomeException -> IO ()) -> IO () -> IO ()
 handledLoop onError body = forever $ handle onError body
+
+----------------------------------------------------------------
 
 counter :: IO (IO Int, IO ())
 counter = do
