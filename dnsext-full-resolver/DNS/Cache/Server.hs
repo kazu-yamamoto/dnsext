@@ -157,15 +157,14 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             port
             hosts
 
-
 getAInfoIPs :: PortNumber -> IO [IP]
 getAInfoIPs port = do
-        ais <- getAddrInfo Nothing Nothing (Just $ show port)
-        let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
-            dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
-            dgramIP _ = Nothing
-        return $
-            mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
+    ais <- getAddrInfo Nothing Nothing (Just $ show port)
+    let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
+        dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
+        dgramIP _ = Nothing
+    return $
+        mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
 getPipeline
     :: Int
     -> Bool
