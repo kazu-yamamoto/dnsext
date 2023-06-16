@@ -109,10 +109,7 @@ setup
 setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
     (env, getSec, expires) <- getEnv maxCacheSize disableV6NS putLines
-    hostIPs <-
-        if null hosts
-            then getAInfoIPs port
-            else return $ map fromString hosts
+    hostIPs <- getHostIPs hosts port
 
     let getP = getPipeline workers workerSharedQueue qsizePerWorker getSec env port
     (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
@@ -129,6 +126,8 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
 
     return (pLoops, monLoops)
   where
+    getHostIPs [] p = getAInfoIPs p
+    getHostIPs hs _ = return $ map fromString hs
     mkParams caps =
         Mon.makeParams
             caps
