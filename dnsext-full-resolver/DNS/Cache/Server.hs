@@ -244,9 +244,9 @@ getWorkers workers sharedQueue perWorker getSec env
 ----------------------------------------------------------------
 
 workerPipeline
-    :: (Show a, ReadQueue q1, QueueSize q1, WriteQueue q2, QueueSize q2)
-    => q1 (Request a)
-    -> q2 (Response a)
+    :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
+    => rq (Request a)
+    -> wq (Response a)
     -> Int
     -> IO EpochTime
     -> Env
