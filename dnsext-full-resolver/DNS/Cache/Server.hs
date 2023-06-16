@@ -398,16 +398,16 @@ resolvWorker
     -> (Response a -> IO ())
     -> Decoded a
     -> IO ()
-resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) =
-    either (logLn Log.WARN) return <=< runExceptT $ do
-        either noResponse enqueue =<< liftIO (getReplyMessage env reqH reqEH qs)
+resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
+    ex <- getReplyMessage env reqH reqEH qs
+    case ex of
+      Right x -> enqueue x
+      Left e -> do
+          incFailed
+          logLn Log.WARN $ "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
-    noResponse replyErr = do
-        liftIO incFailed
-        throwE
-            ("resolv: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr))
-    enqueue respM = liftIO $ do
+    enqueue respM = do
         incMiss
         let rbs = DNS.encode respM
         rbs `seq` enqResp (rbs, addr)
