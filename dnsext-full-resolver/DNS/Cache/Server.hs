@@ -108,19 +108,7 @@ setup
     -> IO ([IO ()], [IO ()])
 setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsizePerWorker port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
-    tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
-          where
-            memoLogLn msg = do
-                tstr <- getTimeStr
-                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-            memoActions = Cache.MemoActions memoLogLn getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        expires now = Cache.expiresMemo now memo
-    env <-
-        Iterative.newEnv putLines disableV6NS (insert, Cache.readMemo memo) tcache
-
+    (env, getSec, expires) <- getEnv maxCacheSize disableV6NS putLines
     hostIPs <-
         if null hosts
             then getAInfoIPs port
@@ -153,6 +141,23 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             qsizePerWorker
             port
             hosts
+
+getEnv
+    :: Int -> Bool -> Log.PutLines -> IO (Env, IO EpochTime, EpochTime -> IO ())
+getEnv maxCacheSize disableV6NS putLines = do
+    tcache@(getSec, getTimeStr) <- TimeCache.new
+    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
+          where
+            memoLogLn msg = do
+                tstr <- getTimeStr
+                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+            memoActions = Cache.MemoActions memoLogLn getSec
+    memo <- Cache.getMemo cacheConf
+    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
+        expires now = Cache.expiresMemo now memo
+        read' = Cache.readMemo memo
+    env <- Iterative.newEnv putLines disableV6NS (insert, read') tcache
+    return (env, getSec, expires)
 
 getAInfoIPs :: PortNumber -> IO [IP]
 getAInfoIPs port = do
