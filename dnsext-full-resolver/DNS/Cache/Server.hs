@@ -126,13 +126,12 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
             then getAInfoIPs port
             else return $ map fromString hosts
 
-    (pLoops, qsizes) <- do
-        (loopsList, qsizes) <-
-            unzip
-                <$> mapM
-                    (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port)
-                    hostIPs
-        return (concat loopsList, qsizes)
+    (loopsList, qsizes) <-
+        unzip
+            <$> mapM
+                (getPipeline workers workerSharedQueue qsizePerWorker getSec cxt port)
+                hostIPs
+    let pLoops = concat loopsList
 
     caps <- getNumCapabilities
     let params =
