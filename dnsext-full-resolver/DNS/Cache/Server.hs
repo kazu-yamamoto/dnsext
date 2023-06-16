@@ -194,7 +194,7 @@ getPipeline workers sharedQueue perWorker getSec env port hostIP = do
                 (putLn Log.WARN . ("Server.sendResponse: error: " ++) . show)
                 $ sendResponse (UDP.sendTo sock) env
 
-    return (respLoop : concat workerLoops ++ [reqLoop], getsStatus)
+    return (respLoop : reqLoop : concat workerLoops, getsStatus)
 
 benchQueries :: [ByteString]
 benchQueries =
