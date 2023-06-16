@@ -38,7 +38,7 @@ import Network.Socket (
 import qualified Network.UDP as UDP
 
 -- other packages
-import UnliftIO (SomeException, concurrently_, race_, tryAny)
+import UnliftIO (SomeException, concurrently_, race_, handle)
 
 -- this package
 
@@ -421,7 +421,7 @@ consumeLoop
     :: Int
     -> (SomeException -> IO ())
     -> (a -> IO ())
-    -> IO (IO b, a -> IO (), IO (Int, Int))
+    -> IO (IO (), a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
     inQ <- newQueue qsize
     let loop = readLoop (readQueue inQ) onError body
@@ -432,16 +432,11 @@ readLoop
     :: IO a
     -> (SomeException -> IO ())
     -> (a -> IO ())
-    -> IO b
-readLoop readQ onError body = loop
-  where
-    hbody = either onError return <=< tryAny . body
-    loop = forever $ hbody =<< readQ
+    -> IO ()
+readLoop readQ onError body = forever $ handle onError (readQ >>= body)
 
-handledLoop :: (SomeException -> IO ()) -> IO () -> IO a
-handledLoop onError = forever . handle
-  where
-    handle = either onError return <=< tryAny
+handledLoop :: (SomeException -> IO ()) -> IO () -> IO ()
+handledLoop onError body = forever $ handle onError body
 
 counter :: IO (IO Int, IO ())
 counter = do
