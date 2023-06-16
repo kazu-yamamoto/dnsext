@@ -121,16 +121,9 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
     cxt <-
         Iterative.newEnv putLines disableV6NS (insert, Cache.readMemo memo) tcache
 
-    let getAInfoIPs = do
-            ais <- getAddrInfo Nothing Nothing (Just $ show port)
-            let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
-                dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
-                dgramIP _ = Nothing
-            return $
-                mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
     hostIPs <-
         if null hosts
-            then getAInfoIPs
+            then getAInfoIPs port
             else return $ map fromString hosts
 
     (pLoops, qsizes) <- do
@@ -162,6 +155,14 @@ setup logOutput logLevel maxCacheSize disableV6NS workers workerSharedQueue qsiz
 
     return (pLoops, monLoops)
 
+getAInfoIPs :: PortNumber -> IO [IP]
+getAInfoIPs port = do
+        ais <- getAddrInfo Nothing Nothing (Just $ show port)
+        let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
+            dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
+            dgramIP _ = Nothing
+        return $
+            mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
 getPipeline
     :: Int
     -> Bool
