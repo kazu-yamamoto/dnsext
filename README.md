@@ -110,7 +110,7 @@ query "jp." A to 192.33.4.12#53/UDP
 query "jp." A to 192.36.148.17#53/UDP
 query "jp." A to 192.58.128.30#53/UDP
 query "jp." A to 192.5.5.241#53/UDP: win
-mdelegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of DS
+delegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of DS
 	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
 	"b.dns.jp." ["202.12.30.131","2001:dc2::1"]
 	"c.dns.jp." ["156.154.100.5","2001:502:ad09::5"]
