@@ -274,18 +274,6 @@ workerPipeline reqQ resQ perWorker getSec env = do
 
 ----------------------------------------------------------------
 
-recvRequest
-    :: Show a
-    => IO (ByteString, a)
-    -> Env
-    -> (Request a -> IO ())
-    -> IO ()
-recvRequest recv _env enqReq = do
-    (bs, addr) <- recv
-    enqReq (bs, addr)
-
-----------------------------------------------------------------
-
 cachedWorker
     :: Show a
     => Env
@@ -343,6 +331,18 @@ resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
                 "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
+
+----------------------------------------------------------------
+
+recvRequest
+    :: Show a
+    => IO (ByteString, a)
+    -> Env
+    -> (Request a -> IO ())
+    -> IO ()
+recvRequest recv _env enqReq = do
+    (bs, addr) <- recv
+    enqReq (bs, addr)
 
 ----------------------------------------------------------------
 
