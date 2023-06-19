@@ -215,14 +215,14 @@ getWorkers n sharedQueue perWorker getSec env
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate n $ workerPipeline reqQ resQ 8 getSec env
+        let wps = replicate n $ getSenderReceiver reqQ resQ 8 getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | sharedQueue = do
         let qsize = perWorker * n
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate n $ workerPipeline reqQ resQ perWorker getSec env
+        let wps = replicate n $ getSenderReceiver reqQ resQ perWorker getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM n $ newQueue perWorker
@@ -230,7 +230,7 @@ getWorkers n sharedQueue perWorker getSec env
         resQs <- replicateM n $ newQueue perWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ workerPipeline reqQ resQ perWorker getSec env
+                [ getSenderReceiver reqQ resQ perWorker getSec env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -238,7 +238,7 @@ getWorkers n sharedQueue perWorker getSec env
 
 ----------------------------------------------------------------
 
-workerPipeline
+getSenderReceiver
     :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
     => rq (Request a)
     -> wq (Response a)
@@ -246,7 +246,7 @@ workerPipeline
     -> IO EpochTime
     -> Env
     -> IO ([IO ()], WorkerStatus)
-workerPipeline reqQ resQ perWorker getSec env = do
+getSenderReceiver reqQ resQ perWorker getSec env = do
     (getHit, incHit) <- counter
     (getMiss, incMiss) <- counter
     (getFailed, incFailed) <- counter
