@@ -1,4 +1,5 @@
 {-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Server (
     run,
@@ -263,16 +264,14 @@ getSenderReceiver
     -> Env
     -> IO ([IO ()], WorkerStatus)
 getSenderReceiver reqQ resQ perWorker getSec env = do
-    (getHit, incHit) <- counter
-    (getMiss, incMiss) <- counter
-    (getFailed, incFailed) <- counter
+    (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show
-        rslvWrkr = resolvWorker env incMiss incFailed enqueueResp
+        rslvWrkr = resolvWorker env incs enqueueResp
     (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker logr rslvWrkr
 
     let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
-        ccWrkr = cachedWorker env getSec incHit incFailed enqueueDec enqueueResp
+        ccWrkr = cachedWorker env getSec incs enqueueDec enqueueResp
         cachedLoop = handledLoop logc (readQueue reqQ >>= ccWrkr)
 
         resolvLoops = replicate nOfResolvWorkers resolvLoop
@@ -294,13 +293,12 @@ cachedWorker
     :: Show a
     => Env
     -> IO EpochTime
-    -> IO ()
-    -> IO ()
+    -> CntInc
     -> EnqueueDec a
     -> EnqueueResp a
     -> Request a
     -> IO ()
-cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
+cachedWorker env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
     now <- getSec
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
@@ -325,12 +323,11 @@ cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
 resolvWorker
     :: Show a
     => Env
-    -> IO ()
-    -> IO ()
+    -> CntInc
     -> EnqueueResp a
     -> Decoded a
     -> IO ()
-resolvWorker env incMiss incFailed enqueueResp (reqM, addr) = do
+resolvWorker env CntInc{..} enqueueResp (reqM, addr) = do
     ex <- getReplyMessage env reqM
     case ex of
         Right x -> do
@@ -371,10 +368,29 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-counter :: IO (IO Int, IO ())
-counter = do
-    ref <- newIORef 0
-    return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
+data CntGet = CntGet {
+    getHit :: IO Int
+  , getMiss :: IO Int
+  , getFailed :: IO Int
+  }
+
+data CntInc = CntInc {
+    incHit :: IO ()
+  , incMiss :: IO ()
+  , incFailed :: IO ()
+  }
+
+newCounters :: IO (CntGet, CntInc)
+newCounters = do
+    (g0,i0) <- counter
+    (g1,i1) <- counter
+    (g2,i2) <- counter
+    return (CntGet g0 g1 g2, CntInc i0 i1 i2)
+  where
+    counter :: IO (IO Int, IO ())
+    counter = do
+        ref <- newIORef 0
+        return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
 ----------------------------------------------------------------
 ----------------------------------------------------------------
