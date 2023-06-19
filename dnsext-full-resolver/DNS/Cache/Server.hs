@@ -12,7 +12,6 @@ import Control.Monad (forever, replicateM)
 import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
-import Data.List (uncons)
 import Data.Maybe (mapMaybe)
 import Data.String (fromString)
 import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
@@ -56,11 +55,10 @@ import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.ServerMonitor (PLStatus, WorkerStatus (WorkerStatus), monitor)
 import qualified DNS.Cache.ServerMonitor as Mon
 import qualified DNS.Cache.TimeCache as TimeCache
-import DNS.Cache.Types (NE)
 import qualified DNS.Log as Log
 
 type Request a = (ByteString, a)
-type Decoded a = (DNS.DNSHeader, DNS.EDNSheader, NE DNS.Question, a)
+type Decoded a = (DNS.DNSMessage, a)
 type Response a = (ByteString, a)
 
 type EnqueueDec a = Decoded a -> IO ()
@@ -291,23 +289,19 @@ cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
     now <- liftIO getSec
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
-        Right reqM -> case uncons $ DNS.question reqM of
-            Nothing -> logLn Log.WARN $ "empty question ignored: " ++ show addr
-            Just qs@(q, _) -> do
-                let reqH = DNS.header reqM
-                    reqEH = DNS.ednsHeader reqM
-                mx <- getReplyCached env reqH reqEH qs
-                case mx of
-                    Nothing ->
-                        reqH `seq` reqEH `seq` qs `seq` enqueueDec (reqH, reqEH, qs, addr)
-                    Just (Right respM) -> do
-                        incHit
-                        let rbs = DNS.encode respM
-                        rbs `seq` enqueueResp (rbs, addr)
-                    Just (Left replyErr) -> do
-                        liftIO incFailed
-                        logLn Log.WARN $
-                            "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (q, addr)
+        Right reqM -> do
+            mx <- getReplyCached env reqM
+            case mx of
+                Nothing ->
+                    enqueueDec (reqM, addr)
+                Just (Right respM) -> do
+                    incHit
+                    let rbs = DNS.encode respM
+                    rbs `seq` enqueueResp (rbs, addr)
+                Just (Left replyErr) -> do
+                    liftIO incFailed
+                    logLn Log.WARN $
+                        "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (DNS.question reqM, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
 
@@ -321,8 +315,8 @@ resolvWorker
     -> EnqueueResp a
     -> Decoded a
     -> IO ()
-resolvWorker env incMiss incFailed enqueueResp (reqH, reqEH, qs@(q, _), addr) = do
-    ex <- getReplyMessage env reqH reqEH qs
+resolvWorker env incMiss incFailed enqueueResp (reqM, addr) = do
+    ex <- getReplyMessage env reqM
     case ex of
         Right x -> do
             incMiss
@@ -331,7 +325,7 @@ resolvWorker env incMiss incFailed enqueueResp (reqH, reqEH, qs@(q, _), addr) = 
         Left e -> do
             incFailed
             logLn Log.WARN $
-                "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
+                "resolv: response cannot be generated: " ++ e ++ ": " ++ show (DNS.question reqM, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
 

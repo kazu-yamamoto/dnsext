@@ -267,35 +267,37 @@ handleResponseError e f msg
 -- 返答メッセージを作る
 getReplyMessage
     :: Env
-    -> DNSHeader
-    -> EDNSheader
-    -> NE DNS.Question
+    -> DNSMessage
     -> IO (Either String DNSMessage)
-getReplyMessage cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
-    (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-        <$> runDNSQuery (getResult bn) cxt (ctrlFromRequestHeader reqH reqEH)
-  where
-    getResult n = do
-        guardRequestHeader reqH reqEH
-        replyResult n typ
+getReplyMessage cxt reqM = case uncons $ DNS.question reqM of
+  Nothing -> return $ Left "empty question"
+  Just qs@(DNS.Question bn typ _, _) -> do
+      let reqH = DNS.header reqM
+          reqEH = DNS.ednsHeader reqM
+          getResult = do
+              guardRequestHeader reqH reqEH
+              replyResult bn typ
+      (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
+        <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
 
 -- キャッシュから返答メッセージを作る
 -- Nothing のときキャッシュ無し
 -- Just Left はエラー
 getReplyCached
     :: Env
-    -> DNSHeader
-    -> EDNSheader
-    -> NE DNS.Question
+    -> DNSMessage
     -> IO (Maybe (Either String DNSMessage))
-getReplyCached cxt reqH reqEH qs@(DNS.Question bn typ _, _) =
-    fmap mkReply . either (Just . Left) (Right <$>)
-        <$> runDNSQuery (getResult bn) cxt (ctrlFromRequestHeader reqH reqEH)
-  where
-    getResult n = do
-        guardRequestHeader reqH reqEH
-        replyResultCached n typ
-    mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
+getReplyCached cxt reqM = case uncons $ DNS.question reqM of
+  Nothing -> return $ Just $ Left "empty question"
+  Just qs@(DNS.Question bn typ _, _) -> do
+      let reqH = DNS.header reqM
+          reqEH = DNS.ednsHeader reqM
+          getResult = do
+              guardRequestHeader reqH reqEH
+              replyResultCached bn typ
+          mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
+      fmap mkReply . either (Just . Left) (Right <$>)
+        <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
