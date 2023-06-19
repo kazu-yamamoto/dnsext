@@ -194,10 +194,10 @@ getPipeline n sharedQueue perWorker getSec env port hostIP = do
     (workers, getsStatus) <- unzip <$> sequence workerPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
-        receiver = handledLoop onErrorR (recvRequest (UDP.recvFrom sock) env enqueueReq)
+        receiver = handledLoop onErrorR (UDP.recvFrom sock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
-        sender = handledLoop onErrorS (dequeueResp >>= sendResponse (UDP.sendTo sock) env)
+        sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo sock))
     return (receiver : sender : concat workers, getsStatus)
 
 ----------------------------------------------------------------
@@ -331,27 +331,6 @@ resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
                 "resolv: response cannot be generated: " ++ e ++ ": " ++ show (q, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
-
-----------------------------------------------------------------
-
-recvRequest
-    :: Show a
-    => IO (ByteString, a)
-    -> Env
-    -> (Request a -> IO ())
-    -> IO ()
-recvRequest recv _env enqReq = do
-    (bs, addr) <- recv
-    enqReq (bs, addr)
-
-----------------------------------------------------------------
-
-sendResponse
-    :: (ByteString -> a -> IO ())
-    -> Env
-    -> Response a
-    -> IO ()
-sendResponse send _env (bs, addr) = send bs addr
 
 ----------------------------------------------------------------
 
