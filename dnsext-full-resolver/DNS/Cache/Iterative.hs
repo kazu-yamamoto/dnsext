@@ -889,8 +889,9 @@ resolveJustDC dc n typ
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
-        lift . logLines Log.DEMO $
-            "resolve-just: selected addresses:" : ["\t" ++ show (sa, n, typ) | sa <- sas]
+        lift . logLn Log.DEMO . unwords $
+            ["resolve-just: query", show (n, typ), "selected addresses:"]
+                ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
   where
