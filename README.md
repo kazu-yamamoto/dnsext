@@ -17,9 +17,9 @@ This new library uses typeclasses to extend resource records and uses `ShortByte
 
 `dnsext-full-resolver` provides a server of full resolver.
 
-## `dug` commnad
+## `dug` command
 
-`dnsext-full-resolver` alos provides dig-like command called `dug`.
+`dnsext-full-resolver` also provides dig-like command called `dug`.
 
 SVBC example: if `-d auto` is specified, `dug` obtains the SVCB record first and resolves the target RR via DNS over X:
 
