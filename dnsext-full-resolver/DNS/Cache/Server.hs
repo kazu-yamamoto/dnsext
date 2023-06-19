@@ -284,7 +284,7 @@ cachedWorker
     -> (Response a -> IO ())
     -> Request a
     -> IO ()
-cachedWorker env getSec incHit incFailed enqDec enqResp (bs, addr) = do
+cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
     now <- liftIO getSec
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
@@ -296,11 +296,11 @@ cachedWorker env getSec incHit incFailed enqDec enqResp (bs, addr) = do
                 mx <- getReplyCached env reqH reqEH qs
                 case mx of
                     Nothing ->
-                        reqH `seq` reqEH `seq` qs `seq` enqDec (reqH, reqEH, qs, addr)
+                        reqH `seq` reqEH `seq` qs `seq` enqueueDec (reqH, reqEH, qs, addr)
                     Just (Right respM) -> do
                         incHit
                         let rbs = DNS.encode respM
-                        rbs `seq` enqResp (rbs, addr)
+                        rbs `seq` enqueueResp (rbs, addr)
                     Just (Left replyErr) -> do
                         liftIO incFailed
                         logLn Log.WARN $
@@ -318,13 +318,13 @@ resolvWorker
     -> (Response a -> IO ())
     -> Decoded a
     -> IO ()
-resolvWorker env incMiss incFailed enqResp (reqH, reqEH, qs@(q, _), addr) = do
+resolvWorker env incMiss incFailed enqueueResp (reqH, reqEH, qs@(q, _), addr) = do
     ex <- getReplyMessage env reqH reqEH qs
     case ex of
         Right x -> do
             incMiss
             let rbs = DNS.encode x
-            rbs `seq` enqResp (rbs, addr)
+            rbs `seq` enqueueResp (rbs, addr)
         Left e -> do
             incFailed
             logLn Log.WARN $
@@ -447,11 +447,11 @@ getPipelineB True n perWorker _ _ = do
     let pipelines = replicate n [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
 getPipelineB _ n perWorker env getSec = do
-    (workerPipelines, enqReq, deqRes) <-
+    (workerPipelines, enqueueReq, dequeueRes) <-
         getWorkers n True perWorker getSec env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
-    return (workers, enqReq, deqRes)
+    return (workers, enqueueReq, dequeueRes)
 
 runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueriesB qs enqueueReq dequeueResp = do
