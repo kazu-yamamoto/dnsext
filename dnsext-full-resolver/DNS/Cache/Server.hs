@@ -193,16 +193,11 @@ getPipeline n sharedQueue perWorker getSec env port hostIP = do
         getWorkers n sharedQueue perWorker getSec env
     (workers, getsStatus) <- unzip <$> sequence workerPipelines
 
-    let receiver =
-            handledLoop (putLn Log.WARN . ("Server.recvRequest: error: " ++) . show) $
-                recvRequest (UDP.recvFrom sock) env enqueueReq
+    let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
+        receiver = handledLoop onErrorR (recvRequest (UDP.recvFrom sock) env enqueueReq)
 
-    let sender =
-            readLoop
-                dequeueResp
-                (putLn Log.WARN . ("Server.sendResponse: error: " ++) . show)
-                $ sendResponse (UDP.sendTo sock) env
-
+    let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
+        sender = handledLoop onErrorS (dequeueResp >>= sendResponse (UDP.sendTo sock) env)
     return (receiver : sender : concat workers, getsStatus)
 
 ----------------------------------------------------------------
@@ -262,7 +257,7 @@ workerPipeline reqQ resQ perWorker getSec env = do
 
     let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
         ccWrkr = cachedWorker env getSec incHit incFailed enqueueDec enqueueResp
-        cachedLoop = readLoop (readQueue reqQ) logc ccWrkr
+        cachedLoop = handledLoop logc (readQueue reqQ >>= ccWrkr)
 
         resolvLoops = replicate nOfResolvWorkers resolvLoop
         loops = resolvLoops ++ [cachedLoop]
@@ -367,17 +362,8 @@ consumeLoop
     -> IO (IO (), a -> IO (), IO (Int, Int))
 consumeLoop qsize onError body = do
     inQ <- newQueue qsize
-    let loop = readLoop (readQueue inQ) onError body
+    let loop = handledLoop onError (readQueue inQ >>= body)
     return (loop, writeQueue inQ, queueSize inQ)
-
-----------------------------------------------------------------
-
-readLoop
-    :: IO a
-    -> (SomeException -> IO ())
-    -> (a -> IO ())
-    -> IO ()
-readLoop readQ onError body = forever $ handle onError (readQ >>= body)
 
 ----------------------------------------------------------------
 
