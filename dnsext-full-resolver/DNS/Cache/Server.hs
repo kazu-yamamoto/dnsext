@@ -63,6 +63,9 @@ type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSHeader, DNS.EDNSheader, NE DNS.Question, a)
 type Response a = (ByteString, a)
 
+type EnqueueDec a = Decoded a -> IO ()
+type EnqueueResp a = Response a -> IO ()
+
 ----------------------------------------------------------------
 
 run
@@ -280,8 +283,8 @@ cachedWorker
     -> IO EpochTime
     -> IO ()
     -> IO ()
-    -> (Decoded a -> IO ())
-    -> (Response a -> IO ())
+    -> EnqueueDec a
+    -> EnqueueResp a
     -> Request a
     -> IO ()
 cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
@@ -315,7 +318,7 @@ resolvWorker
     => Env
     -> IO ()
     -> IO ()
-    -> (Response a -> IO ())
+    -> EnqueueResp a
     -> Decoded a
     -> IO ()
 resolvWorker env incMiss incFailed enqueueResp (reqH, reqEH, qs@(q, _), addr) = do
@@ -337,8 +340,8 @@ resolvWorker env incMiss incFailed enqueueResp (reqH, reqEH, qs@(q, _), addr) = 
 consumeLoop
     :: Int
     -> (SomeException -> IO ())
-    -> (a -> IO ())
-    -> IO (IO (), a -> IO (), IO (Int, Int))
+    -> (Decoded a -> IO ())
+    -> IO (IO (), EnqueueDec a, IO (Int, Int))
 consumeLoop qsize onError body = do
     inQ <- newQueue qsize
     let loop = handledLoop onError (readQueue inQ >>= body)
