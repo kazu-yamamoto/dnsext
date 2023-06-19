@@ -967,9 +967,12 @@ iterative_ dc nss0 (x : xs) =
     stepQuery nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
+        lift . logLn Log.DEMO $
+            "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
         sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        lift . logLines Log.DEMO $
-            "iterative: selected addresses:" : ["\t" ++ show (sa, name, A) | sa <- sas]
+        lift . logLn Log.DEMO . unwords $
+            ["iterative: query", show (name, A), "with selected addresses:"]
+                ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
@@ -1316,8 +1319,8 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
-    lift . logLines Log.DEMO $
-        "root-server addresses for priming:" : ["\t" ++ show ip | ip <- ips]
+    lift . logLn Log.DEMO . unwords $
+        "root-server addresses for priming:" : [show ip | ip <- ips]
     ekeys <- cachedDNSKEY [rootSepDS] ips "."
     either (return . Left . emsg) (body ips) ekeys
   where
@@ -1605,8 +1608,6 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
 delegationIPs dc Delegation{..} = do
-    lift . logLn Log.DEMO $
-        "zone: " ++ show delegationZone ++ ":\n" ++ ppDelegation delegationNS
     disableV6NS <- lift $ asks disableV6NS_
 
     let ipnum = 4
