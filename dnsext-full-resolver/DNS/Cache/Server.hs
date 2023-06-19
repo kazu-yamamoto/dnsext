@@ -9,7 +9,6 @@ module DNS.Cache.Server (
 import Control.Concurrent (forkIO, getNumCapabilities)
 import Control.DeepSeq (deepseq)
 import Control.Monad (forever, replicateM)
-import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import Data.Maybe (mapMaybe)
@@ -286,7 +285,7 @@ cachedWorker
     -> Request a
     -> IO ()
 cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
-    now <- liftIO getSec
+    now <- getSec
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
         Right reqM -> do
@@ -299,7 +298,7 @@ cachedWorker env getSec incHit incFailed enqueueDec enqueueResp (bs, addr) = do
                     let rbs = DNS.encode respM
                     rbs `seq` enqueueResp (rbs, addr)
                 Just (Left replyErr) -> do
-                    liftIO incFailed
+                    incFailed
                     logLn Log.WARN $
                         "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (DNS.question reqM, addr)
   where
