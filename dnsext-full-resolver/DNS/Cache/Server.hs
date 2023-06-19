@@ -372,14 +372,6 @@ consumeLoop qsize onError body = do
 
 ----------------------------------------------------------------
 
-queueSize :: QueueSize q => q a -> IO (Int, Int)
-queueSize q = do
-    a <- fst <$> Queue.readSizes q
-    let b = Queue.sizeMaxBound q
-    return (a, b)
-
-----------------------------------------------------------------
-
 readLoop
     :: IO a
     -> (SomeException -> IO ())
@@ -391,6 +383,14 @@ readLoop readQ onError body = forever $ handle onError (readQ >>= body)
 
 handledLoop :: (SomeException -> IO ()) -> IO () -> IO ()
 handledLoop onError body = forever $ handle onError body
+
+----------------------------------------------------------------
+
+queueSize :: QueueSize q => q a -> IO (Int, Int)
+queueSize q = do
+    a <- fst <$> Queue.readSizes q
+    let b = Queue.sizeMaxBound q
+    return (a, b)
 
 ----------------------------------------------------------------
 
