@@ -314,7 +314,10 @@ cachedWorker env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
                 Just (Left replyErr) -> do
                     incFailed
                     logLn Log.WARN $
-                        "cached: response cannot be generated: " ++ replyErr ++ ": " ++ show (DNS.question reqM, addr)
+                        "cached: response cannot be generated: "
+                            ++ replyErr
+                            ++ ": "
+                            ++ show (DNS.question reqM, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
 
@@ -337,7 +340,10 @@ resolvWorker env CntInc{..} enqueueResp (reqM, addr) = do
         Left e -> do
             incFailed
             logLn Log.WARN $
-                "resolv: response cannot be generated: " ++ e ++ ": " ++ show (DNS.question reqM, addr)
+                "resolv: response cannot be generated: "
+                    ++ e
+                    ++ ": "
+                    ++ show (DNS.question reqM, addr)
   where
     logLn level = logLines_ env level Nothing . (: [])
 
@@ -368,23 +374,23 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-data CntGet = CntGet {
-    getHit :: IO Int
-  , getMiss :: IO Int
-  , getFailed :: IO Int
-  }
+data CntGet = CntGet
+    { getHit :: IO Int
+    , getMiss :: IO Int
+    , getFailed :: IO Int
+    }
 
-data CntInc = CntInc {
-    incHit :: IO ()
-  , incMiss :: IO ()
-  , incFailed :: IO ()
-  }
+data CntInc = CntInc
+    { incHit :: IO ()
+    , incMiss :: IO ()
+    , incFailed :: IO ()
+    }
 
 newCounters :: IO (CntGet, CntInc)
 newCounters = do
-    (g0,i0) <- counter
-    (g1,i1) <- counter
-    (g2,i2) <- counter
+    (g0, i0) <- counter
+    (g1, i1) <- counter
+    (g2, i2) <- counter
     return (CntGet g0 g1 g2, CntInc i0 i1 i2)
   where
     counter :: IO (IO Int, IO ())

@@ -270,15 +270,15 @@ getReplyMessage
     -> DNSMessage
     -> IO (Either String DNSMessage)
 getReplyMessage cxt reqM = case uncons $ DNS.question reqM of
-  Nothing -> return $ Left "empty question"
-  Just qs@(DNS.Question bn typ _, _) -> do
-      let reqH = DNS.header reqM
-          reqEH = DNS.ednsHeader reqM
-          getResult = do
-              guardRequestHeader reqH reqEH
-              replyResult bn typ
-      (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-        <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
+    Nothing -> return $ Left "empty question"
+    Just qs@(DNS.Question bn typ _, _) -> do
+        let reqH = DNS.header reqM
+            reqEH = DNS.ednsHeader reqM
+            getResult = do
+                guardRequestHeader reqH reqEH
+                replyResult bn typ
+        (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
+            <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
 
 -- キャッシュから返答メッセージを作る
 -- Nothing のときキャッシュ無し
@@ -288,16 +288,16 @@ getReplyCached
     -> DNSMessage
     -> IO (Maybe (Either String DNSMessage))
 getReplyCached cxt reqM = case uncons $ DNS.question reqM of
-  Nothing -> return $ Just $ Left "empty question"
-  Just qs@(DNS.Question bn typ _, _) -> do
-      let reqH = DNS.header reqM
-          reqEH = DNS.ednsHeader reqM
-          getResult = do
-              guardRequestHeader reqH reqEH
-              replyResultCached bn typ
-          mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
-      fmap mkReply . either (Just . Left) (Right <$>)
-        <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
+    Nothing -> return $ Just $ Left "empty question"
+    Just qs@(DNS.Question bn typ _, _) -> do
+        let reqH = DNS.header reqM
+            reqEH = DNS.ednsHeader reqM
+            getResult = do
+                guardRequestHeader reqH reqEH
+                replyResultCached bn typ
+            mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
+        fmap mkReply . either (Just . Left) (Right <$>)
+            <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
