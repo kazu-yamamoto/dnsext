@@ -110,8 +110,8 @@ query "jp." A to 192.33.4.12#53/UDP
 query "jp." A to 192.36.148.17#53/UDP
 query "jp." A to 192.58.128.30#53/UDP
 query "jp." A to 192.5.5.241#53/UDP: win
-[92mdelegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of DS
-[0m	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
+mdelegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of DS
+	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
 	"b.dns.jp." ["202.12.30.131","2001:dc2::1"]
 	"c.dns.jp." ["156.154.100.5","2001:502:ad09::5"]
 	"d.dns.jp." ["210.138.175.244","2001:240::53"]
@@ -174,8 +174,8 @@ query "iij.ad.jp." A to 2001:240::53#53/UDP
 query "iij.ad.jp." A to 2001:2f8:0:100::153#53/UDP
 query "iij.ad.jp." A to 2001:240::53#53/UDP: win
 query "iij.ad.jp." A to 2001:200:c000::35#53/UDP: win
-[92mdelegationWithCache: "jp." -> "iij.ad.jp.", delegation - verification success - RRSIG of DS
-[0m	"dns0.iij.ad.jp." ["210.130.0.5","2001:240::105"]
+delegationWithCache: "jp." -> "iij.ad.jp.", delegation - verification success - RRSIG of DS
+	"dns0.iij.ad.jp." ["210.130.0.5","2001:240::105"]
 	"dns1.iij.ad.jp." ["210.130.1.5","2001:240::115"]
 zone: "iij.ad.jp.":
 	"dns0.iij.ad.jp." ["210.130.0.5","2001:240::105"]
@@ -212,10 +212,10 @@ query "www.iij.ad.jp." A to 210.130.1.5#53/UDP
 query "www.iij.ad.jp." A to 2001:240::105#53/UDP
 query "www.iij.ad.jp." A to 2001:240::115#53/UDP
 query "www.iij.ad.jp." A to 2001:240::105#53/UDP: win
-[92mverification success - RRSIG of "www.iij.ad.jp." A
-[0m[92m;; 157usec
+verification success - RRSIG of "www.iij.ad.jp." A
+;; 157usec
 
-[0m;; HEADER SECTION:
+;; HEADER SECTION:
 ;Standard query, NoError, id: 0
 ;Flags: Recursion Desired, Recursion Available
 
