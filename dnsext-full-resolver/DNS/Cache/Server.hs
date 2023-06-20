@@ -266,13 +266,13 @@ getSenderReceiver
 getSenderReceiver reqQ resQ perWorker getSec env = do
     (CntGet{..}, incs) <- newCounters
 
-    let logr = putLn Log.WARN . ("Server.resolvWorker: error: " ++) . show
-        rslvWrkr = resolvWorker env incs enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker logr rslvWrkr
+    let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
+        worker = getWorker env incs enqueueResp
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker logr worker
 
-    let logc = putLn Log.WARN . ("Server.cachedWorker: error: " ++) . show
-        ccWrkr = cachedWorker env getSec incs enqueueDec enqueueResp
-        cachedLoop = handledLoop logc (readQueue reqQ >>= ccWrkr)
+    let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
+        cacher = getCacher env getSec incs enqueueDec enqueueResp
+        cachedLoop = handledLoop logc (readQueue reqQ >>= cacher)
 
         resolvLoops = replicate nOfResolvWorkers resolvLoop
         loops = resolvLoops ++ [cachedLoop]
@@ -289,7 +289,7 @@ getSenderReceiver reqQ resQ perWorker getSec env = do
 
 ----------------------------------------------------------------
 
-cachedWorker
+getCacher
     :: Show a
     => Env
     -> IO EpochTime
@@ -298,7 +298,7 @@ cachedWorker
     -> EnqueueResp a
     -> Request a
     -> IO ()
-cachedWorker env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
+getCacher env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
     now <- getSec
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
@@ -323,14 +323,14 @@ cachedWorker env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
 
 ----------------------------------------------------------------
 
-resolvWorker
+getWorker
     :: Show a
     => Env
     -> CntInc
     -> EnqueueResp a
     -> Decoded a
     -> IO ()
-resolvWorker env CntInc{..} enqueueResp (reqM, addr) = do
+getWorker env CntInc{..} enqueueResp (reqM, addr) = do
     ex <- getReplyMessage env reqM
     case ex of
         Right x -> do
