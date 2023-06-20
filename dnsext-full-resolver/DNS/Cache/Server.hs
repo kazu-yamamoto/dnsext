@@ -84,6 +84,7 @@ run
     -> PortNumber
     -> [HostName]
     -> Bool
+    -- ^ standard console or not
     -> IO ()
 run conf port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
@@ -408,7 +409,15 @@ benchQueries =
 
 ----------------------------------------------------------------
 
-workerBenchmark :: Config -> Bool -> Bool -> Int -> IO ()
+workerBenchmark
+    :: Config
+    -> Bool
+    -- ^ No operation or not
+    -> Bool
+    -- ^ Gnuplot mode or not
+    -> Int
+    -- ^ Request size
+    -> IO ()
 workerBenchmark conf@Config{..} noop gplot size = do
     (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
     (env, getSec) <- getEnvB conf putLines
