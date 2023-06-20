@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Server (
-    Config(..),
+    Config (..),
     run,
     workerBenchmark,
 ) where
@@ -61,14 +61,14 @@ import qualified DNS.Log as Log
 ----------------------------------------------------------------
 
 data Config = Config
-   { logOutput :: Log.Output
-   , logLevel  :: Log.Level
-   , maxCacheSize :: Int
-   , disableV6NS :: Bool
-   , nOfPipelines :: Int
-   , qsizePerWorker :: Int
-   , workerSharedQueue :: Bool
-   }
+    { logOutput :: Log.Output
+    , logLevel :: Log.Level
+    , maxCacheSize :: Int
+    , disableV6NS :: Bool
+    , nOfPipelines :: Int
+    , qsizePerWorker :: Int
+    , workerSharedQueue :: Bool
+    }
 
 type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSMessage, a)
@@ -225,7 +225,8 @@ getWorkers Config{..} getSec env
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker getSec env
+        let wps =
+                replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM nOfPipelines $ newQueue qsizePerWorker

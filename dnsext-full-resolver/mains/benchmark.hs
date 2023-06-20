@@ -134,7 +134,15 @@ run BenchmarkOptions{..} =
         gplotMode
         requests
   where
-    conf = Server.Config logOutput logLevel (2 * 1024 * 1024) False workers qsizePerWorker True
+    conf =
+        Server.Config
+            logOutput
+            logLevel
+            (2 * 1024 * 1024)
+            False
+            workers
+            qsizePerWorker
+            True
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
