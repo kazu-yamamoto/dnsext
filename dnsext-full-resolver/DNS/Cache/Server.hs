@@ -422,10 +422,10 @@ benchQueries =
 
 ----------------------------------------------------------------
 
-workerBenchmark :: Bool -> Bool -> Int -> Int -> Int -> IO ()
-workerBenchmark noop gplot n perWorker size = do
-    (putLines, _logQSize, _terminate) <- Log.new Log.Stdout Log.WARN
-    (env, getSec) <- getEnvB putLines
+workerBenchmark :: Config -> Bool -> Bool -> Int -> Int -> Int -> IO ()
+workerBenchmark conf@Config{..} noop gplot n perWorker size = do
+    (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
+    (env, getSec) <- getEnvB conf putLines
 
     (workers, enqueueReq, dequeueResp) <-
         getPipelineB noop n perWorker env getSec
@@ -456,10 +456,10 @@ workerBenchmark noop gplot n perWorker size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: Log.PutLines -> IO (Env, IO EpochTime)
-getEnvB putLines = do
+getEnvB :: Config -> Log.PutLines -> IO (Env, IO EpochTime)
+getEnvB Config{..} putLines = do
     tcache@(getSec, _) <- TimeCache.new
-    let cacheConf = Cache.MemoConf (2 * 1024 * 1024) 1800 memoActions
+    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec

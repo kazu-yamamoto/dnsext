@@ -1,5 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
+module Main where
+
 import Control.Monad (unless, (>=>))
 import Data.Char (toUpper)
 import Data.List (intercalate)
