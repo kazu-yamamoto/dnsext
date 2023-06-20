@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 import Control.Monad (unless, (>=>))
 import Data.Char (toUpper)
 import Data.List (intercalate)
@@ -150,17 +152,17 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run opts =
+run ServerOptions{..} =
     Server.run
         conf
-        (workers opts)
-        (workerSharedQueue opts)
-        (qsizePerWorker opts)
-        (fromIntegral $ port opts)
-        (bindHosts opts)
-        (stdConsole opts)
+        workers
+        workerSharedQueue
+        qsizePerWorker
+        (fromIntegral $ port)
+        bindHosts
+        stdConsole
   where
-    conf = Server.Config (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
+    conf = Server.Config logOutput logLevel (maxKibiEntries * 1024) disableV6NS
 
 
 main :: IO ()
