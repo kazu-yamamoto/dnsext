@@ -152,16 +152,16 @@ parseOptions args
 run :: ServerOptions -> IO ()
 run opts =
     Server.run
-        (logOutput opts)
-        (logLevel opts)
-        (maxKibiEntries opts * 1024)
-        (disableV6NS opts)
+        conf
         (workers opts)
         (workerSharedQueue opts)
         (qsizePerWorker opts)
         (fromIntegral $ port opts)
         (bindHosts opts)
         (stdConsole opts)
+  where
+    conf = Server.Config (logOutput opts) (logLevel opts) (maxKibiEntries opts * 1024) (disableV6NS opts)
+
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs

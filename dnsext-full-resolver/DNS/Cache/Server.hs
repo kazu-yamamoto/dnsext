@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Server (
+    Config(..),
     run,
     workerBenchmark,
 ) where
@@ -57,6 +58,15 @@ import qualified DNS.Cache.ServerMonitor as Mon
 import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
 
+----------------------------------------------------------------
+
+data Config = Config
+   { logOutput :: Log.Output
+   , logLevel  :: Log.Level
+   , maxCacheSize :: Int
+   , disableV6NS :: Bool
+   }
+
 type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSMessage, a)
 type Response a = (ByteString, a)
@@ -67,10 +77,7 @@ type EnqueueResp a = Response a -> IO ()
 ----------------------------------------------------------------
 
 run
-    :: Log.Output
-    -> Log.Level
-    -> Int
-    -> Bool
+    :: Config
     -> Int
     -> Bool
     -> Int
@@ -78,14 +85,11 @@ run
     -> [HostName]
     -> Bool
     -> IO ()
-run logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWorker port hosts stdConsole = do
+run conf n workerSharedQueue qsizePerWorker port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     (serverLoops, monLoops) <-
         setup
-            logOutput
-            logLevel
-            maxCacheSize
-            disableV6NS
+            conf
             n
             workerSharedQueue
             qsizePerWorker
@@ -99,10 +103,7 @@ run logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWork
 ----------------------------------------------------------------
 
 setup
-    :: Log.Output
-    -> Log.Level
-    -> Int
-    -> Bool
+    :: Config
     -> Int
     -> Bool
     -> Int
@@ -110,9 +111,9 @@ setup
     -> [HostName]
     -> Bool
     -> IO ([IO ()], [IO ()])
-setup logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWorker port hosts stdConsole = do
+setup conf@Config{..} n workerSharedQueue qsizePerWorker port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
-    (env, getSec, expires) <- getEnv maxCacheSize disableV6NS putLines
+    (env, getSec, expires) <- getEnv conf putLines
     hostIPs <- getHostIPs hosts port
 
     let getP = getPipeline n workerSharedQueue qsizePerWorker getSec env port
@@ -148,8 +149,8 @@ setup logOutput logLevel maxCacheSize disableV6NS n workerSharedQueue qsizePerWo
 ----------------------------------------------------------------
 
 getEnv
-    :: Int -> Bool -> Log.PutLines -> IO (Env, IO EpochTime, EpochTime -> IO ())
-getEnv maxCacheSize disableV6NS putLines = do
+    :: Config -> Log.PutLines -> IO (Env, IO EpochTime, EpochTime -> IO ())
+getEnv Config{..} putLines = do
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
