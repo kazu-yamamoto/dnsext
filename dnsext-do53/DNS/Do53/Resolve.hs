@@ -12,6 +12,7 @@ import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Do53.Query
 import DNS.Do53.Types
+import qualified DNS.Log as Log
 import DNS.Types
 
 ----------------------------------------------------------------
@@ -61,8 +62,21 @@ resolveSequential ris0 resolver q qctl = loop ris0
 
 resolveConcurrent
     :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
-resolveConcurrent ris resolver q qctl =
-    raceAny $ map (\ri -> resolver ri q qctl) ris
+resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
+resolveConcurrent ris@(ResolvInfo{..}:_) resolver q@Question{..} qctl = do
+    r@Result{..} <- raceAny $ map (\ri -> resolver ri q qctl) ris
+    let ~tag =
+          "query "
+            ++ show qname
+            ++ " "
+            ++ show qtype
+            ++ " to "
+            ++ resultHostName
+            ++ "#"
+            ++ show resultPortNumber
+            ++ "/UDP"
+    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
+    return r
 
 ----------------------------------------------------------------
 

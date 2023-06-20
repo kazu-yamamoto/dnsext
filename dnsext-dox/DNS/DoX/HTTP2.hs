@@ -80,9 +80,7 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right (msg, _) -> case checkRespM q ident msg of -- fixme
-                Nothing -> do
-                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
-                    return $ toResult ri proto $ Reply msg tx rx
+                Nothing -> return $ toResult ri proto $ Reply msg tx rx
                 Just err -> E.throwIO err
   where
     ~tag =

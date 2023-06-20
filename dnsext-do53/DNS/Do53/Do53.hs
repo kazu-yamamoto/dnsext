@@ -129,7 +129,6 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
-                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
                     return $ Reply msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
@@ -202,9 +201,7 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right (msg, _) -> case checkRespM q ident msg of
-                Nothing -> do
-                    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
-                    return $ Reply msg tx rx
+                Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
 toResult :: ResolvInfo -> String -> Reply -> Result
