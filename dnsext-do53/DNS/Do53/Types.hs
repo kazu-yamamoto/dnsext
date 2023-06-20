@@ -243,7 +243,7 @@ defaultResolvActions =
         , ractionGenId = singleGenId
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
-        , ractionLog = \_ _ _ -> return ()
+        , ractionLog = \_ _ ~_ -> return ()
         }
 
 rsso :: Socket -> IO ()
