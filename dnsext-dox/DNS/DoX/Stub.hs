@@ -14,6 +14,7 @@ import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Imports
 import DNS.DoX.Internal
+import qualified DNS.Log as Log
 import DNS.SVCB
 import DNS.Types
 import Network.Socket (HostName, PortNumber)
@@ -58,6 +59,7 @@ lookupDoX conf domain typ = do
             Right Result{..} -> do
                 let Reply{..} = resultReply
                     ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
+                ractionLog (lconfActions conf) Log.DEMO Nothing [show ss]
                 auto domain typ (unVCLimit lim) (lenvActions lenv) resultHostName ss
 
 auto
