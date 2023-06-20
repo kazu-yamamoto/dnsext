@@ -1,3 +1,7 @@
+{-# LANGUAGE RecordWildCards #-}
+
+module Main where
+
 import Control.Monad (unless, (>=>))
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
@@ -123,13 +127,17 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: BenchmarkOptions -> IO ()
-run opts =
-    Server.workerBenchmark
-        (noopMode opts)
-        (gplotMode opts)
-        (workers opts)
-        (qsizePerWorker opts)
-        (requests opts)
+run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
+  where
+    conf =
+        Server.Config
+            logOutput
+            logLevel
+            (2 * 1024 * 1024)
+            False
+            workers
+            qsizePerWorker
+            True
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
