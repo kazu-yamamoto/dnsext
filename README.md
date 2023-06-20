@@ -15,7 +15,7 @@ This new library uses typeclasses to extend resource records and uses `ShortByte
 
 ## Full resolver
 
-`dnsext-full-resolver` provides a server of full resolver.
+`dnsext-full-resolver` provides a server of full resolver, called 'bowline`.
 
 ## `dug` command
 
