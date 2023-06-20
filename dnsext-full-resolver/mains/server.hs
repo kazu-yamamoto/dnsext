@@ -154,13 +154,9 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: ServerOptions -> IO ()
-run ServerOptions{..} =
-    Server.run
-        conf
-        (fromIntegral $ port)
-        bindHosts
-        stdConsole
+run ServerOptions{..} = Server.run conf port' bindHosts stdConsole
   where
+    port' = fromIntegral port
     conf =
         Server.Config
             logOutput

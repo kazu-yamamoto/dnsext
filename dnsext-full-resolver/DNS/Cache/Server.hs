@@ -4,7 +4,7 @@
 module DNS.Cache.Server (
     Config (..),
     run,
-    workerBenchmark,
+    runBenchmark,
 ) where
 
 -- GHC packages
@@ -409,7 +409,7 @@ benchQueries =
 
 ----------------------------------------------------------------
 
-workerBenchmark
+runBenchmark
     :: Config
     -> Bool
     -- ^ No operation or not
@@ -418,7 +418,7 @@ workerBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-workerBenchmark conf@Config{..} noop gplot size = do
+runBenchmark conf@Config{..} noop gplot size = do
     (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
     (env, getSec) <- getEnvB conf putLines
 

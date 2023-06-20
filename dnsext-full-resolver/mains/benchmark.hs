@@ -127,12 +127,7 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: BenchmarkOptions -> IO ()
-run BenchmarkOptions{..} =
-    Server.workerBenchmark
-        conf
-        noopMode
-        gplotMode
-        requests
+run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
   where
     conf =
         Server.Config
