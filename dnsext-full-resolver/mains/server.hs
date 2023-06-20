@@ -157,15 +157,18 @@ run :: ServerOptions -> IO ()
 run ServerOptions{..} =
     Server.run
         conf
-        workers
-        workerSharedQueue
-        qsizePerWorker
         (fromIntegral $ port)
         bindHosts
         stdConsole
   where
-    conf = Server.Config logOutput logLevel (maxKibiEntries * 1024) disableV6NS
-
+    conf = Server.Config
+             logOutput
+             logLevel
+             (maxKibiEntries * 1024)
+             disableV6NS
+             workers
+             qsizePerWorker
+             workerSharedQueue
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs

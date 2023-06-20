@@ -65,6 +65,9 @@ data Config = Config
    , logLevel  :: Log.Level
    , maxCacheSize :: Int
    , disableV6NS :: Bool
+   , nOfPipelines :: Int
+   , qsizePerWorker :: Int
+   , workerSharedQueue :: Bool
    }
 
 type Request a = (ByteString, a)
@@ -78,24 +81,13 @@ type EnqueueResp a = Response a -> IO ()
 
 run
     :: Config
-    -> Int
-    -> Bool
-    -> Int
     -> PortNumber
     -> [HostName]
     -> Bool
     -> IO ()
-run conf n workerSharedQueue qsizePerWorker port hosts stdConsole = do
+run conf port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
-    (serverLoops, monLoops) <-
-        setup
-            conf
-            n
-            workerSharedQueue
-            qsizePerWorker
-            port
-            hosts
-            stdConsole
+    (serverLoops, monLoops) <- setup conf port hosts stdConsole
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
@@ -104,19 +96,16 @@ run conf n workerSharedQueue qsizePerWorker port hosts stdConsole = do
 
 setup
     :: Config
-    -> Int
-    -> Bool
-    -> Int
     -> PortNumber
     -> [HostName]
     -> Bool
     -> IO ([IO ()], [IO ()])
-setup conf@Config{..} n workerSharedQueue qsizePerWorker port hosts stdConsole = do
+setup conf@Config{..} port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
     (env, getSec, expires) <- getEnv conf putLines
     hostIPs <- getHostIPs hosts port
 
-    let getP = getPipeline n workerSharedQueue qsizePerWorker getSec env port
+    let getP = getPipeline conf getSec env port
     (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
     let pLoops = concat loopsList
 
@@ -140,7 +129,7 @@ setup conf@Config{..} n workerSharedQueue qsizePerWorker port hosts stdConsole =
             logLevel
             maxCacheSize
             disableV6NS
-            n
+            nOfPipelines
             workerSharedQueue
             qsizePerWorker
             port
@@ -195,20 +184,18 @@ getAInfoIPs port = do
 ----------------------------------------------------------------
 
 getPipeline
-    :: Int
-    -> Bool
-    -> Int
+    :: Config
     -> IO EpochTime
     -> Env
     -> PortNumber
     -> IP
     -> IO ([IO ()], PLStatus)
-getPipeline n sharedQueue perWorker getSec env port hostIP = do
+getPipeline conf getSec env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
     (workerPipelines, enqueueReq, dequeueResp) <-
-        getWorkers n sharedQueue perWorker getSec env
+        getWorkers conf getSec env
     (workers, getsStatus) <- unzip <$> sequence workerPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
@@ -222,33 +209,31 @@ getPipeline n sharedQueue perWorker getSec env port hostIP = do
 
 getWorkers
     :: Show a
-    => Int
-    -> Bool
-    -> Int
+    => Config
     -> IO EpochTime
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers n sharedQueue perWorker getSec env
-    | perWorker <= 0 = do
+getWorkers Config{..} getSec env
+    | qsizePerWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate n $ getSenderReceiver reqQ resQ 8 getSec env
+        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ 8 getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
-    | sharedQueue = do
-        let qsize = perWorker * n
+    | workerSharedQueue = do
+        let qsize = qsizePerWorker * nOfPipelines
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate n $ getSenderReceiver reqQ resQ perWorker getSec env
+        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker getSec env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM n $ newQueue perWorker
+        reqQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM n $ newQueue perWorker
+        resQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ perWorker getSec env
+                [ getSenderReceiver reqQ resQ qsizePerWorker getSec env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -264,12 +249,12 @@ getSenderReceiver
     -> IO EpochTime
     -> Env
     -> IO ([IO ()], WorkerStatus)
-getSenderReceiver reqQ resQ perWorker getSec env = do
+getSenderReceiver reqQ resQ qsizePerWorker getSec env = do
     (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
         worker = getWorker env incs enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <- consumeLoop perWorker logr worker
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop qsizePerWorker logr worker
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
         cacher = getCacher env getSec incs enqueueDec enqueueResp
@@ -422,13 +407,13 @@ benchQueries =
 
 ----------------------------------------------------------------
 
-workerBenchmark :: Config -> Bool -> Bool -> Int -> Int -> Int -> IO ()
-workerBenchmark conf@Config{..} noop gplot n perWorker size = do
+workerBenchmark :: Config -> Bool -> Bool -> Int -> IO ()
+workerBenchmark conf@Config{..} noop gplot size = do
     (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
     (env, getSec) <- getEnvB conf putLines
 
     (workers, enqueueReq, dequeueResp) <-
-        getPipelineB noop n perWorker env getSec
+        getPipelineB noop conf env getSec
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -446,11 +431,11 @@ workerBenchmark conf@Config{..} noop gplot n perWorker size = do
 
     if gplot
         then do
-            putStrLn $ unwords [show n, show rate]
+            putStrLn $ unwords [show nOfPipelines, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show n
-            putStrLn $ "perWorker: " ++ show perWorker
+            putStrLn $ "workers: " ++ show nOfPipelines
+            putStrLn $ "qsizePerWorker: " ++ show qsizePerWorker
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show elapsed
@@ -470,20 +455,19 @@ getEnvB Config{..} putLines = do
 
 getPipelineB
     :: Bool
-    -> Int
-    -> Int
+    -> Config
     -> Env
     -> IO EpochTime
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-getPipelineB True n perWorker _ _ = do
-    let qsize = perWorker * n
+getPipelineB True Config{..} _ _ = do
+    let qsize = qsizePerWorker * nOfPipelines
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
-    let pipelines = replicate n [forever $ writeQueue resQ =<< readQueue reqQ]
+    let pipelines = replicate nOfPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
-getPipelineB _ n perWorker env getSec = do
+getPipelineB _ conf env getSec = do
     (workerPipelines, enqueueReq, dequeueRes) <-
-        getWorkers n True perWorker getSec env
+        getWorkers conf getSec env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workers, enqueueReq, dequeueRes)
