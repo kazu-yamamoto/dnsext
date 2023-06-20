@@ -13,11 +13,11 @@ Some resource records use `ByteString` internally. So, if they are cached for a 
 
 This new library uses typeclasses to extend resource records and uses `ShortByteString` in them.
 
-## Full resolver
+## `bowline`, a full resolver server
 
-`dnsext-full-resolver` provides a server of full resolver, called 'bowline`.
+`dnsext-full-resolver` provides a server of full resolver, called `bowline`.
 
-## `dug` command
+## `dug`, a stub/full resolver command
 
 `dnsext-full-resolver` also provides dig-like command called `dug`.
 
