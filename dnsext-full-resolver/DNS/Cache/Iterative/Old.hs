@@ -6,8 +6,8 @@ module DNS.Cache.Iterative.Old where
 -- GHC packages
 import Control.Monad (join, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (runExceptT, throwE)
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Monad.Trans.Except (throwE)
+import Control.Monad.Trans.Reader (asks)
 import Data.Function (on)
 import Data.Functor (($>))
 import Data.List (groupBy, sort, uncons)
@@ -120,10 +120,6 @@ additional セクションにその名前に対するアドレス (A および A
 この情報を使って、繰り返し、子ドメインへの検索を行なう.
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
-
-runDNSQuery
-    :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
-runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage

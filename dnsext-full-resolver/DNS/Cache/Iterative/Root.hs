@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.Iterative.Root ( refreshRoot, cachedDNSKEY, takeDEntryIPs ) where
+module DNS.Cache.Iterative.Root (refreshRoot, cachedDNSKEY, takeDEntryIPs) where
 
 -- GHC packages
 import Control.Monad (when)

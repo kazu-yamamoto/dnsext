@@ -2,7 +2,8 @@ module DNS.Cache.Iterative.Helpers where
 
 -- GHC packages
 import Control.Monad (guard, (<=<))
-import Control.Monad.Trans.Except (throwE)
+import Control.Monad.Trans.Except (runExceptT, throwE)
+import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Function (on)
 import Data.List (groupBy, sort, sortOn, uncons)
 
@@ -10,6 +11,9 @@ import Data.List (groupBy, sort, sortOn, uncons)
 
 -- dns packages
 
+import DNS.Do53.Client (
+    QueryControls (..),
+ )
 import DNS.Do53.Memo (
     Ranking,
  )
@@ -141,3 +145,7 @@ rrnamePairs dds@(d : ds) ggs@(g : gs)
   where
     an = rrname a
     a = head g
+
+runDNSQuery
+    :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
+runDNSQuery q = runReaderT . runReaderT (runExceptT q)
