@@ -17,6 +17,7 @@ library
     other-modules:
         DNS.Cache.Iterative.API
         DNS.Cache.Iterative.Cache
+        DNS.Cache.Iterative.Delegation
         DNS.Cache.Iterative.Env
         DNS.Cache.Iterative.Helpers
         DNS.Cache.Iterative.Norec
@@ -28,11 +29,11 @@ library
         DNS.Cache.Iterative.Types
         DNS.Cache.Iterative.Utils
         DNS.Cache.Iterative.Verify
-        DNS.Cache.ServerMonitor
+        DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
+        DNS.Cache.ServerMonitor
         DNS.Cache.SocketUtil
-        DNS.Cache.Queue
 
     default-language: Haskell2010
     ghc-options:      -Wall
