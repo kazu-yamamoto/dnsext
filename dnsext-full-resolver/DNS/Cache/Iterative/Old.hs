@@ -5,7 +5,7 @@ module DNS.Cache.Iterative.Old where
 
 -- GHC packages
 import qualified Control.Exception as E
-import Control.Monad (guard, join, when, (<=<))
+import Control.Monad (join, when)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
@@ -62,7 +62,6 @@ import DNS.SEC (
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types (
     CLASS,
-    DNSError,
     DNSHeader,
     DNSMessage,
     Domain,
@@ -78,6 +77,7 @@ import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
 
 -- this package
+import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Rev
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
@@ -150,9 +150,6 @@ dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
 runDNSQuery
     :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
-
-throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwE . DnsError
 
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
@@ -1170,59 +1167,6 @@ recoverRRset rrs =
 
 ---
 
-nsList
-    :: Domain
-    -> (Domain -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
-
-cnameList
-    :: Domain
-    -> (Domain -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-cnameList = rrListWith CNAME $ \rd -> DNS.rdataField rd DNS.cname_domain
-
-rrListWith
-    :: TYPE
-    -> (DNS.RData -> Maybe rd)
-    -> Domain
-    -> (rd -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-rrListWith typ fromRD dom h = foldr takeRR []
-  where
-    takeRR rr@ResourceRecord{rdata = rd} xs
-        | rrname rr == dom, rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
-    takeRR _ xs = xs
-
-sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
-sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd
-
-rrsigList :: Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
-rrsigList dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom pair rrs
-  where
-    pair rd rr = (rd, rrttl rr)
-
-axList
-    :: Bool
-    -> (Domain -> Bool)
-    -> (IP -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-axList disableV6NS pdom h = foldr takeAx []
-  where
-    takeAx rr@ResourceRecord{rrtype = A, rdata = rd} xs
-        | pdom (rrname rr)
-        , Just v4 <- DNS.rdataField rd DNS.a_ipv4 =
-            h (IPv4 v4) rr : xs
-    takeAx rr@ResourceRecord{rrtype = AAAA, rdata = rd} xs
-        | not disableV6NS && pdom (rrname rr)
-        , Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 =
-            h (IPv6 v6) rr : xs
-    takeAx _ xs = xs
-
 ---
 
 {- Get the answer DNSMessage from the authoritative server.
@@ -1457,13 +1401,6 @@ lookupCacheEither logMark dom typ = do
         , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
         ]
     return result
-
-withSection
-    :: (m -> ([ResourceRecord], Ranking))
-    -> m
-    -> ([ResourceRecord] -> Ranking -> a)
-    -> a
-withSection getRanked msg body = uncurry body $ getRanked msg
 
 cacheRRset
     :: Ranking

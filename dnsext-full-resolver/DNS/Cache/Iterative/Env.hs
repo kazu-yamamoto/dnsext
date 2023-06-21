@@ -1,5 +1,5 @@
 module DNS.Cache.Iterative.Env (
-    newEnv
+    newEnv,
 ) where
 
 -- GHC packages
