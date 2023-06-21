@@ -52,7 +52,7 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import Data.Function (on)
 import Data.Functor (($>))
-import Data.IORef (IORef, atomicWriteIORef, newIORef, readIORef)
+import Data.IORef (atomicWriteIORef, newIORef, readIORef)
 import Data.List (groupBy, intercalate, sort, sortOn, uncons)
 import qualified Data.List as L
 import Data.Map (Map)
@@ -88,9 +88,6 @@ import DNS.Do53.Internal (
  )
 import qualified DNS.Do53.Internal as DNS
 import DNS.Do53.Memo (
-    CRSet,
-    Cache,
-    Key,
     Ranking (RankAdditional),
     insertSetEmpty,
     rankedAdditional,
@@ -115,7 +112,6 @@ import DNS.Types (
     Domain,
     EDNSheader,
     Question (..),
-    RCODE,
     RData,
     ResourceRecord (..),
     TTL,
@@ -127,6 +123,7 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6, toIPv4, toIPv6b)
 import qualified Data.IP as IP
 
 -- this package
+import DNS.Cache.Iterative.Types
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
@@ -136,17 +133,6 @@ import qualified DNS.Log as Log
 -- >>> :set -XOverloadedStrings
 
 -----
-
-data Env = Env
-    { logLines_ :: Log.PutLines
-    , disableV6NS_ :: !Bool
-    , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
-    , getCache_ :: IO Cache
-    , currentRoot_ :: IORef (Maybe Delegation)
-    , currentSeconds_ :: IO EpochTime
-    , timeString_ :: IO ShowS
-    , idGen_ :: IO DNS.Identifier
-    }
 
 {- datatypes to propagate request flags -}
 
@@ -187,16 +173,6 @@ _requestAD ic = case adBit $ qctlHeader ic of
     FlagSet -> AuthenticatedData
     _ -> NoAuthenticatedData
 
-data QueryError
-    = DnsError DNSError
-    | NotResponse DNS.QorR DNSMessage
-    | InvalidEDNS DNS.EDNSheader DNSMessage
-    | HasError DNS.RCODE DNSMessage
-    deriving (Show)
-
-type ContextT m = ReaderT Env (ReaderT QueryControls m)
-type DNSQuery = ExceptT QueryError (ContextT IO)
-
 ---
 
 {-
@@ -209,12 +185,6 @@ additional セクションにその名前に対するアドレス (A および A
 この情報を使って、繰り返し、子ドメインへの検索を行なう.
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
-
-type UpdateCache =
-    ( Key -> TTL -> CRSet -> Ranking -> IO ()
-    , IO Cache
-    )
-type TimeCache = (IO EpochTime, IO ShowS)
 
 newEnv
     :: Log.PutLines
@@ -298,9 +268,6 @@ getReplyCached cxt reqM = case uncons $ DNS.question reqM of
             mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
         fmap mkReply . either (Just . Left) (Right <$>)
             <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
-
-{- response code, answer section, authority section -}
-type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 
 -- 最終的な解決結果を得る
 runResolve
@@ -897,22 +864,6 @@ resolveJustDC dc n typ
   where
     mdc = maxNotSublevelDelegation
 
-{- FOURMOLU_DISABLE -}
-{- delegation information for domain -}
-data Delegation = Delegation
-    { delegationZone :: Domain {- destination zone domain -}
-    , delegationNS :: NE DEntry {- NS infos of destination zone, get from source zone NS -}
-    , delegationDS :: [RD_DS] {- SEP DNSKEY signature of destination zone, get from source zone NS -}
-    , delegationDNSKEY :: [RD_DNSKEY] {- destination DNSKEY set, get from destination NS -}
-    }
-    deriving (Show)
-{- FOURMOLU_ENABLE -}
-
-data DEntry
-    = DEwithAx !Domain !IP
-    | DEonlyNS !Domain
-    deriving (Show)
-
 nsDomain :: DEntry -> Domain
 nsDomain (DEwithAx dom _) = dom
 nsDomain (DEonlyNS dom) = dom
@@ -1443,16 +1394,6 @@ withVerifiedRRset now dnskeys rrs sigs left right =
             ]
         minTTL = minimum $ ttl : sigTTLs ++ map fromIntegral expireTTLs
     (sortedWires, sortedRRs) = unzip $ SEC.sortCanonical rrs
-
-data RRset = RRset
-    { rrsName :: Domain
-    , rrsType :: TYPE
-    , rrsClass :: CLASS
-    , rrsTTL :: TTL
-    , rrsRDatas :: [RData]
-    , rrsGoodSigs :: [RD_RRSIG]
-    }
-    deriving (Show)
 
 rrsetEmpty :: RRset
 rrsetEmpty = RRset "" (DNS.toTYPE 0) 0 0 [] []
