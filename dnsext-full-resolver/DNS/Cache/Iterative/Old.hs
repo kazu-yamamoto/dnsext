@@ -255,10 +255,6 @@ resolveByCache =
         (\_ -> pure ((), ([], [])))
         (\_ _ -> pure ((), Nothing, ([], [])))
 
----
-rrsetNull :: RRset -> Bool
-rrsetNull = null . rrsRDatas
-
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO RRset{..} = case reqDO of
     NoDnssecOK -> rrs
@@ -274,7 +270,3 @@ rrListFromRRset reqDO RRset{..} = case reqDO of
         [ ResourceRecord rrsName RRSIG rrsClass rrsTTL (DNS.toRData sig)
         | sig <- rrsGoodSigs
         ]
-
----
-
----
