@@ -13,7 +13,7 @@ import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import DNS.Types.Decode (EpochTime)
 import Data.Function (on)
 import Data.Functor (($>))
-import Data.IORef (atomicWriteIORef, newIORef, readIORef)
+import Data.IORef (atomicWriteIORef, readIORef)
 import Data.List (groupBy, sort, sortOn, uncons)
 import Data.Maybe (fromMaybe, isJust, listToMaybe)
 import qualified Data.Set as Set
@@ -40,7 +40,6 @@ import DNS.Do53.Internal (
     ResolvEnv (..),
     ResolvInfo (..),
     defaultResolvInfo,
-    newConcurrentGenId,
     udpTcpResolver,
  )
 import qualified DNS.Do53.Internal as DNS
@@ -143,28 +142,6 @@ additional セクションにその名前に対するアドレス (A および A
 この情報を使って、繰り返し、子ドメインへの検索を行なう.
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
-
-newEnv
-    :: Log.PutLines
-    -> Bool
-    -> UpdateCache
-    -> TimeCache
-    -> IO Env
-newEnv putLines disableV6NS (ins, getCache) (curSec, timeStr) = do
-    genId <- newConcurrentGenId
-    rootRef <- newIORef Nothing
-    let cxt =
-            Env
-                { logLines_ = putLines
-                , disableV6NS_ = disableV6NS
-                , insert_ = ins
-                , getCache_ = getCache
-                , currentRoot_ = rootRef
-                , currentSeconds_ = curSec
-                , timeString_ = timeStr
-                , idGen_ = genId
-                }
-    return cxt
 
 dnsQueryT
     :: (Env -> QueryControls -> IO (Either QueryError a)) -> DNSQuery a
