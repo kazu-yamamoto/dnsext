@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.Iterative.Old where
+module DNS.Cache.Iterative.API where
 
 -- GHC packages
 import Control.Monad.Trans.Class (lift)
