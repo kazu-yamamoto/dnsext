@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.Iterative.Resolve (runResolve, resolve, resolveLogic) where
+module DNS.Cache.Iterative.Resolve (
+    runResolve,
+    resolve,
+    resolveLogic,
+) where
 
 -- GHC packages
 import Control.Monad (when)

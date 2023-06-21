@@ -36,7 +36,6 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Resolve
-import DNS.Cache.Iterative.ResolveJust
 import DNS.Cache.Iterative.Types
 
 -- $setup
@@ -133,15 +132,6 @@ getReplyCached cxt reqM = case uncons $ DNS.question reqM of
             mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
         fmap mkReply . either (Just . Left) (Right <$>)
             <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
-
--- 権威サーバーからの解決結果を得る
-runResolveJust
-    :: Env
-    -> Domain
-    -> TYPE
-    -> QueryControls
-    -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
 
 ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp

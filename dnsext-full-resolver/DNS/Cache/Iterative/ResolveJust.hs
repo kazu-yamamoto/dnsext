@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.Iterative.ResolveJust where
+module DNS.Cache.Iterative.ResolveJust (
+    runResolveJust,
+    resolveJust,
+    runIterative,
+) where
 
 -- GHC packages
 import Control.Monad (join, when)
@@ -53,6 +57,15 @@ import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
 import qualified DNS.Log as Log
+
+-- 権威サーバーからの解決結果を得る
+runResolveJust
+    :: Env
+    -> Domain
+    -> TYPE
+    -> QueryControls
+    -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
 resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
