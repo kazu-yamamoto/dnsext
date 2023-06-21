@@ -1076,9 +1076,6 @@ verifySEP dss dom rrs = do
 rrsetNull :: RRset -> Bool
 rrsetNull = null . rrsRDatas
 
-rrsetVerified :: RRset -> Bool
-rrsetVerified = not . null . rrsGoodSigs
-
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO RRset{..} = case reqDO of
     NoDnssecOK -> rrs
