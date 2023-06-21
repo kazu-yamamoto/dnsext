@@ -747,51 +747,6 @@ delegationWithCache zoneDom dnskeys dom msg = do
         match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
         nsSet = Set.fromList $ map fst nsps
 
-takeDelegationSrc
-    :: [(Domain, ResourceRecord)]
-    -> [RD_DS]
-    -> [ResourceRecord]
-    -> Maybe Delegation
-takeDelegationSrc nsps dss adds = do
-    (p@(_, rr), ps) <- uncons nsps
-    let nss = map fst (p : ps)
-    ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
-    {- only data from delegation source zone. get DNSKEY from destination zone -}
-    return $ Delegation (rrname rr) ents dss []
-  where
-    addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
-    dentries d [] = [DEonlyNS d]
-    dentries d as@(_ : _)
-        | null axs = [DEonlyNS d]
-        | otherwise = axs
-      where
-        axs =
-            axList
-                False
-                (const True {- paired by rrnamePairs -})
-                (\ip _ -> DEwithAx d ip)
-                as
-
--- | pairing correspond rrname domain data
---
--- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, rrclass = classIN, rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
--- >>> rrnamePairs ["s", "t", "u"] [agroup "s", agroup "t", agroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
--- True
--- >>> rrnamePairs ["t"] [agroup "s", agroup "t", agroup "u"] == [("t", agroup "t")]
--- True
--- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
--- True
-rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
-rrnamePairs [] _gs = []
-rrnamePairs (d : ds) [] = (d, []) : rrnamePairs ds []
-rrnamePairs dds@(d : ds) ggs@(g : gs)
-    | d < an = (d, []) : rrnamePairs ds ggs
-    | d == an = (d, g) : rrnamePairs ds gs
-    | otherwise {- d >  an  -} = rrnamePairs dds gs -- unknown additional RRs. just skip
-  where
-    an = rrname a
-    a = head g
-
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 subdomainShared
     :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
