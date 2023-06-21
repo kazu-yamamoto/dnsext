@@ -4,11 +4,10 @@
 module DNS.Cache.Iterative.Old where
 
 -- GHC packages
-import qualified Control.Exception as E
 import Control.Monad (join, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import Control.Monad.Trans.Except (runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), asks)
 import Data.Function (on)
 import Data.Functor (($>))
@@ -28,19 +27,8 @@ import DNS.Do53.Client (
     FlagOp (..),
     HeaderControls (..),
     QueryControls (..),
-    defaultResolvActions,
-    ractionGenId,
-    ractionGetTime,
-    ractionLog,
  )
 import qualified DNS.Do53.Client as DNS
-import DNS.Do53.Internal (
-    ResolvEnv (..),
-    ResolvInfo (..),
-    defaultResolvInfo,
-    udpTcpResolver,
- )
-import qualified DNS.Do53.Internal as DNS
 import DNS.Do53.Memo (
     Ranking (RankAdditional),
     rankedAdditional,
@@ -60,12 +48,10 @@ import DNS.Types (
     DNSMessage,
     Domain,
     EDNSheader,
-    Question (..),
     RData,
     ResourceRecord (..),
     TTL,
     TYPE (A, AAAA, CNAME, NS, SOA),
-    classIN,
  )
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
@@ -73,6 +59,7 @@ import Data.IP (IP (IPv4, IPv6))
 -- this package
 import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.Helpers
+import DNS.Cache.Iterative.Norec
 import DNS.Cache.Iterative.Random
 import DNS.Cache.Iterative.Rev
 import DNS.Cache.Iterative.Types
@@ -140,25 +127,9 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
 
-dnsQueryT
-    :: (Env -> QueryControls -> IO (Either QueryError a)) -> DNSQuery a
-dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
-
 runDNSQuery
     :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
-
-handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
-handleResponseError e f msg
-    | DNS.qOrR flags /= DNS.QR_Response = e $ NotResponse (DNS.qOrR flags) msg
-    | DNS.ednsHeader msg == DNS.InvalidEDNS =
-        e $ InvalidEDNS (DNS.ednsHeader msg) msg
-    | DNS.rcode flags
-        `notElem` [DNS.NoErr, DNS.NameErr] =
-        e $ HasError (DNS.rcode flags) msg
-    | otherwise = f msg
-  where
-    flags = DNS.flags $ DNS.header msg
 
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
@@ -997,41 +968,6 @@ recoverRRset rrs =
 
 ---
 
-{- Get the answer DNSMessage from the authoritative server.
-   Note about flags in request to an authoritative server.
-  * RD (Recursion Desired) must be 0 for request to authoritative server
-  * EDNS must be enable for DNSSEC OK request -}
-norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
-    let ris =
-            [ defaultResolvInfo
-                { rinfoHostName = show aserver
-                , rinfoActions =
-                    defaultResolvActions
-                        { ractionGenId = idGen_ cxt
-                        , ractionGetTime = currentSeconds_ cxt
-                        , ractionLog = logLines_ cxt
-                        }
-                }
-            | aserver <- aservers
-            ]
-        renv =
-            ResolvEnv
-                { renvResolver = udpTcpResolver 3 (32 * 1024) -- 3 is retry
-                , renvConcurrent = True -- should set True if multiple RIs are provided
-                , renvResolvInfos = ris
-                }
-        q = Question name typ classIN
-        doFlagSet
-            | dnsssecOK = FlagSet
-            | otherwise = FlagClear
-        qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
-    either
-        (Left . DnsError)
-        ( \res -> handleResponseError Left Right $ DNS.replyDNSMessage (DNS.resultReply res)
-        )
-        <$> E.try (DNS.resolve renv q qctl)
-
 -- Filter authoritative server addresses from the delegation information.
 -- If the resolution result is NODATA, IllegalDomain is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
@@ -1146,4 +1082,3 @@ resolveNS disableV6NS dc ns = do
     resolveAXofNS
 
 ---
-

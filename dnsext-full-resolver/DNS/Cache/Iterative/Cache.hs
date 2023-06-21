@@ -8,7 +8,7 @@ module DNS.Cache.Iterative.Cache (
     cacheSection,
     cacheNoRRSIG,
     cacheNoDelegation,
-                                 ) where
+) where
 
 -- GHC packages
 import Control.Monad.IO.Class (liftIO)

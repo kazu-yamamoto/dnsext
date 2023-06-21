@@ -18,6 +18,7 @@ library
         DNS.Cache.Iterative.Cache
         DNS.Cache.Iterative.Env
         DNS.Cache.Iterative.Helpers
+        DNS.Cache.Iterative.Norec
         DNS.Cache.Iterative.Old
         DNS.Cache.Iterative.Random
         DNS.Cache.Iterative.Rev
