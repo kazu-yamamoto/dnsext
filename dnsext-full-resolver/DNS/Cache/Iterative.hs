@@ -1,13 +1,33 @@
 module DNS.Cache.Iterative (
-    module DNS.Cache.Iterative.Env,
-    module DNS.Cache.Iterative.Helpers,
-    module DNS.Cache.Iterative.Old,
-    module DNS.Cache.Iterative.Root,
+    -- * resolve interfaces
+    getReplyMessage,
+    getReplyCached,
+    newEnv,
+
+    -- * dug
+    runDNSQuery,
+    replyMessage,
+    replyResult,
+    replyResultCached,
+
+    -- * types
     module DNS.Cache.Iterative.Types,
+
+    -- * testing
+    runResolve,
+    runResolveJust,
+    rootHint,
+    runIterative,
+    printResult,
+    refreshRoot,
+    rrsetVerified,
 ) where
 
 import DNS.Cache.Iterative.Env
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Old
+import DNS.Cache.Iterative.Resolve
+import DNS.Cache.Iterative.ResolveJust
 import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
+import DNS.Cache.Iterative.Utils
