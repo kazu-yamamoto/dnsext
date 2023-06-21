@@ -34,7 +34,6 @@ import DNS.Types (
 import qualified DNS.Types as DNS
 
 -- this package
-import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Resolve
 import DNS.Cache.Iterative.Types
 

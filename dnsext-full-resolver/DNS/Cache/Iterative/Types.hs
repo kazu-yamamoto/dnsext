@@ -3,15 +3,16 @@ module DNS.Cache.Iterative.Types (
     TimeCache,
     Result,
     Env (..),
-    DNSQuery,
     RRset (..),
     DEntry (..),
     ContextT,
     Delegation (..),
     QueryError (..),
+    DNSQuery,
+    runDNSQuery,
 ) where
 
-import Control.Monad.Trans.Except (ExceptT (..))
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.IORef (IORef)
 import Data.IP (IP)
@@ -91,6 +92,10 @@ data QueryError
 
 type ContextT m = ReaderT Env (ReaderT QueryControls m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
+
+runDNSQuery
+    :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
+runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 data RRset = RRset
     { rrsName :: Domain

@@ -5,7 +5,6 @@ module DNS.Cache.Iterative (
     newEnv,
 
     -- * dug
-    runDNSQuery,
     replyMessage,
     replyResult,
     replyResultCached,
