@@ -15,6 +15,7 @@ library
         DNS.Cache.Types
 
     other-modules:
+        DNS.Cache.Iterative.Old
         DNS.Cache.ServerMonitor
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
