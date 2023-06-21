@@ -16,6 +16,7 @@ library
 
     other-modules:
         DNS.Cache.Iterative.Old
+        DNS.Cache.Iterative.Rev
         DNS.Cache.Iterative.Types
         DNS.Cache.Iterative.Utils
         DNS.Cache.ServerMonitor

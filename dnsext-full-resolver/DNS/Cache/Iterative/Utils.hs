@@ -25,7 +25,6 @@ import DNS.Cache.Iterative.Types
 import DNS.Cache.Types (NE)
 import qualified DNS.Log as Log
 
-
 logLines :: Log.Level -> [String] -> ContextT IO ()
 logLines level xs = do
     putLines <- asks logLines_
