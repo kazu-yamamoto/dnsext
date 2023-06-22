@@ -251,9 +251,9 @@ iterative_ dc nss0 (x : xs) =
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         msg <- norec dnssecOK sas name A
-        let withNoDelegation handler = mayDelegation handler (return . HasDelegation)
+        let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
             sharedHandler = subdomainShared dc nss name msg
-            cacheHandler = cacheNoDelegation zone dnskeys name msg $> NoDelegation
+            cacheHandler = cacheNoDelegation zone dnskeys name msg $> noDelegation
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= lift . withNoDelegation cacheHandler
@@ -261,11 +261,11 @@ iterative_ dc nss0 (x : xs) =
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
         let withNXC nxc
-                | nxc = return NoDelegation
+                | nxc = return noDelegation
                 | otherwise = stepQuery nss
         md <- maybe (withNXC =<< lift lookupNX) return =<< lift (lookupDelegation name)
         let fills d = fillsDNSSEC dc nss d
-        mayDelegation (return NoDelegation) (fmap HasDelegation . fills) md
+        mayDelegation (return noDelegation) (fmap hasDelegation . fills) md
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
@@ -281,11 +281,11 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
             d <- getWorkaround
             let dnskey = delegationDNSKEY d
             case dnskey of
-                [] -> return $ HasDelegation d
+                [] -> return $ hasDelegation d
                 _ : _ -> do
                     (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
                     if rrsetVerified rrset
-                        then return $ HasDelegation d
+                        then return $ hasDelegation d
                         else do
                             lift . logLn Log.WARN . unwords $
                                 [ "subdomainShared:"
@@ -298,7 +298,7 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
                             throwDnsError DNS.ServerFailure
 
     case soaRRs of
-        [] -> return NoDelegation {- not workaround fallbacks -}
+        [] -> return noDelegation {- not workaround fallbacks -}
         {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
         [_] -> verifySOA
         _ : _ : _ -> do
