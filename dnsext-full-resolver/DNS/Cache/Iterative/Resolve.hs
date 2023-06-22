@@ -215,7 +215,7 @@ recoverRRset rrs =
     either (const Nothing) (\cps -> Just $ cps k) $
         SEC.canonicalRRsetSorted sortedRRs
   where
-    k dom typ cls ttl rds = RRset dom typ cls ttl rds []
+    k dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
     (_, sortedRRs) = unzip $ SEC.sortCanonical rrs
 
 maxCNameChain :: Int

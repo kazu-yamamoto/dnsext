@@ -100,8 +100,8 @@ rootPriming = do
             let nsps = nsList "." (,) rrs
                 (nss, nsRRs) = unzip nsps
                 rrsigs = rrsigList "." NS rrs
-            (RRset{..}, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
-            return (nsps, Set.fromList nss, cacheNS, rrsGoodSigs)
+            (rs, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
+            return (nsps, Set.fromList nss, cacheNS, rrsetGoodSigs rs)
 
         (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
             let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs

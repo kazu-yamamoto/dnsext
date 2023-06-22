@@ -12,6 +12,8 @@ module DNS.Cache.Iterative.Types (
     delegationHasDS,
     QueryError (..),
     DNSQuery,
+    MayVerifiedRRS (..),
+    mayVerifiedRRS,
     runDNSQuery,
     throwDnsError,
 ) where
@@ -128,13 +130,27 @@ runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwE . DnsError
 
+{- FOURMOLU_DISABLE -}
+data MayVerifiedRRS
+    = NotVerifiedRRS       {- not judged valid or invalid -}
+    | InvalidRRS           {- RRSIG found, but no RRSIG is passed -}
+    | ValidRRS [RD_RRSIG]  {- any RRSIG is passed. [RD_RRSIG] should be not null -}
+    deriving (Eq, Show)
+
+mayVerifiedRRS :: a -> a -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
+mayVerifiedRRS notVerified invalid valid m = case m of
+    NotVerifiedRRS  ->  notVerified
+    InvalidRRS      ->  invalid
+    ValidRRS sigs   ->  valid sigs
+{- FOURMOLU_ENABLE -}
+
 data RRset = RRset
     { rrsName :: Domain
     , rrsType :: TYPE
     , rrsClass :: CLASS
     , rrsTTL :: TTL
     , rrsRDatas :: [RData]
-    , rrsGoodSigs :: [RD_RRSIG]
+    , rrsMayVerified :: MayVerifiedRRS
     }
     deriving (Show)
 
