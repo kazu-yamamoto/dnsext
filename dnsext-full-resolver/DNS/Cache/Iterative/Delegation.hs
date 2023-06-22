@@ -1,7 +1,11 @@
+{-# LANGUAGE DeriveTraversable #-}
+
 module DNS.Cache.Iterative.Delegation (
     lookupDelegation,
     delegationWithCache,
-    MayDelegation (..),
+    MayDelegation,
+    noDelegation,
+    hasDelegation,
     mayDelegation,
 ) where
 
@@ -43,6 +47,21 @@ import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
 import qualified DNS.Log as Log
 
+newtype GMayDelegation a
+    = MayDelegation (Maybe a)
+    deriving (Functor, Foldable, Traversable)
+
+type MayDelegation = GMayDelegation Delegation
+
+noDelegation :: MayDelegation
+noDelegation = MayDelegation Nothing
+
+hasDelegation :: Delegation -> MayDelegation
+hasDelegation = MayDelegation . Just
+
+mayDelegation :: a -> (Delegation -> a) -> MayDelegation -> a
+mayDelegation n h (MayDelegation m) = maybe n h m
+
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
 lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
@@ -74,14 +93,14 @@ lookupDelegation dom = do
             | noCachedV4NS es = Nothing
             {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
             | otherwise =
-                (\des -> HasDelegation $ Delegation dom des [] []) <$> uncons es
+                (\des -> hasDelegation $ Delegation dom des [] []) <$> uncons es
         {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
             let nss = sort $ nsList dom const rrs
             case nss of
-                [] -> return $ Just NoDelegation {- hit null NS list, so no delegation -}
+                [] -> return $ Just noDelegation {- hit null NS list, so no delegation -}
                 _ : _ -> fromDEs . concat <$> mapM lookupDEs nss
 
     maybe (return Nothing) getDelegation =<< lookupCache dom NS
@@ -101,15 +120,6 @@ v4DEntryList des@(de : _) = concatMap skipAAAA $ byNS des
 nsDomain :: DEntry -> Domain
 nsDomain (DEwithAx dom _) = dom
 nsDomain (DEonlyNS dom) = dom
-
-data MayDelegation
-    = NoDelegation {- no delegation information -}
-    | HasDelegation Delegation
-
-mayDelegation :: a -> (Delegation -> a) -> MayDelegation -> a
-mayDelegation n h md = case md of
-    NoDelegation -> n
-    HasDelegation d -> h d
 
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache
@@ -147,7 +157,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
     lift . clogLn Log.DEMO verifyColor $
         "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
     raiseOnFailure
-    lift . maybe (pure NoDelegation) (fmap HasDelegation . found) $
+    lift . maybe (pure noDelegation) (fmap hasDelegation . found) $
         takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
   where
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
