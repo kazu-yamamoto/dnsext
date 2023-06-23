@@ -220,8 +220,10 @@ minUdpSize = 512
 ----------------------------------------------------------------
 
 -- | A 'DNSMessage' template for queries with default settings for
--- the message 'DNSHeader' and 'EDNSheader'.  This is the initial
--- query message state, before customization via 'QueryControls'.
+-- the message 'DNSHeader' and 'EDNSheader'.
+--
+-- >>> defaultQuery
+-- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {qOrR = QR_Query, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
@@ -263,6 +265,9 @@ makeQuery idt q =
 -- extended value, which will be split between the primary header and EDNS OPT
 -- record during message encoding (low 4 bits in DNS header, high 8 bits in
 -- EDNS OPT record).  See 'EDNSheader' for more details.
+--
+-- >>> defaultResponse
+-- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {qOrR = QR_Response, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
@@ -365,6 +370,9 @@ getHeader =
 
 -- | Default 'DNSFlags' record suitable for making recursive queries.  By default
 -- the RD bit is set, and the AD and CD bits are cleared.
+--
+-- >>> defaultDNSFlags
+-- DNSFlags {qOrR = QR_Query, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}
 defaultDNSFlags :: DNSFlags
 defaultDNSFlags =
     DNSFlags
