@@ -31,6 +31,9 @@ import Data.IP (IP (IPv4, IPv6))
 -- this package
 import DNS.Cache.Iterative.Types
 
+-- $setup
+-- >>> import DNS.Types
+
 rrListWith
     :: TYPE
     -> (DNS.RData -> Maybe rd)
