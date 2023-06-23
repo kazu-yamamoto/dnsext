@@ -74,7 +74,8 @@ resolveConcurrent ris@(ResolvInfo{..}:_) resolver q@Question{..} qctl = do
             ++ resultHostName
             ++ "#"
             ++ show resultPortNumber
-            ++ "/UDP"
+            ++ "/"
+            ++ resultTag
     ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
     return r
 
