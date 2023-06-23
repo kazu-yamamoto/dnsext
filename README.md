@@ -31,7 +31,7 @@ query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2
 query "www.iij.ad.jp." A to 2606:4700:4700::1111#443/HTTP/2
 query "www.iij.ad.jp." A to 2606:4700:4700::1001#443/HTTP/2
 query "www.iij.ad.jp." A to 1.0.0.1#443/HTTP/2
-query "www.iij.ad.jp." A to 1.1.1.1#443/UDP: win
+query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2: win
 ;; 1.1.1.1#443/HTTP/2, Tx:42bytes, Rx:58bytes, 135usec
 
 ;; HEADER SECTION:
