@@ -343,11 +343,9 @@ fillDelegationDS dc src dest
             verifyFailed es = do
                 lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
                 throwDnsError DNS.ServerFailure
-            result (e, vinfo) = do
-                let traceLog (verifyColor, verifyMsg) =
-                        lift . clogLn Log.DEMO (Just verifyColor) $
-                            "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                maybe (pure ()) traceLog vinfo
+            result (e, verifyColor, verifyMsg) = do
+                lift . clogLn Log.DEMO (Just verifyColor) $
+                    "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
         if null ips
             then lift nullIPs
@@ -357,7 +355,7 @@ queryDS
     :: [RD_DNSKEY]
     -> [IP]
     -> Domain
-    -> DNSQuery (Either String [RD_DS], (Maybe (Color, String)))
+    -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS dnskeys ips dom = do
     msg <- norec True ips dom DS
     withSection rankedAnswer msg $ \rrs rank -> do
@@ -365,13 +363,14 @@ queryDS dnskeys ips dom = do
             rrsigs = rrsigList dom DS rrs
         (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
         let verifyResult
-                | null dsrds = return (Right [], Just (Yellow, "no DS, so no verify"))
-                | rrsetVerified rrset =
+                | null dsrds = return (Right [], Yellow, "no DS, so no verify")
+                | rrsetVerified rrset = do
                     lift cacheDS
-                        *> return (Right dsrds, Just (Green, "verification success - RRSIG of DS"))
+                    return (Right dsrds, Green, "verification success - RRSIG of DS")
                 | otherwise =
                     return
                         ( Left "queryDS: verification failed - RRSIG of DS"
-                        , Just (Red, "verification failed - RRSIG of DS")
+                        , Red
+                        , "verification failed - RRSIG of DS"
                         )
         verifyResult
