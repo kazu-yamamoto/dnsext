@@ -365,7 +365,7 @@ queryDS dnskeys ips dom = do
             rrsigs = rrsigList dom DS rrs
         (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
         let verifyResult
-                | null dsrds = return (Right [], Nothing {- no DS, so no verify -})
+                | null dsrds = return (Right [], Just (Yellow, "no DS, so no verify"))
                 | rrsetVerified rrset =
                     lift cacheDS
                         *> return (Right dsrds, Just (Green, "verification success - RRSIG of DS"))
