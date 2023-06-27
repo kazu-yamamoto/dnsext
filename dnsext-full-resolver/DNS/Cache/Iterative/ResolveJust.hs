@@ -12,6 +12,7 @@ import Control.Monad (join, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
+import Data.List (uncons)
 import Data.Maybe (isJust)
 
 -- other packages
@@ -107,12 +108,10 @@ delegationIPs dc Delegation{..} = do
 
         result
             | not (null ips) = selectIPs ipnum ips
-            | not (null names) = do
-                mayName <- randomizedSelect names
-                let neverReach = do
-                        lift $ logLn Log.DEMO $ "delegationIPs: never reach this action."
-                        throwDnsError DNS.ServerFailure
-                maybe neverReach (fmap ((: []) . fst) . resolveNS disableV6NS dc) mayName
+            | Just names1 <- uncons names = do
+                {- case for not (null names) -}
+                name <- randomizedSelectN names1
+                (: []) . fst <$> resolveNS disableV6NS dc name
             | disableV6NS && not (null allIPs) = do
                 lift . logLn Log.DEMO . concat $
                     [ "delegationIPs: server-fail: domain: "
