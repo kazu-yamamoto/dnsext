@@ -82,7 +82,7 @@ resolveJustDC dc n typ
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
         lift . logLn Log.DEMO . unwords $
-            ["resolve-just: query", show (n, typ), "selected addresses:"]
+            ["resolve-just: query", show (n, typ), "servers:"]
                 ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
@@ -243,7 +243,7 @@ iterative_ dc nss0 (x : xs) =
             "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
         sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         lift . logLn Log.DEMO . unwords $
-            ["iterative: query", show (name, A), "with selected addresses:"]
+            ["iterative: query", show (name, A), "servers:"]
                 ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
