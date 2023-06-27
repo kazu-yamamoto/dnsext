@@ -76,8 +76,6 @@ resolveJustDC dc n typ
             "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ)
         throwDnsError DNS.ServerFailure
     | otherwise = do
-        lift . logLn Log.DEMO $
-            "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
@@ -164,9 +162,12 @@ resolveNS disableV6NS dc ns = do
             qx +!? qy = do
                 xs <- qx
                 if null xs then qy else pure xs
-            querySection typ =
-                lift . cacheAnswerAx
-                    =<< resolveJustDC (succ dc) ns typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
+            querySection typ = do
+                lift . logLn Log.DEMO . unwords $
+                    ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
+                {- resolve for not sub-level delegation. increase dc (delegation count) -}
+                lift . cacheAnswerAx =<< resolveJustDC (succ dc) ns typ
+
             cacheAnswerAx (msg, _) = withSection rankedAnswer msg $ \rrs rank -> do
                 let ps = axPairs rrs
                 cacheSection (map snd ps) rank
