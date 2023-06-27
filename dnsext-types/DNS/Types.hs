@@ -206,6 +206,8 @@ module DNS.Types (
         OP_NOTIFY,
         OP_UPDATE
     ),
+    fromOPCODE,
+    toOPCODE,
 
     -- ** RCODE
     RCODE (
