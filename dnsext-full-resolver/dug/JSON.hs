@@ -76,14 +76,14 @@ rr ResourceRecord{..} = object xs
 
 {- FOURMOLU_DISABLE -}
 rd :: TYPE -> RData -> (String, Doc ann)
-rd A     v = ("rdA",         justQuote (fromRData v :: Maybe RD_A))
-rd AAAA  v = ("rdAAAA",      justQuote (fromRData v :: Maybe RD_AAAA))
-rd CNAME v = ("radataCNAME", just (fromRData v :: Maybe RD_CNAME))
-rd DNAME v = ("radataDNAME", just (fromRData v :: Maybe RD_DNAME))
-rd NS    v = ("radataNS",    just (fromRData v :: Maybe RD_NS))
-rd PTR   v = ("radataPTR",   just (fromRData v :: Maybe RD_PTR))
-rd TXT   v = ("radataTXT",   just (fromRData v :: Maybe RD_TXT))
-rd _     v = ("RDATAHEX",    dquotes $ pretty $ B.unpack $ B16.encode $ encodeRData v)
+rd A     v = ("rdataA",     justQuote (fromRData v :: Maybe RD_A))
+rd AAAA  v = ("rdataAAAA",  justQuote (fromRData v :: Maybe RD_AAAA))
+rd CNAME v = ("rdataCNAME", just (fromRData v :: Maybe RD_CNAME))
+rd DNAME v = ("rdataDNAME", just (fromRData v :: Maybe RD_DNAME))
+rd NS    v = ("rdataNS",    just (fromRData v :: Maybe RD_NS))
+rd PTR   v = ("rdataPTR",   just (fromRData v :: Maybe RD_PTR))
+rd TXT   v = ("rdataTXT",   just (fromRData v :: Maybe RD_TXT))
+rd _     v = ("RDATAHEX",   dquotes $ pretty $ B.unpack $ B16.encode $ encodeRData v)
 {- FOURMOLU_ENABLE -}
 
 domain :: Domain -> Doc ann
