@@ -60,14 +60,9 @@ lookupCache dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookup ts dom typ DNS.classIN cache
+    let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
     logLn Log.DEBUG . unwords $
-        [ "lookupCache:"
-        , show dom
-        , show typ
-        , show DNS.classIN
-        , ":"
-        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-        ]
+        ["lookupCache:", show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
@@ -85,32 +80,26 @@ lookupCacheEither logMark dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookupEither ts dom typ DNS.classIN cache
-    logLn Log.DEBUG . unwords $
-        [ "lookupCacheEither:"
-        , logMark ++ ":"
-        , show dom
-        , show typ
-        , show DNS.classIN
-        , ":"
-        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-        ]
+    let plogLn lv s = logLn lv $ unwords ["lookupCacheEither:", logMark ++ ":", s]
+        pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+    plogLn Log.DEBUG . unwords $
+        [show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
+    prefix = ("cacheNoRRSIG: " ++)
+    plogLn lv s = logLn lv $ prefix s
     crrsError _ =
         logLines Log.WARN $
-            "cacheNoRRSIG: no caching RR set:" : map (("\t" ++) . show) rrs0
+            prefix "no caching RR set:" : map (("\t" ++) . show) rrs0
     insert hrrs = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
-            logLn Log.DEBUG . unwords $
-                [ "cacheNoRRSIG: RRset:"
-                , show (((dom, typ, cls), ttl), rank)
-                , ' ' : show rds
-                ]
+            plogLn Log.DEBUG . unwords $
+                ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
             liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
     (_, sortedRRs) = unzip $ SEC.sortCanonical rrs0
 
@@ -157,20 +146,16 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
         _ : _ : _ -> Left "multiple SOA records found"
     ncWarn s
         | not $ null answer = do
-            logLines Log.DEBUG . (unwords withDom :) $
+            plogLines Log.DEBUG $
                 map ("\t" ++) ("because of non empty answers:" : map show answer)
             return []
         | otherwise = do
-            logLines Log.WARN . (unwords withDom :) $
+            plogLines Log.WARN $
                 map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
             return []
       where
-        withDom =
-            [ "cacheEmptySection:"
-            , "from-domain=" ++ show zoneDom ++ ","
-            , "domain=" ++ show dom ++ ":"
-            , s
-            ]
+        withDom = ["from-domain=" ++ show zoneDom ++ ",", "domain=" ++ show dom ++ ":", s]
+        plogLines lv xs = logLines lv $ ("cacheEmptySection: " ++ unwords withDom) : xs
         answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
