@@ -2,9 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.ResolveJust (
+    -- * Iteratively search authritative server and exactly query to that
+    runResolveExact,
+    resolveExact,
+    runIterative,
+
+    -- * backword compatibility
     runResolveJust,
     resolveJust,
-    runIterative,
 ) where
 
 -- GHC packages
@@ -56,31 +61,44 @@ import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
 import qualified DNS.Log as Log
 
--- 権威サーバーからの解決結果を得る
+{-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
     :: Env
     -> Domain
     -> TYPE
     -> QueryControls
     -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
+runResolveJust = runResolveExact
+
+-- 権威サーバーからの解決結果を得る
+runResolveExact
+    :: Env
+    -> Domain
+    -> TYPE
+    -> QueryControls
+    -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt cd
+
+{-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
+resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJust = resolveExact
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
-resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
-resolveJust = resolveJustDC 0
+resolveExact :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExact = resolveExactDC 0
 
-resolveJustDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
-resolveJustDC dc n typ
+resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExactDC dc n typ
     | dc > mdc = do
         lift . logLn Log.WARN $
-            "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ)
+            "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
         throwDnsError DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
         lift . logLn Log.DEMO . unwords $
-            ["resolve-just: query", show (n, typ), "servers:"]
+            ["resolve-exact: query", show (n, typ), "servers:"]
                 ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
@@ -166,7 +184,7 @@ resolveNS disableV6NS dc ns = do
                 lift . logLn Log.DEMO . unwords $
                     ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
-                lift . cacheAnswerAx =<< resolveJustDC (succ dc) ns typ
+                lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
 
             cacheAnswerAx (msg, _) = withSection rankedAnswer msg $ \rrs rank -> do
                 let ps = axPairs rrs

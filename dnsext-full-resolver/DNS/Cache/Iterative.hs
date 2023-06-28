@@ -14,6 +14,7 @@ module DNS.Cache.Iterative (
 
     -- * testing
     runResolve,
+    runResolveExact,
     runResolveJust,
     rootHint,
     runIterative,
