@@ -177,7 +177,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
 resolveCNAME bn = do
-    (msg, d) <- resolveJust bn CNAME
+    (msg, d) <- resolveExact bn CNAME
     (,) msg <$> cacheAnswer d bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
@@ -192,7 +192,7 @@ resolveTYPE
         , ([RRset], [RRset])
         ) {- result msg, cname, verified answer, verified authority -}
 resolveTYPE bn typ = do
-    (msg, delegation@Delegation{..}) <- resolveJust bn typ
+    (msg, delegation@Delegation{..}) <- resolveExact bn typ
     let checkTypeRR =
             when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
                 throwDnsError DNS.UnexpectedRDATA -- CNAME と目的の TYPE が同時に存在した場合はエラー
