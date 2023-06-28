@@ -84,7 +84,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
         | typ == Cache.NX = called *> return (([], n0), Left (DNS.NoErr, [], []))
         | typ == CNAME = called *> justCNAME n0
         | otherwise = called *> recCNAMEs 0 n0 id
-    called = lift $ logLn Log.DEBUG $ "resolve: " ++ logMark ++ ": " ++ show (n0, typ)
+    logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
+    called = lift $ logLn_ Log.DEBUG $ show (n0, typ)
     justCNAME bn = do
         let noCache = do
                 result <- cnameHandler bn
@@ -110,10 +111,9 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
     -- recCNAMEs :: Int -> Domain -> [RRset] -> DNSQuery (([RRset], Domain), Either Result a)
     recCNAMEs cc bn dcnRRsets
-        | cc > mcc =
-            lift
-                (logLn Log.WARN $ "query: cname chain limit exceeded: " ++ show (n0, typ))
-                *> throwDnsError DNS.ServerFailure
+        | cc > mcc = do
+            lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
+            throwDnsError DNS.ServerFailure
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do
@@ -151,8 +151,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
             =<< lookupType bn Cache.NX
       where
         inconsistent rrs = do
-            logLn Log.WARN $
-                "resolve: inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
+            logLn_ Log.WARN $
+                "inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
             return Nothing
 
     -- Nothing のときはキャッシュに無し
