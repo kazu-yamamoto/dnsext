@@ -66,7 +66,7 @@ resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
 resolveConcurrent ris@(ResolvInfo{..}:_) resolver q@Question{..} qctl = do
     r@Result{..} <- raceAny $ map (\ri -> resolver ri q qctl) ris
     let ~tag =
-          "query "
+          "    query "
             ++ show qname
             ++ " "
             ++ show qtype

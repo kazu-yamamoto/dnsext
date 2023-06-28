@@ -84,7 +84,7 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
                 Just err -> E.throwIO err
   where
     ~tag =
-        "query "
+        "    query "
             ++ show qname
             ++ " "
             ++ show qtype

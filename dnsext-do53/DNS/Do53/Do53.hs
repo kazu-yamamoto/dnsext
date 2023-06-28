@@ -73,7 +73,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
     E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
   where
     ~tag =
-        "query "
+        "    query "
             ++ show qname
             ++ " "
             ++ show qtype
@@ -160,7 +160,7 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
     E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
   where
     ~tag =
-        "query "
+        "    query "
             ++ show qname
             ++ " "
             ++ show qtype
