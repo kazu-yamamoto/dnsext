@@ -89,9 +89,9 @@ rootPriming = do
     lift . logLn Log.DEMO . unwords $
         "root-server addresses for priming:" : [show ip | ip <- ips]
     ekeys <- cachedDNSKEY [rootSepDS] ips "."
-    either (return . Left . emsg) (body ips) ekeys
+    either (return . left) (body ips) ekeys
   where
-    emsg s = "rootPriming: " ++ s
+    left s = Left $ "rootPriming: " ++ s
     body ips dnskeys = do
         msgNS <- norec True ips "." NS
 
@@ -113,16 +113,15 @@ rootPriming = do
                 [] -> do
                     logLn Log.WARN $ "rootPriming: DNSSEC verification failed"
                     case takeDelegationSrc nsps [] axRRs of
-                        Nothing -> return $ Left $ emsg "no delegation"
-                        Just d -> do
+                        Nothing -> return $ left "no delegation"
+                        Just d@(Delegation _ des _ _) -> do
                             logLn Log.DEMO $
-                                "root-priming: verification failed - RRSIG of NS: \".\"\n"
-                                    ++ ppDelegation (delegationNS d)
+                                "root-priming: verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
                             return $ Right d
                 _ : _ -> do
                     logLn Log.DEBUG $ "rootPriming: DNSSEC verification success"
                     case takeDelegationSrc nsps [rootSepDS] axRRs of
-                        Nothing -> return $ Left $ emsg "no delegation"
+                        Nothing -> return $ left "no delegation"
                         Just (Delegation dom des dss _) -> do
                             logLn Log.DEMO $
                                 "root-priming: verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
