@@ -25,17 +25,17 @@ SVBC example: if `-d auto` is specified, `dug` obtains the SVCB record first and
 
 ```
 % dug @1.1.1.1 www.iij.ad.jp --demo -d auto
-query "_dns.resolver.arpa." SVCB to 1.1.1.1#53/UDP
+% ./dist/build/dug/dug @1.1.1.1 www.iij.ad.jp --demo -d auto
+    query "_dns.resolver.arpa." SVCB to 1.1.1.1#53/UDP
 [RD_SVCB {svcb_priority = 1, svcb_target = "one.one.one.one.", svcb_params = [alpn=["h2"], port=443, ipv4hint=[1.1.1.1,1.0.0.1], ipv6hint=[2606:4700:4700::1111,2606:4700:4700::1001], dohpath="/dns-query{?dns}"]},RD_SVCB {svcb_priority = 2, svcb_target = "one.one.one.one.", svcb_params = [alpn=["dot"], port=853, ipv4hint=[1.1.1.1,1.0.0.1], ipv6hint=[2606:4700:4700::1111,2606:4700:4700::1001]]}]
-query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2
-query "www.iij.ad.jp." A to 2606:4700:4700::1111#443/HTTP/2
-query "www.iij.ad.jp." A to 2606:4700:4700::1001#443/HTTP/2
-query "www.iij.ad.jp." A to 1.0.0.1#443/HTTP/2
-query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2: win
-;; 1.1.1.1#443/HTTP/2, Tx:42bytes, Rx:58bytes, 135usec
+    query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2
+    query "www.iij.ad.jp." A to 2606:4700:4700::1111#443/HTTP/2
+    query "www.iij.ad.jp." A to 2606:4700:4700::1001#443/HTTP/2
+    query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2: win
+;; 1.1.1.1#443/HTTP/2, Tx:42bytes, Rx:58bytes, 168usec
 
 ;; HEADER SECTION:
-;Standard query, NoError, id: 2859
+;Standard query, NoError, id: 43114
 ;Flags: Recursion Desired, Recursion Available
 
 
@@ -46,7 +46,7 @@ query "www.iij.ad.jp." A to 1.1.1.1#443/HTTP/2: win
 ;www.iij.ad.jp.		IN	A
 
 ;; ANSWER SECTION:
-www.iij.ad.jp.	98(1 min)	IN	A	202.232.2.180
+www.iij.ad.jp.	300(5 mins)	IN	A	202.232.2.180
 
 ;; AUTHORITY SECTION:
 
@@ -57,18 +57,17 @@ Full resolve example: if `-i` is specified, `dug` does iterative queries using t
 
 ```
 % dug www.iij.ad.jp --demo -i
-resolve-just: dc=0, ("www.iij.ad.jp.",A)
-root-server addresses for priming: 198.97.190.53 199.7.83.42 199.7.91.13 199.9.14.201
-query "." DNSKEY to 198.97.190.53#53/UDP
-query "." DNSKEY to 199.7.83.42#53/UDP
-query "." DNSKEY to 199.7.91.13#53/UDP
-query "." DNSKEY to 199.9.14.201#53/UDP
-query "." DNSKEY to 199.7.91.13#53/UDP: win
-query "." NS to 198.97.190.53#53/UDP
-query "." NS to 199.7.83.42#53/UDP
-query "." NS to 199.7.91.13#53/UDP
-query "." NS to 199.9.14.201#53/UDP
-query "." NS to 198.97.190.53#53/UDP: win
+root-server addresses for priming: 192.203.230.10 193.0.14.129 198.41.0.4 198.97.190.53
+    query "." DNSKEY to 192.203.230.10#53/UDP
+    query "." DNSKEY to 193.0.14.129#53/UDP
+    query "." DNSKEY to 198.41.0.4#53/UDP
+    query "." DNSKEY to 198.97.190.53#53/UDP
+    query "." DNSKEY to 192.203.230.10#53/UDP: win
+    query "." NS to 192.203.230.10#53/UDP
+    query "." NS to 193.0.14.129#53/UDP
+    query "." NS to 198.41.0.4#53/UDP
+    query "." NS to 198.97.190.53#53/UDP
+    query "." NS to 192.203.230.10#53/UDP: win
 root-priming: verification success - RRSIG of NS: "."
 	"a.root-servers.net." ["198.41.0.4","2001:503:ba3e::2:30"]
 	"b.root-servers.net." ["199.9.14.201","2001:500:200::b"]
@@ -97,13 +96,13 @@ zone: ".":
 	"k.root-servers.net." ["193.0.14.129","2001:7fd::1"]
 	"l.root-servers.net." ["199.7.83.42","2001:500:9f::42"]
 	"m.root-servers.net." ["202.12.27.33","2001:dc3::35"]
-iterative: query ("jp.",A) with selected addresses: 2001:500:1::53 2001:500:2::c 2001:500:12::d0d 2001:500:2d::d
-query "jp." A to 2001:500:1::53#53/UDP
-query "jp." A to 2001:500:2::c#53/UDP
-query "jp." A to 2001:500:12::d0d#53/UDP
-query "jp." A to 2001:500:2d::d#53/UDP
-query "jp." A to 2001:500:2d::d#53/UDP: win
-delegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of DS
+iterative: query ("jp.",A) servers: 2001:dc3::35 192.5.5.241 192.33.4.12 192.36.148.17
+    query "jp." A to 2001:dc3::35#53/UDP
+    query "jp." A to 192.5.5.241#53/UDP
+    query "jp." A to 192.33.4.12#53/UDP
+    query "jp." A to 192.36.148.17#53/UDP
+    query "jp." A to 2001:dc3::35#53/UDP: win
+delegation - verification success - RRSIG of DS: "." -> "jp."
 	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
 	"b.dns.jp." ["202.12.30.131","2001:dc2::1"]
 	"c.dns.jp." ["156.154.100.5","2001:502:ad09::5"]
@@ -112,11 +111,11 @@ delegationWithCache: "." -> "jp.", delegation - verification success - RRSIG of 
 	"f.dns.jp." ["150.100.6.8","2001:2f8:0:100::153"]
 	"g.dns.jp." ["203.119.40.1"]
 	"h.dns.jp." ["161.232.72.25","2a01:8840:1bc::25"]
-query "jp." DNSKEY to 2001:502:ad09::5#53/UDP
-query "jp." DNSKEY to 2001:dc2::1#53/UDP
-query "jp." DNSKEY to 2001:dc4::1#53/UDP
-query "jp." DNSKEY to 2a01:8840:1bc::25#53/UDP
-query "jp." DNSKEY to 2001:dc4::1#53/UDP: win
+    query "jp." DNSKEY to 210.138.175.244#53/UDP
+    query "jp." DNSKEY to 2001:200:c000::35#53/UDP
+    query "jp." DNSKEY to 2001:240::53#53/UDP
+    query "jp." DNSKEY to 2001:2f8:0:100::153#53/UDP
+    query "jp." DNSKEY to 2001:200:c000::35#53/UDP: win
 zone: "jp.":
 	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
 	"b.dns.jp." ["202.12.30.131","2001:dc2::1"]
@@ -126,13 +125,13 @@ zone: "jp.":
 	"f.dns.jp." ["150.100.6.8","2001:2f8:0:100::153"]
 	"g.dns.jp." ["203.119.40.1"]
 	"h.dns.jp." ["161.232.72.25","2a01:8840:1bc::25"]
-iterative: query ("ad.jp.",A) with selected addresses: 2001:502:ad09::5 2001:dc2::1 2001:dc4::1 2a01:8840:1bc::25
-query "ad.jp." A to 2001:502:ad09::5#53/UDP
-query "ad.jp." A to 2001:dc2::1#53/UDP
-query "ad.jp." A to 2001:dc4::1#53/UDP
-query "ad.jp." A to 2a01:8840:1bc::25#53/UDP
-query "ad.jp." A to 2001:dc4::1#53/UDP: win
-delegationWithCache: "jp." -> "ad.jp.", no delegation
+iterative: query ("ad.jp.",A) servers: 203.119.40.1 210.138.175.244 2001:200:c000::35 2001:240::53
+    query "ad.jp." A to 203.119.40.1#53/UDP
+    query "ad.jp." A to 210.138.175.244#53/UDP
+    query "ad.jp." A to 2001:200:c000::35#53/UDP
+    query "ad.jp." A to 2001:240::53#53/UDP
+    query "ad.jp." A to 2001:200:c000::35#53/UDP: win
+no delegation: "jp." -> "ad.jp."
 zone: "jp.":
 	"a.dns.jp." ["203.119.1.1","2001:dc4::1"]
 	"b.dns.jp." ["202.12.30.131","2001:dc2::1"]
@@ -142,38 +141,38 @@ zone: "jp.":
 	"f.dns.jp." ["150.100.6.8","2001:2f8:0:100::153"]
 	"g.dns.jp." ["203.119.40.1"]
 	"h.dns.jp." ["161.232.72.25","2a01:8840:1bc::25"]
-iterative: query ("iij.ad.jp.",A) with selected addresses: 2001:240::53 2001:2f8:0:100::153 2001:502:ad09::5 2001:dc2::1
-query "iij.ad.jp." A to 2001:240::53#53/UDP
-query "iij.ad.jp." A to 2001:2f8:0:100::153#53/UDP
-query "iij.ad.jp." A to 2001:502:ad09::5#53/UDP
-query "iij.ad.jp." A to 2001:dc2::1#53/UDP
-query "iij.ad.jp." A to 2001:240::53#53/UDP: win
-delegationWithCache: "jp." -> "iij.ad.jp.", delegation - verification success - RRSIG of DS
+iterative: query ("iij.ad.jp.",A) servers: 2001:200:c000::35 2001:240::53 2001:2f8:0:100::153 2001:502:ad09::5
+    query "iij.ad.jp." A to 2001:200:c000::35#53/UDP
+    query "iij.ad.jp." A to 2001:240::53#53/UDP
+    query "iij.ad.jp." A to 2001:2f8:0:100::153#53/UDP
+    query "iij.ad.jp." A to 2001:502:ad09::5#53/UDP
+    query "iij.ad.jp." A to 2001:240::53#53/UDP: win
+delegation - verification success - RRSIG of DS: "jp." -> "iij.ad.jp."
 	"dns0.iij.ad.jp." ["210.130.0.5","2001:240::105"]
 	"dns1.iij.ad.jp." ["210.130.1.5","2001:240::115"]
-query "iij.ad.jp." DNSKEY to 210.130.0.5#53/UDP
-query "iij.ad.jp." DNSKEY to 210.130.1.5#53/UDP
-query "iij.ad.jp." DNSKEY to 2001:240::105#53/UDP
-query "iij.ad.jp." DNSKEY to 2001:240::115#53/UDP
-query "iij.ad.jp." DNSKEY to 2001:240::105#53/UDP: win
+    query "iij.ad.jp." DNSKEY to 210.130.0.5#53/UDP
+    query "iij.ad.jp." DNSKEY to 210.130.1.5#53/UDP
+    query "iij.ad.jp." DNSKEY to 2001:240::105#53/UDP
+    query "iij.ad.jp." DNSKEY to 2001:240::115#53/UDP
+    query "iij.ad.jp." DNSKEY to 2001:240::105#53/UDP: win
 zone: "iij.ad.jp.":
 	"dns0.iij.ad.jp." ["210.130.0.5","2001:240::105"]
 	"dns1.iij.ad.jp." ["210.130.1.5","2001:240::115"]
-iterative: query ("www.iij.ad.jp.",A) with selected addresses: 210.130.0.5 210.130.1.5 2001:240::105 2001:240::115
-query "www.iij.ad.jp." A to 210.130.0.5#53/UDP
-query "www.iij.ad.jp." A to 210.130.1.5#53/UDP
-query "www.iij.ad.jp." A to 2001:240::105#53/UDP
-query "www.iij.ad.jp." A to 2001:240::115#53/UDP
-query "www.iij.ad.jp." A to 2001:240::105#53/UDP: win
-delegationWithCache: "iij.ad.jp." -> "www.iij.ad.jp.", no delegation
-resolve-just: query ("www.iij.ad.jp.",A) selected addresses: 210.130.0.5 210.130.1.5 2001:240::105 2001:240::115
-query "www.iij.ad.jp." A to 210.130.0.5#53/UDP
-query "www.iij.ad.jp." A to 210.130.1.5#53/UDP
-query "www.iij.ad.jp." A to 2001:240::105#53/UDP
-query "www.iij.ad.jp." A to 2001:240::115#53/UDP
-query "www.iij.ad.jp." A to 2001:240::105#53/UDP: win
+iterative: query ("www.iij.ad.jp.",A) servers: 210.130.0.5 210.130.1.5 2001:240::105 2001:240::115
+    query "www.iij.ad.jp." A to 210.130.0.5#53/UDP
+    query "www.iij.ad.jp." A to 210.130.1.5#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::105#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::115#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::105#53/UDP: win
+no delegation: "iij.ad.jp." -> "www.iij.ad.jp."
+resolve-exact: query ("www.iij.ad.jp.",A) servers: 210.130.0.5 210.130.1.5 2001:240::105 2001:240::115
+    query "www.iij.ad.jp." A to 210.130.0.5#53/UDP
+    query "www.iij.ad.jp." A to 210.130.1.5#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::105#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::115#53/UDP
+    query "www.iij.ad.jp." A to 2001:240::105#53/UDP: win
 verification success - RRSIG of "www.iij.ad.jp." A
-;; 182usec
+;; 202usec
 
 ;; HEADER SECTION:
 ;Standard query, NoError, id: 0
@@ -189,4 +188,5 @@ www.iij.ad.jp.	300(5 mins)	IN	A	202.232.2.180
 ;; AUTHORITY SECTION:
 
 ;; ADDITIONAL SECTION:
+
 ```
