@@ -92,6 +92,7 @@ rootPriming = do
     either (return . left) (body ips) ekeys
   where
     left s = Left $ "rootPriming: " ++ s
+    plogLn lv s = logLn lv $ "root-priming: " ++ s
     body ips dnskeys = do
         msgNS <- norec True ips "." NS
 
@@ -111,20 +112,20 @@ rootPriming = do
             cacheAX
             case nsGoodSigs of
                 [] -> do
-                    logLn Log.WARN $ "rootPriming: DNSSEC verification failed"
+                    plogLn Log.WARN $ "DNSSEC verification failed"
                     case takeDelegationSrc nsps [] axRRs of
                         Nothing -> return $ left "no delegation"
                         Just d@(Delegation _ des _ _) -> do
-                            logLn Log.DEMO $
-                                "root-priming: verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
+                            plogLn Log.DEMO $
+                                "verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
                             return $ Right d
                 _ : _ -> do
-                    logLn Log.DEBUG $ "rootPriming: DNSSEC verification success"
+                    plogLn Log.DEBUG $ "DNSSEC verification success"
                     case takeDelegationSrc nsps [rootSepDS] axRRs of
                         Nothing -> return $ left "no delegation"
                         Just (Delegation dom des dss _) -> do
-                            logLn Log.DEMO $
-                                "root-priming: verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
+                            plogLn Log.DEMO $
+                                "verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
                             return $ Right $ Delegation dom des dss dnskeys
 
     Delegation _dot hintDes _ _ = rootHint
