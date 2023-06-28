@@ -113,7 +113,7 @@ querySpec disableV6NS debug = describe "query" $ do
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True ucache tcache
     let refreshRoot = runDNSQuery Iterative.refreshRoot cxt mempty
         runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
-        runJust n ty = Iterative.runResolveJust cxt (fromString n) ty mempty
+        runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty
         runResolve n ty =
             (snd <$>)
                 <$> Iterative.runResolve cxt (fromString n) ty mempty
@@ -207,7 +207,7 @@ querySpec disableV6NS debug = describe "query" $ do
     it "resolve-just - delegation with aa" $ do
         -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
         result <-
-            Iterative.runResolveJust
+            Iterative.runResolveExact
                 cxt4
                 (fromString "sc02.alicdn.com.danuoyi.alicdn.com.")
                 A

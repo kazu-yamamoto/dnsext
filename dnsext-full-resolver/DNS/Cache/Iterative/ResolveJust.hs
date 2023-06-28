@@ -2,9 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.ResolveJust (
+    -- * Iteratively search authritative server and exactly query to that
+    runResolveExact,
+    resolveExact,
+    runIterative,
+
+    -- * backword compatibility
     runResolveJust,
     resolveJust,
-    runIterative,
 ) where
 
 -- GHC packages
@@ -56,33 +61,44 @@ import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
 import qualified DNS.Log as Log
 
--- 権威サーバーからの解決結果を得る
+{-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
     :: Env
     -> Domain
     -> TYPE
     -> QueryControls
     -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveJust cxt n typ cd = runDNSQuery (resolveJust n typ) cxt cd
+runResolveJust = runResolveExact
+
+-- 権威サーバーからの解決結果を得る
+runResolveExact
+    :: Env
+    -> Domain
+    -> TYPE
+    -> QueryControls
+    -> IO (Either QueryError (DNSMessage, Delegation))
+runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt cd
+
+{-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
+resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJust = resolveExact
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
-resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
-resolveJust = resolveJustDC 0
+resolveExact :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExact = resolveExactDC 0
 
-resolveJustDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
-resolveJustDC dc n typ
+resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExactDC dc n typ
     | dc > mdc = do
         lift . logLn Log.WARN $
-            "resolve-just: not sub-level delegation limit exceeded: " ++ show (n, typ)
+            "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
         throwDnsError DNS.ServerFailure
     | otherwise = do
-        lift . logLn Log.DEMO $
-            "resolve-just: " ++ "dc=" ++ show dc ++ ", " ++ show (n, typ)
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
         lift . logLn Log.DEMO . unwords $
-            ["resolve-just: query", show (n, typ), "selected addresses:"]
+            ["resolve-exact: query", show (n, typ), "servers:"]
                 ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
@@ -164,9 +180,12 @@ resolveNS disableV6NS dc ns = do
             qx +!? qy = do
                 xs <- qx
                 if null xs then qy else pure xs
-            querySection typ =
-                lift . cacheAnswerAx
-                    =<< resolveJustDC (succ dc) ns typ {- resolve for not sub-level delegation. increase dc (delegation count) -}
+            querySection typ = do
+                lift . logLn Log.DEMO . unwords $
+                    ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
+                {- resolve for not sub-level delegation. increase dc (delegation count) -}
+                lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
+
             cacheAnswerAx (msg, _) = withSection rankedAnswer msg $ \rrs rank -> do
                 let ps = axPairs rrs
                 cacheSection (map snd ps) rank
@@ -243,7 +262,7 @@ iterative_ dc nss0 (x : xs) =
             "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
         sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         lift . logLn Log.DEMO . unwords $
-            ["iterative: query", show (name, A), "with selected addresses:"]
+            ["iterative: query", show (name, A), "servers:"]
                 ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -343,11 +362,9 @@ fillDelegationDS dc src dest
             verifyFailed es = do
                 lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
                 throwDnsError DNS.ServerFailure
-            result (e, vinfo) = do
-                let traceLog (verifyColor, verifyMsg) =
-                        lift . clogLn Log.DEMO (Just verifyColor) $
-                            "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                maybe (pure ()) traceLog vinfo
+            result (e, verifyColor, verifyMsg) = do
+                lift . clogLn Log.DEMO (Just verifyColor) $
+                    "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
         if null ips
             then lift nullIPs
@@ -357,7 +374,7 @@ queryDS
     :: [RD_DNSKEY]
     -> [IP]
     -> Domain
-    -> DNSQuery (Either String [RD_DS], (Maybe (Color, String)))
+    -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS dnskeys ips dom = do
     msg <- norec True ips dom DS
     withSection rankedAnswer msg $ \rrs rank -> do
@@ -365,13 +382,14 @@ queryDS dnskeys ips dom = do
             rrsigs = rrsigList dom DS rrs
         (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
         let verifyResult
-                | null dsrds = return (Right [], Nothing {- no DS, so no verify -})
-                | rrsetVerified rrset =
+                | null dsrds = return (Right [], Yellow, "no DS, so no verify")
+                | rrsetVerified rrset = do
                     lift cacheDS
-                        *> return (Right dsrds, Just (Green, "verification success - RRSIG of DS"))
+                    return (Right dsrds, Green, "verification success - RRSIG of DS")
                 | otherwise =
                     return
                         ( Left "queryDS: verification failed - RRSIG of DS"
-                        , Just (Red, "verification failed - RRSIG of DS")
+                        , Red
+                        , "verification failed - RRSIG of DS"
                         )
         verifyResult

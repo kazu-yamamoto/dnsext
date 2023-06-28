@@ -154,8 +154,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    lift . clogLn Log.DEMO verifyColor $
-        "delegationWithCache: " ++ domTraceMsg ++ ", " ++ verifyMsg
+    lift . clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
     raiseOnFailure
     lift . maybe (pure noDelegation) (fmap hasDelegation . found) $
         takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
