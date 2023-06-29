@@ -125,6 +125,10 @@ data CacheResult
     | Positive DNSMessage
     | Negative String
 
+toCacheResult :: Either String DNSMessage -> CacheResult
+toCacheResult (Left x) = Negative x
+toCacheResult (Right x) = Positive x
+
 -- | Getting a response from the cache.
 getReplyCached
     :: Env
@@ -137,14 +141,11 @@ getReplyCached env reqM = case DNS.question reqM of
 getReplyCached'
     :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
 getReplyCached' env reqM (DNS.Question bn typ _) qs = do
-    mx <-
-        either (Just . Left) (Right <$>)
-            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
-    case mx of
-        Nothing -> return None
-        Just x -> case mkReply x of
-            Left l -> return $ Negative l
-            Right r -> return $ Positive r
+    ex <- runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+    case ex of
+        Right Nothing -> return None
+        Right (Just r) -> return $ toCacheResult $ mkReply $ Right r
+        Left l -> return $ toCacheResult $ mkReply $ Left l
   where
     reqH = DNS.header reqM
     reqEH = DNS.ednsHeader reqM
