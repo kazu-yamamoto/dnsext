@@ -14,7 +14,6 @@ module DNS.Cache.Iterative.API (
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (throwE)
 import Control.Monad.Trans.Reader (asks)
-import Data.List (uncons)
 
 -- other packages
 
@@ -109,16 +108,25 @@ getReplyMessage
     :: Env
     -> DNSMessage
     -> IO (Either String DNSMessage)
-getReplyMessage env reqM = case uncons $ DNS.question reqM of
-    Nothing -> return $ Left "empty question"
-    Just qs@(DNS.Question bn typ _, _) -> do
-        let reqH = DNS.header reqM
-            reqEH = DNS.ednsHeader reqM
-            getResult = do
-                guardRequestHeader reqH reqEH
-                replyResult bn typ
-        (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+getReplyMessage env reqM = case DNS.question reqM of
+    [] -> return $ Left "empty question"
+    qs@(q : _) -> getReplyMessage' env reqM q qs
+
+getReplyMessage'
+    :: Env
+    -> DNSMessage
+    -> DNS.Question
+    -> [DNS.Question]
+    -> IO (Either String DNSMessage)
+getReplyMessage' env reqM (DNS.Question bn typ _) qs = do
+    ers <- runDNSQuery getResult env $ ctrlFromRequestHeader reqH reqEH
+    return $ replyMessage ers (DNS.identifier reqH) qs
+  where
+    reqH = DNS.header reqM
+    reqEH = DNS.ednsHeader reqM
+    getResult = do
+        guardRequestHeader reqH reqEH
+        replyResult bn typ
 
 data CacheResult
     = None
@@ -181,6 +189,7 @@ guardRequestHeader reqH reqEH
   where
     rd = DNS.recDesired $ DNS.flags reqH
 
+-- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
 replyMessage
     :: Either QueryError Result
     -> DNS.Identifier
