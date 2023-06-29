@@ -41,7 +41,7 @@ import UnliftIO (SomeException, concurrently_, handle, race_)
 
 -- this package
 
-import DNS.Cache.Iterative (Env (..), getReplyCached, getReplyMessage)
+import DNS.Cache.Iterative (CacheResult (..), Env (..), getReplyCached, getReplyMessage)
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Queue (
     QueueSize,
@@ -293,13 +293,13 @@ getCacher env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
         Right reqM -> do
             mx <- getReplyCached env reqM
             case mx of
-                Nothing ->
+                None ->
                     enqueueDec (reqM, addr)
-                Just (Right respM) -> do
+                Positive respM -> do
                     incHit
                     let rbs = DNS.encode respM
                     rbs `seq` enqueueResp (rbs, addr)
-                Just (Left replyErr) -> do
+                Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
                         "cached: response cannot be generated: "

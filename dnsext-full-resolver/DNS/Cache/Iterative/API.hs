@@ -3,6 +3,7 @@
 
 module DNS.Cache.Iterative.API (
     getReplyMessage,
+    CacheResult (..),
     getReplyCached,
     replyMessage,
     replyResult,
@@ -119,15 +120,18 @@ getReplyMessage env reqM = case uncons $ DNS.question reqM of
         (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
             <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
 
--- キャッシュから返答メッセージを作る
--- Nothing のときキャッシュ無し
--- Just Left はエラー
+data CacheResult
+    = None
+    | Positive DNSMessage
+    | Negative String
+
+-- | Getting a response from the cache.
 getReplyCached
     :: Env
     -> DNSMessage
-    -> IO (Maybe (Either String DNSMessage))
+    -> IO CacheResult
 getReplyCached env reqM = case uncons $ DNS.question reqM of
-    Nothing -> return $ Just $ Left "empty question"
+    Nothing -> return $ Negative "empty question"
     Just qs@(DNS.Question bn typ _, _) -> do
         let reqH = DNS.header reqM
             reqEH = DNS.ednsHeader reqM
@@ -135,8 +139,14 @@ getReplyCached env reqM = case uncons $ DNS.question reqM of
                 guardRequestHeader reqH reqEH
                 replyResultCached bn typ
             mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
-        fmap mkReply . either (Just . Left) (Right <$>)
-            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+        mx <-
+            either (Just . Left) (Right <$>)
+                <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+        case mx of
+            Nothing -> return None
+            Just x -> case mkReply x of
+                Left l -> return $ Negative l
+                Right r -> return $ Positive r
 
 ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
