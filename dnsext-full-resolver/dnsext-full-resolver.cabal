@@ -84,6 +84,7 @@ executable dug
     hs-source-dirs:   dug
     other-modules:
         Iterative
+        JSON
         Output
         Recursive
 
@@ -104,7 +105,9 @@ executable dug
         random,
         transformers,
         ansi-terminal,
-        unix-time
+        unix-time,
+        prettyprinter,
+        base16-bytestring
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native

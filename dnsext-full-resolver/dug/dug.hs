@@ -34,6 +34,7 @@ import qualified DNS.Log as Log
 import Iterative (iterativeQuery)
 import Output (pprResult)
 import Recursive (recursiveQeury)
+import JSON (showJSON)
 
 options :: [OptDescr (Options -> Options)]
 options =
@@ -80,12 +81,18 @@ options =
         ["demo"]
         (NoArg (\opts -> opts{optLogLevel = Log.DEMO}))
         "set the log level to DEMO"
+    , Option
+        ['j']
+        ["json"]
+        (NoArg (\opts -> opts{optJSON = True}))
+        "use JSON encoding"
     ]
 
 data Options = Options
     { optHelp :: Bool
     , optIterative :: Bool
     , optDisableV6NS :: Bool
+    , optJSON :: Bool
     , optPort :: Maybe String
     , optDoX :: ShortByteString
     , optLogLevel :: Log.Level
@@ -98,6 +105,7 @@ defaultOptions =
         { optHelp = False
         , optIterative = False
         , optDisableV6NS = False
+        , optJSON = False
         , optPort = Nothing
         , optDoX = "do53"
         , optLogLevel = Log.WARN
@@ -161,7 +169,9 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    putLines Log.WARN Nothing [pprResult msg]
+    let res | optJSON = showJSON msg
+            | otherwise = pprResult msg
+    putLines Log.WARN Nothing [res]
     terminate
 
 ----------------------------------------------------------------
