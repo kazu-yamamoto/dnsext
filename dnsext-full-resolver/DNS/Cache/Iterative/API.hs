@@ -130,23 +130,28 @@ getReplyCached
     :: Env
     -> DNSMessage
     -> IO CacheResult
-getReplyCached env reqM = case uncons $ DNS.question reqM of
-    Nothing -> return $ Negative "empty question"
-    Just qs@(DNS.Question bn typ _, _) -> do
-        let reqH = DNS.header reqM
-            reqEH = DNS.ednsHeader reqM
-            getResult = do
-                guardRequestHeader reqH reqEH
-                replyResultCached bn typ
-            mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
-        mx <-
-            either (Just . Left) (Right <$>)
-                <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
-        case mx of
-            Nothing -> return None
-            Just x -> case mkReply x of
-                Left l -> return $ Negative l
-                Right r -> return $ Positive r
+getReplyCached env reqM = case DNS.question reqM of
+    [] -> return $ Negative "empty question"
+    qs@(q : _) -> getReplyCached' env reqM q qs
+
+getReplyCached'
+    :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
+getReplyCached' env reqM (DNS.Question bn typ _) qs = do
+    mx <-
+        either (Just . Left) (Right <$>)
+            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+    case mx of
+        Nothing -> return None
+        Just x -> case mkReply x of
+            Left l -> return $ Negative l
+            Right r -> return $ Positive r
+  where
+    reqH = DNS.header reqM
+    reqEH = DNS.ednsHeader reqM
+    getResult = do
+        guardRequestHeader reqH reqEH
+        replyResultCached bn typ
+    mkReply ers = replyMessage ers (DNS.identifier reqH) qs
 
 ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
