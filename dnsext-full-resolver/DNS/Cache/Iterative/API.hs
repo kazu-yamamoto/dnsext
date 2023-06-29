@@ -108,7 +108,7 @@ getReplyMessage
     :: Env
     -> DNSMessage
     -> IO (Either String DNSMessage)
-getReplyMessage cxt reqM = case uncons $ DNS.question reqM of
+getReplyMessage env reqM = case uncons $ DNS.question reqM of
     Nothing -> return $ Left "empty question"
     Just qs@(DNS.Question bn typ _, _) -> do
         let reqH = DNS.header reqM
@@ -117,7 +117,7 @@ getReplyMessage cxt reqM = case uncons $ DNS.question reqM of
                 guardRequestHeader reqH reqEH
                 replyResult bn typ
         (\ers -> replyMessage ers (DNS.identifier reqH) $ uncurry (:) qs)
-            <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
+            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
 
 -- キャッシュから返答メッセージを作る
 -- Nothing のときキャッシュ無し
@@ -126,7 +126,7 @@ getReplyCached
     :: Env
     -> DNSMessage
     -> IO (Maybe (Either String DNSMessage))
-getReplyCached cxt reqM = case uncons $ DNS.question reqM of
+getReplyCached env reqM = case uncons $ DNS.question reqM of
     Nothing -> return $ Just $ Left "empty question"
     Just qs@(DNS.Question bn typ _, _) -> do
         let reqH = DNS.header reqM
@@ -136,7 +136,7 @@ getReplyCached cxt reqM = case uncons $ DNS.question reqM of
                 replyResultCached bn typ
             mkReply ers = replyMessage ers (DNS.identifier reqH) (uncurry (:) qs)
         fmap mkReply . either (Just . Left) (Right <$>)
-            <$> runDNSQuery getResult cxt (ctrlFromRequestHeader reqH reqEH)
+            <$> runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
 
 ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
