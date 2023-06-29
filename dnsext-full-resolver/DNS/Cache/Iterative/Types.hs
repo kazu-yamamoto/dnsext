@@ -50,15 +50,17 @@ import DNS.Types.Decode (EpochTime)
 type UpdateCache =
     ( Key -> TTL -> CRSet -> Ranking -> IO ()
     , IO Cache
+    , EpochTime -> IO ()
     )
 
 type TimeCache = (IO EpochTime, IO ShowS)
 
 data Env = Env
     { logLines_ :: Log.PutLines
-    , disableV6NS_ :: !Bool
+    , disableV6NS_ :: Bool
     , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
+    , expireCache :: EpochTime -> IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS

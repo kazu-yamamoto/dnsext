@@ -27,10 +27,8 @@ setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        ucache = (insert, Cache.readMemo memo)
-    Iterative.newEnv putLines disableV6NS ucache tcache
+    updateCache <- Iterative.getUpdateCache cacheConf
+    Iterative.newEnv putLines disableV6NS updateCache tcache
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)

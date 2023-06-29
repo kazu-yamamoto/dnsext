@@ -22,7 +22,6 @@ import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import Data.IP (IP (..), fromHostAddress, fromHostAddress6)
@@ -103,10 +102,10 @@ setup
     -> IO ([IO ()], [IO ()])
 setup conf@Config{..} port hosts stdConsole = do
     (putLines, logQSize, terminate) <- Log.new logOutput logLevel
-    (env, getSec, expires) <- getEnv conf putLines
+    env <- getEnv conf putLines
     hostIPs <- getHostIPs hosts port
 
-    let getP = getPipeline conf getSec env port
+    let getP = getPipeline conf env port
     (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
     let pLoops = concat loopsList
 
@@ -117,7 +116,7 @@ setup conf@Config{..} port hosts stdConsole = do
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
     monLoops <-
-        monitor stdConsole params env (qsizes, ucacheQSize, logQSize) expires terminate
+        monitor stdConsole params env (qsizes, ucacheQSize, logQSize) terminate
 
     return (pLoops, monLoops)
   where
@@ -138,8 +137,7 @@ setup conf@Config{..} port hosts stdConsole = do
 
 ----------------------------------------------------------------
 
-getEnv
-    :: Config -> Log.PutLines -> IO (Env, IO EpochTime, EpochTime -> IO ())
+getEnv :: Config -> Log.PutLines -> IO Env
 getEnv Config{..} putLines = do
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -148,12 +146,8 @@ getEnv Config{..} putLines = do
                 tstr <- getTimeStr
                 putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        expires now = Cache.expiresMemo now memo
-        read' = Cache.readMemo memo
-    env <- Iterative.newEnv putLines disableV6NS (insert, read') tcache
-    return (env, getSec, expires)
+    updateCache <- Iterative.getUpdateCache cacheConf
+    Iterative.newEnv putLines disableV6NS updateCache tcache
 
 ----------------------------------------------------------------
 
@@ -186,17 +180,15 @@ getAInfoIPs port = do
 
 getPipeline
     :: Config
-    -> IO EpochTime
     -> Env
     -> PortNumber
     -> IP
     -> IO ([IO ()], PLStatus)
-getPipeline conf getSec env port hostIP = do
+getPipeline conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
-    (workerPipelines, enqueueReq, dequeueResp) <-
-        getWorkers conf getSec env
+    (workerPipelines, enqueueReq, dequeueResp) <- getWorkers conf env
     (workers, getsStatus) <- unzip <$> sequence workerPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
@@ -211,15 +203,14 @@ getPipeline conf getSec env port hostIP = do
 getWorkers
     :: Show a
     => Config
-    -> IO EpochTime
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers Config{..} getSec env
+getWorkers Config{..} env
     | qsizePerWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ 8 getSec env
+        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ 8 env
         return (wps, writeQueue reqQ, readQueue resQ)
     | workerSharedQueue = do
         let qsize = qsizePerWorker * nOfPipelines
@@ -227,7 +218,7 @@ getWorkers Config{..} getSec env
         resQ <- newQueue qsize
         {- share request queue and response queue -}
         let wps =
-                replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker getSec env
+                replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
@@ -235,7 +226,7 @@ getWorkers Config{..} getSec env
         resQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ qsizePerWorker getSec env
+                [ getSenderReceiver reqQ resQ qsizePerWorker env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -248,10 +239,9 @@ getSenderReceiver
     => rq (Request a)
     -> wq (Response a)
     -> Int
-    -> IO EpochTime
     -> Env
     -> IO ([IO ()], WorkerStatus)
-getSenderReceiver reqQ resQ qsizePerWorker getSec env = do
+getSenderReceiver reqQ resQ qsizePerWorker env = do
     (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
@@ -259,7 +249,7 @@ getSenderReceiver reqQ resQ qsizePerWorker getSec env = do
     (resolvLoop, enqueueDec, decQSize) <- consumeLoop qsizePerWorker logr worker
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
-        cacher = getCacher env getSec incs enqueueDec enqueueResp
+        cacher = getCacher env incs enqueueDec enqueueResp
         cachedLoop = handledLoop logc (readQueue reqQ >>= cacher)
 
         resolvLoops = replicate nOfResolvWorkers resolvLoop
@@ -280,14 +270,13 @@ getSenderReceiver reqQ resQ qsizePerWorker getSec env = do
 getCacher
     :: Show a
     => Env
-    -> IO EpochTime
     -> CntInc
     -> EnqueueDec a
     -> EnqueueResp a
     -> Request a
     -> IO ()
-getCacher env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
-    now <- getSec
+getCacher env CntInc{..} enqueueDec enqueueResp (bs, addr) = do
+    now <- currentSeconds_ env
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
         Right reqM -> do
@@ -420,10 +409,9 @@ runBenchmark
     -> IO ()
 runBenchmark conf@Config{..} noop gplot size = do
     (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
-    (env, getSec) <- getEnvB conf putLines
+    env <- getEnvB conf putLines
 
-    (workers, enqueueReq, dequeueResp) <-
-        getPipelineB noop conf env getSec
+    (workers, enqueueReq, dequeueResp) <- getPipelineB noop conf env
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -451,33 +439,30 @@ runBenchmark conf@Config{..} noop gplot size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: Config -> Log.PutLines -> IO (Env, IO EpochTime)
+getEnvB :: Config -> Log.PutLines -> IO Env
 getEnvB Config{..} putLines = do
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-    env <- Iterative.newEnv putLines False (insert, Cache.readMemo memo) tcache
-    return (env, getSec)
+    updateCache <- Iterative.getUpdateCache cacheConf
+    Iterative.newEnv putLines False updateCache tcache
 
 getPipelineB
     :: Bool
     -> Config
     -> Env
-    -> IO EpochTime
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-getPipelineB True Config{..} _ _ = do
+getPipelineB True Config{..} _ = do
     let qsize = qsizePerWorker * nOfPipelines
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
     let pipelines = replicate nOfPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
-getPipelineB _ conf env getSec = do
+getPipelineB _ conf env = do
     (workerPipelines, enqueueReq, dequeueRes) <-
-        getWorkers conf getSec env
+        getWorkers conf env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workers, enqueueReq, dequeueRes)
