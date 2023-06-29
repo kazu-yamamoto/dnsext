@@ -23,7 +23,6 @@ import Data.List (groupBy, sortOn)
 import System.Console.ANSI.Types
 
 -- dns packages
-
 import DNS.Do53.Memo (
     Ranking,
     insertSetEmpty,
@@ -60,14 +59,8 @@ lookupCache dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookup ts dom typ DNS.classIN cache
-    logLn Log.DEBUG . unwords $
-        [ "lookupCache:"
-        , show dom
-        , show typ
-        , show DNS.classIN
-        , ":"
-        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-        ]
+    let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+    logLn Log.DEBUG . unwords $ ["lookupCache:", show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
@@ -75,9 +68,7 @@ lookupCacheEither
     :: String
     -> Domain
     -> TYPE
-    -> ContextT
-        IO
-        (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
+    -> ContextT IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
 lookupCacheEither logMark dom typ = do
     getCache <- asks getCache_
     getSec <- asks currentSeconds_
@@ -85,32 +76,23 @@ lookupCacheEither logMark dom typ = do
         cache <- getCache
         ts <- getSec
         return $ Cache.lookupEither ts dom typ DNS.classIN cache
-    logLn Log.DEBUG . unwords $
-        [ "lookupCacheEither:"
-        , logMark ++ ":"
-        , show dom
-        , show typ
-        , show DNS.classIN
-        , ":"
-        , maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-        ]
+    let plogLn lv s = logLn lv $ unwords ["lookupCacheEither:", logMark ++ ":", s]
+        pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+    plogLn Log.DEBUG . unwords $ [show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
+    prefix = ("cacheNoRRSIG: " ++)
+    plogLn lv s = logLn lv $ prefix s
     crrsError _ =
-        logLines Log.WARN $
-            "cacheNoRRSIG: no caching RR set:" : map (("\t" ++) . show) rrs0
+        logLines Log.WARN $ prefix "no caching RR set:" : map (("\t" ++) . show) rrs0
     insert hrrs = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
-            logLn Log.DEBUG . unwords $
-                [ "cacheNoRRSIG: RRset:"
-                , show (((dom, typ, cls), ttl), rank)
-                , ' ' : show rds
-                ]
+            plogLn Log.DEBUG . unwords $ ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
             liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank
     (_, sortedRRs) = unzip $ SEC.sortCanonical rrs0
 
@@ -157,20 +139,14 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
         _ : _ : _ -> Left "multiple SOA records found"
     ncWarn s
         | not $ null answer = do
-            logLines Log.DEBUG . (unwords withDom :) $
-                map ("\t" ++) ("because of non empty answers:" : map show answer)
+            plogLines Log.DEBUG $ map ("\t" ++) ("because of non empty answers:" : map show answer)
             return []
         | otherwise = do
-            logLines Log.WARN . (unwords withDom :) $
-                map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
+            plogLines Log.WARN $ map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
             return []
       where
-        withDom =
-            [ "cacheEmptySection:"
-            , "from-domain=" ++ show zoneDom ++ ","
-            , "domain=" ++ show dom ++ ":"
-            , s
-            ]
+        withDom = ["from-domain=" ++ show zoneDom ++ ",", "domain=" ++ show dom ++ ":", s]
+        plogLines lv xs = logLines lv $ ("cacheEmptySection: " ++ unwords withDom) : xs
         answer = DNS.answer msg
 
 cacheEmpty :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
@@ -179,8 +155,7 @@ cacheEmpty zoneDom dom typ ttl rank = do
     insertRRSet <- asks insert_
     liftIO $ insertSetEmpty zoneDom dom typ ttl rank insertRRSet
 
-cacheAnswer
-    :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
+cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer Delegation{..} dom typ msg
     | null $ DNS.answer msg =
         lift . fmap ((,) []) $ case rcode of
@@ -195,21 +170,10 @@ cacheAnswer Delegation{..} dom typ msg
             (xRRset, cacheX) <- lift $ verifyAndCache dnskeys (filter isX rrs) sigs rank
             lift cacheX
             let (verifyMsg, verifyColor, raiseOnVerifyFailure)
-                    | null delegationDS =
-                        ( "no verification - no DS, " ++ show dom ++ " " ++ show typ
-                        , Just Yellow
-                        , pure ()
-                        )
-                    | rrsetVerified xRRset =
-                        ( "verification success - RRSIG of " ++ show dom ++ " " ++ show typ
-                        , Just Green
-                        , pure ()
-                        )
+                    | null delegationDS = ("no verification - no DS, " ++ show dom ++ " " ++ show typ, Just Yellow, pure ())
+                    | rrsetVerified xRRset = ("verification success - RRSIG of " ++ show dom ++ " " ++ show typ, Just Green, pure ())
                     | otherwise =
-                        ( "verification failed - RRSIG of " ++ show dom ++ " " ++ show typ
-                        , Just Red
-                        , throwDnsError DNS.ServerFailure
-                        )
+                        ("verification failed - RRSIG of " ++ show dom ++ " " ++ show typ, Just Red, throwDnsError DNS.ServerFailure)
             lift $ clogLn Log.DEMO verifyColor verifyMsg
             raiseOnVerifyFailure
             return ([xRRset], [])
@@ -218,8 +182,7 @@ cacheAnswer Delegation{..} dom typ msg
     zone = delegationZone
     dnskeys = delegationDNSKEY
 
-cacheNoDelegation
-    :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
+cacheNoDelegation :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
 cacheNoDelegation zoneDom dnskeys dom msg = do
     (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
         {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -235,9 +198,7 @@ cacheNoDelegation zoneDom dnskeys dom msg = do
                 cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
             | rcode == DNS.NameErr =
                 if hasCNAME
-                    then do
-                        cacheCNAME
-                        cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+                    then cacheCNAME *> cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
                     else cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
             | otherwise = pure []
           where
