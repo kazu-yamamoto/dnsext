@@ -17,9 +17,11 @@ import DNS.Do53.Internal (
 import DNS.Cache.Iterative.Types
 import qualified DNS.Log as Log
 
+-- | Creating a new 'Env'.
 newEnv
     :: Log.PutLines
     -> Bool
+    -- ^ disabling IPv6
     -> UpdateCache
     -> TimeCache
     -> IO Env
