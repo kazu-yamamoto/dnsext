@@ -17,11 +17,9 @@ import Data.List (groupBy, sort, uncons)
 import qualified Data.Set as Set
 
 -- other packages
-
 import System.Console.ANSI.Types
 
 -- dns packages
-
 import DNS.Do53.Memo (
     rankedAdditional,
     rankedAuthority,
@@ -68,18 +66,8 @@ lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
 lookupDelegation dom = do
     disableV6NS <- asks disableV6NS_
     let lookupDEs ns = do
-            let deListA =
-                    rrListWith
-                        A
-                        (`DNS.rdataField` DNS.a_ipv4)
-                        ns
-                        (\v4 _ -> DEwithAx ns (IPv4 v4))
-                deListAAAA =
-                    rrListWith
-                        AAAA
-                        (`DNS.rdataField` DNS.aaaa_ipv6)
-                        ns
-                        (\v6 _ -> DEwithAx ns (IPv6 v6))
+            let deListA = rrListWith A (`DNS.rdataField` DNS.a_ipv4) ns (\v4 _ -> DEwithAx ns (IPv4 v4))
+                deListAAAA = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns (\v6 _ -> DEwithAx ns (IPv6 v6))
 
             lk4 <- fmap (deListA . fst) <$> lookupCache ns A
             lk6 <- fmap (deListAAAA . fst) <$> lookupCache ns AAAA
@@ -129,16 +117,12 @@ delegationWithCache zoneDom dnskeys dom msg = do
         let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
         (rrset, cacheDS) <-
             lift $ verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
+
         let (verifyMsg, verifyColor, raiseOnFailure)
                 | null nsps = ("no delegation", Nothing, pure ())
                 | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
-                | rrsetVerified rrset =
-                    ("delegation - verification success - RRSIG of DS", Just Green, pure ())
-                | otherwise =
-                    ( "delegation - verification failed - RRSIG of DS"
-                    , Just Red
-                    , throwDnsError DNS.ServerFailure
-                    )
+                | rrsetVerified rrset = ("delegation - verification success - RRSIG of DS", Just Green, pure ())
+                | otherwise = ("delegation - verification failed - RRSIG of DS", Just Red, throwDnsError DNS.ServerFailure)
         return
             ( verifyMsg
             , verifyColor
