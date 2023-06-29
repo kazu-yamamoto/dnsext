@@ -20,7 +20,6 @@ import qualified Data.Set as Set
 -- other packages
 
 -- dns packages
-
 import DNS.Do53.Memo (
     rankedAdditional,
     rankedAnswer,
@@ -86,8 +85,7 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
-    lift . logLn Log.DEMO . unwords $
-        "root-server addresses for priming:" : [show ip | ip <- ips]
+    lift . logLn Log.DEMO . unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     ekeys <- cachedDNSKEY [rootSepDS] ips "."
     either (return . left) (body ips) ekeys
   where
@@ -110,23 +108,18 @@ rootPriming = do
         lift $ do
             cacheNS
             cacheAX
+            let withNoDelegation m f = maybe (return $ left "no delegation") f m
             case nsGoodSigs of
                 [] -> do
                     plogLn Log.WARN $ "DNSSEC verification failed"
-                    case takeDelegationSrc nsps [] axRRs of
-                        Nothing -> return $ left "no delegation"
-                        Just d@(Delegation _ des _ _) -> do
-                            plogLn Log.DEMO $
-                                "verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
-                            return $ Right d
+                    withNoDelegation (takeDelegationSrc nsps [] axRRs) $ \d@(Delegation _ des _ _) -> do
+                        plogLn Log.DEMO $ "verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
+                        return $ Right d
                 _ : _ -> do
                     plogLn Log.DEBUG $ "DNSSEC verification success"
-                    case takeDelegationSrc nsps [rootSepDS] axRRs of
-                        Nothing -> return $ left "no delegation"
-                        Just (Delegation dom des dss _) -> do
-                            plogLn Log.DEMO $
-                                "verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
-                            return $ Right $ Delegation dom des dss dnskeys
+                    withNoDelegation (takeDelegationSrc nsps [rootSepDS] axRRs) $ \(Delegation dom des dss _) -> do
+                        plogLn Log.DEMO $ "verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
+                        return $ Right $ Delegation dom des dss dnskeys
 
     Delegation _dot hintDes _ _ = rootHint
 
@@ -137,17 +130,15 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY
-    :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY [] _ _ = return $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = do
     msg <- norec True aservers dom DNSKEY
     let rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-    case rcode of
-        DNS.NoErr -> lift $ withSection rankedAnswer msg $ \rrs rank ->
+    lift $ case rcode of
+        DNS.NoErr -> withSection rankedAnswer msg $ \rrs rank ->
             either (return . Left) (doCache rank) $ verifySEP dss dom rrs
-        _ ->
-            return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
+        _ -> return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
     doCache rank (seps, dnskeys, rrsigs) = do
         (rrset, cacheDNSKEY) <-
@@ -160,9 +151,7 @@ verifySEP
     :: [RD_DS]
     -> Domain
     -> [ResourceRecord]
-    -> Either
-        String
-        ([(RD_DNSKEY, RD_DS)], [(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, TTL)])
+    -> Either String ([(RD_DNSKEY, RD_DS)], [(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, TTL)])
 verifySEP dss dom rrs = do
     let rrsigs = rrsigList dom DNSKEY rrs
     when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
