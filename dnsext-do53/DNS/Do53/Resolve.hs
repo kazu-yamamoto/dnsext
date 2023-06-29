@@ -63,19 +63,19 @@ resolveSequential ris0 resolver q qctl = loop ris0
 resolveConcurrent
     :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
-resolveConcurrent ris@(ResolvInfo{..}:_) resolver q@Question{..} qctl = do
+resolveConcurrent ris@(ResolvInfo{..} : _) resolver q@Question{..} qctl = do
     r@Result{..} <- raceAny $ map (\ri -> resolver ri q qctl) ris
     let ~tag =
-          "    query "
-            ++ show qname
-            ++ " "
-            ++ show qtype
-            ++ " to "
-            ++ resultHostName
-            ++ "#"
-            ++ show resultPortNumber
-            ++ "/"
-            ++ resultTag
+            "    query "
+                ++ show qname
+                ++ " "
+                ++ show qtype
+                ++ " to "
+                ++ resultHostName
+                ++ "#"
+                ++ show resultPortNumber
+                ++ "/"
+                ++ resultTag
     ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
     return r
 

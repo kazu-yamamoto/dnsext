@@ -32,9 +32,9 @@ import Text.Read (readMaybe)
 import qualified DNS.Log as Log
 
 import Iterative (iterativeQuery)
+import JSON (showJSON)
 import Output (pprResult)
 import Recursive (recursiveQeury)
-import JSON (showJSON)
 
 options :: [OptDescr (Options -> Options)]
 options =
@@ -169,7 +169,8 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let res | optJSON = showJSON msg
+    let res
+            | optJSON = showJSON msg
             | otherwise = pprResult msg
     putLines Log.WARN Nothing [res]
     terminate
