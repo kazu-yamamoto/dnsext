@@ -2,9 +2,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.API (
-    getReplyIterative,
+    getResponseIterative,
     CacheResult (..),
-    getReplyCached,
+    getResponseCached,
     getResultIterative,
     getResultCached,
     replyMessage,
@@ -103,22 +103,22 @@ additional セクションにその名前に対するアドレス (A および A
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
--- | Getting a reply corresponding to a query.
-getReplyIterative
+-- | Getting a response corresponding to a query.
+getResponseIterative
     :: Env
     -> DNSMessage
     -> IO (Either String DNSMessage)
-getReplyIterative env reqM = case DNS.question reqM of
+getResponseIterative env reqM = case DNS.question reqM of
     [] -> return $ Left "empty question"
-    qs@(q : _) -> getReplyIterative' env reqM q qs
+    qs@(q : _) -> getResponseIterative' env reqM q qs
 
-getReplyIterative'
+getResponseIterative'
     :: Env
     -> DNSMessage
     -> DNS.Question
     -> [DNS.Question]
     -> IO (Either String DNSMessage)
-getReplyIterative' env reqM (DNS.Question bn typ _) qs = do
+getResponseIterative' env reqM (DNS.Question bn typ _) qs = do
     ers <- runDNSQuery getResult env $ ctrlFromRequestHeader reqH reqEH
     return $ replyMessage ers (DNS.identifier reqH) qs
   where
@@ -137,30 +137,30 @@ toCacheResult :: Either String DNSMessage -> CacheResult
 toCacheResult (Left x) = Negative x
 toCacheResult (Right x) = Positive x
 
--- | Getting a reply corresponding to a query from the cache.
-getReplyCached
+-- | Getting a response corresponding to a query from the cache.
+getResponseCached
     :: Env
     -> DNSMessage
     -> IO CacheResult
-getReplyCached env reqM = case DNS.question reqM of
+getResponseCached env reqM = case DNS.question reqM of
     [] -> return $ Negative "empty question"
-    qs@(q : _) -> getReplyCached' env reqM q qs
+    qs@(q : _) -> getResponseCached' env reqM q qs
 
-getReplyCached'
+getResponseCached'
     :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
-getReplyCached' env reqM (DNS.Question bn typ _) qs = do
+getResponseCached' env reqM (DNS.Question bn typ _) qs = do
     ex <- runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
     case ex of
         Right Nothing -> return None
-        Right (Just r) -> return $ toCacheResult $ mkReply $ Right r
-        Left l -> return $ toCacheResult $ mkReply $ Left l
+        Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
+        Left l -> return $ toCacheResult $ mkResponse $ Left l
   where
     reqH = DNS.header reqM
     reqEH = DNS.ednsHeader reqM
     getResult = do
         guardRequestHeader reqH reqEH
         getResultCached bn typ
-    mkReply ers = replyMessage ers (DNS.identifier reqH) qs
+    mkResponse ers = replyMessage ers (DNS.identifier reqH) qs
 
 ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
@@ -233,7 +233,7 @@ replyMessage eas ident rqs =
     h = DNS.header res
     f = DNS.flags h
 
--- | Getting a reply corresponding to 'Domain' and 'TYPE'.
+-- | Getting a response corresponding to 'Domain' and 'TYPE'.
 getResultIterative :: Domain -> TYPE -> DNSQuery Result
 getResultIterative n typ = do
     ((cnrrs, _rn), etm) <- resolve n typ
@@ -242,7 +242,7 @@ getResultIterative n typ = do
         fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either id fromMessage etm
 
--- | Getting a reply corresponding to 'Domain' and 'TYPE' from the cache.
+-- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
 getResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
 getResultCached n typ = do
     ((cnrrs, _rn), e) <- resolveByCache n typ

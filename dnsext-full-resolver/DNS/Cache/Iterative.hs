@@ -1,9 +1,9 @@
 module DNS.Cache.Iterative (
     -- * resolve interfaces
     newEnv,
-    getReplyIterative,
+    getResponseIterative,
     CacheResult (..),
-    getReplyCached,
+    getResponseCached,
     getResultIterative,
     getResultCached,
     replyMessage,
