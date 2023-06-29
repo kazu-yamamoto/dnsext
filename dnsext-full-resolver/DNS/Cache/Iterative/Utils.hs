@@ -9,18 +9,13 @@ import Data.Function (on)
 import Data.List (groupBy, intercalate)
 
 -- other packages
-
 import System.Console.ANSI.Types
 
 -- dns packages
-
-import DNS.Types (
-    DNSMessage,
- )
+import DNS.Types (DNSMessage)
 import qualified DNS.Types as DNS
 
 -- this package
-
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Types (NE)
 import qualified DNS.Log as Log
@@ -49,12 +44,7 @@ printResult = either print (putStr . unlines . concat . result)
 
 ppDelegation :: NE DEntry -> String
 ppDelegation des =
-    "\t"
-        ++ ( intercalate "\n\t" $
-                map (pp . bundle) $
-                    groupBy ((==) `on` fst) $
-                        map toT (fst des : snd des)
-           )
+    "\t" ++ (intercalate "\n\t" $ map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT (fst des : snd des))
   where
     toT (DEwithAx d i) = (d, show i)
     toT (DEonlyNS d) = (d, "")
