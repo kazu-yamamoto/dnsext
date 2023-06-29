@@ -23,7 +23,7 @@ import System.IO (
  )
 
 -- other packages
-import System.Console.ANSI (hSetSGR)
+import System.Console.ANSI (hSetSGR, hSupportsANSIColor)
 import System.Console.ANSI.Types
 import System.Log.FastLogger (
     BufSize,
@@ -77,15 +77,17 @@ newHandleLogger
     :: Handle -> Level -> IO (PutLines, GetQueueSize, Terminate)
 newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
+    colorize <- hSupportsANSIColor outFh
     inQ <- newQueue 8
     flushMutex <- newEmptyMVar
     tid <- forkIO $ logLoop inQ flushMutex
-    return (logLines inQ, getQSize inQ, kill inQ flushMutex tid)
+    return (logLines colorize inQ, getQSize inQ, kill inQ flushMutex tid)
   where
-    logLines inQ lv color xs =
-        when (loggerLevel <= lv) $
-            writeQueue inQ $
-                Just (color, xs)
+    logLines colorize inQ lv color xs
+        | colorize = withColor color
+        | otherwise = withColor Nothing
+      where
+        withColor c = when (loggerLevel <= lv) $ writeQueue inQ $ Just (c, xs)
 
     getQSize inQ = do
         s <- fst <$> Queue.readSizes inQ
