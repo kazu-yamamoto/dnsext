@@ -41,7 +41,7 @@ import UnliftIO (SomeException, concurrently_, handle, race_)
 
 -- this package
 
-import DNS.Cache.Iterative (Env (..), getReplyCached, getReplyMessage)
+import DNS.Cache.Iterative (CacheResult (..), Env (..), getResponseCached, getResponseIterative)
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Queue (
     QueueSize,
@@ -291,15 +291,15 @@ getCacher env getSec CntInc{..} enqueueDec enqueueResp (bs, addr) = do
     case DNS.decodeAt now bs of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
         Right reqM -> do
-            mx <- getReplyCached env reqM
+            mx <- getResponseCached env reqM
             case mx of
-                Nothing ->
+                None ->
                     enqueueDec (reqM, addr)
-                Just (Right respM) -> do
+                Positive respM -> do
                     incHit
                     let rbs = DNS.encode respM
                     rbs `seq` enqueueResp (rbs, addr)
-                Just (Left replyErr) -> do
+                Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
                         "cached: response cannot be generated: "
@@ -319,7 +319,7 @@ getWorker
     -> Decoded a
     -> IO ()
 getWorker env CntInc{..} enqueueResp (reqM, addr) = do
-    ex <- getReplyMessage env reqM
+    ex <- getResponseIterative env reqM
     case ex of
         Right x -> do
             incMiss

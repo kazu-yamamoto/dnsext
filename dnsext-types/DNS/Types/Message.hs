@@ -309,7 +309,7 @@ makeResponse idt q as =
 -- | Raw data format for the header of DNS Query and Response.
 data DNSHeader = DNSHeader
     { identifier :: Identifier
-    -- ^ Query or reply identifier.
+    -- ^ Query or response identifier.
     , flags :: DNSFlags
     -- ^ Flags, OPCODE, and RCODE
     }

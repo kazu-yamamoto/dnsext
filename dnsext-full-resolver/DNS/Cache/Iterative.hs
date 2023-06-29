@@ -1,13 +1,12 @@
 module DNS.Cache.Iterative (
     -- * resolve interfaces
-    getReplyMessage,
-    getReplyCached,
     newEnv,
-
-    -- * dug
+    getResponseIterative,
+    CacheResult (..),
+    getResponseCached,
+    getResultIterative,
+    getResultCached,
     replyMessage,
-    replyResult,
-    replyResultCached,
 
     -- * types
     module DNS.Cache.Iterative.Types,
