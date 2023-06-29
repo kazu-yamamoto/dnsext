@@ -104,7 +104,7 @@ additional セクションにその名前に対するアドレス (A および A
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
--- 返答メッセージを作る
+-- | Getting a response.
 getReplyMessage
     :: Env
     -> DNSMessage
