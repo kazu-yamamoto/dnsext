@@ -17,7 +17,7 @@ import DNS.Cache.Iterative (
     Env (..),
     newEnv,
     replyMessage,
-    replyResult,
+    getResultIterative,
     rootHint,
     runDNSQuery,
  )
@@ -118,7 +118,7 @@ querySpec disableV6NS debug = describe "query" $ do
             (snd <$>)
                 <$> Iterative.runResolve cxt (fromString n) ty mempty
         getReply n ty ident = do
-            e <- runDNSQuery (replyResult (fromString n) ty) cxt mempty
+            e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
     let printQueryError :: Show e => Either e a -> IO ()

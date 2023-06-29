@@ -36,7 +36,7 @@ resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
 resolve cxt ictl n ty =
     toMessage
-        <$> Iterative.runDNSQuery (Iterative.replyResult domain ty) cxt ictl
+        <$> Iterative.runDNSQuery (Iterative.getResultIterative domain ty) cxt ictl
   where
     domain = fromString n
     toMessage er = Iterative.replyMessage er 0 {- dummy id -} [Question domain ty classIN]
