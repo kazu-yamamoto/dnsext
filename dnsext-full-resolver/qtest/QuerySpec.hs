@@ -16,6 +16,7 @@ import DNS.Cache.Iterative (
     Delegation (..),
     Env (..),
     newEnv,
+    getUpdateCache,
     replyMessage,
     getResultIterative,
     rootHint,
@@ -61,12 +62,9 @@ cacheStateSpec :: Bool -> Spec
 cacheStateSpec disableV6NS = describe "cache-state" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-    memo <- runIO $ Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        getCache = Cache.readMemo memo
-
+    updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv (\_ _ _ -> pure ()) disableV6NS (insert, getCache) tcache
+            cxt <- newEnv (\_ _ _ -> pure ()) disableV6NS updateCache tcache
             eresult <-
                 (snd <$>)
                     <$> Iterative.runResolve cxt (fromString n) ty mempty
@@ -103,14 +101,12 @@ querySpec :: Bool -> Bool -> Spec
 querySpec disableV6NS debug = describe "query" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
-    memo <- runIO $ Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        ucache = (insert, Cache.readMemo memo)
-        putLines
+    updateCache <- runIO $ getUpdateCache cacheConf
+    let putLines
             | debug = \lv _ xs -> putStr $ unlines [show lv ++ ": " ++ x | x <- xs]
             | otherwise = \_ _ _ -> pure ()
-    cxt <- runIO $ newEnv putLines disableV6NS ucache tcache
-    cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True ucache tcache
+    cxt <- runIO $ newEnv putLines disableV6NS updateCache tcache
+    cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True updateCache tcache
     let refreshRoot = runDNSQuery Iterative.refreshRoot cxt mempty
         runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty

@@ -156,10 +156,9 @@ monitor
     -> Params
     -> Env
     -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-    -> (EpochTime -> IO ())
     -> IO ()
     -> IO [IO ()]
-monitor stdConsole params cxt getsSizeInfo expires terminate = do
+monitor stdConsole params env getsSizeInfo terminate = do
     ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
     let ss = map fst ps
     sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
@@ -173,9 +172,9 @@ monitor stdConsole params cxt getsSizeInfo expires terminate = do
   where
     runStdConsole monQuit = do
         let repl =
-                console params cxt getsSizeInfo expires terminate monQuit stdin stdout "<std>"
+                console params env getsSizeInfo terminate monQuit stdin stdout "<std>"
         void $ forkIO repl
-    logLn level = logLines_ cxt level Nothing . (: [])
+    logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
     monitorServer monQuit@(_, waitQuit) s = do
         let step = do
@@ -183,7 +182,7 @@ monitor stdConsole params cxt getsSizeInfo expires terminate = do
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
                 let repl =
-                        console params cxt getsSizeInfo expires terminate monQuit sockh sockh $
+                        console params env getsSizeInfo terminate monQuit sockh sockh $
                             show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
@@ -197,14 +196,13 @@ console
     :: Params
     -> Env
     -> ([PLStatus], IO (Int, Int), IO (Int, Int))
-    -> (EpochTime -> IO ())
     -> IO ()
     -> (STM (), STM ())
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console params cxt (pQSizeList, ucacheQSize, logQSize) expires terminate (issueQuit, waitQuit) inH outH ainfo = do
+console params env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -259,21 +257,21 @@ console params cxt (pQSizeList, ucacheQSize, logQSize) expires terminate (issueQ
         dispatch Param = mapM_ outLn $ showParams params
         dispatch Noop = return ()
         dispatch (Find s) =
-            mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ cxt
+            mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
         dispatch (Lookup dom typ) = maybe (outLn "miss.") hit =<< lookupCache
           where
             lookupCache = do
-                cache <- getCache_ cxt
-                ts <- currentSeconds_ cxt
+                cache <- getCache_ env
+                ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status = printStatus
-        dispatch (Expire offset) = expires . (+ offset) =<< currentSeconds_ cxt
+        dispatch (Expire offset) = expireCache env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
 
     printStatus = do
-        outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ cxt
+        outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
         let psize s getSize = do
                 (cur, mx) <- getSize
                 outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
