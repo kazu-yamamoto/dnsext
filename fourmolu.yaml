@@ -2,7 +2,7 @@
 indentation: 4
 
 # Max line length for automatic line breaking
-column-limit: 80
+column-limit: 132
 
 # Styling of arrows in type signatures (choices: trailing, leading, or leading-args)
 function-arrows: leading
