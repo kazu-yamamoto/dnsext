@@ -162,7 +162,7 @@ runBenchmark
     -- ^ Request size
     -> IO ()
 runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
-    env <- getEnvB conf
+    env <- getEnv conf
 
     (workers, enqueueReq, dequeueResp) <- benchServer udpconf env noop
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
@@ -171,9 +171,9 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
     ds `deepseq` return ()
 
     -----
-    _ <- runQueriesB initD enqueueReq dequeueResp
+    _ <- runQueries initD enqueueReq dequeueResp
     before <- getCurrentTime
-    _ <- runQueriesB ds enqueueReq dequeueResp
+    _ <- runQueries ds enqueueReq dequeueResp
     after <- getCurrentTime
 
     let elapsed = after `diffUTCTime` before
@@ -192,8 +192,8 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: Config -> IO Env
-getEnvB Config{..} = do
+getEnv :: Config -> IO Env
+getEnv Config{..} = do
     logTripble@(putLines, _, _) <- Log.new logOutput logLevel
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -203,8 +203,8 @@ getEnvB Config{..} = do
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv logTripble False updateCache tcache
 
-runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
-runQueriesB qs enqueueReq dequeueResp = do
+runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
+runQueries qs enqueueReq dequeueResp = do
     _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
     replicateM len dequeueResp
   where
