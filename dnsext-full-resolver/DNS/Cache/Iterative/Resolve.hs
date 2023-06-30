@@ -151,14 +151,12 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
             =<< lookupType bn Cache.NX
       where
         inconsistent rrs = do
-            logLn_ Log.WARN $
-                "inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
+            logLn_ Log.WARN $ "inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
             return Nothing
 
     -- Nothing のときはキャッシュに無し
     -- Just Left のときはキャッシュに有るが CNAME レコード無し
-    lookupCNAME
-        :: Domain -> ContextT IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
+    lookupCNAME :: Domain -> ContextT IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
     lookupCNAME bn = do
         maySOAorCNRRs <- lookupType bn CNAME {- TODO: get CNAME RRSIG from cache -}
         return $ do
@@ -201,8 +199,7 @@ resolveTYPE bn typ = do
             noCNAME = do
                 (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
             withCNAME cn = do
-                (cnameRRset, cacheCNAME) <-
-                    verifyAndCache delegationDNSKEY cnameRRs (rrsigList bn CNAME rrs) rank
+                (cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY cnameRRs (rrsigList bn CNAME rrs) rank
                 cacheCNAME
                 return (msg, Just (cn, cnameRRset), ([], []))
         case cnames of

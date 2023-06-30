@@ -90,16 +90,13 @@ resolveExact = resolveExactDC 0
 resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
-        lift . logLn Log.WARN $
-            "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
+        lift . logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
         throwDnsError DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
-        lift . logLn Log.DEMO . unwords $
-            ["resolve-exact: query", show (n, typ), "servers:"]
-                ++ [show sa | sa <- sas]
+        lift . logLn Log.DEMO . unwords $ ["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
   where
@@ -113,11 +110,11 @@ delegationIPs dc Delegation{..} = do
 
     let ipnum = 4
         ips = takeDEntryIPs disableV6NS delegationNS
+        zone = delegationZone
 
         takeNames (DEonlyNS name) xs
-            | not $
-                name `DNS.isSubDomainOf` delegationZone =
-                name : xs {- skip sub-domain without glue to avoid loop -}
+            | not (name `DNS.isSubDomainOf` zone) = name : xs
+        --    {- skip sub-domain without glue to avoid loop -}
         takeNames _ xs = xs
 
         names = foldr takeNames [] $ uncurry (:) delegationNS
@@ -129,23 +126,14 @@ delegationIPs dc Delegation{..} = do
                 name <- randomizedSelectN names1
                 (: []) . fst <$> resolveNS disableV6NS dc name
             | disableV6NS && not (null allIPs) = do
-                lift . logLn Log.DEMO . concat $
-                    [ "delegationIPs: server-fail: domain: "
-                    , show delegationZone
-                    , ", delegation is empty."
-                    ]
+                plogLn Log.DEMO $ "delegationIPs: server-fail: domain: " ++ show zone ++ ", delegation is empty."
                 throwDnsError DNS.ServerFailure
             | otherwise = do
-                lift . logLn Log.DEMO . concat $
-                    [ "delegationIPs: illegal-domain: "
-                    , show delegationZone
-                    , ", delegation is empty."
-                    , " without glue sub-domains: "
-                    , show subNames
-                    ]
+                plogLn Log.DEMO $ "illegal-domain: " ++ show zone ++ ", delegation is empty. without glue sub-domains: " ++ show subNames
                 throwDnsError DNS.IllegalDomain
           where
             allIPs = takeDEntryIPs False delegationNS
+            plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
 
         takeSubNames (DEonlyNS name) xs
             | name `DNS.isSubDomainOf` delegationZone =
@@ -181,8 +169,7 @@ resolveNS disableV6NS dc ns = do
                 xs <- qx
                 if null xs then qy else pure xs
             querySection typ = do
-                lift . logLn Log.DEMO . unwords $
-                    ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
+                lift . logLn Log.DEMO . unwords $ ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
                 lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
 
@@ -195,12 +182,10 @@ resolveNS disableV6NS dc ns = do
         resolveAXofNS = do
             let failEmptyAx
                     | disableV6NS = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
                         throwDnsError DNS.IllegalDomain
             maybe failEmptyAx pure
                 =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
@@ -258,12 +243,10 @@ iterative_ dc nss0 (x : xs) =
     stepQuery nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
-        lift . logLn Log.DEMO $
-            "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
-        sas <- delegationIPs dc nss {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        lift . logLn Log.DEMO . unwords $
-            ["iterative: query", show (name, A), "servers:"]
-                ++ [show sa | sa <- sas]
+        lift . logLn Log.DEMO $ "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
+        {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
+        sas <- delegationIPs dc nss
+        lift . logLn Log.DEMO . unwords $ ["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas]
         let dnssecOK = not (null delegationDS) && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
@@ -289,58 +272,41 @@ maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-subdomainShared
-    :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+subdomainShared :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
 subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
-    let soaRRs =
-            rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
-        getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
-        verifySOA = do
-            d <- getWorkaround
-            let dnskey = delegationDNSKEY d
-            case dnskey of
-                [] -> return $ hasDelegation d
-                _ : _ -> do
-                    (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
-                    if rrsetVerified rrset
-                        then return $ hasDelegation d
-                        else do
-                            lift . logLn Log.WARN . unwords $
-                                [ "subdomainShared:"
-                                , show dom ++ ":"
-                                , "verification error. invalid SOA:"
-                                , show soaRRs
-                                ]
-                            lift . clogLn Log.DEMO (Just Red) $
-                                show dom ++ ": verification error. invalid SOA"
-                            throwDnsError DNS.ServerFailure
-
+    let soaRRs = rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
     case soaRRs of
         [] -> return noDelegation {- not workaround fallbacks -}
         {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
-        [_] -> verifySOA
-        _ : _ : _ -> do
-            lift . logLn Log.WARN . unwords $
-                [ "subdomainShared:"
-                , show dom ++ ":"
-                , "multiple SOAs are found:"
-                , show soaRRs
-                ]
-            lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-            throwDnsError DNS.ServerFailure
+        [_] -> getWorkaround >>= verifySOA rrs rank soaRRs
+        _ : _ : _ -> multipleSOA soaRRs
+  where
+    verificationError = do
+        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": verification error. invalid SOA:"
+        lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
+        throwDnsError DNS.ServerFailure
+    multipleSOA soaRRs = do
+        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": multiple SOAs are found:"
+        lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
+        throwDnsError DNS.ServerFailure
+    getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
+    verifySOA rrs rank soaRRs d
+        | null dnskey = return $ hasDelegation d
+        | otherwise = do
+            (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
+            if rrsetVerified rrset
+                then return $ hasDelegation d
+                else verificationError
+      where
+        dnskey = delegationDNSKEY d
 
 fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC dc nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
     when (not (null delegationDS) && null delegationDNSKEY) $ do
-        lift . logLn Log.WARN . unwords $
-            [ "fillsDNSSEC:"
-            , show delegationZone ++ ":"
-            , "DS is not null, and DNSKEY is null"
-            ]
-        lift . clogLn Log.DEMO (Just Red) $
-            show delegationZone
-                ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
+        let zone = show delegationZone
+        lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is not null, and DNSKEY is null"
+        lift . clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
 
@@ -363,8 +329,7 @@ fillDelegationDS dc src dest
                 lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
                 throwDnsError DNS.ServerFailure
             result (e, verifyColor, verifyMsg) = do
-                lift . clogLn Log.DEMO (Just verifyColor) $
-                    "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
+                lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
         if null ips
             then lift nullIPs
@@ -383,13 +348,6 @@ queryDS dnskeys ips dom = do
         (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
         let verifyResult
                 | null dsrds = return (Right [], Yellow, "no DS, so no verify")
-                | rrsetVerified rrset = do
-                    lift cacheDS
-                    return (Right dsrds, Green, "verification success - RRSIG of DS")
-                | otherwise =
-                    return
-                        ( Left "queryDS: verification failed - RRSIG of DS"
-                        , Red
-                        , "verification failed - RRSIG of DS"
-                        )
+                | rrsetVerified rrset = lift cacheDS *> return (Right dsrds, Green, "verification success - RRSIG of DS")
+                | otherwise = return (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
         verifyResult
