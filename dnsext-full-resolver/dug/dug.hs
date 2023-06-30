@@ -63,7 +63,7 @@ options =
         ["dox"]
         ( ReqArg
             (\dox opts -> opts{optDoX = Short.toShort (C8.pack dox)})
-            "auto|dot|doq|h2|h3"
+            "auto|tcp|dot|doq|h2|h3"
         )
         "enable DoX"
     , Option

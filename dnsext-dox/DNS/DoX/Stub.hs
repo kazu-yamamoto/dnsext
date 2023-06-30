@@ -42,6 +42,7 @@ makeResolver alpn lim mpath = case alpn of
     "doq" -> Just $ quicResolver lim
     "h2" -> Just $ http2Resolver (fromMaybe "/dns-query" mpath) lim
     "h3" -> Just $ http3Resolver (fromMaybe "/dns-query" mpath) lim
+    "tcp" -> Just $ tcpResolver lim
     _ -> Nothing
 
 -- | Looking up SVCB RR first and lookup the target automatically
