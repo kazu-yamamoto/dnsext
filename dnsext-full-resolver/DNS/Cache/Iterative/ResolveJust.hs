@@ -272,33 +272,33 @@ maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-subdomainShared
-    :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+subdomainShared :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
 subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
     let soaRRs = rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
-        getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
-        verifySOA = do
-            d <- getWorkaround
-            let dnskey = delegationDNSKEY d
-            case dnskey of
-                [] -> return $ hasDelegation d
-                _ : _ -> do
-                    (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
-                    if rrsetVerified rrset
-                        then return $ hasDelegation d
-                        else do
-                            lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": verification error. invalid SOA:"
-                            lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
-                            throwDnsError DNS.ServerFailure
-
     case soaRRs of
         [] -> return noDelegation {- not workaround fallbacks -}
         {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
-        [_] -> verifySOA
-        _ : _ : _ -> do
-            lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": multiple SOAs are found:"
-            lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-            throwDnsError DNS.ServerFailure
+        [_] -> getWorkaround >>= verifySOA rrs rank soaRRs
+        _ : _ : _ -> multipleSOA soaRRs
+  where
+    verificationError = do
+        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": verification error. invalid SOA:"
+        lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
+        throwDnsError DNS.ServerFailure
+    multipleSOA soaRRs = do
+        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": multiple SOAs are found:"
+        lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
+        throwDnsError DNS.ServerFailure
+    getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
+    verifySOA rrs rank soaRRs d
+        | null dnskey = return $ hasDelegation d
+        | otherwise = do
+            (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
+            if rrsetVerified rrset
+                then return $ hasDelegation d
+                else verificationError
+      where
+        dnskey = delegationDNSKEY d
 
 fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC dc nss d = do
