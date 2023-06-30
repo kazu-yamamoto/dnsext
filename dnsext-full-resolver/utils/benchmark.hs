@@ -1,9 +1,16 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
-import Control.Monad (unless, (>=>))
+import Control.Concurrent (forkIO, getNumCapabilities)
+import Control.DeepSeq (deepseq)
+import Control.Monad (replicateM, unless, (>=>))
+import qualified DNS.Types as DNS
+import qualified DNS.Types.Encode as DNS
+import Data.ByteString (ByteString)
+import Data.String (fromString)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
     ArgOrder (RequireOrder),
@@ -11,14 +18,6 @@ import System.Console.GetOpt (
     getOpt,
     usageInfo,
  )
-import Control.Concurrent (forkIO, getNumCapabilities)
-import Control.DeepSeq (deepseq)
-import Control.Monad (replicateM)
-import qualified DNS.Types as DNS
-import qualified DNS.Types.Encode as DNS
-import Data.ByteString (ByteString)
-import Data.String (fromString)
-import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import System.Environment (getArgs)
 import Text.Read (readEither)
 import UnliftIO (concurrently_)
@@ -194,8 +193,8 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
             putStrLn $ "rate: " ++ show rate
 
 getEnvB :: Config -> IO Env
-getEnvB Config{..}  = do
-    logTripble@(putLines,_,_) <- Log.new logOutput logLevel
+getEnvB Config{..} = do
+    logTripble@(putLines, _, _) <- Log.new logOutput logLevel
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where

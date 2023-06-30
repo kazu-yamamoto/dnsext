@@ -185,7 +185,6 @@ getUdpServer env conf port hosts = do
 getMonitor :: Env -> Config -> Bool -> [PLStatus] -> IO [IO ()]
 getMonitor env conf stdConsole_ qsizes = do
     _caps <- getNumCapabilities -- fixme
-
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
