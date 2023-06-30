@@ -28,7 +28,7 @@ setup disableV6NS putLines = do
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv (putLines, return (0,0), return ()) disableV6NS updateCache tcache
+    Iterative.newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)

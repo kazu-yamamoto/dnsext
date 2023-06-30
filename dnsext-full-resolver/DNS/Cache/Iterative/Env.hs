@@ -10,10 +10,10 @@ import Data.IORef (newIORef)
 
 -- dns packages
 
-import qualified DNS.Do53.Memo as Cache
 import DNS.Do53.Internal (
     newConcurrentGenId,
  )
+import qualified DNS.Do53.Memo as Cache
 
 -- this package
 import DNS.Cache.Iterative.Types
@@ -29,13 +29,13 @@ getUpdateCache cacheConf = do
 
 -- | Creating a new 'Env'.
 newEnv
-    :: (Log.PutLines,Log.GetQueueSize,Log.Terminate)
+    :: (Log.PutLines, Log.GetQueueSize, Log.Terminate)
     -> Bool
     -- ^ disabling IPv6
     -> UpdateCache
     -> TimeCache
     -> IO Env
-newEnv (putLines,getQSize,terminate) disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
+newEnv (putLines, getQSize, terminate) disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     let cxt =

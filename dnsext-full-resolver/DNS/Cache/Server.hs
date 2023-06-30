@@ -3,45 +3,31 @@
 
 module DNS.Cache.Server (
     UdpServerConfig (..),
-    run,
-    runBenchmark,
+    udpServer,
+    PLStatus,
+    WorkerStatus (..),
 ) where
 
 -- GHC packages
-import Control.Concurrent (forkIO, getNumCapabilities)
-import Control.DeepSeq (deepseq)
 import Control.Monad (forever, replicateM)
 import Data.ByteString (ByteString)
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
-import Data.Maybe (mapMaybe)
-import Data.String (fromString)
-import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 
 -- dnsext-* packages
-
-import qualified DNS.Do53.Memo as Cache
-import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import Data.IP (IP (..), fromHostAddress, fromHostAddress6)
+import Data.IP (IP (..))
 import Network.Socket (
-    AddrInfo (..),
-    HostName,
     PortNumber,
-    SockAddr (..),
-    SocketType (Datagram),
-    getAddrInfo,
  )
 import qualified Network.UDP as UDP
 
 -- other packages
-import UnliftIO (SomeException, concurrently_, handle, race_)
+import UnliftIO (SomeException, handle)
 
 -- this package
-
 import DNS.Cache.Iterative (CacheResult (..), Env (..), getResponseCached, getResponseIterative)
-import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Queue (
     QueueSize,
     ReadQueue,
@@ -52,9 +38,6 @@ import DNS.Cache.Queue (
     writeQueue,
  )
 import qualified DNS.Cache.Queue as Queue
-import DNS.Cache.ServerMonitor (PLStatus, WorkerStatus (WorkerStatus), monitor)
-import qualified DNS.Cache.ServerMonitor as Mon
-import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
 
 ----------------------------------------------------------------
@@ -65,16 +48,6 @@ data UdpServerConfig = UdpServerConfig
     , udpWorkerSharedQueue :: Bool
     }
 
-data Config = Config
-    { logOutput :: Log.Output
-    , logLevel :: Log.Level
-    , maxCacheSize :: Int
-    , disableV6NS :: Bool
-    , nOfPipelines :: Int
-    , qsizePerWorker :: Int
-    , workerSharedQueue :: Bool
-    }
-
 type Request a = (ByteString, a)
 type Decoded a = (DNS.DNSMessage, a)
 type Response a = (ByteString, a)
@@ -83,85 +56,6 @@ type EnqueueDec a = Decoded a -> IO ()
 type EnqueueResp a = Response a -> IO ()
 
 ----------------------------------------------------------------
-
-run
-    :: Config
-    -> UdpServerConfig
-    -> PortNumber
-    -> [HostName]
-    -> Bool
-    -- ^ standard console or not
-    -> IO ()
-run conf udpconf port hosts stdConsole = do
-    DNS.runInitIO DNS.addResourceDataForDNSSEC
-    env <- getEnv conf
-    (serverLoops, qsizes) <- setup env udpconf port hosts
-    monLoops <- getMonitor env conf port hosts stdConsole qsizes
-    race_
-        (foldr concurrently_ (return ()) serverLoops)
-        (foldr concurrently_ (return ()) monLoops)
-
-----------------------------------------------------------------
-
-setup :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
-setup env conf port hosts = do
-    hostIPs <- getHostIPs hosts port
-    (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
-    let pLoops = concat loopsList
-
-    return (pLoops, qsizes)
-  where
-    getHostIPs [] p = getAInfoIPs p
-    getHostIPs hs _ = return $ map fromString hs
-
-getMonitor :: Env -> Config -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
-getMonitor env Config{..} port hosts stdConsole qsizes = do
-    caps <- getNumCapabilities
-    let params = mkParams caps
-
-    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
-
-    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    monitor stdConsole params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
-  where
-    mkParams caps =
-        Mon.makeParams
-            caps
-            logOutput
-            logLevel
-            maxCacheSize
-            disableV6NS
-            nOfPipelines
-            workerSharedQueue
-            qsizePerWorker
-            port
-            hosts
-
-----------------------------------------------------------------
-
-getEnv :: Config -> IO Env
-getEnv Config{..} = do
-    logTriple@(putLines,_,_) <- Log.new logOutput logLevel
-    tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
-          where
-            memoLogLn msg = do
-                tstr <- getTimeStr
-                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-            memoActions = Cache.MemoActions memoLogLn getSec
-    updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTriple disableV6NS updateCache tcache
-
-----------------------------------------------------------------
-
-getAInfoIPs :: PortNumber -> IO [IP]
-getAInfoIPs port = do
-    ais <- getAddrInfo Nothing Nothing (Just $ show port)
-    let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
-        dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
-        dgramIP _ = Nothing
-    return $
-        mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
 
 ----------------------------------------------------------------
 
@@ -258,7 +152,7 @@ getSenderReceiver reqQ resQ qsizePerWorker env = do
         resolvLoops = replicate nOfResolvWorkers resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        workerStatus = WorkerStatus reqQSize decQSize resQSize getHit getMiss getFailed
+        workerStatus = WorkerStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
     return (loops, workerStatus)
   where
@@ -354,10 +248,21 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-data CntGet = CntGet
-    { getHit :: IO Int
+data WorkerStatus = WorkerStatus
+    { reqQSize :: IO (Int, Int)
+    , decQSize :: IO (Int, Int)
+    , resQSize :: IO (Int, Int)
+    , getHit :: IO Int
     , getMiss :: IO Int
     , getFailed :: IO Int
+    }
+
+type PLStatus = [WorkerStatus]
+
+data CntGet = CntGet
+    { getHit' :: IO Int
+    , getMiss' :: IO Int
+    , getFailed' :: IO Int
     }
 
 data CntInc = CntInc
@@ -378,6 +283,7 @@ newCounters = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
+{-
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 -- Benchmark
@@ -477,3 +383,4 @@ runQueriesB qs enqueueReq dequeueResp = do
     replicateM len dequeueResp
   where
     len = length qs
+-}

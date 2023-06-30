@@ -1,12 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.ServerMonitor (
+module Monitor (
     monitor,
     Params,
     makeParams,
     showParams,
-    PLStatus,
-    WorkerStatus (..),
 ) where
 
 -- GHC packages
@@ -50,10 +48,10 @@ import qualified Network.Socket as S
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-
 import DNS.Cache.Iterative (Env (..))
-import DNS.Cache.SocketUtil (addrInfo)
+import DNS.Cache.Server
 import qualified DNS.Log as Log
+import SocketUtil (addrInfo)
 
 data Params = Params
     { numCapabilities :: Int
@@ -119,17 +117,6 @@ showParams params =
     showOut Log.Stderr = "stderr"
     showOut _ = "rotate file"
     hosts = dnsHosts params
-
-data WorkerStatus = WorkerStatus
-    { reqQSize :: IO (Int, Int)
-    , decQSize :: IO (Int, Int)
-    , resQSize :: IO (Int, Int)
-    , getHit :: IO Int
-    , getMiss :: IO Int
-    , getFailed :: IO Int
-    }
-
-type PLStatus = [WorkerStatus]
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port

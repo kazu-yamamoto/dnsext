@@ -127,6 +127,9 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: BenchmarkOptions -> IO ()
+run = undefined
+
+{-
 run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
   where
     conf =
@@ -138,6 +141,7 @@ run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
             workers
             qsizePerWorker
             True
+-}
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs

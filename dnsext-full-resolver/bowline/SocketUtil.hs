@@ -1,4 +1,4 @@
-module DNS.Cache.SocketUtil (
+module SocketUtil (
     addrInfo,
     mkSocketWaitForByte,
     isAnySockAddr,

@@ -2,10 +2,21 @@
 
 module Main where
 
+import Control.Concurrent (getNumCapabilities)
 import Control.Monad (unless, (>=>))
+import qualified DNS.Cache.Iterative as Iterative
+import qualified DNS.Cache.TimeCache as TimeCache
+import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Log as Log
+import qualified DNS.SEC as DNS
+import qualified DNS.Types as DNS
 import Data.Char (toUpper)
+import Data.IP
 import Data.List (intercalate)
+import Data.Maybe (mapMaybe)
+import Data.String (fromString)
 import Data.Word (Word16)
+import Network.Socket
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
     ArgOrder (RequireOrder),
@@ -15,14 +26,17 @@ import System.Console.GetOpt (
  )
 import System.Environment (getArgs)
 import Text.Read (readEither)
+import UnliftIO (concurrently_, race_)
 
-import qualified DNS.Cache.Server as Server
-import qualified DNS.Log as Log
+import DNS.Cache.Iterative (Env (..))
+import DNS.Cache.Server
 
-data ServerOptions = ServerOptions
+import qualified Monitor as Mon
+
+data Config = Config
     { logOutput :: Log.Output
     , logLevel :: Log.Level
-    , maxKibiEntries :: Int
+    , maxCacheSize :: Int
     , disableV6NS :: Bool
     , workers :: Int
     , workerSharedQueue :: Bool
@@ -32,12 +46,12 @@ data ServerOptions = ServerOptions
     , stdConsole :: Bool
     }
 
-defaultOptions :: ServerOptions
-defaultOptions =
-    ServerOptions
+defaultConfig :: Config
+defaultConfig =
+    Config
         { logOutput = Log.Stdout
         , logLevel = Log.WARN
-        , maxKibiEntries = 2 * 1024
+        , maxCacheSize = 2 * 1024
         , disableV6NS = False
         , workers = 2
         , workerSharedQueue = True
@@ -47,7 +61,7 @@ defaultOptions =
         , stdConsole = False
         }
 
-descs :: [OptDescr (ServerOptions -> Either String ServerOptions)]
+descs :: [OptDescr (Config -> Either String Config)]
 descs =
     [ Option
         ['h']
@@ -74,12 +88,12 @@ descs =
         ["max-cache-entries"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts{maxKibiEntries = x}
+                readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts{maxCacheSize = x}
             )
             "POSITIVE_INTEGER"
         )
         ( "max K-entries in cache (1024 entries per 1). default is "
-            ++ show (maxKibiEntries defaultOptions)
+            ++ show (maxCacheSize defaultConfig)
             ++ " K-entries"
         )
     , Option
@@ -143,29 +157,104 @@ help =
             "cache-server [options] [BIND_HOSTNAMES]"
             descs
 
-parseOptions :: [String] -> IO (Maybe ServerOptions)
+parseOptions :: [String] -> IO (Maybe Config)
 parseOptions args
     | not (null errs) = mapM putStrLn errs *> return Nothing
     | otherwise = either helpOnLeft (return . Just) $ do
-        opt <- foldr (>=>) return ars defaultOptions
+        opt <- foldr (>=>) return ars defaultConfig
         return opt{bindHosts = hosts}
   where
     (ars, hosts, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
-run :: ServerOptions -> IO ()
-run ServerOptions{..} = Server.run conf port' bindHosts stdConsole
+run :: Config -> IO ()
+run conf@Config{..} = run' conf udpconf port' bindHosts stdConsole
   where
     port' = fromIntegral port
-    conf =
-        Server.UdpServerConfig
-            logOutput
-            logLevel
-            (maxKibiEntries * 1024)
-            disableV6NS
+    udpconf =
+        UdpServerConfig
             workers
             qsizePerWorker
             workerSharedQueue
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
+
+run'
+    :: Config
+    -> UdpServerConfig
+    -> PortNumber
+    -> [HostName]
+    -> Bool
+    -- ^ standard console or not
+    -> IO ()
+run' conf udpconf port hosts stdConsole_ = do
+    DNS.runInitIO DNS.addResourceDataForDNSSEC
+    env <- getEnv conf
+    (serverLoops, qsizes) <- setup env udpconf port hosts
+    monLoops <- getMonitor env conf port hosts stdConsole_ qsizes
+    race_
+        (foldr concurrently_ (return ()) serverLoops)
+        (foldr concurrently_ (return ()) monLoops)
+
+----------------------------------------------------------------
+
+setup :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
+setup env conf port hosts = do
+    hostIPs <- getHostIPs hosts port
+    (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
+    let pLoops = concat loopsList
+
+    return (pLoops, qsizes)
+  where
+    getHostIPs [] p = getAInfoIPs p
+    getHostIPs hs _ = return $ map fromString hs
+
+getMonitor :: Env -> Config -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
+getMonitor env Config{..} port_ hosts stdConsole_ qsizes = do
+    caps <- getNumCapabilities
+    let params = mkParams caps
+
+    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
+
+    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
+    Mon.monitor stdConsole_ params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
+  where
+    mkParams caps =
+        Mon.makeParams
+            caps
+            logOutput
+            logLevel
+            maxCacheSize
+            disableV6NS
+            2 -- fixme
+            workerSharedQueue
+            qsizePerWorker
+            port_
+            hosts
+
+----------------------------------------------------------------
+
+getEnv :: Config -> IO Env
+getEnv Config{..} = do
+    logTriple@(putLines, _, _) <- Log.new logOutput logLevel
+    tcache@(getSec, getTimeStr) <- TimeCache.new
+    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
+          where
+            memoLogLn msg = do
+                tstr <- getTimeStr
+                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+            memoActions = Cache.MemoActions memoLogLn getSec
+    updateCache <- Iterative.getUpdateCache cacheConf
+    Iterative.newEnv logTriple disableV6NS updateCache tcache
+
+----------------------------------------------------------------
+
+getAInfoIPs :: PortNumber -> IO [IP]
+getAInfoIPs port = do
+    ais <- getAddrInfo Nothing Nothing (Just $ show port)
+    let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
+        dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
+        dgramIP _ = Nothing
+    return $
+        mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]
