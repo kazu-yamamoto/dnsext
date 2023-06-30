@@ -104,6 +104,7 @@ additional セクションにその名前に対するアドレス (A および A
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
 
 -- | Getting a response corresponding to a query.
+--   The cache is maybe updated.
 getResponseIterative
     :: Env
     -> DNSMessage
@@ -234,6 +235,7 @@ replyMessage eas ident rqs =
     f = DNS.flags h
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE'.
+--   The cache is maybe updated.
 getResultIterative :: Domain -> TYPE -> DNSQuery Result
 getResultIterative n typ = do
     ((cnrrs, _rn), etm) <- resolve n typ
