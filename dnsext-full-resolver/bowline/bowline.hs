@@ -15,7 +15,6 @@ import Data.IP
 import Data.List (intercalate)
 import Data.Maybe (mapMaybe)
 import Data.String (fromString)
-import Data.Word (Word16)
 import Network.Socket
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
@@ -31,37 +30,8 @@ import UnliftIO (concurrently_, race_)
 import DNS.Cache.Iterative (Env (..))
 import DNS.Cache.Server
 
+import Config
 import qualified Monitor as Mon
-
-----------------------------------------------------------------
-
-data Config = Config
-    { logOutput :: Log.Output
-    , logLevel :: Log.Level
-    , maxCacheSize :: Int
-    , disableV6NS :: Bool
-    , workers :: Int
-    , workerSharedQueue :: Bool
-    , qsizePerWorker :: Int
-    , port :: Word16
-    , bindHosts :: [String]
-    , stdConsole :: Bool
-    }
-
-defaultConfig :: Config
-defaultConfig =
-    Config
-        { logOutput = Log.Stdout
-        , logLevel = Log.WARN
-        , maxCacheSize = 2 * 1024
-        , disableV6NS = False
-        , workers = 2
-        , workerSharedQueue = True
-        , qsizePerWorker = 16
-        , port = 53
-        , bindHosts = []
-        , stdConsole = False
-        }
 
 ----------------------------------------------------------------
 
@@ -110,7 +80,7 @@ descs =
         ["workers"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{workers = x}
+                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{workersPerSocket = x}
             )
             "POSITIVE_INTEGER"
         )
@@ -125,7 +95,7 @@ descs =
         ["per-worker"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts{qsizePerWorker = x}
+                readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts{queueSizePerWorker = x}
             )
             "POSITIVE_INTEGER"
         )
@@ -135,7 +105,7 @@ descs =
         ["port"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts{port = x}
+                readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts{udpPort = x}
             )
             "PORT_NUMBER"
         )
@@ -181,17 +151,17 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, qsizes) <- getUdpServer env udpconf port' bindHosts
-    monLoops <- getMonitor env conf port' bindHosts stdConsole qsizes
+    (serverLoops, qsizes) <- getUdpServer env udpconf udpPort' bindHosts
+    monLoops <- getMonitor env conf stdConsole qsizes
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
   where
-    port' = fromIntegral port
+    udpPort' = fromIntegral udpPort
     udpconf =
         UdpServerConfig
-            workers
-            qsizePerWorker
+            workersPerSocket
+            queueSizePerWorker
             workerSharedQueue
 
 main :: IO ()
@@ -212,28 +182,14 @@ getUdpServer env conf port hosts = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
-getMonitor env Config{..} port_ hosts stdConsole_ qsizes = do
-    caps <- getNumCapabilities
-    let params = mkParams caps
+getMonitor :: Env -> Config -> Bool -> [PLStatus] -> IO [IO ()]
+getMonitor env conf stdConsole_ qsizes = do
+    _caps <- getNumCapabilities -- fixme
 
-    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
+    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    Mon.monitor stdConsole_ params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
-  where
-    mkParams caps =
-        Mon.makeParams
-            caps
-            logOutput
-            logLevel
-            maxCacheSize
-            disableV6NS
-            2 -- fixme
-            workerSharedQueue
-            qsizePerWorker
-            port_
-            hosts
+    Mon.monitor stdConsole_ conf env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
 
 ----------------------------------------------------------------
 
