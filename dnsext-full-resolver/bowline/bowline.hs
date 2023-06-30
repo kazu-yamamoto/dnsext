@@ -33,6 +33,8 @@ import DNS.Cache.Server
 
 import qualified Monitor as Mon
 
+----------------------------------------------------------------
+
 data Config = Config
     { logOutput :: Log.Output
     , logLevel :: Log.Level
@@ -60,6 +62,8 @@ defaultConfig =
         , bindHosts = []
         , stdConsole = False
         }
+
+----------------------------------------------------------------
 
 descs :: [OptDescr (Config -> Either String Config)]
 descs =
@@ -150,12 +154,16 @@ descs =
     parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
     outputs = [("stdout", Log.Stdout), ("stderr", Log.Stderr)]
 
+----------------------------------------------------------------
+
 help :: IO ()
 help =
     putStr $
         usageInfo
             "cache-server [options] [BIND_HOSTNAMES]"
             descs
+
+----------------------------------------------------------------
 
 parseOptions :: [String] -> IO (Maybe Config)
 parseOptions args
@@ -167,8 +175,17 @@ parseOptions args
     (ars, hosts, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
+----------------------------------------------------------------
+
 run :: Config -> IO ()
-run conf@Config{..} = run' conf udpconf port' bindHosts stdConsole
+run conf@Config{..} = do
+    DNS.runInitIO DNS.addResourceDataForDNSSEC
+    env <- getEnv conf
+    (serverLoops, qsizes) <- getUdpServer env udpconf port' bindHosts
+    monLoops <- getMonitor env conf port' bindHosts stdConsole qsizes
+    race_
+        (foldr concurrently_ (return ()) serverLoops)
+        (foldr concurrently_ (return ()) monLoops)
   where
     port' = fromIntegral port
     udpconf =
@@ -180,27 +197,10 @@ run conf@Config{..} = run' conf udpconf port' bindHosts stdConsole
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
 
-run'
-    :: Config
-    -> UdpServerConfig
-    -> PortNumber
-    -> [HostName]
-    -> Bool
-    -- ^ standard console or not
-    -> IO ()
-run' conf udpconf port hosts stdConsole_ = do
-    DNS.runInitIO DNS.addResourceDataForDNSSEC
-    env <- getEnv conf
-    (serverLoops, qsizes) <- setup env udpconf port hosts
-    monLoops <- getMonitor env conf port hosts stdConsole_ qsizes
-    race_
-        (foldr concurrently_ (return ()) serverLoops)
-        (foldr concurrently_ (return ()) monLoops)
-
 ----------------------------------------------------------------
 
-setup :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
-setup env conf port hosts = do
+getUdpServer :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
+getUdpServer env conf port hosts = do
     hostIPs <- getHostIPs hosts port
     (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
     let pLoops = concat loopsList
@@ -209,6 +209,8 @@ setup env conf port hosts = do
   where
     getHostIPs [] p = getAInfoIPs p
     getHostIPs hs _ = return $ map fromString hs
+
+----------------------------------------------------------------
 
 getMonitor :: Env -> Config -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
 getMonitor env Config{..} port_ hosts stdConsole_ qsizes = do
