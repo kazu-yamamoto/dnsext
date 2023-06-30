@@ -39,7 +39,6 @@ library
         base >=4 && <5,
         bytestring,
         containers,
-        deepseq,
         transformers,
         stm,
         time,
@@ -131,8 +130,14 @@ executable workers-benchmark
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
+        bytestring,
+        deepseq,
         dnsext-log,
-        dnsext-full-resolver
+        dnsext-types,
+        dnsext-full-resolver,
+        dnsext-do53,
+        time,
+        unliftio
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native

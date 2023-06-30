@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ParallelListComp #-}
 
 module Main where
 
@@ -10,16 +11,29 @@ import System.Console.GetOpt (
     getOpt,
     usageInfo,
  )
+import Control.Concurrent (forkIO, getNumCapabilities)
+import Control.DeepSeq (deepseq)
+import Control.Monad (replicateM)
+import qualified DNS.Types as DNS
+import qualified DNS.Types.Encode as DNS
+import Data.ByteString (ByteString)
+import Data.String (fromString)
+import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
 import System.Environment (getArgs)
 import Text.Read (readEither)
+import UnliftIO (concurrently_)
 
-import qualified DNS.Cache.Server as Server
+import DNS.Cache.Iterative (Env (..))
+import qualified DNS.Cache.Iterative as Iterative
+import DNS.Cache.Server
+import qualified DNS.Cache.TimeCache as TimeCache
+import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 
-data BenchmarkOptions = BenchmarkOptions
+data Config = Config
     { logOutput :: Log.Output
     , logLevel :: Log.Level
-    , maxKibiEntries :: Int
+    , maxCacheSize :: Int
     , noopMode :: Bool
     , gplotMode :: Bool
     , workers :: Int
@@ -27,12 +41,12 @@ data BenchmarkOptions = BenchmarkOptions
     , requests :: Int
     }
 
-defaultOptions :: BenchmarkOptions
+defaultOptions :: Config
 defaultOptions =
-    BenchmarkOptions
+    Config
         { logOutput = Log.Stdout
         , logLevel = Log.WARN
-        , maxKibiEntries = 2 * 1024
+        , maxCacheSize = 2 * 1024
         , noopMode = False
         , gplotMode = False
         , workers = 2
@@ -40,7 +54,7 @@ defaultOptions =
         , requests = 512 * 1024
         }
 
-descs :: [OptDescr (BenchmarkOptions -> Either String BenchmarkOptions)]
+descs :: [OptDescr (Config -> Either String Config)]
 descs =
     [ Option
         ['h']
@@ -116,7 +130,7 @@ help =
             "benchmark [options]"
             descs
 
-parseOptions :: [String] -> IO (Maybe BenchmarkOptions)
+parseOptions :: [String] -> IO (Maybe Config)
 parseOptions args
     | not (null errs) = mapM putStrLn errs *> return Nothing
     | otherwise = either helpOnLeft (return . Just) $ do
@@ -126,22 +140,90 @@ parseOptions args
     (ars, _rest, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
-run :: BenchmarkOptions -> IO ()
-run = undefined
-
-{-
-run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
+run :: Config -> IO ()
+run conf@Config{..} = runBenchmark conf udpconf noopMode gplotMode requests
   where
-    conf =
-        Server.UdpServerConfig
-            logOutput
-            logLevel
-            (2 * 1024 * 1024)
-            False
+    udpconf =
+        UdpServerConfig
             workers
             qsizePerWorker
             True
--}
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
+
+runBenchmark
+    :: Config
+    -> UdpServerConfig
+    -> Bool
+    -- ^ No operation or not
+    -> Bool
+    -- ^ Gnuplot mode or not
+    -> Int
+    -- ^ Request size
+    -> IO ()
+runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
+    env <- getEnvB conf
+
+    (workers, enqueueReq, dequeueResp) <- benchServer udpconf env noop
+    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
+
+    let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
+    ds `deepseq` return ()
+
+    -----
+    _ <- runQueriesB initD enqueueReq dequeueResp
+    before <- getCurrentTime
+    _ <- runQueriesB ds enqueueReq dequeueResp
+    after <- getCurrentTime
+
+    let elapsed = after `diffUTCTime` before
+        toDouble = fromRational . toRational :: NominalDiffTime -> Double
+        rate = toDouble $ fromIntegral size / after `diffUTCTime` before
+
+    if gplot
+        then do
+            putStrLn $ unwords [show udpNofPipelines, show rate]
+        else do
+            putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
+            putStrLn $ "workers: " ++ show udpNofPipelines
+            putStrLn $ "qsizePerWorker: " ++ show udpQsizePerWorker
+            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
+            putStrLn $ "requests: " ++ show size
+            putStrLn $ "elapsed: " ++ show elapsed
+            putStrLn $ "rate: " ++ show rate
+
+getEnvB :: Config -> IO Env
+getEnvB Config{..}  = do
+    logTripble@(putLines,_,_) <- Log.new logOutput logLevel
+    tcache@(getSec, _) <- TimeCache.new
+    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
+          where
+            memoLogLn = putLines Log.WARN Nothing . (: [])
+            memoActions = Cache.MemoActions memoLogLn getSec
+    updateCache <- Iterative.getUpdateCache cacheConf
+    Iterative.newEnv logTripble False updateCache tcache
+
+runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
+runQueriesB qs enqueueReq dequeueResp = do
+    _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
+    replicateM len dequeueResp
+  where
+    len = length qs
+
+benchQueries :: [ByteString]
+benchQueries =
+    [ DNS.encode $ setId mid rootA {- TODO: seq ByteString ? -}
+    | mid <- cycle [0 .. maxBound]
+    | rootA <- cycle rootAs
+    ]
+  where
+    setId mid qm = qm{DNS.header = dh{DNS.identifier = mid}}
+    dh = DNS.header DNS.defaultQuery
+    rootAs =
+        [ DNS.defaultQuery
+            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN]
+            }
+        | c1 <- ["a", "b", "c", "d"]
+        , let name = c1 ++ ".root-servers.net."
+        ]

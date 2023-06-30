@@ -6,6 +6,7 @@ module DNS.Cache.Server (
     udpServer,
     PLStatus,
     WorkerStatus (..),
+    benchServer,
 ) where
 
 -- GHC packages
@@ -283,104 +284,24 @@ newCounters = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
-{-
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 -- Benchmark
 
-benchQueries :: [ByteString]
-benchQueries =
-    [ DNS.encode $ setId mid rootA {- TODO: seq ByteString ? -}
-    | mid <- cycle [0 .. maxBound]
-    | rootA <- cycle rootAs
-    ]
-  where
-    setId mid qm = qm{DNS.header = dh{DNS.identifier = mid}}
-    dh = DNS.header DNS.defaultQuery
-    rootAs =
-        [ DNS.defaultQuery
-            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN]
-            }
-        | c1 <- ["a", "b", "c", "d"]
-        , let name = c1 ++ ".root-servers.net."
-        ]
-
-----------------------------------------------------------------
-
-runBenchmark
-    :: Config
-    -> UdpServerConfig
-    -> Bool
-    -- ^ No operation or not
-    -> Bool
-    -- ^ Gnuplot mode or not
-    -> Int
-    -- ^ Request size
-    -> IO ()
-runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
-    env <- getEnvB conf
-
-    (workers, enqueueReq, dequeueResp) <- getPipelineB noop udpconf env
-    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
-
-    let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
-    ds `deepseq` return ()
-
-    -----
-    _ <- runQueriesB initD enqueueReq dequeueResp
-    before <- getCurrentTime
-    _ <- runQueriesB ds enqueueReq dequeueResp
-    after <- getCurrentTime
-
-    let elapsed = after `diffUTCTime` before
-        toDouble = fromRational . toRational :: NominalDiffTime -> Double
-        rate = toDouble $ fromIntegral size / after `diffUTCTime` before
-
-    if gplot
-        then do
-            putStrLn $ unwords [show udpNofPipelines, show rate]
-        else do
-            putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show udpNofPipelines
-            putStrLn $ "qsizePerWorker: " ++ show udpQsizePerWorker
-            putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
-            putStrLn $ "requests: " ++ show size
-            putStrLn $ "elapsed: " ++ show elapsed
-            putStrLn $ "rate: " ++ show rate
-
-getEnvB :: Config -> IO Env
-getEnvB Config{..}  = do
-    logTripble@(putLines,_,_) <- Log.new logOutput logLevel
-    tcache@(getSec, _) <- TimeCache.new
-    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
-          where
-            memoLogLn = putLines Log.WARN Nothing . (: [])
-            memoActions = Cache.MemoActions memoLogLn getSec
-    updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTripble False updateCache tcache
-
-getPipelineB
-    :: Bool
-    -> UdpServerConfig
+benchServer
+    :: UdpServerConfig
     -> Env
+    -> Bool
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-getPipelineB True UdpServerConfig{..} _ = do
+benchServer UdpServerConfig{..} _ True = do
     let qsize = udpQsizePerWorker * udpNofPipelines
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
     let pipelines = replicate udpNofPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
-getPipelineB _ udpconf env = do
+benchServer udpconf env _ = do
     (workerPipelines, enqueueReq, dequeueRes) <-
         getWorkers udpconf env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workers, enqueueReq, dequeueRes)
-
-runQueriesB :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
-runQueriesB qs enqueueReq dequeueResp = do
-    _ <- forkIO $ sequence_ [enqueueReq (q, ()) | q <- qs]
-    replicateM len dequeueResp
-  where
-    len = length qs
--}

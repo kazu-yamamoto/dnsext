@@ -4,8 +4,6 @@ module Main where
 
 import Control.Concurrent (getNumCapabilities)
 import Control.Monad (unless, (>=>))
-import qualified DNS.Cache.Iterative as Iterative
-import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
@@ -28,7 +26,9 @@ import Text.Read (readEither)
 import UnliftIO (concurrently_, race_)
 
 import DNS.Cache.Iterative (Env (..))
+import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
+import qualified DNS.Cache.TimeCache as TimeCache
 
 import Config
 import qualified Monitor as Mon
