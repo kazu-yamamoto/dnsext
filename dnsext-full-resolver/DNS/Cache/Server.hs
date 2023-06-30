@@ -101,8 +101,7 @@ setup
     -> Bool
     -> IO ([IO ()], [IO ()])
 setup conf@Config{..} port hosts stdConsole = do
-    (putLines, logQSize, terminate) <- Log.new logOutput logLevel
-    env <- getEnv conf putLines
+    env <- getEnv conf
     hostIPs <- getHostIPs hosts port
 
     let getP = getPipeline conf env port
@@ -112,11 +111,11 @@ setup conf@Config{..} port hosts stdConsole = do
     caps <- getNumCapabilities
     let params = mkParams caps
 
-    putLines Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
+    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
     monLoops <-
-        monitor stdConsole params env (qsizes, ucacheQSize, logQSize) terminate
+        monitor stdConsole params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
 
     return (pLoops, monLoops)
   where
@@ -137,8 +136,9 @@ setup conf@Config{..} port hosts stdConsole = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> Log.PutLines -> IO Env
-getEnv Config{..} putLines = do
+getEnv :: Config -> IO Env
+getEnv Config{..} = do
+    logTriple@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
@@ -147,7 +147,7 @@ getEnv Config{..} putLines = do
                 putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv putLines disableV6NS updateCache tcache
+    Iterative.newEnv logTriple disableV6NS updateCache tcache
 
 ----------------------------------------------------------------
 
@@ -408,8 +408,7 @@ runBenchmark
     -- ^ Request size
     -> IO ()
 runBenchmark conf@Config{..} noop gplot size = do
-    (putLines, _logQSize, _terminate) <- Log.new logOutput logLevel
-    env <- getEnvB conf putLines
+    env <- getEnvB conf
 
     (workers, enqueueReq, dequeueResp) <- getPipelineB noop conf env
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
@@ -439,15 +438,16 @@ runBenchmark conf@Config{..} noop gplot size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: Config -> Log.PutLines -> IO Env
-getEnvB Config{..} putLines = do
+getEnvB :: Config -> IO Env
+getEnvB Config{..}  = do
+    logTripble@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv putLines False updateCache tcache
+    Iterative.newEnv logTripble False updateCache tcache
 
 getPipelineB
     :: Bool
