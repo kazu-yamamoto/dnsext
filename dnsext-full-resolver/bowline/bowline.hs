@@ -158,7 +158,7 @@ run ServerOptions{..} = Server.run conf port' bindHosts stdConsole
   where
     port' = fromIntegral port
     conf =
-        Server.Config
+        Server.UdpServerConfig
             logOutput
             logLevel
             (maxKibiEntries * 1024)

@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Server (
-    Config (..),
+    UdpServerConfig (..),
     run,
     runBenchmark,
 ) where
@@ -59,7 +59,7 @@ import qualified DNS.Log as Log
 
 ----------------------------------------------------------------
 
-data Config = Config
+data UdpServerConfig = UdpServerConfig
     { logOutput :: Log.Output
     , logLevel :: Log.Level
     , maxCacheSize :: Int
@@ -79,7 +79,7 @@ type EnqueueResp a = Response a -> IO ()
 ----------------------------------------------------------------
 
 run
-    :: Config
+    :: UdpServerConfig
     -> PortNumber
     -> [HostName]
     -> Bool
@@ -95,16 +95,16 @@ run conf port hosts stdConsole = do
 ----------------------------------------------------------------
 
 setup
-    :: Config
+    :: UdpServerConfig
     -> PortNumber
     -> [HostName]
     -> Bool
     -> IO ([IO ()], [IO ()])
-setup conf@Config{..} port hosts stdConsole = do
+setup conf@UdpServerConfig{..} port hosts stdConsole = do
     env <- getEnv conf
     hostIPs <- getHostIPs hosts port
 
-    let getP = getPipeline conf env port
+    let getP = udpServer conf env port
     (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
     let pLoops = concat loopsList
 
@@ -136,8 +136,8 @@ setup conf@Config{..} port hosts stdConsole = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> IO Env
-getEnv Config{..} = do
+getEnv :: UdpServerConfig -> IO Env
+getEnv UdpServerConfig{..} = do
     logTriple@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -178,13 +178,13 @@ getAInfoIPs port = do
 
 ----------------------------------------------------------------
 
-getPipeline
-    :: Config
+udpServer
+    :: UdpServerConfig
     -> Env
     -> PortNumber
     -> IP
     -> IO ([IO ()], PLStatus)
-getPipeline conf env port hostIP = do
+udpServer conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
@@ -202,10 +202,10 @@ getPipeline conf env port hostIP = do
 
 getWorkers
     :: Show a
-    => Config
+    => UdpServerConfig
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers Config{..} env
+getWorkers UdpServerConfig{..} env
     | qsizePerWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
@@ -399,7 +399,7 @@ benchQueries =
 ----------------------------------------------------------------
 
 runBenchmark
-    :: Config
+    :: UdpServerConfig
     -> Bool
     -- ^ No operation or not
     -> Bool
@@ -407,7 +407,7 @@ runBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-runBenchmark conf@Config{..} noop gplot size = do
+runBenchmark conf@UdpServerConfig{..} noop gplot size = do
     env <- getEnvB conf
 
     (workers, enqueueReq, dequeueResp) <- getPipelineB noop conf env
@@ -438,8 +438,8 @@ runBenchmark conf@Config{..} noop gplot size = do
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: Config -> IO Env
-getEnvB Config{..}  = do
+getEnvB :: UdpServerConfig -> IO Env
+getEnvB UdpServerConfig{..}  = do
     logTripble@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -451,10 +451,10 @@ getEnvB Config{..}  = do
 
 getPipelineB
     :: Bool
-    -> Config
+    -> UdpServerConfig
     -> Env
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-getPipelineB True Config{..} _ = do
+getPipelineB True UdpServerConfig{..} _ = do
     let qsize = qsizePerWorker * nOfPipelines
     reqQ <- newQueue qsize
     resQ <- newQueue qsize

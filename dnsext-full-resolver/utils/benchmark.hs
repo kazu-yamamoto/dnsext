@@ -130,7 +130,7 @@ run :: BenchmarkOptions -> IO ()
 run BenchmarkOptions{..} = Server.runBenchmark conf noopMode gplotMode requests
   where
     conf =
-        Server.Config
+        Server.UdpServerConfig
             logOutput
             logLevel
             (2 * 1024 * 1024)
