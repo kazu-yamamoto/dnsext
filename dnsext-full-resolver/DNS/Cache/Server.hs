@@ -87,40 +87,36 @@ run
     -> IO ()
 run conf port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
-    (serverLoops, monLoops) <- setup conf port hosts stdConsole
+    env <- getEnv conf
+    (serverLoops, qsizes) <- setup env conf port hosts
+    monLoops <- getMonitor env conf port hosts stdConsole qsizes
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
 
 ----------------------------------------------------------------
 
-setup
-    :: UdpServerConfig
-    -> PortNumber
-    -> [HostName]
-    -> Bool
-    -> IO ([IO ()], [IO ()])
-setup conf@UdpServerConfig{..} port hosts stdConsole = do
-    env <- getEnv conf
+setup :: Env -> UdpServerConfig -> PortNumber -> [String] -> IO ([IO ()], [PLStatus])
+setup env conf port hosts = do
     hostIPs <- getHostIPs hosts port
-
-    let getP = udpServer conf env port
-    (loopsList, qsizes) <- unzip <$> mapM getP hostIPs
+    (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
     let pLoops = concat loopsList
 
+    return (pLoops, qsizes)
+  where
+    getHostIPs [] p = getAInfoIPs p
+    getHostIPs hs _ = return $ map fromString hs
+
+getMonitor :: Env -> UdpServerConfig -> PortNumber -> [String] -> Bool -> [PLStatus] -> IO [IO ()]
+getMonitor env UdpServerConfig{..} port hosts stdConsole qsizes = do
     caps <- getNumCapabilities
     let params = mkParams caps
 
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ Mon.showParams params
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    monLoops <-
-        monitor stdConsole params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
-
-    return (pLoops, monLoops)
+    monitor stdConsole params env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
   where
-    getHostIPs [] p = getAInfoIPs p
-    getHostIPs hs _ = return $ map fromString hs
     mkParams caps =
         Mon.makeParams
             caps
