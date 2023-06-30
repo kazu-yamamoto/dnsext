@@ -96,7 +96,7 @@ run conf port hosts stdConsole = do
 
 ----------------------------------------------------------------
 
-setup :: Env -> UdpServerConfig -> PortNumber -> [String] -> IO ([IO ()], [PLStatus])
+setup :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
 setup env conf port hosts = do
     hostIPs <- getHostIPs hosts port
     (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
@@ -107,7 +107,7 @@ setup env conf port hosts = do
     getHostIPs [] p = getAInfoIPs p
     getHostIPs hs _ = return $ map fromString hs
 
-getMonitor :: Env -> UdpServerConfig -> PortNumber -> [String] -> Bool -> [PLStatus] -> IO [IO ()]
+getMonitor :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
 getMonitor env UdpServerConfig{..} port hosts stdConsole qsizes = do
     caps <- getNumCapabilities
     let params = mkParams caps
