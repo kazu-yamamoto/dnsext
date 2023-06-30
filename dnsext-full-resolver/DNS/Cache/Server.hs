@@ -60,6 +60,12 @@ import qualified DNS.Log as Log
 ----------------------------------------------------------------
 
 data UdpServerConfig = UdpServerConfig
+    { udpNofPipelines :: Int
+    , udpQsizePerWorker :: Int
+    , udpWorkerSharedQueue :: Bool
+    }
+
+data Config = Config
     { logOutput :: Log.Output
     , logLevel :: Log.Level
     , maxCacheSize :: Int
@@ -79,16 +85,17 @@ type EnqueueResp a = Response a -> IO ()
 ----------------------------------------------------------------
 
 run
-    :: UdpServerConfig
+    :: Config
+    -> UdpServerConfig
     -> PortNumber
     -> [HostName]
     -> Bool
     -- ^ standard console or not
     -> IO ()
-run conf port hosts stdConsole = do
+run conf udpconf port hosts stdConsole = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, qsizes) <- setup env conf port hosts
+    (serverLoops, qsizes) <- setup env udpconf port hosts
     monLoops <- getMonitor env conf port hosts stdConsole qsizes
     race_
         (foldr concurrently_ (return ()) serverLoops)
@@ -107,8 +114,8 @@ setup env conf port hosts = do
     getHostIPs [] p = getAInfoIPs p
     getHostIPs hs _ = return $ map fromString hs
 
-getMonitor :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
-getMonitor env UdpServerConfig{..} port hosts stdConsole qsizes = do
+getMonitor :: Env -> Config -> PortNumber -> [HostName] -> Bool -> [PLStatus] -> IO [IO ()]
+getMonitor env Config{..} port hosts stdConsole qsizes = do
     caps <- getNumCapabilities
     let params = mkParams caps
 
@@ -132,8 +139,8 @@ getMonitor env UdpServerConfig{..} port hosts stdConsole qsizes = do
 
 ----------------------------------------------------------------
 
-getEnv :: UdpServerConfig -> IO Env
-getEnv UdpServerConfig{..} = do
+getEnv :: Config -> IO Env
+getEnv Config{..} = do
     logTriple@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -202,27 +209,27 @@ getWorkers
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getWorkers UdpServerConfig{..} env
-    | qsizePerWorker <= 0 = do
+    | udpQsizePerWorker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate nOfPipelines $ getSenderReceiver reqQ resQ 8 env
+        let wps = replicate udpNofPipelines $ getSenderReceiver reqQ resQ 8 env
         return (wps, writeQueue reqQ, readQueue resQ)
-    | workerSharedQueue = do
-        let qsize = qsizePerWorker * nOfPipelines
+    | udpWorkerSharedQueue = do
+        let qsize = udpQsizePerWorker * udpNofPipelines
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
         let wps =
-                replicate nOfPipelines $ getSenderReceiver reqQ resQ qsizePerWorker env
+                replicate udpNofPipelines $ getSenderReceiver reqQ resQ udpQsizePerWorker env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
+        reqQs <- replicateM udpNofPipelines $ newQueue udpQsizePerWorker
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM nOfPipelines $ newQueue qsizePerWorker
+        resQs <- replicateM udpNofPipelines $ newQueue udpQsizePerWorker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ qsizePerWorker env
+                [ getSenderReceiver reqQ resQ udpQsizePerWorker env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -395,7 +402,8 @@ benchQueries =
 ----------------------------------------------------------------
 
 runBenchmark
-    :: UdpServerConfig
+    :: Config
+    -> UdpServerConfig
     -> Bool
     -- ^ No operation or not
     -> Bool
@@ -403,10 +411,10 @@ runBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-runBenchmark conf@UdpServerConfig{..} noop gplot size = do
+runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
     env <- getEnvB conf
 
-    (workers, enqueueReq, dequeueResp) <- getPipelineB noop conf env
+    (workers, enqueueReq, dequeueResp) <- getPipelineB noop udpconf env
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -424,18 +432,18 @@ runBenchmark conf@UdpServerConfig{..} noop gplot size = do
 
     if gplot
         then do
-            putStrLn $ unwords [show nOfPipelines, show rate]
+            putStrLn $ unwords [show udpNofPipelines, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show nOfPipelines
-            putStrLn $ "qsizePerWorker: " ++ show qsizePerWorker
+            putStrLn $ "workers: " ++ show udpNofPipelines
+            putStrLn $ "qsizePerWorker: " ++ show udpQsizePerWorker
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show elapsed
             putStrLn $ "rate: " ++ show rate
 
-getEnvB :: UdpServerConfig -> IO Env
-getEnvB UdpServerConfig{..}  = do
+getEnvB :: Config -> IO Env
+getEnvB Config{..}  = do
     logTripble@(putLines,_,_) <- Log.new logOutput logLevel
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
@@ -451,14 +459,14 @@ getPipelineB
     -> Env
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
 getPipelineB True UdpServerConfig{..} _ = do
-    let qsize = qsizePerWorker * nOfPipelines
+    let qsize = udpQsizePerWorker * udpNofPipelines
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
-    let pipelines = replicate nOfPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
+    let pipelines = replicate udpNofPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
-getPipelineB _ conf env = do
+getPipelineB _ udpconf env = do
     (workerPipelines, enqueueReq, dequeueRes) <-
-        getWorkers conf env
+        getWorkers udpconf env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workers, enqueueReq, dequeueRes)
