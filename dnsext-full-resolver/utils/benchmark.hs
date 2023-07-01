@@ -182,11 +182,11 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
 
     if gplot
         then do
-            putStrLn $ unwords [show udpNofPipelines, show rate]
+            putStrLn $ unwords [show udp_pipelines_per_socket, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "workers: " ++ show udpNofPipelines
-            putStrLn $ "qsizePerWorker: " ++ show udpQsizePerWorker
+            putStrLn $ "pipelines: " ++ show udp_pipelines_per_socket
+            putStrLn $ "qsizePerWorker: " ++ show udp_queue_size_per_worker
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show elapsed

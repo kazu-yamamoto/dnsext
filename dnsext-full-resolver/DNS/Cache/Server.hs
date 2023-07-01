@@ -44,9 +44,9 @@ import qualified DNS.Log as Log
 ----------------------------------------------------------------
 
 data UdpServerConfig = UdpServerConfig
-    { udpNofPipelines :: Int
-    , udpQsizePerWorker :: Int
-    , udpWorkerSharedQueue :: Bool
+    { udp_pipelines_per_socket :: Int
+    , udp_queue_size_per_worker :: Int
+    , udp_worker_share_queue :: Bool
     }
 
 type Request a = (ByteString, a)
@@ -104,27 +104,27 @@ getWorkers
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getWorkers UdpServerConfig{..} env
-    | udpQsizePerWorker <= 0 = do
+    | udp_queue_size_per_worker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate udpNofPipelines $ getSenderReceiver reqQ resQ 8 env
+        let wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ 8 env
         return (wps, writeQueue reqQ, readQueue resQ)
-    | udpWorkerSharedQueue = do
-        let qsize = udpQsizePerWorker * udpNofPipelines
+    | udp_worker_share_queue = do
+        let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
         let wps =
-                replicate udpNofPipelines $ getSenderReceiver reqQ resQ udpQsizePerWorker env
+                replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udp_queue_size_per_worker env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM udpNofPipelines $ newQueue udpQsizePerWorker
+        reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM udpNofPipelines $ newQueue udpQsizePerWorker
+        resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ udpQsizePerWorker env
+                [ getSenderReceiver reqQ resQ udp_queue_size_per_worker env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -294,10 +294,10 @@ benchServer
     -> Bool
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
 benchServer UdpServerConfig{..} _ True = do
-    let qsize = udpQsizePerWorker * udpNofPipelines
+    let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
-    let pipelines = replicate udpNofPipelines [forever $ writeQueue resQ =<< readQueue reqQ]
+    let pipelines = replicate udp_pipelines_per_socket [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
 benchServer udpconf env _ = do
     (workerPipelines, enqueueReq, dequeueRes) <-
