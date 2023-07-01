@@ -25,7 +25,7 @@ import qualified Monitor as Mon
 ----------------------------------------------------------------
 
 help :: IO ()
-help = putStrLn "bowline <conf>"
+help = putStrLn "bowline [<confFile>]"
 
 ----------------------------------------------------------------
 
@@ -48,9 +48,11 @@ run conf@Config{..} = do
 
 main :: IO ()
 main = do
-    [cnfFile] <- getArgs
-    conf <- parseConfig cnfFile
-    run conf
+    args <- getArgs
+    case args of
+      [] -> run defaultConfig
+      [confFile] -> parseConfig confFile >>= run
+      _          -> help
 
 ----------------------------------------------------------------
 
