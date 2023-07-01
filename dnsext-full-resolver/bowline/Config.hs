@@ -90,7 +90,7 @@ makeConfig def conf =
         , cnf_udp_queue_size_per_worker = get "udp-queue-size-per-worker" cnf_udp_queue_size_per_worker
         , cnf_udp_port = get "udp-port" cnf_udp_port
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
-        , cnf_bind_addresses = [] -- fixme
+        , cnf_bind_addresses = get "bind-addresses" cnf_bind_addresses
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
         }
   where
