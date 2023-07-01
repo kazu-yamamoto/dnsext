@@ -37,25 +37,25 @@ library
     ghc-options:      -Wall
     build-depends:
         base >=4 && <5,
-        bytestring,
-        containers,
-        transformers,
-        stm,
-        time,
-        word8,
         ansi-terminal,
         async,
         auto-update,
-        network,
-        network-udp,
-        psqueues,
-        iproute,
+        bytestring,
+        containers,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-log,
         dnsext-types,
+        iproute,
+        network,
+        network-udp,
+        psqueues,
         random,
-        unliftio
+        stm,
+        time,
+        transformers,
+        unliftio,
+        word8
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -73,17 +73,17 @@ executable bowline
     build-depends:
         base,
         bytestring,
-        dnsext-log,
-        dnsext-full-resolver,
-        dnsext-types,
-        dnsext-do53,
         dnsext-dnssec,
+        dnsext-do53,
+        dnsext-full-resolver,
+        dnsext-log,
+        dnsext-types,
         iproute,
-        stm,
         network,
-        unliftio,
         parsec,
-        split
+        split,
+        stm,
+        unliftio
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
@@ -104,6 +104,8 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
+        ansi-terminal,
+        base16-bytestring,
         bytestring,
         dnsext-dnssec,
         dnsext-do53,
@@ -114,12 +116,10 @@ executable dug
         dnsext-types,
         iproute,
         network,
+        prettyprinter,
         random,
         transformers,
-        ansi-terminal,
-        unix-time,
-        prettyprinter,
-        base16-bytestring
+        unix-time
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
@@ -136,10 +136,10 @@ executable workers-benchmark
         base,
         bytestring,
         deepseq,
+        dnsext-do53,
+        dnsext-full-resolver,
         dnsext-log,
         dnsext-types,
-        dnsext-full-resolver,
-        dnsext-do53,
         time,
         unliftio
 
@@ -158,11 +158,11 @@ test-suite spec
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        hspec,
-        dnsext-types,
         dnsext-dnssec,
         dnsext-do53,
-        dnsext-full-resolver
+        dnsext-full-resolver,
+        dnsext-types,
+        hspec
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
