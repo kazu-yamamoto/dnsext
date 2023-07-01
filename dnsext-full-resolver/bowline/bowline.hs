@@ -50,9 +50,9 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-      [] -> run defaultConfig
-      [confFile] -> parseConfig confFile >>= run
-      _          -> help
+        [] -> run defaultConfig
+        [confFile] -> parseConfig confFile >>= run
+        _ -> help
 
 ----------------------------------------------------------------
 

@@ -1,13 +1,13 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Config (
-    Config(..)
-  , defaultConfig
-  , parseConfig
-  , showConfig
-  ) where
+    Config (..),
+    defaultConfig,
+    parseConfig,
+    showConfig,
+) where
 
 import qualified DNS.Log as Log
 import Text.Parsec
@@ -44,6 +44,7 @@ defaultConfig =
         , cnf_bind_addresses = []
         , cnf_monitor_stdio = False
         }
+
 ----------------------------------------------------------------
 
 showConfig :: Config -> [String]
@@ -90,7 +91,7 @@ makeConfig def conf =
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_bind_addresses = [] -- fixme
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
-    }
+        }
   where
     get k func = maybe (func def) fromConf $ lookup k conf
 
@@ -98,7 +99,7 @@ makeConfig def conf =
 
 type Conf = (String, ConfValue)
 
-data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String deriving (Eq,Show)
+data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String deriving (Eq, Show)
 
 class FromConf a where
     fromConf :: ConfValue -> a
@@ -131,7 +132,7 @@ field :: Parser Conf
 field = (,) <$> key <*> (sep *> value)
 
 key :: Parser String
-key = many1 (oneOf $ ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "_-") <* spcs
+key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
 
 sep :: Parser ()
 sep = () <$ char ':' *> spcs
@@ -144,8 +145,9 @@ cv_int :: Parser ConfValue
 cv_int = CV_Int . read <$> many1 digit <* trailing
 
 cv_bool :: Parser ConfValue
-cv_bool = CV_Bool True  <$ string "yes" <* trailing <|>
-          CV_Bool False <$ string "no"  <* trailing
+cv_bool =
+    CV_Bool True <$ string "yes" <* trailing
+        <|> CV_Bool False <$ string "no" <* trailing
 
 cv_string :: Parser ConfValue
 cv_string = CV_String <$> many (noneOf " \t\n") <* trailing
