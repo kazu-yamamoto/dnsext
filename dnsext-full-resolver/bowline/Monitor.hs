@@ -73,14 +73,13 @@ data Command
     deriving (Show)
 
 monitor
-    :: Bool
-    -> Config
+    :: Config
     -> Env
     -> ([PLStatus], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> IO [IO ()]
-monitor stdConsole conf env getsSizeInfo terminate = do
-    let monPort' = fromIntegral $ monitorPort conf
+monitor conf env getsSizeInfo terminate = do
+    let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
     let ss = map fst ps
     sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
@@ -89,7 +88,7 @@ monitor stdConsole conf env getsSizeInfo terminate = do
     monQuit <- do
         qRef <- newTVarIO False
         return (writeTVar qRef True, readTVar qRef >>= guard)
-    when stdConsole $ runStdConsole monQuit
+    when (cnf_monitor_stdio conf) $ runStdConsole monQuit
     return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do

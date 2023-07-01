@@ -45,7 +45,7 @@ descs =
     , Option
         []
         ["log-output"]
-        ( ReqArg (\s opts -> parseOutput s >>= \x -> return opts{logOutput = x}) $
+        ( ReqArg (\s opts -> parseOutput s >>= \x -> return opts{cnf_log_output = x}) $
             "{" ++ intercalate "|" (map fst outputs) ++ "}"
         )
         "log output target. default is stdout"
@@ -53,7 +53,7 @@ descs =
         ['l']
         ["log-level"]
         ( ReqArg
-            (\s opts -> readEither (map toUpper s) >>= \x -> return opts{logLevel = x})
+            (\s opts -> readEither (map toUpper s) >>= \x -> return opts{cnf_log_level = x})
             "{WARN|NOTICE|INFO|DEBUG}"
         )
         "server log-level"
@@ -62,25 +62,25 @@ descs =
         ["max-cache-entries"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts{maxCacheSize = x}
+                readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts{cnf_cache_size = x}
             )
             "POSITIVE_INTEGER"
         )
         ( "max K-entries in cache (1024 entries per 1). default is "
-            ++ show (maxCacheSize defaultConfig)
+            ++ show (cnf_cache_size defaultConfig)
             ++ " K-entries"
         )
     , Option
         ['4']
         ["disable-v6-ns"]
-        (NoArg $ \opts -> return opts{disableV6NS = True})
+        (NoArg $ \opts -> return opts{cnf_disable_v6_ns = True})
         "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
     , Option
         ['w']
         ["workers"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{workersPerSocket = x}
+                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{cnf_udp_workes_per_socket = x}
             )
             "POSITIVE_INTEGER"
         )
@@ -88,14 +88,14 @@ descs =
     , Option
         []
         ["no-shared-queue"]
-        (NoArg $ \opts -> return opts{workerSharedQueue = False})
+        (NoArg $ \opts -> return opts{cnf_udp_worker_share_queue = False})
         "not share request queue and response queue in worker threads"
     , Option
         []
         ["per-worker"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts{queueSizePerWorker = x}
+                readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts{cnf_udp_queue_size_per_worker = x}
             )
             "POSITIVE_INTEGER"
         )
@@ -105,7 +105,7 @@ descs =
         ["port"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts{udpPort = x}
+                readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts{cnf_udp_port = x}
             )
             "PORT_NUMBER"
         )
@@ -113,7 +113,7 @@ descs =
     , Option
         ['s']
         ["std-console"]
-        (NoArg $ \opts -> return opts{stdConsole = True, logOutput = Log.Stderr})
+        (NoArg $ \opts -> return opts{cnf_monitor_stdio = True, cnf_log_output = Log.Stderr})
         "open console using stdin and stdout. also set log-output to stderr"
     ]
   where
@@ -140,7 +140,7 @@ parseOptions args
     | not (null errs) = mapM putStrLn errs *> return Nothing
     | otherwise = either helpOnLeft (return . Just) $ do
         opt <- foldr (>=>) return ars defaultConfig
-        return opt{bindHosts = hosts}
+        return opt{cnf_bind_addresses = hosts}
   where
     (ars, hosts, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing
@@ -151,18 +151,18 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, qsizes) <- getUdpServer env udpconf udpPort' bindHosts
-    monLoops <- getMonitor env conf stdConsole qsizes
+    (serverLoops, qsizes) <- getUdpServer env udpconf cnf_udp_port' cnf_bind_addresses
+    monLoops <- getMonitor env conf qsizes
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
   where
-    udpPort' = fromIntegral udpPort
+    cnf_udp_port' = fromIntegral cnf_udp_port
     udpconf =
         UdpServerConfig
-            workersPerSocket
-            queueSizePerWorker
-            workerSharedQueue
+            cnf_udp_workes_per_socket
+            cnf_udp_queue_size_per_worker
+            cnf_udp_worker_share_queue
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
@@ -182,28 +182,28 @@ getUdpServer env conf port hosts = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> Bool -> [PLStatus] -> IO [IO ()]
-getMonitor env conf stdConsole_ qsizes = do
+getMonitor :: Env -> Config -> [PLStatus] -> IO [IO ()]
+getMonitor env conf qsizes = do
     _caps <- getNumCapabilities -- fixme
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    Mon.monitor stdConsole_ conf env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
+    Mon.monitor conf env (qsizes, ucacheQSize, logQSize_ env) (logTerminate_ env)
 
 ----------------------------------------------------------------
 
 getEnv :: Config -> IO Env
 getEnv Config{..} = do
-    logTriple@(putLines, _, _) <- Log.new logOutput logLevel
+    logTriple@(putLines, _, _) <- Log.new cnf_log_output cnf_log_level
     tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
+    let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
           where
             memoLogLn msg = do
                 tstr <- getTimeStr
                 putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTriple disableV6NS updateCache tcache
+    Iterative.newEnv logTriple cnf_disable_v6_ns updateCache tcache
 
 ----------------------------------------------------------------
 
