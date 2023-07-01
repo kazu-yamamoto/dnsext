@@ -139,7 +139,13 @@ config = commentLines *> many cfield <* eof
     cfield = field <* commentLines
 
 field :: Parser Conf
-field = (,) <$> key <*> (sep *> value)
+field = do
+    k <- key
+    sep
+    v <- value
+    if v == CV_String ""
+        then fail ("\"" ++ k ++ ":\" does not specify a value")
+        else return (k, v)
 
 key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
