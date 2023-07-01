@@ -66,11 +66,13 @@ executable bowline
     other-modules:
         Config
         Monitor
+        Parser
         SocketUtil
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
+        bytestring,
         dnsext-log,
         dnsext-full-resolver,
         dnsext-types,
@@ -79,7 +81,8 @@ executable bowline
         iproute,
         stm,
         network,
-        unliftio
+        unliftio,
+        parsec
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native

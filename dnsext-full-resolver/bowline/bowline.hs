@@ -3,26 +3,15 @@
 module Main where
 
 import Control.Concurrent (getNumCapabilities)
-import Control.Monad (unless, (>=>))
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
-import Data.Char (toUpper)
 import Data.IP
-import Data.List (intercalate)
 import Data.Maybe (mapMaybe)
 import Data.String (fromString)
 import Network.Socket
-import System.Console.GetOpt (
-    ArgDescr (NoArg, ReqArg),
-    ArgOrder (RequireOrder),
-    OptDescr (Option),
-    getOpt,
-    usageInfo,
- )
 import System.Environment (getArgs)
-import Text.Read (readEither)
 import UnliftIO (concurrently_, race_)
 
 import DNS.Cache.Iterative (Env (..))
@@ -35,115 +24,8 @@ import qualified Monitor as Mon
 
 ----------------------------------------------------------------
 
-descs :: [OptDescr (Config -> Either String Config)]
-descs =
-    [ Option
-        ['h']
-        ["help"]
-        (NoArg $ const $ Left "show help")
-        "show this help text"
-    , Option
-        []
-        ["log-output"]
-        ( ReqArg (\s opts -> parseOutput s >>= \x -> return opts{cnf_log_output = x}) $
-            "{" ++ intercalate "|" (map fst outputs) ++ "}"
-        )
-        "log output target. default is stdout"
-    , Option
-        ['l']
-        ["log-level"]
-        ( ReqArg
-            (\s opts -> readEither (map toUpper s) >>= \x -> return opts{cnf_log_level = x})
-            "{WARN|NOTICE|INFO|DEBUG}"
-        )
-        "server log-level"
-    , Option
-        ['M']
-        ["max-cache-entries"]
-        ( ReqArg
-            ( \s opts ->
-                readIntWith (> 0) "max-cache-entries. not positive size" s >>= \x -> return opts{cnf_cache_size = x}
-            )
-            "POSITIVE_INTEGER"
-        )
-        ( "max K-entries in cache (1024 entries per 1). default is "
-            ++ show (cnf_cache_size defaultConfig)
-            ++ " K-entries"
-        )
-    , Option
-        ['4']
-        ["disable-v6-ns"]
-        (NoArg $ \opts -> return opts{cnf_disable_v6_ns = True})
-        "not to query IPv6 NS addresses. default is querying IPv6 NS addresses"
-    , Option
-        ['w']
-        ["workers"]
-        ( ReqArg
-            ( \s opts ->
-                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{cnf_udp_workes_per_socket = x}
-            )
-            "POSITIVE_INTEGER"
-        )
-        "workers per host. default is 2"
-    , Option
-        []
-        ["no-shared-queue"]
-        (NoArg $ \opts -> return opts{cnf_udp_worker_share_queue = False})
-        "not share request queue and response queue in worker threads"
-    , Option
-        []
-        ["per-worker"]
-        ( ReqArg
-            ( \s opts ->
-                readIntWith (>= 0) "per-worker. not positive" s >>= \x -> return opts{cnf_udp_queue_size_per_worker = x}
-            )
-            "POSITIVE_INTEGER"
-        )
-        "queue size per worker. default is 16. positive integer or 0. 0 means not limited size queue"
-    , Option
-        ['p']
-        ["port"]
-        ( ReqArg
-            ( \s opts ->
-                readIntWith (>= 0) "port. non-negative is required" s >>= \x -> return opts{cnf_udp_port = x}
-            )
-            "PORT_NUMBER"
-        )
-        "server port number. default server-port is 53. monitor port number is server-port + 9970. so default monitor-port is 10023.\nyou can connect to the monitor with `telnet localhost <monitor port>`. for more information, connect to monitor and type `help<Enter>`."
-    , Option
-        ['s']
-        ["std-console"]
-        (NoArg $ \opts -> return opts{cnf_monitor_stdio = True, cnf_log_output = Log.Stderr})
-        "open console using stdin and stdout. also set log-output to stderr"
-    ]
-  where
-    readIntWith p em s = do
-        x <- readEither s :: Either String Int
-        unless (p x) $ Left $ em ++ ": " ++ show x
-        return $ fromIntegral x
-    parseOutput s = maybe (Left "unknown log output target") Right $ lookup s outputs
-    outputs = [("stdout", Log.Stdout), ("stderr", Log.Stderr)]
-
-----------------------------------------------------------------
-
 help :: IO ()
-help =
-    putStr $
-        usageInfo
-            "cache-server [options] [BIND_HOSTNAMES]"
-            descs
-
-----------------------------------------------------------------
-
-parseOptions :: [String] -> IO (Maybe Config)
-parseOptions args
-    | not (null errs) = mapM putStrLn errs *> return Nothing
-    | otherwise = either helpOnLeft (return . Just) $ do
-        opt <- foldr (>=>) return ars defaultConfig
-        return opt{cnf_bind_addresses = hosts}
-  where
-    (ars, hosts, errs) = getOpt RequireOrder descs args
-    helpOnLeft e = putStrLn e *> help *> return Nothing
+help = putStrLn "bowline <conf>"
 
 ----------------------------------------------------------------
 
@@ -165,7 +47,10 @@ run conf@Config{..} = do
             cnf_udp_worker_share_queue
 
 main :: IO ()
-main = maybe (return ()) run =<< parseOptions =<< getArgs
+main = do
+    [cnfFile] <- getArgs
+    conf <- parseConfig cnfFile
+    run conf
 
 ----------------------------------------------------------------
 
