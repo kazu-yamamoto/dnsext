@@ -28,7 +28,7 @@ data Config = Config
     , cnf_monitor_port :: Int
     , cnf_bind_addresses :: [String]
     , cnf_monitor_stdio :: Bool
-    }
+    } deriving (Show)
 
 defaultConfig :: Config
 defaultConfig =

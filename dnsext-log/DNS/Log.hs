@@ -50,6 +50,11 @@ data Output
     | Stderr
     | RouteFile FileLogSpec BufSize
 
+instance Show Output where
+    show Stdout = "Stdout"
+    show Stderr = "Stderr"
+    show (RouteFile _ _) = "RouteFile"
+
 type PutLines = Level -> Maybe Color -> [String] -> IO ()
 type GetQueueSize = IO (Int, Int)
 type Terminate = IO ()
