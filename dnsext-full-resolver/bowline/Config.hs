@@ -49,22 +49,22 @@ defaultConfig =
 showConfig :: Config -> [String]
 showConfig conf =
     [ -- field "capabilities" numCapabilities
-      field_ "log output" (showOut . cnf_log_output)
-    , field "log level" cnf_log_level
-    , field "max cache size" cnf_cache_size
-    , field "disable queries to IPv6 NS" cnf_disable_v6_ns
-    , field "pipelines per socket" cnf_udp_pipelines_per_socket
-    , field "worker shared queue" cnf_udp_worker_share_queue
-    , field "queue size per worker" cnf_udp_queue_size_per_worker
-    , field "DNS port" cnf_udp_port
-    , field "Monitor port" cnf_monitor_port
+      field'_ "log output" (showOut . cnf_log_output)
+    , field' "log level" cnf_log_level
+    , field' "max cache size" cnf_cache_size
+    , field' "disable queries to IPv6 NS" cnf_disable_v6_ns
+    , field' "pipelines per socket" cnf_udp_pipelines_per_socket
+    , field' "worker shared queue" cnf_udp_worker_share_queue
+    , field' "queue size per worker" cnf_udp_queue_size_per_worker
+    , field' "DNS port" cnf_udp_port
+    , field' "Monitor port" cnf_monitor_port
     ]
         ++ if null hosts
             then ["DNS host list: null"]
             else "DNS host list:" : map ("DNS host: " ++) hosts
   where
-    field_ label toS = label ++ ": " ++ toS conf
-    field label get = field_ label (show . get)
+    field'_ label' toS = label' ++ ": " ++ toS conf
+    field' label' get = field'_ label' (show . get)
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
     showOut _ = "rotate file"
