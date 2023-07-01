@@ -33,7 +33,7 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, qsizes) <- getUdpServer env udpconf cnf_udp_port' cnf_bind_addresses
+    (serverLoops, qsizes) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
     monLoops <- getMonitor env conf qsizes
     race_
         (foldr concurrently_ (return ()) serverLoops)
@@ -56,8 +56,8 @@ main = do
 
 ----------------------------------------------------------------
 
-getUdpServer :: Env -> UdpServerConfig -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
-getUdpServer env conf port hosts = do
+getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
+getUdpServer conf env port hosts = do
     hostIPs <- getHostIPs hosts port
     (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
     let pLoops = concat loopsList
