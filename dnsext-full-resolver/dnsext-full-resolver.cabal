@@ -82,7 +82,8 @@ executable bowline
         stm,
         network,
         unliftio,
-        parsec
+        parsec,
+        split
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native

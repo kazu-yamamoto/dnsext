@@ -10,6 +10,7 @@ module Config (
 ) where
 
 import qualified DNS.Log as Log
+import Data.List.Split (splitOn)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
@@ -114,6 +115,15 @@ instance FromConf Bool where
 
 instance FromConf String where
     fromConf (CV_String s) = s
+    fromConf _ = error "fromConf string"
+
+instance FromConf (Maybe String) where
+    fromConf (CV_String "") = Nothing
+    fromConf (CV_String s)  = Just s
+    fromConf _ = error "fromConf string"
+
+instance FromConf [String] where
+    fromConf (CV_String s)  = splitOn "," s
     fromConf _ = error "fromConf string"
 
 ----------------------------------------------------------------
