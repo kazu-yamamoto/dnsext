@@ -42,7 +42,7 @@ run conf@Config{..} = do
     cnf_udp_port' = fromIntegral cnf_udp_port
     udpconf =
         UdpServerConfig
-            cnf_udp_workes_per_socket
+            cnf_udp_pipelines_per_socket
             cnf_udp_queue_size_per_worker
             cnf_udp_worker_share_queue
 

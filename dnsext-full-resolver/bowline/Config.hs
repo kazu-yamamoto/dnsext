@@ -20,7 +20,7 @@ data Config = Config
     , cnf_log_level :: Log.Level
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
-    , cnf_udp_workes_per_socket :: Int
+    , cnf_udp_pipelines_per_socket :: Int
     , cnf_udp_worker_share_queue :: Bool
     , cnf_udp_queue_size_per_worker :: Int
     , cnf_udp_port :: Int
@@ -36,7 +36,7 @@ defaultConfig =
         , cnf_log_level = Log.WARN
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
-        , cnf_udp_workes_per_socket = 2
+        , cnf_udp_pipelines_per_socket = 2
         , cnf_udp_worker_share_queue = True
         , cnf_udp_queue_size_per_worker = 16
         , cnf_udp_port = 53
@@ -53,7 +53,7 @@ showConfig conf =
     , field "log level" cnf_log_level
     , field "max cache size" cnf_cache_size
     , field "disable queries to IPv6 NS" cnf_disable_v6_ns
-    , field "worker threads per socket" cnf_udp_workes_per_socket
+    , field "pipelines per socket" cnf_udp_pipelines_per_socket
     , field "worker shared queue" cnf_udp_worker_share_queue
     , field "queue size per worker" cnf_udp_queue_size_per_worker
     , field "DNS port" cnf_udp_port
@@ -83,7 +83,7 @@ makeConfig def conf =
         , cnf_log_level = Log.WARN -- fixme
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
-        , cnf_udp_workes_per_socket = get "udp-workes-per-socket" cnf_udp_workes_per_socket
+        , cnf_udp_pipelines_per_socket = get "udp-pipelines-per-socket" cnf_udp_pipelines_per_socket
         , cnf_udp_worker_share_queue = get "udp-worker-share-queue" cnf_udp_worker_share_queue
         , cnf_udp_queue_size_per_worker = get "udp-queue-size-per-worker" cnf_udp_queue_size_per_worker
         , cnf_udp_port = get "udp-port" cnf_udp_port
