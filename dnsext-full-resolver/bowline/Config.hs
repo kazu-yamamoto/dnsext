@@ -119,11 +119,11 @@ instance FromConf String where
 
 instance FromConf (Maybe String) where
     fromConf (CV_String "") = Nothing
-    fromConf (CV_String s)  = Just s
+    fromConf (CV_String s) = Just s
     fromConf _ = error "fromConf string"
 
 instance FromConf [String] where
-    fromConf (CV_String s)  = splitOn "," s
+    fromConf (CV_String s) = splitOn "," s
     fromConf _ = error "fromConf string"
 
 ----------------------------------------------------------------
