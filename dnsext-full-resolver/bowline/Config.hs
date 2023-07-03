@@ -22,6 +22,7 @@ data Config = Config
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
     , cnf_udp_pipelines_per_socket :: Int
+    , cnf_udp_workers_per_pipeline :: Int
     , cnf_udp_worker_share_queue :: Bool
     , cnf_udp_queue_size_per_worker :: Int
     , cnf_udp_port :: Int
@@ -39,6 +40,7 @@ defaultConfig =
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
         , cnf_udp_pipelines_per_socket = 2
+        , cnf_udp_workers_per_pipeline = 8
         , cnf_udp_worker_share_queue = True
         , cnf_udp_queue_size_per_worker = 16
         , cnf_udp_port = 53
@@ -87,6 +89,7 @@ makeConfig def conf =
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_udp_pipelines_per_socket = get "udp-pipelines-per-socket" cnf_udp_pipelines_per_socket
+        , cnf_udp_workers_per_pipeline = get "udp-workers-per-pipeline" cnf_udp_workers_per_pipeline
         , cnf_udp_worker_share_queue = get "udp-worker-share-queue" cnf_udp_worker_share_queue
         , cnf_udp_queue_size_per_worker = get "udp-queue-size-per-worker" cnf_udp_queue_size_per_worker
         , cnf_udp_port = get "udp-port" cnf_udp_port

@@ -39,6 +39,7 @@ import qualified DNS.Log as Log
 
 data UdpServerConfig = UdpServerConfig
     { udp_pipelines_per_socket :: Int
+    , udp_workers_per_pipline :: Int
     , udp_queue_size_per_worker :: Int
     , udp_worker_share_queue :: Bool
     }
@@ -144,14 +145,13 @@ getSenderReceiver reqQ resQ UdpServerConfig{..} env = do
         cacher = getCacher env incs enqueueDec enqueueResp
         cachedLoop = handledLoop logc (readQueue reqQ >>= cacher)
 
-        resolvLoops = replicate nOfResolvWorkers resolvLoop
+        resolvLoops = replicate udp_workers_per_pipline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
         workerStatus = WorkerStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
     return (loops, workerStatus)
   where
-    nOfResolvWorkers = 8
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
     resQSize = queueSize resQ

@@ -35,7 +35,7 @@ data Config = Config
     , maxCacheSize :: Int
     , noopMode :: Bool
     , gplotMode :: Bool
-    , workers :: Int
+    , pipelines :: Int
     , qsizePerWorker :: Int
     , requests :: Int
     }
@@ -48,7 +48,7 @@ defaultOptions =
         , maxCacheSize = 2 * 1024
         , noopMode = False
         , gplotMode = False
-        , workers = 2
+        , pipelines = 2
         , qsizePerWorker = 16
         , requests = 512 * 1024
         }
@@ -80,11 +80,11 @@ descs =
         (NoArg $ \opts -> return opts{gplotMode = True})
         "output for GNUplot"
     , Option
-        ['w']
-        ["workers"]
+        ['p']
+        ["pipelines"]
         ( ReqArg
             ( \s opts ->
-                readIntWith (> 0) "workers. not positive" s >>= \x -> return opts{workers = x}
+                readIntWith (> 0) "pipelines. not positive" s >>= \x -> return opts{pipelines = x}
             )
             "POSITIVE_INTEGER"
         )
@@ -144,7 +144,8 @@ run conf@Config{..} = runBenchmark conf udpconf noopMode gplotMode requests
   where
     udpconf =
         UdpServerConfig
-            workers
+            pipelines
+            8
             qsizePerWorker
             True
 
