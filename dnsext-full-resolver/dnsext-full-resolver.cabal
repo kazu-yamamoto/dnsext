@@ -9,8 +9,9 @@ extra-source-files: CHANGELOG.md
 
 library
     exposed-modules:
-        DNS.Cache.Server
         DNS.Cache.Iterative
+        DNS.Cache.Server
+        DNS.Cache.Server.Bench
         DNS.Cache.TimeCache
         DNS.Cache.Types
 
@@ -32,6 +33,7 @@ library
         DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
+        DNS.Cache.Server.UDP
 
     default-language: Haskell2010
     ghc-options:      -Wall
