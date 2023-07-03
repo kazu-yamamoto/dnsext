@@ -97,20 +97,20 @@ getWorkers
     => UdpServerConfig
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers UdpServerConfig{..} env
+getWorkers udpconf@UdpServerConfig{..} env
     | udp_queue_size_per_worker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ 8 env
+        let udpconf' = udpconf { udp_queue_size_per_worker = 8 }
+            wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf' env
         return (wps, writeQueue reqQ, readQueue resQ)
     | udp_worker_share_queue = do
         let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps =
-                replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udp_queue_size_per_worker env
+        let wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
@@ -118,7 +118,7 @@ getWorkers UdpServerConfig{..} env
         resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ udp_queue_size_per_worker env
+                [ getSenderReceiver reqQ resQ udpconf env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -130,15 +130,15 @@ getSenderReceiver
     :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
     => rq (Request a)
     -> wq (Response a)
-    -> Int
+    -> UdpServerConfig
     -> Env
     -> IO ([IO ()], WorkerStatus)
-getSenderReceiver reqQ resQ qsizePerWorker env = do
+getSenderReceiver reqQ resQ UdpServerConfig{..} env = do
     (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
         worker = getWorker env incs enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <- consumeLoop qsizePerWorker logr worker
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop udp_queue_size_per_worker logr worker
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
         cacher = getCacher env incs enqueueDec enqueueResp
