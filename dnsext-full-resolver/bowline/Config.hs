@@ -83,7 +83,7 @@ makeConfig :: Config -> [Conf] -> Config
 makeConfig def conf =
     Config
         { cnf_log_output = Log.Stdout -- fixme
-        , cnf_log_level = Log.WARN -- fixme
+        , cnf_log_level = get "log-level" cnf_log_level
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_udp_pipelines_per_socket = get "udp-pipelines-per-socket" cnf_udp_pipelines_per_socket
@@ -126,6 +126,17 @@ instance FromConf (Maybe String) where
 instance FromConf [String] where
     fromConf (CV_String s) = splitOn "," s
     fromConf _ = error "fromConf string"
+
+instance FromConf Log.Level where
+    fromConf (CV_String s) = logLevel s
+    fromConf _ = error "fromConf log level"
+
+----------------------------------------------------------------
+
+logLevel :: String -> Log.Level
+logLevel "debug" = Log.DEBUG
+logLevel "demo" = Log.DEMO
+logLevel _ = Log.WARN
 
 ----------------------------------------------------------------
 
