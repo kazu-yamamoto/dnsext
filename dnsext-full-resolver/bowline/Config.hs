@@ -10,6 +10,7 @@ module Config (
 ) where
 
 import qualified DNS.Log as Log
+import Data.Char (toUpper)
 import Data.List.Split (splitOn)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
@@ -137,9 +138,12 @@ instance FromConf Log.Level where
 ----------------------------------------------------------------
 
 logLevel :: String -> Log.Level
-logLevel "debug" = Log.DEBUG
-logLevel "demo" = Log.DEMO
-logLevel _ = Log.WARN
+logLevel s = case lvs of
+    lv : _ -> lv
+    [] -> error $ "fromConf unknwon log-level " ++ s
+  where
+    lvs = [lv | (lv, "") <- reads u]
+    u = map toUpper s
 
 ----------------------------------------------------------------
 
