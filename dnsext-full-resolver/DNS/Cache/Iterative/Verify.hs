@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.Iterative.Verify (verifyAndCache) where
+module DNS.Cache.Iterative.Verify (
+    withCanonical,
+    withCanonical',
+    verifyAndCache,
+) where
 
 -- GHC packages
 import Control.Monad.IO.Class (liftIO)
