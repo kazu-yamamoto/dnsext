@@ -1,12 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Cache.ServerMonitor (
+module Monitor (
     monitor,
-    Params,
-    makeParams,
-    showParams,
-    PLStatus,
-    WorkerStatus (..),
 ) where
 
 -- GHC packages
@@ -50,86 +45,12 @@ import qualified Network.Socket as S
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-
 import DNS.Cache.Iterative (Env (..))
-import DNS.Cache.SocketUtil (addrInfo)
+import DNS.Cache.Server
 import qualified DNS.Log as Log
 
-data Params = Params
-    { numCapabilities :: Int
-    , logOutput :: Log.Output
-    , logLevel :: Log.Level
-    , maxCacheSize :: Int
-    , disableV6NS :: Bool
-    , workersPerSocket :: Int
-    , workerSharedQueue :: Bool
-    , queueSizePerWorker :: Int
-    , dnsPort :: PortNumber
-    , monitorPort :: PortNumber
-    , dnsHosts :: [String]
-    }
-
-makeParams
-    :: Int
-    -> Log.Output
-    -> Log.Level
-    -> Int
-    -> Bool
-    -> Int
-    -> Bool
-    -> Int
-    -> PortNumber
-    -> [String]
-    -> Params
-makeParams capabilities output level maxSize disableV6 workers sharedQueue perWorker port hosts =
-    Params
-        { numCapabilities = capabilities
-        , logOutput = output
-        , logLevel = level
-        , maxCacheSize = maxSize
-        , disableV6NS = disableV6
-        , workersPerSocket = workers
-        , workerSharedQueue = sharedQueue
-        , queueSizePerWorker = perWorker
-        , dnsPort = port
-        , monitorPort = port + 9970
-        , dnsHosts = hosts
-        }
-
-showParams :: Params -> [String]
-showParams params =
-    [ field "capabilities" numCapabilities
-    , field_ "log output" (showOut . logOutput)
-    , field "log level" logLevel
-    , field "max cache size" maxCacheSize
-    , field "disable queries to IPv6 NS" disableV6NS
-    , field "worker threads per socket" workersPerSocket
-    , field "worker shared queue" workerSharedQueue
-    , field "queue size per worker" queueSizePerWorker
-    , field "DNS port" dnsPort
-    , field "Monitor port" monitorPort
-    ]
-        ++ if null hosts
-            then ["DNS host list: null"]
-            else "DNS host list:" : map ("DNS host: " ++) hosts
-  where
-    field_ label toS = label ++ ": " ++ toS params
-    field label get = field_ label (show . get)
-    showOut Log.Stdout = "stdout"
-    showOut Log.Stderr = "stderr"
-    showOut _ = "rotate file"
-    hosts = dnsHosts params
-
-data WorkerStatus = WorkerStatus
-    { reqQSize :: IO (Int, Int)
-    , decQSize :: IO (Int, Int)
-    , resQSize :: IO (Int, Int)
-    , getHit :: IO Int
-    , getMiss :: IO Int
-    , getFailed :: IO Int
-    }
-
-type PLStatus = [WorkerStatus]
+import Config
+import SocketUtil (addrInfo)
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -152,14 +73,14 @@ data Command
     deriving (Show)
 
 monitor
-    :: Bool
-    -> Params
+    :: Config
     -> Env
     -> ([PLStatus], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> IO [IO ()]
-monitor stdConsole params env getsSizeInfo terminate = do
-    ps <- monitorSockets (monitorPort params) ["::1", "127.0.0.1"]
+monitor conf env getsSizeInfo terminate = do
+    let monPort' = fromIntegral $ cnf_monitor_port conf
+    ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
     let ss = map fst ps
     sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
     mapM_ (uncurry S.bind) ps
@@ -167,12 +88,12 @@ monitor stdConsole params env getsSizeInfo terminate = do
     monQuit <- do
         qRef <- newTVarIO False
         return (writeTVar qRef True, readTVar qRef >>= guard)
-    when stdConsole $ runStdConsole monQuit
+    when (cnf_monitor_stdio conf) $ runStdConsole monQuit
     return $ map (monitorServer monQuit) ss
   where
     runStdConsole monQuit = do
         let repl =
-                console params env getsSizeInfo terminate monQuit stdin stdout "<std>"
+                console conf env getsSizeInfo terminate monQuit stdin stdout "<std>"
         void $ forkIO repl
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
@@ -182,7 +103,7 @@ monitor stdConsole params env getsSizeInfo terminate = do
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
                 let repl =
-                        console params env getsSizeInfo terminate monQuit sockh sockh $
+                        console conf env getsSizeInfo terminate monQuit sockh sockh $
                             show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
@@ -193,7 +114,7 @@ monitor stdConsole params env getsSizeInfo terminate = do
         loop
 
 console
-    :: Params
+    :: Config
     -> Env
     -> ([PLStatus], IO (Int, Int), IO (Int, Int))
     -> IO ()
@@ -202,7 +123,7 @@ console
     -> Handle
     -> String
     -> IO ()
-console params env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
+console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -254,7 +175,7 @@ console params env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, wai
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch Param = mapM_ outLn $ showParams params
+        dispatch Param = mapM_ outLn $ showConfig conf
         dispatch Noop = return ()
         dispatch (Find s) =
             mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env

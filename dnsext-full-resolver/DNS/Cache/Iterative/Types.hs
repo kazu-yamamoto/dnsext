@@ -57,6 +57,8 @@ type TimeCache = (IO EpochTime, IO ShowS)
 
 data Env = Env
     { logLines_ :: Log.PutLines
+    , logQSize_ :: Log.GetQueueSize
+    , logTerminate_ :: Log.Terminate
     , disableV6NS_ :: Bool
     , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache

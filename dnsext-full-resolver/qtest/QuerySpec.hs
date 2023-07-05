@@ -15,10 +15,10 @@ import System.Environment (lookupEnv)
 import DNS.Cache.Iterative (
     Delegation (..),
     Env (..),
-    newEnv,
-    getUpdateCache,
-    replyMessage,
     getResultIterative,
+    getUpdateCache,
+    newEnv,
+    replyMessage,
     rootHint,
     runDNSQuery,
  )
@@ -64,7 +64,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv (\_ _ _ -> pure ()) disableV6NS updateCache tcache
+            cxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
             eresult <-
                 (snd <$>)
                     <$> Iterative.runResolve cxt (fromString n) ty mempty
@@ -105,8 +105,8 @@ querySpec disableV6NS debug = describe "query" $ do
     let putLines
             | debug = \lv _ xs -> putStr $ unlines [show lv ++ ": " ++ x | x <- xs]
             | otherwise = \_ _ _ -> pure ()
-    cxt <- runIO $ newEnv putLines disableV6NS updateCache tcache
-    cxt4 <- runIO $ newEnv (\_ _ _ -> pure ()) True updateCache tcache
+    cxt <- runIO $ newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
+    cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
     let refreshRoot = runDNSQuery Iterative.refreshRoot cxt mempty
         runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty

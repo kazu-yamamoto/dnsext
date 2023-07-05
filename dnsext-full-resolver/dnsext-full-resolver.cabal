@@ -9,8 +9,9 @@ extra-source-files: CHANGELOG.md
 
 library
     exposed-modules:
-        DNS.Cache.Server
         DNS.Cache.Iterative
+        DNS.Cache.Server
+        DNS.Cache.Server.Bench
         DNS.Cache.TimeCache
         DNS.Cache.Types
 
@@ -32,33 +33,31 @@ library
         DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
-        DNS.Cache.ServerMonitor
-        DNS.Cache.SocketUtil
+        DNS.Cache.Server.UDP
 
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:
         base >=4 && <5,
-        bytestring,
-        containers,
-        deepseq,
-        transformers,
-        stm,
-        time,
-        word8,
         ansi-terminal,
         async,
         auto-update,
-        network,
-        network-udp,
-        psqueues,
-        iproute,
+        bytestring,
+        containers,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-log,
         dnsext-types,
+        iproute,
+        network,
+        network-udp,
+        psqueues,
         random,
-        unliftio
+        stm,
+        time,
+        transformers,
+        unliftio,
+        word8
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
@@ -66,12 +65,27 @@ library
 executable bowline
     main-is:          bowline.hs
     hs-source-dirs:   bowline
+    other-modules:
+        Config
+        Monitor
+        Parser
+        SocketUtil
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
+        bytestring,
+        dnsext-dnssec,
+        dnsext-do53,
+        dnsext-full-resolver,
         dnsext-log,
-        dnsext-full-resolver
+        dnsext-types,
+        iproute,
+        network,
+        parsec,
+        split,
+        stm,
+        unliftio
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
@@ -92,6 +106,8 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
+        ansi-terminal,
+        base16-bytestring,
         bytestring,
         dnsext-dnssec,
         dnsext-do53,
@@ -102,12 +118,10 @@ executable dug
         dnsext-types,
         iproute,
         network,
+        prettyprinter,
         random,
         transformers,
-        ansi-terminal,
-        unix-time,
-        prettyprinter,
-        base16-bytestring
+        unix-time
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
@@ -122,8 +136,14 @@ executable workers-benchmark
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
+        bytestring,
+        deepseq,
+        dnsext-do53,
+        dnsext-full-resolver,
         dnsext-log,
-        dnsext-full-resolver
+        dnsext-types,
+        time,
+        unliftio
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
@@ -140,11 +160,11 @@ test-suite spec
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        hspec,
-        dnsext-types,
         dnsext-dnssec,
         dnsext-do53,
-        dnsext-full-resolver
+        dnsext-full-resolver,
+        dnsext-types,
+        hspec
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
