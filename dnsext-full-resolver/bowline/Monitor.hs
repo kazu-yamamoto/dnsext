@@ -75,7 +75,7 @@ data Command
 monitor
     :: Config
     -> Env
-    -> ([PLStatus], IO (Int, Int), IO (Int, Int))
+    -> ([PipelineStatusList], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> IO [IO ()]
 monitor conf env getsSizeInfo terminate = do
@@ -116,14 +116,14 @@ monitor conf env getsSizeInfo terminate = do
 console
     :: Config
     -> Env
-    -> ([PLStatus], IO (Int, Int), IO (Int, Int))
+    -> ([PipelineStatusList], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> (STM (), STM ())
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
+console conf env (psls, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -201,9 +201,9 @@ console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQ
                 psize ("request queue " ++ index) reqQSize
                 psize ("decoded queue " ++ index) decQSize
                 psize ("response queue " ++ index) resQSize
-            | (i, pipelineStatus) <- zip [0 :: Int ..] pQSizeList
+            | (i, pipelineStatusList) <- zip [0 :: Int ..] psls
             , (j, PipelineStatus{..}) <-
-                zip [0 :: Int ..] pipelineStatus
+                zip [0 :: Int ..] pipelineStatusList
             , let index = show i ++ "," ++ show j
             ]
         psize "ucache queue" ucacheQSize
@@ -213,8 +213,8 @@ console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQ
         ts <-
             sequence
                 [ (,,) <$> getHit <*> getMiss <*> getFailed
-                | pipelineStatus <- pQSizeList
-                , PipelineStatus{..} <- pipelineStatus
+                | pipelineStatusList <- psls
+                , PipelineStatus{..} <- pipelineStatusList
                 ]
         let hits = sum [hit | (hit, _, _) <- ts]
             replies = hits + sum [miss | (_, miss, _) <- ts]

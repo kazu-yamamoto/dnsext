@@ -57,7 +57,7 @@ main = do
 
 ----------------------------------------------------------------
 
-getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
+getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [PipelineStatusList])
 getUdpServer conf env port hosts = do
     hostIPs <- getHostIPs hosts port
     (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
@@ -70,7 +70,7 @@ getUdpServer conf env port hosts = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> [PLStatus] -> IO [IO ()]
+getMonitor :: Env -> Config -> [PipelineStatusList] -> IO [IO ()]
 getMonitor env conf qsizes = do
     _caps <- getNumCapabilities -- fixme
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf

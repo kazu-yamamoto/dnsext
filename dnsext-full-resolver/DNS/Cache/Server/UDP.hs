@@ -76,7 +76,7 @@ udpServer
     -> Env
     -> PortNumber
     -> IP
-    -> IO ([IO ()], PLStatus)
+    -> IO ([IO ()], PipelineStatusList)
 udpServer conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
@@ -252,7 +252,7 @@ data PipelineStatus = PipelineStatus
     , getFailed :: IO Int
     }
 
-type PLStatus = [PipelineStatus]
+type PipelineStatusList = [PipelineStatus]
 
 data CntGet = CntGet
     { getHit' :: IO Int
