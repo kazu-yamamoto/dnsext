@@ -1,7 +1,7 @@
 module DNS.Cache.Server (
     UdpServerConfig (..),
     udpServer,
-    WorkerStatus (..),
+    PipelineStatus (..),
     PLStatus,
 ) where
 

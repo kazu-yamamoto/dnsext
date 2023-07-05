@@ -202,7 +202,7 @@ console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQ
                 psize ("decoded queue " ++ index) decQSize
                 psize ("response queue " ++ index) resQSize
             | (i, workerStatusList) <- zip [0 :: Int ..] pQSizeList
-            , (j, WorkerStatus{..}) <-
+            , (j, PipelineStatus{..}) <-
                 zip [0 :: Int ..] workerStatusList
             , let index = show i ++ "," ++ show j
             ]
@@ -214,7 +214,7 @@ console conf env (pQSizeList, ucacheQSize, logQSize) terminate (issueQuit, waitQ
             sequence
                 [ (,,) <$> getHit <*> getMiss <*> getFailed
                 | workerStatusList <- pQSizeList
-                , WorkerStatus{..} <- workerStatusList
+                , PipelineStatus{..} <- workerStatusList
                 ]
         let hits = sum [hit | (hit, _, _) <- ts]
             replies = hits + sum [miss | (_, miss, _) <- ts]

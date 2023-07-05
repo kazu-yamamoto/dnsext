@@ -97,7 +97,7 @@ getPipelines
     :: Show a
     => UdpServerConfig
     -> Env
-    -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
+    -> IO ([IO ([IO ()], PipelineStatus)], Request a -> IO (), IO (Response a))
 getPipelines udpconf@UdpServerConfig{..} env
     | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
@@ -133,7 +133,7 @@ getCacherWorkers
     -> wq (Response a)
     -> UdpServerConfig
     -> Env
-    -> IO ([IO ()], WorkerStatus)
+    -> IO ([IO ()], PipelineStatus)
 getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
     (CntGet{..}, incs) <- newCounters
 
@@ -148,7 +148,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        workerStatus = WorkerStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
+        workerStatus = PipelineStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
     return (loops, workerStatus)
   where
@@ -243,7 +243,7 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-data WorkerStatus = WorkerStatus
+data PipelineStatus = PipelineStatus
     { reqQSize :: IO (Int, Int)
     , decQSize :: IO (Int, Int)
     , resQSize :: IO (Int, Int)
@@ -252,7 +252,7 @@ data WorkerStatus = WorkerStatus
     , getFailed :: IO Int
     }
 
-type PLStatus = [WorkerStatus]
+type PLStatus = [PipelineStatus]
 
 data CntGet = CntGet
     { getHit' :: IO Int
