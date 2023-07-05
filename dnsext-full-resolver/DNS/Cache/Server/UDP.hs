@@ -39,9 +39,9 @@ import qualified DNS.Log as Log
 
 data UdpServerConfig = UdpServerConfig
     { udp_pipelines_per_socket :: Int
-    , udp_workers_per_pipline :: Int
-    , udp_queue_size_per_worker :: Int
-    , udp_worker_share_queue :: Bool
+    , udp_workers_per_pipeline :: Int
+    , udp_queue_size_per_pipeline :: Int
+    , udp_pipeline_share_queue :: Bool
     }
 
 type Request a = (ByteString, a)
@@ -99,24 +99,24 @@ getPipelines
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
 getPipelines udpconf@UdpServerConfig{..} env
-    | udp_queue_size_per_worker <= 0 = do
+    | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let udpconf' = udpconf { udp_queue_size_per_worker = 8 }
+        let udpconf' = udpconf { udp_queue_size_per_pipeline = 8 }
             wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env
         return (wps, writeQueue reqQ, readQueue resQ)
-    | udp_worker_share_queue = do
-        let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
+    | udp_pipeline_share_queue = do
+        let qsize = udp_queue_size_per_pipeline * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
         let wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
+        reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
+        resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
                 [ getCacherWorkers reqQ resQ udpconf env
@@ -139,13 +139,13 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
         worker = getWorker env incs enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <- consumeLoop udp_queue_size_per_worker logr worker
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop udp_queue_size_per_pipeline logr worker
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
         cacher = getCacher env incs enqueueDec enqueueResp
         cachedLoop = handledLoop logc (readQueue reqQ >>= cacher)
 
-        resolvLoops = replicate udp_workers_per_pipline resolvLoop
+        resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
         workerStatus = WorkerStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'

@@ -44,8 +44,8 @@ run conf@Config{..} = do
         UdpServerConfig
             cnf_udp_pipelines_per_socket
             cnf_udp_workers_per_pipeline
-            cnf_udp_queue_size_per_worker
-            cnf_udp_worker_share_queue
+            cnf_udp_queue_size_per_pipeline
+            cnf_udp_pipeline_share_queue
 
 main :: IO ()
 main = do

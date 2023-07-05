@@ -32,7 +32,7 @@ benchServer
     -> Bool
     -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
 benchServer UdpServerConfig{..} _ True = do
-    let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
+    let qsize = udp_queue_size_per_pipeline * udp_pipelines_per_socket
     reqQ <- newQueue qsize
     resQ <- newQueue qsize
     let pipelines = replicate udp_pipelines_per_socket [forever $ writeQueue resQ =<< readQueue reqQ]
