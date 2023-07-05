@@ -39,7 +39,7 @@ benchServer UdpServerConfig{..} _ True = do
     return (pipelines, writeQueue reqQ, readQueue resQ)
 benchServer udpconf env _ = do
     (workerPipelines, enqueueReq, dequeueRes) <-
-        getWorkers udpconf env
+        getPipelines udpconf env
             :: IO ([IO ([IO ()], WorkerStatus)], Request () -> IO (), IO (Response ()))
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
     return (workers, enqueueReq, dequeueRes)

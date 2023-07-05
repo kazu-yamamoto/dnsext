@@ -55,18 +55,18 @@ type EnqueueResp a = Response a -> IO ()
 
 ----------------------------------------------------------------
 
--- Pipeline
+--                          <---------  Pipeline  -------------->
 --
---                                  Iterative IO
---                                     Req Resp
---                         Cache        ^   |
---                           |          |   v
---        +--------+    +--------+    +--------+    +--------+
--- Req -> | recver | -> | cacher | -> | worker | -> | sender | -> Resp
---        +--------+    +--------|    +--------+    +--------+
---                           |                          ^
---                           +--------------------------+
---                                    Cache hit
+--                                       Iterative IO
+--                                         Req Resp
+--                            cache         ^   |
+--                              |           |   v
+--        +--------+ shared +--------+    +--------+    +--------+
+-- Req -> | recver | -----> | cacher | -> | worker | -> | sender | -> Resp
+--        +--------+ or any +--------|    +--------+    +--------+
+--                               |                          ^
+--                               +--------------------------+
+--                                        Cache hit
 --
 
 ----------------------------------------------------------------
@@ -81,37 +81,37 @@ udpServer conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
-    (workerPipelines, enqueueReq, dequeueResp) <- getWorkers conf env
-    (workers, getsStatus) <- unzip <$> sequence workerPipelines
+    (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env
+    (pipelines, getsStatus) <- unzip <$> sequence mkPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
         receiver = handledLoop onErrorR (UDP.recvFrom sock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
         sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo sock))
-    return (receiver : sender : concat workers, getsStatus)
+    return (receiver : sender : concat pipelines, getsStatus)
 
 ----------------------------------------------------------------
 
-getWorkers
+getPipelines
     :: Show a
     => UdpServerConfig
     -> Env
     -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers udpconf@UdpServerConfig{..} env
+getPipelines udpconf@UdpServerConfig{..} env
     | udp_queue_size_per_worker <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
         let udpconf' = udpconf { udp_queue_size_per_worker = 8 }
-            wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf' env
+            wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env
         return (wps, writeQueue reqQ, readQueue resQ)
     | udp_worker_share_queue = do
         let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf env
+        let wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
@@ -119,7 +119,7 @@ getWorkers udpconf@UdpServerConfig{..} env
         resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ udpconf env
+                [ getCacherWorkers reqQ resQ udpconf env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -127,14 +127,14 @@ getWorkers udpconf@UdpServerConfig{..} env
 
 ----------------------------------------------------------------
 
-getSenderReceiver
+getCacherWorkers
     :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
     => rq (Request a)
     -> wq (Response a)
     -> UdpServerConfig
     -> Env
     -> IO ([IO ()], WorkerStatus)
-getSenderReceiver reqQ resQ UdpServerConfig{..} env = do
+getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
     (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
