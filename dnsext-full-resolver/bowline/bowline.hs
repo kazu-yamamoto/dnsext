@@ -2,7 +2,6 @@
 
 module Main where
 
-import Control.Concurrent (getNumCapabilities)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
@@ -33,8 +32,8 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, qsizes) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
-    monLoops <- getMonitor env conf qsizes
+    (serverLoops, getStatuses) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
+    monLoops <- getMonitor env conf $ concat getStatuses
     race_
         (foldr concurrently_ (return ()) serverLoops)
         (foldr concurrently_ (return ()) monLoops)
@@ -44,8 +43,8 @@ run conf@Config{..} = do
         UdpServerConfig
             cnf_udp_pipelines_per_socket
             cnf_udp_workers_per_pipeline
-            cnf_udp_queue_size_per_worker
-            cnf_udp_worker_share_queue
+            cnf_udp_queue_size_per_pipeline
+            cnf_udp_pipeline_share_queue
 
 main :: IO ()
 main = do
@@ -57,22 +56,21 @@ main = do
 
 ----------------------------------------------------------------
 
-getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [PLStatus])
+getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [[IO Status]])
 getUdpServer conf env port hosts = do
     hostIPs <- getHostIPs hosts port
-    (loopsList, qsizes) <- unzip <$> mapM (udpServer conf env port) hostIPs
+    (loopsList, getStatuses) <- unzip <$> mapM (udpServer conf env port) hostIPs
     let pLoops = concat loopsList
 
-    return (pLoops, qsizes)
+    return (pLoops, getStatuses)
   where
     getHostIPs [] p = getAInfoIPs p
     getHostIPs hs _ = return $ map fromString hs
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> [PLStatus] -> IO [IO ()]
+getMonitor :: Env -> Config -> [IO Status] -> IO [IO ()]
 getMonitor env conf qsizes = do
-    _caps <- getNumCapabilities -- fixme
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
 
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})

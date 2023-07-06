@@ -19,6 +19,7 @@ import Network.Socket (
 import qualified Network.UDP as UDP
 
 -- other packages
+import qualified DNS.Log as Log
 import UnliftIO (SomeException, handle)
 
 -- this package
@@ -33,15 +34,15 @@ import DNS.Cache.Queue (
     writeQueue,
  )
 import qualified DNS.Cache.Queue as Queue
-import qualified DNS.Log as Log
+import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
 
 data UdpServerConfig = UdpServerConfig
     { udp_pipelines_per_socket :: Int
-    , udp_workers_per_pipline :: Int
-    , udp_queue_size_per_worker :: Int
-    , udp_worker_share_queue :: Bool
+    , udp_workers_per_pipeline :: Int
+    , udp_queue_size_per_pipeline :: Int
+    , udp_pipeline_share_queue :: Bool
     }
 
 type Request a = (ByteString, a)
@@ -55,18 +56,18 @@ type EnqueueResp a = Response a -> IO ()
 
 ----------------------------------------------------------------
 
--- Pipeline
+--                          <---------  Pipeline  -------------->
 --
---                                  Iterative IO
---                                     Req Resp
---                         Cache        ^   |
---                           |          |   v
---        +--------+    +--------+    +--------+    +--------+
--- Req -> | recver | -> | cacher | -> | worker | -> | sender | -> Resp
---        +--------+    +--------|    +--------+    +--------+
---                           |                          ^
---                           +--------------------------+
---                                    Cache hit
+--                                       Iterative IO
+--                                         Req Resp
+--                            cache         ^   |
+--                              |           |   v
+--        +--------+ shared +--------+    +--------+    +--------+
+-- Req -> | recver | -----> | cacher | -> | worker | -> | sender | -> Resp
+--        +--------+ or any +--------|    +--------+    +--------+
+--                               |                          ^
+--                               +--------------------------+
+--                                        Cache hit
 --
 
 ----------------------------------------------------------------
@@ -76,50 +77,50 @@ udpServer
     -> Env
     -> PortNumber
     -> IP
-    -> IO ([IO ()], PLStatus)
+    -> IO ([IO ()], [IO Status])
 udpServer conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
-    (workerPipelines, enqueueReq, dequeueResp) <- getWorkers conf env
-    (workers, getsStatus) <- unzip <$> sequence workerPipelines
+    (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env
+    (pipelines, getsStatus) <- unzip <$> sequence mkPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
         receiver = handledLoop onErrorR (UDP.recvFrom sock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
         sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo sock))
-    return (receiver : sender : concat workers, getsStatus)
+    return (receiver : sender : concat pipelines, getsStatus)
 
 ----------------------------------------------------------------
 
-getWorkers
+getPipelines
     :: Show a
     => UdpServerConfig
     -> Env
-    -> IO ([IO ([IO ()], WorkerStatus)], Request a -> IO (), IO (Response a))
-getWorkers udpconf@UdpServerConfig{..} env
-    | udp_queue_size_per_worker <= 0 = do
+    -> IO ([IO ([IO ()], IO Status)], Request a -> IO (), IO (Response a))
+getPipelines udpconf@UdpServerConfig{..} env
+    | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let udpconf' = udpconf { udp_queue_size_per_worker = 8 }
-            wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf' env
+        let udpconf' = udpconf{udp_queue_size_per_pipeline = 8}
+            wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env
         return (wps, writeQueue reqQ, readQueue resQ)
-    | udp_worker_share_queue = do
-        let qsize = udp_queue_size_per_worker * udp_pipelines_per_socket
+    | udp_pipeline_share_queue = do
+        let qsize = udp_queue_size_per_pipeline * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate udp_pipelines_per_socket $ getSenderReceiver reqQ resQ udpconf env
+        let wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf env
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
-        reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
+        reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
         enqueueReq <- Queue.writeQueue <$> Queue.makePutAny reqQs
-        resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_worker
+        resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getSenderReceiver reqQ resQ udpconf env
+                [ getCacherWorkers reqQ resQ udpconf env
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -127,30 +128,30 @@ getWorkers udpconf@UdpServerConfig{..} env
 
 ----------------------------------------------------------------
 
-getSenderReceiver
+getCacherWorkers
     :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
     => rq (Request a)
     -> wq (Response a)
     -> UdpServerConfig
     -> Env
-    -> IO ([IO ()], WorkerStatus)
-getSenderReceiver reqQ resQ UdpServerConfig{..} env = do
+    -> IO ([IO ()], IO Status)
+getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
     (CntGet{..}, incs) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
         worker = getWorker env incs enqueueResp
-    (resolvLoop, enqueueDec, decQSize) <- consumeLoop udp_queue_size_per_worker logr worker
+    (resolvLoop, enqueueDec, decQSize) <- consumeLoop udp_queue_size_per_pipeline logr worker
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
         cacher = getCacher env incs enqueueDec enqueueResp
         cachedLoop = handledLoop logc (readQueue reqQ >>= cacher)
 
-        resolvLoops = replicate udp_workers_per_pipline resolvLoop
+        resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        workerStatus = WorkerStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
+        status = getStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
-    return (loops, workerStatus)
+    return (loops, status)
   where
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
@@ -243,17 +244,6 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-data WorkerStatus = WorkerStatus
-    { reqQSize :: IO (Int, Int)
-    , decQSize :: IO (Int, Int)
-    , resQSize :: IO (Int, Int)
-    , getHit :: IO Int
-    , getMiss :: IO Int
-    , getFailed :: IO Int
-    }
-
-type PLStatus = [WorkerStatus]
-
 data CntGet = CntGet
     { getHit' :: IO Int
     , getMiss' :: IO Int
@@ -277,3 +267,25 @@ newCounters = do
     counter = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
+
+----------------------------------------------------------------
+
+getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> IO Int -> IO Int -> IO Int -> IO [(String, Int)]
+getStatus reqQSize decQSize resQSize getHit getMiss getFailed = do
+    (nreq, mreq) <- reqQSize
+    (ndec, mdec) <- decQSize
+    (nres, mres) <- resQSize
+    hit <- getHit
+    miss <- getMiss
+    fail_ <- getFailed
+    return
+        [ ("request queue size", nreq)
+        , ("decoded queue size", ndec)
+        , ("response queue size", nres)
+        , ("request queue max size", mreq)
+        , ("decoded queue max size", mdec)
+        , ("response queue max size", mres)
+        , ("hit", hit)
+        , ("miss", miss)
+        , ("fail", fail_)
+        ]
