@@ -40,6 +40,7 @@ import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Log as Log
 
+{-# DEPRECATED verifyAndCache "Use withCanonical or withCanonical'" #-}
 verifyAndCache
     :: [RD_DNSKEY]
     -> [ResourceRecord]
