@@ -148,34 +148,14 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        pipelineStatus = PipelineStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
+        status = getStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
-    return (loops, getStatus pipelineStatus)
+    return (loops, status)
   where
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
     resQSize = queueSize resQ
     reqQSize = queueSize reqQ
-
-getStatus :: PipelineStatus -> IO Status
-getStatus PipelineStatus{..} = do
-    (nreq, mreq) <- reqQSize
-    (ndec, mdec) <- decQSize
-    (nres, mres) <- resQSize
-    hit <- getHit
-    miss <- getMiss
-    fail_ <- getFailed
-    return
-        [ ("request queue size", nreq)
-        , ("decoded queue size", ndec)
-        , ("response queue size", nres)
-        , ("request queue max size", mreq)
-        , ("decoded queue max size", mdec)
-        , ("response queue max size", mres)
-        , ("hit", hit)
-        , ("miss", miss)
-        , ("fail", fail_)
-        ]
 
 ----------------------------------------------------------------
 
@@ -263,19 +243,6 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-type Status = [(String, Int)]
-
-data PipelineStatus = PipelineStatus
-    { reqQSize :: IO (Int, Int)
-    , decQSize :: IO (Int, Int)
-    , resQSize :: IO (Int, Int)
-    , getHit :: IO Int
-    , getMiss :: IO Int
-    , getFailed :: IO Int
-    }
-
-type PipelineStatusList = [PipelineStatus]
-
 data CntGet = CntGet
     { getHit' :: IO Int
     , getMiss' :: IO Int
@@ -299,3 +266,27 @@ newCounters = do
     counter = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
+
+----------------------------------------------------------------
+
+type Status = [(String, Int)]
+
+getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> IO Int -> IO Int -> IO Int -> IO [(String, Int)]
+getStatus reqQSize decQSize resQSize getHit getMiss getFailed = do
+    (nreq, mreq) <- reqQSize
+    (ndec, mdec) <- decQSize
+    (nres, mres) <- resQSize
+    hit <- getHit
+    miss <- getMiss
+    fail_ <- getFailed
+    return
+        [ ("request queue size", nreq)
+        , ("decoded queue size", ndec)
+        , ("response queue size", nres)
+        , ("request queue max size", mreq)
+        , ("decoded queue max size", mdec)
+        , ("response queue max size", mres)
+        , ("hit", hit)
+        , ("miss", miss)
+        , ("fail", fail_)
+        ]
