@@ -1,8 +1,7 @@
 module DNS.Cache.Server (
     UdpServerConfig (..),
     udpServer,
-    PipelineStatus (..),
-    PipelineStatusList,
+    Status,
 ) where
 
 import DNS.Cache.Server.UDP

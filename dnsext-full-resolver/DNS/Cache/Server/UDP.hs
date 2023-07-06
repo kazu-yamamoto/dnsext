@@ -76,7 +76,7 @@ udpServer
     -> Env
     -> PortNumber
     -> IP
-    -> IO ([IO ()], PipelineStatusList)
+    -> IO ([IO ()], [IO Status])
 udpServer conf env port hostIP = do
     sock <- UDP.serverSocket (hostIP, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
@@ -97,13 +97,13 @@ getPipelines
     :: Show a
     => UdpServerConfig
     -> Env
-    -> IO ([IO ([IO ()], PipelineStatus)], Request a -> IO (), IO (Response a))
+    -> IO ([IO ([IO ()], IO Status)], Request a -> IO (), IO (Response a))
 getPipelines udpconf@UdpServerConfig{..} env
     | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
-        let udpconf' = udpconf { udp_queue_size_per_pipeline = 8 }
+        let udpconf' = udpconf{udp_queue_size_per_pipeline = 8}
             wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env
         return (wps, writeQueue reqQ, readQueue resQ)
     | udp_pipeline_share_queue = do
@@ -133,7 +133,7 @@ getCacherWorkers
     -> wq (Response a)
     -> UdpServerConfig
     -> Env
-    -> IO ([IO ()], PipelineStatus)
+    -> IO ([IO ()], IO Status)
 getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
     (CntGet{..}, incs) <- newCounters
 
@@ -148,14 +148,34 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        workerStatus = PipelineStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
+        pipelineStatus = PipelineStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
 
-    return (loops, workerStatus)
+    return (loops, getStatus pipelineStatus)
   where
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
     resQSize = queueSize resQ
     reqQSize = queueSize reqQ
+
+getStatus :: PipelineStatus -> IO Status
+getStatus PipelineStatus{..} = do
+    (nreq, mreq) <- reqQSize
+    (ndec, mdec) <- decQSize
+    (nres, mres) <- resQSize
+    hit <- getHit
+    miss <- getMiss
+    fail_ <- getFailed
+    return
+        [ ("request queue size", nreq)
+        , ("decoded queue size", ndec)
+        , ("response queue size", nres)
+        , ("request queue max size", mreq)
+        , ("decoded queue max size", mdec)
+        , ("response queue max size", mres)
+        , ("hit", hit)
+        , ("miss", miss)
+        , ("fail", fail_)
+        ]
 
 ----------------------------------------------------------------
 
@@ -242,6 +262,8 @@ queueSize q = do
     return (a, b)
 
 ----------------------------------------------------------------
+
+type Status = [(String, Int)]
 
 data PipelineStatus = PipelineStatus
     { reqQSize :: IO (Int, Int)

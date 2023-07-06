@@ -6,7 +6,7 @@ module Monitor (
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
+import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
 import Control.Monad (guard, unless, void, when, (<=<))
 import DNS.Types.Decode (EpochTime)
@@ -75,7 +75,7 @@ data Command
 monitor
     :: Config
     -> Env
-    -> ([PipelineStatusList], IO (Int, Int), IO (Int, Int))
+    -> ([IO Status], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> IO [IO ()]
 monitor conf env getsSizeInfo terminate = do
@@ -116,14 +116,14 @@ monitor conf env getsSizeInfo terminate = do
 console
     :: Config
     -> Env
-    -> ([PipelineStatusList], IO (Int, Int), IO (Int, Int))
+    -> ([IO Status], IO (Int, Int), IO (Int, Int))
     -> IO ()
     -> (STM (), STM ())
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env (psls, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
+console conf env (iss, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -192,35 +192,16 @@ console conf env (psls, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) i
         dispatch x = outLn $ "command: unknown state: " ++ show x
 
     printStatus = do
+        caps <- getNumCapabilities
+        outLn $ "capabilities: " ++ show caps
         outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
         let psize s getSize = do
                 (cur, mx) <- getSize
                 outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
-        sequence_
-            [ do
-                psize ("request queue " ++ index) reqQSize
-                psize ("decoded queue " ++ index) decQSize
-                psize ("response queue " ++ index) resQSize
-            | (i, pipelineStatusList) <- zip [0 :: Int ..] psls
-            , (j, PipelineStatus{..}) <-
-                zip [0 :: Int ..] pipelineStatusList
-            , let index = show i ++ "," ++ show j
-            ]
+        mapM_ (\action -> action >>= outLn . show) iss
         psize "ucache queue" ucacheQSize
         lmx <- snd <$> logQSize
         when (lmx >= 0) $ psize "log queue" logQSize
-
-        ts <-
-            sequence
-                [ (,,) <$> getHit <*> getMiss <*> getFailed
-                | pipelineStatusList <- psls
-                , PipelineStatus{..} <- pipelineStatusList
-                ]
-        let hits = sum [hit | (hit, _, _) <- ts]
-            replies = hits + sum [miss | (_, miss, _) <- ts]
-            total = replies + sum [failed | (_, _, failed) <- ts]
-        outLn $ "hit rate: " ++ show hits ++ " / " ++ show replies
-        outLn $ "reply rate: " ++ show replies ++ " / " ++ show total
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]
