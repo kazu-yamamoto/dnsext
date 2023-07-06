@@ -19,6 +19,7 @@ import Network.Socket (
 import qualified Network.UDP as UDP
 
 -- other packages
+import qualified DNS.Log as Log
 import UnliftIO (SomeException, handle)
 
 -- this package
@@ -33,7 +34,7 @@ import DNS.Cache.Queue (
     writeQueue,
  )
 import qualified DNS.Cache.Queue as Queue
-import qualified DNS.Log as Log
+import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
 
@@ -268,8 +269,6 @@ newCounters = do
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
 ----------------------------------------------------------------
-
-type Status = [(String, Int)]
 
 getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> IO Int -> IO Int -> IO Int -> IO [(String, Int)]
 getStatus reqQSize decQSize resQSize getHit getMiss getFailed = do

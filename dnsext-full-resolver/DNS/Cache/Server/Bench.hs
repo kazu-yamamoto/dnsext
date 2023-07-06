@@ -20,6 +20,7 @@ import DNS.Cache.Queue (
     readQueue,
     writeQueue,
  )
+import DNS.Cache.Server.Types
 import DNS.Cache.Server.UDP
 
 ----------------------------------------------------------------
