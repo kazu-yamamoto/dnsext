@@ -106,6 +106,7 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
 --   the sub-domains under `zoneDom`.
 --   The `getRanked` function returns the section with the empty information.
+{- FOURMOLU_DISABLE -}
 cacheEmptySection
     :: Domain
     -> [RD_DNSKEY]
@@ -113,7 +114,8 @@ cacheEmptySection
     -> TYPE
     -> (DNSMessage -> ([ResourceRecord], Ranking))
     -> DNSMessage
-    -> ContextT IO [RRset {- returns verified authority section -}]
+    -> ContextT IO [RRset] {- returns verified authority section -}
+{- FOURMOLU_ENABLE -}
 cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
     (takePair, soaRRset, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
         let (ps, soaRRs) = unzip $ rrListWith SOA DNS.fromRData zoneDom fromSOA rrs
