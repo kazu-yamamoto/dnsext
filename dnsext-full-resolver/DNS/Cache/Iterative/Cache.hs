@@ -16,7 +16,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Function (on)
-import Data.Functor (($>))
+import Data.Functor (($>), (<&>))
 import Data.List (groupBy, sortOn)
 
 -- other packages
@@ -49,7 +49,7 @@ import qualified DNS.Types as DNS
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import DNS.Cache.Iterative.Verify
+import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Log as Log
 
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
@@ -118,22 +118,21 @@ cacheEmptySection
     -> ContextT IO [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
-    (takePair, soaRRset, cacheSOA) <- withSection rankedAuthority msg $ \rrs rank -> do
-        let (ps, soaRRs) = unzip $ rrListWith SOA DNS.fromRData zoneDom fromSOA rrs
-        (rrset, cacheSOA_) <- verifyAndCache dnskeys soaRRs (rrsigList dom SOA rrs) rank
-        return (single ps, rrset, cacheSOA_)
-    let doCache (soaDom, ncttl) = do
-            cacheSOA
-            withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
-
-    either (ncWarn >>> ($> [])) (doCache >>> ($> [soaRRset])) takePair
+    Verify.withCanonical dnskeys rankedAuthority msg zoneDom SOA fromSOA nullSOA (pure []) $ \ps soaRRset cacheSOA -> do
+        let doCache (soaDom, ncttl) = do
+                cacheSOA
+                withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
+        either (ncWarn >>> ($> [])) (doCache >>> ($> [soaRRset])) $ single ps
   where
-    {- the minimum of the SOA.MINIMUM field and SOA's TTL
-       https://datatracker.ietf.org/doc/html/rfc2308#section-3
-       https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-    fromSOA soa rr = ((rrname rr, minimum [DNS.soa_minimum soa, rrttl rr, maxNCacheTTL]), rr)
+    fromSOA :: ResourceRecord -> Maybe (Domain, TTL)
+    fromSOA ResourceRecord{..} = (,) rrname . soaTTL <$> DNS.fromRData rdata
       where
+        {- the minimum of the SOA.MINIMUM field and SOA's TTL
+           https://datatracker.ietf.org/doc/html/rfc2308#section-3
+           https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
+        soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
         maxNCacheTTL = 21600
+    nullSOA = ncWarn "no SOA records found" $> []
 
     single list = case list of
         [] -> Left "no SOA records found"
@@ -156,53 +155,45 @@ cacheEmpty zoneDom dom typ ttl rank = do
     liftIO $ insertSetEmpty zoneDom dom typ ttl rank insertRRSet
 
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
-cacheAnswer Delegation{..} dom typ msg
-    | null $ DNS.answer msg =
-        lift . fmap ((,) []) $ case rcode of
-            {- authority sections for null answer -}
-            DNS.NoErr -> cacheEmptySection zone dnskeys dom typ rankedAnswer msg
-            DNS.NameErr -> cacheEmptySection zone dnskeys dom Cache.NX rankedAnswer msg
-            _ -> return []
-    | otherwise = do
-        withSection rankedAnswer msg $ \rrs rank -> do
-            let isX rr = rrname rr == dom && rrtype rr == typ
-                sigs = rrsigList dom typ rrs
-            (xRRset, cacheX) <- lift $ verifyAndCache dnskeys (filter isX rrs) sigs rank
-            lift cacheX
-            let qinfo = show dom ++ " " ++ show typ
-                (verifyMsg, verifyColor, raiseOnVerifyFailure)
-                    | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
-                    | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
-                    | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
-                    | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
-            lift $ clogLn Log.DEMO verifyColor verifyMsg
-            raiseOnVerifyFailure
-            return ([xRRset], [])
+cacheAnswer Delegation{..} dom typ msg = do
+    (ans, auth, cacheX, raiseOnVerifyFailure) <- lift verify
+    raiseOnVerifyFailure
+    lift cacheX
+    return (ans, auth)
   where
+    verify = Verify.withCanonical dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+        let qinfo = show dom ++ " " ++ show typ
+            (verifyMsg, verifyColor, raiseOnVerifyFailure)
+                | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
+                | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
+                | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
+                | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
+        clogLn Log.DEMO verifyColor verifyMsg
+        return ([xRRset], [], cacheX, raiseOnVerifyFailure)
+    nullX = doCacheEmpty <&> \e -> ([], e, pure (), pure ())
+    doCacheEmpty = case rcode of
+        {- authority sections for null answer -}
+        DNS.NoErr -> cacheEmptySection zone dnskeys dom typ rankedAnswer msg
+        DNS.NameErr -> cacheEmptySection zone dnskeys dom Cache.NX rankedAnswer msg
+        _ -> return []
+    ncX = pure ([], [], pure (), pure ())
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
     zone = delegationZone
     dnskeys = delegationDNSKEY
 
 cacheNoDelegation :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
 cacheNoDelegation zoneDom dnskeys dom msg = do
-    (hasCNAME, cacheCNAME) <- withSection rankedAnswer msg $ \rrs rank -> do
+    Verify.withCanonical dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME (pure ()) $ \_rds _cnRRset cacheCNAME -> do
         {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
            However, without querying the NS of the CNAME destination,
            you cannot obtain the record of rank that can be used for the reply. -}
-        let crrs = cnameList dom (\_ rr -> rr) rrs
-        (_cnameRRset, cacheCNAME_) <-
-            verifyAndCache dnskeys crrs (rrsigList dom CNAME rrs) rank
-        return (not $ null crrs, cacheCNAME_)
-
-    let doCacheEmpty
-            | rcode == DNS.NoErr =
-                cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-            | rcode == DNS.NameErr =
-                if hasCNAME
-                    then cacheCNAME *> cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-                    else cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
-            | otherwise = pure []
-          where
-            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-
-    doCacheEmpty $> ()
+        doCacheEmpty True cacheCNAME $> ()
+  where
+    cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
+    nullCNAME = doCacheEmpty False (pure ()) $> ()
+    doCacheEmpty hasCNAME cacheCNAME
+        | rcode == DNS.NoErr = cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+        | rcode == DNS.NameErr && hasCNAME = cacheCNAME *> cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
+        | rcode == DNS.NameErr = cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
+        | otherwise = pure []
+    rcode = DNS.rcode $ DNS.flags $ DNS.header msg
