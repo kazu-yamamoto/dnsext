@@ -11,6 +11,7 @@ module DNS.Cache.Iterative.Cache (
 ) where
 
 -- GHC packages
+import Control.Arrow ((>>>))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
@@ -124,9 +125,8 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
     let doCache (soaDom, ncttl) = do
             cacheSOA
             withSection getRanked msg $ \_rrs rank -> cacheEmpty soaDom dom typ ncttl rank
-            return [soaRRset]
 
-    either ncWarn doCache takePair
+    either (ncWarn >>> ($> [])) (doCache >>> ($> [soaRRset])) takePair
   where
     {- the minimum of the SOA.MINIMUM field and SOA's TTL
        https://datatracker.ietf.org/doc/html/rfc2308#section-3
@@ -142,10 +142,8 @@ cacheEmptySection zoneDom dnskeys dom typ getRanked msg = do
     ncWarn s
         | not $ null answer = do
             plogLines Log.DEBUG $ map ("\t" ++) ("because of non empty answers:" : map show answer)
-            return []
         | otherwise = do
             plogLines Log.WARN $ map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
-            return []
       where
         withDom = ["from-domain=" ++ show zoneDom ++ ",", "domain=" ++ show dom ++ ":", s]
         plogLines lv xs = logLines lv $ ("cacheEmptySection: " ++ unwords withDom) : xs
