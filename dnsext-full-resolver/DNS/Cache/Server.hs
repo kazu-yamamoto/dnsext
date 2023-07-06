@@ -4,5 +4,5 @@ module DNS.Cache.Server (
     Status,
 ) where
 
-import DNS.Cache.Server.Types
+import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.UDP

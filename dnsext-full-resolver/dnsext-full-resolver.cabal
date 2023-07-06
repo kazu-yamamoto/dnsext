@@ -33,7 +33,7 @@ library
         DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
-        DNS.Cache.Server.Types
+        DNS.Cache.Server.Pipeline
         DNS.Cache.Server.UDP
 
     default-language: Haskell2010
