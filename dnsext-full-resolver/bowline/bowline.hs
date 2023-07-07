@@ -6,9 +6,6 @@ import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
-import Data.IP
-import Data.Maybe (mapMaybe)
-import Data.String (fromString)
 import Network.Socket
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
@@ -62,19 +59,15 @@ main = do
 ----------------------------------------------------------------
 
 getServers
-    :: (PortNumber -> IP -> IO ([IO ()], [IO Status]))
+    :: (PortNumber -> HostName -> IO ([IO ()], [IO Status]))
     -> PortNumber
     -> [HostName]
     -> IO ([IO ()], [IO Status])
 getServers server port hosts = do
-    hostIPs <- getHostIPs hosts port
-    (xss, yss) <- unzip <$> mapM (server port) hostIPs
+    (xss, yss) <- unzip <$> mapM (server port) hosts
     let xs = concat xss
         ys = concat yss
     return (xs, ys)
-  where
-    getHostIPs [] p = getAInfoIPs p
-    getHostIPs hs _ = return $ map fromString hs
 
 ----------------------------------------------------------------
 
@@ -99,14 +92,3 @@ getEnv Config{..} = do
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv logTriple cnf_disable_v6_ns updateCache tcache
-
-----------------------------------------------------------------
-
-getAInfoIPs :: PortNumber -> IO [IP]
-getAInfoIPs port = do
-    ais <- getAddrInfo Nothing Nothing (Just $ show port)
-    let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
-        dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
-        dgramIP _ = Nothing
-    return $
-        mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]

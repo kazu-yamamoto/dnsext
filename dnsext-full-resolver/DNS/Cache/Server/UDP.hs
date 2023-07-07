@@ -13,10 +13,10 @@ import qualified DNS.Types.Decode as DNS
 
 -- other packages
 import qualified DNS.Log as Log
-import Data.IP (IP (..))
 import qualified Network.UDP as UDP
 import Network.Socket (
     PortNumber,
+    HostName,
  )
 import UnliftIO (SomeException, handle)
 
@@ -74,10 +74,10 @@ udpServer
     :: UdpServerConfig
     -> Env
     -> PortNumber
-    -> IP
+    -> HostName
     -> IO ([IO ()], [IO Status])
-udpServer conf env port hostIP = do
-    sock <- UDP.serverSocket (hostIP, port)
+udpServer conf env port addr = do
+    sock <- UDP.serverSocket (read addr, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
 
     (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env
