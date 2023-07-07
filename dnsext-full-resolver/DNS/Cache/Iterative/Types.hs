@@ -6,7 +6,10 @@ module DNS.Cache.Iterative.Types (
     RRset (..),
     DEntry (..),
     ContextT,
+    CasesNotFilledDS (..),
+    MayFilledDS (..),
     Delegation (..),
+    delegationHasDS,
     QueryError (..),
     DNSQuery,
     runDNSQuery,
@@ -70,18 +73,38 @@ data Env = Env
     , idGen_ :: IO DNS.Identifier
     }
 
+{- FOURMOLU_DISABLE -}
+-- | The cases that generate `NotFilled`
+data CasesNotFilledDS
+    = CachedDelegation  {- intermediate state of reconstructing delegation-info using cache -}
+    | ServsChildZone    {- when child(sub-domain) zone shares same authoritative server,
+                            delegation-info that should contain DS records is not returned -}
+    deriving Show
+
+data MayFilledDS
+    = NotFilledDS CasesNotFilledDS
+    | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
+    deriving (Show)
+{- FOURMOLU_ENABLE -}
+
 -- | Delegation information for domain
 data Delegation = Delegation
     { delegationZone :: Domain
     -- ^ Destination zone domain
     , delegationNS :: NE DEntry
     -- ^ NS infos of destination zone, get from source zone NS
-    , delegationDS :: [RD_DS]
+    , delegationDS :: MayFilledDS
     -- ^ SEP DNSKEY signature of destination zone, get from source zone NS
     , delegationDNSKEY :: [RD_DNSKEY]
     -- ^ Destination DNSKEY set, get from destination NS
     }
     deriving (Show)
+
+delegationHasDS :: Delegation -> Bool
+delegationHasDS d = case delegationDS d of
+    NotFilledDS _ -> False
+    (FilledDS []) -> False
+    (FilledDS (_ : _)) -> True
 
 data DEntry
     = DEwithAx !Domain !IP
