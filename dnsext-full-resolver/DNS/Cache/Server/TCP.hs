@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DNS.Cache.Server.TCP where
 
 -- GHC packages
@@ -29,10 +31,21 @@ tcpServer
     -> IP
     -> IO ([IO ()], [IO Status])
 tcpServer _tcpconf env port ip = do
-    (_cntget, cntinc) <- newCounters
+    (cntget, cntinc) <- newCounters
     let tcpserver = runTCPServer (Just $ show ip) (show port) $ \sock -> do
             let send = DNS.sendVC $ DNS.sendTCP sock
                 recv = DNS.recvVC 2048 $ DNS.recvTCP sock
             (_n, bss) <- recv
             cacheWorkerLogic env cntinc send bss
-    return ([tcpserver], [])
+    return ([tcpserver], [getStatus cntget])
+
+getStatus :: CntGet -> IO [(String, Int)]
+getStatus CntGet{..} = do
+    hit <- getHit'
+    miss <- getMiss'
+    fail_ <- getFailed'
+    return
+        [ ("hit", hit)
+        , ("miss", miss)
+        , ("fail", fail_)
+        ]

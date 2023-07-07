@@ -32,21 +32,24 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (udpServers, getStatuses) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
-    (tcpServers, _) <- tcpServer (TcpServerConfig 30) env 10053 (read "127.0.0.1")
+    (udpServers, udpStatus) <- getServers (udpServer udpconf env) cnf_udp_port' cnf_bind_addresses
+    (tcpServers, tcpStatus) <- getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_bind_addresses
     let servers = udpServers ++ tcpServers
-    monitor <- getMonitor env conf $ concat getStatuses
+    monitor <- getMonitor env conf (udpStatus ++ tcpStatus)
     race_
         (foldr concurrently_ (return ()) servers)
         (foldr concurrently_ (return ()) monitor)
   where
     cnf_udp_port' = fromIntegral cnf_udp_port
+    cnf_tcp_port' = fromIntegral cnf_tcp_port
     udpconf =
         UdpServerConfig
             cnf_udp_pipelines_per_socket
             cnf_udp_workers_per_pipeline
             cnf_udp_queue_size_per_pipeline
             cnf_udp_pipeline_share_queue
+    tcpconf =
+        TcpServerConfig 30 -- fixme
 
 main :: IO ()
 main = do
@@ -58,13 +61,17 @@ main = do
 
 ----------------------------------------------------------------
 
-getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [[IO Status]])
-getUdpServer conf env port hosts = do
+getServers
+    :: (PortNumber -> IP -> IO ([IO ()], [IO Status]))
+    -> PortNumber
+    -> [HostName]
+    -> IO ([IO ()], [IO Status])
+getServers server port hosts = do
     hostIPs <- getHostIPs hosts port
-    (loopsList, getStatuses) <- unzip <$> mapM (udpServer conf env port) hostIPs
-    let pLoops = concat loopsList
-
-    return (pLoops, getStatuses)
+    (xss, yss) <- unzip <$> mapM (server port) hostIPs
+    let xs = concat xss
+        ys = concat yss
+    return (xs, ys)
   where
     getHostIPs [] p = getAInfoIPs p
     getHostIPs hs _ = return $ map fromString hs

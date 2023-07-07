@@ -27,6 +27,8 @@ data Config = Config
     , cnf_udp_queue_size_per_pipeline :: Int
     , cnf_udp_pipeline_share_queue :: Bool
     , cnf_udp_port :: Int
+    , cnf_tcp_idle_timeout :: Int
+    , cnf_tcp_port :: Int
     , cnf_monitor_port :: Int
     , cnf_bind_addresses :: [String]
     , cnf_monitor_stdio :: Bool
@@ -45,6 +47,8 @@ defaultConfig =
         , cnf_udp_pipeline_share_queue = True
         , cnf_udp_queue_size_per_pipeline = 16
         , cnf_udp_port = 53
+        , cnf_tcp_idle_timeout = 30000000
+        , cnf_tcp_port = 53
         , cnf_monitor_port = 10023
         , cnf_bind_addresses = []
         , cnf_monitor_stdio = False
@@ -94,6 +98,8 @@ makeConfig def conf =
         , cnf_udp_queue_size_per_pipeline = get "udp-queue-size-per-pipeline" cnf_udp_queue_size_per_pipeline
         , cnf_udp_pipeline_share_queue = get "udp-pipeline-share-queue" cnf_udp_pipeline_share_queue
         , cnf_udp_port = get "udp-port" cnf_udp_port
+        , cnf_tcp_idle_timeout = get "tcp-idle-timeout" cnf_tcp_idle_timeout
+        , cnf_tcp_port = get "tcp-port" cnf_tcp_port
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_bind_addresses = get "bind-addresses" cnf_bind_addresses
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
