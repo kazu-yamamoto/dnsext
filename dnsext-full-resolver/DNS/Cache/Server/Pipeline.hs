@@ -24,9 +24,9 @@ type Status = [(String, Int)]
 ----------------------------------------------------------------
 
 data CntGet = CntGet
-    { getHit' :: IO Int
-    , getMiss' :: IO Int
-    , getFailed' :: IO Int
+    { getHit :: IO Int
+    , getMiss :: IO Int
+    , getFailed :: IO Int
     }
 
 data CntInc = CntInc
@@ -46,6 +46,17 @@ newCounters = do
     counter = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
+
+readCounters :: CntGet -> IO [(String, Int)]
+readCounters CntGet{..} = do
+    hit <- getHit
+    miss <- getMiss
+    fail_ <- getFailed
+    return
+        [ ("hit", hit)
+        , ("miss", miss)
+        , ("fail", fail_)
+        ]
 
 ----------------------------------------------------------------
 
@@ -115,5 +126,5 @@ cacheWorkerLogic env cntinc send req = do
     cacherLogic env cntinc send decode worker req
   where
     decode t bss = case DNS.decodeChunks t bss of
-      Left e -> Left e
-      Right (m,_) -> Right m
+        Left e -> Left e
+        Right (m, _) -> Right m

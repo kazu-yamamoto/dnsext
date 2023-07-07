@@ -11,8 +11,8 @@ module DNS.Cache.Server.TCP where
 import qualified DNS.Do53.Internal as DNS
 import Network.Run.TCP
 import Network.Socket (
-    PortNumber,
     HostName,
+    PortNumber,
  )
 
 -- this package
@@ -37,15 +37,4 @@ tcpServer _tcpconf env port host = do
                 recv = DNS.recvVC 2048 $ DNS.recvTCP sock
             (_n, bss) <- recv
             cacheWorkerLogic env cntinc send bss
-    return ([tcpserver], [getStatus cntget])
-
-getStatus :: CntGet -> IO [(String, Int)]
-getStatus CntGet{..} = do
-    hit <- getHit'
-    miss <- getMiss'
-    fail_ <- getFailed'
-    return
-        [ ("hit", hit)
-        , ("miss", miss)
-        , ("fail", fail_)
-        ]
+    return ([tcpserver], [readCounters cntget])

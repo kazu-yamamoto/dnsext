@@ -13,11 +13,11 @@ import qualified DNS.Types.Decode as DNS
 
 -- other packages
 import qualified DNS.Log as Log
-import qualified Network.UDP as UDP
 import Network.Socket (
-    PortNumber,
     HostName,
+    PortNumber,
  )
+import qualified Network.UDP as UDP
 import UnliftIO (SomeException, handle)
 
 -- this package
@@ -134,7 +134,7 @@ getCacherWorkers
     -> Env
     -> IO ([IO ()], IO Status)
 getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
-    (CntGet{..}, incs) <- newCounters
+    (cntget, cntinc) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
     (resolvLoop, enqueueDec, decQSize) <- do
@@ -142,7 +142,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
         let loop = handledLoop logr $ do
                 (reqMsg, addr) <- readQueue inQ
                 let enqueueResp' x = enqueueResp (x, addr)
-                workerLogic env incs enqueueResp' reqMsg
+                workerLogic env cntinc enqueueResp' reqMsg
         return (loop, writeQueue inQ, queueSize inQ)
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
@@ -150,12 +150,12 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
             (req, addr) <- readQueue reqQ
             let enqueueDec' x = enqueueDec (x, addr)
                 enqueueResp' x = enqueueResp (x, addr)
-            cacherLogic env incs enqueueResp' DNS.decodeAt enqueueDec' req
+            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' req
 
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        status = getStatus reqQSize decQSize resQSize getHit' getMiss' getFailed'
+        status = getStatus reqQSize decQSize resQSize cntget
 
     return (loops, status)
   where
@@ -179,22 +179,18 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> IO Int -> IO Int -> IO Int -> IO [(String, Int)]
-getStatus reqQSize decQSize resQSize getHit getMiss getFailed = do
+getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> CntGet -> IO [(String, Int)]
+getStatus reqQSize decQSize resQSize cntget = do
     (nreq, mreq) <- reqQSize
     (ndec, mdec) <- decQSize
     (nres, mres) <- resQSize
-    hit <- getHit
-    miss <- getMiss
-    fail_ <- getFailed
-    return
+    xs <- readCounters cntget
+    return $
         [ ("request queue size", nreq)
         , ("decoded queue size", ndec)
         , ("response queue size", nres)
         , ("request queue max size", mreq)
         , ("decoded queue max size", mdec)
         , ("response queue max size", mres)
-        , ("hit", hit)
-        , ("miss", miss)
-        , ("fail", fail_)
         ]
+            ++ xs
