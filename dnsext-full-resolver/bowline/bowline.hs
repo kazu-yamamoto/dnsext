@@ -32,11 +32,13 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, getStatuses) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
-    monLoops <- getMonitor env conf $ concat getStatuses
+    (udpServers, getStatuses) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
+    (tcpServers, _) <- tcpServer (TcpServerConfig 30) env 10053 (read "127.0.0.1")
+    let servers = udpServers ++ tcpServers
+    monitor <- getMonitor env conf $ concat getStatuses
     race_
-        (foldr concurrently_ (return ()) serverLoops)
-        (foldr concurrently_ (return ()) monLoops)
+        (foldr concurrently_ (return ()) servers)
+        (foldr concurrently_ (return ()) monitor)
   where
     cnf_udp_port' = fromIntegral cnf_udp_port
     udpconf =
