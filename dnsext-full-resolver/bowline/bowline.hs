@@ -46,7 +46,8 @@ run conf@Config{..} = do
             cnf_udp_queue_size_per_pipeline
             cnf_udp_pipeline_share_queue
     tcpconf =
-        TcpServerConfig 30 -- fixme
+        TcpServerConfig
+            cnf_tcp_idle_timeout
 
 main :: IO ()
 main = do
