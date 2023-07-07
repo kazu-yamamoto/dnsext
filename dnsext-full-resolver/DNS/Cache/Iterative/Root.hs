@@ -18,6 +18,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
 -- other packages
+import System.Console.ANSI.Types
 
 -- dns packages
 import DNS.Do53.Memo (
@@ -90,7 +91,7 @@ rootPriming = do
     either (return . left) (body ips) ekeys
   where
     left s = Left $ "rootPriming: " ++ s
-    plogLn lv s = logLn lv $ "root-priming: " ++ s
+    plogLn lv color s = clogLn lv (Just color) $ "root-priming: " ++ s
     body ips dnskeys = do
         msgNS <- norec True ips "." NS
 
@@ -105,21 +106,20 @@ rootPriming = do
             let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
             return (axRRs, cacheSection axRRs rank)
 
-        lift $ do
-            cacheNS
-            cacheAX
-            let withNoDelegation m f = maybe (return $ left "no delegation") f m
-            case nsGoodSigs of
-                [] -> do
-                    plogLn Log.WARN $ "DNSSEC verification failed"
-                    withNoDelegation (takeDelegationSrc nsps [] axRRs) $ \d@(Delegation _ des _ _) -> do
-                        plogLn Log.DEMO $ "verification failed - RRSIG of NS: \".\"\n" ++ ppDelegation des
-                        return $ Right d
-                _ : _ -> do
-                    plogLn Log.DEBUG $ "DNSSEC verification success"
-                    withNoDelegation (takeDelegationSrc nsps [rootSepDS] axRRs) $ \(Delegation dom des dss _) -> do
-                        plogLn Log.DEMO $ "verification success - RRSIG of NS: \".\"\n" ++ ppDelegation des
-                        return $ Right $ Delegation dom des dss dnskeys
+        let withNoDelegation m f = maybe (return $ left "no delegation") f m
+        lift $ case nsGoodSigs of
+            [] -> do
+                plogLn Log.DEMO Red "verification failed - RRSIG of NS: \".\""
+                withNoDelegation (takeDelegationSrc nsps [] axRRs) $ \(Delegation _ des _ _) -> do
+                    logLn Log.DEMO $ ppDelegation des
+                    return $ left "DNSSEC verification failed"
+            _ : _ -> do
+                cacheNS
+                cacheAX
+                plogLn Log.DEMO Green "verification success - RRSIG of NS: \".\""
+                withNoDelegation (takeDelegationSrc nsps [rootSepDS] axRRs) $ \(Delegation dom des dss _) -> do
+                    logLn Log.DEMO $ ppDelegation des
+                    return $ Right $ Delegation dom des dss dnskeys
 
     Delegation _dot hintDes _ _ = rootHint
 
