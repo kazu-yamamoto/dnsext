@@ -53,12 +53,13 @@ cacherLogic
     :: Env
     -> CntInc
     -> (ByteString -> IO ())
+    -> (DNS.EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
     -> (DNS.DNSMessage -> IO ())
-    -> ByteString
+    -> a
     -> IO ()
-cacherLogic env CntInc{..} send toResolver req = do
+cacherLogic env CntInc{..} send decode toResolver req = do
     now <- currentSeconds_ env
-    case DNS.decodeAt now req of
+    case decode now req of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
         Right reqMsg -> do
             mx <- getResponseCached env reqMsg
@@ -107,7 +108,12 @@ cacheWorkerLogic
     :: Env
     -> CntInc
     -> (ByteString -> IO ())
-    -> ByteString
+    -> [ByteString]
     -> IO ()
-cacheWorkerLogic env cntinc send req =
-    cacherLogic env cntinc send (workerLogic env cntinc send) req
+cacheWorkerLogic env cntinc send req = do
+    let worker = workerLogic env cntinc send
+    cacherLogic env cntinc send decode worker req
+  where
+    decode t bss = case DNS.decodeChunks t bss of
+      Left e -> Left e
+      Right (m,_) -> Right m

@@ -1,7 +1,6 @@
 module DNS.Cache.Server.TCP where
 
 -- GHC packages
-import qualified Data.ByteString as BS
 
 -- dnsext-* packages
 
@@ -34,6 +33,6 @@ tcpServer _tcpconf env port ip = do
     let tcpserver = runTCPServer (Just $ show ip) (show port) $ \sock -> do
             let send = DNS.sendVC $ DNS.sendTCP sock
                 recv = DNS.recvVC 2048 $ DNS.recvTCP sock
-            (_n, req') <- recv
-            cacheWorkerLogic env cntinc send $ BS.concat req'
+            (_n, bss) <- recv
+            cacheWorkerLogic env cntinc send bss
     return ([tcpserver], [])

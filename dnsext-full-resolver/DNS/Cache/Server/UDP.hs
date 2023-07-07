@@ -9,14 +9,15 @@ import Data.ByteString (ByteString)
 
 -- dnsext-* packages
 import qualified DNS.Types as DNS
-import Data.IP (IP (..))
-import Network.Socket (
-    PortNumber,
- )
-import qualified Network.UDP as UDP
+import qualified DNS.Types.Decode as DNS
 
 -- other packages
 import qualified DNS.Log as Log
+import Data.IP (IP (..))
+import qualified Network.UDP as UDP
+import Network.Socket (
+    PortNumber,
+ )
 import UnliftIO (SomeException, handle)
 
 -- this package
@@ -149,7 +150,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
             (req, addr) <- readQueue reqQ
             let enqueueDec' x = enqueueDec (x, addr)
                 enqueueResp' x = enqueueResp (x, addr)
-            cacherLogic env incs enqueueResp' enqueueDec' req
+            cacherLogic env incs enqueueResp' DNS.decodeAt enqueueDec' req
 
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
