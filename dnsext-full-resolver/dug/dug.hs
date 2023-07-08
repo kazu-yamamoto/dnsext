@@ -63,7 +63,7 @@ options =
         ["dox"]
         ( ReqArg
             (\dox opts -> opts{optDoX = Short.toShort (C8.pack dox)})
-            "auto|tcp|dot|doq|h2|h3"
+            "<proto>"
         )
         "enable DoX"
     , Option
@@ -121,6 +121,7 @@ main = do
     (args, Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
+        putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
     let (at, plus, targets) = divide args
     (dom, typ) <- getDomTyp targets
