@@ -5,15 +5,16 @@ module DNS.DoX.HTTP3 where
 
 import DNS.Do53.Client
 import DNS.Do53.Internal
-import DNS.DoX.Common
-import DNS.DoX.HTTP2
-import DNS.DoX.Imports
 import DNS.Types
 import qualified Data.ByteString.Char8 as C8
 import Network.HTTP3.Client
 import Network.QUIC
 import qualified Network.QUIC.Client as QUIC
 import qualified UnliftIO.Exception as E
+
+import DNS.DoX.HTTP2
+import DNS.DoX.Imports
+import DNS.DoX.QUIC
 
 http3Resolver :: ShortByteString -> VCLimit -> Resolver
 http3Resolver path lim ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->

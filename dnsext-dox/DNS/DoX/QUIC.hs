@@ -4,9 +4,12 @@
 module DNS.DoX.QUIC where
 
 import DNS.Do53.Internal
-import DNS.DoX.Common
 import Network.QUIC
 import Network.QUIC.Client
+import Network.QUIC.Internal hiding (Recv, shared)
+import Network.Socket
+
+import DNS.DoX.Imports
 
 quicResolver :: VCLimit -> Resolver
 quicResolver lim ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
@@ -19,3 +22,14 @@ quicResolver lim ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
                 shutdownStream strm
             recvDoQ = recvVC lim $ recvStream strm
         solve sendDoQ recvDoQ
+
+getQUICParams :: HostName -> PortNumber -> ByteString -> ClientConfig
+getQUICParams hostname port alpn =
+    defaultClientConfig
+        { ccServerName = hostname
+        , ccPortName = show port
+        , ccALPN = \_ -> return $ Just [alpn]
+        , ccDebugLog = False
+        , ccValidate = False
+        , ccVersions = [Version1]
+        }

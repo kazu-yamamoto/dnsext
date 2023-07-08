@@ -25,7 +25,6 @@ library
         DNS.DoX.Stub
 
     other-modules:
-        DNS.DoX.Common
         DNS.DoX.HTTP2
         DNS.DoX.HTTP3
         DNS.DoX.Imports
@@ -44,6 +43,7 @@ library
         dnsext-types,
         http-types,
         http2,
+        http2-tls,
         http3,
         iproute,
         network >=2.3,

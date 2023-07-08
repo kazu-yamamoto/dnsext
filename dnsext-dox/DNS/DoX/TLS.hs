@@ -4,8 +4,8 @@
 module DNS.DoX.TLS where
 
 import DNS.Do53.Internal
-import DNS.DoX.Common
 import Data.ByteString.Char8 ()
+import qualified Network.HTTP2.TLS.Client as H2
 import Network.Socket hiding (recvBuf)
 import Network.Socket.BufferPool (makeRecvN)
 import Network.TLS (bye, contextNew, handshake)
@@ -18,10 +18,10 @@ tlsResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
     perform solve = E.bracket open close $ \sock -> do
         E.bracket (contextNew sock params) bye $ \ctx -> do
             handshake ctx
-            recvN <- makeRecvN "" $ recvTLS ctx
-            let sendDoT = sendVC $ sendManyTLS ctx
+            recvN <- makeRecvN "" $ H2.recvTLS ctx
+            let sendDoT = sendVC $ H2.sendManyTLS ctx
                 recvDoT = recvVC lim recvN
             solve sendDoT recvDoT
 
     open = openTCP rinfoHostName rinfoPortNumber
-    params = getTLSParams rinfoHostName "dot" False
+    params = H2.getTLSParams rinfoHostName "dot" False
