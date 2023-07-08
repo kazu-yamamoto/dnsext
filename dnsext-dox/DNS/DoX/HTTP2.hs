@@ -5,6 +5,7 @@
 
 module DNS.DoX.HTTP2 (
     http2Resolver,
+    http2cResolver,
     doHTTP,
 )
 where
@@ -21,7 +22,7 @@ import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
 import Data.ByteString.Short (fromShort)
 import Network.HTTP.Types
-import Network.HTTP2.Client
+import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified UnliftIO.Exception as E
 
@@ -29,6 +30,12 @@ http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = do
     ident <- ractionGenId rinfoActions
     H2.run rinfoHostName rinfoPortNumber $
+        doHTTP "HTTP/2" ident path lim ri q qctl
+
+http2cResolver :: ShortByteString -> VCLimit -> Resolver
+http2cResolver path lim ri@ResolvInfo{..} q qctl = do
+    ident <- ractionGenId rinfoActions
+    H2.runH2C rinfoHostName rinfoPortNumber $
         doHTTP "HTTP/2" ident path lim ri q qctl
 
 doHTTP
