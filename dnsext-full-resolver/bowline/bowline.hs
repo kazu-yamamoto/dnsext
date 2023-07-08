@@ -31,8 +31,9 @@ run conf@Config{..} = do
     env <- getEnv conf
     (udpServers, udpStatus) <- getServers (udpServer udpconf env) cnf_udp_port' cnf_bind_addresses
     (tcpServers, tcpStatus) <- getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_bind_addresses
-    let servers = udpServers ++ tcpServers
-    monitor <- getMonitor env conf (udpStatus ++ tcpStatus)
+    (h2Servers, h2Status) <- getServers (http2Server http2conf env) 10080 cnf_bind_addresses
+    let servers = udpServers ++ tcpServers ++ h2Servers
+    monitor <- getMonitor env conf (udpStatus ++ tcpStatus ++ h2Status)
     race_
         (foldr concurrently_ (return ()) servers)
         (foldr concurrently_ (return ()) monitor)
@@ -48,6 +49,8 @@ run conf@Config{..} = do
     tcpconf =
         TcpServerConfig
             cnf_tcp_idle_timeout
+    http2conf =
+        Http2ServerConfig 30000000
 
 main :: IO ()
 main = do

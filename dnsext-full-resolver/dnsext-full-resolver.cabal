@@ -33,6 +33,7 @@ library
         DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
+        DNS.Cache.Server.HTTP2
         DNS.Cache.Server.Pipeline
         DNS.Cache.Server.TCP
         DNS.Cache.Server.UDP
@@ -50,6 +51,8 @@ library
         dnsext-do53,
         dnsext-log,
         dnsext-types,
+        http2,
+        http-types,
         iproute,
         network,
         network-run,
