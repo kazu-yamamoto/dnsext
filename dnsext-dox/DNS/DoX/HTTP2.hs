@@ -10,7 +10,6 @@ module DNS.DoX.HTTP2 (
 )
 where
 
-import qualified Data.ByteString.Char8 as C8
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Imports
@@ -20,6 +19,7 @@ import DNS.Types.Decode
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
+import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (fromShort)
 import Network.HTTP.Types
 import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)

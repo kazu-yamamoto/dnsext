@@ -4,22 +4,23 @@
 module DNS.Cache.Server.HTTP2 where
 
 -- GHC packages
-import Data.ByteString.Char8 ()
+
 import Data.ByteString.Builder (byteString)
+import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
 import DNS.Do53.Internal
 
 -- other packages
 
-import qualified UnliftIO.Exception as E
+import qualified Network.HTTP.Types as HT
+import Network.HTTP2.Server
 import Network.Run.TCP
 import Network.Socket (
     HostName,
     PortNumber,
  )
-import Network.HTTP2.Server
-import qualified Network.HTTP.Types as HT
+import qualified UnliftIO.Exception as E
 
 -- this package
 import DNS.Cache.Iterative (Env (..))
@@ -41,9 +42,11 @@ http2Server _http2conf env port host = do
     let http2server = runTCPServer (Just host) (show port) $ runHTTP2Server cntinc
     return ([http2server], [readCounters cntget])
   where
-    runHTTP2Server cntinc s = E.bracket (allocSimpleConfig s 4096)
-                                 freeSimpleConfig
-                                 (\config -> run config $ doHTTP env cntinc)
+    runHTTP2Server cntinc s =
+        E.bracket
+            (allocSimpleConfig s 4096)
+            freeSimpleConfig
+            (\config -> run config $ doHTTP env cntinc)
 
 doHTTP
     :: Env
@@ -53,10 +56,10 @@ doHTTP
     -> (Response -> [PushPromise] -> IO ())
     -> IO ()
 doHTTP env cntinc req _aux sendResponse = do
-        (_rx, rqs) <- recvManyN (getRequestBodyChunk req) 2048
-        let send res = do
-                let response = responseBuilder HT.ok200 header $ byteString res
-                sendResponse response []
-        cacheWorkerLogic env cntinc send rqs
-      where
-        header = [(HT.hContentType, "application/dns-message")]
+    (_rx, rqs) <- recvManyN (getRequestBodyChunk req) 2048
+    let send res = do
+            let response = responseBuilder HT.ok200 header $ byteString res
+            sendResponse response []
+    cacheWorkerLogic env cntinc send rqs
+  where
+    header = [(HT.hContentType, "application/dns-message")]
