@@ -30,13 +30,13 @@ http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = do
     ident <- ractionGenId rinfoActions
     H2.run rinfoHostName rinfoPortNumber $
-        doHTTP "HTTP/2" ident path lim ri q qctl
+        doHTTP "H2" ident path lim ri q qctl
 
 http2cResolver :: ShortByteString -> VCLimit -> Resolver
 http2cResolver path lim ri@ResolvInfo{..} q qctl = do
     ident <- ractionGenId rinfoActions
     H2.runH2C rinfoHostName rinfoPortNumber $
-        doHTTP "HTTP/2" ident path lim ri q qctl
+        doHTTP "H2C" ident path lim ri q qctl
 
 doHTTP
     :: String

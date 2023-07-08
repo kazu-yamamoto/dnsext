@@ -27,7 +27,7 @@ http3Resolver path lim ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
 h3resolver
     :: Connection -> Config -> Identifier -> ShortByteString -> VCLimit -> Resolver
 h3resolver conn conf ident path lim ri@ResolvInfo{..} q qctl =
-    run conn cliconf conf $ doHTTP "HTTP/3" ident path lim ri q qctl
+    run conn cliconf conf $ doHTTP "H3" ident path lim ri q qctl
   where
     cliconf =
         ClientConfig
