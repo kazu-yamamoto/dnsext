@@ -63,6 +63,7 @@ library
         random,
         stm,
         time,
+        tls,
         transformers,
         unliftio,
         word8
@@ -93,6 +94,7 @@ executable bowline
         parsec,
         split,
         stm,
+        tls,
         unliftio
 
     if (os(windows) && impl(ghc >=9.0))

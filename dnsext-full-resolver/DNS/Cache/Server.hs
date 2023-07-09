@@ -5,6 +5,8 @@ module DNS.Cache.Server (
     tcpServer,
     Http2cServerConfig (..),
     http2cServer,
+    Http2ServerConfig (..),
+    http2Server,
     Status,
     Server,
     Env,

@@ -20,6 +20,8 @@ import Parser
 data Config = Config
     { cnf_log_output :: Log.Output
     , cnf_log_level :: Log.Level
+    , cnf_cert_file :: FilePath
+    , cnf_key_file :: FilePath
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
     , cnf_udp :: Bool
@@ -57,6 +59,8 @@ defaultConfig =
     Config
         { cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
+        , cnf_cert_file = "fullchain.pem"
+        , cnf_key_file = "privkey.pem"
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
         , cnf_udp = True
@@ -125,6 +129,8 @@ makeConfig def conf =
     Config
         { cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
+        , cnf_cert_file = get "cert-file" cnf_cert_file
+        , cnf_key_file = get "key-file" cnf_key_file
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_udp = get "udp" cnf_udp

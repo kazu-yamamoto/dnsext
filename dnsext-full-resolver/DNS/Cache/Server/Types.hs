@@ -6,8 +6,8 @@ module DNS.Cache.Server.Types (
     PortNumber,
 ) where
 
-import Network.Socket
 import DNS.Cache.Iterative (Env (..))
+import Network.Socket
 
 type Status = [(String, Int)]
 

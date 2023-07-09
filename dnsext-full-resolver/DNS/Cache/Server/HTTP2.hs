@@ -15,21 +15,32 @@ import DNS.Do53.Internal
 
 import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
-import qualified Network.HTTP2.TLS.Server as H2
+import qualified Network.HTTP2.TLS.Server as H2TLS
+import Network.TLS (Credentials (..))
 
 -- this package
 import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
+data Http2ServerConfig = Http2ServerConfig
+    { http2_idle_timeout :: Int
+    }
+
+http2Server :: Credentials -> Http2ServerConfig -> Server
+http2Server creds _http2onf env port host = do
+    (cntget, cntinc) <- newCounters
+    let http2server = H2TLS.run creds host port $ doHTTP env cntinc
+    return ([http2server], [readCounters cntget])
+
 data Http2cServerConfig = Http2cServerConfig
     { http2c_idle_timeout :: Int
     }
 
 http2cServer :: Http2cServerConfig -> Server
-http2cServer _http2conf env port host = do
+http2cServer _http2cconf env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = H2.runH2C host port $ doHTTP env cntinc
+    let http2server = H2TLS.runH2C host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
 
 doHTTP

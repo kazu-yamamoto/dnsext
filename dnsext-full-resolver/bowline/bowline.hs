@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -7,6 +8,7 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
 import Network.Socket
+import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
 
@@ -29,10 +31,17 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
+    creds <-
+        if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
+            then do
+                Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
+                return $ Credentials [cred]
+            else return $ Credentials []
     let trans =
             [ (cnf_udp, udpServer udpconf, cnf_udp_port)
             , (cnf_tcp, tcpServer tcpconf, cnf_tcp_port)
             , (cnf_h2c, http2cServer h2cconf, cnf_h2c_port)
+            , (cnf_h2, http2Server creds h2conf, cnf_h2_port)
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     monitor <- getMonitor env conf $ concat statuses
@@ -51,6 +60,9 @@ run conf@Config{..} = do
     h2cconf =
         Http2cServerConfig
             cnf_h2c_idle_timeout
+    h2conf =
+        Http2ServerConfig
+            cnf_h2_idle_timeout
 
 main :: IO ()
 main = do
