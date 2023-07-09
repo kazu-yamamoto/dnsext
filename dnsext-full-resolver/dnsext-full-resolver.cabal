@@ -52,6 +52,7 @@ library
         dnsext-log,
         dnsext-types,
         http2,
+        http2-tls,
         http-types,
         iproute,
         network,
