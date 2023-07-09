@@ -29,11 +29,21 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (udpServers, udpStatus) <- getServers (udpServer udpconf env) cnf_udp_port' cnf_bind_addresses
-    (tcpServers, tcpStatus) <- getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_bind_addresses
-    (h2Servers, h2Status) <- getServers (http2cServer http2cconf env) cnf_h2c_port' cnf_bind_addresses
-    let servers = udpServers ++ tcpServers ++ h2Servers
-    monitor <- getMonitor env conf (udpStatus ++ tcpStatus ++ h2Status)
+    (udpServers, udpStatus) <-
+        if cnf_udp
+            then getServers (udpServer udpconf env) cnf_udp_port' cnf_addrs
+            else return ([], [])
+    (tcpServers, tcpStatus) <-
+        if cnf_tcp
+            then getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_addrs
+            else return ([], [])
+    (h2cServers, h2cStatus) <-
+        if cnf_h2c
+            then getServers (http2cServer h2cconf env) cnf_h2c_port' cnf_addrs
+            else return ([], [])
+    let servers = udpServers ++ tcpServers ++ h2cServers
+        statuses = udpStatus ++ tcpStatus ++ h2cStatus
+    monitor <- getMonitor env conf statuses
     race_
         (foldr concurrently_ (return ()) servers)
         (foldr concurrently_ (return ()) monitor)
@@ -50,7 +60,7 @@ run conf@Config{..} = do
     tcpconf =
         TcpServerConfig
             cnf_tcp_idle_timeout
-    http2cconf =
+    h2cconf =
         Http2cServerConfig
             cnf_h2c_idle_timeout
 
