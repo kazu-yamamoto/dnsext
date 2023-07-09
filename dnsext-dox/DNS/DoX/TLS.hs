@@ -6,6 +6,7 @@ module DNS.DoX.TLS where
 import DNS.Do53.Internal
 import Data.ByteString.Char8 ()
 import qualified Network.HTTP2.TLS.Client as H2
+import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket hiding (recvBuf)
 import Network.Socket.BufferPool (makeRecvN)
 import Network.TLS (bye, contextNew, handshake)
@@ -24,4 +25,4 @@ tlsResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
             solve sendDoT recvDoT
 
     open = openTCP rinfoHostName rinfoPortNumber
-    params = H2.getTLSParams rinfoHostName "dot" False
+    params = H2.getClientParams rinfoHostName "dot" False
