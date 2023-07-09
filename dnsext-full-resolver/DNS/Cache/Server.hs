@@ -6,9 +6,13 @@ module DNS.Cache.Server (
     Http2cServerConfig (..),
     http2cServer,
     Status,
+    Server,
+    Env,
+    HostName,
+    PortNumber,
 ) where
 
 import DNS.Cache.Server.HTTP2
-import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.TCP
+import DNS.Cache.Server.Types
 import DNS.Cache.Server.UDP

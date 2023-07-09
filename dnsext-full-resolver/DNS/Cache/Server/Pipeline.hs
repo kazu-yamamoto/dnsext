@@ -19,10 +19,6 @@ import DNS.Cache.Iterative (CacheResult (..), Env (..), getResponseCached, getRe
 
 ----------------------------------------------------------------
 
-type Status = [(String, Int)]
-
-----------------------------------------------------------------
-
 data CntGet = CntGet
     { getHit :: IO Int
     , getMiss :: IO Int

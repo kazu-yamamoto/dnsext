@@ -29,28 +29,16 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (udpServers, udpStatus) <-
-        if cnf_udp
-            then getServers (udpServer udpconf env) cnf_udp_port' cnf_addrs
-            else return ([], [])
-    (tcpServers, tcpStatus) <-
-        if cnf_tcp
-            then getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_addrs
-            else return ([], [])
-    (h2cServers, h2cStatus) <-
-        if cnf_h2c
-            then getServers (http2cServer h2cconf env) cnf_h2c_port' cnf_addrs
-            else return ([], [])
-    let servers = udpServers ++ tcpServers ++ h2cServers
-        statuses = udpStatus ++ tcpStatus ++ h2cStatus
-    monitor <- getMonitor env conf statuses
-    race_
-        (foldr concurrently_ (return ()) servers)
-        (foldr concurrently_ (return ()) monitor)
+    let trans =
+            [ (cnf_udp, udpServer udpconf, cnf_udp_port)
+            , (cnf_tcp, tcpServer tcpconf, cnf_tcp_port)
+            , (cnf_h2c, http2cServer h2cconf, cnf_h2c_port)
+            ]
+    (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
+    monitor <- getMonitor env conf $ concat statuses
+    race_ (conc $ concat servers) (conc monitor)
   where
-    cnf_udp_port' = fromIntegral cnf_udp_port
-    cnf_tcp_port' = fromIntegral cnf_tcp_port
-    cnf_h2c_port' = fromIntegral cnf_h2c_port
+    conc = foldr concurrently_ $ return ()
     udpconf =
         UdpServerConfig
             cnf_udp_pipelines_per_socket
@@ -75,15 +63,18 @@ main = do
 ----------------------------------------------------------------
 
 getServers
-    :: (PortNumber -> HostName -> IO ([IO ()], [IO Status]))
-    -> PortNumber
+    :: Env
     -> [HostName]
+    -> (Bool, Server, Int)
     -> IO ([IO ()], [IO Status])
-getServers server port hosts = do
-    (xss, yss) <- unzip <$> mapM (server port) hosts
+getServers _ _ (False, _, _) = return ([], [])
+getServers env hosts (True, server, port') = do
+    (xss, yss) <- unzip <$> mapM (server env port) hosts
     let xs = concat xss
         ys = concat yss
     return (xs, ys)
+  where
+    port = fromIntegral port'
 
 ----------------------------------------------------------------
 

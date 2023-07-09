@@ -14,37 +14,32 @@ import DNS.Do53.Internal
 -- other packages
 
 import qualified Network.HTTP.Types as HT
-import Network.HTTP2.Server
-import Network.HTTP2.TLS.Server
+import qualified Network.HTTP2.Server as H2
+import qualified Network.HTTP2.TLS.Server as H2
 
 -- this package
-import DNS.Cache.Iterative (Env (..))
 import DNS.Cache.Server.Pipeline
+import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
 data Http2cServerConfig = Http2cServerConfig
     { http2c_idle_timeout :: Int
     }
 
-http2cServer
-    :: Http2cServerConfig
-    -> Env
-    -> PortNumber
-    -> HostName
-    -> IO ([IO ()], [IO Status])
+http2cServer :: Http2cServerConfig -> Server
 http2cServer _http2conf env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = runH2C host port $ doHTTP env cntinc
+    let http2server = H2.runH2C host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
 
 doHTTP
     :: Env
     -> CntInc
-    -> Server
+    -> H2.Server
 doHTTP env cntinc req _aux sendResponse = do
-    (_rx, rqs) <- recvManyN (getRequestBodyChunk req) 2048
+    (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
     let send res = do
-            let response = responseBuilder HT.ok200 header $ byteString res
+            let response = H2.responseBuilder HT.ok200 header $ byteString res
             sendResponse response []
     cacheWorkerLogic env cntinc send rqs
   where

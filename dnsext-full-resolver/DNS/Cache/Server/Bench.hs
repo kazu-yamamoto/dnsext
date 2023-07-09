@@ -14,13 +14,12 @@ import Control.Monad (forever)
 -- other packages
 
 -- this package
-import DNS.Cache.Iterative (Env (..))
 import DNS.Cache.Queue (
     newQueue,
     readQueue,
     writeQueue,
  )
-import DNS.Cache.Server.Pipeline
+import DNS.Cache.Server.Types
 import DNS.Cache.Server.UDP
 
 ----------------------------------------------------------------

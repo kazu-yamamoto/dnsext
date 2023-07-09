@@ -13,10 +13,6 @@ import qualified DNS.Types.Decode as DNS
 
 -- other packages
 import qualified DNS.Log as Log
-import Network.Socket (
-    HostName,
-    PortNumber,
- )
 import qualified Network.UDP as UDP
 import UnliftIO (SomeException, handle)
 
@@ -33,6 +29,7 @@ import DNS.Cache.Queue (
  )
 import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.Server.Pipeline
+import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
 
@@ -70,12 +67,7 @@ type EnqueueResp a = Response a -> IO ()
 
 ----------------------------------------------------------------
 
-udpServer
-    :: UdpServerConfig
-    -> Env
-    -> PortNumber
-    -> HostName
-    -> IO ([IO ()], [IO Status])
+udpServer :: UdpServerConfig -> Server
 udpServer conf env port addr = do
     sock <- UDP.serverSocket (read addr, port)
     let putLn lv = logLines_ env lv Nothing . (: [])
