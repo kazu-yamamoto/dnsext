@@ -22,17 +22,17 @@ import DNS.Cache.Iterative (Env (..))
 import DNS.Cache.Server.Pipeline
 
 ----------------------------------------------------------------
-data Http2ServerConfig = Http2ServerConfig
-    { http2_idle_timeout :: Int
+data Http2cServerConfig = Http2cServerConfig
+    { http2c_idle_timeout :: Int
     }
 
-http2Server
-    :: Http2ServerConfig
+http2cServer
+    :: Http2cServerConfig
     -> Env
     -> PortNumber
     -> HostName
     -> IO ([IO ()], [IO Status])
-http2Server _http2conf env port host = do
+http2cServer _http2conf env port host = do
     (cntget, cntinc) <- newCounters
     let http2server = runH2C host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])

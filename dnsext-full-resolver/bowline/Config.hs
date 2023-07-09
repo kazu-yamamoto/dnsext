@@ -29,6 +29,10 @@ data Config = Config
     , cnf_udp_port :: Int
     , cnf_tcp_idle_timeout :: Int
     , cnf_tcp_port :: Int
+    , cnf_h2_idle_timeout :: Int
+    , cnf_h2_port :: Int
+    , cnf_h2c_idle_timeout :: Int
+    , cnf_h2c_port :: Int
     , cnf_monitor_port :: Int
     , cnf_bind_addresses :: [String]
     , cnf_monitor_stdio :: Bool
@@ -49,6 +53,10 @@ defaultConfig =
         , cnf_udp_port = 53
         , cnf_tcp_idle_timeout = 30000000
         , cnf_tcp_port = 53
+        , cnf_h2_idle_timeout = 30000000
+        , cnf_h2_port = 443
+        , cnf_h2c_idle_timeout = 30000000
+        , cnf_h2c_port = 80
         , cnf_monitor_port = 10023
         , cnf_bind_addresses = []
         , cnf_monitor_stdio = False
@@ -100,6 +108,10 @@ makeConfig def conf =
         , cnf_udp_port = get "udp-port" cnf_udp_port
         , cnf_tcp_idle_timeout = get "tcp-idle-timeout" cnf_tcp_idle_timeout
         , cnf_tcp_port = get "tcp-port" cnf_tcp_port
+        , cnf_h2_idle_timeout = get "h2-idle-timeout" cnf_h2_idle_timeout
+        , cnf_h2_port = get "h2-port" cnf_h2_port
+        , cnf_h2c_idle_timeout = get "h2c-idle-timeout" cnf_h2c_idle_timeout
+        , cnf_h2c_port = get "h2c-port" cnf_h2c_port
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_bind_addresses = get "bind-addresses" cnf_bind_addresses
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio

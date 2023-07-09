@@ -31,7 +31,7 @@ run conf@Config{..} = do
     env <- getEnv conf
     (udpServers, udpStatus) <- getServers (udpServer udpconf env) cnf_udp_port' cnf_bind_addresses
     (tcpServers, tcpStatus) <- getServers (tcpServer tcpconf env) cnf_tcp_port' cnf_bind_addresses
-    (h2Servers, h2Status) <- getServers (http2Server http2conf env) 10080 cnf_bind_addresses
+    (h2Servers, h2Status) <- getServers (http2cServer http2cconf env) cnf_h2c_port' cnf_bind_addresses
     let servers = udpServers ++ tcpServers ++ h2Servers
     monitor <- getMonitor env conf (udpStatus ++ tcpStatus ++ h2Status)
     race_
@@ -40,6 +40,7 @@ run conf@Config{..} = do
   where
     cnf_udp_port' = fromIntegral cnf_udp_port
     cnf_tcp_port' = fromIntegral cnf_tcp_port
+    cnf_h2c_port' = fromIntegral cnf_h2c_port
     udpconf =
         UdpServerConfig
             cnf_udp_pipelines_per_socket
@@ -49,8 +50,9 @@ run conf@Config{..} = do
     tcpconf =
         TcpServerConfig
             cnf_tcp_idle_timeout
-    http2conf =
-        Http2ServerConfig 30000000
+    http2cconf =
+        Http2cServerConfig
+            cnf_h2c_idle_timeout
 
 main :: IO ()
 main = do

@@ -3,8 +3,8 @@ module DNS.Cache.Server (
     udpServer,
     TcpServerConfig (..),
     tcpServer,
-    Http2ServerConfig (..),
-    http2Server,
+    Http2cServerConfig (..),
+    http2cServer,
     Status,
 ) where
 
