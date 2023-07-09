@@ -171,8 +171,9 @@ cacheAnswer Delegation{..} dom typ msg
             lift cacheX
             let qinfo = show dom ++ " " ++ show typ
                 (verifyMsg, verifyColor, raiseOnVerifyFailure)
-                    | null delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
+                    | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                     | rrsetVerified xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
+                    | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
                     | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
             lift $ clogLn Log.DEMO verifyColor verifyMsg
             raiseOnVerifyFailure
