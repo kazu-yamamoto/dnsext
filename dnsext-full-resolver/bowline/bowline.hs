@@ -42,6 +42,7 @@ run conf@Config{..} = do
             , (cnf_tcp, tcpServer tcpconf, cnf_tcp_port)
             , (cnf_h2c, http2cServer h2cconf, cnf_h2c_port)
             , (cnf_h2, http2Server creds h2conf, cnf_h2_port)
+            , (cnf_tls, tlsServer creds tlsconf, cnf_tls_port)
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     monitor <- getMonitor env conf $ concat statuses
@@ -63,6 +64,9 @@ run conf@Config{..} = do
     h2conf =
         Http2ServerConfig
             cnf_h2_idle_timeout
+    tlsconf =
+        TlsServerConfig
+            cnf_tls_idle_timeout
 
 main :: IO ()
 main = do

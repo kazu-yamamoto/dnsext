@@ -36,6 +36,7 @@ library
         DNS.Cache.Server.HTTP2
         DNS.Cache.Server.Pipeline
         DNS.Cache.Server.TCP
+        DNS.Cache.Server.TLS
         DNS.Cache.Server.Types
         DNS.Cache.Server.UDP
 
@@ -61,6 +62,7 @@ library
         network-udp,
         psqueues,
         random,
+        recv,
         stm,
         time,
         tls,
