@@ -2,7 +2,6 @@ module DNS.Cache.Iterative.Helpers where
 
 -- GHC packages
 import Control.Monad (guard, (<=<))
-import Control.Monad.Trans.Except (throwE)
 import Data.Function (on)
 import Data.List (groupBy, sort, sortOn, uncons)
 
@@ -19,7 +18,6 @@ import DNS.SEC (
     TYPE (RRSIG),
  )
 import DNS.Types (
-    DNSError,
     Domain,
     ResourceRecord (..),
     TTL,
@@ -64,9 +62,6 @@ withSection
     -> ([ResourceRecord] -> Ranking -> a)
     -> a
 withSection getRanked msg body = uncurry body $ getRanked msg
-
-throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwE . DnsError
 
 nsList
     :: Domain
