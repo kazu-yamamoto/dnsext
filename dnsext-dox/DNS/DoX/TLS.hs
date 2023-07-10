@@ -12,10 +12,10 @@ tlsResolver :: VCLimit -> Resolver
 tlsResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
   where
     -- Using a fresh connection
-    perform solve = H2.runTLS rinfoHostName rinfoPortNumber "dot" f
+    perform solve = H2.runTLS H2.defaultSettings rinfoHostName rinfoPortNumber "dot" solve'
       where
-        f H2.IOBackend{..} = do
-            recvN <- makeRecvN "" recv
-            let sendDoT = sendVC sendMany
+        solve' _mgr backend = do
+            recvN <- makeRecvN "" $ H2.recv backend
+            let sendDoT = sendVC $ H2.sendMany backend
                 recvDoT = recvVC lim recvN
             solve sendDoT recvDoT

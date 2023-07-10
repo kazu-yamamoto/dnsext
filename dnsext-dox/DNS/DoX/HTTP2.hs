@@ -29,13 +29,13 @@ import qualified UnliftIO.Exception as E
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = do
     ident <- ractionGenId rinfoActions
-    H2.run rinfoHostName rinfoPortNumber $
+    H2.run H2.defaultSettings rinfoHostName rinfoPortNumber $
         doHTTP "H2" ident path lim ri q qctl
 
 http2cResolver :: ShortByteString -> VCLimit -> Resolver
 http2cResolver path lim ri@ResolvInfo{..} q qctl = do
     ident <- ractionGenId rinfoActions
-    H2.runH2C rinfoHostName rinfoPortNumber $
+    H2.runH2C H2.defaultSettings rinfoHostName rinfoPortNumber $
         doHTTP "H2C" ident path lim ri q qctl
 
 doHTTP
