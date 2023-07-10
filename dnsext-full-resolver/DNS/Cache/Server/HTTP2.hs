@@ -30,7 +30,7 @@ data Http2ServerConfig = Http2ServerConfig
 http2Server :: Credentials -> Http2ServerConfig -> Server
 http2Server creds _http2onf env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.run creds host port $ doHTTP env cntinc
+    let http2server = H2TLS.run H2TLS.defaultSettings creds host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
 
 data Http2cServerConfig = Http2cServerConfig
@@ -40,7 +40,7 @@ data Http2cServerConfig = Http2cServerConfig
 http2cServer :: Http2cServerConfig -> Server
 http2cServer _http2cconf env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.runH2C host port $ doHTTP env cntinc
+    let http2server = H2TLS.runH2C H2TLS.defaultSettings host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
 
 doHTTP
