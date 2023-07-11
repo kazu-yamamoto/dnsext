@@ -28,20 +28,30 @@ data Http2ServerConfig = Http2ServerConfig
     }
 
 http2Server :: Credentials -> Http2ServerConfig -> Server
-http2Server creds _http2onf env port host = do
+http2Server creds Http2ServerConfig{..} env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.run H2TLS.defaultSettings creds host port $ doHTTP env cntinc
+    let http2server = H2TLS.run settings creds host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
+  where
+    settings =
+        H2TLS.defaultSettings
+            { H2TLS.settingsTimeout = http2_idle_timeout
+            }
 
 data Http2cServerConfig = Http2cServerConfig
     { http2c_idle_timeout :: Int
     }
 
 http2cServer :: Http2cServerConfig -> Server
-http2cServer _http2cconf env port host = do
+http2cServer Http2cServerConfig{..} env port host = do
     (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.runH2C H2TLS.defaultSettings host port $ doHTTP env cntinc
+    let http2server = H2TLS.runH2C settings host port $ doHTTP env cntinc
     return ([http2server], [readCounters cntget])
+  where
+    settings =
+        H2TLS.defaultSettings
+            { H2TLS.settingsTimeout = http2c_idle_timeout
+            }
 
 doHTTP
     :: Env
