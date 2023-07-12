@@ -81,10 +81,6 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         fmap snd (clookup cs "iij.ad.jp." A) `shouldSatisfy` (>= Just Cache.RankAnswer)
 
-    it "nodata - ns" $ do
-        (_, cs) <- getResolveCache "iij.ad.jp." A
-        check cs "ad.jp." NS `shouldSatisfy` isJust
-
     it "no zone sub-domain - nodata - ns" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         check cs "ad.jp." NS `shouldSatisfy` isJust
