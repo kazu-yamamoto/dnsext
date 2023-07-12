@@ -62,7 +62,7 @@ options =
         ['d']
         ["dox"]
         ( ReqArg
-            (\dox opts -> opts{optDoX = Short.toShort (C8.pack dox)})
+            (\dox opts -> opts{optDoX = convDoX dox})
             "<proto>"
         )
         "enable DoX"
@@ -217,9 +217,19 @@ getPort (Just x) _ = case readMaybe x of
         putStrLn $ "Port " ++ x ++ " is illegal"
         exitFailure
 
+{- FOURMOLU_DISABLE -}
+convDoX :: String -> ShortByteString
+convDoX dox = case dox' of
+  "http2" -> "h2"
+  "http3" -> "h3"
+  "quic"  -> "doq"
+  "tls"   -> "dot"
+  x       -> Short.toShort x
+  where
+    dox' = C8.pack dox
+
 ----------------------------------------------------------------
 
-{- FOURMOLU_DISABLE -}
 toFlag :: String -> QueryControls
 toFlag "+rec"       = rdFlag FlagSet
 toFlag "+recurse"   = rdFlag FlagSet
