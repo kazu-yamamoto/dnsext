@@ -106,18 +106,18 @@ rootPriming = do
             let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
             return (axRRs, cacheSection axRRs rank)
 
-        let withNoDelegation m f = maybe (return $ left "no delegation") f m
+        let withDelegation dh = maybe (return $ left "no delegation") dh $ takeDelegationSrc nsps [rootSepDS] axRRs
         lift $ case nsGoodSigs of
             [] -> do
                 plogLn Log.DEMO Red "verification failed - RRSIG of NS: \".\""
-                withNoDelegation (takeDelegationSrc nsps [] axRRs) $ \(Delegation _ des _ _) -> do
+                withDelegation $ \(Delegation _ des _ _) -> do
                     logLn Log.DEMO $ ppDelegation des
                     return $ left "DNSSEC verification failed"
             _ : _ -> do
                 cacheNS
                 cacheAX
                 plogLn Log.DEMO Green "verification success - RRSIG of NS: \".\""
-                withNoDelegation (takeDelegationSrc nsps [rootSepDS] axRRs) $ \(Delegation dom des dss _) -> do
+                withDelegation $ \(Delegation dom des dss _) -> do
                     logLn Log.DEMO $ ppDelegation des
                     return $ Right $ Delegation dom des dss dnskeys
 
