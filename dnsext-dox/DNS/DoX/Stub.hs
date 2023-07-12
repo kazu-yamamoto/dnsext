@@ -22,30 +22,32 @@ import Network.Socket (HostName, PortNumber)
 -- $setup
 -- >>> :set -XOverloadedStrings
 
+{- FOURMOLU_DISABLE -}
 -- | From APLN to its port number.
 --
 -- >>> doxPort "dot"
 -- 853
 doxPort :: ALPN -> PortNumber
-doxPort "dot" = 853
-doxPort "doq" = 853
-doxPort "h2" = 443
-doxPort "h2c" = 80
-doxPort "h3" = 443
-doxPort _ = 53
+doxPort "dot"   = 853
+doxPort "doq"   = 853
+doxPort "h2"    = 443
+doxPort "h2c"   =  80
+doxPort "h3"    = 443
+doxPort _       =  53
 
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
 makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe Resolver
 makeResolver alpn lim mpath = case alpn of
-    "dot" -> Just $ tlsResolver lim
+    "tcp" -> Just $ tcpResolver  lim
+    "dot" -> Just $ tlsResolver  lim
     "doq" -> Just $ quicResolver lim
-    "h2" -> Just $ http2Resolver (fromMaybe "/dns-query" mpath) lim
+    "h2"  -> Just $ http2Resolver  (fromMaybe "/dns-query" mpath) lim
     "h2c" -> Just $ http2cResolver (fromMaybe "/dns-query" mpath) lim
-    "h3" -> Just $ http3Resolver (fromMaybe "/dns-query" mpath) lim
-    "tcp" -> Just $ tcpResolver lim
-    _ -> Nothing
+    "h3"  -> Just $ http3Resolver  (fromMaybe "/dns-query" mpath) lim
+    _     -> Nothing
+{- FOURMOLU_ENABLE -}
 
 -- | Looking up SVCB RR first and lookup the target automatically
 --   according to the priority of the values of SVCB RR.
