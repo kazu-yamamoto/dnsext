@@ -39,11 +39,11 @@ run conf@Config{..} = do
             else return $ Credentials []
     let trans =
             [ (cnf_udp, udpServer udpconf, cnf_udp_port)
-            , (cnf_tcp, tcpServer tcpconf, cnf_tcp_port)
-            , (cnf_h2c, http2cServer h2cconf, cnf_h2c_port)
-            , (cnf_h2, http2Server creds h2conf, cnf_h2_port)
-            , (cnf_h3, http3Server creds h3conf, cnf_h3_port)
-            , (cnf_tls, tlsServer creds tlsconf, cnf_tls_port)
+            , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
+            , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
+            , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
+            , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
+            , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     monitor <- getMonitor env conf $ concat statuses
@@ -52,25 +52,17 @@ run conf@Config{..} = do
     conc = foldr concurrently_ $ return ()
     udpconf =
         UdpServerConfig
-            cnf_udp_pipelines_per_socket
-            cnf_udp_workers_per_pipeline
-            cnf_udp_queue_size_per_pipeline
-            cnf_udp_pipeline_share_queue
-    tcpconf =
-        TcpServerConfig
-            cnf_tcp_idle_timeout
-    h2cconf =
-        Http2cServerConfig
-            cnf_h2c_idle_timeout
-    h2conf =
-        Http2ServerConfig
-            cnf_h2_idle_timeout
-    h3conf =
-        Http3ServerConfig
-            cnf_h3_idle_timeout
-    tlsconf =
-        TlsServerConfig
-            cnf_tls_idle_timeout
+            { udp_pipelines_per_socket = cnf_udp_pipelines_per_socket
+            , udp_workers_per_pipeline = cnf_udp_workers_per_pipeline
+            , udp_queue_size_per_pipeline = cnf_udp_queue_size_per_pipeline
+            , udp_pipeline_share_queue = cnf_udp_pipeline_share_queue
+            }
+    vcconf =
+        VcServerConfig
+            { vc_query_max_size = cnf_vc_query_max_size
+            , vc_idle_timeout = cnf_vc_idle_timeout
+            , vc_slowloris_size = cnf_vc_slowloris_size
+            }
 
 main :: IO ()
 main = do

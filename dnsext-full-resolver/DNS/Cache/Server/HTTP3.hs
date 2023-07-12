@@ -24,14 +24,10 @@ import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.Types
 
 ----------------------------------------------------------------
-data Http3ServerConfig = Http3ServerConfig
-    { http3_idle_timeout :: Int
-    }
-
-http3Server :: Credentials -> Http3ServerConfig -> Server
-http3Server creds Http3ServerConfig{..} env port host = do
+http3Server :: Credentials -> VcServerConfig -> Server
+http3Server creds VcServerConfig{..} env port host = do
     (cntget, cntinc) <- newCounters
-    let http3server = T.withManager (http3_idle_timeout * 1000000) $ \mgr ->
+    let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             QUIC.run sconf $ \conn ->
                 H3.run conn (conf mgr) $ doHTTP env cntinc
     return ([http3server], [readCounters cntget])
