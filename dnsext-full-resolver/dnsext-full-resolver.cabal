@@ -34,6 +34,7 @@ library
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
         DNS.Cache.Server.HTTP2
+        DNS.Cache.Server.HTTP3
         DNS.Cache.Server.Pipeline
         DNS.Cache.Server.TCP
         DNS.Cache.Server.TLS
@@ -53,18 +54,21 @@ library
         dnsext-do53,
         dnsext-log,
         dnsext-types,
+        http-types,
         http2,
         http2-tls,
-        http-types,
+        http3,
         iproute,
         network,
         network-run,
         network-udp,
         psqueues,
+        quic,
         random,
         recv,
         stm,
         time,
+        time-manager,
         tls,
         transformers,
         unliftio,
