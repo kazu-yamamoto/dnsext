@@ -253,7 +253,7 @@ iterative_ dc nss0 (x : xs) =
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         msg <- norec dnssecOK sas name A
         let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
-            sharedHandler = subdomainShared dc nss name msg
+            sharedHandler = servsChildZone dc nss name msg
             cacheHandler = cacheNoDelegation zone dnskeys name msg $> noDelegation
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
@@ -272,8 +272,8 @@ maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-subdomainShared :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
-subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
+servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> do
     let soaRRs = rrListWith SOA (DNS.fromRData :: RData -> Maybe DNS.RD_SOA) dom (\_ x -> x) rrs
     case soaRRs of
         [] -> return noDelegation {- not workaround fallbacks -}
@@ -282,11 +282,11 @@ subdomainShared dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> 
         _ : _ : _ -> multipleSOA soaRRs
   where
     verificationError = do
-        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": verification error. invalid SOA:"
+        lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": verification error. invalid SOA:"
         lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
         throwDnsError DNS.ServerFailure
     multipleSOA soaRRs = do
-        lift . logLn Log.WARN $ "subdomainShared: " ++ show dom ++ ": multiple SOAs are found:"
+        lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
         lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
         throwDnsError DNS.ServerFailure
     getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) [] [])
