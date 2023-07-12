@@ -7,6 +7,7 @@ module DNS.Cache.Server (
     http2Server,
     http3Server,
     tlsServer,
+    quicServer,
     Status,
     Server,
     Env,
@@ -16,6 +17,7 @@ module DNS.Cache.Server (
 
 import DNS.Cache.Server.HTTP2
 import DNS.Cache.Server.HTTP3
+import DNS.Cache.Server.QUIC
 import DNS.Cache.Server.TCP
 import DNS.Cache.Server.TLS
 import DNS.Cache.Server.Types

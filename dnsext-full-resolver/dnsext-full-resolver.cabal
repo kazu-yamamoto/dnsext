@@ -36,6 +36,7 @@ library
         DNS.Cache.Server.HTTP2
         DNS.Cache.Server.HTTP3
         DNS.Cache.Server.Pipeline
+        DNS.Cache.Server.QUIC
         DNS.Cache.Server.TCP
         DNS.Cache.Server.TLS
         DNS.Cache.Server.Types

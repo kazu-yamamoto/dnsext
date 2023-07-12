@@ -44,6 +44,7 @@ run conf@Config{..} = do
             , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
             , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
             , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
+            , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     monitor <- getMonitor env conf $ concat statuses
