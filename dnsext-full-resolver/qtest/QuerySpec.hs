@@ -156,8 +156,8 @@ querySpec disableV6NS debug = describe "query" $ do
         printQueryError result
         result `shouldSatisfy` isRight
 
-    it "iterative - long" $ do
-        result <- runIterative root "c.b.a.pt.dns-oarc.net."
+    it "iterative - many" $ do
+        result <- runIterative root "media-router-aol1.prod.g03.yahoodns.net."
         printQueryError result
         result `shouldSatisfy` isRight
 
