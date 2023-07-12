@@ -76,20 +76,17 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
             (,) eresult . convert . Cache.dump <$> getCache_ cxt
         clookup cs n typ = lookup (fromString n, typ) cs
         check cs n typ = lookup (fromString n, typ) cs
+        nodata = maybe False (\(crset, _rank) -> either (const True) (const False) crset)
 
     it "answer - a" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         fmap snd (clookup cs "iij.ad.jp." A) `shouldSatisfy` (>= Just Cache.RankAnswer)
 
-    it "nodata - ns" $ do
+    it "not zone - nodata ns" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
-        check cs "ad.jp." NS `shouldSatisfy` isJust
+        check cs "ad.jp." NS `shouldSatisfy` nodata
 
-    it "no zone sub-domain - nodata - ns" $ do
-        (_, cs) <- getResolveCache "iij.ad.jp." A
-        check cs "ad.jp." NS `shouldSatisfy` isJust
-
-    it "no zone sub-domain - soa" $ do
+    it "not zone - soa of nodata ns" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         check cs "jp." SOA `shouldSatisfy` isJust
 
@@ -156,8 +153,8 @@ querySpec disableV6NS debug = describe "query" $ do
         printQueryError result
         result `shouldSatisfy` isRight
 
-    it "iterative - long" $ do
-        result <- runIterative root "c.b.a.pt.dns-oarc.net."
+    it "iterative - many" $ do
+        result <- runIterative root "media-router-aol1.prod.g03.yahoodns.net."
         printQueryError result
         result `shouldSatisfy` isRight
 
