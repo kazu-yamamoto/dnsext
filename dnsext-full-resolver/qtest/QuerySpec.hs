@@ -76,16 +76,17 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
             (,) eresult . convert . Cache.dump <$> getCache_ cxt
         clookup cs n typ = lookup (fromString n, typ) cs
         check cs n typ = lookup (fromString n, typ) cs
+        nodata = maybe False (\(crset, _rank) -> either (const True) (const False) crset)
 
     it "answer - a" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         fmap snd (clookup cs "iij.ad.jp." A) `shouldSatisfy` (>= Just Cache.RankAnswer)
 
-    it "no zone sub-domain - nodata - ns" $ do
+    it "not zone - nodata ns" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
-        check cs "ad.jp." NS `shouldSatisfy` isJust
+        check cs "ad.jp." NS `shouldSatisfy` nodata
 
-    it "no zone sub-domain - soa" $ do
+    it "not zone - soa of nodata ns" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A
         check cs "jp." SOA `shouldSatisfy` isJust
 
