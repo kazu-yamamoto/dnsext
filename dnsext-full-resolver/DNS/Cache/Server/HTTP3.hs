@@ -12,9 +12,9 @@ import Data.ByteString.Char8 ()
 
 -- other packages
 
-import Network.QUIC.Server (ServerConfig(..))
-import qualified Network.QUIC.Server as QUIC
 import qualified Network.HTTP3.Server as H3
+import Network.QUIC.Server (ServerConfig (..))
+import qualified Network.QUIC.Server as QUIC
 import Network.TLS (Credentials (..))
 import qualified System.TimeManager as T
 
@@ -32,8 +32,8 @@ http3Server :: Credentials -> Http3ServerConfig -> Server
 http3Server creds Http3ServerConfig{..} env port host = do
     (cntget, cntinc) <- newCounters
     let http3server = T.withManager (http3_idle_timeout * 1000000) $ \mgr ->
-          QUIC.run sconf $ \conn ->
-              H3.run conn (conf mgr) $ doHTTP env cntinc
+            QUIC.run sconf $ \conn ->
+                H3.run conn (conf mgr) $ doHTTP env cntinc
     return ([http3server], [readCounters cntget])
   where
     sconf = getServerConfig creds host port "h3"
