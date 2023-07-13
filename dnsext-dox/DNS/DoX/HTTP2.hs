@@ -7,6 +7,7 @@ module DNS.DoX.HTTP2 (
     http2Resolver,
     http2cResolver,
     doHTTP,
+    withTimeout,
 )
 where
 
@@ -26,17 +27,28 @@ import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified UnliftIO.Exception as E
 
+withTimeout :: ResolvInfo -> String -> IO Reply -> IO Result
+withTimeout ri@ResolvInfo{..} proto action = do
+    mres <- ractionTimeout rinfoActions action
+    case mres of
+        Nothing -> E.throwIO TimeoutExpired
+        Just res -> return $ toResult ri proto res
+
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
 http2Resolver path lim ri@ResolvInfo{..} q qctl = do
+    let proto = "H2"
     ident <- ractionGenId rinfoActions
-    H2.run rinfoHostName rinfoPortNumber $
-        doHTTP "H2" ident path lim ri q qctl
+    withTimeout ri proto $
+        H2.run rinfoHostName rinfoPortNumber $
+            doHTTP proto ident path lim ri q qctl
 
 http2cResolver :: ShortByteString -> VCLimit -> Resolver
 http2cResolver path lim ri@ResolvInfo{..} q qctl = do
+    let proto = "H2C"
     ident <- ractionGenId rinfoActions
-    H2.runH2C rinfoHostName rinfoPortNumber $
-        doHTTP "H2C" ident path lim ri q qctl
+    withTimeout ri proto $
+        H2.runH2C rinfoHostName rinfoPortNumber $
+            doHTTP proto ident path lim ri q qctl
 
 doHTTP
     :: String
@@ -46,8 +58,8 @@ doHTTP
     -> ResolvInfo
     -> Question
     -> QueryControls
-    -> Client Result
-doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = do
+    -> Client Reply
+doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
@@ -56,7 +68,7 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right (msg, _) -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ toResult ri proto $ Reply msg tx rx
+                Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
   where
     ~tag =
