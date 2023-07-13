@@ -1,5 +1,6 @@
 module DNS.DoX.Internal (
     http2Resolver,
+    http2cResolver,
     http3Resolver,
     tlsResolver,
     quicResolver,

@@ -5,13 +5,14 @@
 
 module DNS.DoX.HTTP2 (
     http2Resolver,
+    http2cResolver,
     doHTTP,
+    withTimeout,
 )
 where
 
 import DNS.Do53.Client
 import DNS.Do53.Internal
-import DNS.DoX.Common
 import DNS.DoX.Imports
 import qualified DNS.Log as Log
 import DNS.Types
@@ -21,46 +22,33 @@ import qualified Data.ByteString.Builder as BB
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (fromShort)
-import Foreign.Marshal.Alloc (free, mallocBytes)
 import Network.HTTP.Types
-import Network.HTTP2.Client
-import Network.Socket hiding (recvBuf)
-import Network.Socket.BufferPool
-import Network.TLS hiding (HostName)
-import qualified System.TimeManager as T
+import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)
+import qualified Network.HTTP2.TLS.Client as H2
 import qualified UnliftIO.Exception as E
 
+withTimeout :: ResolvInfo -> String -> IO Reply -> IO Result
+withTimeout ri@ResolvInfo{..} proto action = do
+    mres <- ractionTimeout rinfoActions action
+    case mres of
+        Nothing -> E.throwIO TimeoutExpired
+        Just res -> return $ toResult ri proto res
+
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
-http2Resolver path lim ri@ResolvInfo{..} q qctl = E.bracket open close $ \sock ->
-    E.bracket (contextNew sock params) bye $ \ctx -> do
-        handshake ctx
-        ident <- ractionGenId rinfoActions
-        h2resolver ctx ident path lim ri q qctl
-  where
-    open = do
-        s <- openTCP rinfoHostName rinfoPortNumber
-        winhack s
-        return s
-    params = getTLSParams rinfoHostName "h2" False
+http2Resolver path lim ri@ResolvInfo{..} q qctl = do
+    let proto = "H2"
+    ident <- ractionGenId rinfoActions
+    withTimeout ri proto $
+        H2.run rinfoHostName rinfoPortNumber $
+            doHTTP proto ident path lim ri q qctl
 
-winhack :: Socket -> IO ()
-#ifdef mingw32_HOST_OS
-winhack s = setSocketOption s RecvTimeOut 3000000
-#else
-winhack _ = return ()
-#endif
-
-h2resolver :: Context -> Identifier -> ShortByteString -> VCLimit -> Resolver
-h2resolver ctx ident path lim ri@ResolvInfo{..} q qctl =
-    E.bracket (allocConfig ctx 4096) freeConfig $ \conf ->
-        run cliconf conf $ doHTTP "HTTP/2" ident path lim ri q qctl
-  where
-    cliconf =
-        ClientConfig
-            { scheme = "https"
-            , authority = C8.pack rinfoHostName
-            , cacheLimit = 20
-            }
+http2cResolver :: ShortByteString -> VCLimit -> Resolver
+http2cResolver path lim ri@ResolvInfo{..} q qctl = do
+    let proto = "H2C"
+    ident <- ractionGenId rinfoActions
+    withTimeout ri proto $
+        H2.runH2C rinfoHostName rinfoPortNumber $
+            doHTTP proto ident path lim ri q qctl
 
 doHTTP
     :: String
@@ -70,8 +58,8 @@ doHTTP
     -> ResolvInfo
     -> Question
     -> QueryControls
-    -> Client Result
-doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = do
+    -> Client Reply
+doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
@@ -80,7 +68,7 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right (msg, _) -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ toResult ri proto $ Reply msg tx rx
+                Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
   where
     ~tag =
@@ -97,27 +85,13 @@ doHTTP proto ident path lim ri@ResolvInfo{..} q@Question{..} qctl sendRequest = 
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire
-    hdr = clientDoHHeaders wire
+    hdr = clientDoHHeaders tx
     req = requestBuilder methodPost (fromShort path) hdr $ BB.byteString wire
 
-allocConfig :: Context -> Int -> IO Config
-allocConfig ctx bufsiz = do
-    buf <- mallocBytes bufsiz
-    timmgr <- T.initialize $ 30 * 1000000
-    recvN <- makeRecvN "" $ recvTLS ctx
-    let config =
-            Config
-                { confWriteBuffer = buf
-                , confBufferSize = bufsiz
-                , confSendAll = sendTLS ctx
-                , confReadN = recvN
-                , confPositionReadMaker = defaultPositionReadMaker
-                , confTimeoutManager = timmgr
-                }
-    return config
-
--- | Deallocating the resource of the simple configuration.
-freeConfig :: Config -> IO ()
-freeConfig conf = do
-    free $ confWriteBuffer conf
-    T.killManager $ confTimeoutManager conf
+clientDoHHeaders :: Int -> RequestHeaders
+clientDoHHeaders len =
+    [ (hUserAgent, "HaskellQuic/0.0.0")
+    , (hContentType, "application/dns-message")
+    , (hAccept, "application/dns-message")
+    , (hContentLength, C8.pack $ show len)
+    ]

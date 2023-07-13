@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -6,10 +7,8 @@ import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.Types as DNS
-import Data.IP
-import Data.Maybe (mapMaybe)
-import Data.String (fromString)
 import Network.Socket
+import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
 
@@ -32,19 +31,39 @@ run :: Config -> IO ()
 run conf@Config{..} = do
     DNS.runInitIO DNS.addResourceDataForDNSSEC
     env <- getEnv conf
-    (serverLoops, getStatuses) <- getUdpServer udpconf env cnf_udp_port' cnf_bind_addresses
-    monLoops <- getMonitor env conf $ concat getStatuses
-    race_
-        (foldr concurrently_ (return ()) serverLoops)
-        (foldr concurrently_ (return ()) monLoops)
+    creds <-
+        if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
+            then do
+                Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
+                return $ Credentials [cred]
+            else return $ Credentials []
+    let trans =
+            [ (cnf_udp, udpServer udpconf, cnf_udp_port)
+            , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
+            , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
+            , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
+            , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
+            , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
+            , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
+            ]
+    (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
+    monitor <- getMonitor env conf $ concat statuses
+    race_ (conc $ concat servers) (conc monitor)
   where
-    cnf_udp_port' = fromIntegral cnf_udp_port
+    conc = foldr concurrently_ $ return ()
     udpconf =
         UdpServerConfig
-            cnf_udp_pipelines_per_socket
-            cnf_udp_workers_per_pipeline
-            cnf_udp_queue_size_per_pipeline
-            cnf_udp_pipeline_share_queue
+            { udp_pipelines_per_socket = cnf_udp_pipelines_per_socket
+            , udp_workers_per_pipeline = cnf_udp_workers_per_pipeline
+            , udp_queue_size_per_pipeline = cnf_udp_queue_size_per_pipeline
+            , udp_pipeline_share_queue = cnf_udp_pipeline_share_queue
+            }
+    vcconf =
+        VcServerConfig
+            { vc_query_max_size = cnf_vc_query_max_size
+            , vc_idle_timeout = cnf_vc_idle_timeout
+            , vc_slowloris_size = cnf_vc_slowloris_size
+            }
 
 main :: IO ()
 main = do
@@ -56,16 +75,19 @@ main = do
 
 ----------------------------------------------------------------
 
-getUdpServer :: UdpServerConfig -> Env -> PortNumber -> [HostName] -> IO ([IO ()], [[IO Status]])
-getUdpServer conf env port hosts = do
-    hostIPs <- getHostIPs hosts port
-    (loopsList, getStatuses) <- unzip <$> mapM (udpServer conf env port) hostIPs
-    let pLoops = concat loopsList
-
-    return (pLoops, getStatuses)
+getServers
+    :: Env
+    -> [HostName]
+    -> (Bool, Server, Int)
+    -> IO ([IO ()], [IO Status])
+getServers _ _ (False, _, _) = return ([], [])
+getServers env hosts (True, server, port') = do
+    (xss, yss) <- unzip <$> mapM (server env port) hosts
+    let xs = concat xss
+        ys = concat yss
+    return (xs, ys)
   where
-    getHostIPs [] p = getAInfoIPs p
-    getHostIPs hs _ = return $ map fromString hs
+    port = fromIntegral port'
 
 ----------------------------------------------------------------
 
@@ -90,14 +112,3 @@ getEnv Config{..} = do
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv logTriple cnf_disable_v6_ns updateCache tcache
-
-----------------------------------------------------------------
-
-getAInfoIPs :: PortNumber -> IO [IP]
-getAInfoIPs port = do
-    ais <- getAddrInfo Nothing Nothing (Just $ show port)
-    let dgramIP AddrInfo{addrAddress = SockAddrInet _ ha} = Just $ IPv4 $ fromHostAddress ha
-        dgramIP AddrInfo{addrAddress = SockAddrInet6 _ _ ha6 _} = Just $ IPv6 $ fromHostAddress6 ha6
-        dgramIP _ = Nothing
-    return $
-        mapMaybe dgramIP [ai | ai@AddrInfo{addrSocketType = Datagram} <- ais]

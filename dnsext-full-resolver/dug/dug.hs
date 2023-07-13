@@ -62,8 +62,8 @@ options =
         ['d']
         ["dox"]
         ( ReqArg
-            (\dox opts -> opts{optDoX = Short.toShort (C8.pack dox)})
-            "auto|tcp|dot|doq|h2|h3"
+            (\dox opts -> opts{optDoX = convDoX dox})
+            "<proto>"
         )
         "enable DoX"
     , Option
@@ -121,6 +121,7 @@ main = do
     (args, Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
+        putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
     let (at, plus, targets) = divide args
     (dom, typ) <- getDomTyp targets
@@ -216,9 +217,19 @@ getPort (Just x) _ = case readMaybe x of
         putStrLn $ "Port " ++ x ++ " is illegal"
         exitFailure
 
+{- FOURMOLU_DISABLE -}
+convDoX :: String -> ShortByteString
+convDoX dox = case dox' of
+  "http2" -> "h2"
+  "http3" -> "h3"
+  "quic"  -> "doq"
+  "tls"   -> "dot"
+  x       -> Short.toShort x
+  where
+    dox' = C8.pack dox
+
 ----------------------------------------------------------------
 
-{- FOURMOLU_DISABLE -}
 toFlag :: String -> QueryControls
 toFlag "+rec"       = rdFlag FlagSet
 toFlag "+recurse"   = rdFlag FlagSet

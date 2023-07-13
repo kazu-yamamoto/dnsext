@@ -33,6 +33,12 @@ library
         DNS.Cache.Queue
         DNS.Cache.RootServers
         DNS.Cache.RootTrustAnchors
+        DNS.Cache.Server.HTTP2
+        DNS.Cache.Server.HTTP3
+        DNS.Cache.Server.Pipeline
+        DNS.Cache.Server.QUIC
+        DNS.Cache.Server.TCP
+        DNS.Cache.Server.TLS
         DNS.Cache.Server.Types
         DNS.Cache.Server.UDP
 
@@ -49,13 +55,22 @@ library
         dnsext-do53,
         dnsext-log,
         dnsext-types,
+        http-types,
+        http2,
+        http2-tls,
+        http3,
         iproute,
         network,
+        network-run,
         network-udp,
         psqueues,
+        quic,
         random,
+        recv,
         stm,
         time,
+        time-manager,
+        tls,
         transformers,
         unliftio,
         word8
@@ -86,6 +101,7 @@ executable bowline
         parsec,
         split,
         stm,
+        tls,
         unliftio
 
     if (os(windows) && impl(ghc >=9.0))

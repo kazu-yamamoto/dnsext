@@ -33,8 +33,6 @@ import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Types as DNS
 import Network.Socket (
     AddrInfo (..),
-    HostName,
-    PortNumber,
     SockAddr,
     Socket,
     SocketType (Stream),
