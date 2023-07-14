@@ -17,18 +17,18 @@ import Control.Monad (join, when)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
+import Data.IORef (newIORef)
 import Data.List (uncons)
 import Data.Maybe (isJust)
 
 -- other packages
-
 import System.Console.ANSI.Types
 
 -- dns packages
-
 import DNS.Do53.Client (
     QueryControls (..),
  )
+import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.Do53.Memo (
     rankedAnswer,
     rankedAuthority,
@@ -59,6 +59,7 @@ import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
+import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
@@ -223,6 +224,39 @@ runIterative
     -> IO (Either QueryError Delegation)
 runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import System.IO
+-- >>> import qualified DNS.Types.Opaque as Opaque
+-- >>> import DNS.SEC
+-- >>> DNS.runInitIO addResourceDataForDNSSEC
+-- >>> hSetBuffering stdout LineBuffering
+
+-- test env use from doctest
+_newTestEnv :: ([String] -> IO ()) -> IO Env
+_newTestEnv putLines =
+    env <$> newIORef Nothing <*> newConcurrentGenId
+  where
+    (ins, getCache, expire) = (\_ _ _ _ -> pure (), pure $ Cache.empty 0, const $ pure ())
+    (curSec, timeStr) = TimeCache.none
+    env rootRef genId =
+        Env
+            { logLines_ = \_ _ -> putLines
+            , logQSize_ = pure (-1, -1)
+            , logTerminate_ = pure ()
+            , disableV6NS_ = True
+            , insert_ = ins
+            , getCache_ = getCache
+            , expireCache = expire
+            , currentRoot_ = rootRef
+            , currentSeconds_ = curSec
+            , timeString_ = timeStr
+            , idGen_ = genId
+            }
+
+_noLogging :: [String] -> IO ()
+_noLogging = const $ pure ()
+
 -- 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 iterative :: Delegation -> Domain -> DNSQuery Delegation
@@ -311,6 +345,24 @@ fillsDNSSEC dc nss d = do
         throwDnsError DNS.ServerFailure
     return filled
 
+-- | Fill DS for delegation info. The result must be `FilledDS` for success query.
+--
+-- >>> Right dummyKey = Opaque.fromBase64 "dummykey///dummykey///dummykey///dummykey///"
+-- >>> dummyDNSKEY = RD_DNSKEY [ZONE] 3 RSASHA256 $ toPubKey RSASHA256 dummyKey
+-- >>> Right dummyDS_ = Opaque.fromBase16 "0123456789ABCD0123456789ABCD0123456789ABCD0123456789ABCD"
+-- >>> dummyDS = RD_DS 0 RSASHA256 SHA256 dummyDS_
+-- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithAx h1 a1, [DEwithAx h2 a2]) ds [dummyDNSKEY]
+-- >>> parent = withNS2 "org." "a0.org.afilias-nst.info." "199.19.56.1" "a2.org.afilias-nst.info." "199.249.112.1" (FilledDS [dummyDS])
+-- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
+-- >>> isFilled d = case (delegationDS d) of { NotFilledDS _ -> False; FilledDS _ -> True }
+-- >>> env <- _newTestEnv _noLogging
+-- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env mempty
+-- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
+-- Right True
+-- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS ServsChildZone)
+-- Right True
+-- >>> fmap isFilled <$> (runChild $ mkChild $ FilledDS [])
+-- Right True
 fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillDelegationDS dc src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
