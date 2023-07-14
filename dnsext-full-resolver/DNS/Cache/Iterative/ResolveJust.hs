@@ -18,7 +18,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
 import Data.IORef (newIORef)
-import Data.List (uncons)
+import Data.List (isInfixOf, uncons)
 import Data.Maybe (isJust)
 
 -- other packages
@@ -254,11 +254,23 @@ _newTestEnv putLines =
             , idGen_ = genId
             }
 
+_findConsumed :: [String] -> IO ()
+_findConsumed ss
+    | any ("consumes not-filled DS:" `isInfixOf`) ss = putStrLn "consume message found"
+    | otherwise = pure ()
+
 _noLogging :: [String] -> IO ()
 _noLogging = const $ pure ()
 
--- 反復検索
+-- | 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
+--
+-- >>> testIterative dom = do { root <- refreshRoot; iterative root dom }
+-- >>> env <- _newTestEnv _findConsumed
+-- >>> runDNSQuery (testIterative "mew.org.") env mempty $> ()  {- fill-action is not called -}
+--
+-- >>> runDNSQuery (testIterative "arpa.") env mempty $> ()  {- fill-action is called for `ServsChildZone` -}
+-- consume message found
 iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ reverse $ DNS.superDomains n
 
