@@ -226,6 +226,7 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -Wno-incomplete-uni-patterns
 -- >>> import System.IO
 -- >>> import qualified DNS.Types.Opaque as Opaque
 -- >>> import DNS.SEC
