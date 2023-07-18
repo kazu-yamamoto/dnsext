@@ -13,6 +13,7 @@ module DNS.Cache.Iterative.Root (
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (runExceptT, throwE)
 import Control.Monad.Trans.Reader (asks)
 import Data.IORef (atomicWriteIORef, readIORef)
 import Data.Maybe (fromMaybe)
@@ -88,39 +89,36 @@ rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
     lift . logLn Log.DEMO . unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
-    ekeys <- cachedDNSKEY [rootSepDS] ips "."
-    either (return . left) (body ips) ekeys
+    body ips
   where
-    left s = Left $ "rootPriming: " ++ s
-    plogLn lv color s = clogLn lv (Just color) $ "root-priming: " ++ s
-    body ips dnskeys = do
-        msgNS <- norec True ips "." NS
+    throw s = throwE $ "rootPriming: " ++ s
+    liftCXT = lift . lift
+    logResult delegationNS color s = liftCXT $ do
+        clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
+        logLn Log.DEMO $ ppDelegation delegationNS
+    body ips = runExceptT $ do
+        dnskeys <- either throw pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
+        msgNS <- lift $ norec True ips "." NS
 
         (nsps, nsSet, cacheNS, nsGoodSigs) <- withSection rankedAnswer msgNS $ \rrs rank -> do
             let nsps = nsList "." (,) rrs
                 (nss, nsRRs) = unzip nsps
                 rrsigs = rrsigList "." NS rrs
-            (rs, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
-            return (nsps, Set.fromList nss, cacheNS, rrsetGoodSigs rs)
+            (rs, cacheNS) <- liftCXT $ verifyAndCache dnskeys nsRRs rrsigs rank
+            pure (nsps, Set.fromList nss, cacheNS, rrsetGoodSigs rs)
+        let (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
+                (axList False (`Set.member` nsSet) (\_ x -> x) rrs, cacheSection axRRs rank)
 
-        (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
-            let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
-            return (axRRs, cacheSection axRRs rank)
+        Delegation{..} <- maybe (throw "no delegation") pure $ takeDelegationSrc nsps [rootSepDS] axRRs
+        when (null nsGoodSigs) $ do
+            logResult delegationNS Red "verification failed - RRSIG of NS: \".\""
+            throw "DNSSEC verification failed"
 
-        let withDelegation dh = maybe (return $ left "no delegation") dh $ takeDelegationSrc nsps [rootSepDS] axRRs
-        lift $ case nsGoodSigs of
-            [] -> do
-                plogLn Log.DEMO Red "verification failed - RRSIG of NS: \".\""
-                withDelegation $ \(Delegation _ des _ _) -> do
-                    logLn Log.DEMO $ ppDelegation des
-                    return $ left "DNSSEC verification failed"
-            _ : _ -> do
-                cacheNS
-                cacheAX
-                plogLn Log.DEMO Green "verification success - RRSIG of NS: \".\""
-                withDelegation $ \(Delegation dom des dss _) -> do
-                    logLn Log.DEMO $ ppDelegation des
-                    return $ Right $ Delegation dom des dss dnskeys
+        liftCXT $ do
+            cacheNS
+            cacheAX
+        logResult delegationNS Green "verification success - RRSIG of NS: \".\""
+        pure $ Delegation delegationZone delegationNS delegationDS dnskeys
 
     Delegation _dot hintDes _ _ = rootHint
 
