@@ -77,12 +77,14 @@ lookupDelegation dom = do
                     | otherwise -> [DEonlyNS ns {- the case both A and AAAA are miss-hit -}]
                 Just as -> as {- just return address records. null case is wrong cache, so return null to skip this NS -}
         noCachedV4NS es = disableV6NS && null (v4DEntryList es)
+
         fromDEs es
-            | noCachedV4NS es = Nothing
             {- all NS records for A are skipped under disableV6NS, so handle as miss-hit NS case -}
-            | otherwise =
-                (\des -> hasDelegation $ Delegation dom des [] []) <$> uncons es
-        {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
+            | noCachedV4NS es = Nothing
+            --
+            {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
+            | otherwise = (\des -> hasDelegation $ Delegation dom des (NotFilledDS CachedDelegation) []) <$> uncons es
+
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
