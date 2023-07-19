@@ -40,6 +40,7 @@ import DNS.Types (
 import qualified DNS.Types as DNS
 
 -- this package
+import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Resolve
 import DNS.Cache.Iterative.Types
 
@@ -289,7 +290,7 @@ resolveByCache =
         (\_ _ -> pure ((), Nothing, ([], [])))
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
-rrListFromRRset reqDO RRset{..} = case reqDO of
+rrListFromRRset reqDO rs@RRset{..} = case reqDO of
     NoDnssecOK -> rrs
     DnssecOK -> case rrsRDatas of
         [] -> []
@@ -301,5 +302,5 @@ rrListFromRRset reqDO RRset{..} = case reqDO of
         ]
     sigs =
         [ ResourceRecord rrsName RRSIG rrsClass rrsTTL (DNS.toRData sig)
-        | sig <- rrsGoodSigs
+        | sig <- rrsetGoodSigs rs
         ]

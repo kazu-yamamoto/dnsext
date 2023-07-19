@@ -44,9 +44,9 @@ verifyAndCache _ [] _ _ = return (rrsetEmpty, return ())
 verifyAndCache dnskeys rrs@(_ : _) sigs rank = do
     now <- liftIO =<< asks currentSeconds_
     let crrsError [] _ = return (rrsetEmpty, return ())
-        crrsError sortedRRs@(ResourceRecord{..} : _) _ = do
+        crrsError (_ : _) _ = do
             logLines Log.WARN $ "verifyAndCache: no caching RR set:" : map (("\t" ++) . show) rrs
-            return (RRset rrname rrtype rrclass rrttl [DNS.rdata x | x <- sortedRRs] [], return ())
+            return (rrsetEmpty, return ())
     withVerifiedRRset now dnskeys rrs sigs crrsError $
         \_sortedRRs dom typ cls minTTL rds sigrds ->
             return (RRset dom typ cls minTTL rds sigrds, cacheRRset rank dom typ cls minTTL rds sigrds)
@@ -59,12 +59,12 @@ withVerifiedRRset
     -> [ResourceRecord]
     -> [(RD_RRSIG, TTL)]
     -> ([ResourceRecord] -> String -> a)
-    -> ([ResourceRecord] -> Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> a)
+    -> ([ResourceRecord] -> Domain -> TYPE -> CLASS -> TTL -> [RData] -> MayVerifiedRRS -> a)
     -> a
 withVerifiedRRset now dnskeys rrs sigs left right =
     either (left sortedRRs) ($ rightK) $ SEC.canonicalRRsetSorted sortedRRs
   where
-    rightK dom typ cls ttl rds = right sortedRRs dom typ cls minTTL rds sigrds
+    rightK dom typ cls ttl rds = right sortedRRs dom typ cls minTTL rds goodSigRDs
       where
         goodSigs =
             [ rrsig
@@ -73,12 +73,16 @@ withVerifiedRRset now dnskeys rrs sigs left right =
             , Right () <- [SEC.verifyRRSIGsorted (toDNSTime now) key sigrd typ ttl sortedWires]
             ]
         (sigrds, sigTTLs) = unzip goodSigs
+        goodSigRDs
+            | null dnskeys = NotVerifiedRRS {- no way to verify  -}
+            | null sigs = InvalidRRS {- dnskeys is not null, but sigs is null -}
+            | otherwise = ValidRRS sigrds
         expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
         minTTL = minimum $ ttl : sigTTLs ++ map fromIntegral expireTTLs
     (sortedWires, sortedRRs) = unzip $ SEC.sortCanonical rrs
 
 rrsetEmpty :: RRset
-rrsetEmpty = RRset "" (DNS.toTYPE 0) 0 0 [] []
+rrsetEmpty = RRset "" (DNS.toTYPE 0) 0 0 [] NotVerifiedRRS
 
 cacheRRset
     :: Ranking
@@ -87,7 +91,7 @@ cacheRRset
     -> CLASS
     -> TTL
     -> [RData]
-    -> [RD_RRSIG]
+    -> MayVerifiedRRS
     -> ContextT IO ()
 cacheRRset rank dom typ cls ttl rds _sigrds = do
     insertRRSet <- asks insert_

@@ -100,8 +100,8 @@ rootPriming = do
             let nsps = nsList "." (,) rrs
                 (nss, nsRRs) = unzip nsps
                 rrsigs = rrsigList "." NS rrs
-            (RRset{..}, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
-            return (nsps, Set.fromList nss, cacheNS, rrsGoodSigs)
+            (rs, cacheNS) <- lift $ verifyAndCache dnskeys nsRRs rrsigs rank
+            return (nsps, Set.fromList nss, cacheNS, rrsetGoodSigs rs)
 
         (axRRs, cacheAX) <- withSection rankedAdditional msgNS $ \rrs rank -> do
             let axRRs = axList False (`Set.member` nsSet) (\_ x -> x) rrs
@@ -144,7 +144,7 @@ cachedDNSKEY dss aservers dom = do
     doCache rank (seps, dnskeys, rrsigs) = do
         (rrset, cacheDNSKEY) <-
             verifyAndCache (map fst seps) (map snd dnskeys) rrsigs rank
-        if rrsetVerified rrset {- only cache DNSKEY RRset on verification successs -}
+        if rrsetValid rrset {- only cache DNSKEY RRset on verification successs -}
             then cacheDNSKEY *> return (Right $ map fst dnskeys)
             else return $ Left "cachedDNSKEY: no verified RRSIG found"
 

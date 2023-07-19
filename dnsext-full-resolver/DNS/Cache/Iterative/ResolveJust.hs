@@ -342,7 +342,7 @@ servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \rrs rank -> d
         | null dnskey = return $ hasDelegation d
         | otherwise = do
             (rrset, _) <- lift $ verifyAndCache dnskey soaRRs (rrsigList dom SOA rrs) rank
-            if rrsetVerified rrset
+            if rrsetValid rrset
                 then return $ hasDelegation d
                 else verificationError
       where
@@ -418,6 +418,6 @@ queryDS dnskeys ips dom = do
         (rrset, cacheDS) <- lift $ verifyAndCache dnskeys dsRRs rrsigs rank
         let verifyResult
                 | null dsrds = return (Right [], Yellow, "no DS, so no verify")
-                | rrsetVerified rrset = lift cacheDS *> return (Right dsrds, Green, "verification success - RRSIG of DS")
+                | rrsetValid rrset = lift cacheDS *> return (Right dsrds, Green, "verification success - RRSIG of DS")
                 | otherwise = return (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
         verifyResult

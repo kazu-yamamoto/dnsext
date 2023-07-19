@@ -50,8 +50,11 @@ rrsigList dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom p
   where
     pair rd rr = (rd, rrttl rr)
 
-rrsetVerified :: RRset -> Bool
-rrsetVerified = not . null . rrsGoodSigs
+rrsetGoodSigs :: RRset -> [RD_RRSIG]
+rrsetGoodSigs = mayVerifiedRRS [] [] id . rrsMayVerified
+
+rrsetValid :: RRset -> Bool
+rrsetValid = mayVerifiedRRS False False (const True) . rrsMayVerified
 
 sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
 sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd

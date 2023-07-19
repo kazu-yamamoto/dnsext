@@ -123,13 +123,13 @@ delegationWithCache zoneDom dnskeys dom msg = do
         let (verifyMsg, verifyColor, raiseOnFailure)
                 | null nsps = ("no delegation", Nothing, pure ())
                 | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
-                | rrsetVerified rrset = ("delegation - verification success - RRSIG of DS", Just Green, pure ())
+                | rrsetValid rrset = ("delegation - verification success - RRSIG of DS", Just Green, pure ())
                 | otherwise = ("delegation - verification failed - RRSIG of DS", Just Red, throwDnsError DNS.ServerFailure)
         return
             ( verifyMsg
             , verifyColor
             , raiseOnFailure
-            , if rrsetVerified rrset then dsrds else []
+            , if rrsetValid rrset then dsrds else []
             , cacheDS
             )
 

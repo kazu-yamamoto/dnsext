@@ -21,7 +21,7 @@ module DNS.Cache.Iterative (
     printResult,
     refreshRoot,
     rootPriming,
-    rrsetVerified,
+    rrsetValid,
 ) where
 
 import DNS.Cache.Iterative.API

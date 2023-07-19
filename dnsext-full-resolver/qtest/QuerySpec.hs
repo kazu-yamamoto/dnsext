@@ -129,7 +129,7 @@ querySpec disableV6NS debug = describe "query" $ do
           where
             rcode = DNS.rcode $ DNS.flags $ DNS.header msg
         verified rrsets
-            | all Iterative.rrsetVerified rrsets = Verified
+            | all Iterative.rrsetValid rrsets = Verified
             | otherwise = NotVerified
         checkVAnswer (msg, (vans, _))
             | null vans = VEmpty rcode
