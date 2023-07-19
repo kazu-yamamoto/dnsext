@@ -10,6 +10,7 @@ module DNS.Cache.Iterative.Resolve (
 -- GHC packages
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
+import Data.Functor (($>))
 import Data.List (uncons)
 
 -- other packages
@@ -43,7 +44,7 @@ import DNS.Cache.Iterative.ResolveJust
 import DNS.Cache.Iterative.Rev
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import DNS.Cache.Iterative.Verify
+import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Log as Log
 
 -- 最終的な解決結果を得る
@@ -181,30 +182,20 @@ resolveCNAME bn = do
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
-resolveTYPE
-    :: Domain
-    -> TYPE
-    -> DNSQuery
-        ( DNSMessage
-        , Maybe (Domain, RRset)
-        , ([RRset], [RRset])
-        ) {- result msg, cname, verified answer, verified authority -}
+{- returns: result msg, cname, verified answer, verified authority -}
+resolveTYPE :: Domain -> TYPE -> DNSQuery (DNSMessage, Maybe (Domain, RRset), ([RRset], [RRset]))
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveExact bn typ
-    let checkTypeRR =
-            when (any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg) $
-                throwDnsError DNS.UnexpectedRDATA -- CNAME と目的の TYPE が同時に存在した場合はエラー
-    withSection rankedAnswer msg $ \rrs rank -> do
-        let (cnames, cnameRRs) = unzip $ cnameList bn (,) rrs
-            noCNAME = do
-                (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
-            withCNAME cn = do
-                (cnameRRset, cacheCNAME) <- verifyAndCache delegationDNSKEY cnameRRs (rrsigList bn CNAME rrs) rank
-                cacheCNAME
-                return (msg, Just (cn, cnameRRset), ([], []))
-        case cnames of
-            [] -> noCNAME
-            cn : _ -> checkTypeRR *> lift (withCNAME cn)
+    let cnDomain rr = DNS.rdataField (rdata rr) DNS.cname_domain
+        nullCNAME = pure $ (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
+        ncCNAME = pure $ pure (msg, Nothing, ([], []))
+        ansHasTYPE = any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg
+        mkResult cnames cnameRRset cacheCNAME = pure $ do
+            let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
+            when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
+            lift cacheCNAME $> (msg, cninfo, ([], []))
+    verify <- lift $ Verify.withCanonical delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
+    verify
 
 {-# WARNING
     recoverRRset
