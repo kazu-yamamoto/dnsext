@@ -20,6 +20,7 @@ module DNS.Cache.Iterative (
     runIterative,
     printResult,
     refreshRoot,
+    rootPriming,
     rrsetVerified,
 ) where
 

@@ -3,6 +3,7 @@
 
 module DNS.Cache.Iterative.Root (
     refreshRoot,
+    rootPriming,
     cachedDNSKEY,
     takeDEntryIPs,
     rootHint,

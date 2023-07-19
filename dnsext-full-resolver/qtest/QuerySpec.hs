@@ -104,8 +104,7 @@ querySpec disableV6NS debug = describe "query" $ do
             | otherwise = \_ _ _ -> pure ()
     cxt <- runIO $ newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
-    let refreshRoot = runDNSQuery Iterative.refreshRoot cxt mempty
-        runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
+    let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty
         runResolve n ty =
             (snd <$>)
@@ -140,13 +139,11 @@ querySpec disableV6NS debug = describe "query" $ do
         checkResult = either (const Failed) (checkAnswer . fst)
 
     it "root-priming" $ do
-        result <- refreshRoot
+        result <- runDNSQuery Iterative.rootPriming cxt mempty
         printQueryError result
-        result `shouldSatisfy` isRight
+        either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
-    root <-
-        runIO $
-            either (fail . ("root-priming error: " ++) . show) return =<< refreshRoot
+    root <- runIO . (either (fail . ("refresh-root error: " ++) . show) pure =<<) $ runDNSQuery Iterative.refreshRoot cxt mempty
 
     it "iterative" $ do
         result <- runIterative root "iij.ad.jp."
