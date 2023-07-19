@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (runExceptT, throwE)
 import Control.Monad.Trans.Reader (asks)
+import Data.Functor (($>))
 import Data.IORef (atomicWriteIORef, readIORef)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
@@ -30,14 +31,12 @@ import DNS.Do53.Memo (
 import DNS.SEC (
     RD_DNSKEY,
     RD_DS (..),
-    RD_RRSIG (..),
     TYPE (DNSKEY),
  )
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types (
     Domain,
     ResourceRecord (..),
-    TTL,
     TYPE (NS),
  )
 import qualified DNS.Types as DNS
@@ -131,31 +130,31 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY [] _ _ = return $ Left "cachedDSNKEY: no DS entry"
+cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = do
     msg <- norec True aservers dom DNSKEY
     let rcode = DNS.rcode $ DNS.flags $ DNS.header msg
     lift $ case rcode of
-        DNS.NoErr -> withSection rankedAnswer msg $ \rrs rank ->
-            either (return . Left) (doCache rank) $ verifySEP dss dom rrs
-        _ -> return $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
+        DNS.NoErr -> withSection rankedAnswer msg $ \srrs rank ->
+            either (pure . Left) (verifyDNSKEY srrs rank) $ verifySEP dss dom srrs
+        _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
-    doCache rank (seps, dnskeys, rrsigs) = do
-        (rrset, cacheDNSKEY) <-
-            verifyAndCache (map fst seps) (map snd dnskeys) rrsigs rank
-        if rrsetValid rrset {- only cache DNSKEY RRset on verification successs -}
-            then cacheDNSKEY *> return (Right $ map fst dnskeys)
-            else return $ Left "cachedDNSKEY: no verified RRSIG found"
+    cachedResult krds dnskeyRRset cacheDNSKEY
+        | rrsetValid dnskeyRRset = cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
+        | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
+    verifyDNSKEY srrs rank sepps = do
+        now <- liftIO =<< asks currentSeconds_
+        let dnskeyRD = DNS.fromRData . rdata
+            nullDNSKEY = pure $ Left "cachedDNSKEY: null" {- guarded by verifySEP, null case, SEP is null too -}
+            ncDNSKEY _rrs s = pure $ Left $ "cachedDNSKEY: not canonical: " ++ s
+        Verify.withCanonical' now (map fst sepps) dom DNSKEY dnskeyRD srrs rank nullDNSKEY ncDNSKEY cachedResult
 
 verifySEP
     :: [RD_DS]
     -> Domain
     -> [ResourceRecord]
-    -> Either String ([(RD_DNSKEY, RD_DS)], [(RD_DNSKEY, ResourceRecord)], [(RD_RRSIG, TTL)])
+    -> Either String ([(RD_DNSKEY, RD_DS)])
 verifySEP dss dom rrs = do
-    let rrsigs = rrsigList dom DNSKEY rrs
-    when (null rrsigs) $ Left $ verifyError "no RRSIG found for DNSKEY"
-
     let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
         seps =
             [ (key, ds)
@@ -163,11 +162,8 @@ verifySEP dss dom rrs = do
             , ds <- dss
             , Right () <- [SEC.verifyDS dom key ds]
             ]
-    when (null seps) $ Left $ verifyError "no DNSKEY matches with DS"
-
-    return (seps, dnskeys, rrsigs)
-  where
-    verifyError s = "verifySEP: " ++ s
+    when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
+    pure seps
 
 -- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
 rootHint :: Delegation
