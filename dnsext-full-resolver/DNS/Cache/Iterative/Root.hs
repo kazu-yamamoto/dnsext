@@ -49,7 +49,6 @@ import DNS.Cache.Iterative.Norec
 import DNS.Cache.Iterative.Random
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import DNS.Cache.Iterative.Verify
 import qualified DNS.Cache.Iterative.Verify as Verify
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.RootTrustAnchors (rootSepDS)
