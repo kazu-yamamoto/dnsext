@@ -58,7 +58,6 @@ import DNS.Cache.Iterative.Random
 import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import DNS.Cache.Iterative.Verify
 import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Cache.TimeCache as TimeCache
 import qualified DNS.Log as Log
