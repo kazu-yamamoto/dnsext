@@ -51,6 +51,7 @@ import DNS.Cache.Iterative.Random
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import DNS.Cache.Iterative.Verify
+import qualified DNS.Cache.Iterative.Verify as Verify
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
@@ -96,29 +97,29 @@ rootPriming = do
     logResult delegationNS color s = liftCXT $ do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
         logLn Log.DEMO $ ppDelegation delegationNS
+    nullNS = pure $ throw "no NS RRs"
+    ncNS = pure $ throw "not canonical NS RRs"
+    pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
+    mkVerify dnskeys msgNS = Verify.withCanonical dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+        \nsps nsRRset cacheNS -> pure $ do
+            let nsSet = Set.fromList $ map fst nsps
+                (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
+                    (axList False (`Set.member` nsSet) (\_ rr -> rr) rrs, cacheSection axRRs rank)
+
+            Delegation{..} <- maybe (throw "no delegation") pure $ takeDelegationSrc nsps [rootSepDS] axRRs
+            when (not $ rrsetValid nsRRset) $ do
+                logResult delegationNS Red "verification failed - RRSIG of NS: \".\""
+                throw "DNSSEC verification failed"
+
+            liftCXT $ cacheNS *> cacheAX
+            logResult delegationNS Green "verification success - RRSIG of NS: \".\""
+            pure $ Delegation delegationZone delegationNS delegationDS dnskeys
+
     body ips = runExceptT $ do
         dnskeys <- either throw pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
         msgNS <- lift $ norec True ips "." NS
-
-        (nsps, nsSet, cacheNS, nsGoodSigs) <- withSection rankedAnswer msgNS $ \rrs rank -> do
-            let nsps = nsList "." (,) rrs
-                (nss, nsRRs) = unzip nsps
-                rrsigs = rrsigList "." NS rrs
-            (rs, cacheNS) <- liftCXT $ verifyAndCache dnskeys nsRRs rrsigs rank
-            pure (nsps, Set.fromList nss, cacheNS, rrsetGoodSigs rs)
-        let (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
-                (axList False (`Set.member` nsSet) (\_ x -> x) rrs, cacheSection axRRs rank)
-
-        Delegation{..} <- maybe (throw "no delegation") pure $ takeDelegationSrc nsps [rootSepDS] axRRs
-        when (null nsGoodSigs) $ do
-            logResult delegationNS Red "verification failed - RRSIG of NS: \".\""
-            throw "DNSSEC verification failed"
-
-        liftCXT $ do
-            cacheNS
-            cacheAX
-        logResult delegationNS Green "verification success - RRSIG of NS: \".\""
-        pure $ Delegation delegationZone delegationNS delegationDS dnskeys
+        verify <- liftCXT $ mkVerify dnskeys msgNS
+        verify
 
     Delegation _dot hintDes _ _ = rootHint
 
