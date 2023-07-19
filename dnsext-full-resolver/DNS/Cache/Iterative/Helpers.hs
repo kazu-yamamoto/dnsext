@@ -56,10 +56,6 @@ rrsetGoodSigs = mayVerifiedRRS [] [] id . rrsMayVerified
 rrsetValid :: RRset -> Bool
 rrsetValid = mayVerifiedRRS False False (const True) . rrsMayVerified
 
-{-# DEPRECATED rrsetVerified "use rrsetValid instead of this" #-}
-rrsetVerified :: RRset -> Bool
-rrsetVerified = rrsetValid
-
 sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
 sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd
 
