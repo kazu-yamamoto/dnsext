@@ -109,7 +109,8 @@ querySpec disableV6NS debug = describe "query" $ do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
-    let printQueryError :: Show e => Either e a -> IO ()
+    let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure
+        printQueryError :: Show e => Either e a -> IO ()
         printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
         _pprResult (msg, (ans, auth)) =
             unlines $
@@ -139,7 +140,9 @@ querySpec disableV6NS debug = describe "query" $ do
         printQueryError result
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
-    root <- runIO . (either (fail . ("refresh-root error: " ++) . show) pure =<<) $ runDNSQuery Iterative.refreshRoot cxt mempty
+    root <- runIO $ do
+        icxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
+        failLeft "refresh-root error" =<< runDNSQuery Iterative.refreshRoot icxt mempty
 
     it "iterative" $ do
         result <- runIterative root "iij.ad.jp."
