@@ -65,9 +65,7 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
             cxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
-            eresult <-
-                (snd <$>)
-                    <$> Iterative.runResolve cxt (fromString n) ty mempty
+            eresult <- fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -106,9 +104,7 @@ querySpec disableV6NS debug = describe "query" $ do
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
     let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty
-        runResolve n ty =
-            (snd <$>)
-                <$> Iterative.runResolve cxt (fromString n) ty mempty
+        runResolve n ty = fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
         getReply n ty ident = do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
