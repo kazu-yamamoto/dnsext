@@ -180,6 +180,7 @@ test-suite spec
         dnsext-dnssec,
         dnsext-do53,
         dnsext-full-resolver,
+        dnsext-log,
         dnsext-types,
         hspec
 

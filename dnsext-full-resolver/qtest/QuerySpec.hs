@@ -12,6 +12,8 @@ import Data.Maybe (isJust, isNothing)
 import Data.String (fromString)
 import System.Environment (lookupEnv)
 
+import qualified DNS.Log as Log
+
 import DNS.Cache.Iterative (
     Delegation (..),
     Env (..),
@@ -48,9 +50,14 @@ spec = do
     disableV6NS <- getEnvBool "DISABLE_V6_NS"
     debug <- getEnvBool "QTEST_DEBUG"
     runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
+    let debugLog = do
+            (putLines, _, _) <- Log.new Log.Stdout Log.DEBUG
+            pure $ \lv c xs -> putLines lv c [show lv ++ ": " ++ x | x <- xs]
+        quiet = \_ _ _ -> pure ()
+    putLines <- if debug then runIO debugLog else pure quiet
     envSpec
-    cacheStateSpec disableV6NS
-    querySpec disableV6NS debug
+    cacheStateSpec disableV6NS putLines
+    querySpec disableV6NS putLines
 
 envSpec :: Spec
 envSpec = describe "env" $ do
@@ -58,16 +65,14 @@ envSpec = describe "env" $ do
         let sp p = case p of Delegation _ _ _ _ -> True -- check not error
         rootHint `shouldSatisfy` sp
 
-cacheStateSpec :: Bool -> Spec
-cacheStateSpec disableV6NS = describe "cache-state" $ do
+cacheStateSpec :: Bool -> Log.PutLines -> Spec
+cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
-            eresult <-
-                (snd <$>)
-                    <$> Iterative.runResolve cxt (fromString n) ty mempty
+            cxt <- newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
+            eresult <- fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -94,26 +99,22 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
         (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
         check cs "arpa." NS `shouldSatisfy` isNothing
 
-querySpec :: Bool -> Bool -> Spec
-querySpec disableV6NS debug = describe "query" $ do
+querySpec :: Bool -> Log.PutLines -> Spec
+querySpec disableV6NS putLines = describe "query" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
-    let putLines
-            | debug = \lv _ xs -> putStr $ unlines [show lv ++ ": " ++ x | x <- xs]
-            | otherwise = \_ _ _ -> pure ()
     cxt <- runIO $ newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
     let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty
-        runResolve n ty =
-            (snd <$>)
-                <$> Iterative.runResolve cxt (fromString n) ty mempty
+        runResolve n ty = fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
         getReply n ty ident = do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
 
-    let printQueryError :: Show e => Either e a -> IO ()
+    let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure
+        printQueryError :: Show e => Either e a -> IO ()
         printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
         _pprResult (msg, (ans, auth)) =
             unlines $
@@ -143,7 +144,9 @@ querySpec disableV6NS debug = describe "query" $ do
         printQueryError result
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
-    root <- runIO . (either (fail . ("refresh-root error: " ++) . show) pure =<<) $ runDNSQuery Iterative.refreshRoot cxt mempty
+    root <- runIO $ do
+        icxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
+        failLeft "refresh-root error" =<< runDNSQuery Iterative.refreshRoot icxt mempty
 
     it "iterative" $ do
         result <- runIterative root "iij.ad.jp."
