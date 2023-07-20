@@ -12,6 +12,8 @@ import Data.Maybe (isJust, isNothing)
 import Data.String (fromString)
 import System.Environment (lookupEnv)
 
+import qualified DNS.Log as Log
+
 import DNS.Cache.Iterative (
     Delegation (..),
     Env (..),
@@ -48,9 +50,14 @@ spec = do
     disableV6NS <- getEnvBool "DISABLE_V6_NS"
     debug <- getEnvBool "QTEST_DEBUG"
     runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
+    let debugLog = do
+            (putLines, _, _) <- Log.new Log.Stdout Log.DEBUG
+            pure $ \lv c xs -> putLines lv c [show lv ++ ": " ++ x | x <- xs]
+        quiet = \_ _ _ -> pure ()
+    putLines <- if debug then runIO debugLog else pure quiet
     envSpec
     cacheStateSpec disableV6NS
-    querySpec disableV6NS debug
+    querySpec disableV6NS putLines
 
 envSpec :: Spec
 envSpec = describe "env" $ do
@@ -92,14 +99,11 @@ cacheStateSpec disableV6NS = describe "cache-state" $ do
         (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
         check cs "arpa." NS `shouldSatisfy` isNothing
 
-querySpec :: Bool -> Bool -> Spec
-querySpec disableV6NS debug = describe "query" $ do
+querySpec :: Bool -> Log.PutLines -> Spec
+querySpec disableV6NS putLines = describe "query" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
-    let putLines
-            | debug = \lv _ xs -> putStr $ unlines [show lv ++ ": " ++ x | x <- xs]
-            | otherwise = \_ _ _ -> pure ()
     cxt <- runIO $ newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
     cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
     let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
