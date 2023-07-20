@@ -56,7 +56,7 @@ spec = do
         quiet = \_ _ _ -> pure ()
     putLines <- if debug then runIO debugLog else pure quiet
     envSpec
-    cacheStateSpec disableV6NS
+    cacheStateSpec disableV6NS putLines
     querySpec disableV6NS putLines
 
 envSpec :: Spec
@@ -65,13 +65,13 @@ envSpec = describe "env" $ do
         let sp p = case p of Delegation _ _ _ _ -> True -- check not error
         rootHint `shouldSatisfy` sp
 
-cacheStateSpec :: Bool -> Spec
-cacheStateSpec disableV6NS = describe "cache-state" $ do
+cacheStateSpec :: Bool -> Log.PutLines -> Spec
+cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) disableV6NS updateCache tcache
+            cxt <- newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
             eresult <- fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
