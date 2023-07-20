@@ -110,8 +110,8 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     (sigrds, sigTTLs) = unzip goodSigs
     goodSigRDs
         | null dnskeys = NotVerifiedRRS {- no way to verify  -}
-        | null sigs = InvalidRRS {- dnskeys is not null, but sigs is null -}
-        | null sigrds = InvalidRRS {- no good signature -}
+        | null sigs = InvalidRRS "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
+        | null sigrds = InvalidRRS "no good sigs:" {- no good signatures -}
         | otherwise = ValidRRS sigrds
 
 {- get not verified canonical RRset -}

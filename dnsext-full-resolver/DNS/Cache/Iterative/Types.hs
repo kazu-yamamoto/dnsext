@@ -133,14 +133,14 @@ throwDnsError = throwE . DnsError
 {- FOURMOLU_DISABLE -}
 data MayVerifiedRRS
     = NotVerifiedRRS       {- not judged valid or invalid -}
-    | InvalidRRS           {- RRSIG found, but no RRSIG is passed -}
+    | InvalidRRS String    {- RRSIG found, but no RRSIG is passed -}
     | ValidRRS [RD_RRSIG]  {- any RRSIG is passed. [RD_RRSIG] should be not null -}
     deriving (Eq, Show)
 
-mayVerifiedRRS :: a -> a -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
+mayVerifiedRRS :: a -> (String -> a) -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
 mayVerifiedRRS notVerified invalid valid m = case m of
     NotVerifiedRRS  ->  notVerified
-    InvalidRRS      ->  invalid
+    InvalidRRS es   ->  invalid es
     ValidRRS sigs   ->  valid sigs
 {- FOURMOLU_ENABLE -}
 
