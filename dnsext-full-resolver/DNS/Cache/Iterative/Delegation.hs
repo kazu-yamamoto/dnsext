@@ -13,6 +13,7 @@ module DNS.Cache.Iterative.Delegation (
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Function (on)
+import Data.Functor (($>))
 import Data.List (groupBy, sort, uncons)
 import qualified Data.Set as Set
 
@@ -42,7 +43,7 @@ import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import DNS.Cache.Iterative.Verify
+import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Log as Log
 
 newtype GMayDelegation a
@@ -115,36 +116,28 @@ nsDomain (DEonlyNS dom) = dom
 delegationWithCache
     :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
-    (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- withSection rankedAuthority msg $ \rrs rank -> do
-        let (dsrds, dsRRs) = unzip $ rrListWith DS DNS.fromRData dom (,) rrs
-        (rrset, cacheDS) <-
-            lift $ verifyAndCache dnskeys dsRRs (rrsigList dom DS rrs) rank
-
-        let (verifyMsg, verifyColor, raiseOnFailure)
-                | null nsps = ("no delegation", Nothing, pure ())
-                | null dsrds = ("delegation - no DS, so no verify", Just Yellow, pure ())
-                | rrsetValid rrset = ("delegation - verification success - RRSIG of DS", Just Green, pure ())
-                | otherwise = ("delegation - verification failed - RRSIG of DS", Just Red, throwDnsError DNS.ServerFailure)
-        return
-            ( verifyMsg
-            , verifyColor
-            , raiseOnFailure
-            , if rrsetValid rrset then dsrds else []
-            , cacheDS
-            )
-
+    (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- lift verify
     let found x = do
             cacheDS
             cacheNS
             cacheAdds
+            clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             return x
 
-    lift . clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
     raiseOnFailure
-    lift . maybe (pure noDelegation) (fmap hasDelegation . found) $
+    lift . maybe (notFound $> noDelegation) (fmap hasDelegation . found) $
         takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
   where
+    verify = Verify.withCanonical dnskeys rankedAuthority msg dom DS fromDS nullDS ncDS result
+    fromDS = DNS.fromRData . rdata
+    nullDS = pure ("delegation - no DS, so no verify", Just Yellow, pure (), [], pure ()) {- TODO: NoData DS negative cache -}
+    ncDS = pure ("delegation - not canonical DS", Just Red, throwDnsError DNS.ServerFailure, [], pure ())
+    result dsrds dsRRset cacheDS
+        | rrsetValid dsRRset = pure ("delegation - verification success - RRSIG of DS", Just Green, pure (), dsrds, cacheDS)
+        | otherwise = pure ("delegation - verification failed - RRSIG of DS", Just Red, throwDnsError DNS.ServerFailure, [], cacheDS)
+
+    notFound = clogLn Log.DEMO Nothing $ "no delegation: " ++ domTraceMsg
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
