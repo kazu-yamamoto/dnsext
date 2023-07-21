@@ -134,16 +134,6 @@ sortRDataCanonical rrs =
   where
     putLenRData = with16Length . putRData Canonical . rdata
 
-{-# WARNING sortCanonical "use sortRDataCanonical for input of verifyRRSIGwith, and verifyRRSIGsorted" #-}
-sortCanonical :: [ResourceRecord] -> [(SPut (), ResourceRecord)]
-sortCanonical rrs = map snd sorted
-  where
-    sorted =
-        sortOn
-            fst
-            [ (runSPut sput, (sput, rr)) | rr <- rrs, let sput = putResourceRecord Canonical rr
-            ]
-
 {- assume sorted input. generalized RRset with CPS -}
 canonicalRRsetSorted
     :: [ResourceRecord]
