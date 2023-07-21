@@ -111,8 +111,23 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     goodSigRDs
         | null dnskeys = NotVerifiedRRS {- no way to verify  -}
         | null sigs = InvalidRRS "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
-        | null sigrds = InvalidRRS "no good sigs:" {- no good signatures -}
+        | null sigrds = InvalidRRS noValids {- no good signatures -}
         | otherwise = ValidRRS sigrds
+    noValids
+        | null verifyErrors = unlines $ "no match key-tags:" : map ("  " ++) showKeysSigs
+        | otherwise = unlines $ "no good sigs:" : verifyErrors
+    showKeysSigs = [showKey key (SEC.keyTag key) | key <- dnskeys] ++ [showSig sigrd | (sigrd, _) <- sigs]
+    verifyErrors =
+        [ s
+        | (sigrd, _) <- sigs
+        , key <- dnskeys
+        , let dnskeyTag = SEC.keyTag key
+        , dnskeyTag == rrsig_key_tag sigrd
+        , Left em <- [verify key sigrd]
+        , s <- ["  error: " ++ em, "    " ++ show sigrd, "    " ++ showKey key dnskeyTag]
+        ]
+    showSig sigrd = "rrsig: " ++ show sigrd
+    showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
 
 {- get not verified canonical RRset -}
 canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
