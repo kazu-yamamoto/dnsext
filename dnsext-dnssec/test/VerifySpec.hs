@@ -23,6 +23,7 @@ spec = do
         it "SHA384" $ caseDS dsSHA384
     describe "verify RRSIG" $ do
         it "RSA/SHA256" $ caseRRSIG rsaSHA256
+        it "RSA/SHA256 Reconstruction" $ caseRRSIG rsaSHA256_RECONS
         it "RSA/SHA256 RRset" $ caseRRSIG rsaSHA256_RRset
         it "RSA/SHA512" $ caseRRSIG rsaSHA512
         it "ECDSA/P256" $ caseRRSIG ecdsaP256
@@ -276,6 +277,53 @@ rsaSHA256 =
         rd_rrsig'
             A 8 3
             3600
+            1893456000 946684800
+            9033
+            "example.net."
+            " kRCOH6u7l0QGy9qpC9 \
+            \ l1sLncJcOKFLJ7GhiUOibu4teYp5VE9RncriShZNz85mwlMgNEa \
+            \ cFYK/lPtPiVYP4bwg== "
+
+{- "Reconstructing the Signed Data"
+   https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
+   applying RRSIG original TTL on verification -}
+rsaSHA256_RECONS :: RRSIG_CASE
+rsaSHA256_RECONS =
+    ( ResourceRecord
+        { rrname = "example.net."
+        , rrttl = 3600
+        , rrclass = classIN
+        , rrtype = DNSKEY
+        , rdata = key_rd
+        }
+    ,
+        [ ResourceRecord
+            { rrname = "www.example.net."
+            , rrttl = 1800 {- value different from original TTL -}
+            , rrclass = classIN
+            , rrtype = A
+            , rdata = rd_a $ read "192.0.2.91"
+            }
+        ]
+    , ResourceRecord
+        { rrname = "www.example.net."
+        , rrttl = 1200
+        , rrclass = classIN
+        , rrtype = RRSIG
+        , rdata = sig_rd
+        }
+    )
+  where
+    key_rd =
+        rd_dnskey'
+            256 3 8
+            " AwEAAcFcGsaxxdgiuuGmCkVI \
+            \ my4h99CqT7jwY3pexPGcnUFtR2Fh36BponcwtkZ4cAgtvd4Qs8P \
+            \ kxUdp6p/DlUmObdk= "
+    sig_rd =
+        rd_rrsig'
+            A 8 3
+            3600 {- original TTL -}
             1893456000 946684800
             9033
             "example.net."
