@@ -86,6 +86,8 @@ withVerifiedRRset
 withVerifiedRRset now dnskeys (RRset{..}, sortedWires) sigs vk =
     vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas goodSigRDs
   where
+    expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
+    minTTL = minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs
     verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd rrsType rrsTTL sortedWires
     goodSigs =
         [ rrsig
@@ -99,8 +101,6 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedWires) sigs vk =
         | null sigs = InvalidRRS {- dnskeys is not null, but sigs is null -}
         | null sigrds = InvalidRRS {- no good signature -}
         | otherwise = ValidRRS sigrds
-    expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
-    minTTL = minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs
 
 {- get not verified canonical RRset -}
 canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
