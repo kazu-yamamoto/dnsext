@@ -237,6 +237,7 @@ caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure
       where
         rd = rdata rr
 
+{- FOURMOLU_DISABLE -}
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256 :: RRSIG_CASE
 rsaSHA256 =
@@ -267,20 +268,15 @@ rsaSHA256 =
   where
     key_rd =
         rd_dnskey'
-            256
-            3
-            8
+            256 3 8
             " AwEAAcFcGsaxxdgiuuGmCkVI \
             \ my4h99CqT7jwY3pexPGcnUFtR2Fh36BponcwtkZ4cAgtvd4Qs8P \
             \ kxUdp6p/DlUmObdk= "
     sig_rd =
         rd_rrsig'
-            A
-            8
-            3
+            A 8 3
             3600
-            1893456000
-            946684800
+            1893456000 946684800
             9033
             "example.net."
             " kRCOH6u7l0QGy9qpC9 \
@@ -323,21 +319,16 @@ rsaSHA256_RRset =
   where
     key_rd =
         rd_dnskey'
-            256
-            3
-            8
+            256 3 8
             " AwEAAdyl8rJAwIXpgJn4HKW9mIhlJQHjLkq91UL+qcfiFkMmQoIxCuDc \
             \ RBKgSfdgSavRThrttFGn6qFHSYDr2NmbiDkQwmSksnH13UTUK+hbPUev \
             \ LOa76MchHxvA+GNkulUcHEFdp+ic2QAvGnahrzz9iMCTsA7y3UOHJS9V \
             \ sxFwoPhX "
     sig_rd =
         rd_rrsig'
-            A
-            8
-            4
+            A 8 4
             600
-            1680189006
-            1677597006
+            1680189006 1677597006
             2508
             "iij.ad.jp."
             " kgV2bxld5SLc3M7kVFl1QD3cKw60T71iaI7OAgcBsgAW84vvRUY/hp0v \
@@ -375,21 +366,16 @@ rsaSHA512 =
   where
     key_rd =
         rd_dnskey'
-            256
-            3
-            10
+            256 3 10
             " AwEAAdHoNTOW+et86KuJOWRD \
             \ p1pndvwb6Y83nSVXXyLA3DLroROUkN6X0O6pnWnjJQujX/AyhqFD \
             \ xj13tOnD9u/1kTg7cV6rklMrZDtJCQ5PCl/D7QNPsgVsMu1J2Q8g \
             \ pMpztNFLpPBz1bWXjDtaR7ZQBlZ3PFY12ZTSncorffcGmhOL "
     sig_rd =
         rd_rrsig'
-            A
-            10
-            3
+            A 10 3
             3600
-            1893456000
-            946684800
+            1893456000 946684800
             3740
             "example.net."
             " tsb4wnjRUDnB1BUi+t \
@@ -428,19 +414,14 @@ ecdsaP256 =
   where
     key_rd =
         rd_dnskey'
-            257
-            3
-            13
+            257 3 13
             " GojIhhXUN/u4v54ZQqGSnyhWJwaubCvTmeexv7bR6edb \
             \ krSqQpF64cYbcB7wNcP+e+MAnLr+Wi9xMWyQLc8NAA== "
     sig_rd =
         rd_rrsig'
-            A
-            13
-            3
+            A 13 3
             3600
-            1284026679
-            1281607479
+            1284026679 1281607479
             55648
             "example.net."
             " qx6wLYqmh+l9oCKTN6qIc+bw6ya+KJ8oMz0YP107epXA \
@@ -476,20 +457,15 @@ ecdsaP384 =
   where
     key_rd =
         rd_dnskey'
-            257
-            3
-            14
+            257 3 14
             " xKYaNhWdGOfJ+nPrL8/arkwf2EY3MDJ+SErKivBVSum1 \
             \ w/egsXvSADtNJhyem5RCOpgQ6K8X1DRSEkrbYQ+OB+v8 \
             \ /uX45NBwY8rp65F6Glur8I/mlVNgF6W/qTI37m40 "
     sig_rd =
         rd_rrsig'
-            A
-            14
-            3
+            A 14 3
             3600
-            1284027625
-            1281608425
+            1284027625 1281608425
             10771
             "example.net."
             " /L5hDKIvGDyI1fcARX3z65qrmPsVz73QD1Mr5CEqOiLP \
@@ -526,18 +502,13 @@ ed25519 =
   where
     key_rd =
         rd_dnskey'
-            257
-            3
-            15
+            257 3 15
             " l02Woi0iS8Aa25FQkUd9RMzZHJpBoRQwAQEX1SxZJA4= "
     sig_rd =
         rd_rrsig'
-            MX
-            15
-            3
+            MX 15 3
             3600
-            1440021600
-            1438207200
+            1440021600 1438207200
             3613
             "example.com."
             " Edk+IB9KNNWg0HAjm7FazXyrd5m3Rk8zNZbvNpAcM+eysqcUOMIjWoevFkj \
@@ -573,24 +544,21 @@ ed448 =
   where
     key_rd =
         rd_dnskey'
-            257
-            3
-            16
+            257 3 16
             " 3kgROaDjrh0H2iuixWBrc8g2EpBBLCdGzHmn+G2MpTPhpj/OiBVHHSfPodx \
             \ 1FYYUcJKm1MDpJtIA "
     sig_rd =
         rd_rrsig'
-            MX
-            16
-            3
+            MX 16 3
             3600
-            1440021600
-            1438207200
+            1440021600 1438207200
             9713
             "example.com."
             " Nmc0rgGKpr3GKYXcB1JmqqS4NYwhmechvJTqVzt3jR+Qy/lSLFoIk1L+9e3 \
             \ 9GPL+5tVzDPN3f9kAwiu8KCuPPjtl227ayaCZtRKZuJax7n9NuYlZJIusX0 \
             \ SOIOKBGzG+yWYtz1/jjbzl5GGkWvREUCUA "
+
+{- FOURMOLU_ENABLE -}
 
 -----
 -- NSEC3 hash cases
