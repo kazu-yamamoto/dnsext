@@ -182,18 +182,18 @@ cacheAnswer Delegation{..} dom typ msg = do
     dnskeys = delegationDNSKEY
 
 cacheNoDelegation :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
-cacheNoDelegation zoneDom dnskeys dom msg = do
-    Verify.withCanonical dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME (pure ()) $ \_rds _cnRRset cacheCNAME -> do
-        {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
-           However, without querying the NS of the CNAME destination,
-           you cannot obtain the record of rank that can be used for the reply. -}
-        doCacheEmpty True cacheCNAME $> ()
+cacheNoDelegation zoneDom dnskeys dom msg
+    | rcode == DNS.NoErr = cacheNoDataNS $> ()
+    | rcode == DNS.NameErr = nameErrors $> ()
+    | otherwise = pure ()
   where
+    nameErrors = Verify.withCanonical dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
+    {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
+       However, without querying the NS of the CNAME destination,
+       you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = doCacheEmpty False (pure ()) $> ()
-    doCacheEmpty hasCNAME cacheCNAME
-        | rcode == DNS.NoErr = cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-        | rcode == DNS.NameErr && hasCNAME = cacheCNAME *> cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
-        | rcode == DNS.NameErr = cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
-        | otherwise = pure []
+    nullCNAME = cacheEmptySection zoneDom dnskeys dom Cache.NX rankedAuthority msg
+    ncCNAME = cacheNoDataNS
+    cacheNoDataNS = cacheEmptySection zoneDom dnskeys dom NS rankedAuthority msg
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
