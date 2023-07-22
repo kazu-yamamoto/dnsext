@@ -104,11 +104,14 @@ querySpec disableV6NS putLines = describe "query" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
-    cxt <- runIO $ newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
-    cxt4 <- runIO $ newEnv (\_ _ _ -> pure (), return (0, 0), return ()) True updateCache tcache
+    let getCXT = newEnv (putLines, return (0, 0), return ()) disableV6NS updateCache tcache
+    cxt <- runIO getCXT
+    cxt4 <- runIO $ newEnv (putLines, return (0, 0), return ()) True updateCache tcache
     let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
-        runJust n ty = Iterative.runResolveExact cxt (fromString n) ty mempty
-        runResolve n ty = fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
+        runExactCXT cxt_ n ty = Iterative.runResolveExact cxt_ (fromString n) ty mempty
+        runJust = runExactCXT cxt
+        runResolveCXT cxt_ n ty = fmap snd <$> Iterative.runResolve cxt_ (fromString n) ty mempty
+        runResolve = runResolveCXT cxt
         getReply n ty ident = do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
@@ -199,17 +202,12 @@ querySpec disableV6NS putLines = describe "query" $ do
 
     it "resolve-just - delegation with aa" $ do
         -- `dig -4 @ns1.alibabadns.com. danuoyi.alicdn.com. A` has delegation authority section with aa flag
-        result <-
-            Iterative.runResolveExact
-                cxt4
-                (fromString "sc02.alicdn.com.danuoyi.alicdn.com.")
-                A
-                mempty
+        result <- runExactCXT cxt4 "sc02.alicdn.com.danuoyi.alicdn.com." A
         printQueryError result
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
     it "resolve - cname" $ do
-        result <- runResolve "porttest.dns-oarc.net." CNAME
+        result <- getCXT >>= \cxtI -> runResolveCXT cxtI "porttest.dns-oarc.net." CNAME
         printQueryError result
         let cached (rcode, rrs, _)
                 | null rrs = VEmpty rcode
@@ -223,7 +221,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         isRight result `shouldBe` True
 
     it "resolve - a with DNSSEC_OK" $ do
-        result <- runResolve "iij.ad.jp." A
+        result <- getCXT >>= \cxtI -> runResolveCXT cxtI "iij.ad.jp." A
         printQueryError result
         isRight result `shouldBe` True
         let cached (rcode, rrs, _)
