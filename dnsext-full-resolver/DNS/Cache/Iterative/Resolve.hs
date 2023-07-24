@@ -207,7 +207,7 @@ recoverRRset rrs =
         SEC.canonicalRRsetSorted sortedRRs
   where
     k dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
-    (_, sortedRRs) = unzip $ SEC.sortCanonical rrs
+    (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 maxCNameChain :: Int
 maxCNameChain = 16

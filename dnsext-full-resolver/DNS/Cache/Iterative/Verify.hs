@@ -83,12 +83,12 @@ withVerifiedRRset
     -> [(RD_RRSIG, TTL)]
     -> (RRset -> a)
     -> a
-withVerifiedRRset now dnskeys (RRset{..}, sortedWires) sigs vk =
+withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas goodSigRDs
   where
     expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
     minTTL = minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs
-    verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd rrsType rrsTTL sortedWires
+    verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd rrsName rrsType rrsClass sortedRDatas
     goodSigs =
         [ rrsig
         | rrsig@(sigrd, _) <- sigs
@@ -107,8 +107,8 @@ canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
 canonicalRRset rrs =
     either Left (Right . ($ rightK)) $ SEC.canonicalRRsetSorted sortedRRs
   where
-    rightK dom typ cls ttl rds = (RRset dom typ cls ttl rds NotVerifiedRRS, sortedWires)
-    (sortedWires, sortedRRs) = unzip $ SEC.sortCanonical rrs
+    rightK dom typ cls ttl rds = (RRset dom typ cls ttl rds NotVerifiedRRS, sortedRDatas)
+    (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset
     :: Ranking
