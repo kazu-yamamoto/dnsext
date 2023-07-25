@@ -90,6 +90,7 @@ dnstap :: ByteString -> IO ()
 dnstap bsx = withReadBuffer bsx loop
   where
     loop rbuf = do
+        putStr "DNSTAP "
         t <- tag rbuf
         case t of
           (1, LEN) -> do
@@ -103,35 +104,36 @@ dnstap bsx = withReadBuffer bsx loop
               str <- extractByteString rbuf lenPref
               C8.putStrLn str
           (14, LEN) -> do
-              putStr "Message "
+              putStrLn "Message:"
               lenPref <- varint rbuf
-              str <- extractByteString rbuf lenPref
-              C8.putStrLn $ B16.encode str
+              bs <- extractByteString rbuf lenPref
+              message bs
           (15, VARINT) -> do
               putStr "Type "
               varint rbuf >>= print
-          _ -> skip rbuf t
+          (num,wt) -> do
+              putStr $ show num ++ " "
+              skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
 
-skip :: Readable a1 => a1 -> (Int, WireType) -> IO ()
-skip rbuf (_,VARINT) = do
+skip :: Readable a1 => a1 -> WireType -> IO ()
+skip rbuf VARINT = do
     len <- varint rbuf
     putStrLn $ "skipping VARINT " ++ show len
-skip rbuf (_,I64) = do
+skip rbuf I64 = do
     _ <- read64 rbuf -- fixme endian
     putStrLn $ "skipping I64"
-skip rbuf (_,LEN) = do
+skip rbuf LEN = do
     len <- varint rbuf
     putStrLn $ "skipping LEN " ++ show len
     ff rbuf len
-skip rbuf (_,I32) = do
-    _ <- read32 rbuf -- fixme endian
-    putStrLn $ "skipping I64"
+skip rbuf I32 = do
+    _ <- i32 rbuf
+    putStrLn $ "skipping I32"
 skip rbuf _ = do
-    putStrLn $ "skipping VARINT uknown"
+    putStrLn $ "skipping VARINT unknown"
     remainingSize rbuf >>= ff rbuf
-
 
 newtype WireType = WireType Int deriving Eq
 
@@ -167,3 +169,141 @@ tag rbuf = do
     let wtyp = n .&. 0x7
         num = n `shiftR` 3
     return (num, WireType wtyp)
+
+message :: ByteString -> IO ()
+message bs = withReadBuffer bs loop
+  where
+    loop rbuf = do
+        t <- tag rbuf
+        case t of
+          (1, VARINT) -> do
+              putStr "Type "
+              varint rbuf >>= putStrLn . messageType
+          (2, VARINT) -> do
+              putStr "SocketFamily "
+              varint rbuf >>= putStrLn . socketFamily
+          (3, VARINT) -> do
+              putStr "SocketProtocol "
+              varint rbuf >>= putStrLn . socketProtocol
+          (4, LEN) -> do
+              putStr "QueryAddress "
+              dump rbuf
+          (5, LEN) -> do
+              putStr "ResponseAddress "
+              dump rbuf
+          (6, VARINT) -> do
+              putStr "QueryPort "
+              varint rbuf >>= print
+          (7, VARINT) -> do
+              putStr "ResponsePort "
+              varint rbuf >>= print
+          (8, VARINT) -> do
+              putStr "QueryTimeSec "
+              varint rbuf >>= print
+          (9, I32) -> do
+              putStr "QueryTimeNsec "
+              i32 rbuf >>= print
+          (10, LEN) -> do
+              putStr "QueryMessage "
+              dump rbuf
+          (11, LEN) -> do
+              putStr "QueryZone "
+              dump rbuf
+          (12, VARINT) -> do
+              putStr "ResponseTimeSec "
+              varint rbuf >>= print
+          (13, I32) -> do
+              putStr "ResponseTimeNsec "
+              i32 rbuf >>= print
+          (14, LEN) -> do
+              lenPref <- varint rbuf
+              bs' <- extractByteString rbuf lenPref
+              policy bs'
+          (num,wt) -> do
+              putStr $ show num ++ " "
+              skip rbuf wt
+        rest <- remainingSize rbuf
+        when (rest /= 0) $ loop rbuf
+
+policy :: ByteString -> IO ()
+policy bs = withReadBuffer bs loop
+  where
+    loop rbuf = do
+        putStr "POLICY "
+        t <- tag rbuf
+        case t of
+          (5, LEN) -> do
+              putStr "Value "
+              dump rbuf
+          (num,wt) -> do
+              putStr $ show num ++ " "
+              skip rbuf wt
+
+dump :: Readable a => a -> IO ()
+dump rbuf = do
+    len <- varint rbuf
+    bs <- extractByteString rbuf len
+    C8.putStrLn $ B16.encode bs
+
+i32 :: Readable a => a -> IO Int
+i32 rbuf = do
+    n0 <- fromIntegral <$> read8 rbuf
+    n1 <- fromIntegral <$> read8 rbuf
+    n2 <- fromIntegral <$> read8 rbuf
+    n3 <- fromIntegral <$> read8 rbuf
+    return ((n3 `shiftL` 24) .|. (n2 `shiftL` 16) .|. (n1 `shiftL` 8) .|. n0)
+
+-- enum
+
+dnstapType :: Int -> String
+dnstapType 1 = "MESSAGE"
+dnstapType _ = "UNKNOWN"
+
+socketFamily :: Int -> String
+socketFamily 1 = "IPv4"
+socketFamily 2 = "IPv6"
+socketFamily _ = "UNKNOWN"
+
+socketProtocol :: Int -> String
+socketProtocol 1 = "UDP"
+socketProtocol 2 = "TCP"
+socketProtocol 3 = "DOT"
+socketProtocol 4 = "DOH"
+socketProtocol 5 = "DNSCryptUDP"
+socketProtocol 6 = "DNSCryptTCP"
+socketProtocol 7 = "DOQ"
+socketProtocol _ = "UNKNOWN"
+
+match :: Int -> String
+match 1 = "QNAME"
+match 2 = "CLIENT_IP"
+match 3 = "RESPONSE_IP"
+match 4 = "NS_NAME"
+match 5 = "NS_IP"
+match _ = "UNKNOWN"
+
+action :: Int -> String
+action 1 = "NXDOMAIN"
+action 2 = "NODATA"
+action 3 = "PASS"
+action 4 = "DROP"
+action 5 = "TRUNCATE"
+action 6 = "LOCAL_DATA"
+action _ = "UNKNOWN"
+
+messageType :: Int -> String
+messageType 1 = "AUTH_QUERY"
+messageType 2 = "AUTH_RESPONSE"
+messageType 3 = "RESOLVER_QUERY"
+messageType 4 = "RESOLVER_RESPONSE"
+messageType 5 = "CLIENT_QUERY"
+messageType 6 = "CLIENT_RESPONSE"
+messageType 7 = "FORWARDER_QUERY"
+messageType 8 = "FORWARDER_RESPONSE"
+messageType 9 = "STUB_QUERY"
+messageType 10 = "STUB_RESPONSE"
+messageType 11 = "TOOL_QUERY"
+messageType 12 = "TOOL_RESPONSE"
+messageType 13 = "UPDATE_QUERY"
+messageType 14 = "UPDATE_RESPONSE"
+messageType _ = "UNKNOWN"
