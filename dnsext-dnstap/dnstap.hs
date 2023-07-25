@@ -66,9 +66,9 @@ fstrmStart recvN = do
         a <- read32 rbuf
         when (a /= fstrm_control_accept) $ error "xxx"
         l1 <- read32 rbuf
-        str <- extractByteString rbuf $ fromIntegral l1
+        bs <- extractByteString rbuf $ fromIntegral l1
         putStr "ACCEPT "
-        C8.putStrLn str
+        C8.putStrLn bs
 
 fstrmData :: P.RecvN -> IO ()
 fstrmData recvN = loop
@@ -102,14 +102,10 @@ dnstap bsx = withReadBuffer bsx loop
         case t of
           (1, LEN) -> do
               putStr "Identity "
-              lenPref <- varint rbuf
-              str <- extractByteString rbuf lenPref
-              C8.putStrLn str
+              dumpASCII rbuf
           (2, LEN) -> do
               putStr "Version "
-              lenPref <- varint rbuf
-              str <- extractByteString rbuf lenPref
-              C8.putStrLn str
+              dumpASCII rbuf
           (14, LEN) -> do
               putStrLn "Message:"
               lenPref <- varint rbuf
@@ -119,7 +115,7 @@ dnstap bsx = withReadBuffer bsx loop
               putStr "Type "
               varint rbuf >>= print
           (num,wt) -> do
-              putStr $ show num ++ " "
+              putStr $ "KEY " ++ show num ++ " "
               skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
@@ -177,7 +173,7 @@ message bs = withReadBuffer bs loop
               bs' <- extractByteString rbuf lenPref
               policy bs'
           (num,wt) -> do
-              putStr $ show num ++ " "
+              putStr $ "KEY " ++ show num ++ " "
               skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
@@ -194,14 +190,20 @@ policy bs = withReadBuffer bs loop
               putStr "Value "
               dump rbuf
           (num,wt) -> do
-              putStr $ show num ++ " "
+              putStr $ "KEY " ++ show num ++ " "
               skip rbuf wt
+
+----------------------------------------------------------------
 
 decodeDNSMessage :: Readable a => a -> IO ()
 decodeDNSMessage rbuf = do
     len <- varint rbuf
     bs <- extractByteString rbuf len
-    print $ decode bs
+    case decode bs of
+      Right x -> print x
+      Left  e -> do
+          print e
+          C8.putStrLn $ B16.encode bs
 
 ----------------------------------------------------------------
 -- enum
@@ -329,3 +331,8 @@ dump rbuf = do
     len <- varint rbuf
     bs <- extractByteString rbuf len
     C8.putStrLn $ B16.encode bs
+
+dumpASCII :: Readable a => a -> IO ()
+dumpASCII rbuf = do
+    len <- varint rbuf
+    extractByteString rbuf len >>= C8.putStrLn
