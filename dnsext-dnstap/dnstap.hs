@@ -14,22 +14,7 @@ import Network.ByteOrder
 import Network.Socket
 import qualified Network.Socket.BufferPool as P
 
--- Fast stream:
--- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
-
--- DNSTAP
--- https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
-
-fstrm_control_accept :: Word32
-fstrm_control_accept = 0x01
-fstrm_control_start :: Word32
-fstrm_control_start = 0x02
-fstrm_control_stop :: Word32
-fstrm_control_stop = 0x03
-fstrm_control_ready :: Word32
-fstrm_control_ready = 0x04
-fstrm_control_finish :: Word32
-fstrm_control_finish = 0x05
+----------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -41,6 +26,22 @@ main = do
     loop lsock = forever $ do
         (sock,_) <- accept lsock
         void $ forkIO $ fstrmReader sock
+
+----------------------------------------------------------------
+
+-- Fast stream:
+-- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
+
+fstrm_control_accept :: Word32
+fstrm_control_accept = 0x01
+fstrm_control_start :: Word32
+fstrm_control_start = 0x02
+fstrm_control_stop :: Word32
+fstrm_control_stop = 0x03
+fstrm_control_ready :: Word32
+fstrm_control_ready = 0x04
+fstrm_control_finish :: Word32
+fstrm_control_finish = 0x05
 
 fstrmReader :: Socket -> IO ()
 fstrmReader sock = do
@@ -81,12 +82,16 @@ fstrmData recvN = loop
             then return ()
             else do
                 bsx <- recvN l
---                putStrLn $ prettyHex bsx
                 dnstap bsx
                 loop
 
 fstrmStop :: IO ()
 fstrmStop = putStrLn "STOP"
+
+----------------------------------------------------------------
+
+-- DNSTAP
+-- https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
 
 dnstap :: ByteString -> IO ()
 dnstap bsx = withReadBuffer bsx loop
@@ -118,59 +123,6 @@ dnstap bsx = withReadBuffer bsx loop
               skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
-
-skip :: Readable a1 => a1 -> WireType -> IO ()
-skip rbuf VARINT = do
-    len <- varint rbuf
-    putStrLn $ "skipping VARINT " ++ show len
-skip rbuf I64 = do
-    _ <- read64 rbuf -- fixme endian
-    putStrLn $ "skipping I64"
-skip rbuf LEN = do
-    len <- varint rbuf
-    putStrLn $ "skipping LEN " ++ show len
-    ff rbuf len
-skip rbuf I32 = do
-    _ <- i32 rbuf
-    putStrLn $ "skipping I32"
-skip rbuf _ = do
-    putStrLn $ "skipping VARINT unknown"
-    remainingSize rbuf >>= ff rbuf
-
-newtype WireType = WireType Int deriving Eq
-
-pattern VARINT :: WireType
-pattern VARINT = WireType 0
-pattern I64 :: WireType
-pattern I64 = WireType 1
-pattern LEN :: WireType
-pattern LEN = WireType 2
-pattern I32 :: WireType
-pattern I32 = WireType 5
-
-instance Show WireType where
-    show (WireType 0) = "VARINT"
-    show (WireType 1) = "I64"
-    show (WireType 2) = "LEN"
-    show (WireType 5) = "I32"
-    show (WireType x) = "WireType " ++ show x
-
-varint :: Readable p => p -> IO Int
-varint rbuf = loop 0 0
-  where
-    loop n0 s = do
-        n <- fromIntegral <$> read8 rbuf
-        let n1 = n0 + ((n .&. 0x7f) `shiftL` s)
-        if n `testBit` 7
-           then loop n1 (s + 7)
-           else return n1
-
-tag :: Readable p => p -> IO (Int, WireType)
-tag rbuf = do
-    n <- varint rbuf
-    let wtyp = n .&. 0x7
-        num = n `shiftR` 3
-    return (num, WireType wtyp)
 
 message :: ByteString -> IO ()
 message bs = withReadBuffer bs loop
@@ -244,26 +196,13 @@ policy bs = withReadBuffer bs loop
               putStr $ show num ++ " "
               skip rbuf wt
 
-dump :: Readable a => a -> IO ()
-dump rbuf = do
-    len <- varint rbuf
-    bs <- extractByteString rbuf len
-    C8.putStrLn $ B16.encode bs
-
 decodeDNSMessage :: Readable a => a -> IO ()
 decodeDNSMessage rbuf = do
     len <- varint rbuf
     bs <- extractByteString rbuf len
     print $ decode bs
 
-i32 :: Readable a => a -> IO Int
-i32 rbuf = do
-    n0 <- fromIntegral <$> read8 rbuf
-    n1 <- fromIntegral <$> read8 rbuf
-    n2 <- fromIntegral <$> read8 rbuf
-    n3 <- fromIntegral <$> read8 rbuf
-    return ((n3 `shiftL` 24) .|. (n2 `shiftL` 16) .|. (n1 `shiftL` 8) .|. n0)
-
+----------------------------------------------------------------
 -- enum
 
 dnstapType :: Int -> String
@@ -318,3 +257,74 @@ messageType 12 = "TOOL_RESPONSE"
 messageType 13 = "UPDATE_QUERY"
 messageType 14 = "UPDATE_RESPONSE"
 messageType _ = "UNKNOWN"
+
+----------------------------------------------------------------
+-- Protocol buffer
+-- https://protobuf.dev/programming-guides/encoding/
+
+newtype WireType = WireType Int deriving Eq
+
+pattern VARINT :: WireType
+pattern VARINT = WireType 0
+pattern I64 :: WireType
+pattern I64 = WireType 1
+pattern LEN :: WireType
+pattern LEN = WireType 2
+pattern I32 :: WireType
+pattern I32 = WireType 5
+
+instance Show WireType where
+    show (WireType 0) = "VARINT"
+    show (WireType 1) = "I64"
+    show (WireType 2) = "LEN"
+    show (WireType 5) = "I32"
+    show (WireType x) = "WireType " ++ show x
+
+varint :: Readable p => p -> IO Int
+varint rbuf = loop 0 0
+  where
+    loop n0 s = do
+        n <- fromIntegral <$> read8 rbuf
+        let n1 = n0 + ((n .&. 0x7f) `shiftL` s)
+        if n `testBit` 7
+           then loop n1 (s + 7)
+           else return n1
+
+i32 :: Readable a => a -> IO Int
+i32 rbuf = do
+    n0 <- fromIntegral <$> read8 rbuf
+    n1 <- fromIntegral <$> read8 rbuf
+    n2 <- fromIntegral <$> read8 rbuf
+    n3 <- fromIntegral <$> read8 rbuf
+    return ((n3 `shiftL` 24) .|. (n2 `shiftL` 16) .|. (n1 `shiftL` 8) .|. n0)
+
+tag :: Readable p => p -> IO (Int, WireType)
+tag rbuf = do
+    n <- varint rbuf
+    let wtyp = n .&. 0x7
+        num = n `shiftR` 3
+    return (num, WireType wtyp)
+
+skip :: Readable a1 => a1 -> WireType -> IO ()
+skip rbuf VARINT = do
+    len <- varint rbuf
+    putStrLn $ "skipping VARINT " ++ show len
+skip rbuf I64 = do
+    _ <- read64 rbuf -- fixme endian
+    putStrLn $ "skipping I64"
+skip rbuf LEN = do
+    len <- varint rbuf
+    putStrLn $ "skipping LEN " ++ show len
+    ff rbuf len
+skip rbuf I32 = do
+    _ <- i32 rbuf
+    putStrLn $ "skipping I32"
+skip rbuf _ = do
+    putStrLn $ "skipping VARINT unknown"
+    remainingSize rbuf >>= ff rbuf
+
+dump :: Readable a => a -> IO ()
+dump rbuf = do
+    len <- varint rbuf
+    bs <- extractByteString rbuf len
+    C8.putStrLn $ B16.encode bs
