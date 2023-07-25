@@ -182,6 +182,7 @@ message bs = withReadBuffer bs loop
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
 
+-- fixme
 policy :: ByteString -> IO ()
 policy bs = withReadBuffer bs loop
   where
