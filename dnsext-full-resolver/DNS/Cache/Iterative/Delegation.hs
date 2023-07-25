@@ -113,31 +113,31 @@ nsDomain (DEwithAx dom _) = dom
 nsDomain (DEonlyNS dom) = dom
 
 -- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache
-    :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
+delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
-    (verifyMsg, verifyColor, raiseOnFailure, dss, cacheDS) <- lift verify
-    let found x = do
-            cacheDS
-            cacheNS
-            cacheAdds
-            clogLn Log.DEMO verifyColor $ verifyMsg ++ ": " ++ domTraceMsg
-            clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
-            return x
-
-    raiseOnFailure
-    lift . maybe (notFound $> noDelegation) (fmap hasDelegation . found) $
-        takeDelegationSrc nsps dss adds {- There is delegation information only when there is a selectable NS -}
+    {- There is delegation information only when there is a selectable NS -}
+    action <- lift . maybe (notFound $> pure noDelegation) (fmap (hasDelegation <$>) . found) $ findDelegation nsps adds
+    action
   where
-    verify = Verify.withCanonical dnskeys rankedAuthority msg dom DS fromDS nullDS ncDS result
+    found k = Verify.withCanonical dnskeys rankedAuthority msg dom DS fromDS (nullDS k) (ncDS k) (withDS k)
     fromDS = DNS.fromRData . rdata
-    nullDS = pure ("delegation - no DS, so no verify", Just Yellow, pure (), [], pure ()) {- TODO: NoData DS negative cache -}
-    ncDS = pure ("delegation - not canonical DS", Just Red, throwDnsError DNS.ServerFailure, [], pure ())
-    result dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = pure ("delegation - verification success - RRSIG of DS", Just Green, pure (), dsrds, cacheDS)
-        | otherwise = pure ("delegation - verification failed - RRSIG of DS", Just Red, throwDnsError DNS.ServerFailure, [], cacheDS)
+    {- TODO: NoData DS negative cache -}
+    nullDS k = do
+        vrfyLog (Just Yellow) "delegation - no DS, so no verify"
+        caches $> pure (k [])
+    ncDS _ = vrfyLog (Just Red) "delegation - not canonical DS" $> throwDnsError DNS.ServerFailure
+    withDS k dsrds dsRRset cacheDS
+        | rrsetValid dsRRset = do
+            let x = k dsrds
+            vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
+            clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
+            caches *> cacheDS $> pure x
+        | otherwise =
+            vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS" $> throwDnsError DNS.ServerFailure
+    caches = cacheNS *> cacheAdds
 
-    notFound = clogLn Log.DEMO Nothing $ "no delegation: " ++ domTraceMsg
+    notFound = vrfyLog Nothing "no delegation"
+    vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
