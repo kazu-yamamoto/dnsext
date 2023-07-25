@@ -5,6 +5,7 @@ module Main where
 
 import Control.Concurrent
 import Control.Monad
+import DNS.Types.Decode
 import Data.Bits
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
@@ -74,6 +75,7 @@ fstrmData recvN = loop
     loop = do
         bsl <- recvN 4
         l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
+        putStrLn "--------------------------------"
         putStrLn $ "fstrm data length: " ++ show l
         if l == 0
             then return ()
@@ -205,7 +207,7 @@ message bs = withReadBuffer bs loop
               i32 rbuf >>= print
           (10, LEN) -> do
               putStr "QueryMessage "
-              dump rbuf
+              decodeDNSMessage rbuf
           (11, LEN) -> do
               putStr "QueryZone "
               dump rbuf
@@ -216,6 +218,9 @@ message bs = withReadBuffer bs loop
               putStr "ResponseTimeNsec "
               i32 rbuf >>= print
           (14, LEN) -> do
+              putStr "ResponseMessage "
+              decodeDNSMessage rbuf
+          (15, LEN) -> do
               lenPref <- varint rbuf
               bs' <- extractByteString rbuf lenPref
               policy bs'
@@ -244,6 +249,12 @@ dump rbuf = do
     len <- varint rbuf
     bs <- extractByteString rbuf len
     C8.putStrLn $ B16.encode bs
+
+decodeDNSMessage :: Readable a => a -> IO ()
+decodeDNSMessage rbuf = do
+    len <- varint rbuf
+    bs <- extractByteString rbuf len
+    print $ decode bs
 
 i32 :: Readable a => a -> IO Int
 i32 rbuf = do
