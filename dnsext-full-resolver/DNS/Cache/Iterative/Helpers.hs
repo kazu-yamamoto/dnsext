@@ -116,9 +116,6 @@ findDelegation nsps adds = do
         {- -----  -----  - domains are filtered by rrnamePairs, here does not check them -}
         axs = axList False (const True) (\ip _ -> DEwithAx d ip) as
 
-takeDelegationSrc :: [(Domain, ResourceRecord)] -> [RD_DS] -> [ResourceRecord] -> Maybe Delegation
-takeDelegationSrc nsps dss adds = ($ dss) <$> findDelegation nsps adds
-
 -- | pairing correspond rrname domain data
 --
 -- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, rrclass = classIN, rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
