@@ -30,6 +30,7 @@ import Data.IP (IP (IPv4, IPv6))
 import DNS.Cache.Iterative.Types
 
 -- $setup
+-- >>> :set -XOverloadedStrings
 -- >>> import DNS.Types
 
 rrListWith
