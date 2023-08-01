@@ -36,6 +36,9 @@ import qualified Data.IP as IP
 -- this package
 import DNS.Cache.Iterative.Types
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 -- result output tags for special IP-blocks
 data EmbedResult
     = EmbedLocal
