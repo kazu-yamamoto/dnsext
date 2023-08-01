@@ -19,8 +19,9 @@ import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
 -- $setup
--- >>> import Data.Either
--- >>> let isLeft = either (const True) (const False)
+-- >>> {- workaround to avoid 'not in scope' errors: https://github.com/sol/doctest/issues/327#issuecomment-1405603806 -}
+-- >>> :seti -XOverloadedStrings
+-- >>> import Data.Either (isLeft)
 
 -- | Parsing a file.
 --   If parsing fails, an 'IOException' is thrown.
