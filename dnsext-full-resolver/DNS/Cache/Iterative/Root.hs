@@ -17,7 +17,6 @@ import Control.Monad.Trans.Except (runExceptT, throwE)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
 import Data.IORef (atomicWriteIORef, readIORef)
-import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
 -- other packages
@@ -104,7 +103,7 @@ rootPriming = do
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
                     (axList False (`Set.member` nsSet) (\_ rr -> rr) rrs, cacheSection axRRs rank)
 
-            Delegation{..} <- maybe (throw "no delegation") pure $ takeDelegationSrc nsps [rootSepDS] axRRs
+            Delegation{..} <- maybe (throw "no delegation") (pure . ($ [rootSepDS])) $ findDelegation nsps axRRs
             when (not $ rrsetValid nsRRset) $ do
                 logResult delegationNS Red "verification failed - RRSIG of NS: \".\""
                 throw "DNSSEC verification failed"
@@ -167,9 +166,7 @@ verifySEP dss dom rrs = do
 -- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
 rootHint :: Delegation
 rootHint =
-    fromMaybe
-        (error "rootHint: bad configuration.")
-        $ takeDelegationSrc (nsList "." (,) ns) [] as
+    maybe (error "rootHint: bad configuration.") ($ []) $ findDelegation (nsList "." (,) ns) as
   where
     (ns, as) = rootServers
 

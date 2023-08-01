@@ -98,17 +98,14 @@ axList disableV6NS pdom h = foldr takeAx []
             h (IPv6 v6) rr : xs
     takeAx _ xs = xs
 
-takeDelegationSrc
-    :: [(Domain, ResourceRecord)]
-    -> [RD_DS]
-    -> [ResourceRecord]
-    -> Maybe Delegation
-takeDelegationSrc nsps dss adds = do
+{- The existence or non-existence of a Delegation is independent of the existence of [DS_RD]. -}
+findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
+findDelegation nsps adds = do
     (p@(_, rr), ps) <- uncons nsps
     let nss = map fst (p : ps)
     ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
     {- only data from delegation source zone. get DNSKEY from destination zone -}
-    return $ Delegation (rrname rr) ents (FilledDS dss) []
+    pure $ \dss -> Delegation (rrname rr) ents (FilledDS dss) []
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d [] = [DEonlyNS d]
@@ -116,12 +113,8 @@ takeDelegationSrc nsps dss adds = do
         | null axs = [DEonlyNS d]
         | otherwise = axs
       where
-        axs =
-            axList
-                False
-                (const True {- paired by rrnamePairs -})
-                (\ip _ -> DEwithAx d ip)
-                as
+        {- -----  -----  - domains are filtered by rrnamePairs, here does not check them -}
+        axs = axList False (const True) (\ip _ -> DEwithAx d ip) as
 
 -- | pairing correspond rrname domain data
 --
