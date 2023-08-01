@@ -44,9 +44,6 @@ import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Resolve
 import DNS.Cache.Iterative.Types
 
--- $setup
--- >>> :set -XOverloadedStrings
-
 -----
 
 {- datatypes to propagate request flags -}
