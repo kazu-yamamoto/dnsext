@@ -2,12 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.Verify (
+    with,
     withCanonical,
     withCanonical',
 ) where
 
 -- GHC packages
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import DNS.Types.Decode (EpochTime)
 
@@ -38,6 +40,20 @@ import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Log as Log
+
+{- FOURMOLU_DISABLE -}
+with
+    :: [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> Domain -> TYPE
+    -> (ResourceRecord -> Maybe a)
+    -> DNSQuery b -> DNSQuery b -> ([a] -> RRset -> ContextT IO () -> DNSQuery b)
+    -> DNSQuery b
+{- FOURMOLU_ENABLE -}
+with dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
+    let rightK' xs rrset cache = pure $ rightK xs rrset cache
+    action <- lift $ withCanonical dnskeys getRanked msg rrn rrty h (pure nullK) (pure leftK) rightK'
+    action
 
 withCanonical
     :: [RD_DNSKEY]
