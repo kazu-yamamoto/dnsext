@@ -13,7 +13,7 @@ module DNS.Cache.Iterative.Root (
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (runExceptT, throwE)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
 import Data.IORef (atomicWriteIORef, readIORef)
@@ -89,34 +89,32 @@ rootPriming = do
     lift . logLn Log.DEMO . unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     body ips
   where
-    throw s = throwE $ "rootPriming: " ++ s
-    liftCXT = lift . lift
-    logResult delegationNS color s = liftCXT $ do
+    left s = pure $ Left $ "rootPriming: " ++ s
+    logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
         logLn Log.DEMO $ ppDelegation delegationNS
-    nullNS = pure $ throw "no NS RRs"
-    ncNS = pure $ throw "not canonical NS RRs"
+    nullNS = left "no NS RRs"
+    ncNS = left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
-    mkVerify dnskeys msgNS = Verify.withCanonical dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
-        \nsps nsRRset cacheNS -> pure $ do
+    verify dnskeys msgNS = Verify.withCanonical dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+        \nsps nsRRset cacheNS -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
                     (axList False (`Set.member` nsSet) (\_ rr -> rr) rrs, cacheSection axRRs rank)
-
-            Delegation{..} <- maybe (throw "no delegation") (pure . ($ [rootSepDS])) $ findDelegation nsps axRRs
-            when (not $ rrsetValid nsRRset) $ do
-                logResult delegationNS Red "verification failed - RRSIG of NS: \".\""
-                throw "DNSSEC verification failed"
-
-            liftCXT $ cacheNS *> cacheAX
-            logResult delegationNS Green "verification success - RRSIG of NS: \".\""
-            pure $ Delegation delegationZone delegationNS delegationDS dnskeys
+            case findDelegation nsps axRRs of
+                Nothing -> left "no delegation"
+                Just k | not $ rrsetValid nsRRset -> do
+                    logResult (delegationNS $ k [rootSepDS]) Red "verification failed - RRSIG of NS: \".\""
+                    left "DNSSEC verification failed"
+                Just k | Delegation{..} <- k [rootSepDS] -> do
+                    cacheNS *> cacheAX
+                    logResult delegationNS Green "verification success - RRSIG of NS: \".\""
+                    pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys
 
     body ips = runExceptT $ do
-        dnskeys <- either throw pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
+        dnskeys <- either (throwE . ("rootPriming: " ++)) pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
         msgNS <- lift $ norec True ips "." NS
-        verify <- liftCXT $ mkVerify dnskeys msgNS
-        verify
+        ExceptT $ lift $ verify dnskeys msgNS
 
     Delegation _dot hintDes _ _ = rootHint
 
