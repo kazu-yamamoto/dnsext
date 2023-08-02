@@ -2,12 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.Verify (
+    with,
     withCanonical,
     withCanonical',
 ) where
 
 -- GHC packages
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import DNS.Types.Decode (EpochTime)
 
@@ -39,34 +41,44 @@ import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Log as Log
 
+{- FOURMOLU_DISABLE -}
+with
+    :: [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> Domain -> TYPE
+    -> (ResourceRecord -> Maybe a)
+    -> DNSQuery b -> DNSQuery b -> ([a] -> RRset -> ContextT IO () -> DNSQuery b)
+    -> DNSQuery b
+{- FOURMOLU_ENABLE -}
+with dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
+    let rightK' xs rrset cache = pure $ rightK xs rrset cache
+    action <- lift $ withCanonical dnskeys getRanked msg rrn rrty h (pure nullK) (pure leftK) rightK'
+    action
+
+{- FOURMOLU_DISABLE -}
 withCanonical
     :: [RD_DNSKEY]
-    -> (m -> ([ResourceRecord], Ranking))
-    -> m
-    -> Domain
-    -> TYPE
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> Domain  -> TYPE
     -> (ResourceRecord -> Maybe a)
+    -> ContextT IO b -> ContextT IO b -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
     -> ContextT IO b
-    -> ContextT IO b
-    -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
-    -> ContextT IO b
+{- FOURMOLU_ENABLE -}
 withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
     now <- liftIO =<< asks currentSeconds_
     let notCanonical rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
     withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK notCanonical rightK
 
+{- FOURMOLU_DISABLE -}
 withCanonical'
     :: EpochTime
     -> [RD_DNSKEY]
-    -> Domain
-    -> TYPE
+    -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
-    -> [ResourceRecord]
-    -> Ranking
+    -> [ResourceRecord] -> Ranking
+    -> b -> ([ResourceRecord] -> String -> b) -> ([a] -> RRset -> ContextT IO () -> b)
     -> b
-    -> ([ResourceRecord] -> String -> b)
-    -> ([a] -> RRset -> ContextT IO () -> b)
-    -> b
+{- FOURMOLU_ENABLE -}
 withCanonical' now dnskeys rrn rrty h srrs rank nullK leftK rightK0
     | null xRRs = nullK
     | otherwise = either (leftK xRRs) rightK $ canonicalRRset xRRs

@@ -116,27 +116,26 @@ nsDomain (DEonlyNS dom) = dom
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zoneDom dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
-    action <- lift . maybe (notFound $> pure noDelegation) (fmap (hasDelegation <$>) . found) $ findDelegation nsps adds
-    action
+    maybe (notFound $> noDelegation) (fmap hasDelegation . found) $ findDelegation nsps adds
   where
-    found k = Verify.withCanonical dnskeys rankedAuthority msg dom DS fromDS (nullDS k) (ncDS k) (withDS k)
+    found k = Verify.with dnskeys rankedAuthority msg dom DS fromDS (nullDS k) (ncDS k) (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
-    nullDS k = do
+    nullDS k = lift $ do
         vrfyLog (Just Yellow) "delegation - no DS, so no verify"
-        caches $> pure (k [])
-    ncDS _ = vrfyLog (Just Red) "delegation - not canonical DS" $> throwDnsError DNS.ServerFailure
+        caches $> k []
+    ncDS _ = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = do
+        | rrsetValid dsRRset = lift $ do
             let x = k dsrds
             vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
             clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
-            caches *> cacheDS $> pure x
+            caches *> cacheDS $> x
         | otherwise =
-            vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS" $> throwDnsError DNS.ServerFailure
+            lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
     caches = cacheNS *> cacheAdds
 
-    notFound = vrfyLog Nothing "no delegation"
+    notFound = lift $ vrfyLog Nothing "no delegation"
     vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
     domTraceMsg = show zoneDom ++ " -> " ++ show dom
 
