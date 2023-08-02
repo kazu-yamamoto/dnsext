@@ -130,20 +130,19 @@ cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = do
     msg <- norec True aservers dom DNSKEY
     let rcode = DNS.rcode $ DNS.flags $ DNS.header msg
-    lift $ case rcode of
-        DNS.NoErr -> withSection rankedAnswer msg $ \srrs rank ->
-            either (pure . Left) (verifyDNSKEY srrs rank) $ verifySEP dss dom srrs
+    case rcode of
+        DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
+            either (pure . Left) (verifyDNSKEY msg) $ verifySEP dss dom srrs
         _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
     cachedResult krds dnskeyRRset cacheDNSKEY
-        | rrsetValid dnskeyRRset = cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
+        | rrsetValid dnskeyRRset = lift cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
-    verifyDNSKEY srrs rank sepps = do
-        now <- liftIO =<< asks currentSeconds_
-        let dnskeyRD = DNS.fromRData . rdata
+    verifyDNSKEY msg sepps = do
+        let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null" {- guarded by verifySEP, null case, SEP is null too -}
-            ncDNSKEY _rrs s = pure $ Left $ "cachedDNSKEY: not canonical: " ++ s
-        Verify.withCanonical' now (map fst sepps) dom DNSKEY dnskeyRD srrs rank nullDNSKEY ncDNSKEY cachedResult
+            ncDNSKEY = pure $ Left $ "cachedDNSKEY: not canonical"
+        Verify.with (map fst sepps) rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 verifySEP
     :: [RD_DS]
