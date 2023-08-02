@@ -413,10 +413,10 @@ queryDS
     -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS dnskeys ips dom = do
     msg <- norec True ips dom DS
-    lift $ Verify.withCanonical dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.with dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
     ncDS = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
     verifyResult dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
+        | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
