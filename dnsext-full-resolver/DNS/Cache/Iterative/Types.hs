@@ -135,7 +135,10 @@ data MayVerifiedRRS
     = NotVerifiedRRS       {- not judged valid or invalid -}
     | InvalidRRS String    {- RRSIG found, but no RRSIG is passed -}
     | ValidRRS [RD_RRSIG]  {- any RRSIG is passed. [RD_RRSIG] should be not null -}
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show MayVerifiedRRS where
+  show = mayVerifiedRRS "NotVerifiedRRS" ("InvalidRRS " ++) (("ValidRRS " ++) . show)
 
 mayVerifiedRRS :: a -> (String -> a) -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
 mayVerifiedRRS notVerified invalid valid m = case m of
