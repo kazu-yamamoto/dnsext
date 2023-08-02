@@ -14,6 +14,7 @@ import Control.Monad.Trans.Reader (asks)
 import DNS.Types.Decode (EpochTime)
 
 -- other packages
+import System.Console.ANSI.Types
 
 -- dns packages
 import DNS.Do53.Memo (Ranking)
@@ -66,8 +67,18 @@ withCanonical
 {- FOURMOLU_ENABLE -}
 withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
     now <- liftIO =<< asks currentSeconds_
-    let notCanonical rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
-    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK notCanonical rightK
+    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK ncK withRRS
+  where
+    ncK rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
+    withRRS x rrset cache = do
+        mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
+        rightK x rrset cache
+    logInvalids es = do
+        (x, xs) <- pure $ case lines es of
+            [] -> ("", [])
+            x : xs -> (": " ++ x, xs)
+        clogLn Log.DEMO (Just Cyan) $ "withCanonical: InvalidRRS" ++ x
+        logLines Log.DEMO xs
 
 {- FOURMOLU_DISABLE -}
 withCanonical'
@@ -110,9 +121,24 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     (sigrds, sigTTLs) = unzip goodSigs
     goodSigRDs
         | null dnskeys = NotVerifiedRRS {- no way to verify  -}
-        | null sigs = InvalidRRS {- dnskeys is not null, but sigs is null -}
-        | null sigrds = InvalidRRS {- no good signature -}
+        | null sigs = InvalidRRS "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
+        | null sigrds = InvalidRRS noValids {- no good signatures -}
         | otherwise = ValidRRS sigrds
+    noValids
+        | null verifyErrors = unlines $ "no match key-tags:" : map ("  " ++) showKeysSigs
+        | otherwise = unlines $ "no good sigs:" : verifyErrors
+    showKeysSigs = [showKey key (SEC.keyTag key) | key <- dnskeys] ++ [showSig sigrd | (sigrd, _) <- sigs]
+    verifyErrors =
+        [ s
+        | (sigrd, _) <- sigs
+        , key <- dnskeys
+        , let dnskeyTag = SEC.keyTag key
+        , dnskeyTag == rrsig_key_tag sigrd
+        , Left em <- [verify key sigrd]
+        , s <- ["  error: " ++ em, "    " ++ show sigrd, "    " ++ showKey key dnskeyTag]
+        ]
+    showSig sigrd = "rrsig: " ++ show sigrd
+    showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
 
 {- get not verified canonical RRset -}
 canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
