@@ -14,7 +14,6 @@ module DNS.Cache.Iterative.ResolveJust (
 
 -- GHC packages
 import Control.Monad (join, when)
-import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
@@ -321,12 +320,12 @@ maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
-servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \srrs rank -> do
+servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \srrs _rank -> do
     let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
     case soaRRs of
         [] -> pure noDelegation {- not workaround fallbacks -}
         {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
-        [_] -> getWorkaround >>= verifySOA srrs rank
+        [_] -> getWorkaround >>= verifySOA
         _ : _ : _ -> multipleSOA soaRRs
   where
     soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
@@ -339,15 +338,13 @@ servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \srrs rank -> 
         lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
         throwDnsError DNS.ServerFailure
     getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [])
-    verifySOA srrs rank wd
+    verifySOA wd
         | null dnskeys = pure $ hasDelegation wd
-        | otherwise = do
-            now <- liftIO =<< lift (asks currentSeconds_)
-            Verify.withCanonical' now dnskeys dom SOA (soaRD . rdata) srrs rank nullSOA ncSOA result
+        | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
       where
         dnskeys = delegationDNSKEY wd
         nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
-        ncSOA _rrs _s = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
+        ncSOA = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
         result _ soaRRset _cacheSOA
             | rrsetValid soaRRset = pure $ hasDelegation wd
             | otherwise = verificationError
