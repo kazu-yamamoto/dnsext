@@ -14,6 +14,7 @@ import Control.Monad.Trans.Reader (asks)
 import DNS.Types.Decode (EpochTime)
 
 -- other packages
+import System.Console.ANSI.Types
 
 -- dns packages
 import DNS.Do53.Memo (Ranking)
@@ -66,8 +67,18 @@ withCanonical
 {- FOURMOLU_ENABLE -}
 withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
     now <- liftIO =<< asks currentSeconds_
-    let notCanonical rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
-    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK notCanonical rightK
+    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK ncK withRRS
+  where
+    ncK rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
+    withRRS x rrset cache = do
+        mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
+        rightK x rrset cache
+    logInvalids es = do
+        (x, xs) <- pure $ case lines es of
+            [] -> ("", [])
+            x : xs -> (": " ++ x, xs)
+        clogLn Log.DEMO (Just Cyan) $ "withCanonical: InvalidRRS" ++ x
+        logLines Log.DEMO xs
 
 {- FOURMOLU_DISABLE -}
 withCanonical'
