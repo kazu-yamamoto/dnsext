@@ -187,15 +187,14 @@ resolveTYPE :: Domain -> TYPE -> DNSQuery (DNSMessage, Maybe (Domain, RRset), ([
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveExact bn typ
     let cnDomain rr = DNS.rdataField (rdata rr) DNS.cname_domain
-        nullCNAME = pure $ (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
-        ncCNAME = pure $ pure (msg, Nothing, ([], []))
+        nullCNAME = (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
+        ncCNAME = pure (msg, Nothing, ([], []))
         ansHasTYPE = any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg
-        mkResult cnames cnameRRset cacheCNAME = pure $ do
+        mkResult cnames cnameRRset cacheCNAME = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
             lift cacheCNAME $> (msg, cninfo, ([], []))
-    verify <- lift $ Verify.withCanonical delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
-    verify
+    Verify.with delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
 {-# WARNING
     recoverRRset
