@@ -30,6 +30,7 @@ spec = do
         it "ECDSA/P384" $ caseRRSIG ecdsaP384
         it "Ed25519" $ caseRRSIG ed25519
         it "Ed448" $ caseRRSIG ed448
+        it "some RData length" $ caseRRSIG someRDataLength
     describe "NSEC3 hash" $ do
         it "RFC7129 section5" $ caseNSEC3Hash nsec3HashRFC7129
     describe "verify NSEC3" $ do
@@ -605,6 +606,76 @@ ed448 =
             " Nmc0rgGKpr3GKYXcB1JmqqS4NYwhmechvJTqVzt3jR+Qy/lSLFoIk1L+9e3 \
             \ 9GPL+5tVzDPN3f9kAwiu8KCuPPjtl227ayaCZtRKZuJax7n9NuYlZJIusX0 \
             \ SOIOKBGzG+yWYtz1/jjbzl5GGkWvREUCUA "
+
+someRDataLength :: RRSIG_CASE
+someRDataLength =
+    ( ResourceRecord
+        { rrname = "1.in-addr.arpa."
+        , rrttl = 3600
+        , rrclass = classIN
+        , rrtype = DNSKEY
+        , rdata = key_rd
+        }
+    , [ ResourceRecord
+          { rrname = "1.in-addr.arpa."
+          , rrttl = 86400
+          , rrclass = classIN
+          , rrtype = NS
+          , rdata = rd_ns "apnic1.dnsnode.net."
+          }
+      , ResourceRecord
+          { rrname = "1.in-addr.arpa."
+          , rrttl = 86400
+          , rrclass = classIN
+          , rrtype = NS
+          , rdata = rd_ns "rirns.arin.net."
+          }
+      , ResourceRecord
+          { rrname = "1.in-addr.arpa."
+          , rrttl = 86400
+          , rrclass = classIN
+          , rrtype = NS
+          , rdata = rd_ns "ns2.apnic.net."
+          }
+      , ResourceRecord
+          { rrname = "1.in-addr.arpa."
+          , rrttl = 86400
+          , rrclass = classIN
+          , rrtype = NS
+          , rdata = rd_ns "ns3.lacnic.net."
+          }
+      , ResourceRecord
+          { rrname = "1.in-addr.arpa."
+          , rrttl = 86400
+          , rrclass = classIN
+          , rrtype = NS
+          , rdata = rd_ns "apnic.authdns.ripe.net."
+          }
+      ]
+    , ResourceRecord
+        { rrname = "1.in-addr.arpa."
+        , rrttl = 86400
+        , rrclass = classIN
+        , rrtype = RRSIG
+        , rdata = sig_rd
+        }
+    )
+  where
+    key_rd =
+      rd_dnskey'
+          256 3 13
+          " Mg+rz9zLYj22A5jXBeNUBJ0dgoFIsaJ0uxGMUQwe96SX5ZY3Rv7rsoT7 \
+          \ NxW3bz89yTEE3bsRC7ZNr3rJ6sXuvQ== "
+
+    sig_rd =
+      rd_rrsig'
+          NS 13 3
+          86400
+          "20230815144321" "20230731131321"
+          27138
+          "1.in-addr.arpa."
+          " orQelyK9FeIqXctGSJlavpVE3ZY1tR63RS6YXZE5wxLzj/yCo5ansthw \
+          \ vbr4qg0RNAblXlAObfERz7aE1e0z5A== "
 
 {- FOURMOLU_ENABLE -}
 
