@@ -145,9 +145,8 @@ canonicalRRsetSorted rrs = do
             ((==) `on` rrname) hd x
                 && ((==) `on` rrtype) hd x
                 && ((==) `on` rrclass) hd x
-                && ((==) `on` rrttl) hd x
     unless (all eqhd xs) $
-        Left "canonicalRRsetSorted: requires same ( rrname, rrtype, rrclass, rrttl )"
+        Left "canonicalRRsetSorted: requires same ( rrname, rrtype, rrclass )"
     let rds = [rdata rr | rr <- rrs]
     unless (all ((== 1) . length) $ group rds) $
         Left "canonicalRRsetSorted: requires unique RData set"
