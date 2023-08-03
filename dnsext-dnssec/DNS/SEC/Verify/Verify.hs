@@ -130,9 +130,9 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
    Same order between RData and RR, under same ( rrname, rrtype, rrclass, rrttl ). -}
 sortRDataCanonical :: [ResourceRecord] -> [(SPut (), ResourceRecord)]
 sortRDataCanonical rrs =
-    map snd $ sortOn fst [(runSPut sput, (sput, rr)) | rr <- rrs, let sput = putLenRData rr]
+    map snd $ sortOn fst [(runSPut sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
   where
-    putLenRData = with16Length . putRData Canonical . rdata
+    putRData' = putRData Canonical . rdata
 
 {- assume sorted input. generalized RRset with CPS -}
 canonicalRRsetSorted
