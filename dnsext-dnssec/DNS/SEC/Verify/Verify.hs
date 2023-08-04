@@ -124,7 +124,7 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"
 
-{- Canonical RR Ordering within an RRset
+{- RFC 4034 Section 6.3: Canonical RR Ordering within an RRset
    https://datatracker.ietf.org/doc/html/rfc4034#section-6.3
    "RRs with the same owner name,
     class, and type are sorted by treating the RDATA portion of the
