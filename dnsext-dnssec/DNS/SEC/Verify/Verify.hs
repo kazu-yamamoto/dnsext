@@ -124,15 +124,17 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"
 
-{- Canonical RR Ordering within an RRset
+{- RFC 4034 Section 6.3: Canonical RR Ordering within an RRset
    https://datatracker.ietf.org/doc/html/rfc4034#section-6.3
-   Assumes same ( rrname, rrtype, rrclass, rrttl ).
-   Same order between RData and RR, under same ( rrname, rrtype, rrclass, rrttl ). -}
+   "RRs with the same owner name,
+    class, and type are sorted by treating the RDATA portion of the
+    canonical form of each RR as a left-justified unsigned octet sequence" -}
 sortRDataCanonical :: [ResourceRecord] -> [(SPut (), ResourceRecord)]
 sortRDataCanonical rrs =
-    map snd $ sortOn fst [(runSPut sput, (sput, rr)) | rr <- rrs, let sput = putLenRData rr]
+    {- sortOn "RDATA portion of the canonical form" without RDATA length -}
+    map snd $ sortOn fst [(runSPut sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
   where
-    putLenRData = with16Length . putRData Canonical . rdata
+    putRData' = putRData Canonical . rdata
 
 {- assume sorted input. generalized RRset with CPS -}
 canonicalRRsetSorted
