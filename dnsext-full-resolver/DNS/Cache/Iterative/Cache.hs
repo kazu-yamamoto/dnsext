@@ -2,6 +2,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.Cache (
+    lookupValid,
+    lookupRRsetEither,
     lookupCache,
     lookupCacheEither,
     cacheAnswer,
@@ -12,6 +14,7 @@ module DNS.Cache.Iterative.Cache (
 
 -- GHC packages
 import Control.Arrow ((>>>))
+import Control.Monad (guard)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader (asks)
@@ -33,6 +36,7 @@ import DNS.Do53.Memo (
 import qualified DNS.Do53.Memo as Cache
 import DNS.SEC (
     RD_DNSKEY,
+    RD_RRSIG,
     TYPE,
  )
 import qualified DNS.SEC.Verify as SEC
@@ -42,8 +46,10 @@ import DNS.Types (
     ResourceRecord (..),
     TTL,
     TYPE (CNAME, NS, SOA),
+    CLASS,
  )
 import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
 
 -- this package
 import DNS.Cache.Iterative.Helpers
@@ -52,17 +58,72 @@ import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Log as Log
 
-lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = do
+type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
+
+withLookupCache :: CacheHandler a -> String -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+withLookupCache h logMark dom typ = do
     getCache <- asks getCache_
     getSec <- asks currentSeconds_
     result <- liftIO $ do
         cache <- getCache
         ts <- getSec
-        return $ Cache.lookup ts dom typ DNS.classIN cache
+        return $ h ts dom typ DNS.classIN cache
     let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-    logLn Log.DEBUG . unwords $ ["lookupCache:", show dom, show typ, show DNS.classIN, ":", pprResult]
+        mark ws
+            | null logMark = ws
+            | otherwise = (logMark ++ ":") : ws
+    logLn Log.DEBUG . unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
+
+lookupRRset :: String -> Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
+  where
+    mkAlive :: CacheHandler RRset
+    mkAlive ts = Cache.lookupAlive ts result
+    result ttl crset rank = either (const Nothing) rightK crset
+      where
+        rightK rv = (,) <$> rightRRset dom typ DNS.classIN ttl rv <*> pure rank
+
+valid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
+valid m = do
+  (rrset, _rank) <- m
+  guard $ rrsetValid rrset
+  m
+
+lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupValid dom typ = valid <$> lookupRRset "" dom typ
+
+-- | when cache has EMPTY result, lookup SOA data for top domain of this zone
+lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (Either (RRset, Ranking) RRset, Ranking))
+lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
+  where
+    mkAlive :: CacheHandler (Either (RRset, Ranking) RRset)
+    mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
+    result now cache ttl crs rank = case crs of
+        Left srcDom -> do
+            sp <- Cache.lookupAlive now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
+            Just (Left sp, rank)
+        Right rv@(_rds, _msigs) -> do
+            rrset <- rightRRset dom typ DNS.classIN ttl rv
+            Just (Right rrset, rank)
+    soaResult ettl srcDom ttl crs rank = either (const Nothing) rightK crs
+      where
+        rightK rv@(_rds, _msigs) = do
+            rrset <- rightRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -}) rv
+            Just (rrset, rank)
+
+rightRRset :: Domain -> TYPE -> CLASS -> TTL -> ([DNS.RData], Maybe [RD_RRSIG]) -> Maybe RRset
+rightRRset dom typ cls ttl (rds, msigs)
+    | null rds = Nothing
+    | otherwise = case msigs of
+        Nothing -> Just $ RRset dom typ cls ttl rds NotVerifiedRRS
+        Just [] -> Nothing
+        Just (sigs@(_:_)) -> Just $ RRset dom typ cls ttl rds (ValidRRS sigs)
+
+---
+
+lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
+lookupCache = withLookupCache Cache.lookup ""
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupCacheEither
@@ -70,17 +131,7 @@ lookupCacheEither
     -> Domain
     -> TYPE
     -> ContextT IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
-lookupCacheEither logMark dom typ = do
-    getCache <- asks getCache_
-    getSec <- asks currentSeconds_
-    result <- liftIO $ do
-        cache <- getCache
-        ts <- getSec
-        return $ Cache.lookupEither ts dom typ DNS.classIN cache
-    let plogLn lv s = logLn lv $ unwords ["lookupCacheEither:", logMark ++ ":", s]
-        pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-    plogLn Log.DEBUG . unwords $ [show dom, show typ, show DNS.classIN, ":", pprResult]
-    return result
+lookupCacheEither = withLookupCache Cache.lookupEither
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
