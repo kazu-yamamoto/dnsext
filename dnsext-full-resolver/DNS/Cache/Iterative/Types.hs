@@ -2,6 +2,7 @@ module DNS.Cache.Iterative.Types (
     UpdateCache,
     TimeCache,
     Result,
+    ResultRRS,
     Env (..),
     RRset (..),
     DEntry (..),
@@ -159,3 +160,4 @@ data RRset = RRset
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
+type ResultRRS = (RCODE, [RRset], [RRset])
