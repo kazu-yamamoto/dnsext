@@ -122,8 +122,11 @@ rightRRset dom typ cls ttl (rds, msigs)
 
 ---
 
+{- lookup RRs without sigs -}
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-lookupCache = withLookupCache Cache.lookup ""
+lookupCache dom typ = fmap noSigs <$> lookupRRset "" dom typ
+  where
+    noSigs (RRset{..}, rank) = ([ResourceRecord rrsName rrsType rrsClass rrsTTL rd | rd <- rrsRDatas], rank)
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupCacheEither
