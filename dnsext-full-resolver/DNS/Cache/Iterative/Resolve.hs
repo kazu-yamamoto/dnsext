@@ -10,6 +10,7 @@ module DNS.Cache.Iterative.Resolve (
 -- GHC packages
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
 import Data.List (uncons)
 
@@ -28,7 +29,6 @@ import qualified DNS.Do53.Memo as Cache
 import DNS.SEC (
     TYPE,
  )
-import qualified DNS.SEC.Verify as SEC
 import DNS.Types (
     DNSMessage,
     Domain,
@@ -88,11 +88,13 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
     called = lift $ logLn_ Log.DEBUG $ show (n0, typ)
     justCNAME bn = do
-        let noCache = do
+        reqDO <- lift . lift $ asks requestDO
+        let rrsFromRRset = rrListFromRRset reqDO
+            noCache = do
                 result <- cnameHandler bn
                 pure (([], bn), Right result)
 
-            withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], soa))
+            withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], rrsFromRRset soa))
 
             cachedCNAME (rrs, soa) =
                 pure
@@ -106,7 +108,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
-            (cachedCNAME . either (\soa -> ([], soa)) (\(_cn, cnRR) -> ([cnRR], [])))
+            (cachedCNAME . either (\soa -> ([], rrsFromRRset soa)) (\cname -> (rrsFromRRset cname, [])))
             =<< lift (lookupCNAME bn)
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
@@ -116,22 +118,28 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
             lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             throwDnsError DNS.ServerFailure
         | otherwise = do
-            let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            reqDO <- lift . lift $ asks requestDO
+            let rrsFromRRset = rrListFromRRset reqDO
+                recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do
                     (msg, cname, vsec) <- typeHandler bn typ
                     maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
 
-                withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], soa))
+                withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], rrsFromRRset soa))
 
                 noTypeCache =
                     maybe
                         (maybe noCache withNXC =<< lift (lookupNX bn))
                         recCNAMEs_ {- recurse with cname cache -}
-                        =<< lift ((recover =<<) . joinE <$> lookupCNAME bn)
+                        =<< lift ((withCN =<<) . joinE <$> lookupCNAME bn)
                   where
                     {- when CNAME has NODATA, do not loop with CNAME domain -}
                     joinE = (either (const Nothing) Just =<<)
-                    recover (dom, cnrr) = (,) dom <$> recoverRRset [cnrr]
+                    withCN cnRRset = do
+                        (cn, _) <- uncons cns
+                        Just (cn, cnRRset)
+                      where
+                        cns = [cn | rd <- rrsRDatas cnRRset, Just cn <- [DNS.rdataField rd DNS.cname_domain]]
 
                 cachedType (tyRRs, soa) = pure ((dcnRRsets [], bn), Left (DNS.NoErr, tyRRs, soa))
 
@@ -139,14 +147,14 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
                 noTypeCache
                 ( cachedType
                     . either
-                        (\(soa, _rank) -> ([], soa))
-                        (\tyRRs -> (tyRRs, [] {- return cached result with target typ -}))
+                        (\(soa, _rank) -> ([], rrsFromRRset soa))
+                        (\xrrs -> (rrsFromRRset xrrs, [] {- return cached result with target typ -}))
                 )
                 =<< lift (lookupType bn typ)
       where
         mcc = maxCNameChain
 
-    lookupNX :: Domain -> ContextT IO (Maybe ([ResourceRecord], Ranking))
+    lookupNX :: Domain -> ContextT IO (Maybe (RRset, Ranking))
     lookupNX bn =
         maybe (return Nothing) (either (return . Just) inconsistent)
             =<< lookupType bn Cache.NX
@@ -157,16 +165,15 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
     -- Nothing のときはキャッシュに無し
     -- Just Left のときはキャッシュに有るが CNAME レコード無し
-    lookupCNAME :: Domain -> ContextT IO (Maybe (Either [ResourceRecord] (Domain, ResourceRecord)))
+    lookupCNAME :: Domain -> ContextT IO (Maybe (Either RRset RRset))
     lookupCNAME bn = do
-        maySOAorCNRRs <- lookupType bn CNAME {- TODO: get CNAME RRSIG from cache -}
+        maySOAorCNRRs <- lookupType bn CNAME
         return $ do
-            let soa (rrs, _rank) = Just $ Left rrs
-                cname rrs = Right . fst <$> uncons (cnameList bn (,) rrs)
-            {- should not be possible, but as cache miss-hit when empty CNAME list case -}
-            either soa cname =<< maySOAorCNRRs
+            let soa (rrs, _rank) = Left rrs
+                cname rrs = Right rrs
+            either soa cname <$> maySOAorCNRRs
 
-    lookupType bn t = (replyRank =<<) <$> lookupCacheEither logMark bn t
+    lookupType bn t = (replyRank =<<) <$> lookupRRsetEither logMark bn t
     replyRank (x, rank)
         -- 最も低い ranking は reply の answer に利用しない
         -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
@@ -195,18 +202,6 @@ resolveTYPE bn typ = do
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
             lift cacheCNAME $> (msg, cninfo, ([], []))
     Verify.with delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
-
-{-# WARNING
-    recoverRRset
-    "remove this definition after supporting lookups of rrset from cache"
-    #-}
-recoverRRset :: [ResourceRecord] -> Maybe RRset
-recoverRRset rrs =
-    either (const Nothing) (\cps -> Just $ cps k) $
-        SEC.canonicalRRsetSorted sortedRRs
-  where
-    k dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
-    (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 maxCNameChain :: Int
 maxCNameChain = 16
