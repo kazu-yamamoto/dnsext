@@ -10,7 +10,6 @@ module DNS.Cache.Iterative.Resolve (
 -- GHC packages
 import Control.Monad (when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (asks)
 import Data.Functor (($>))
 import Data.List (uncons)
 
@@ -39,7 +38,6 @@ import qualified DNS.Types as DNS
 
 -- this package
 import DNS.Cache.Iterative.Cache
-import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.ResolveJust
 import DNS.Cache.Iterative.Rev
 import DNS.Cache.Iterative.Types
@@ -56,7 +54,7 @@ runResolve
     -> IO
         ( Either
             QueryError
-            (([RRset], Domain), Either Result (DNSMessage, ([RRset], [RRset])))
+            (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
         )
 runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt cd
 
@@ -67,7 +65,7 @@ runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt cd
 resolve
     :: Domain
     -> TYPE
-    -> DNSQuery (([RRset], Domain), Either Result (DNSMessage, ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 resolveLogic
@@ -76,7 +74,7 @@ resolveLogic
     -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
     -> Domain
     -> TYPE
-    -> DNSQuery (([RRset], Domain), Either Result (a, ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (a, ([RRset], [RRset])))
 resolveLogic logMark cnameHandler typeHandler n0 typ =
     maybe notSpecial special $ takeSpecialRevDomainResult n0
   where
@@ -88,13 +86,11 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
     called = lift $ logLn_ Log.DEBUG $ show (n0, typ)
     justCNAME bn = do
-        reqDO <- lift . lift $ asks requestDO
-        let rrsFromRRset = rrListFromRRset reqDO
-            noCache = do
+        let noCache = do
                 result <- cnameHandler bn
                 pure (([], bn), Right result)
 
-            withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], rrsFromRRset soa))
+            withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], [soa]))
 
             cachedCNAME (rrs, soa) =
                 pure
@@ -108,7 +104,7 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
 
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
-            (cachedCNAME . either (\soa -> ([], rrsFromRRset soa)) (\cname -> (rrsFromRRset cname, [])))
+            (cachedCNAME . either (\soa -> ([], [soa])) (\cname -> ([cname], [])))
             =<< lift (lookupCNAME bn)
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
@@ -118,14 +114,12 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
             lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             throwDnsError DNS.ServerFailure
         | otherwise = do
-            reqDO <- lift . lift $ asks requestDO
-            let rrsFromRRset = rrListFromRRset reqDO
-                recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do
                     (msg, cname, vsec) <- typeHandler bn typ
                     maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
 
-                withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], rrsFromRRset soa))
+                withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], [soa]))
 
                 noTypeCache =
                     maybe
@@ -147,8 +141,8 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
                 noTypeCache
                 ( cachedType
                     . either
-                        (\(soa, _rank) -> ([], rrsFromRRset soa))
-                        (\xrrs -> (rrsFromRRset xrrs, [] {- return cached result with target typ -}))
+                        (\(soa, _rank) -> ([], [soa]))
+                        (\xrrs -> ([xrrs], [] {- return cached result with target typ -}))
                 )
                 =<< lift (lookupType bn typ)
       where
