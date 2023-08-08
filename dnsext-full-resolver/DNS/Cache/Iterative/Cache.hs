@@ -5,7 +5,6 @@ module DNS.Cache.Iterative.Cache (
     lookupValid,
     lookupRRsetEither,
     lookupCache,
-    lookupCacheEither,
     cacheAnswer,
     cacheSection,
     cacheNoRRSIG,
@@ -127,14 +126,6 @@ lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = fmap noSigs <$> lookupRRset "" dom typ
   where
     noSigs (RRset{..}, rank) = ([ResourceRecord rrsName rrsType rrsClass rrsTTL rd | rd <- rrsRDatas], rank)
-
--- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupCacheEither
-    :: String
-    -> Domain
-    -> TYPE
-    -> ContextT IO (Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking))
-lookupCacheEither = withLookupCache Cache.lookupEither
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
