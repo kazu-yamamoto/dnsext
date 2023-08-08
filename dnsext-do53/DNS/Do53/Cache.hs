@@ -5,9 +5,6 @@ module DNS.Do53.Cache (
     empty,
     null,
     lookupAlive,
-    lookup,
-    lookupEither,
-    takeRRSet,
     insert,
     expires,
     size,
@@ -36,6 +33,11 @@ module DNS.Do53.Cache (
     member,
     dump,
     dumpKeys,
+
+    -- * tests
+    lookup,
+    lookupEither,
+    takeRRSet,
 )
 where
 
