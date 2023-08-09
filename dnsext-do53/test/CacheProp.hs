@@ -131,7 +131,7 @@ genCrsAssoc =
     , (AAAA, crset . (DNS.rd_aaaa <$>) <$> listOf1 (elements v6List))
     ]
   where
-    crset rd = Right (rd, Nothing)
+    crset rds = Cache.NotVerified rds
 
 toULString :: String -> Gen String
 toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
