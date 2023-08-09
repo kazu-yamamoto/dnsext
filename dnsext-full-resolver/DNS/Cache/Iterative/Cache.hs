@@ -27,6 +27,7 @@ import System.Console.ANSI.Types
 
 -- dns packages
 import DNS.Do53.Memo (
+    unCRSet,
     Ranking,
     insertSetEmpty,
     rankedAnswer,
@@ -46,6 +47,7 @@ import DNS.Types (
     TTL,
     TYPE (CNAME, NS, SOA),
     CLASS,
+    RData,
  )
 import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
@@ -79,18 +81,19 @@ lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
     mkAlive ts = Cache.lookupAlive ts result
-    result ttl crset rank = either (const Nothing) rightK crset
+    result ttl crset rank = (,) <$> unCRSet (const Nothing) notVerified valid crset <*> pure rank
       where
-        rightK rv = (,) <$> rightRRset dom typ DNS.classIN ttl rv <*> pure rank
+        notVerified = notVerifiedRRset dom typ DNS.classIN ttl
+        valid = validRRset dom typ DNS.classIN ttl
 
-valid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
-valid m = do
+guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
+guardValid m = do
   (rrset, _rank) <- m
   guard $ rrsetValid rrset
   m
 
 lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
-lookupValid dom typ = valid <$> lookupRRset "" dom typ
+lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (Either (RRset, Ranking) RRset, Ranking))
@@ -98,26 +101,26 @@ lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler (Either (RRset, Ranking) RRset)
     mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
-    result now cache ttl crs rank = case crs of
-        Left srcDom -> do
-            sp <- Cache.lookupAlive now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
-            Just (Left sp, rank)
-        Right rv@(_rds, _msigs) -> do
-            rrset <- rightRRset dom typ DNS.classIN ttl rv
-            Just (Right rrset, rank)
-    soaResult ettl srcDom ttl crs rank = either (const Nothing) rightK crs
+    result now cache ttl crs rank = (,) <$> unCRSet negative notVerified valid crs <*> pure rank
       where
-        rightK rv@(_rds, _msigs) = do
-            rrset <- rightRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -}) rv
-            Just (rrset, rank)
+        {- EMPTY hit. empty ranking and SOA result. -}
+        negative soaDom = Left <$> Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.classIN cache
+        notVerified rds = Right <$> notVerifiedRRset dom typ DNS.classIN ttl rds
+        valid rds sigs = Right <$> validRRset dom typ DNS.classIN ttl rds sigs
 
-rightRRset :: Domain -> TYPE -> CLASS -> TTL -> ([DNS.RData], Maybe [RD_RRSIG]) -> Maybe RRset
-rightRRset dom typ cls ttl (rds, msigs)
-    | null rds = Nothing
-    | otherwise = case msigs of
-        Nothing -> Just $ RRset dom typ cls ttl rds NotVerifiedRRS
-        Just [] -> Nothing
-        Just (sigs@(_:_)) -> Just $ RRset dom typ cls ttl rds (ValidRRS sigs)
+    soaResult ettl srcDom ttl crs rank = (,) <$> unCRSet (const Nothing) notVerified valid crs <*> pure rank
+      where
+        notVerified = notVerifiedRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -})
+        valid = validRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -})
+
+notVerifiedRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> Maybe RRset
+notVerifiedRRset _ _ _ _ [] = Nothing
+notVerifiedRRset dom typ cls ttl rds = Just $ RRset dom typ cls ttl rds NotVerifiedRRS
+
+validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> Maybe RRset
+validRRset _ _ _ _ [] _ = Nothing
+validRRset _ _ _ _ _ [] = Nothing
+validRRset dom typ cls ttl rds sigs = Just $ RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
 
@@ -139,7 +142,7 @@ cacheNoRRSIG rrs0 rank = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
             plogLn Log.DEBUG . unwords $ ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
-            liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right (rds, Nothing)) rank
+            liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Cache.NotVerified rds) rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
 cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
