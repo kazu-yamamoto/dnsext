@@ -349,11 +349,10 @@ fromRDatas rds = rds `listseq` Just (NotVerified rds)
     listseq :: [a] -> b -> b
     listseq ps q = case listRnf ps of () -> q
 
-rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
-rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
-    | rrclass == DNS.classIN
-        && DNS.rdataType rd == rrtype =
-        Just (Question rrname rrtype rrclass, rrttl)
+rrSetKey :: ResourceRecord -> Maybe Key
+rrSetKey (ResourceRecord rrname rrtype rrclass _rrttl rd)
+    | rrclass == DNS.classIN && DNS.rdataType rd == rrtype =
+        Just (Question rrname rrtype rrclass)
     | otherwise = Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
@@ -362,8 +361,9 @@ takeRRSet rrs@(_ : _) = do
     ps <- mapM rrSetKey rrs -- rrtype and rdata are consistent for each RR
     guard $ length (group ps) == 1 -- query key and TLL are equal for each elements
     (k', _) <- uncons ps -- always success because rrs is not null.
+    let ttl = minimum $ map DNS.rrttl rrs -- always exist because rrs is not null.
     rds <- fromRDatas $ map DNS.rdata rrs
-    return $ \h -> uncurry h k' rds
+    return $ \h -> h k' ttl rds
 
 {- FOURMOLU_DISABLE -}
 extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
