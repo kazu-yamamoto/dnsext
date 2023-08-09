@@ -222,10 +222,26 @@ lookup_ mk k (Cache cache _) = do
     (eol, Val crset rank) <- k `PSQ.lookup` cache
     mk eol crset rank
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
+-- |
+-- >>> c0 = empty 256
+-- >>> dump <$> insertRRs 0 [] RankAnswer c0
+-- Nothing
+-- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.classIN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
+-- >>> mapM_ print $ dump c1
+-- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.1.1,192.168.1.2]) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.32.1]) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
-insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
+insertRRs now rrs rank = updateAll
   where
-    insertRRSet rrset = rrset $ \key ttl cr -> insert now key ttl cr rank c
+    updateAll = foldr compU (const Nothing) [ u | cps <- is, let u = update cps ]
+    update rrsetCPS c = rrsetCPS $ \key ttl cr srank -> insert now key ttl cr srank c
+    (_errs, is) = insertSetFromSection rrs rank
+
+    compU :: (a -> Maybe a) -> (a -> Maybe a) -> (a -> Maybe a)
+    compU u au c = maybe (u c) u $ au c
 
 -- |
 --   Insert RR-list example with error-handling
