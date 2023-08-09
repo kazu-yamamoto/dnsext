@@ -26,7 +26,8 @@ module DNS.Do53.Cache (
     Key,
     Question (..),
     Val (..),
-    CRSet,
+    CRSet (..),
+    unCRSet,
     extractRRSet,
     (<+),
     alive,
@@ -69,12 +70,20 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
 
-{- CRSet
-   -  Left  - NXDOMAIN or NODATA, hold zone-domain delegation from
-   -  Right (_:_, Nothing) - not empty RRSET, not verified
-   -  Right (_:_, Just []) - not empty RRSET, verification failed
-   -  Right (_:_, Just (_:_)) - not empty RRSET, verification succeeded -}
-type CRSet = Either Domain ([RData], Maybe [RD_RRSIG])
+{- FOURMOLU_DISABLE -}
+data CRSet
+    = Negative Domain           {- NXDOMAIN or NODATA, hold zone-domain delegation from -}
+    | NotVerified [RData]       {- not empty RRSET, not verified -}
+    {-- | VerifyFailed [RData]  {- verification failed -} {- unused state -} --}
+    | Valid [RData] [RD_RRSIG]  {- not empty RRSET, verification succeeded -}
+    deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
+
+unCRSet :: (Domain -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
+unCRSet notExist notVerified valid crs = case crs of
+    Negative soa -> notExist soa
+    NotVerified rds -> notVerified rds
+    Valid rds sigs -> valid rds sigs
 
 ---
 
@@ -176,8 +185,8 @@ lookupEither
 lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
   where
     result ttl crs rank = case crs of
-        Left srcDom -> do
-            sp <- lookupAlive now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
+        Negative soaDom -> do
+            sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
             return (Left sp, rank)
         _ ->
             Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
@@ -329,12 +338,11 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 toRDatas :: CRSet -> ([RData], [RD_RRSIG])
-toRDatas (Left _) = ([], [])
-toRDatas (Right (rs, sigs)) = (rs, maybe [] id sigs)
+toRDatas = unCRSet (const ([], [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas [] = Nothing
-fromRDatas rds = rds `listseq` Just (Right (rds, Nothing))
+fromRDatas rds = rds `listseq` Just (NotVerified rds)
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())
@@ -384,6 +392,6 @@ insertSetEmpty
     -> TTL
     -> Ranking
     -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty srcDom dom typ ttl rank h = srcDom `seq` h key ttl (Left srcDom) rank
+insertSetEmpty soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
   where
     key = Question dom typ DNS.classIN
