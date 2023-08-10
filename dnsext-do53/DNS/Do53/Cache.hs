@@ -222,10 +222,26 @@ lookup_ mk k (Cache cache _) = do
     (eol, Val crset rank) <- k `PSQ.lookup` cache
     mk eol crset rank
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
+-- |
+-- >>> c0 = empty 256
+-- >>> dump <$> insertRRs 0 [] RankAnswer c0
+-- Nothing
+-- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.classIN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
+-- >>> mapM_ print $ dump c1
+-- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.1.1,192.168.1.2]) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.32.1]) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
-insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
+insertRRs now rrs rank = updateAll
   where
-    insertRRSet rrset = rrset $ \key ttl cr -> insert now key ttl cr rank c
+    updateAll = foldr compU (const Nothing) [ u | cps <- is, let u = update cps ]
+    update rrsetCPS c = rrsetCPS $ \key ttl cr srank -> insert now key ttl cr srank c
+    (_errs, is) = insertSetFromSection rrs rank
+
+    compU :: (a -> Maybe a) -> (a -> Maybe a) -> (a -> Maybe a)
+    compU u au c = maybe (u c) u $ au c
 
 -- |
 --   Insert RR-list example with error-handling
@@ -349,11 +365,10 @@ fromRDatas rds = rds `listseq` Just (NotVerified rds)
     listseq :: [a] -> b -> b
     listseq ps q = case listRnf ps of () -> q
 
-rrSetKey :: ResourceRecord -> Maybe (Key, TTL)
-rrSetKey (ResourceRecord rrname rrtype rrclass rrttl rd)
-    | rrclass == DNS.classIN
-        && DNS.rdataType rd == rrtype =
-        Just (Question rrname rrtype rrclass, rrttl)
+rrSetKey :: ResourceRecord -> Maybe Key
+rrSetKey (ResourceRecord rrname rrtype rrclass _rrttl rd)
+    | rrclass == DNS.classIN && DNS.rdataType rd == rrtype =
+        Just (Question rrname rrtype rrclass)
     | otherwise = Nothing
 
 takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
@@ -362,8 +377,9 @@ takeRRSet rrs@(_ : _) = do
     ps <- mapM rrSetKey rrs -- rrtype and rdata are consistent for each RR
     guard $ length (group ps) == 1 -- query key and TLL are equal for each elements
     (k', _) <- uncons ps -- always success because rrs is not null.
+    let ttl = minimum $ map DNS.rrttl rrs -- always exist because rrs is not null.
     rds <- fromRDatas $ map DNS.rdata rrs
-    return $ \h -> uncurry h k' rds
+    return $ \h -> h k' ttl rds
 
 {- FOURMOLU_DISABLE -}
 extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
