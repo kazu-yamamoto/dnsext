@@ -101,14 +101,14 @@ lookupCacheSection
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     nx <- lookupCache (keyForNX q) c
     case nx of
-        Just (_, Left _) -> return $ Left NameError
-        Just (_, Right _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
+        Just (_, Negative{}) -> return $ Left NameError
+        Just (_, _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
         Nothing -> do
             mx <- lookupCache q c
             case mx of
                 Nothing -> notCached
-                Just (_, Left _) -> return $ Right [] {- NoData -}
-                Just (_, Right rs) -> return $ Right rs
+                Just (_, Negative{}) -> return $ Right [] {- NoData -}
+                Just (_, crs) -> return $ Right $ crsRDatas crs
   where
     notCached = do
         eres <- lookupRaw env q
@@ -132,6 +132,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                     Right rss -> do
                         cachePositive cconf c q now rss
                         return $ Right $ map rdata rss
+    crsRDatas = unCRSet (const []) id const
     toRR = filter (qtype `isTypeOf`) . answer
     (c, cconf) = fromJust lenvCache
 
@@ -142,7 +143,7 @@ cachePositive cconf c k now rss
     | otherwise = insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
-    v = Right rds
+    v = NotVerified rds
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
 insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
@@ -155,7 +156,7 @@ insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
 cacheNegative :: CacheConf -> Memo -> Key -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
     [] -> return () -- does not cache anything
-    soa : _ -> insertNegative cconf c k now (Left $ rrname soa) $ rrttl soa
+    soa : _ -> insertNegative cconf c k now (Negative $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 

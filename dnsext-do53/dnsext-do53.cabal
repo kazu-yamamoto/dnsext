@@ -56,6 +56,7 @@ library
         deepseq,
         dnsext-log,
         dnsext-types,
+        dnsext-dnssec,
         iproute >=1.3.2,
         mtl,
         network >=3.1.4,

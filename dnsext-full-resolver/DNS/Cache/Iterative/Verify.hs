@@ -18,6 +18,7 @@ import System.Console.ANSI.Types
 
 -- dns packages
 import DNS.Do53.Memo (Ranking)
+import qualified DNS.Do53.Memo as Cache
 import DNS.SEC (
     RD_DNSKEY,
     RD_RRSIG (..),
@@ -157,7 +158,10 @@ cacheRRset
     -> [RData]
     -> MayVerifiedRRS
     -> ContextT IO ()
-cacheRRset rank dom typ cls ttl rds _sigrds = do
-    insertRRSet <- asks insert_
-    logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
-    liftIO $ insertRRSet (DNS.Question dom typ cls) ttl (Right rds) rank {- TODO: cache with RD_RRSIG -}
+cacheRRset rank dom typ cls ttl rds mv =
+    mayVerifiedRRS (doCache $ Cache.NotVerified rds) (const $ pure ()) (doCache . Cache.Valid rds) mv
+  where
+    doCache crs = do
+        insertRRSet <- asks insert_
+        logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
+        liftIO $ insertRRSet (DNS.Question dom typ cls) ttl crs rank

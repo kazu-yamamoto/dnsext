@@ -25,7 +25,6 @@ import Numeric (readDec, readHex, showHex)
 -- dns packages
 import DNS.Types (
     Domain,
-    ResourceRecord (..),
     TYPE (SOA),
     classIN,
  )
@@ -46,23 +45,24 @@ data EmbedResult
     | EmbedIp6
     deriving (Show)
 
-runEmbedResult :: Domain -> EmbedResult -> Result
+runEmbedResult :: Domain -> EmbedResult -> ResultRRS
 runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
   where
     soa EmbedLocal = soaRR "localhost." "root@localhost." 1 604800 86400 2419200 604800
     soa EmbedInAddr = soaRR dom "." 0 28800 7200 604800 86400
     soa EmbedIp6 = soaRR dom "." 0 28800 7200 604800 86400
     soaRR mname mail ser refresh retry expire ncttl =
-        ResourceRecord
-            { rrname = dom
-            , rrtype = SOA
-            , rrclass = classIN
-            , rrttl = ncttl
-            , rdata = DNS.rd_soa mname mail ser refresh retry expire ncttl
+        RRset
+            { rrsName = dom
+            , rrsType = SOA
+            , rrsClass = classIN
+            , rrsTTL = ncttl
+            , rrsRDatas = [DNS.rd_soa mname mail ser refresh retry expire ncttl]
+            , rrsMayVerified = NotVerifiedRRS
             }
 
 -- result for special IP-address block from reverse lookup domain
-takeSpecialRevDomainResult :: Domain -> Maybe Result
+takeSpecialRevDomainResult :: Domain -> Maybe ResultRRS
 takeSpecialRevDomainResult dom =
     fmap (uncurry runEmbedResult) $
         fst <$> v4EmbeddedResult dom <|> fst <$> v6EmbeddedResult dom

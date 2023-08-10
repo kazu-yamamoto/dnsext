@@ -240,14 +240,19 @@ getResultIterative n typ = do
     reqDO <- lift . lift $ asks requestDO
     let fromRRsets = concatMap $ rrListFromRRset reqDO
         fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
-    return $ makeResult reqDO cnrrs $ either id fromMessage etm
+    return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
+
+resultFromRRS ::RequestDO -> ResultRRS -> Result
+resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
+  where
+    fromRRsets = concatMap $ rrListFromRRset reqDO
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
 getResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
 getResultCached n typ = do
     ((cnrrs, _rn), e) <- resolveByCache n typ
     reqDO <- lift . lift $ asks requestDO
-    return $ either (Just . makeResult reqDO cnrrs) (const Nothing) e
+    return $ either (Just . makeResult reqDO cnrrs . resultFromRRS reqDO) (const Nothing) e
 
 makeResult :: RequestDO -> [RRset] -> Result -> Result
 makeResult reqDO cnRRset (rcode, ans, auth) =
@@ -279,7 +284,7 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
 resolveByCache
     :: Domain
     -> TYPE
-    -> DNSQuery (([RRset], Domain), Either Result ((), ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
 resolveByCache =
     resolveLogic
         "cache"

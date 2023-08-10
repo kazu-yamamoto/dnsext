@@ -81,7 +81,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
             (,) eresult . convert . Cache.dump <$> getCache_ cxt
         clookup cs n typ = lookup (fromString n, typ) cs
         check cs n typ = lookup (fromString n, typ) cs
-        nodata = maybe False (\(crset, _rank) -> either (const True) (const False) crset)
+        nodata = maybe False (\(crset, _rank) -> Cache.unCRSet (const True) (const False) (\_ _ -> False) crset)
 
     it "answer - a" $ do
         (_, cs) <- getResolveCache "iij.ad.jp." A

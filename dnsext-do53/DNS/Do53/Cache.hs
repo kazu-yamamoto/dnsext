@@ -4,9 +4,7 @@ module DNS.Do53.Cache (
     -- * cache interfaces
     empty,
     null,
-    lookup,
-    lookupEither,
-    takeRRSet,
+    lookupAlive,
     insert,
     expires,
     size,
@@ -28,13 +26,19 @@ module DNS.Do53.Cache (
     Key,
     Question (..),
     Val (..),
-    CRSet,
+    CRSet (..),
+    unCRSet,
     extractRRSet,
     (<+),
     alive,
     member,
     dump,
     dumpKeys,
+
+    -- * tests
+    lookup,
+    lookupEither,
+    takeRRSet,
 )
 where
 
@@ -52,6 +56,7 @@ import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 
 -- dnsext packages
+import DNS.SEC (RD_RRSIG, TYPE (RRSIG))
 import DNS.Types (
     CLASS,
     DNSMessage,
@@ -65,10 +70,20 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
 
-{- CRSet
-   -  Left  - NXDOMAIN or NODATA, hold zone-domain delegation from
-   -  Right - not empty RRSET                                 -}
-type CRSet = Either Domain [RData]
+{- FOURMOLU_DISABLE -}
+data CRSet
+    = Negative Domain           {- NXDOMAIN or NODATA, hold zone-domain delegation from -}
+    | NotVerified [RData]       {- not empty RRSET, not verified -}
+    {-- | VerifyFailed [RData]  {- verification failed -} {- unused state -} --}
+    | Valid [RData] [RD_RRSIG]  {- not empty RRSET, verification succeeded -}
+    deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
+
+unCRSet :: (Domain -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
+unCRSet notExist notVerified valid crs = case crs of
+    Negative soa -> notExist soa
+    NotVerified rds -> notVerified rds
+    Valid rds sigs -> valid rds sigs
 
 ---
 
@@ -157,7 +172,7 @@ lookup
     -> Maybe ([ResourceRecord], Ranking)
 lookup now dom typ cls = lookupAlive now result dom typ cls
   where
-    result ttl (Val crs rank) = Just (extractRRSet dom typ cls ttl crs, rank)
+    result ttl crs rank = Just (extractRRSet dom typ cls ttl crs, rank)
 
 -- when cache has EMPTY, returns SOA
 lookupEither
@@ -166,32 +181,21 @@ lookupEither
     -> TYPE
     -> CLASS
     -> Cache
-    -> Maybe
-        ( Either ([ResourceRecord], Ranking) [ResourceRecord]
-        , Ranking {- SOA or RRs, ranking -}
-        )
+    -> Maybe (Either ([ResourceRecord], Ranking) [ResourceRecord], Ranking {- SOA or RRs, ranking -})
 lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
   where
-    result ttl (Val crs rank) = case crs of
-        Left srcDom -> do
-            sp <- lookupAlive now (soaResult ttl srcDom) srcDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
+    result ttl crs rank = case crs of
+        Negative soaDom -> do
+            sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
             return (Left sp, rank)
         _ ->
             Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
-    soaResult ettl srcDom ttl (Val crs rank) =
-        Just
-            ( extractRRSet
-                srcDom
-                SOA
-                DNS.classIN
-                (ettl `min` ttl {- treated as TTL of empty data -})
-                crs
-            , rank
-            )
+    soaResult ettl srcDom ttl crs rank =
+        Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -}) crs, rank)
 
 lookupAlive
     :: EpochTime
-    -> (TTL -> Val -> Maybe a)
+    -> (TTL -> CRSet -> Ranking -> Maybe a)
     -> Domain
     -> TYPE
     -> CLASS
@@ -199,24 +203,24 @@ lookupAlive
     -> Maybe a
 lookupAlive now mk dom typ cls = lookup_ mkAlive $ Question dom typ cls
   where
-    mkAlive eol v = do
+    mkAlive eol crset rank = do
         ttl <- alive now eol
-        mk ttl v
+        mk ttl crset rank
 
 -- lookup interface for stub resolver
 stubLookup :: Key -> Cache -> Maybe (EpochTime, CRSet)
 stubLookup k = lookup_ result k
   where
-    result eol (Val crs _) = Just (eol, crs)
+    result eol crs _ = Just (eol, crs)
 
 lookup_
-    :: (EpochTime -> Val -> Maybe a)
+    :: (EpochTime -> CRSet -> Ranking -> Maybe a)
     -> Key
     -> Cache
     -> Maybe a
 lookup_ mk k (Cache cache _) = do
-    (eol, v) <- k `PSQ.lookup` cache
-    mk eol v
+    (eol, Val crset rank) <- k `PSQ.lookup` cache
+    mk eol crset rank
 
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank c = insertRRSet =<< takeRRSet rrs
@@ -248,7 +252,7 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
     lookupRank =
         lookupAlive
             now
-            (\_ (Val _ r) -> Just r)
+            (\_ _crset r -> Just r)
             dom
             typ
             cls
@@ -318,7 +322,7 @@ member
     -> CLASS
     -> Cache
     -> Bool
-member now dom typ cls = isJust . lookupAlive now (\_ _ -> Just ()) dom typ cls
+member now dom typ cls = isJust . lookupAlive now (\_ _ _ -> Just ()) dom typ cls
 
 dump :: Cache -> [(Key, (EpochTime, Val))]
 dump (Cache c _) = [(k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c]
@@ -333,13 +337,12 @@ now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
-toRDatas :: CRSet -> [RData]
-toRDatas (Left _) = []
-toRDatas (Right rs) = rs
+toRDatas :: CRSet -> ([RData], [RD_RRSIG])
+toRDatas = unCRSet (const ([], [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas [] = Nothing
-fromRDatas rds = rds `listseq` Just (Right rds)
+fromRDatas rds = rds `listseq` Just (NotVerified rds)
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())
@@ -362,8 +365,14 @@ takeRRSet rrs@(_ : _) = do
     rds <- fromRDatas $ map DNS.rdata rrs
     return $ \h -> uncurry h k' rds
 
+{- FOURMOLU_DISABLE -}
 extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
-extractRRSet dom ty cls ttl = map (ResourceRecord dom ty cls ttl) . toRDatas
+extractRRSet dom ty cls ttl crs =
+    [ResourceRecord dom ty cls ttl rd | rd <- rds] ++
+    [ResourceRecord dom RRSIG cls ttl $ DNS.toRData sig | sig <- sigs]
+  where
+    (rds, sigs) = toRDatas crs
+{- FOURMOLU_ENABLE -}
 
 insertSetFromSection
     :: [ResourceRecord]
@@ -383,6 +392,6 @@ insertSetEmpty
     -> TTL
     -> Ranking
     -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty srcDom dom typ ttl rank h = srcDom `seq` h key ttl (Left srcDom) rank
+insertSetEmpty soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
   where
     key = Question dom typ DNS.classIN

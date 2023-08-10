@@ -202,9 +202,9 @@ fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFil
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
 fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS (dss@(_ : _)), delegationDNSKEY = [], ..} =
-    maybe query (lift . fill . toDNSKEYs) =<< lift (lookupCache delegationZone DNSKEY)
+    maybe query (lift . fill . toDNSKEYs) =<< lift (lookupValid delegationZone DNSKEY)
   where
-    toDNSKEYs (rrs, _) = rrListWith DNSKEY DNS.fromRData delegationZone const rrs
+    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
     query = do
         ips <- delegationIPs dc d
@@ -388,9 +388,9 @@ fillDelegationDS dc src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe query (lift . fill . toDSs) =<< lift (lookupCache delegationZone DS)
+            maybe query (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
   where
-    toDSs (rrs, _rank) = rrListWith DS DNS.fromRData (delegationZone dest) const rrs
+    toDSs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dss = return dest{delegationDS = FilledDS dss}
     query = do
         ips <- delegationIPs dc src
