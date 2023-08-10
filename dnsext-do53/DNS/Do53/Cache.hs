@@ -287,6 +287,7 @@ lookup_ mk k (Cache cache _) = do
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -Wno-incomplete-uni-patterns
 
 -- |
 -- >>> c0 = empty 256
