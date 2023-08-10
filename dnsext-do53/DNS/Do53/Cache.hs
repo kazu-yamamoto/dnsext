@@ -287,6 +287,7 @@ lookup_ mk k (Cache cache _) = do
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -Wno-incomplete-uni-patterns
 
 -- |
 -- >>> c0 = empty 256
@@ -294,8 +295,8 @@ lookup_ mk k (Cache cache _) = do
 -- Nothing
 -- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.classIN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.1.1,192.168.1.2]) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (NotVerified [192.168.32.1]) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified [192.168.1.1,192.168.1.2])) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified [192.168.32.1])) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
