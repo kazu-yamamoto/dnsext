@@ -26,14 +26,26 @@ module DNS.Do53.Cache (
     Key,
     Question (..),
     Val (..),
-    CRSet (..),
-    unCRSet,
     extractRRSet,
     (<+),
     alive,
     member,
     dump,
     dumpKeys,
+
+    -- * low-level, cache entry
+    Positive (..),
+    positiveHit,
+    positiveRDatas,
+    positiveRRSIGs,
+    Hit (..),
+    hitEither,
+    CRSet,
+    mkNotVerified,
+    notVerified,
+    mkValid,
+    valid,
+    unCRSet,
 
     -- * tests
     lookup,
@@ -70,20 +82,71 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
 
+---
+data NE a = NE a [a] deriving (Eq)
+
+neList :: NE a -> [a]
+neList (NE x xs) = x : xs
+
+cons1 :: [a] -> b -> (a -> [a] -> b) -> b
+cons1 [] nil _ = nil
+cons1 (x : xs) _ cons = cons x xs
+
+instance Show a => Show (NE a) where
+    show = show . neList
+
+type RDatas = NE RData
+type RRSIGs = NE RD_RRSIG
+
 {- FOURMOLU_DISABLE -}
-data CRSet
-    = Negative Domain           {- NXDOMAIN or NODATA, hold zone-domain delegation from -}
-    | NotVerified [RData]       {- not empty RRSET, not verified -}
-    {-- | VerifyFailed [RData]  {- verification failed -} {- unused state -} --}
-    | Valid [RData] [RD_RRSIG]  {- not empty RRSET, verification succeeded -}
+data Positive
+    = NotVerified RDatas        {- not verified -}
+    {-- | VerifyFailed RDatas   {- verification failed -} {- unused state -} --}
+    | Valid RDatas RRSIGs       {- verification succeeded -}
     deriving (Eq, Show)
+
+positiveHit :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
+positiveHit notVerified_ valid_ pos = case pos of
+    NotVerified rds -> notVerified_ $ neList rds
+    Valid rds ss  -> valid_ (neList rds) (neList ss)
+
+data Hit
+    = Negative Domain           {- Negative hit, NXDOMAIN or NODATA, hold zone-domain delegation from -}
+    | Positive Positive         {- Positive hit -}
+    deriving (Eq, Show)
+
+hitEither :: (Domain -> a) -> (Positive -> a) -> Hit -> a
+hitEither negative positive hit = case hit of
+    Negative soa -> negative soa
+    Positive pos -> positive pos
 {- FOURMOLU_ENABLE -}
 
+type CRSet = Hit
+
+mkNotVerified :: RData -> [RData] -> CRSet
+mkNotVerified d ds = Positive $ NotVerified $ NE d ds
+
+notVerified :: [RData] -> a -> (CRSet -> a) -> a
+notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
+
+mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> CRSet
+mkValid d ds s ss = Positive $ Valid (NE d ds) (NE s ss)
+
+valid :: [RData] -> [RD_RRSIG] -> a -> (CRSet -> a) -> a
+valid rds sigs nothing just = cons1 rds nothing withRds
+  where
+    withRds d ds = cons1 sigs nothing withSigs
+      where
+        withSigs s ss = just $ mkValid d ds s ss
+
 unCRSet :: (Domain -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
-unCRSet notExist notVerified valid crs = case crs of
-    Negative soa -> notExist soa
-    NotVerified rds -> notVerified rds
-    Valid rds sigs -> valid rds sigs
+unCRSet negative notVerified_ valid_ = hitEither negative (positiveHit notVerified_ valid_)
+
+positiveRDatas :: Positive -> [RData]
+positiveRDatas = positiveHit id const
+
+positiveRRSIGs :: Positive -> a -> ([RD_RRSIG] -> a) -> a
+positiveRRSIGs pos nothing just = positiveHit (const nothing) (\_ sigs -> just sigs) pos
 
 ---
 
@@ -357,8 +420,7 @@ toRDatas :: CRSet -> ([RData], [RD_RRSIG])
 toRDatas = unCRSet (const ([], [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe CRSet
-fromRDatas [] = Nothing
-fromRDatas rds = rds `listseq` Just (NotVerified rds)
+fromRDatas rds = rds `listseq` notVerified rds Nothing Just
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())
@@ -385,9 +447,9 @@ takeRRSet rrs@(_ : _) = do
 extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
 extractRRSet dom ty cls ttl crs =
     [ResourceRecord dom ty cls ttl rd | rd <- rds] ++
-    [ResourceRecord dom RRSIG cls ttl $ DNS.toRData sig | sig <- sigs]
+    [ResourceRecord dom RRSIG cls ttl $ DNS.toRData sig | sig <- ss]
   where
-    (rds, sigs) = toRDatas crs
+    (rds, ss) = toRDatas crs
 {- FOURMOLU_ENABLE -}
 
 insertSetFromSection

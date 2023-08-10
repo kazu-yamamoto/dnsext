@@ -159,8 +159,10 @@ cacheRRset
     -> MayVerifiedRRS
     -> ContextT IO ()
 cacheRRset rank dom typ cls ttl rds mv =
-    mayVerifiedRRS (doCache $ Cache.NotVerified rds) (const $ pure ()) (doCache . Cache.Valid rds) mv
+    mayVerifiedRRS notVerivied (const $ pure ()) valid mv
   where
+    notVerivied = Cache.notVerified rds (pure ()) doCache
+    valid sigs = Cache.valid rds sigs (pure ()) doCache
     doCache crs = do
         insertRRSet <- asks insert_
         logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds

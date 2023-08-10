@@ -108,7 +108,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
             case mx of
                 Nothing -> notCached
                 Just (_, Negative{}) -> return $ Right [] {- NoData -}
-                Just (_, crs) -> return $ Right $ crsRDatas crs
+                Just (_, Positive pos) -> return $ Right $ positiveRDatas pos
   where
     notCached = do
         eres <- lookupRaw env q
@@ -132,7 +132,6 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                     Right rss -> do
                         cachePositive cconf c q now rss
                         return $ Right $ map rdata rss
-    crsRDatas = unCRSet (const []) id const
     toRR = filter (qtype `isTypeOf`) . answer
     (c, cconf) = fromJust lenvCache
 
@@ -140,10 +139,9 @@ cachePositive
     :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
     | ttl == 0 = return () -- does not cache anything
-    | otherwise = insertPositive cconf c k now v ttl
+    | otherwise = notVerified rds (return ()) $ \v -> insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
-    v = NotVerified rds
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
 insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
