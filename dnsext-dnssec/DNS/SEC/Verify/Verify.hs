@@ -274,17 +274,22 @@ hashNSEC3with :: NSEC3Impl -> RD_NSEC3 -> Domain -> Opaque
 hashNSEC3with impl RD_NSEC3{..} domain =
     hashNSEC3with' impl nsec3_iterations nsec3_salt domain
 
+{- `nsec3param_flags` should be checked outside.
+   https://datatracker.ietf.org/doc/html/rfc5155#section-4.1.2
+   "NSEC3PARAM RRs with a Flags field value other than zero MUST be ignored." -}
 hashNSEC3PARAMwith :: NSEC3Impl -> RD_NSEC3PARAM -> Domain -> Opaque
 hashNSEC3PARAMwith impl RD_NSEC3PARAM{..} domain =
     hashNSEC3with' impl nsec3param_iterations nsec3param_salt domain
 
-{- `nsec3param_flags` should be checked outside.
-   https://datatracker.ietf.org/doc/html/rfc5155#section-4.1.2
-   "NSEC3PARAM RRs with a Flags field value other than zero MUST be ignored." -}
-
-verifyNSEC3with
-    :: [(NSEC3Impl, NSEC3_Range)] -> Domain -> TYPE -> Either String NSEC3_Result
-verifyNSEC3with ps = NSEC3.verify [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps]
+getNSEC3Result :: NSEC3.Logic -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+getNSEC3Result hl cs qname qtype =
+    withImpls $ \ps -> NSEC3.getResult hl [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname qtype
+  where
+    withImpls h = h =<< mapM addImpl cs
+    addImpl r@(_, nsec3) = do
+        let alg = nsec3_hashalg nsec3
+        impl <- maybe (Left $ "verifyNSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
+        return (impl, r)
 
 nsec3Dicts :: Map HashAlg NSEC3Impl
 nsec3Dicts =
@@ -310,17 +315,23 @@ hashNSEC3PARAM nsec3p domain =
     alg = nsec3param_hashalg nsec3p
     hash impl = hashNSEC3PARAMwith impl nsec3p domain
 
-verifyNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
-verifyNSEC3 cs domain qtype = do
-    ps <- mapM addImpl cs
-    verifyNSEC3with ps domain qtype
-  where
-    addImpl r@(_, nsec3) = do
-        let alg = nsec3_hashalg nsec3
-        impl <-
-            maybe (Left $ "verifyNSEC3: unsupported algorithm: " ++ show alg) Right $
-                Map.lookup alg nsec3Dicts
-        return (impl, r)
+nameErrorNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+nameErrorNSEC3 = getNSEC3Result NSEC3.get_nameError
+
+noDataNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+noDataNSEC3 = getNSEC3Result NSEC3.get_noData
+
+unsignedDelegationNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+unsignedDelegationNSEC3 = getNSEC3Result NSEC3.get_unsignedDelegation
+
+wildcardExpansionNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+wildcardExpansionNSEC3 = getNSEC3Result NSEC3.get_wildcardExpansion
+
+wildcardNoDataNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+wildcardNoDataNSEC3 = getNSEC3Result NSEC3.get_wildcardNoData
+
+detectNSEC3 :: [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+detectNSEC3 = getNSEC3Result NSEC3.detect
 
 ---
 
