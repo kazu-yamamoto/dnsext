@@ -338,3 +338,21 @@ detectNSEC3 = getNSEC3Result NSEC3.detect
 verifyNSEC
     :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
 verifyNSEC = NSEC.verify
+
+detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+detectNSEC = NSEC.getResult NSEC.detect
+
+nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+nameErrorNSEC = NSEC.getResult NSEC.get_nameError
+
+noDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+noDataNSEC = NSEC.getResult NSEC.get_noData
+
+unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+unsignedDelegationNSEC = NSEC.getResult NSEC.get_unsignedDelegation
+
+wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+wildcardExpansionNSEC = NSEC.getResult NSEC.get_wildcardExpansion
+
+wildcardNoDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+wildcardNoDataNSEC = NSEC.getResult NSEC.get_wildcardNoData
