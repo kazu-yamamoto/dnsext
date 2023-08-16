@@ -1062,7 +1062,7 @@ nsecRFC4035WildcardNoData = (("example.", rdatas, "a.z.w.example.", AAAA), expec
     expect =
         NSEC_Expect_WildcardNoData
             ("x.y.w.example.", "a.z.w.example.")
-            ("*.w.example.", "*.w.example.")
+            ("*.w.example.", "a.z.w.example.")
 
 -- a.z.w.example.      IN AAAA
 {-- x.y.w.example. 3600 NSEC   xx.example. MX RRSIG NSEC -}
