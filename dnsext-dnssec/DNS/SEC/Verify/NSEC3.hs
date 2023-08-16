@@ -2,118 +2,133 @@
 
 module DNS.SEC.Verify.NSEC3 where
 
+-- ghc packages
+import Data.ByteString.Short (fromShort)
+import Data.String (fromString)
+
 -- dnsext-types
+import DNS.Types hiding (qname)
+import qualified DNS.Types.Opaque as Opaque
 
 -- this package
-
 import DNS.SEC.Flags (NSEC3_Flag (OptOut))
 import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
-import DNS.Types hiding (qname)
-import qualified DNS.Types.Opaque as Opaque
-import Data.ByteString.Short (fromShort)
-import Data.String (fromString)
 
-{- find NSEC3 records which covers or matches with qname or super names of qname,
-   to recognize non-existence of domain or non-existence of RRset -}
-verify
-    :: [(NSEC3_Range, Domain -> Opaque)]
+type Logic = (Domain -> [RangeProp]) -> Domain -> TYPE -> [[RangeProp]] -> Maybe (Either String NSEC3_Result)
+
+getResult
+    :: Logic
+    -> [(NSEC3_Range, Hash)]
     -> Domain
     -> TYPE
     -> Either String NSEC3_Result
-verify n3s domain qtype = do
-    (zone, refines) <- n3RangeRefines n3s
-    supers <- zoneSuperDomains zone
-    findEncloser supers refines
+getResult n3logic n3s qname qtype = do
+    (zone, refine) <- n3RefineWithRanges n3s
+    let subs = zoneSubDomains qname zone
+        propSets = map refine subs
+        noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
+    when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
+    fromMaybe noEncloser $ n3logic refine qname qtype propSets
+
+---
+
+{- FOURMOLU_DISABLE -}
+detect :: Logic
+detect getPropSet qname qtype props =
+    {- `stepNE` detects UnsignedDelegation case.
+        Run this loop before `getNoData` to apply delegation
+        for both UnsignedDelegation and NoData properties -}
+    msum (map stepNE pps)                                  <|>
+    get_noData              getPropSet qname qtype props   <|>
+    get_wildcardExpansion   getPropSet qname qtype props
   where
-    zoneSuperDomains zone
-        | domain `isSubDomainOf` zone =
-            Right $ takeWhile (/= zone) (superDomains domain ++ [fromString "."]) ++ [zone]
-        | otherwise = Left "NSEC3.verify: qname is not under zone"
+    stepNE ps =
+        step_nameError getPropSet ps             <|>
+        step_wildcardNoData getPropSet qtype ps  <|>
+        step_unsignedDelegation ps
+    pps = zip props (tail props)  {- reuse computed range-props for closest-name and next-closer-name -}
+{- FOURMOLU_ENABLE -}
 
-    findEncloser supers refines =
-        maybe (Left "NSEC3.verify: no NSEC3 encloser") id $
-            {- find non-existence of RRset -}
-            loop stepNE ppairs
-                {- `loop stepNE` detects UnsignedDelegation case.
-                   Run this loop before `getNoData` to apply delegation
-                   for both UnsignedDelegation and NoData properties -}
-                <|>
-                {- find just qname matches -}
-                getNoData props
-                <|>
-                {- find wildcard-expansion result -}
-                loop stepWE props
-      where
-        {- reuse computed range-props for closest-name and next-closer-name -}
-        ppairs = zip props (tail props)
-        props = map rangePropSet supers
+---
 
-        {- return first result or continue -}
-        loop
-            :: (a -> Maybe b)
-            -> [a]
-            -> Maybe b
-        loop step = foldr stepK Nothing
-          where
-            -- stepK :: a -> Maybe b -> Maybe b
-            stepK p k = step p <|> k
+{- find NSEC3 records which covers or matches with qname or super names of qname,
+   to recognize non-existence of domain or non-existence of RRset -}
 
-        getNoData :: [[RangeProp]] -> Maybe (Either String NSEC3_Result)
-        getNoData [] = Nothing
-        getNoData (exists : _) = notElemBitmap <$> just1 (matches exists)
-          where
+get_nameError :: Logic
+get_nameError getPropSet _qname _qtype props = msum $ map step pps
+  where
+    step = step_nameError getPropSet
+    {- reuse computed range-props for closest-name and next-closer-name -}
+    pps = zip props (tail props)
+
+{- find just qname matches -}
+get_noData :: Logic
+get_noData _ _ _ [] = Just $ Left "NSEC3.get_noData: no prop-set"
+get_noData _ _ qtype (exists : _) = notElemBitmap <$> propMatches1 exists
+  where
+    notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
+        | qtype `elem` nsec3_types = Left $ "NSEC3.n3Get_noData: type bitmap has query type `" ++ show qtype ++ "`."
+        | otherwise = Right $ n3r_noData m
+
+get_unsignedDelegation :: Logic
+get_unsignedDelegation _ _ _ props = msum $ map step pps
+  where
+    step = step_unsignedDelegation
+    {- reuse computed range-props for closest-name and next-closer-name -}
+    pps = zip props (tail props)
+
+get_wildcardExpansion :: Logic
+get_wildcardExpansion _ _ _ = {- first result -} msum . map step
+  where
+    step :: [RangeProp] -> Maybe (Either String NSEC3_Result)
+    step nexts = Right . n3r_wildcardExpansion <$> propCovers1 nexts
+
+get_wildcardNoData :: Logic
+get_wildcardNoData getPropSet _qname qtype props = msum $ map step pps
+  where
+    step = step_wildcardNoData getPropSet qtype
+    {- reuse computed range-props for closest-name and next-closer-name -}
+    pps = zip props (tail props)
+
+---
+
+step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_Result)
+step_nameError getPropSet =
+    n3StepNonExistence $ \closest nextCloser clname _nextN3 -> do
+        let wildcardProps = getPropSet (fromString "*" <> clname)
+        Right . n3r_nameError closest nextCloser <$> propCovers1 wildcardProps
+
+step_unsignedDelegation :: RangeProps -> Maybe (Either String NSEC3_Result)
+step_unsignedDelegation =
+    n3StepNonExistence $ \closest nextCloser _clname nextN3 -> do
+        let unsignedDelegation
+                | OptOut `elem` nsec3_flags nextN3 = Right $ n3r_unsignedDelegation closest nextCloser
+                | otherwise = Left $ "NSEC3.get_unsignedDelegation: wildcard name is not matched or covered."
+        pure unsignedDelegation
+
+step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_Result)
+step_wildcardNoData getPropSet qtype =
+    n3StepNonExistence $ \closest nextCloser clname _nextN3 -> do
+        let wildcardProps = getPropSet (fromString "*" <> clname)
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
-                | qtype `elem` nsec3_types =
-                    Left $
-                        "NSEC3.verify: NoData: type bitmap has query type `" ++ show qtype ++ "`."
-                | otherwise = Right $ n3r_noData m
+                | qtype `elem` nsec3_types = Left $ "NSEC3.get_wildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
+                | otherwise = Right $ n3r_wildcardNoData closest nextCloser m
+        notElemBitmap <$> propMatches1 wildcardProps
 
-        {- next-closer-name 'cover' for qname and closest-name 'match' for super-name are checked at the same time -}
-        stepNE :: ([RangeProp], [RangeProp]) -> Maybe (Either String NSEC3_Result)
-        stepNE (nexts, closests) = do
-            nextCloser@(Covers ((_, nextN3), _)) <- just1 $ covers nexts
-            closest@(Matches (_, cn)) <- just1 $ matches closests
+{- step to find non-existence of RRset.
+   next-closer-name 'cover' for qname and closest-name 'match' for super-name are checked at the same time. -}
+n3StepNonExistence
+    :: (Matches NSEC3_Witness -> Covers NSEC3_Witness -> Domain -> RD_NSEC3 -> Maybe a)
+    -> RangeProps
+    -> Maybe a
+n3StepNonExistence neHandler (nexts, closests) = do
+    nextCloser@(Covers ((_, nextN3), _)) <- propCovers1 nexts
+    closest@(Matches (_, clname)) <- propMatches1 closests
+    neHandler closest nextCloser clname nextN3
 
-            let wildcardProps = rangePropSet (fromString "*" <> cn)
-                takeWildcardCover = just1 $ covers wildcardProps
-                takeWildcardMatches = just1 $ matches wildcardProps
-                takeWildcardNoData = notElemBitmap <$> takeWildcardMatches
-                  where
-                    notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
-                        | qtype `elem` nsec3_types =
-                            Left $
-                                "NSEC3.verify: WildcardNoData: type bitmap has query type `"
-                                    ++ show qtype
-                                    ++ "`."
-                        | otherwise = Right $ n3r_wildcardNoData closest nextCloser m
-                unsignedDelegation
-                    | OptOut `elem` nsec3_flags nextN3 =
-                        Right $ n3r_unsignedDelegation closest nextCloser
-                    | otherwise = Left $ "NSEC3.verify: wildcard name is not matched or covered."
-            ( Right . n3r_nameError closest nextCloser
-                    <$> takeWildcardCover
-                        <|> takeWildcardNoData
-                        <|> pure unsignedDelegation
-                )
-
-        stepWE :: [RangeProp] -> Maybe (Either String NSEC3_Result)
-        stepWE nexts = Right . n3r_wildcardExpansion <$> just1 (covers nexts)
-
-        rangePropSet :: Domain -> [RangeProp]
-        rangePropSet qname =
-            [ r
-            | refine <- refines
-            , Just r <- [refine qname]
-            ]
-
-        matches xs = [x | M x <- xs]
-        covers xs = [x | C x <- xs]
-        just1 xs = case xs of
-            [] -> Nothing
-            [x] -> Just x
-            _ -> Nothing
+---
 
 newtype Matches a = Matches a deriving (Show)
 
@@ -150,6 +165,10 @@ n3r_wildcardNoData (Matches closest) (Covers next) (Matches wildcard) =
 
 type RangeProp = RangeProp_ NSEC3_Witness
 
+type RangeProps = ([RangeProp], [RangeProp])
+
+type Hash = Domain -> Opaque
+
 ---
 
 data RangeProp_ a
@@ -157,26 +176,55 @@ data RangeProp_ a
     | C (Covers a)
     deriving (Show)
 
+propMatches1 :: [RangeProp] -> Maybe (Matches NSEC3_Witness)
+propMatches1 xs = case [x | M x <- xs] of
+    [] -> Nothing
+    [x] -> Just x
+    _ -> Nothing
+
+propCovers1 :: [RangeProp] -> Maybe (Covers NSEC3_Witness)
+propCovers1 xs = case [x | C x <- xs] of
+    [] -> Nothing
+    [x] -> Just x
+    _ -> Nothing
+
+---
+
+-- $setup
+-- >>> :set -XOverloadedStrings
+
+-- |
+-- >>> n3Covers 1 5 3
+-- True
+-- >>> n3Covers 1 5 0
+-- False
+-- >>> n3Covers 1 5 6
+-- False
 n3Covers :: Ord a => a -> a -> a -> Bool
 n3Covers lower upper qv = lower < qv && qv < upper
 
+-- |
+--   https://datatracker.ietf.org/doc/html/rfc5155#section-3.1.7
+--   "The value of the Next Hashed Owner Name
+--    field in the last NSEC3 RR in the zone is the same as the hashed
+--    owner name of the first NSEC3 RR in the zone in hash order."
+--
+-- >>> n3CoversR 5 1 0
+-- True
+-- >>> n3CoversR 5 1 6
+-- True
+-- >>> n3CoversR 5 1 3
+-- False
 n3CoversR :: Ord a => a -> a -> a -> Bool
 n3CoversR lower upper qv = qv < upper || lower < qv
 
-{- https://datatracker.ietf.org/doc/html/rfc5155#section-3.1.7
-   "The value of the Next Hashed Owner Name
-    field in the last NSEC3 RR in the zone is the same as the hashed
-    owner name of the first NSEC3 RR in the zone in hash order." -}
-
-{- get funcs to compute 'match' or 'cover' with ranges from NSEC3 record-set -}
-n3RangeRefines
-    :: [(NSEC3_Range, Domain -> Opaque)]
-    -> Either String (Domain, [(Domain -> Maybe (RangeProp_ NSEC3_Witness))])
-n3RangeRefines ranges0 = do
-    (((owner1, _), _), _) <-
-        maybe (Left "NSEC3.n3RangeRefines: no NSEC3 records") Right $ uncons ranges0
-    (_, zname) <-
-        maybe (Left "NSEC3.n3RangeRefines: no zone name") Right $ unconsName owner1
+{- get func to compute 'match' or 'cover' with ranges from NSEC3 record-set -}
+n3RefineWithRanges
+    :: [(NSEC3_Range, Hash)]
+    -> Either String (Domain, Domain -> [RangeProp])
+n3RefineWithRanges ranges0 = do
+    (((owner1, _), _), _) <- maybe (Left "NSEC3.n3RefineWithRanges: no NSEC3 records") Right $ uncons ranges0
+    (_, zname) <- maybe (Left "NSEC3.n3RefineWithRanges: no zone name") Right $ unconsName owner1
 
     let rs =
             [ (ownerBytes, r)
@@ -198,14 +246,12 @@ n3RangeRefines ranges0 = do
     decodeBase32 :: ShortByteString -> [Opaque]
     decodeBase32 part = either (const []) (: []) $ Opaque.fromBase32Hex $ fromShort part
 
-    takeRefines
-        :: [(Opaque, (NSEC3_Range, Domain -> Opaque))]
-        -> Either String [(Domain -> Maybe (RangeProp_ NSEC3_Witness))]
+    takeRefines :: [(Opaque, (NSEC3_Range, Hash))] -> Either String (Domain -> [RangeProp])
     takeRefines ranges
-        | length (filter fst results) > 1 =
-            Left "NSEC3.n3RangeRefines: multiple rounded records found."
-        | otherwise = Right $ map snd results
+        | length (filter fst results) > 1 = Left "NSEC3.n3RefineWithRanges: multiple rounded records found."
+        | otherwise = Right props
       where
+        props qname = [prop | (_, refine) <- results, Just prop <- [refine qname]]
         results =
             [ (rounded, result)
             | (owner, (rangeB32H@(_, RD_NSEC3{..}), hash)) <- ranges
@@ -224,3 +270,15 @@ n3RangeRefines ranges0 = do
                         Note that this order is the same as the canonical DNS name order specified in [RFC4034],
                         when the hashed owner names are in base32, encoded with an Extended Hex Alphabet [RFC4648]." -}
             ]
+
+-- |
+-- >>> zoneSubDomains "a.b.c.d.e." "c.d.e."
+-- ["a.b.c.d.e.","b.c.d.e.","c.d.e."]
+-- >>> zoneSubDomains "example.com." "."
+-- ["example.com.","com.","."]
+-- >>> zoneSubDomains "example.com." "a.example.com."
+-- []
+zoneSubDomains :: Domain -> Domain -> [Domain]
+zoneSubDomains domain zone
+    | domain `isSubDomainOf` zone = takeWhile (/= zone) (superDomains domain ++ [fromString "."]) ++ [zone]
+    | otherwise = []
