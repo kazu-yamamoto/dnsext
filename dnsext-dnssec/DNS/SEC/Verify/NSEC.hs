@@ -45,24 +45,17 @@ verify zone ranges qname qtype = do
         getWildcardExpansion = Right . nsecR_WildcardExpansion <$> cover qnames
 
         getWildcardNoData = do
-            c@(Covers ((_, _), qn)) <- cover qnames
-            let wildcards =
-                    [ M m | range <- ranges, Just (wsuper, m) <- [wildMatches range], qn `isSubDomainOf` wsuper
-                    ]
-                notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
+            c <- cover qnames
+            let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
                     | qtype `elem` nsecTypes =
                         Left $
                             "NSEC.verify: WildcardNoData: type bitmap has query type `"
                                 ++ show qtype
                                 ++ "`."
-                    | otherwise = Right $ nsecR_WildcardNoData c m
-            notElemBitmap <$> match wildcards
+                    | otherwise = Right $ nsecR_WildcardNoData c w
+            notElemBitmap <$> wild qnames
 
         qnames = getProps qname
-        wildMatches range@(owner, _) =
-            case unconsName owner of
-                Just (hd, tl) | hd == fromString "*" -> Just (tl, rangeMatches range)
-                _ -> Nothing
 
         getProps name =
             [ r
@@ -72,19 +65,17 @@ verify zone ranges qname qtype = do
 
         match xs = just1 [x | M x <- xs]
         cover xs = just1 [x | C x <- xs]
+        wild xs = just1 [x | W x <- xs]
         just1 xs = case xs of
             [] -> Nothing
             [x] -> Just x
             _ -> Nothing
 
-        unconsName :: Domain -> Maybe (ShortByteString, Domain)
-        unconsName name = case toWireLabels name of
-            x : xs -> Just (x, fromWireLabels xs)
-            [] -> Nothing
-
 newtype Matches a = Matches a deriving (Show)
 
 newtype Covers a = Covers a deriving (Show)
+
+newtype Wilds a = Wilds a deriving (Show)
 
 rangeMatches :: NSEC_Range -> Matches NSEC_Witness
 rangeMatches r@(owner, _nsec) = Matches (r, owner)
@@ -106,8 +97,8 @@ nsecR_WildcardExpansion (Covers name) =
     NSECResult_WildcardExpansion name
 
 nsecR_WildcardNoData
-    :: Covers NSEC_Witness -> Matches NSEC_Witness -> NSEC_Result
-nsecR_WildcardNoData (Covers name) (Matches wildcard) =
+    :: Covers NSEC_Witness -> Wilds NSEC_Witness -> NSEC_Result
+nsecR_WildcardNoData (Covers name) (Wilds wildcard) =
     NSECResult_WildcardNoData name wildcard
 
 type RangeProp = RangeProp_ NSEC_Witness
@@ -117,6 +108,7 @@ type RangeProp = RangeProp_ NSEC_Witness
 data RangeProp_ a
     = M (Matches a)
     | C (Covers a)
+    | W (Wilds a)
     deriving (Show)
 
 nsecCovers :: Ord a => a -> a -> a -> Bool
@@ -139,10 +131,10 @@ nsecRangeRefines
 nsecRangeRefines ranges
     | length (filter fst results) > 1 =
         Left "NSEC.nsecRangeRefines: multiple inverted records found."
-    | otherwise = Right $ map snd results
+    | otherwise = Right $ concatMap snd results
   where
     results =
-        [ (inverted, result)
+        [ (inverted, [withRange, withWild])
         | range@(owner, RD_NSEC{..}) <- ranges
         , let next = nsecNextDomain
               inverted = owner > next
@@ -150,7 +142,20 @@ nsecRangeRefines ranges
                 | qname == owner = Just $ M $ Matches (range, qname)
                 | cover owner next qname = Just $ C $ Covers (range, qname)
                 | otherwise = Nothing
-              result
+              withRange
                 | inverted = refineWithRange nsecCoversI
                 | otherwise = refineWithRange nsecCovers
+              withWild qname = unconsLables owner Nothing wildmatch
+                where
+                  wildmatch w wildsuper
+                      | w == fromString "*" && qname `isSubDomainOf` wildsuper = Just $ W $ Wilds (range, qname)
+                      | otherwise = Nothing
         ]
+
+unconsLables :: Domain -> a -> (ShortByteString -> Domain -> a) -> a
+unconsLables = unconsLabels_
+
+unconsLabels_ :: IsRepresentation a b => a -> c -> (b -> a -> c) -> c
+unconsLabels_ rep nothing just = case toWireLabels rep of
+    []   ->  nothing
+    x:xs ->  just x $ fromWireLabels xs
