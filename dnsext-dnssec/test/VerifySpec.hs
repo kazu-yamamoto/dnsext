@@ -974,10 +974,19 @@ type NSEC_CASE = ((Domain, [(Domain, RData)], Domain, TYPE), NSEC_Expect)
 
 caseNSEC :: NSEC_CASE -> Expectation
 caseNSEC ((zone, rds, qn, qtype), expect) = either expectationFailure (const $ pure ()) $ do
+    let checkEach = getEach expect
+    resEach <- checkEach zone ranges qn qtype
+    nsecCheckResult resEach expect
     result <- verifyNSEC zone ranges qn qtype
     nsecCheckResult result expect
   where
     ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
+    getEach ex = case ex of
+        NSEC_Expect_NameError{} -> nameErrorNSEC
+        NSEC_Expect_NoData{} -> noDataNSEC
+        NSEC_Expect_UnsignedDelegation{} -> unsignedDelegationNSEC
+        NSEC_Expect_WildcardExpansion{} -> wildcardExpansionNSEC
+        NSEC_Expect_WildcardNoData{} -> wildcardNoDataNSEC
 
 -- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2
 -- Name Error
