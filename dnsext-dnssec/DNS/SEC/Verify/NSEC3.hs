@@ -204,6 +204,10 @@ n3Covers :: Ord a => a -> a -> a -> Bool
 n3Covers lower upper qv = lower < qv && qv < upper
 
 -- |
+--   In the last NSEC3 RR in the zone, lower limit and upper limit are rotated
+--   * The lower limit, owner-name is the largest hash value in the zone
+--   * The upper limit, next-domain is the smallest hash value in the zone
+--
 --   https://datatracker.ietf.org/doc/html/rfc5155#section-3.1.7
 --   "The value of the Next Hashed Owner Name
 --    field in the last NSEC3 RR in the zone is the same as the hashed
@@ -243,22 +247,22 @@ n3RefineWithRanges ranges0 = do
 
     takeRefines :: [(Opaque, (NSEC3_Range, Hash))] -> Either String (Domain -> [RangeProp])
     takeRefines ranges
-        | length (filter fst results) > 1 = Left "NSEC3.n3RefineWithRanges: multiple rounded records found."
+        | length (filter fst results) > 1 = Left "NSEC3.n3RefineWithRanges: multiple rotated records found."
         | otherwise = Right props
       where
         props qname = [prop | (_, refine) <- results, Just prop <- [refine qname]]
         results =
-            [ (rounded, result)
+            [ (rotated, result)
             | (owner, (rangeB32H@(_, RD_NSEC3{..}), hash)) <- ranges
             , let next = nsec3_next_hashed_owner_name {- binary hashed value, not base32hex -}
-                  rounded = owner > next
+                  rotated = owner > next
                   refineWithRange cover qname
                     {- owner and next are decoded range, not base32hex -}
                     | hash qname == owner = Just $ M $ Matches (rangeB32H, qname)
                     | cover owner next (hash qname) = Just $ C $ Covers (rangeB32H, qname)
                     | otherwise = Nothing
                   result
-                    | rounded = refineWithRange n3CoversR
+                    | rotated = refineWithRange n3CoversR
                     | otherwise = refineWithRange n3Covers
                     {- base32hex does not change hash ordering. https://datatracker.ietf.org/doc/html/rfc5155#section-1.3
                        "Terminology: Hash order:
