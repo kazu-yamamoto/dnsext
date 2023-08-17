@@ -66,7 +66,7 @@ get_nameError getPropSet _qname _qtype props = msum $ map step pps
 {- find just qname matches -}
 get_noData :: Logic
 get_noData _ _ _ [] = Just $ Left "NSEC3.get_noData: no prop-set"
-get_noData _ _ qtype (exists : _) = notElemBitmap <$> propMatches1 exists
+get_noData _ _ qtype (exists : _) = notElemBitmap <$> propMatch exists
   where
     notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
         | qtype `elem` nsec3_types = Left $ "NSEC3.n3Get_noData: type bitmap has query type `" ++ show qtype ++ "`."
@@ -83,7 +83,7 @@ get_wildcardExpansion :: Logic
 get_wildcardExpansion _ _ _ = {- first result -} msum . map step
   where
     step :: [RangeProp] -> Maybe (Either String NSEC3_Result)
-    step nexts = Right . n3r_wildcardExpansion <$> propCovers1 nexts
+    step nexts = Right . n3r_wildcardExpansion <$> propCover nexts
 
 get_wildcardNoData :: Logic
 get_wildcardNoData getPropSet _qname qtype props = msum $ map step pps
@@ -98,7 +98,7 @@ step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String 
 step_nameError getPropSet =
     n3StepNonExistence $ \closest nextCloser clname _nextN3 -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
-        Right . n3r_nameError closest nextCloser <$> propCovers1 wildcardProps
+        Right . n3r_nameError closest nextCloser <$> propCover wildcardProps
 
 step_unsignedDelegation :: RangeProps -> Maybe (Either String NSEC3_Result)
 step_unsignedDelegation =
@@ -115,7 +115,7 @@ step_wildcardNoData getPropSet qtype =
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
                 | qtype `elem` nsec3_types = Left $ "NSEC3.get_wildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
                 | otherwise = Right $ n3r_wildcardNoData closest nextCloser m
-        notElemBitmap <$> propMatches1 wildcardProps
+        notElemBitmap <$> propMatch wildcardProps
 
 {- step to find non-existence of RRset.
    next-closer-name 'cover' for qname and closest-name 'match' for super-name are checked at the same time. -}
@@ -124,8 +124,8 @@ n3StepNonExistence
     -> RangeProps
     -> Maybe a
 n3StepNonExistence neHandler (nexts, closests) = do
-    nextCloser@(Covers ((_, nextN3), _)) <- propCovers1 nexts
-    closest@(Matches (_, clname)) <- propMatches1 closests
+    nextCloser@(Covers ((_, nextN3), _)) <- propCover nexts
+    closest@(Matches (_, clname)) <- propMatch closests
     neHandler closest nextCloser clname nextN3
 
 ---
@@ -176,14 +176,14 @@ data RangeProp_ a
     | C (Covers a)
     deriving (Show)
 
-propMatches1 :: [RangeProp] -> Maybe (Matches NSEC3_Witness)
-propMatches1 xs = case [x | M x <- xs] of
+propMatch :: [RangeProp] -> Maybe (Matches NSEC3_Witness)
+propMatch xs = case [x | M x <- xs] of
     [] -> Nothing
     [x] -> Just x
     _ -> Nothing
 
-propCovers1 :: [RangeProp] -> Maybe (Covers NSEC3_Witness)
-propCovers1 xs = case [x | C x <- xs] of
+propCover :: [RangeProp] -> Maybe (Covers NSEC3_Witness)
+propCover xs = case [x | C x <- xs] of
     [] -> Nothing
     [x] -> Just x
     _ -> Nothing
