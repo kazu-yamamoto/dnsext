@@ -13,68 +13,6 @@ import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
 
-verify :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
-verify zone ranges qname qtype = do
-    refines <- nsecRangeRefines ranges
-    findEncloser refines
-  where
-    findEncloser refines =
-        maybe (Left "NSEC.verify: no NSEC encloser") id $
-            getWildcardNoData
-                <|> getNameError
-                <|> getUnsignedDelegation
-                <|> getNoData
-                <|> getWildcardExpansion
-      where
-        getNameError = Right <$> (nsecR_NameError <$> cover qnames <*> cover wildcards)
-          where
-            wildcards = getProps (fromString "*" <> zone)
-
-        getNoData = notElemBitmap <$> match qnames
-          where
-            notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
-                | qtype `elem` nsecTypes =
-                    Left $ "NSEC.verify: NoData: type bitmap has query type `" ++ show qtype ++ "`."
-                | otherwise = Right $ nsecR_NoData m
-
-        getUnsignedDelegation = do
-            c@(Covers ((owner, RD_NSEC{..}), qn)) <- cover qnames
-            guard $ owner /= zone {- owner MUST be sub-level, not zone-top -}
-            guard $ qn `isSubDomainOf` owner && NS `elem` nsecTypes {- super-domain is NS -}
-            guard $ DS `notElem` nsecTypes {- not signed -}
-            return $ Right $ nsecR_UnsignedDelegation c
-
-        getWildcardExpansion = Right . nsecR_WildcardExpansion <$> cover qnames
-
-        getWildcardNoData = do
-            c <- cover qnames
-            let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
-                    | qtype `elem` nsecTypes =
-                        Left $
-                            "NSEC.verify: WildcardNoData: type bitmap has query type `"
-                                ++ show qtype
-                                ++ "`."
-                    | otherwise = Right $ nsecR_WildcardNoData c w
-            notElemBitmap <$> wild qnames
-
-        qnames = getProps qname
-
-        getProps name =
-            [ r
-            | refine <- refines
-            , Just r <- [refine name]
-            ]
-
-        match xs = just1 [x | M x <- xs]
-        cover xs = just1 [x | C x <- xs]
-        wild xs = just1 [x | W x <- xs]
-        just1 xs = case xs of
-            [] -> Nothing
-            [x] -> Just x
-            _ -> Nothing
-
----
-
 getResult :: Logic -> Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
 getResult nlogic zone ranges qname qtype = do
     refine <- nsecRefineWithRanges ranges
@@ -223,32 +161,6 @@ nsecCovers lower upper qv = lower < qv && qv < upper
 -- False
 nsecCoversR :: Ord a => a -> a -> a -> Bool
 nsecCoversR lower upper qv = qv < upper || lower < qv
-
-nsecRangeRefines
-    :: [NSEC_Range] -> Either String [Domain -> Maybe (RangeProp_ NSEC_Witness)]
-nsecRangeRefines ranges
-    | length (filter fst results) > 1 =
-        Left "NSEC.nsecRangeRefines: multiple inverted records found."
-    | otherwise = Right $ concatMap snd results
-  where
-    results =
-        [ (rotated, [withRange, withWild])
-        | range@(owner, RD_NSEC{..}) <- ranges
-        , let next = nsecNextDomain
-              rotated = owner > next
-              refineWithRange cover qname
-                | qname == owner = Just $ M $ Matches (range, qname)
-                | cover owner next qname = Just $ C $ Covers (range, qname)
-                | otherwise = Nothing
-              withRange
-                | rotated = refineWithRange nsecCoversR
-                | otherwise = refineWithRange nsecCovers
-              withWild qname = unconsLables owner Nothing wildmatch
-                where
-                  wildmatch w wildsuper
-                      | w == fromString "*" && qname `isSubDomainOf` wildsuper = Just $ W $ Wilds (range, qname)
-                      | otherwise = Nothing
-        ]
 
 nsecRefineWithRanges :: [NSEC_Range] -> Either String (Domain -> [RangeProp])
 nsecRefineWithRanges ranges
