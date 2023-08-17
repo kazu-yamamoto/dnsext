@@ -977,7 +977,7 @@ caseNSEC ((zone, rds, qn, qtype), expect) = either expectationFailure (const $ p
     let checkEach = getEach expect
     resEach <- checkEach zone ranges qn qtype
     nsecCheckResult resEach expect
-    result <- verifyNSEC zone ranges qn qtype
+    result <- detectNSEC zone ranges qn qtype
     nsecCheckResult result expect
   where
     ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
