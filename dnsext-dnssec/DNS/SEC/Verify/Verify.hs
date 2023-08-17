@@ -335,10 +335,6 @@ detectNSEC3 = getNSEC3Result NSEC3.detect
 
 ---
 
-verifyNSEC
-    :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
-verifyNSEC = NSEC.verify
-
 detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
 detectNSEC = NSEC.getResult NSEC.detect
 
