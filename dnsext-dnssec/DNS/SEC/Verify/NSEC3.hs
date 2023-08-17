@@ -224,7 +224,7 @@ n3RefineWithRanges
     -> Either String (Domain, Domain -> [RangeProp])
 n3RefineWithRanges ranges0 = do
     (((owner1, _), _), _) <- maybe (Left "NSEC3.n3RefineWithRanges: no NSEC3 records") Right $ uncons ranges0
-    (_, zname) <- maybe (Left "NSEC3.n3RefineWithRanges: no zone name") Right $ unconsName owner1
+    zname <- unconsLabels owner1 (Left "NSEC3.n3RefineWithRanges: no zone name") (const Right)
 
     let rs =
             [ (ownerBytes, r)
@@ -232,17 +232,12 @@ n3RefineWithRanges ranges0 = do
             , nsec3_flags `elem` [[], [OptOut]]
             , {- https://datatracker.ietf.org/doc/html/rfc5155#section-8.2
                  "A validator MUST ignore NSEC3 RRs with a Flag fields value other than zero or one." -}
-            Just (owner32h, parent) <- [unconsName rrn]
+            (owner32h, parent) <- unconsLabels rrn [] (\x y -> [(x, y)])
             , parent == zname
             , ownerBytes <- decodeBase32 owner32h
             ]
     (,) zname <$> takeRefines rs
   where
-    unconsName :: Domain -> Maybe (ShortByteString, Domain)
-    unconsName name = case toWireLabels name of
-        x : xs -> Just (x, fromWireLabels xs)
-        [] -> Nothing
-
     decodeBase32 :: ShortByteString -> [Opaque]
     decodeBase32 part = either (const []) (: []) $ Opaque.fromBase32Hex $ fromShort part
 
