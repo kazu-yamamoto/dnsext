@@ -95,13 +95,13 @@ get_wildcardNoData getPropSet qtype props = msum $ map step pps
 
 step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_Result)
 step_nameError getPropSet =
-    n3StepNonExistence $ \closest nextCloser clname _nextN3 -> do
+    n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
         Right . n3r_nameError closest nextCloser <$> propCover wildcardProps
 
 step_unsignedDelegation :: RangeProps -> Maybe (Either String NSEC3_Result)
 step_unsignedDelegation =
-    n3StepNonExistence $ \closest nextCloser _clname nextN3 -> do
+    n3StepNonExistence $ \nextCloser@(Covers ((_, nextN3), _)) closest -> do
         let unsignedDelegation
                 | OptOut `elem` nsec3_flags nextN3 = Right $ n3r_unsignedDelegation closest nextCloser
                 | otherwise = Left $ "NSEC3.get_unsignedDelegation: wildcard name is not matched or covered."
@@ -109,7 +109,7 @@ step_unsignedDelegation =
 
 step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_Result)
 step_wildcardNoData getPropSet qtype =
-    n3StepNonExistence $ \closest nextCloser clname _nextN3 -> do
+    n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
                 | qtype `elem` nsec3_types = Left $ "NSEC3.get_wildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
@@ -119,13 +119,13 @@ step_wildcardNoData getPropSet qtype =
 {- step to find non-existence of RRset.
    next-closer-name 'cover' for qname and closest-name 'match' for super-name are checked at the same time. -}
 n3StepNonExistence
-    :: (Matches NSEC3_Witness -> Covers NSEC3_Witness -> Domain -> RD_NSEC3 -> Maybe a)
+    :: (Covers NSEC3_Witness -> Matches NSEC3_Witness -> Maybe a)
     -> RangeProps
     -> Maybe a
 n3StepNonExistence neHandler (nexts, closests) = do
-    nextCloser@(Covers ((_, nextN3), _)) <- propCover nexts
-    closest@(Matches (_, clname)) <- propMatch closests
-    neHandler closest nextCloser clname nextN3
+    nextCloser <- propCover nexts
+    closest <- propMatch closests
+    neHandler nextCloser closest
 
 ---
 
