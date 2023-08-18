@@ -14,12 +14,12 @@ module DNS.SEC.Imports (
     module Data.Word,
     module Numeric,
     EpochTime,
+    unconsLabels,
 )
 where
 
 import Control.Applicative
 import Control.Monad
-import DNS.Types.Decode (EpochTime)
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (ShortByteString)
@@ -32,3 +32,14 @@ import Data.Ord
 import Data.Typeable
 import Data.Word
 import Numeric
+
+import DNS.Types (Domain, IsRepresentation (..))
+import DNS.Types.Decode (EpochTime)
+
+unconsLabels :: Domain -> a -> (ShortByteString -> Domain -> a) -> a
+unconsLabels = unconsLabels_
+
+unconsLabels_ :: IsRepresentation a b => a -> c -> (b -> a -> c) -> c
+unconsLabels_ rep nothing just = case toWireLabels rep of
+    [] -> nothing
+    x : xs -> just x $ fromWireLabels xs
