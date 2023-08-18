@@ -756,9 +756,9 @@ nsec3CheckResult result expect = case (result, expect) of
 caseNSEC3 :: NSEC3_CASE -> Expectation
 caseNSEC3 ((rds, qn, qtype), expect) = either expectationFailure (const $ pure ()) $ do
     let checkEach = getEach expect
-    resEach <- checkEach ranges qn qtype
+    resEach <- checkEach Nothing ranges qn qtype
     nsec3CheckResult resEach expect
-    result <- detectNSEC3 ranges qn qtype
+    result <- detectNSEC3 Nothing ranges qn qtype
     nsec3CheckResult result expect
   where
     ranges = [(owner, nsec3) | (owner, rd) <- rds, Just nsec3 <- [fromRData rd]]
