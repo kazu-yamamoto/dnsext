@@ -288,7 +288,7 @@ getNSEC3Result hl cs qname qtype =
     withImpls h = h =<< mapM addImpl cs
     addImpl r@(_, nsec3) = do
         let alg = nsec3_hashalg nsec3
-        impl <- maybe (Left $ "verifyNSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
+        impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
         return (impl, r)
 
 nsec3Dicts :: Map HashAlg NSEC3Impl
