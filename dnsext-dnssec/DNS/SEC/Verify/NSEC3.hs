@@ -27,10 +27,9 @@ getResult
 getResult n3logic n3s qname qtype = do
     (zone, refine) <- n3RefineWithRanges n3s
     let subs = zoneSubDomains qname zone
-        propSets = map refine subs
-        noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
     when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
-    fromMaybe noEncloser $ n3logic refine qname qtype propSets
+    let noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
+    fromMaybe noEncloser $ n3logic refine qname qtype $ map refine subs
 
 ---
 
