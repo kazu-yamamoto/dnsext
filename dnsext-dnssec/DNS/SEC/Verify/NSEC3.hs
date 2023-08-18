@@ -20,12 +20,15 @@ type Logic = (Domain -> [RangeProp]) -> TYPE -> [[RangeProp]] -> Maybe (Either S
 
 getResult
     :: Logic
+    -> Maybe Domain
     -> [(NSEC3_Range, Hash)]
     -> Domain
     -> TYPE
     -> Either String NSEC3_Result
-getResult n3logic n3s qname qtype = do
+getResult n3logic mayZone n3s qname qtype = do
     (zone, refine) <- n3RefineWithRanges n3s
+    let guardZone z = when (z /= zone) $ Left $ "NSEC3.getResult: zone " ++ show z ++ " is not consistent for NSEC3 records"
+    maybe (Right ()) guardZone mayZone
     let subs = zoneSubDomains qname zone
     when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
     let noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
