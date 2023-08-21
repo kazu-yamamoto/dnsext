@@ -13,7 +13,7 @@ import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
 
-getResult :: Logic -> Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+getResult :: Logic a -> Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String a
 getResult nlogic zone ranges qname qtype = do
     refine <- nsecRefineWithRanges ranges
     let qnames = refine qname
@@ -23,49 +23,49 @@ getResult nlogic zone ranges qname qtype = do
 
 newtype Zone = Zone Domain
 
-type Logic = Zone -> TYPE -> [RangeProp] -> [RangeProp] -> Maybe (Either String NSEC_Result)
+type Logic a = Zone -> TYPE -> [RangeProp] -> [RangeProp] -> Maybe (Either String a)
 
 ---
 
 {- FOURMOLU_DISABLE -}
-detect :: Logic
+detect :: Logic NSEC_Result
 detect zone qtype qnames coverwild =
-    get_wildcardNoData      zone qtype qnames coverwild  <|>
-    get_nameError           zone qtype qnames coverwild  <|>
-    get_unsignedDelegation  zone qtype qnames coverwild  <|>
-    get_noData              zone qtype qnames coverwild  <|>
-    get_wildcardExpansion   zone qtype qnames coverwild
+    fmap NSECR_WildcardNoData      <$> get_wildcardNoData      zone qtype qnames coverwild  <|>
+    fmap NSECR_NameError           <$> get_nameError           zone qtype qnames coverwild  <|>
+    fmap NSECR_UnsignedDelegation  <$> get_unsignedDelegation  zone qtype qnames coverwild  <|>
+    fmap NSECR_NoData              <$> get_noData              zone qtype qnames coverwild  <|>
+    fmap NSECR_WildcardExpansion   <$> get_wildcardExpansion   zone qtype qnames coverwild
 {- FOURMOLU_ENABLE -}
 
 ---
 
-get_nameError :: Logic
-get_nameError _zone _qtype qnames coverwild = Right <$> (nsecR_NameError <$> propCover qnames <*> propCover coverwild)
+get_nameError :: Logic NSEC_NameError
+get_nameError _zone _qtype qnames coverwild = Right <$> (nsec_NameError <$> propCover qnames <*> propCover coverwild)
 
-get_noData :: Logic
+get_noData :: Logic NSEC_NoData
 get_noData _zone qtype qnames _coverwild = notElemBitmap <$> propMatch qnames
   where
     notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
         | qtype `elem` nsecTypes = Left $ "NSEC.verify: NoData: type bitmap has query type `" ++ show qtype ++ "`."
-        | otherwise = Right $ nsecR_NoData m
+        | otherwise = Right $ nsec_NoData m
 
-get_unsignedDelegation :: Logic
+get_unsignedDelegation :: Logic NSEC_UnsignedDelegation
 get_unsignedDelegation (Zone zone) _qtype qnames _coverwild = do
     c@(Covers ((owner, RD_NSEC{..}), qn)) <- propCover qnames
     guard $ owner /= zone {- owner MUST be sub-level, not zone-top -}
     guard $ qn `isSubDomainOf` owner && NS `elem` nsecTypes {- super-domain is NS -}
     guard $ DS `notElem` nsecTypes {- not signed -}
-    pure $ Right $ nsecR_UnsignedDelegation c
+    pure $ Right $ nsec_UnsignedDelegation c
 
-get_wildcardExpansion :: Logic
-get_wildcardExpansion _zone _qtype qnames _coverwild = Right . nsecR_WildcardExpansion <$> propCover qnames
+get_wildcardExpansion :: Logic NSEC_WildcardExpansion
+get_wildcardExpansion _zone _qtype qnames _coverwild = Right . nsec_WildcardExpansion <$> propCover qnames
 
-get_wildcardNoData :: Logic
+get_wildcardNoData :: Logic NSEC_WildcardNoData
 get_wildcardNoData _zone qtype qnames _coverwild = do
     c <- propCover qnames
     let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
             | qtype `elem` nsecTypes = Left $ "NSEC.verify: WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
-            | otherwise = Right $ nsecR_WildcardNoData c w
+            | otherwise = Right $ nsec_WildcardNoData c w
     notElemBitmap <$> propWild qnames
 
 ---
@@ -79,26 +79,25 @@ newtype Wilds a = Wilds a deriving (Show)
 rangeMatches :: NSEC_Range -> Matches NSEC_Witness
 rangeMatches r@(owner, _nsec) = Matches (r, owner)
 
-nsecR_NameError :: Covers NSEC_Witness -> Covers NSEC_Witness -> NSEC_Result
-nsecR_NameError (Covers name) (Covers wildcard) =
-    NSECResult_NameError name wildcard
+nsec_NameError :: Covers NSEC_Witness -> Covers NSEC_Witness -> NSEC_NameError
+nsec_NameError (Covers name) (Covers wildcard) =
+    NSEC_NameError name wildcard
 
-nsecR_NoData :: Matches NSEC_Witness -> NSEC_Result
-nsecR_NoData (Matches name) =
-    NSECResult_NoData name
+nsec_NoData :: Matches NSEC_Witness -> NSEC_NoData
+nsec_NoData (Matches name) =
+    NSEC_NoData name
 
-nsecR_UnsignedDelegation :: Covers NSEC_Witness -> NSEC_Result
-nsecR_UnsignedDelegation (Covers name) =
-    NSECResult_UnsignedDelegation name
+nsec_UnsignedDelegation :: Covers NSEC_Witness -> NSEC_UnsignedDelegation
+nsec_UnsignedDelegation (Covers name) =
+    NSEC_UnsignedDelegation name
 
-nsecR_WildcardExpansion :: Covers NSEC_Witness -> NSEC_Result
-nsecR_WildcardExpansion (Covers name) =
-    NSECResult_WildcardExpansion name
+nsec_WildcardExpansion :: Covers NSEC_Witness -> NSEC_WildcardExpansion
+nsec_WildcardExpansion (Covers name) =
+    NSEC_WildcardExpansion name
 
-nsecR_WildcardNoData
-    :: Covers NSEC_Witness -> Wilds NSEC_Witness -> NSEC_Result
-nsecR_WildcardNoData (Covers name) (Wilds wildcard) =
-    NSECResult_WildcardNoData name wildcard
+nsec_WildcardNoData :: Covers NSEC_Witness -> Wilds NSEC_Witness -> NSEC_WildcardNoData
+nsec_WildcardNoData (Covers name) (Wilds wildcard) =
+    NSEC_WildcardNoData name wildcard
 
 type RangeProp = RangeProp_ NSEC_Witness
 
