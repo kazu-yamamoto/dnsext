@@ -46,7 +46,7 @@ get_noData :: Logic NSEC_NoData
 get_noData _zone qtype qnames _coverwild = notElemBitmap <$> propMatch qnames
   where
     notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
-        | qtype `elem` nsecTypes = Left $ "NSEC.verify: NoData: type bitmap has query type `" ++ show qtype ++ "`."
+        | qtype `elem` nsecTypes = Left $ "NSEC.NoData: type bitmap has query type `" ++ show qtype ++ "`."
         | otherwise = Right $ nsec_NoData m
 
 get_unsignedDelegation :: Logic NSEC_UnsignedDelegation
@@ -64,7 +64,7 @@ get_wildcardNoData :: Logic NSEC_WildcardNoData
 get_wildcardNoData _zone qtype qnames _coverwild = do
     c <- propCover qnames
     let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
-            | qtype `elem` nsecTypes = Left $ "NSEC.verify: WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
+            | qtype `elem` nsecTypes = Left $ "NSEC.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
             | otherwise = Right $ nsec_WildcardNoData c w
     notElemBitmap <$> propWild qnames
 
