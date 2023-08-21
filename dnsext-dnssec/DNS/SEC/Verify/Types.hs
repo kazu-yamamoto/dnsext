@@ -89,22 +89,44 @@ type NSEC_Range = (Domain, RD_NSEC)
 
 type NSEC_Witness = (NSEC_Range, Domain)
 
+{- FOURMOLU_DISABLE -}
+data NSEC_NameError =
+    NSEC_NameError
+    { nsec_nameError_qname_cover :: NSEC_Witness
+    , nsec_nameError_wildcard_cover :: NSEC_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2 -}
+    deriving Show
+
+data NSEC_NoData =
+    NSEC_NoData
+    { nsec_noData_qname_match :: NSEC_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.3 -}
+    deriving Show
+
+data NSEC_UnsignedDelegation =
+    NSEC_UnsignedDelegation
+    { nsec_unsignedDelegation_ns_qname_cover :: NSEC_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.5 -}
+    deriving Show
+
+data NSEC_WildcardExpansion =
+    NSEC_WildcardExpansion
+    { nsec_wildcardExpansion_qname_cover :: NSEC_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.6 -}
+    deriving Show
+
+data NSEC_WildcardNoData =
+    NSEC_WildcardNoData
+    { nsec_wildcardNoData_qname_cover :: NSEC_Witness
+    , nsec_wildcardNoData_wildcard_match :: NSEC_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.7 -}
+    deriving Show
+{- FOURMOLU_ENABLE -}
+
 data NSEC_Result
-    = NSECResult_NameError
-        { nsec_qname_cover :: NSEC_Witness
-        , nsec_wildcard_cover :: NSEC_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2 -}
-    | NSECResult_NoData
-        { nsec_qname_match :: NSEC_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.3 -}
-    | NSECResult_UnsignedDelegation
-        { nsec_ns_qname_cover :: NSEC_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.5 -}
-    | NSECResult_WildcardExpansion
-        { nsec_qname_cover :: NSEC_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.6 -}
-    | NSECResult_WildcardNoData
-        { nsec_qname_cover :: NSEC_Witness
-        , nsec_wildcard_match :: NSEC_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.7 -}
+    = NSECR_NameError NSEC_NameError
+    | NSECR_NoData NSEC_NoData
+    | NSECR_UnsignedDelegation NSEC_UnsignedDelegation
+    | NSECR_WildcardExpansion NSEC_WildcardExpansion
+    | NSECR_WildcardNoData NSEC_WildcardNoData
     deriving (Show)
