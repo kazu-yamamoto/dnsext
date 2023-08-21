@@ -338,17 +338,17 @@ detectNSEC3 = getNSEC3Result NSEC3.detect
 detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
 detectNSEC = NSEC.getResult NSEC.detect
 
-nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NameError
 nameErrorNSEC = NSEC.getResult NSEC.get_nameError
 
-noDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+noDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NoData
 noDataNSEC = NSEC.getResult NSEC.get_noData
 
-unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_UnsignedDelegation
 unsignedDelegationNSEC = NSEC.getResult NSEC.get_unsignedDelegation
 
-wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardExpansion
 wildcardExpansionNSEC = NSEC.getResult NSEC.get_wildcardExpansion
 
-wildcardNoDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+wildcardNoDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardNoData
 wildcardNoDataNSEC = NSEC.getResult NSEC.get_wildcardNoData
