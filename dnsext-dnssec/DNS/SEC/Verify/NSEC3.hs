@@ -194,13 +194,14 @@ propCover xs = case [x | C x <- xs] of
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -XTypeApplications
 
 -- |
--- >>> n3Covers 1 5 3
+-- >>> n3Covers @Int 1 5 3
 -- True
--- >>> n3Covers 1 5 0
+-- >>> n3Covers @Int 1 5 0
 -- False
--- >>> n3Covers 1 5 6
+-- >>> n3Covers @Int 1 5 6
 -- False
 n3Covers :: Ord a => a -> a -> a -> Bool
 n3Covers lower upper qv = lower < qv && qv < upper
@@ -215,11 +216,11 @@ n3Covers lower upper qv = lower < qv && qv < upper
 --    field in the last NSEC3 RR in the zone is the same as the hashed
 --    owner name of the first NSEC3 RR in the zone in hash order."
 --
--- >>> n3CoversR 5 1 0
+-- >>> n3CoversR @Int 5 1 0
 -- True
--- >>> n3CoversR 5 1 6
+-- >>> n3CoversR @Int 5 1 6
 -- True
--- >>> n3CoversR 5 1 3
+-- >>> n3CoversR @Int 5 1 3
 -- False
 n3CoversR :: Ord a => a -> a -> a -> Bool
 n3CoversR lower upper qv = qv < upper || lower < qv
