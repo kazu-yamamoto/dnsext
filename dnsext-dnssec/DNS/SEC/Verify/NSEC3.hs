@@ -67,11 +67,11 @@ get_nameError getPropSet _qtype props = msum $ map step pps
 
 {- find just qname matches -}
 get_noData :: Logic NSEC3_NoData
-get_noData _ _ [] = Just $ Left "NSEC3.get_noData: no prop-set"
+get_noData _ _ [] = Just $ Left "NSEC3.NoData: no prop-set"
 get_noData _ qtype (exists : _) = notElemBitmap <$> propMatch exists
   where
     notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
-        | qtype `elem` nsec3_types = Left $ "NSEC3.n3Get_noData: type bitmap has query type `" ++ show qtype ++ "`."
+        | qtype `elem` nsec3_types = Left $ "NSEC3.NoData: type bitmap has query type `" ++ show qtype ++ "`."
         | otherwise = Right $ n3_noData m
 
 get_unsignedDelegation :: Logic NSEC3_UnsignedDelegation
@@ -107,7 +107,7 @@ step_unsignedDelegation =
     n3StepNonExistence $ \nextCloser@(Covers ((_, nextN3), _)) closest -> do
         let unsignedDelegation
                 | OptOut `elem` nsec3_flags nextN3 = Right $ n3_unsignedDelegation closest nextCloser
-                | otherwise = Left $ "NSEC3.get_unsignedDelegation: wildcard name is not matched or covered."
+                | otherwise = Left $ "NSEC3.UnsignedDelegation: No OptOut flag. Not NameErr, wildcard is not matched or covered."
         pure unsignedDelegation
 
 step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_WildcardNoData)
@@ -115,7 +115,7 @@ step_wildcardNoData getPropSet qtype =
     n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
-                | qtype `elem` nsec3_types = Left $ "NSEC3.get_wildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
+                | qtype `elem` nsec3_types = Left $ "NSEC3.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
                 | otherwise = Right $ n3_wildcardNoData closest nextCloser m
         notElemBitmap <$> propMatch wildcardProps
 
