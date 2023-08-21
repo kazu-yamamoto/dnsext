@@ -16,15 +16,15 @@ import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
 
-type Logic = (Domain -> [RangeProp]) -> TYPE -> [[RangeProp]] -> Maybe (Either String NSEC3_Result)
+type Logic a = (Domain -> [RangeProp]) -> TYPE -> [[RangeProp]] -> Maybe (Either String a)
 
 getResult
-    :: Logic
+    :: Logic a
     -> Maybe Domain
     -> [(NSEC3_Range, Hash)]
     -> Domain
     -> TYPE
-    -> Either String NSEC3_Result
+    -> Either String a
 getResult n3logic mayZone n3s qname qtype = do
     (zone, refine) <- n3RefineWithRanges n3s
     let guardZone z = when (z /= zone) $ Left $ "NSEC3.getResult: zone " ++ show z ++ " is not consistent for NSEC3 records"
@@ -37,19 +37,19 @@ getResult n3logic mayZone n3s qname qtype = do
 ---
 
 {- FOURMOLU_DISABLE -}
-detect :: Logic
+detect :: Logic NSEC3_Result
 detect getPropSet qtype props =
     {- `stepNE` detects UnsignedDelegation case.
         Run this loop before `getNoData` to apply delegation
         for both UnsignedDelegation and NoData properties -}
-    msum (map stepNE pps)                                  <|>
-    get_noData              getPropSet qtype props   <|>
-    get_wildcardExpansion   getPropSet qtype props
+    msum (map stepNE pps)                                                            <|>
+    fmap N3R_NoData             <$> get_noData              getPropSet qtype props   <|>
+    fmap N3R_WildcardExpansion  <$> get_wildcardExpansion   getPropSet qtype props
   where
     stepNE ps =
-        step_nameError getPropSet ps             <|>
-        step_wildcardNoData getPropSet qtype ps  <|>
-        step_unsignedDelegation ps
+        fmap N3R_NameError           <$> step_nameError getPropSet ps             <|>
+        fmap N3R_WildcardNoData      <$> step_wildcardNoData getPropSet qtype ps  <|>
+        fmap N3R_UnsignedDelegation  <$> step_unsignedDelegation ps
     pps = zip props (tail props)  {- reuse computed range-props for closest-name and next-closer-name -}
 {- FOURMOLU_ENABLE -}
 
@@ -58,7 +58,7 @@ detect getPropSet qtype props =
 {- find NSEC3 records which covers or matches with qname or super names of qname,
    to recognize non-existence of domain or non-existence of RRset -}
 
-get_nameError :: Logic
+get_nameError :: Logic NSEC3_NameError
 get_nameError getPropSet _qtype props = msum $ map step pps
   where
     step = step_nameError getPropSet
@@ -66,28 +66,27 @@ get_nameError getPropSet _qtype props = msum $ map step pps
     pps = zip props (tail props)
 
 {- find just qname matches -}
-get_noData :: Logic
+get_noData :: Logic NSEC3_NoData
 get_noData _ _ [] = Just $ Left "NSEC3.get_noData: no prop-set"
 get_noData _ qtype (exists : _) = notElemBitmap <$> propMatch exists
   where
     notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
         | qtype `elem` nsec3_types = Left $ "NSEC3.n3Get_noData: type bitmap has query type `" ++ show qtype ++ "`."
-        | otherwise = Right $ n3r_noData m
+        | otherwise = Right $ n3_noData m
 
-get_unsignedDelegation :: Logic
+get_unsignedDelegation :: Logic NSEC3_UnsignedDelegation
 get_unsignedDelegation _ _ props = msum $ map step pps
   where
     step = step_unsignedDelegation
     {- reuse computed range-props for closest-name and next-closer-name -}
     pps = zip props (tail props)
 
-get_wildcardExpansion :: Logic
+get_wildcardExpansion :: Logic NSEC3_WildcardExpansion
 get_wildcardExpansion _ _ = {- first result -} msum . map step
   where
-    step :: [RangeProp] -> Maybe (Either String NSEC3_Result)
-    step nexts = Right . n3r_wildcardExpansion <$> propCover nexts
+    step nexts = Right . n3_wildcardExpansion <$> propCover nexts
 
-get_wildcardNoData :: Logic
+get_wildcardNoData :: Logic NSEC3_WildcardNoData
 get_wildcardNoData getPropSet qtype props = msum $ map step pps
   where
     step = step_wildcardNoData getPropSet qtype
@@ -96,27 +95,28 @@ get_wildcardNoData getPropSet qtype props = msum $ map step pps
 
 ---
 
-step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_Result)
+
+step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_NameError)
 step_nameError getPropSet =
     n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
-        Right . n3r_nameError closest nextCloser <$> propCover wildcardProps
+        Right . n3_nameError closest nextCloser <$> propCover wildcardProps
 
-step_unsignedDelegation :: RangeProps -> Maybe (Either String NSEC3_Result)
+step_unsignedDelegation :: RangeProps -> Maybe (Either String NSEC3_UnsignedDelegation)
 step_unsignedDelegation =
     n3StepNonExistence $ \nextCloser@(Covers ((_, nextN3), _)) closest -> do
         let unsignedDelegation
-                | OptOut `elem` nsec3_flags nextN3 = Right $ n3r_unsignedDelegation closest nextCloser
+                | OptOut `elem` nsec3_flags nextN3 = Right $ n3_unsignedDelegation closest nextCloser
                 | otherwise = Left $ "NSEC3.get_unsignedDelegation: wildcard name is not matched or covered."
         pure unsignedDelegation
 
-step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_Result)
+step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_WildcardNoData)
 step_wildcardNoData getPropSet qtype =
     n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
                 | qtype `elem` nsec3_types = Left $ "NSEC3.get_wildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
-                | otherwise = Right $ n3r_wildcardNoData closest nextCloser m
+                | otherwise = Right $ n3_wildcardNoData closest nextCloser m
         notElemBitmap <$> propMatch wildcardProps
 
 {- step to find non-existence of RRset.
@@ -136,34 +136,34 @@ newtype Matches a = Matches a deriving (Show)
 
 newtype Covers a = Covers a deriving (Show)
 
-n3r_nameError
+n3_nameError
     :: Matches NSEC3_Witness
     -> Covers NSEC3_Witness
     -> Covers NSEC3_Witness
-    -> NSEC3_Result
-n3r_nameError (Matches closest) (Covers next) (Covers wildcard) =
-    N3Result_NameError closest next wildcard
+    -> NSEC3_NameError
+n3_nameError (Matches closest) (Covers next) (Covers wildcard) =
+    NSEC3_NameError closest next wildcard
 
-n3r_noData :: Matches NSEC3_Witness -> NSEC3_Result
-n3r_noData (Matches closest) =
-    N3Result_NoData closest
+n3_noData :: Matches NSEC3_Witness -> NSEC3_NoData
+n3_noData (Matches closest) =
+    NSEC3_NoData closest
 
-n3r_unsignedDelegation
-    :: Matches NSEC3_Witness -> Covers NSEC3_Witness -> NSEC3_Result
-n3r_unsignedDelegation (Matches closest) (Covers next) =
-    N3Result_UnsignedDelegation closest next
+n3_unsignedDelegation
+    :: Matches NSEC3_Witness -> Covers NSEC3_Witness -> NSEC3_UnsignedDelegation
+n3_unsignedDelegation (Matches closest) (Covers next) =
+    NSEC3_UnsignedDelegation closest next
 
-n3r_wildcardExpansion :: Covers NSEC3_Witness -> NSEC3_Result
-n3r_wildcardExpansion (Covers next) =
-    N3Result_WildcardExpansion next
+n3_wildcardExpansion :: Covers NSEC3_Witness -> NSEC3_WildcardExpansion
+n3_wildcardExpansion (Covers next) =
+    NSEC3_WildcardExpansion next
 
-n3r_wildcardNoData
+n3_wildcardNoData
     :: Matches NSEC3_Witness
     -> Covers NSEC3_Witness
     -> Matches NSEC3_Witness
-    -> NSEC3_Result
-n3r_wildcardNoData (Matches closest) (Covers next) (Matches wildcard) =
-    N3Result_WildcardNoData closest next wildcard
+    -> NSEC3_WildcardNoData
+n3_wildcardNoData (Matches closest) (Covers next) (Matches wildcard) =
+    NSEC3_WildcardNoData closest next wildcard
 
 type RangeProp = RangeProp_ NSEC3_Witness
 
