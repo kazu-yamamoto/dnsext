@@ -132,13 +132,14 @@ propWild xs = case [x | W x <- xs] of
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -XTypeApplications
 
 -- |
--- >>> nsecCovers 1 5 3
+-- >>> nsecCovers @Int 1 5 3
 -- True
--- >>> nsecCovers 1 5 0
+-- >>> nsecCovers @Int 1 5 0
 -- False
--- >>> nsecCovers 1 5 6
+-- >>> nsecCovers @Int 1 5 6
 -- False
 nsecCovers :: Ord a => a -> a -> a -> Bool
 nsecCovers lower upper qv = lower < qv && qv < upper
@@ -153,11 +154,11 @@ nsecCovers lower upper qv = lower < qv && qv < upper
 --    the zone apex (the owner name of the zone's SOA RR). This indicates that the owner name of
 --    the NSEC RR is the last name in the canonical ordering of the zone."
 --
--- >>> nsecCoversR 5 1 0
+-- >>> nsecCoversR @Int 5 1 0
 -- True
--- >>> nsecCoversR 5 1 6
+-- >>> nsecCoversR @Int 5 1 6
 -- True
--- >>> nsecCoversR 5 1 3
+-- >>> nsecCoversR @Int 5 1 3
 -- False
 nsecCoversR :: Ord a => a -> a -> a -> Bool
 nsecCoversR lower upper qv = qv < upper || lower < qv
