@@ -729,21 +729,21 @@ type NSEC3_CASE = (([(Domain, RData)], Domain, TYPE), NSEC3_Expect)
 
 nsec3CheckResult :: NSEC3_Result -> NSEC3_Expect -> Either String ()
 nsec3CheckResult result expect = case (result, expect) of
-    (N3Result_NameError{..}, N3Expect_NameError ec en ew) -> do
-        check "name-error: closest" (w2e nsec3_closest_match) ec
-        check "name-error: next" (w2e nsec3_next_closer_cover) en
-        check "name-error: wildcard" (w2e nsec3_wildcard_cover) ew
-    (N3Result_NoData{..}, N3Expect_NoData ec) -> do
-        check "no-data: closest" (w2e nsec3_closest_match) ec
-    (N3Result_UnsignedDelegation{..}, N3Expect_UnsignedDelegation ec en) -> do
-        check "unsigned: closest" (w2e nsec3_closest_match) ec
-        check "unsigned: next" (w2e nsec3_next_closer_cover) en
-    (N3Result_WildcardExpansion{..}, N3Expect_WildcardExpansion en) -> do
-        check "wildcard-expansion: next" (w2e nsec3_next_closer_cover) en
-    (N3Result_WildcardNoData{..}, N3Expect_WildcardNoData ec en ew) -> do
-        check "wildcard-no-data: closest" (w2e nsec3_closest_match) ec
-        check "wildcard-no-data: next" (w2e nsec3_next_closer_cover) en
-        check "wildcard-no-data: wildcard" (w2e nsec3_wildcard_match) ew
+    (N3R_NameError (NSEC3_NameError{..}), N3Expect_NameError ec en ew) -> do
+        check "name-error: closest" (w2e nsec3_nameError_closest_match) ec
+        check "name-error: next" (w2e nsec3_nameError_next_closer_cover) en
+        check "name-error: wildcard" (w2e nsec3_nameError_wildcard_cover) ew
+    (N3R_NoData (NSEC3_NoData{..}), N3Expect_NoData ec) -> do
+        check "no-data: closest" (w2e nsec3_noData_closest_match) ec
+    (N3R_UnsignedDelegation (NSEC3_UnsignedDelegation{..}), N3Expect_UnsignedDelegation ec en) -> do
+        check "unsigned: closest" (w2e nsec3_unsignedDelegation_closest_match) ec
+        check "unsigned: next" (w2e nsec3_unsignedDelegation_next_closer_cover) en
+    (N3R_WildcardExpansion (NSEC3_WildcardExpansion{..}), N3Expect_WildcardExpansion en) -> do
+        check "wildcard-expansion: next" (w2e nsec3_wildcardExpansion_next_closer_cover) en
+    (N3R_WildcardNoData (NSEC3_WildcardNoData{..}), N3Expect_WildcardNoData ec en ew) -> do
+        check "wildcard-no-data: closest" (w2e nsec3_wildcardNodata_closest_match) ec
+        check "wildcard-no-data: next" (w2e nsec3_wildcardNodata_next_closer_cover) en
+        check "wildcard-no-data: wildcard" (w2e nsec3_wildcardNodata_wildcard_match) ew
     _ ->
         Left $ unlines ["result data mismatch:", show result, show expect]
   where
@@ -754,20 +754,20 @@ nsec3CheckResult result expect = case (result, expect) of
         | otherwise = Left $ tag ++ ": " ++ show r ++ " =/= " ++ show e
 
 caseNSEC3 :: NSEC3_CASE -> Expectation
-caseNSEC3 ((rds, qn, qtype), expect) = either expectationFailure (const $ pure ()) $ do
+caseNSEC3 ((rds, qname, qtype), expect) = either expectationFailure (const $ pure ()) $ do
     let checkEach = getEach expect
-    resEach <- checkEach Nothing ranges qn qtype
+    resEach <- checkEach Nothing ranges qname qtype
     nsec3CheckResult resEach expect
-    result <- detectNSEC3 Nothing ranges qn qtype
+    result <- detectNSEC3 Nothing ranges qname qtype
     nsec3CheckResult result expect
   where
     ranges = [(owner, nsec3) | (owner, rd) <- rds, Just nsec3 <- [fromRData rd]]
-    getEach ex = case ex of
-        N3Expect_NameError{} -> nameErrorNSEC3
-        N3Expect_NoData{} -> noDataNSEC3
-        N3Expect_UnsignedDelegation{} -> unsignedDelegationNSEC3
-        N3Expect_WildcardExpansion{} -> wildcardExpansionNSEC3
-        N3Expect_WildcardNoData{} -> wildcardNoDataNSEC3
+    getEach ex mz rs qn qt = case ex of
+        N3Expect_NameError{} -> N3R_NameError <$> nameErrorNSEC3 mz rs qn qt
+        N3Expect_NoData{} -> N3R_NoData <$> noDataNSEC3 mz rs qn qt
+        N3Expect_UnsignedDelegation{} -> N3R_UnsignedDelegation <$> unsignedDelegationNSEC3 mz rs qn qt
+        N3Expect_WildcardExpansion{} -> N3R_WildcardExpansion <$> wildcardExpansionNSEC3 mz rs qn qt
+        N3Expect_WildcardNoData{} -> N3R_WildcardNoData <$> wildcardNoDataNSEC3 mz rs qn qt
 
 -- example from https://datatracker.ietf.org/doc/html/rfc7129#section-5.5
 nsec3RFC7129NameError :: NSEC3_CASE

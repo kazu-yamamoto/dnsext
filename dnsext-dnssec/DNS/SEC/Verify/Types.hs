@@ -37,29 +37,50 @@ type NSEC3_Range = (Domain, RD_NSEC3)
 -- | range and qname which is owner of it or covered by it
 type NSEC3_Witness = (NSEC3_Range, Domain)
 
--- | verify result of NSEC3
+{- FOURMOLU_DISABLE -}
+data NSEC3_NameError =
+    NSEC3_NameError
+    { nsec3_nameError_closest_match :: NSEC3_Witness
+    , nsec3_nameError_next_closer_cover :: NSEC3_Witness
+    , nsec3_nameError_wildcard_cover :: NSEC3_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.1 -}
+    deriving Show
+
+data NSEC3_NoData =
+    NSEC3_NoData
+    { nsec3_noData_closest_match :: NSEC3_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2
+         https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.6 -}
+    deriving Show
+
+data NSEC3_UnsignedDelegation =
+    NSEC3_UnsignedDelegation
+    { nsec3_unsignedDelegation_closest_match :: NSEC3_Witness
+    , nsec3_unsignedDelegation_next_closer_cover :: NSEC3_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3 -}
+    deriving Show
+
+data NSEC3_WildcardExpansion =
+    NSEC3_WildcardExpansion
+    { nsec3_wildcardExpansion_next_closer_cover :: NSEC3_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.4 -}
+    deriving Show
+
+data NSEC3_WildcardNoData =
+    NSEC3_WildcardNoData
+    { nsec3_wildcardNodata_closest_match :: NSEC3_Witness
+    , nsec3_wildcardNodata_next_closer_cover :: NSEC3_Witness
+    , nsec3_wildcardNodata_wildcard_match :: NSEC3_Witness
+    } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.5 -}
+    deriving Show
+{- FOURMOLU_ENABLE -}
+
 data NSEC3_Result
-    = N3Result_NameError
-        { nsec3_closest_match :: NSEC3_Witness
-        , nsec3_next_closer_cover :: NSEC3_Witness
-        , nsec3_wildcard_cover :: NSEC3_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.1 -}
-    | N3Result_NoData
-        { nsec3_closest_match :: NSEC3_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2
-             https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.6 -}
-    | N3Result_UnsignedDelegation
-        { nsec3_closest_match :: NSEC3_Witness
-        , nsec3_next_closer_cover :: NSEC3_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3 -}
-    | N3Result_WildcardExpansion
-        { nsec3_next_closer_cover :: NSEC3_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.4 -}
-    | N3Result_WildcardNoData
-        { nsec3_closest_match :: NSEC3_Witness
-        , nsec3_next_closer_cover :: NSEC3_Witness
-        , nsec3_wildcard_match :: NSEC3_Witness
-        } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.5 -}
+    = N3R_NameError NSEC3_NameError
+    | N3R_NoData NSEC3_NoData
+    | N3R_UnsignedDelegation NSEC3_UnsignedDelegation
+    | N3R_WildcardExpansion NSEC3_WildcardExpansion
+    | N3R_WildcardNoData NSEC3_WildcardNoData
     deriving (Show)
 
 ---
