@@ -949,18 +949,18 @@ data NSEC_Expect
 
 nsecCheckResult :: NSEC_Result -> NSEC_Expect -> Either String ()
 nsecCheckResult result expect = case (result, expect) of
-    (NSECResult_NameError{..}, NSEC_Expect_NameError eq ew) -> do
-        check "name-error: qname_cover" (w2e nsec_qname_cover) eq
-        check "name-error: wildcard_cover" (w2e nsec_wildcard_cover) ew
-    (NSECResult_NoData{..}, NSEC_Expect_NoData eq) -> do
-        check "no-data: qname_match" (w2e nsec_qname_match) eq
-    (NSECResult_UnsignedDelegation{..}, NSEC_Expect_UnsignedDelegation eq) -> do
-        check "unsigned: ns_qname_cover" (w2e nsec_ns_qname_cover) eq
-    (NSECResult_WildcardExpansion{..}, NSEC_Expect_WildcardExpansion eq) -> do
-        check "wildcard-expansion: qname_cover" (w2e nsec_qname_cover) eq
-    (NSECResult_WildcardNoData{..}, NSEC_Expect_WildcardNoData eq ew) -> do
-        check "wildcard-no-data: qname_cover" (w2e nsec_qname_cover) eq
-        check "wildcard-no-data: wildcard_match" (w2e nsec_wildcard_match) ew
+    (NSECR_NameError (NSEC_NameError {..}), NSEC_Expect_NameError eq ew) -> do
+        check "name-error: qname_cover" (w2e nsec_nameError_qname_cover) eq
+        check "name-error: wildcard_cover" (w2e nsec_nameError_wildcard_cover) ew
+    (NSECR_NoData (NSEC_NoData {..}), NSEC_Expect_NoData eq) -> do
+        check "no-data: qname_match" (w2e nsec_noData_qname_match) eq
+    (NSECR_UnsignedDelegation (NSEC_UnsignedDelegation{..}), NSEC_Expect_UnsignedDelegation eq) -> do
+        check "unsigned: ns_qname_cover" (w2e nsec_unsignedDelegation_ns_qname_cover) eq
+    (NSECR_WildcardExpansion (NSEC_WildcardExpansion{..}), NSEC_Expect_WildcardExpansion eq) -> do
+        check "wildcard-expansion: qname_cover" (w2e nsec_wildcardExpansion_qname_cover) eq
+    (NSECR_WildcardNoData (NSEC_WildcardNoData{..}), NSEC_Expect_WildcardNoData eq ew) -> do
+        check "wildcard-no-data: qname_cover" (w2e nsec_wildcardNoData_qname_cover) eq
+        check "wildcard-no-data: wildcard_match" (w2e nsec_wildcardNoData_wildcard_match) ew
     _ ->
         Left $ unlines ["result data mismatch:", show result, show expect]
   where
@@ -973,20 +973,20 @@ nsecCheckResult result expect = case (result, expect) of
 type NSEC_CASE = ((Domain, [(Domain, RData)], Domain, TYPE), NSEC_Expect)
 
 caseNSEC :: NSEC_CASE -> Expectation
-caseNSEC ((zone, rds, qn, qtype), expect) = either expectationFailure (const $ pure ()) $ do
+caseNSEC ((zone, rds, qname, qtype), expect) = either expectationFailure (const $ pure ()) $ do
     let checkEach = getEach expect
-    resEach <- checkEach zone ranges qn qtype
+    resEach <- checkEach zone ranges qname qtype
     nsecCheckResult resEach expect
-    result <- detectNSEC zone ranges qn qtype
+    result <- detectNSEC zone ranges qname qtype
     nsecCheckResult result expect
   where
     ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
-    getEach ex = case ex of
-        NSEC_Expect_NameError{} -> nameErrorNSEC
-        NSEC_Expect_NoData{} -> noDataNSEC
-        NSEC_Expect_UnsignedDelegation{} -> unsignedDelegationNSEC
-        NSEC_Expect_WildcardExpansion{} -> wildcardExpansionNSEC
-        NSEC_Expect_WildcardNoData{} -> wildcardNoDataNSEC
+    getEach ex z rs qn qt = case ex of
+        NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn qt
+        NSEC_Expect_NoData{} -> NSECR_NoData <$> noDataNSEC z rs qn qt
+        NSEC_Expect_UnsignedDelegation{} -> NSECR_UnsignedDelegation <$> unsignedDelegationNSEC z rs qn qt
+        NSEC_Expect_WildcardExpansion{} -> NSECR_WildcardExpansion <$> wildcardExpansionNSEC z rs qn qt
+        NSEC_Expect_WildcardNoData{} -> NSECR_WildcardNoData <$> wildcardNoDataNSEC z rs qn qt
 
 -- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2
 -- Name Error
