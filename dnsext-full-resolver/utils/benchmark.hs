@@ -10,7 +10,7 @@ import qualified DNS.Types as DNS
 import qualified DNS.Types.Encode as DNS
 import Data.ByteString (ByteString)
 import Data.String (fromString)
-import Data.Time (NominalDiffTime, diffUTCTime, getCurrentTime)
+import Data.UnixTime (diffUnixTime, getUnixTime)
 import System.Console.GetOpt (
     ArgDescr (NoArg, ReqArg),
     ArgOrder (RequireOrder),
@@ -173,13 +173,13 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
 
     -----
     _ <- runQueries initD enqueueReq dequeueResp
-    before <- getCurrentTime
+    before <- getUnixTime
     _ <- runQueries ds enqueueReq dequeueResp
-    after <- getCurrentTime
+    after <- getUnixTime
 
-    let elapsed = after `diffUTCTime` before
-        toDouble = fromRational . toRational :: NominalDiffTime -> Double
-        rate = toDouble $ fromIntegral size / after `diffUTCTime` before
+    let elapsed = toRational $ after `diffUnixTime` before
+        toDouble = fromRational :: Rational -> Double
+        rate = fromIntegral size / elapsed
 
     if gplot
         then do
@@ -190,8 +190,8 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
             putStrLn $ "qsizePerPipeline: " ++ show udp_queue_size_per_pipeline
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
-            putStrLn $ "elapsed: " ++ show elapsed
-            putStrLn $ "rate: " ++ show rate
+            putStrLn $ "elapsed: " ++ show (toDouble elapsed) ++ " (sec)"
+            putStrLn $ "rate: " ++ show (toDouble rate)
 
 getEnv :: Config -> IO Env
 getEnv Config{..} = do
