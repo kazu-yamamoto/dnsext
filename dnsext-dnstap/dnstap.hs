@@ -32,22 +32,15 @@ fstrmReader :: Socket -> IO ()
 fstrmReader sock = do
     ctx <- newContext sock $ Config False True True
     handshake ctx
-    fstrmData ctx
-    fstrmStop
-
-fstrmData :: Context -> IO ()
-fstrmData ctx = loop
+    loop ctx
   where
-    loop = do
+    loop ctx = do
         bsx <- recvData ctx
         if C8.length bsx == 0
             then return ()
             else do
                 dnstap bsx
-                loop
-
-fstrmStop :: IO ()
-fstrmStop = putStrLn "STOP"
+                loop ctx
 
 ----------------------------------------------------------------
 

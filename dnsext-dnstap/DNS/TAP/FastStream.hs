@@ -10,7 +10,6 @@ module DNS.TAP.FastStream where
 
 import Control.Exception as E
 import Control.Monad
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Typeable
 import Data.Word
@@ -19,33 +18,22 @@ import Network.Socket
 import qualified Network.Socket.BufferPool as P
 import qualified Network.Socket.ByteString as NSB
 
-data Control
-    = ESCAPE
-    | ACCEPT
-    | START
-    | STOP
-    | READY
-    | FINISH
-    deriving (Eq, Show)
+data Control = Control { fromControl :: Word32 } deriving (Eq, Show)
 
 {- FOURMOLU_DISABLE -}
-fromControl :: Control -> Word32
-fromControl ESCAPE = 0x00
-fromControl ACCEPT = 0x01
-fromControl START  = 0x02
-fromControl STOP   = 0x03
-fromControl READY  = 0x04
-fromControl FINISH = 0x05
+pattern ESCAPE :: Control
+pattern ESCAPE  = Control 0x00
+pattern ACCEPT :: Control
+pattern ACCEPT  = Control 0x01
+pattern START  :: Control
+pattern START   = Control 0x02
+pattern STOP   :: Control
+pattern STOP    = Control 0x03
+pattern READY  :: Control
+pattern READY   = Control 0x04
+pattern FINISH :: Control
+pattern FINISH  = Control 0x05
 {- FOURMOLU_ENABLE -}
-
-toControl :: Word32 -> Maybe Control
-toControl 0x00 = Just ESCAPE
-toControl 0x01 = Just ACCEPT
-toControl 0x02 = Just START
-toControl 0x03 = Just STOP
-toControl 0x04 = Just READY
-toControl 0x05 = Just FINISH
-toControl _ = Nothing
 
 data FSException = FSException String deriving (Show, Typeable)
 
@@ -81,17 +69,17 @@ handshake :: Context -> IO ()
 handshake Context{..}
   | ctxServer = do
         bsc <- ctxRecv 4
-        c <- withReadBuffer bsc $ \rbuf -> toControl <$> read32 rbuf
-        when (c /= Just ESCAPE) $ throwIO $ FSException "no ESCAPE"
+        c <- withReadBuffer bsc $ \rbuf -> Control <$> read32 rbuf
+        when (c /= ESCAPE) $ throwIO $ FSException "no ESCAPE"
         bsl <- ctxRecv 4
         l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
         bsx <- ctxRecv l
         withReadBuffer bsx $ \rbuf -> do
-            s <- toControl <$> read32 rbuf
-            when (s /= Just START) $ throwIO $ FSException "no START"
+            s <- Control <$> read32 rbuf
+            when (s /= START) $ throwIO $ FSException "no START"
             when ctxDebug $ putStrLn "START"
-            a <- toControl <$> read32 rbuf
-            when (a /= Just ACCEPT) $ throwIO $ FSException "no ACCEPT"
+            a <- Control <$> read32 rbuf
+            when (a /= ACCEPT) $ throwIO $ FSException "no ACCEPT"
             when ctxDebug $ putStr "ACCEPT "
             l1 <- read32 rbuf
             bs <- extractByteString rbuf $ fromIntegral l1
@@ -110,7 +98,10 @@ recvData Context{..}
         l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
         when ctxDebug $ putStrLn "--------------------------------"
         when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
-        ctxRecv l
+        bsx <- ctxRecv l
+        when ctxDebug $ do
+            when (C8.length bsx == 0) $ putStrLn "STOP"
+        return bsx
   | otherwise = throwIO $ FSException "client cannot use recvData"
 
 sendData :: Context -> ByteString -> IO ()
