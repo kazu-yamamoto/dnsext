@@ -27,7 +27,6 @@ library
         DNS.Do53.Client
         DNS.Do53.Internal
         DNS.Do53.Memo
-        DNS.Do53.OneShot
 
     other-modules:
         DNS.Do53.Cache
