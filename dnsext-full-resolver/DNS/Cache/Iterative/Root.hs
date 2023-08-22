@@ -10,38 +10,26 @@ module DNS.Cache.Iterative.Root (
 ) where
 
 -- GHC packages
-import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import Control.Monad.Trans.Reader (asks)
-import Data.Functor (($>))
 import Data.IORef (atomicWriteIORef, readIORef)
 import qualified Data.Set as Set
 
 -- other packages
-import System.Console.ANSI.Types
 
--- dns packages
+-- dnsext packages
 import DNS.Do53.Memo (
     rankedAdditional,
     rankedAnswer,
  )
-import DNS.SEC (
-    RD_DNSKEY,
-    RD_DS (..),
-    TYPE (DNSKEY),
- )
+import qualified DNS.Log as Log
+import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
-import DNS.Types (
-    Domain,
-    ResourceRecord (..),
-    TYPE (NS),
- )
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Norec
@@ -52,7 +40,6 @@ import qualified DNS.Cache.Iterative.Verify as Verify
 import DNS.Cache.RootServers (rootServers)
 import DNS.Cache.RootTrustAnchors (rootSepDS)
 import DNS.Cache.Types (NE)
-import qualified DNS.Log as Log
 
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do
