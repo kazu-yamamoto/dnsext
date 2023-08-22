@@ -8,16 +8,13 @@ import Data.IORef (newIORef)
 
 -- other packages
 
--- dns packages
-
-import DNS.Do53.Internal (
-    newConcurrentGenId,
- )
+-- dnsext packages
+import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Log as Log
 
 -- this package
 import DNS.Cache.Iterative.Types
-import qualified DNS.Log as Log
 
 getUpdateCache :: Cache.MemoConf -> IO UpdateCache
 getUpdateCache cacheConf = do
