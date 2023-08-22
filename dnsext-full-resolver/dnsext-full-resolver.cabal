@@ -73,6 +73,7 @@ library
         time-manager,
         tls,
         transformers,
+        unix-time,
         unliftio,
         word8
 
