@@ -19,15 +19,13 @@ module DNS.Cache.Iterative.Types (
     throwDnsError,
 ) where
 
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import Control.Monad.Trans.Reader (ReaderT (..))
+-- GHC packages
 import Data.IORef (IORef)
-import Data.IP (IP)
 
-import DNS.Cache.Types (NE)
-import DNS.Do53.Client (
-    QueryControls (..),
- )
+-- other packages
+
+-- dnsext packages
+import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Memo (
     CRSet,
     Cache,
@@ -35,24 +33,14 @@ import DNS.Do53.Memo (
     Ranking,
  )
 import qualified DNS.Log as Log
-import DNS.SEC (
-    RD_DNSKEY,
-    RD_DS (..),
-    RD_RRSIG (..),
-    TYPE,
- )
-import DNS.Types (
-    CLASS,
-    DNSError,
-    DNSMessage,
-    Domain,
-    RCODE,
-    RData,
-    ResourceRecord (..),
-    TTL,
- )
+import DNS.SEC
+import DNS.Types
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
+import Data.IP (IP)
+
+-- this package
+import DNS.Cache.Imports
+import DNS.Cache.Types (NE)
 
 type UpdateCache =
     ( Key -> TTL -> CRSet -> Ranking -> IO ()

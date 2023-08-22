@@ -5,13 +5,7 @@ module DNS.Cache.RootServers (
 ) where
 
 -- dns packages
-import DNS.Types (
-    ResourceRecord (ResourceRecord, rdata, rrname, rrtype),
-    TYPE (A, AAAA, NS),
-    rd_a,
-    rd_aaaa,
-    rd_ns,
- )
+import DNS.Types
 import qualified DNS.Types as DNS
 
 rootServers :: ([ResourceRecord], [ResourceRecord])

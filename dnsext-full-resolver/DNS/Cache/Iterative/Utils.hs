@@ -3,22 +3,19 @@
 module DNS.Cache.Iterative.Utils where
 
 -- GHC packages
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (asks)
-import Data.Function (on)
-import Data.List (groupBy, intercalate)
 
 -- other packages
-import System.Console.ANSI.Types
 
--- dns packages
+-- dnsext packages
+import qualified DNS.Log as Log
 import DNS.Types (DNSMessage)
 import qualified DNS.Types as DNS
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Types (NE)
-import qualified DNS.Log as Log
 
 logLines :: Log.Level -> [String] -> ContextT IO ()
 logLines level xs = do

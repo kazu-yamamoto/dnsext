@@ -2,13 +2,10 @@ module DNS.Cache.Iterative.Norec (norec) where
 
 -- GHC packages
 import qualified Control.Exception as E
-import Control.Monad.Trans.Except (ExceptT (..))
-import Control.Monad.Trans.Reader (ReaderT (..))
 
 -- other packages
 
--- dns packages
-
+-- dnsext packages
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls (..),
@@ -25,19 +22,12 @@ import DNS.Do53.Internal (
     udpTcpResolver,
  )
 import qualified DNS.Do53.Internal as DNS
-import DNS.SEC (
-    TYPE,
- )
-import DNS.Types (
-    DNSMessage,
-    Domain,
-    Question (..),
-    classIN,
- )
+import DNS.Types hiding (InvalidEDNS, flags)
 import qualified DNS.Types as DNS
 import Data.IP (IP)
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Types
 
 {- Get the answer DNSMessage from the authoritative server.

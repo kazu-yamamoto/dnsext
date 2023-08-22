@@ -10,41 +10,29 @@ module DNS.Cache.Iterative.Delegation (
 ) where
 
 -- GHC packages
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (asks)
-import Data.Function (on)
-import Data.Functor (($>))
-import Data.List (groupBy, sort, uncons)
 import qualified Data.Set as Set
 
 -- other packages
-import System.Console.ANSI.Types
 
--- dns packages
+-- dnsext packages
 import DNS.Do53.Memo (
     rankedAdditional,
     rankedAuthority,
  )
-import DNS.SEC (
-    RD_DNSKEY,
-    TYPE (DS),
- )
-import DNS.Types (
-    DNSMessage,
-    Domain,
-    ResourceRecord (..),
-    TYPE (A, AAAA, NS),
- )
+import qualified DNS.Log as Log
+import DNS.SEC
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import qualified DNS.Log as Log
 
 newtype GMayDelegation a
     = MayDelegation (Maybe a)

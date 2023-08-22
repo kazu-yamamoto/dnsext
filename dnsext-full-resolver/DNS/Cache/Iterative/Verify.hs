@@ -8,40 +8,25 @@ module DNS.Cache.Iterative.Verify (
 ) where
 
 -- GHC packages
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (asks)
-import DNS.Types.Decode (EpochTime)
 
 -- other packages
-import System.Console.ANSI.Types
 
--- dns packages
+-- dnsext packages
 import DNS.Do53.Memo (Ranking)
 import qualified DNS.Do53.Memo as Cache
-import DNS.SEC (
-    RD_DNSKEY,
-    RD_RRSIG (..),
-    TYPE,
-    fromDNSTime,
-    toDNSTime,
- )
+import qualified DNS.Log as Log
+import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
-import DNS.Types (
-    CLASS,
-    Domain,
-    RData,
-    ResourceRecord (..),
-    TTL,
- )
+import DNS.Types
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Internal as DNS
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
-import qualified DNS.Log as Log
 
 {- FOURMOLU_DISABLE -}
 with

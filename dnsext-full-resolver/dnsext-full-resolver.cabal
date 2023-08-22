@@ -16,6 +16,7 @@ library
         DNS.Cache.Types
 
     other-modules:
+        DNS.Cache.Imports
         DNS.Cache.Iterative.API
         DNS.Cache.Iterative.Cache
         DNS.Cache.Iterative.Delegation

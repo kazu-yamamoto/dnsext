@@ -29,7 +29,7 @@ import Control.Concurrent.STM (
     writeTQueue,
     writeTVar,
  )
-import Control.Monad (guard, msum, when)
+import Control.Monad
 
 -- queue interface
 data Queue m a = Queue

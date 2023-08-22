@@ -6,33 +6,22 @@ module DNS.Cache.Iterative.Rev (
 ) where
 
 -- GHC packages
-import Control.Applicative ((<|>))
-import Control.Arrow (first)
-import Control.Monad (guard)
-import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
-import Data.Function (on)
-import Data.List (groupBy, intercalate, sortOn)
 import qualified Data.List as L
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (listToMaybe)
-import Numeric (readDec, readHex, showHex)
 
 -- other packages
 
--- dns packages
-import DNS.Types (
-    Domain,
-    TYPE (SOA),
-    classIN,
- )
+-- dnsext packages
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IPv4, IPv6, toIPv4, toIPv6b)
 import qualified Data.IP as IP
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Types
 
 -- $setup

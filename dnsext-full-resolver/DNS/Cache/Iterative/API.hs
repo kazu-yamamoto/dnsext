@@ -11,14 +11,10 @@ module DNS.Cache.Iterative.API (
 ) where
 
 -- GHC packages
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except (throwE)
-import Control.Monad.Trans.Reader (asks)
 
 -- other packages
 
--- dns packages
-
+-- dnsext packages
 import DNS.Do53.Client (
     EdnsControls (..),
     FlagOp (..),
@@ -26,20 +22,12 @@ import DNS.Do53.Client (
     QueryControls (..),
  )
 import qualified DNS.Do53.Client as DNS
-import DNS.SEC (
-    TYPE (DNSKEY, DS, NSEC, NSEC3, RRSIG),
- )
-import DNS.Types (
-    DNSHeader,
-    DNSMessage,
-    Domain,
-    EDNSheader,
-    ResourceRecord (..),
-    TYPE (SOA),
- )
+import DNS.SEC (TYPE (..))
+import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Resolve
 import DNS.Cache.Iterative.Types
@@ -242,7 +230,7 @@ getResultIterative n typ = do
         fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
-resultFromRRS ::RequestDO -> ResultRRS -> Result
+resultFromRRS :: RequestDO -> ResultRRS -> Result
 resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
   where
     fromRRsets = concatMap $ rrListFromRRset reqDO

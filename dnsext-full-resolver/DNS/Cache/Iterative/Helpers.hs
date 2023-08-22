@@ -1,32 +1,18 @@
 module DNS.Cache.Iterative.Helpers where
 
 -- GHC packages
-import Control.Monad (guard, (<=<))
-import Data.Function (on)
-import Data.List (groupBy, sort, sortOn, uncons)
 
 -- other packages
 
--- dns packages
-
-import DNS.Do53.Memo (
-    Ranking,
- )
-import DNS.SEC (
-    RD_DS,
-    RD_RRSIG (..),
-    TYPE (RRSIG),
- )
-import DNS.Types (
-    Domain,
-    ResourceRecord (..),
-    TTL,
-    TYPE (A, AAAA, CNAME, NS),
- )
+-- dnsext packages
+import DNS.Do53.Memo (Ranking)
+import DNS.SEC
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Types
 
 -- $setup
