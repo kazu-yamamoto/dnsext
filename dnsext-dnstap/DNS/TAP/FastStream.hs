@@ -105,7 +105,11 @@ recvData Context{..}
   | otherwise = throwIO $ FSException "client cannot use recvData"
 
 sendData :: Context -> ByteString -> IO ()
-sendData = undefined
+sendData Context{..} _bs
+  | ctxServer = throwIO $ FSException "server cannot use sendData"
+  | otherwise = undefined
 
 bye :: Context -> IO ()
-bye = undefined
+bye Context{..}
+  | ctxServer = throwIO $ FSException "server cannot use bye"
+  | otherwise = undefined
