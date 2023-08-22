@@ -3,16 +3,15 @@
 
 module Main where
 
+import DNS.TAP.FastStream
 import Control.Concurrent
 import Control.Monad
 import DNS.Types.Decode
 import Data.Bits
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
-import Hexdump
 import Network.ByteOrder
 import Network.Socket
-import qualified Network.Socket.BufferPool as P
 
 ----------------------------------------------------------------
 
@@ -29,59 +28,21 @@ main = do
 
 ----------------------------------------------------------------
 
--- Fast stream:
--- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
-
-fstrm_control_accept :: Word32
-fstrm_control_accept = 0x01
-fstrm_control_start :: Word32
-fstrm_control_start = 0x02
-fstrm_control_stop :: Word32
-fstrm_control_stop = 0x03
-fstrm_control_ready :: Word32
-fstrm_control_ready = 0x04
-fstrm_control_finish :: Word32
-fstrm_control_finish = 0x05
-
 fstrmReader :: Socket -> IO ()
 fstrmReader sock = do
-    pool <- P.newBufferPool 512 16384
-    recvN <- P.makeRecvN "" $ P.receive sock pool
-    fstrmStart recvN
-    fstrmData recvN
+    ctx <- newContext sock $ Config False True True
+    handshake ctx
+    fstrmData ctx
     fstrmStop
 
-fstrmStart :: P.RecvN -> IO ()
-fstrmStart recvN = do
-    bsc <- recvN 4
-    c <- withReadBuffer bsc $ \rbuf -> fromIntegral <$> read32 rbuf
-    when (c /= (0 :: Int)) $ error "start no control"
-    bsl <- recvN 4
-    l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
-    bsx <- recvN l
-    withReadBuffer bsx $ \rbuf -> do
-        s <- read32 rbuf
-        when (s /= fstrm_control_start) $ error "xxx"
-        putStrLn "START"
-        a <- read32 rbuf
-        when (a /= fstrm_control_accept) $ error "xxx"
-        l1 <- read32 rbuf
-        bs <- extractByteString rbuf $ fromIntegral l1
-        putStr "ACCEPT "
-        C8.putStrLn bs
-
-fstrmData :: P.RecvN -> IO ()
-fstrmData recvN = loop
+fstrmData :: Context -> IO ()
+fstrmData ctx = loop
   where
     loop = do
-        bsl <- recvN 4
-        l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
-        putStrLn "--------------------------------"
-        putStrLn $ "fstrm data length: " ++ show l
-        if l == 0
+        bsx <- recvData ctx
+        if C8.length bsx == 0
             then return ()
             else do
-                bsx <- recvN l
                 dnstap bsx
                 loop
 
@@ -314,16 +275,16 @@ skip rbuf VARINT = do
     putStrLn $ "skipping VARINT " ++ show len
 skip rbuf I64 = do
     _ <- read64 rbuf -- fixme endian
-    putStrLn $ "skipping I64"
+    putStrLn "skipping I64"
 skip rbuf LEN = do
     len <- varint rbuf
     putStrLn $ "skipping LEN " ++ show len
     ff rbuf len
 skip rbuf I32 = do
     _ <- i32 rbuf
-    putStrLn $ "skipping I32"
+    putStrLn "skipping I32"
 skip rbuf _ = do
-    putStrLn $ "skipping VARINT unknown"
+    putStrLn "skipping VARINT unknown"
     remainingSize rbuf >>= ff rbuf
 
 dump :: Readable a => a -> IO ()
