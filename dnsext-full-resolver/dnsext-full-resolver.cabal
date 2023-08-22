@@ -69,10 +69,10 @@ library
         random,
         recv,
         stm,
-        time,
         time-manager,
         tls,
         transformers,
+        unix-time,
         unliftio,
         word8
 
@@ -160,7 +160,7 @@ executable workers-benchmark
         dnsext-full-resolver,
         dnsext-log,
         dnsext-types,
-        time,
+        unix-time,
         unliftio
 
     if (os(windows) && impl(ghc >=9.0))

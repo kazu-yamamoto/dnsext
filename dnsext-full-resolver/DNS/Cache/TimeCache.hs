@@ -4,16 +4,10 @@ module DNS.Cache.TimeCache (
 ) where
 
 -- GHC packages
-import DNS.Types.Decode (EpochTime)
-import Data.Time (
-    defaultTimeLocale,
-    formatTime,
-    getCurrentTimeZone,
-    utcToZonedTime,
- )
-import Data.Time.Clock.System (SystemTime (..), getSystemTime, systemToUTCTime)
+import qualified Data.ByteString.Char8 as C8
+import Foreign.C.Types (CTime (..))
 
--- dns packages
+-- other packages
 import Control.AutoUpdate (
     defaultUpdateSettings,
     mkAutoUpdate,
@@ -21,43 +15,43 @@ import Control.AutoUpdate (
     updateFreq,
  )
 
+-- dnsext packages
+import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
+
+-- this package
+import DNS.Cache.Imports
+
 new :: IO (IO EpochTime, IO ShowS)
 new = do
-    getSec <- mkAutoSeconds
-    getTimeStr <- mkAutoTimeStr getSec
-    return (getSec, getTimeStr)
+    getUTime <- mkAutoUnixTime
+    getSec <- mkAutoSeconds getUTime
+    getShowS <- mkAutoTimeShowS getUTime
+    pure (getSec, getShowS)
 
-mkAutoSeconds :: IO (IO EpochTime)
-mkAutoSeconds =
+mkAutoUnixTime :: IO (IO UnixTime)
+mkAutoUnixTime = mostOncePerSecond getUnixTime
+
+mkAutoSeconds :: IO UnixTime -> IO (IO EpochTime)
+mkAutoSeconds getUTime = mostOncePerSecond $ unixToEpoch <$> getUTime
+
+mkAutoTimeShowS :: IO UnixTime -> IO (IO ShowS)
+mkAutoTimeShowS getUTime = mostOncePerSecond $ getTimeShowS =<< getUTime
+
+mostOncePerSecond :: IO a -> IO (IO a)
+mostOncePerSecond upd =
     mkAutoUpdate
         defaultUpdateSettings
-            { updateAction = getSystemSeconds {- calls clock_gettime in x86-64 linux -}
+            { updateAction = upd
             , updateFreq = 1000 * 1000
             }
-  where
-    getSystemSeconds = do
-        MkSystemTime{systemSeconds = sec} <- getSystemTime
-        return sec
 
-mkAutoTimeStr :: IO EpochTime -> IO (IO (String -> String))
-mkAutoTimeStr getSec =
-    mkAutoUpdate
-        defaultUpdateSettings
-            { updateAction = getFormattedTime
-            , updateFreq = 1000 * 1000
-            }
-  where
-    getFormattedTime = do
-        sec <- getSec
-        let t = MkSystemTime{systemSeconds = sec, systemNanoseconds = 0}
-        zt <- utcToZonedTime <$> getCurrentTimeZone <*> pure (systemToUTCTime t)
-        return (formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" zt ++)
-
--- no caching
 none :: (IO EpochTime, IO ShowS)
-none =
-    ( systemSeconds <$> getSystemTime
-    , (++) . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S %Z" <$> getUTC
-    )
-  where
-    getUTC = utcToZonedTime <$> getCurrentTimeZone <*> fmap systemToUTCTime getSystemTime
+none = (unixToEpoch <$> getUnixTime, getTimeShowS =<< getUnixTime)
+
+---
+
+getTimeShowS :: UnixTime -> IO ShowS
+getTimeShowS ts = (++) . C8.unpack <$> formatUnixTime (fromString "%Y-%m-%d %H:%M:%S %Z") ts
+
+unixToEpoch :: UnixTime -> EpochTime
+unixToEpoch (UnixTime (CTime tim) _) = tim
