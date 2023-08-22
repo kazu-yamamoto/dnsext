@@ -13,42 +13,27 @@ module DNS.Cache.Iterative.ResolveJust (
 ) where
 
 -- GHC packages
-import Control.Monad (join, when)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (asks)
-import Data.Functor (($>))
 import Data.IORef (newIORef)
-import Data.List (isInfixOf, uncons)
-import Data.Maybe (isJust)
 
 -- other packages
-import System.Console.ANSI.Types
 
--- dns packages
-import DNS.Do53.Client (
-    QueryControls (..),
- )
+-- dnsext packages
+import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.Do53.Memo (
     rankedAnswer,
     rankedAuthority,
  )
 import qualified DNS.Do53.Memo as Cache
-import DNS.SEC (
-    RD_DNSKEY,
-    RD_DS (..),
-    TYPE (DNSKEY, DS),
- )
-import DNS.Types (
-    DNSMessage,
-    Domain,
-    ResourceRecord (..),
-    TYPE (A, AAAA, SOA),
- )
+import qualified DNS.Log as Log
+import DNS.SEC
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP)
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.Delegation
 import DNS.Cache.Iterative.Helpers
@@ -59,7 +44,6 @@ import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
 import qualified DNS.Cache.TimeCache as TimeCache
-import qualified DNS.Log as Log
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
