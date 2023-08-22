@@ -160,7 +160,6 @@ executable workers-benchmark
         dnsext-full-resolver,
         dnsext-log,
         dnsext-types,
-        time,
         unix-time,
         unliftio
 
