@@ -161,6 +161,7 @@ executable workers-benchmark
         dnsext-log,
         dnsext-types,
         time,
+        unix-time,
         unliftio
 
     if (os(windows) && impl(ghc >=9.0))
