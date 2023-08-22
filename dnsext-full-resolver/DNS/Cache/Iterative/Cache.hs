@@ -12,20 +12,10 @@ module DNS.Cache.Iterative.Cache (
 ) where
 
 -- GHC packages
-import Control.Arrow ((>>>))
-import Control.Monad (guard)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Reader (asks)
-import Data.Function (on)
-import Data.Functor (($>), (<&>))
-import Data.List (groupBy, sortOn)
 
 -- other packages
 
-import System.Console.ANSI.Types
-
--- dns packages
+-- dnsext packages
 import DNS.Do53.Memo (
     Ranking,
     insertSetEmpty,
@@ -33,30 +23,19 @@ import DNS.Do53.Memo (
     rankedAuthority,
  )
 import qualified DNS.Do53.Memo as Cache
-import DNS.SEC (
-    RD_DNSKEY,
-    RD_RRSIG,
-    TYPE,
- )
+import qualified DNS.Log as Log
+import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
-import DNS.Types (
-    DNSMessage,
-    Domain,
-    ResourceRecord (..),
-    TTL,
-    TYPE (CNAME, NS, SOA),
-    CLASS,
-    RData,
- )
+import DNS.Types
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
+import System.Console.ANSI.Types
 
 -- this package
+import DNS.Cache.Imports hiding (insert)
 import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import qualified DNS.Log as Log
 
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
