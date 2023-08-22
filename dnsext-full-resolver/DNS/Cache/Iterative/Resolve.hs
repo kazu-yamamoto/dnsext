@@ -8,42 +8,28 @@ module DNS.Cache.Iterative.Resolve (
 ) where
 
 -- GHC packages
-import Control.Monad (when)
-import Control.Monad.Trans.Class (lift)
-import Data.Functor (($>))
-import Data.List (uncons)
 
 -- other packages
 
--- dns packages
-
-import DNS.Do53.Client (
-    QueryControls (..),
- )
+-- dnsext packages
+import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Memo (
     Ranking (RankAdditional),
     rankedAnswer,
  )
 import qualified DNS.Do53.Memo as Cache
-import DNS.SEC (
-    TYPE,
- )
-import DNS.Types (
-    DNSMessage,
-    Domain,
-    ResourceRecord (..),
-    TYPE (CNAME),
- )
+import qualified DNS.Log as Log
+import DNS.Types
 import qualified DNS.Types as DNS
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Iterative.Cache
 import DNS.Cache.Iterative.ResolveJust
 import DNS.Cache.Iterative.Rev
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import qualified DNS.Log as Log
 
 -- 最終的な解決結果を得る
 runResolve
