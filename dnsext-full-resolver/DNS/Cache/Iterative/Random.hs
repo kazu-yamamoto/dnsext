@@ -5,18 +5,15 @@ module DNS.Cache.Iterative.Random (
 ) where
 
 -- GHC packages
-import Control.Monad.IO.Class (MonadIO)
-import Data.Maybe (listToMaybe)
 
 -- other packages
-
 import System.Random (getStdRandom, randomR)
 
--- dns packages
-
+-- dnsext packages
 import Data.IP (IP)
 
 -- this package
+import DNS.Cache.Imports
 import DNS.Cache.Types (NE)
 
 randomSelect :: Bool
