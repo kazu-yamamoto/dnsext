@@ -92,15 +92,6 @@ recvControl Context{..} = do
 recvContent :: Context -> Word32 -> IO ByteString
 recvContent Context{..} l = ctxRecv $ fromIntegral l
 
-readLength :: Readable a => a -> IO Word32
-readLength = read32
-
-readControl :: Readable a => a -> IO Control
-readControl rbuf = Control <$> read32 rbuf
-
-readContent :: Readable a => a -> Word32 -> IO ByteString
-readContent rbuf l = extractByteString rbuf $ fromIntegral l
-
 -- ESCAPE is already received.
 control :: Context -> Control -> IO ()
 control ctx@Context{..} ctrl = do
