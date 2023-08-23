@@ -8,10 +8,13 @@
 -- * Spec: https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
 
 module DNS.TAP.FastStream (
+    -- * Types
     Config (..),
     Context,
     newContext,
+    -- * Reader and writer
     reader,
+    -- * API
     handshake,
     recvData,
     sendData,
@@ -29,6 +32,7 @@ import qualified Network.Socket.ByteString as NSB
 
 ----------------------------------------------------------------
 
+-- | Configuration for fast stream.
 data Config = Config
     { bidirectional :: Bool
     , isReader :: Bool
@@ -37,6 +41,7 @@ data Config = Config
 
 ----------------------------------------------------------------
 
+-- | Context of a connection.
 data Context = Context
     { ctxRecv :: Int -> IO ByteString
     , ctxSend :: [ByteString] -> IO ()
@@ -45,6 +50,7 @@ data Context = Context
     , ctxDebug :: Bool
     }
 
+-- | Creating 'Context' from 'Socket'.
 newContext :: Socket -> Config -> IO Context
 newContext s conf = do
     pool <- P.newBufferPool 512 16384
@@ -154,6 +160,7 @@ sendControlFrame Context{..} ctrl = do
 ----------------------------------------------------------------
 -- API
 
+-- | Setting up the connection.
 handshake :: Context -> IO ()
 handshake ctx@Context{..}
     | ctxReader = do
@@ -163,7 +170,8 @@ handshake ctx@Context{..}
         when ctxBidi $ sendControlFrame ctx ACCEPT
     | otherwise = sendControlFrame ctx START
 
--- | "" returns on EOF
+-- | Receiving data.
+--   "" indicates that writer stops writing.
 recvData :: Context -> IO ByteString
 recvData ctx@Context{..}
     | ctxReader = do
@@ -178,11 +186,13 @@ recvData ctx@Context{..}
                 return bs
     | otherwise = throwIO $ FSException "client cannot use recvData"
 
+-- | Writing data.
 sendData :: Context -> ByteString -> IO ()
 sendData Context{..} _bs
     | ctxReader = throwIO $ FSException "server cannot use sendData"
     | otherwise = undefined
 
+-- | Tearing down the connection.
 bye :: Context -> IO ()
 bye ctx@Context{..}
     | ctxReader = do
@@ -194,6 +204,7 @@ bye ctx@Context{..}
 
 ----------------------------------------------------------------
 
+-- | Reading loop.
 reader :: Context -> (ByteString -> IO ()) -> IO ()
 reader ctx body = do
     handshake ctx
