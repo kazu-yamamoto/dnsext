@@ -31,7 +31,7 @@ import qualified Network.Socket.ByteString as NSB
 
 data Config = Config
     { bidirectional :: Bool
-    , isServer :: Bool
+    , isReader :: Bool
     , debug :: Bool
     }
 
@@ -41,7 +41,7 @@ data Context = Context
     { ctxRecv :: Int -> IO ByteString
     , ctxSend :: [ByteString] -> IO ()
     , ctxBidi :: Bool
-    , ctxServer :: Bool
+    , ctxReader :: Bool
     , ctxDebug :: Bool
     }
 
@@ -54,7 +54,7 @@ newContext s conf = do
             { ctxRecv = recvN
             , ctxSend = NSB.sendMany s
             , ctxBidi = bidirectional conf
-            , ctxServer = isServer conf
+            , ctxReader = isReader conf
             , ctxDebug = debug conf
             }
 
@@ -156,7 +156,7 @@ sendControlFrame Context{..} ctrl = do
 
 handshake :: Context -> IO ()
 handshake ctx@Context{..}
-    | ctxServer = do
+    | ctxReader = do
         c <- recvControl ctx
         check c ESCAPE
         recvControlFrame ctx START
@@ -166,7 +166,7 @@ handshake ctx@Context{..}
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
 recvData ctx@Context{..}
-    | ctxServer = do
+    | ctxReader = do
         l <- recvLength ctx
         when ctxDebug $ putStrLn "--------------------------------"
         if l == 0
@@ -180,12 +180,12 @@ recvData ctx@Context{..}
 
 sendData :: Context -> ByteString -> IO ()
 sendData Context{..} _bs
-    | ctxServer = throwIO $ FSException "server cannot use sendData"
+    | ctxReader = throwIO $ FSException "server cannot use sendData"
     | otherwise = undefined
 
 bye :: Context -> IO ()
 bye ctx@Context{..}
-    | ctxServer = do
+    | ctxReader = do
         recvControlFrame ctx STOP
         sendControlFrame ctx FINISH `E.catch` \(E.SomeException _) -> return ()
     | otherwise = do
