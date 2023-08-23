@@ -7,14 +7,14 @@
 -- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
 
 module DNS.TAP.FastStream (
-    Config(..)
-  , newContext
-  , reader
-  , handshake
-  , recvData
-  , sendData
-  , bye
-  ) where
+    Config (..),
+    newContext,
+    reader,
+    handshake,
+    recvData,
+    sendData,
+    bye,
+) where
 
 import Control.Exception as E
 import Control.Monad
@@ -26,7 +26,7 @@ import Network.Socket
 import qualified Network.Socket.BufferPool as P
 import qualified Network.Socket.ByteString as NSB
 
-data Control = Control { fromControl :: Word32 } deriving Eq
+data Control = Control {fromControl :: Word32} deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern ESCAPE :: Control
@@ -52,10 +52,10 @@ instance Show Control where
     show (Control n) = "Control " ++ show n
 {- FOURMOLU_ENABLE -}
 
-data FieldType = FieldType { fromFieldType :: Word32 } deriving (Eq, Show)
+data FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
 
 pattern ContentType :: FieldType
-pattern ContentType  = FieldType 0x01
+pattern ContentType = FieldType 0x01
 
 data FSException = FSException String deriving (Show, Typeable)
 
@@ -70,24 +70,25 @@ data Config = Config
 ----------------------------------------------------------------
 
 data Context = Context
-    { ctxRecv   :: Int -> IO ByteString
-    , ctxSend   :: [ByteString] -> IO ()
-    , ctxBidi   :: Bool
+    { ctxRecv :: Int -> IO ByteString
+    , ctxSend :: [ByteString] -> IO ()
+    , ctxBidi :: Bool
     , ctxServer :: Bool
-    , ctxDebug  :: Bool
+    , ctxDebug :: Bool
     }
 
 newContext :: Socket -> Config -> IO Context
 newContext s conf = do
     pool <- P.newBufferPool 512 16384
     recvN <- P.makeRecvN "" $ P.receive s pool
-    return Context {
-        ctxRecv = recvN
-      , ctxSend = NSB.sendMany s
-      , ctxBidi = bidirectional conf
-      , ctxServer = isServer conf
-      , ctxDebug = debug conf
-      }
+    return
+        Context
+            { ctxRecv = recvN
+            , ctxSend = NSB.sendMany s
+            , ctxBidi = bidirectional conf
+            , ctxServer = isServer conf
+            , ctxDebug = debug conf
+            }
 
 ----------------------------------------------------------------
 
@@ -123,12 +124,12 @@ recvControlFrame ctx@Context{..} ctrl = do
         ft <- FieldType <$> recvLength ctx
         l0 <- recvLength ctx
         ct <- recvContent ctx l0
-        if ft == ContentType then do
-            when ctxDebug $ do
-                putStr "Content-Type: "
-                C8.putStrLn ct
-          else
-            when ctxDebug $ putStrLn "unknown field"
+        if ft == ContentType
+            then do
+                when ctxDebug $ do
+                    putStr "Content-Type: "
+                    C8.putStrLn ct
+            else when ctxDebug $ putStrLn "unknown field"
         loop (l - 8 - l0)
 
 check :: Control -> Control -> IO ()
@@ -146,39 +147,39 @@ sendControlFrame Context{..} ctrl = do
 
 handshake :: Context -> IO ()
 handshake ctx@Context{..}
-  | ctxServer = do
+    | ctxServer = do
         c <- recvControl ctx
         check c ESCAPE
         recvControlFrame ctx START
         when ctxBidi $ sendControlFrame ctx ACCEPT
-  | otherwise = sendControlFrame ctx START
+    | otherwise = sendControlFrame ctx START
 
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
 recvData ctx@Context{..}
-  | ctxServer = do
+    | ctxServer = do
         l <- recvLength ctx
         when ctxDebug $ putStrLn "--------------------------------"
-        if l == 0 then
-            return ""
-          else do
-            when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
-            bs <- recvContent ctx l
-            when ctxBidi $ sendControlFrame ctx READY
-            return bs
-  | otherwise = throwIO $ FSException "client cannot use recvData"
+        if l == 0
+            then return ""
+            else do
+                when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
+                bs <- recvContent ctx l
+                when ctxBidi $ sendControlFrame ctx READY
+                return bs
+    | otherwise = throwIO $ FSException "client cannot use recvData"
 
 sendData :: Context -> ByteString -> IO ()
 sendData Context{..} _bs
-  | ctxServer = throwIO $ FSException "server cannot use sendData"
-  | otherwise = undefined
+    | ctxServer = throwIO $ FSException "server cannot use sendData"
+    | otherwise = undefined
 
 bye :: Context -> IO ()
 bye ctx@Context{..}
-  | ctxServer = do
+    | ctxServer = do
         recvControlFrame ctx STOP
         sendControlFrame ctx FINISH `E.catch` \(E.SomeException _) -> return ()
-  | otherwise = do
+    | otherwise = do
         sendControlFrame ctx STOP
         recvControlFrame ctx FINISH
 
