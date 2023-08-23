@@ -33,6 +33,7 @@ fstrmReader sock = do
     ctx <- newContext sock $ Config False True True
     handshake ctx
     loop ctx
+    bye ctx
   where
     loop ctx = do
         bsx <- recvData ctx
