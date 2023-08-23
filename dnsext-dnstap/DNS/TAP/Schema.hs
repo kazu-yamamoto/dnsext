@@ -43,6 +43,7 @@ message :: ByteString -> IO ()
 message bs = withReadBuffer bs loop
   where
     loop rbuf = do
+        putStr "Message "
         t <- tag rbuf
         case t of
             (1, VARINT) -> do
@@ -97,7 +98,6 @@ message bs = withReadBuffer bs loop
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
 
--- fixme
 policy :: ByteString -> IO ()
 policy bs = withReadBuffer bs loop
   where
@@ -105,6 +105,13 @@ policy bs = withReadBuffer bs loop
         putStr "POLICY "
         t <- tag rbuf
         case t of
+          -- fixme
+            (3, VARINT) -> do
+                putStr "Action: "
+                varint rbuf >>= putStrLn . action
+            (4, VARINT) -> do
+                putStr "Match: "
+                varint rbuf >>= putStrLn . match
             (5, LEN) -> do
                 putStr "Value "
                 dump rbuf
