@@ -16,10 +16,9 @@ module DNS.TAP.FastStream (
     bye,
 ) where
 
-import Control.Exception as E
+import UnliftIO.Exception as E
 import Control.Monad
 import qualified Data.ByteString.Char8 as C8
-import Data.Typeable
 import Data.Word
 import Network.ByteOrder
 import Network.Socket
