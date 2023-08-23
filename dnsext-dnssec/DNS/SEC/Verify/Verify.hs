@@ -25,6 +25,7 @@ import DNS.SEC.Verify.EdDSA (ed25519, ed448)
 import qualified DNS.SEC.Verify.N3SHA as NSEC3
 import qualified DNS.SEC.Verify.NSEC as NSEC
 import qualified DNS.SEC.Verify.NSEC3 as NSEC3
+import qualified DNS.SEC.Verify.NSECxRange as NRange
 import DNS.SEC.Verify.RSA (rsaSHA1, rsaSHA256, rsaSHA512)
 import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
@@ -312,6 +313,9 @@ hashNSEC3PARAM nsec3p domain =
 
 ---
 
+zipSigsNSEC3 :: [ResourceRecord] -> (String -> a) -> ([(ResourceRecord, NSEC3_Range, [(RD_RRSIG, TTL)])] -> a) -> a
+zipSigsNSEC3 = NRange.zipSigsets NSEC3.rangeImpl
+
 getNSEC3Result :: NSEC3.Logic a -> Domain -> [NSEC3_Range] -> Domain -> Either String a
 getNSEC3Result hl zone cs qname =
     withImpls $ \ps -> NSEC3.getResult hl zone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname
@@ -339,6 +343,11 @@ wildcardNoDataNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.get_wildcard
 
 detectNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
 detectNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.detect qtype) zone ranges qname
+
+---
+
+zipSigsNSEC :: [ResourceRecord] -> (String -> a) -> ([(ResourceRecord, NSEC_Range, [(RD_RRSIG, TTL)])] -> a) -> a
+zipSigsNSEC = NRange.zipSigsets NSEC.rangeImpl
 
 ---
 
