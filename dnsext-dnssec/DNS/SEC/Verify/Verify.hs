@@ -277,21 +277,13 @@ hashNSEC3PARAMwith :: NSEC3Impl -> RD_NSEC3PARAM -> Domain -> Opaque
 hashNSEC3PARAMwith impl RD_NSEC3PARAM{..} domain =
     hashNSEC3with' impl nsec3param_iterations nsec3param_salt domain
 
-getNSEC3Result :: NSEC3.Logic a -> Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String a
-getNSEC3Result hl mayZone cs qname qtype =
-    withImpls $ \ps -> NSEC3.getResult hl mayZone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname qtype
-  where
-    withImpls h = h =<< mapM addImpl cs
-    addImpl r@(_, nsec3) = do
-        let alg = nsec3_hashalg nsec3
-        impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
-        return (impl, r)
-
 nsec3Dicts :: Map HashAlg NSEC3Impl
 nsec3Dicts =
     Map.fromList
         [ (Hash_SHA1, NSEC3.n3sha1)
         ]
+
+---
 
 hashNSEC3 :: RD_NSEC3 -> Domain -> Either String Opaque
 hashNSEC3 nsec3 domain =
@@ -310,6 +302,18 @@ hashNSEC3PARAM nsec3p domain =
   where
     alg = nsec3param_hashalg nsec3p
     hash impl = hashNSEC3PARAMwith impl nsec3p domain
+
+---
+
+getNSEC3Result :: NSEC3.Logic a -> Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String a
+getNSEC3Result hl mayZone cs qname qtype =
+    withImpls $ \ps -> NSEC3.getResult hl mayZone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname qtype
+  where
+    withImpls h = h =<< mapM addImpl cs
+    addImpl r@(_, nsec3) = do
+        let alg = nsec3_hashalg nsec3
+        impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
+        return (impl, r)
 
 nameErrorNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NameError
 nameErrorNSEC3 = getNSEC3Result NSEC3.get_nameError
