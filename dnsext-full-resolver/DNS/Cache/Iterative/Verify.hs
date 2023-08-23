@@ -5,6 +5,24 @@ module DNS.Cache.Iterative.Verify (
     with,
     withCanonical,
     withCanonical',
+    --
+    NResultK,
+    GetNE,
+    GetNoDatas,
+    getNameError,
+    getNameError',
+    getUnsignedDelegation,
+    getUnsignedDelegation',
+    getWildcardExpansion,
+    getWildcardExpansion',
+    getNoDatas,
+    getNoDatas',
+    --
+    GetResult,
+    runHandlers,
+    mkHandler,
+    nsecWithValid,
+    nsec3WithValid,
 ) where
 
 -- GHC packages
@@ -17,6 +35,7 @@ import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
+import DNS.SEC.Verify.Types
 import DNS.Types
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Internal as DNS
@@ -131,6 +150,238 @@ withVerifiedRRset now dnskeys RRset{..} sortedRDatas sigs vk =
         ]
     showSig sigrd = "rrsig: " ++ show sigrd
     showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
+
+---
+
+type NResultK r a = r -> [RRset] -> ContextT IO () -> a
+
+{- FOURMOLU_DISABLE -}
+type GetNE m msg r1 r2 a
+    =  Domain -> [RD_DNSKEY]
+    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> Domain
+    -> m a -> (String -> m a) -> (String -> m a)
+    -> NResultK r1 (m a) -> NResultK r2 (m a)
+    -> m a
+
+type GetNoDatas m msg r1 r2 r3 r4 a
+    =  Domain -> [RD_DNSKEY]
+    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> Domain -> TYPE
+    -> m a -> (String -> m a) -> (String -> m a)
+    -> NResultK r1 (m a) -> NResultK r2 (m a) -> NResultK r3 (m a) -> NResultK r4 (m a)
+    -> m a
+{- FOURMOLU_ENABLE -}
+
+getNameError :: GetNE DNSQuery m NSEC_NameError NSEC3_NameError a
+getNameError = liftN2 getNameError'
+
+getUnsignedDelegation :: GetNE DNSQuery m NSEC_UnsignedDelegation NSEC3_UnsignedDelegation a
+getUnsignedDelegation = liftN2 getUnsignedDelegation'
+
+getWildcardExpansion :: GetNE DNSQuery m NSEC_WildcardExpansion NSEC3_WildcardExpansion a
+getWildcardExpansion = liftN2 getWildcardExpansion'
+
+getNoDatas :: GetNoDatas DNSQuery m NSEC_WildcardNoData NSEC_NoData NSEC3_WildcardNoData NSEC3_NoData a
+getNoDatas = liftNoData getNoDatas'
+
+{- FOURMOLU_DISABLE -}
+liftN2 :: GetNE (ContextT IO) m r1 r2 (DNSQuery a) -> GetNE DNSQuery m r1 r2 a
+liftN2 getN2 zone dnskeys getRanked msg qname nullK notValidK leftK rightK1 rightK2 = do
+    let liftR rightK r rrsets cache = pure $ rightK r rrsets cache
+    action <- lift $ getN2 zone dnskeys getRanked msg qname
+              (pure nullK) (pure . notValidK) (pure . leftK) (liftR rightK1) (liftR rightK2)
+    action
+
+liftNoData :: GetNoDatas (ContextT IO) m r1 r2 r3 r4 (DNSQuery a) -> GetNoDatas DNSQuery m r1 r2 r3 r4 a
+liftNoData getND zone dnskeys getRanked msg qname qtype nullK notValidK leftK rightK1 rightK2 rightK3 rightK4 = do
+    let liftR rightK r rrsets cache = pure $ rightK r rrsets cache
+    action <- lift $ getND zone dnskeys getRanked msg qname qtype
+              (pure nullK) (pure . notValidK) (pure . leftK) (liftR rightK1) (liftR rightK2) (liftR rightK3) (liftR rightK4)
+    action
+{- FOURMOLU_ENABLE -}
+
+getNameError' :: GetNE (ContextT IO) m NSEC_NameError NSEC3_NameError a
+getNameError' zone dnskeys getRanked msg qname =
+    getWithFallback (\rs -> SEC.nameErrorNSEC zone rs qname) (\rs -> SEC.nameErrorNSEC3 zone rs qname) dnskeys getRanked msg
+
+getUnsignedDelegation' :: GetNE (ContextT IO) m NSEC_UnsignedDelegation NSEC3_UnsignedDelegation a
+getUnsignedDelegation' zone dnskeys getRanked msg qname =
+    getWithFallback (\rs -> SEC.unsignedDelegationNSEC zone rs qname) (\rs -> SEC.unsignedDelegationNSEC3 zone rs qname) dnskeys getRanked msg
+
+getWildcardExpansion' :: GetNE (ContextT IO) m NSEC_WildcardExpansion NSEC3_WildcardExpansion a
+getWildcardExpansion' zone dnskeys getRanked msg qname =
+    getWithFallback (\rs -> SEC.wildcardExpansionNSEC zone rs qname) (\rs -> SEC.wildcardExpansionNSEC3 zone rs qname) dnskeys getRanked msg
+
+---
+
+type GetResult range r = [range] -> Either String r
+
+{- FOURMOLU_DISABLE -}
+getWithFallback
+    :: GetResult NSEC_Range nsecr -> GetResult NSEC3_Range nsec3r
+    -> [RD_DNSKEY]
+    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> ContextT IO a -> (String -> ContextT IO a) -> (String -> ContextT IO a)
+    -> NResultK nsecr (ContextT IO a) -> NResultK nsec3r (ContextT IO a)
+    -> ContextT IO a
+getWithFallback getNSEC getNSEC3 dnskeys getRanked msg nullK invalidK leftK rightNSEC rightNSEC3 = nsec
+  where
+    nsec  = nsecWithValid   dnskeys getRanked msg nullNSEC invalidK nsecK
+    nullNSEC = nsec3
+    nsecK  ranges rrsets doCache =
+        runHandlers "cannot handle NSEC:" leftK $
+        handle getNSEC   rightNSEC
+      where
+        handle = mkHandler ranges rrsets doCache
+
+    nsec3 = nsec3WithValid  dnskeys getRanked msg nullK    invalidK nsec3K
+    nsec3K ranges rrsets doCache =
+        runHandlers "cannot handle NSEC3:" leftK $
+        handle getNSEC3  rightNSEC3
+      where
+        handle = mkHandler ranges rrsets doCache
+{- FOURMOLU_ENABLE -}
+
+---
+
+{- FOURMOLU_DISABLE -}
+getNoDatas' :: GetNoDatas (ContextT IO) msg NSEC_WildcardNoData NSEC_NoData NSEC3_WildcardNoData NSEC3_NoData a
+getNoDatas' zone dnskeys getRanked msg qname qtype nullK invalidK leftK rightNSECwild rightNSEC rightNSEC3wild rightNSEC3 = nsec
+  where
+    nsec  = nsecWithValid   dnskeys getRanked msg nullNSEC invalidK nsecK
+    nullNSEC = nsec3
+    nsecK  ranges rrsets doCache =
+        runHandlers "cannot handle NSEC NoDatas:" leftK $
+        handle wildcardNoData rightNSECwild .
+        handle noData         rightNSEC
+      where
+        handle = mkHandler ranges rrsets doCache
+        wildcardNoData rs  = SEC.wildcardNoDataNSEC   zone rs qname qtype
+        noData         rs  = SEC.noDataNSEC           zone rs qname qtype
+
+    nsec3 = nsec3WithValid  dnskeys getRanked msg nullK    invalidK nsec3K
+    nsec3K ranges rrsets doCache =
+        runHandlers "cannot handle NSEC3 NoDatas:" leftK $
+        handle wildcardNoData rightNSEC3wild .
+        handle noData         rightNSEC3
+      where
+        handle = mkHandler ranges rrsets doCache
+        wildcardNoData rs  = SEC.wildcardNoDataNSEC3  zone rs qname qtype
+        noData         rs  = SEC.noDataNSEC3          zone rs qname qtype
+{- FOURMOLU_ENABLE -}
+
+---
+
+runHandlers :: String -> (String -> a) -> ((String -> a) -> String -> a) -> a
+runHandlers header leftK h = h leftK (header ++ ":\n")
+
+{- FOURMOLU_DISABLE -}
+mkHandler
+    :: [range]
+    -> [RRset]
+    -> ContextT IO ()
+    ---
+    -> GetResult range r
+    -> NResultK r a
+    ---
+    -> (String -> a)
+    -> (String -> a)
+mkHandler ranges rrsets doCache getR resultK fallbackK = case getR ranges of
+    Right r  -> \_ -> resultK r rrsets doCache
+    Left e   -> fallbackK . (++ ("  " ++ e))
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+nsecWithValid
+    :: [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> ContextT IO a -> (String -> ContextT IO a)
+    -> ([NSEC_Range] -> [RRset] -> ContextT IO () -> ContextT IO a)
+    -> ContextT IO a
+{- FOURMOLU_ENABLE -}
+nsecWithValid = nsecxWithValid SEC.zipSigsNSEC "NSEC"
+
+{- FOURMOLU_DISABLE -}
+nsec3WithValid
+    :: [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> ContextT IO a -> (String -> ContextT IO a)
+    -> ([NSEC3_Range] -> [RRset] -> ContextT IO () -> ContextT IO a)
+    -> ContextT IO a
+{- FOURMOLU_ENABLE -}
+nsec3WithValid = nsecxWithValid SEC.zipSigsNSEC3 "NSEC3"
+
+type WithZippedSigs r a = [ResourceRecord] -> (String -> a) -> ([(ResourceRecord, r, [(RD_RRSIG, TTL)])] -> a) -> a
+
+{- FOURMOLU_DISABLE -}
+nsecxWithValid
+    :: WithZippedSigs range (ContextT IO a) -> String
+    -> [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> ContextT IO a -> (String -> ContextT IO a)
+    -> ([range] -> [RRset] -> ContextT IO () -> ContextT IO a)
+    -> ContextT IO a
+{- FOURMOLU_ENABLE -}
+nsecxWithValid withZippedSigs tag dnskeys getRanked msg nullK invalidK validK0 =
+    nsecxWithValid' withZippedSigs tag dnskeys getRanked msg nullK ncK invalidK validK
+  where
+    ncK = invalidK . ("not canonical NSEC/NSEC3, something wrong: " ++)
+    validK = uncurry validK0 . unzip
+
+{- FOURMOLU_DISABLE -}
+nsecxWithValid'
+    :: WithZippedSigs range (ContextT IO a) -> String
+    -> [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> ContextT IO a -> (String -> ContextT IO a) -> (String -> ContextT IO a)
+    -> ([(range, RRset)] -> ContextT IO () -> ContextT IO a)
+    -> ContextT IO a
+{- FOURMOLU_ENABLE -}
+nsecxWithValid' withZippedSigs tag dnskeys getRanked msg nullK ncK invalidK validK =
+    nsecxWithRanges withZippedSigs dnskeys getRanked msg nullK ncK runVerified
+  where
+    runVerified rps doCache
+        | valid = validK rps doCache
+        | otherwise = invalidK $ unlines notValidErrors
+      where
+        (_ranges, rrsets) = unzip rps
+        valid = all rrsetValid rrsets
+
+        notValidErrors = header : esInvalid ++ esNotVerified
+        header = tag ++ " verify errors: "
+        esInvalid = [ie | set <- rrsets, InvalidRRS ie <- [rrsMayVerified set]]
+        esNotVerified = "not-verified RRset list:" : ["  " ++ showRRset set | set <- rrsets, NotVerifiedRRS <- [rrsMayVerified set]]
+        showRRset RRset{..} = unwords [show rrsName, show rrsType, show rrsRDatas]
+
+{- FOURMOLU_DISABLE -}
+nsecxWithRanges
+    :: WithZippedSigs range (ContextT IO a)
+    -> [RD_DNSKEY]
+    -> (m -> ([ResourceRecord], Ranking)) -> m
+    -> ContextT IO a -> (String -> ContextT IO a)
+    -> ([(range, RRset)] -> ContextT IO () -> ContextT IO a)
+    -> ContextT IO a
+{- FOURMOLU_ENABLE -}
+nsecxWithRanges withZippedSigs dnskeys getRanked msg nullK leftK rightK = do
+    now <- liftIO =<< asks currentSeconds_
+    withSection getRanked msg $ runSection now
+  where
+    runSection now srrs rank = withZippedSigs srrs leftK $ runSigned now rank
+
+    runSigned _now _rank [] = nullK
+    runSigned now rank rs@(_ : _) = either leftK (runVerified rank) $ mapM (verify now) rs
+
+    runVerified rank vs = rightK vs $ doCache rank vs
+
+    {- TODO: interval search psq cache -}
+    doCache _rank vs = mapM_ (\(_range, _rrset@(RRset{})) -> pure ()) vs
+
+    verify now (rr, range, sigs) =
+        canonicalRRset [rr] Left $ \rrset sortedRDatas ->
+            Right $ withVerifiedRRset now dnskeys rrset sortedRDatas sigs ((,) range)
+
+---
 
 {- get not verified canonical RRset -}
 canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [DNS.SPut ()] -> a) -> a
