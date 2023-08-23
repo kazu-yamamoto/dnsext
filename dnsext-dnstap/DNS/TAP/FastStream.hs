@@ -160,4 +160,6 @@ bye ctx@Context{..}
   | ctxServer = do
         recvControlFrame ctx STOP
         sendControlFrame ctx FINISH `E.catch` \(E.SomeException _) -> return ()
-  | otherwise = undefined
+  | otherwise = do
+        sendControlFrame ctx STOP
+        recvControlFrame ctx FINISH
