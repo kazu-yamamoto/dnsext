@@ -93,8 +93,8 @@ recvContent :: Context -> Word32 -> IO ByteString
 recvContent Context{..} l = ctxRecv $ fromIntegral l
 
 -- ESCAPE is already received.
-control :: Context -> Control -> IO ()
-control ctx@Context{..} ctrl = do
+recvControlFrame :: Context -> Control -> IO ()
+recvControlFrame ctx@Context{..} ctrl = do
     l0 <- recvLength ctx
     when (l0 < 4) $ throwIO $ FSException "illegal control length"
     c <- recvControl ctx
@@ -125,12 +125,14 @@ handshake ctx@Context{..}
   | ctxServer = do
         c <- recvControl ctx
         check c ESCAPE
-        control ctx START
-  | otherwise = do
-        let len = undefined
-        ctxSend $ bytestring32 $ fromControl ESCAPE
-        ctxSend $ bytestring32 len
-        ctxSend $ bytestring32 $ fromControl START
+        recvControlFrame ctx START
+  | otherwise = sendControlFrame ctx START
+
+sendControlFrame :: Context -> Control -> IO ()
+sendControlFrame Context{..} ctrl = do
+    ctxSend $ bytestring32 $ fromControl ESCAPE
+    ctxSend $ bytestring32 4
+    ctxSend $ bytestring32 $ fromControl ctrl
 
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
@@ -152,5 +154,5 @@ sendData Context{..} _bs
 
 bye :: Context -> IO ()
 bye ctx@Context{..}
-  | ctxServer = control ctx STOP
+  | ctxServer = recvControlFrame ctx STOP
   | otherwise = undefined
