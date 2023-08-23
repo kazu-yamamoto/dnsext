@@ -126,6 +126,7 @@ handshake ctx@Context{..}
         c <- recvControl ctx
         check c ESCAPE
         recvControlFrame ctx START
+        when ctxBidi $ sendControlFrame ctx ACCEPT
   | otherwise = sendControlFrame ctx START
 
 sendControlFrame :: Context -> Control -> IO ()
@@ -144,7 +145,9 @@ recvData ctx@Context{..}
             return ""
           else do
             when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
-            recvContent ctx l
+            bs <- recvContent ctx l
+            when ctxBidi $ sendControlFrame ctx READY
+            return bs
   | otherwise = throwIO $ FSException "client cannot use recvData"
 
 sendData :: Context -> ByteString -> IO ()
@@ -154,5 +157,7 @@ sendData Context{..} _bs
 
 bye :: Context -> IO ()
 bye ctx@Context{..}
-  | ctxServer = recvControlFrame ctx STOP
+  | ctxServer = do
+        recvControlFrame ctx STOP
+        sendControlFrame ctx FINISH `E.catch` \(E.SomeException _) -> return ()
   | otherwise = undefined

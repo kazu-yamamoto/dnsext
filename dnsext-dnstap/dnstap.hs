@@ -30,7 +30,7 @@ main = do
 
 fstrmReader :: Socket -> IO ()
 fstrmReader sock = do
-    ctx <- newContext sock $ Config False True True
+    ctx <- newContext sock $ Config True True True
     handshake ctx
     loop ctx
     bye ctx
