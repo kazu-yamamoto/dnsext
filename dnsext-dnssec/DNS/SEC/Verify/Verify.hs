@@ -2,7 +2,15 @@
 
 module DNS.SEC.Verify.Verify where
 
+-- GHC packages
+import qualified Data.ByteString as BS
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 -- dnsext-types
+import DNS.Types
+import DNS.Types.Internal
+import qualified DNS.Types.Opaque as Opaque
 
 -- this package
 
@@ -11,13 +19,7 @@ import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
 import DNS.SEC.Time (DNSTime, putDNSTime)
-import DNS.SEC.Types (
-    RD_DNSKEY (..),
-    RD_DS (..),
-    RD_NSEC3 (..),
-    RD_NSEC3PARAM (..),
-    RD_RRSIG (..),
- )
+import DNS.SEC.Types
 import DNS.SEC.Verify.ECDSA (ecdsaP256SHA, ecdsaP384SHA)
 import DNS.SEC.Verify.EdDSA (ed25519, ed448)
 import qualified DNS.SEC.Verify.N3SHA as NSEC3
@@ -26,12 +28,6 @@ import qualified DNS.SEC.Verify.NSEC3 as NSEC3
 import DNS.SEC.Verify.RSA (rsaSHA1, rsaSHA256, rsaSHA512)
 import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
-import DNS.Types
-import DNS.Types.Internal
-import qualified DNS.Types.Opaque as Opaque
-import qualified Data.ByteString as BS
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 keyTag :: RD_DNSKEY -> Word16
 keyTag = keyTagFromBS . runSPut . putResourceData Canonical
