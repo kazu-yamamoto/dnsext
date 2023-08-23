@@ -123,7 +123,7 @@ recvContent Context{..} l = ctxRecv $ fromIntegral l
 ----------------------------------------------------------------
 
 -- ESCAPE is already received.
-recvControlFrame :: Context -> Control -> IO ()
+recvControlFrame :: Context -> Control -> IO [(FieldType,ByteString)]
 recvControlFrame ctx@Context{..} ctrl = do
     l0 <- recvLength ctx
     when (l0 < 4) $ throwIO $ FSException "illegal control length"
@@ -131,10 +131,10 @@ recvControlFrame ctx@Context{..} ctrl = do
     check c ctrl
     when ctxDebug $ print ctrl
     let l1 = l0 - 4
-    loop l1
+    loop l1 id
   where
-    loop 0 = return ()
-    loop l = do
+    loop 0 build = return $ build []
+    loop l build = do
         when (l < 8) $ throwIO $ FSException "illegal field length"
         ft <- FieldType <$> recvLength ctx
         l0 <- recvLength ctx
@@ -145,17 +145,23 @@ recvControlFrame ctx@Context{..} ctrl = do
                     putStr "Content-Type: "
                     C8.putStrLn ct
             else when ctxDebug $ putStrLn "unknown field"
-        loop (l - 8 - l0)
+        loop (l - 8 - l0) (build . ((ft,ct) :))
 
 check :: Control -> Control -> IO ()
 check c ctrl = when (c /= ctrl) $ throwIO $ FSException ("no " ++ show ctrl)
 
-sendControlFrame :: Context -> Control -> IO ()
-sendControlFrame Context{..} ctrl = do
+sendControlFrame :: Context -> Control -> [(FieldType,ByteString)] -> IO ()
+sendControlFrame Context{..} ctrl xs = do
     let esc = bytestring32 $ fromControl ESCAPE
-        len = bytestring32 4
         ctr = bytestring32 $ fromControl ctrl
-    ctxSend [esc, len, ctr]
+        xss = concatMap enc xs
+        len = bytestring32 $ fromIntegral (4 + sum (map C8.length xss))
+    ctxSend (esc : len : ctr : xss)
+  where
+    enc (t,c) = [ bytestring32 $ fromFieldType t
+                , bytestring32 $ fromIntegral $ C8.length c
+                , c
+                ]
 
 ----------------------------------------------------------------
 -- API
@@ -164,11 +170,17 @@ sendControlFrame Context{..} ctrl = do
 handshake :: Context -> IO ()
 handshake ctx@Context{..}
     | ctxReader = do
+        when ctxBidi $ do
+            c <- recvControl ctx
+            check c ESCAPE
+            ct <- recvControlFrame ctx READY
+            -- fixme: select one
+            sendControlFrame ctx ACCEPT ct
         c <- recvControl ctx
+        print c
         check c ESCAPE
-        recvControlFrame ctx START
-        when ctxBidi $ sendControlFrame ctx ACCEPT
-    | otherwise = sendControlFrame ctx START
+        void $ recvControlFrame ctx START
+    | otherwise = sendControlFrame ctx START []
 
 -- | Receiving data.
 --   "" indicates that writer stops writing.
@@ -182,7 +194,6 @@ recvData ctx@Context{..}
             else do
                 when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
                 bs <- recvContent ctx l
-                when ctxBidi $ sendControlFrame ctx READY
                 return bs
     | otherwise = throwIO $ FSException "client cannot use recvData"
 
@@ -196,11 +207,11 @@ sendData Context{..} _bs
 bye :: Context -> IO ()
 bye ctx@Context{..}
     | ctxReader = do
-        recvControlFrame ctx STOP
-        sendControlFrame ctx FINISH `E.catch` \(E.SomeException _) -> return ()
+        void $ recvControlFrame ctx STOP
+        when ctxBidi $ sendControlFrame ctx FINISH [] `E.catch` \(E.SomeException _) -> return ()
     | otherwise = do
-        sendControlFrame ctx STOP
-        recvControlFrame ctx FINISH
+        sendControlFrame ctx STOP []
+        when ctxBidi $ void $ recvControlFrame ctx FINISH
 
 ----------------------------------------------------------------
 
