@@ -20,10 +20,10 @@ dnstap bsx = withReadBuffer bsx loop
         t <- tag rbuf
         case t of
             (1, LEN) -> do
-                putStr "Identity "
+                putStr "Identity: "
                 dumpASCII rbuf
             (2, LEN) -> do
-                putStr "Version "
+                putStr "Version: "
                 dumpASCII rbuf
             (14, LEN) -> do
                 putStrLn "Message:"
@@ -31,10 +31,10 @@ dnstap bsx = withReadBuffer bsx loop
                 bs <- extractByteString rbuf lenPref
                 message bs
             (15, VARINT) -> do
-                putStr "Type "
-                varint rbuf >>= print
+                putStr "Type: "
+                varint rbuf >>= putStrLn . dnstapType
             (num, wt) -> do
-                putStr $ "KEY " ++ show num ++ " "
+                putStr $ "KEY: " ++ show num ++ " "
                 skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
@@ -46,53 +46,53 @@ message bs = withReadBuffer bs loop
         t <- tag rbuf
         case t of
             (1, VARINT) -> do
-                putStr "Type "
+                putStr "Type: "
                 varint rbuf >>= putStrLn . messageType
             (2, VARINT) -> do
-                putStr "SocketFamily "
+                putStr "SocketFamily: "
                 varint rbuf >>= putStrLn . socketFamily
             (3, VARINT) -> do
-                putStr "SocketProtocol "
+                putStr "SocketProtocol: "
                 varint rbuf >>= putStrLn . socketProtocol
             (4, LEN) -> do
-                putStr "QueryAddress "
+                putStr "QueryAddress: "
                 dump rbuf
             (5, LEN) -> do
-                putStr "ResponseAddress "
+                putStr "ResponseAddress: "
                 dump rbuf
             (6, VARINT) -> do
-                putStr "QueryPort "
+                putStr "QueryPort: "
                 varint rbuf >>= print
             (7, VARINT) -> do
-                putStr "ResponsePort "
+                putStr "ResponsePort: "
                 varint rbuf >>= print
             (8, VARINT) -> do
-                putStr "QueryTimeSec "
+                putStr "QueryTimeSec: "
                 varint rbuf >>= print
             (9, I32) -> do
-                putStr "QueryTimeNsec "
+                putStr "QueryTimeNsec: "
                 i32 rbuf >>= print
             (10, LEN) -> do
-                putStr "QueryMessage "
+                putStr "QueryMessage: "
                 decodeDNSMessage rbuf
             (11, LEN) -> do
-                putStr "QueryZone "
+                putStr "QueryZone: "
                 dump rbuf
             (12, VARINT) -> do
-                putStr "ResponseTimeSec "
+                putStr "ResponseTimeSec: "
                 varint rbuf >>= print
             (13, I32) -> do
-                putStr "ResponseTimeNsec "
+                putStr "ResponseTimeNsec: "
                 i32 rbuf >>= print
             (14, LEN) -> do
-                putStr "ResponseMessage "
+                putStr "ResponseMessage: "
                 decodeDNSMessage rbuf
             (15, LEN) -> do
                 lenPref <- varint rbuf
                 bs' <- extractByteString rbuf lenPref
                 policy bs'
             (num, wt) -> do
-                putStr $ "KEY " ++ show num ++ " "
+                putStr $ "KEY: " ++ show num ++ " "
                 skip rbuf wt
         rest <- remainingSize rbuf
         when (rest /= 0) $ loop rbuf
