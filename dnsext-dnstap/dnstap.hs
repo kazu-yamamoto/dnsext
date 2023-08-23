@@ -24,24 +24,8 @@ main = do
   where
     loop lsock = forever $ do
         (sock,_) <- accept lsock
-        void $ forkIO $ fstrmReader sock
-
-----------------------------------------------------------------
-
-fstrmReader :: Socket -> IO ()
-fstrmReader sock = do
-    ctx <- newContext sock $ Config True True True
-    handshake ctx
-    loop ctx
-    bye ctx
-  where
-    loop ctx = do
-        bsx <- recvData ctx
-        if C8.length bsx == 0
-            then return ()
-            else do
-                dnstap bsx
-                loop ctx
+        ctx <- newContext sock $ Config True True True
+        void $ forkIO $ reader ctx dnstap
 
 ----------------------------------------------------------------
 

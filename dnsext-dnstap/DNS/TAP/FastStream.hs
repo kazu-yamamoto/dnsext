@@ -6,7 +6,15 @@
 -- Fast stream:
 -- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
 
-module DNS.TAP.FastStream where
+module DNS.TAP.FastStream (
+    Config(..)
+  , newContext
+  , reader
+  , handshake
+  , recvData
+  , sendData
+  , bye
+  ) where
 
 import Control.Exception as E
 import Control.Monad
@@ -59,6 +67,8 @@ data Config = Config
     , debug :: Bool
     }
 
+----------------------------------------------------------------
+
 data Context = Context
     { ctxRecv   :: Int -> IO ByteString
     , ctxSend   :: [ByteString] -> IO ()
@@ -79,6 +89,8 @@ newContext s conf = do
       , ctxDebug = debug conf
       }
 
+----------------------------------------------------------------
+
 recvLength :: Context -> IO Word32
 recvLength Context{..} = do
     bsc <- ctxRecv 4
@@ -91,6 +103,8 @@ recvControl Context{..} = do
 
 recvContent :: Context -> Word32 -> IO ByteString
 recvContent Context{..} l = ctxRecv $ fromIntegral l
+
+----------------------------------------------------------------
 
 -- ESCAPE is already received.
 recvControlFrame :: Context -> Control -> IO ()
@@ -120,6 +134,16 @@ recvControlFrame ctx@Context{..} ctrl = do
 check :: Control -> Control -> IO ()
 check c ctrl = when (c /= ctrl) $ throwIO $ FSException ("no " ++ show ctrl)
 
+sendControlFrame :: Context -> Control -> IO ()
+sendControlFrame Context{..} ctrl = do
+    let esc = bytestring32 $ fromControl ESCAPE
+        len = bytestring32 4
+        ctr = bytestring32 $ fromControl ctrl
+    ctxSend [esc, len, ctr]
+
+----------------------------------------------------------------
+-- API
+
 handshake :: Context -> IO ()
 handshake ctx@Context{..}
   | ctxServer = do
@@ -128,13 +152,6 @@ handshake ctx@Context{..}
         recvControlFrame ctx START
         when ctxBidi $ sendControlFrame ctx ACCEPT
   | otherwise = sendControlFrame ctx START
-
-sendControlFrame :: Context -> Control -> IO ()
-sendControlFrame Context{..} ctrl = do
-    let esc = bytestring32 $ fromControl ESCAPE
-        len = bytestring32 4
-        ctr = bytestring32 $ fromControl ctrl
-    ctxSend [esc, len, ctr]
 
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
@@ -164,3 +181,19 @@ bye ctx@Context{..}
   | otherwise = do
         sendControlFrame ctx STOP
         recvControlFrame ctx FINISH
+
+----------------------------------------------------------------
+
+reader :: Context -> (ByteString -> IO ()) -> IO ()
+reader ctx body = do
+    handshake ctx
+    loop
+    bye ctx
+  where
+    loop = do
+        bs <- recvData ctx
+        if C8.length bs == 0
+            then return ()
+            else do
+                body bs
+                loop
