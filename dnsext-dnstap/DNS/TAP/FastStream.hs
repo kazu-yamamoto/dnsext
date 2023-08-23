@@ -65,24 +65,45 @@ newContext s conf = do
       , ctxDebug = debug conf
       }
 
+recvLength :: Context -> IO Word32
+recvLength Context{..} = do
+    bsc <- ctxRecv 4
+    unsafeWithByteString bsc peek32
+
+recvControl :: Context -> IO Control
+recvControl Context{..} = do
+    bsc <- ctxRecv 4
+    Control <$> unsafeWithByteString bsc peek32
+
+recvContent :: Context -> Word32 -> IO ByteString
+recvContent Context{..} l = ctxRecv $ fromIntegral l
+
+readLength :: Readable a => a -> IO Word32
+readLength = read32
+
+readControl :: Readable a => a -> IO Control
+readControl rbuf = Control <$> read32 rbuf
+
+readContent :: Readable a => a -> Word32 -> IO ByteString
+readContent rbuf l = extractByteString rbuf $ fromIntegral l
+
+check :: Control -> Control -> IO ()
+check c ctrl = when (c /= ctrl) $ throwIO $ FSException ("no " ++ show ctrl)
+
 handshake :: Context -> IO ()
-handshake Context{..}
+handshake ctx@Context{..}
   | ctxServer = do
-        bsc <- ctxRecv 4
-        c <- withReadBuffer bsc $ \rbuf -> Control <$> read32 rbuf
-        when (c /= ESCAPE) $ throwIO $ FSException "no ESCAPE"
-        bsl <- ctxRecv 4
-        l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
-        bsx <- ctxRecv l
+        c <- recvControl ctx
+        check c ESCAPE
+        bsx <- recvLength ctx >>= recvContent ctx
         withReadBuffer bsx $ \rbuf -> do
-            s <- Control <$> read32 rbuf
-            when (s /= START) $ throwIO $ FSException "no START"
+            s <- readControl rbuf
+            check s START
             when ctxDebug $ putStrLn "START"
-            a <- Control <$> read32 rbuf
-            when (a /= ACCEPT) $ throwIO $ FSException "no ACCEPT"
+            a <- readControl rbuf
+            check a ACCEPT
             when ctxDebug $ putStr "ACCEPT "
-            l1 <- read32 rbuf
-            bs <- extractByteString rbuf $ fromIntegral l1
+            bs <- readLength rbuf >>= readContent rbuf
             when ctxDebug $ C8.putStrLn bs
   | otherwise = do
         let len = undefined
@@ -92,16 +113,16 @@ handshake Context{..}
 
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
-recvData Context{..}
+recvData ctx@Context{..}
   | ctxServer = do
-        bsl <- ctxRecv 4
-        l <- withReadBuffer bsl $ \rbuf -> fromIntegral <$> read32 rbuf
         when ctxDebug $ putStrLn "--------------------------------"
-        when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
-        bsx <- ctxRecv l
-        when ctxDebug $ do
-            when (C8.length bsx == 0) $ putStrLn "STOP"
-        return bsx
+        l <- recvLength ctx
+        if l == 0 then do
+            when ctxDebug $ putStrLn "STOP"
+            return ""
+          else do
+            when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
+            recvContent ctx l
   | otherwise = throwIO $ FSException "client cannot use recvData"
 
 sendData :: Context -> ByteString -> IO ()
