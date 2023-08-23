@@ -3,11 +3,13 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- Fast stream:
--- https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
+-- | Fast stream implementaion.
+--
+-- * Spec: https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
 
 module DNS.TAP.FastStream (
     Config (..),
+    Context,
     newContext,
     reader,
     handshake,
@@ -25,40 +27,7 @@ import Network.Socket
 import qualified Network.Socket.BufferPool as P
 import qualified Network.Socket.ByteString as NSB
 
-data Control = Control {fromControl :: Word32} deriving (Eq)
-
-{- FOURMOLU_DISABLE -}
-pattern ESCAPE :: Control
-pattern ESCAPE  = Control 0x00
-pattern ACCEPT :: Control
-pattern ACCEPT  = Control 0x01
-pattern START  :: Control
-pattern START   = Control 0x02
-pattern STOP   :: Control
-pattern STOP    = Control 0x03
-pattern READY  :: Control
-pattern READY   = Control 0x04
-pattern FINISH :: Control
-pattern FINISH  = Control 0x05
-
-instance Show Control where
-    show ESCAPE = "ESCAPE"
-    show ACCEPT = "ACCEPT"
-    show START  = "START"
-    show STOP   = "STOP"
-    show READY  = "READY"
-    show FINISH = "FINISH"
-    show (Control n) = "Control " ++ show n
-{- FOURMOLU_ENABLE -}
-
-data FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
-
-pattern ContentType :: FieldType
-pattern ContentType = FieldType 0x01
-
-data FSException = FSException String deriving (Show, Typeable)
-
-instance Exception FSException
+----------------------------------------------------------------
 
 data Config = Config
     { bidirectional :: Bool
@@ -88,6 +57,47 @@ newContext s conf = do
             , ctxServer = isServer conf
             , ctxDebug = debug conf
             }
+
+----------------------------------------------------------------
+
+data Control = Control {fromControl :: Word32} deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern ESCAPE :: Control
+pattern ESCAPE  = Control 0x00
+pattern ACCEPT :: Control
+pattern ACCEPT  = Control 0x01
+pattern START  :: Control
+pattern START   = Control 0x02
+pattern STOP   :: Control
+pattern STOP    = Control 0x03
+pattern READY  :: Control
+pattern READY   = Control 0x04
+pattern FINISH :: Control
+pattern FINISH  = Control 0x05
+
+instance Show Control where
+    show ESCAPE = "ESCAPE"
+    show ACCEPT = "ACCEPT"
+    show START  = "START"
+    show STOP   = "STOP"
+    show READY  = "READY"
+    show FINISH = "FINISH"
+    show (Control n) = "Control " ++ show n
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
+data FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
+
+pattern ContentType :: FieldType
+pattern ContentType = FieldType 0x01
+
+----------------------------------------------------------------
+
+data FSException = FSException String deriving (Show, Typeable)
+
+instance Exception FSException
 
 ----------------------------------------------------------------
 
