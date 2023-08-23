@@ -61,7 +61,7 @@ data Config = Config
 
 data Context = Context
     { ctxRecv   :: Int -> IO ByteString
-    , ctxSend   :: ByteString -> IO ()
+    , ctxSend   :: [ByteString] -> IO ()
     , ctxBidi   :: Bool
     , ctxServer :: Bool
     , ctxDebug  :: Bool
@@ -73,7 +73,7 @@ newContext s conf = do
     recvN <- P.makeRecvN "" $ P.receive s pool
     return Context {
         ctxRecv = recvN
-      , ctxSend = NSB.sendAll s
+      , ctxSend = NSB.sendMany s
       , ctxBidi = bidirectional conf
       , ctxServer = isServer conf
       , ctxDebug = debug conf
@@ -131,9 +131,10 @@ handshake ctx@Context{..}
 
 sendControlFrame :: Context -> Control -> IO ()
 sendControlFrame Context{..} ctrl = do
-    ctxSend $ bytestring32 $ fromControl ESCAPE
-    ctxSend $ bytestring32 4
-    ctxSend $ bytestring32 $ fromControl ctrl
+    let esc = bytestring32 $ fromControl ESCAPE
+        len = bytestring32 4
+        ctr = bytestring32 $ fromControl ctrl
+    ctxSend [esc, len, ctr]
 
 -- | "" returns on EOF
 recvData :: Context -> IO ByteString
