@@ -12,6 +12,26 @@ import DNS.Types hiding (qname)
 import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
+import qualified DNS.SEC.Verify.NSECxRange as NRange
+
+rangeImpl :: NRange.Impl NSEC_Range NSEC_Range
+rangeImpl =
+    NRange.Impl
+    { nrangeTYPE = NSEC
+    , nrangeTake = takeRange
+    , nrangeRefine = refineRange
+    , nrangeLower = fst
+    , nrangeUpper = nsecNextDomain . snd
+    }
+  where
+    takeRange ResourceRecord{..} = (,) rrname <$> fromRData rdata
+
+refineRange :: Domain -> NSEC_Range -> Either String NSEC_Range
+refineRange zone range@(rrn, _rd)
+    | rrn `isSubDomainOf` zone = Right range
+    | otherwise = Left $ "NSEC.refineRange: not under zone: " ++ show rrn
+
+---
 
 getResult :: Logic a -> Domain -> [NSEC_Range] -> Domain -> Either String a
 getResult nlogic zone ranges qname = do
@@ -161,11 +181,11 @@ nsecCoversR :: Ord a => a -> a -> a -> Bool
 nsecCoversR lower upper qv = qv < upper || lower < qv
 
 nsecRefineWithRanges :: [NSEC_Range] -> Either String (Domain -> [RangeProp])
-nsecRefineWithRanges ranges
-    | length (filter fst results) > 1 =
-        Left "NSEC.nsecRangeRefines: multiple rorated records found."
-    | otherwise = Right props
+nsecRefineWithRanges ranges = do
+    uniqueSorted ranges
+    Right props
   where
+    uniqueSorted = NRange.uniqueSorted rangeImpl
     props qname = [prop | (_, refines) <- results, refine <- refines, Just prop <- [refine qname]]
     results =
         [ (rotated, [withRange, withWild])
