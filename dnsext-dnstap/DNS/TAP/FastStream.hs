@@ -123,9 +123,11 @@ recvContent Context{..} l = ctxRecv $ fromIntegral l
 
 ----------------------------------------------------------------
 
--- ESCAPE is already received.
-recvControlFrame :: Context -> Control -> IO [(FieldType, ByteString)]
-recvControlFrame ctx@Context{..} ctrl = do
+recvControlFrame :: Context -> Control -> Bool -> IO [(FieldType, ByteString)]
+recvControlFrame ctx@Context{..} ctrl skipEscape = do
+    unless skipEscape $ do
+        c <- recvControl ctx
+        check c ESCAPE
     l0 <- recvLength ctx
     when (l0 < 4) $ throwIO $ FSException "illegal control length"
     c <- recvControl ctx
@@ -173,14 +175,10 @@ handshake :: Context -> IO ()
 handshake ctx@Context{..}
     | ctxReader = do
         when ctxBidi $ do
-            c <- recvControl ctx
-            check c ESCAPE
-            ct <- recvControlFrame ctx READY
+            ct <- recvControlFrame ctx READY False
             -- fixme: select one
             sendControlFrame ctx ACCEPT ct
-        c <- recvControl ctx
-        check c ESCAPE
-        void $ recvControlFrame ctx START
+        void $ recvControlFrame ctx START False
     | otherwise = sendControlFrame ctx START []
 
 -- | Receiving data.
@@ -207,11 +205,11 @@ sendData Context{..} _bs
 bye :: Context -> IO ()
 bye ctx@Context{..}
     | ctxReader = do
-        void $ recvControlFrame ctx STOP
+        void $ recvControlFrame ctx STOP True
         when ctxBidi $ sendControlFrame ctx FINISH [] `E.catch` \(E.SomeException _) -> return ()
     | otherwise = do
         sendControlFrame ctx STOP []
-        when ctxBidi $ void $ recvControlFrame ctx FINISH
+        when ctxBidi $ void $ recvControlFrame ctx FINISH False
 
 ----------------------------------------------------------------
 
