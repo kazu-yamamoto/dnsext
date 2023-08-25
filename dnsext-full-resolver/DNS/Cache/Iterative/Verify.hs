@@ -28,6 +28,10 @@ import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 
+-- |
+-- null case is no RR for specified type.
+-- left case is not canonical RRset.
+-- righ case is after verified, with valid or invalid RRset.
 {- FOURMOLU_DISABLE -}
 with
     :: [RD_DNSKEY]
@@ -51,9 +55,8 @@ withCanonical
     -> ContextT IO b -> ContextT IO b -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
     -> ContextT IO b
 {- FOURMOLU_ENABLE -}
-withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
-    now <- liftIO =<< asks currentSeconds_
-    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK ncK withRRS
+withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK =
+    withSection getRanked msg $ \srrs rank -> withCanonical' dnskeys rrn rrty h srrs rank nullK ncK withRRS
   where
     ncK rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
     withRRS x rrset cache = do
@@ -68,22 +71,24 @@ withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
 
 {- FOURMOLU_DISABLE -}
 withCanonical'
-    :: EpochTime
-    -> [RD_DNSKEY]
+    :: [RD_DNSKEY]
     -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
     -> [ResourceRecord] -> Ranking
-    -> b -> ([ResourceRecord] -> String -> b) -> ([a] -> RRset -> ContextT IO () -> b)
-    -> b
+    -> ContextT IO b -> ([ResourceRecord] -> String -> ContextT IO b)
+    -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
+    -> ContextT IO b
 {- FOURMOLU_ENABLE -}
-withCanonical' now dnskeys rrn rrty h srrs rank nullK leftK rightK0
+withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
     | null xRRs = nullK
     | otherwise = either (leftK xRRs) rightK $ canonicalRRset xRRs
   where
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
     sigs = rrsigList rrn rrty srrs
-    rightK p = withVerifiedRRset now dnskeys p sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
-        rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
+    rightK p = do
+        now <- liftIO =<< asks currentSeconds_
+        withVerifiedRRset now dnskeys p sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
+            rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
 
 withVerifiedRRset
     :: EpochTime
