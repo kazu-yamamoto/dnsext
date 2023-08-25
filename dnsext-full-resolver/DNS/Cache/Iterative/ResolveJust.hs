@@ -190,10 +190,10 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS (dss@(_ : _)), dele
   where
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
+    nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
+    verifyFailed es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
     query = do
         ips <- delegationIPs dc d
-        let nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-            verifyFailed es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
         if null ips
             then lift nullIPs
             else lift . either verifyFailed fill =<< cachedDNSKEY dss ips delegationZone
