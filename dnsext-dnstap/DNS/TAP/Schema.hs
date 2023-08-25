@@ -1,7 +1,6 @@
 -- | DNSTAP Schema.
 --
 -- * Spec: https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
-
 module DNS.TAP.Schema (dnstap) where
 
 import Control.Monad
@@ -105,7 +104,7 @@ policy bs = withReadBuffer bs loop
         putStr "POLICY "
         t <- tag rbuf
         case t of
-          -- fixme
+            -- fixme
             (3, VARINT) -> do
                 putStr "Action: "
                 varint rbuf >>= putStrLn . action

@@ -6,14 +6,15 @@
 -- | Fast stream implementaion.
 --
 -- * Spec: https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
-
 module DNS.TAP.FastStream (
     -- * Types
     Config (..),
     Context,
     newContext,
+
     -- * Reader and writer
     reader,
+
     -- * API
     handshake,
     recvData,
@@ -21,7 +22,6 @@ module DNS.TAP.FastStream (
     bye,
 ) where
 
-import UnliftIO.Exception as E
 import Control.Monad
 import qualified Data.ByteString.Char8 as C8
 import Data.Word
@@ -29,6 +29,7 @@ import Network.ByteOrder
 import Network.Socket
 import qualified Network.Socket.BufferPool as P
 import qualified Network.Socket.ByteString as NSB
+import UnliftIO.Exception as E
 
 ----------------------------------------------------------------
 
@@ -123,7 +124,7 @@ recvContent Context{..} l = ctxRecv $ fromIntegral l
 ----------------------------------------------------------------
 
 -- ESCAPE is already received.
-recvControlFrame :: Context -> Control -> IO [(FieldType,ByteString)]
+recvControlFrame :: Context -> Control -> IO [(FieldType, ByteString)]
 recvControlFrame ctx@Context{..} ctrl = do
     l0 <- recvLength ctx
     when (l0 < 4) $ throwIO $ FSException "illegal control length"
@@ -145,12 +146,12 @@ recvControlFrame ctx@Context{..} ctrl = do
                     putStr "Content-Type: "
                     C8.putStrLn ct
             else when ctxDebug $ putStrLn "unknown field"
-        loop (l - 8 - l0) (build . ((ft,ct) :))
+        loop (l - 8 - l0) (build . ((ft, ct) :))
 
 check :: Control -> Control -> IO ()
 check c ctrl = when (c /= ctrl) $ throwIO $ FSException ("no " ++ show ctrl)
 
-sendControlFrame :: Context -> Control -> [(FieldType,ByteString)] -> IO ()
+sendControlFrame :: Context -> Control -> [(FieldType, ByteString)] -> IO ()
 sendControlFrame Context{..} ctrl xs = do
     let esc = bytestring32 $ fromControl ESCAPE
         ctr = bytestring32 $ fromControl ctrl
@@ -158,10 +159,11 @@ sendControlFrame Context{..} ctrl xs = do
         len = bytestring32 $ fromIntegral (4 + sum (map C8.length xss))
     ctxSend (esc : len : ctr : xss)
   where
-    enc (t,c) = [ bytestring32 $ fromFieldType t
-                , bytestring32 $ fromIntegral $ C8.length c
-                , c
-                ]
+    enc (t, c) =
+        [ bytestring32 $ fromFieldType t
+        , bytestring32 $ fromIntegral $ C8.length c
+        , c
+        ]
 
 ----------------------------------------------------------------
 -- API

@@ -4,7 +4,6 @@
 -- | Protocol buffer implementaion
 --
 -- Spec: https://protobuf.dev/programming-guides/encoding/
-
 module DNS.TAP.ProtocolBuffer where
 
 import Data.Bits
