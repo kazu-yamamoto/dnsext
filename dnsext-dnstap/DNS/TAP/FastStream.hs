@@ -67,7 +67,7 @@ newContext s conf = do
 
 ----------------------------------------------------------------
 
-data Control = Control {fromControl :: Word32} deriving (Eq)
+newtype Control = Control {fromControl :: Word32} deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern ESCAPE :: Control
@@ -95,14 +95,14 @@ instance Show Control where
 
 ----------------------------------------------------------------
 
-data FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
+newtype FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
 
 pattern ContentType :: FieldType
 pattern ContentType = FieldType 0x01
 
 ----------------------------------------------------------------
 
-data FSException = FSException String deriving (Show, Typeable)
+newtype FSException = FSException String deriving (Show, Typeable)
 
 instance Exception FSException
 
@@ -195,8 +195,7 @@ recvData ctx@Context{..}
             then return ""
             else do
                 when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
-                bs <- recvContent ctx l
-                return bs
+                recvContent ctx l
     | otherwise = throwIO $ FSException "client cannot use recvData"
 
 -- | Writing data.
