@@ -190,7 +190,7 @@ recvData ctx@Context{..}
     | ctxReader = do
         l <- recvLength ctx
         when ctxDebug $ putStrLn "--------------------------------"
-        if l == 0
+        if l == 0 -- ESCAPE
             then return ""
             else do
                 when ctxDebug $ putStrLn $ "fstrm data length: " ++ show l
