@@ -21,5 +21,5 @@ main = do
   where
     loop lsock = forever $ do
         (sock, _) <- accept lsock
-        ctx <- newContext sock $ Config True True True
+        ctx <- newReaderContext sock $ Config True True
         void $ forkIO $ reader ctx dnstap

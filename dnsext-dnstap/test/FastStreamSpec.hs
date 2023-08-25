@@ -22,7 +22,7 @@ readWrite = do
   where
     n = 10 :: Int
     client mvar = runTCPClient "127.0.0.1" "50002" $ \sock -> do
-        ctx <- newContext sock $ Config False False False
+        ctx <- newWriterContext sock $ Config False False
         ref <- newIORef 0
         writer ctx $ do
             i <- readIORef ref
@@ -34,9 +34,8 @@ readWrite = do
                 else return ""
         takeMVar mvar `shouldReturn` ()
     server mvar = runTCPServer (Just "127.0.0.1") "50002" $ \sock -> do
-        ctx <- newContext sock $ Config False True False
+        ctx <- newReaderContext sock $ Config False False
         ref <- newIORef 0
         reader ctx $ \_ -> modifyIORef' ref (+1)
         readIORef ref `shouldReturn` n
         putMVar mvar ()
-

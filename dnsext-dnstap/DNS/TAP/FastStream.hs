@@ -10,7 +10,8 @@ module DNS.TAP.FastStream (
     -- * Types
     Config (..),
     Context,
-    newContext,
+    newReaderContext,
+    newWriterContext,
 
     -- * Reader and writer
     reader,
@@ -37,7 +38,6 @@ import UnliftIO.Exception as E
 -- | Configuration for fast stream.
 data Config = Config
     { bidirectional :: Bool
-    , isReader :: Bool
     , debug :: Bool
     }
 
@@ -53,8 +53,8 @@ data Context = Context
     }
 
 -- | Creating 'Context' from 'Socket'.
-newContext :: Socket -> Config -> IO Context
-newContext s conf = do
+newContext :: Bool -> Socket -> Config -> IO Context
+newContext isReader s conf = do
     pool <- P.newBufferPool 512 16384
     recvN <- P.makeRecvN "" $ P.receive s pool
     return
@@ -62,9 +62,17 @@ newContext s conf = do
             { ctxRecv = recvN
             , ctxSend = NSB.sendMany s
             , ctxBidi = bidirectional conf
-            , ctxReader = isReader conf
+            , ctxReader = isReader
             , ctxDebug = debug conf
             }
+
+-- | Creating 'Context' for readers from 'Socket'.
+newReaderContext :: Socket -> Config -> IO Context
+newReaderContext = newContext True
+
+-- | Creating 'Context' for writers from 'Socket'.
+newWriterContext :: Socket -> Config -> IO Context
+newWriterContext = newContext False
 
 ----------------------------------------------------------------
 
