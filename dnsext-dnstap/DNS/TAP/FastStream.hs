@@ -14,6 +14,7 @@ module DNS.TAP.FastStream (
 
     -- * Reader and writer
     reader,
+    writer,
 
     -- * API
     handshake,
@@ -179,7 +180,11 @@ handshake ctx@Context{..}
             -- fixme: select one
             sendControlFrame ctx ACCEPT ct
         void $ recvControlFrame ctx START False
-    | otherwise = sendControlFrame ctx START []
+    | otherwise = do
+        when ctxBidi $ do
+            sendControlFrame ctx READY [] -- fixme ct
+            void $ recvControlFrame ctx ACCEPT False
+        sendControlFrame ctx START []
 
 -- | Receiving data.
 --   "" indicates that writer stops writing.
@@ -197,9 +202,11 @@ recvData ctx@Context{..}
 
 -- | Writing data.
 sendData :: Context -> ByteString -> IO ()
-sendData Context{..} _bs
+sendData Context{..} bs
     | ctxReader = throwIO $ FSException "server cannot use sendData"
-    | otherwise = undefined
+    | otherwise = do
+          let len = bytestring32 $ fromIntegral $ C8.length bs
+          ctxSend [len, bs]
 
 -- | Tearing down the connection.
 bye :: Context -> IO ()
@@ -222,8 +229,23 @@ reader ctx body = do
   where
     loop = do
         bs <- recvData ctx
-        if C8.length bs == 0
+        if bs == ""
             then return ()
             else do
                 body bs
+                loop
+
+-- | Writing loop.
+writer :: Context -> IO ByteString -> IO ()
+writer ctx body = do
+    handshake ctx
+    loop
+    bye ctx
+  where
+    loop = do
+        bs <- body
+        if bs == ""
+            then return ()
+            else do
+                sendData ctx bs
                 loop
