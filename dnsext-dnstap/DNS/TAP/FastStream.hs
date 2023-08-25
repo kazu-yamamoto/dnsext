@@ -179,7 +179,6 @@ handshake ctx@Context{..}
             -- fixme: select one
             sendControlFrame ctx ACCEPT ct
         c <- recvControl ctx
-        print c
         check c ESCAPE
         void $ recvControlFrame ctx START
     | otherwise = sendControlFrame ctx START []
