@@ -1,141 +1,86 @@
 -- | DNSTAP Schema.
 --
 -- * Spec: https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
-module DNS.TAP.Schema (dnstap) where
+module DNS.TAP.Schema (
+    dnstap
+  , DNSTAP(..)
+  , Message(..)
+  ) where
 
-import Control.Monad
-import DNS.Types.Decode
-import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8 as C8
+import DNS.Types (DNSMessage)
+import qualified DNS.Types.Decode as DNS
 import Network.ByteOrder
 
 import DNS.TAP.ProtocolBuffer
 
-dnstap :: ByteString -> IO ()
-dnstap bsx = withReadBuffer bsx loop
-  where
-    loop rbuf = do
-        putStr "DNSTAP "
-        t <- tag rbuf
-        case t of
-            (1, LEN) -> do
-                putStr "Identity: "
-                dumpASCII rbuf
-            (2, LEN) -> do
-                putStr "Version: "
-                dumpASCII rbuf
-            (14, LEN) -> do
-                putStrLn "Message:"
-                lenPref <- varint rbuf
-                bs <- extractByteString rbuf lenPref
-                message bs
-            (15, VARINT) -> do
-                putStr "Type: "
-                varint rbuf >>= putStrLn . dnstapType
-            (num, wt) -> do
-                putStr $ "KEY: " ++ show num ++ " "
-                skip rbuf wt
-        rest <- remainingSize rbuf
-        when (rest /= 0) $ loop rbuf
+data DNSTAP = DNSTAP {
+    dnstapIdentity :: Maybe ByteString
+  , dnstapVresion :: Maybe ByteString
+  , dnstapMessage :: Message
+  , dnstapType :: String
+  } deriving (Eq, Show)
 
-message :: ByteString -> IO ()
-message bs = withReadBuffer bs loop
-  where
-    loop rbuf = do
-        putStr "Message "
-        t <- tag rbuf
-        case t of
-            (1, VARINT) -> do
-                putStr "Type: "
-                varint rbuf >>= putStrLn . messageType
-            (2, VARINT) -> do
-                putStr "SocketFamily: "
-                varint rbuf >>= putStrLn . socketFamily
-            (3, VARINT) -> do
-                putStr "SocketProtocol: "
-                varint rbuf >>= putStrLn . socketProtocol
-            (4, LEN) -> do
-                putStr "QueryAddress: "
-                dump rbuf
-            (5, LEN) -> do
-                putStr "ResponseAddress: "
-                dump rbuf
-            (6, VARINT) -> do
-                putStr "QueryPort: "
-                varint rbuf >>= print
-            (7, VARINT) -> do
-                putStr "ResponsePort: "
-                varint rbuf >>= print
-            (8, VARINT) -> do
-                putStr "QueryTimeSec: "
-                varint rbuf >>= print
-            (9, I32) -> do
-                putStr "QueryTimeNsec: "
-                i32 rbuf >>= print
-            (10, LEN) -> do
-                putStr "QueryMessage: "
-                decodeDNSMessage rbuf
-            (11, LEN) -> do
-                putStr "QueryZone: "
-                dump rbuf
-            (12, VARINT) -> do
-                putStr "ResponseTimeSec: "
-                varint rbuf >>= print
-            (13, I32) -> do
-                putStr "ResponseTimeNsec: "
-                i32 rbuf >>= print
-            (14, LEN) -> do
-                putStr "ResponseMessage: "
-                decodeDNSMessage rbuf
-            (15, LEN) -> do
-                lenPref <- varint rbuf
-                bs' <- extractByteString rbuf lenPref
-                policy bs'
-            (num, wt) -> do
-                putStr $ "KEY: " ++ show num ++ " "
-                skip rbuf wt
-        rest <- remainingSize rbuf
-        when (rest /= 0) $ loop rbuf
+dnstap :: ByteString -> IO DNSTAP
+dnstap bs = do
+    obj <- decode bs
+    msg <- message (getS obj 14 id)
+    return DNSTAP {
+        dnstapIdentity = getSm obj 1 id
+      , dnstapVresion = getSm obj 2 id
+      , dnstapMessage = msg
+      , dnstapType = getI obj 15 dnstapType'
+      }
 
-policy :: ByteString -> IO ()
-policy bs = withReadBuffer bs loop
-  where
-    loop rbuf = do
-        putStr "POLICY "
-        t <- tag rbuf
-        case t of
-            -- fixme
-            (3, VARINT) -> do
-                putStr "Action: "
-                varint rbuf >>= putStrLn . action
-            (4, VARINT) -> do
-                putStr "Match: "
-                varint rbuf >>= putStrLn . match
-            (5, LEN) -> do
-                putStr "Value "
-                dump rbuf
-            (num, wt) -> do
-                putStr $ "KEY " ++ show num ++ " "
-                skip rbuf wt
+data Message = Message {
+    messageType :: String
+  , messageSocketFamily :: Maybe String
+  , messageSocketProtocol :: Maybe String
+  , messageQueryAddress :: Maybe ByteString -- fixme
+  , messageResponseAddress :: Maybe ByteString -- fixme
+  , messageQueryPort :: Maybe Int
+  , messageResponsePort :: Maybe Int
+  , messageQueryTimeSec :: Maybe Int
+  , messageQueryTimeNsec :: Maybe Int
+  , messageQueryMessage :: Maybe DNSMessage
+  , messageQueryZone :: Maybe ByteString
+  , messageResponseTimeSec :: Maybe Int
+  , messageResponseTimeNsec :: Maybe Int
+  , messageResponseMessage :: Maybe DNSMessage
+  } deriving (Eq, Show)
+
+message :: ByteString -> IO Message
+message bs = do
+    obj <- decode bs
+    return Message {
+        messageType = getI obj 1 messageType'
+      , messageSocketFamily = getIm obj 2 socketFamily
+      , messageSocketProtocol = getIm obj 3 socketProtocol
+      , messageQueryAddress = getSm obj 4 id
+      , messageResponseAddress = getSm obj 5 id
+      , messageQueryPort = getIm obj 6 id
+      , messageResponsePort = getIm obj 7 id
+      , messageQueryTimeSec = getIm obj 8 id
+      , messageQueryTimeNsec = getIm obj 9 id
+      , messageQueryMessage = getSm obj 10 decodeDNSMessage
+      , messageQueryZone = getSm obj 11 id
+      , messageResponseTimeSec = getIm obj 12 id
+      , messageResponseTimeNsec = getIm obj 13 id
+      , messageResponseMessage  = getSm obj 14 decodeDNSMessage
+      }
 
 ----------------------------------------------------------------
 
-decodeDNSMessage :: Readable a => a -> IO ()
-decodeDNSMessage rbuf = do
-    len <- varint rbuf
-    bs <- extractByteString rbuf len
-    case decode bs of
-        Right x -> print x
-        Left e -> do
-            print e
-            C8.putStrLn $ B16.encode bs
+decodeDNSMessage :: ByteString -> DNSMessage
+decodeDNSMessage bs = case DNS.decode bs of
+  Right x -> x
+  Left e -> error (show e)
 
 ----------------------------------------------------------------
 -- enum
 
-dnstapType :: Int -> String
-dnstapType 1 = "MESSAGE"
-dnstapType _ = "UNKNOWN"
+dnstapType' :: Int -> String
+dnstapType' 1 = "MESSAGE"
+dnstapType' _ = "UNKNOWN"
 
 socketFamily :: Int -> String
 socketFamily 1 = "IPv4"
@@ -152,36 +97,19 @@ socketProtocol 6 = "DNSCryptTCP"
 socketProtocol 7 = "DOQ"
 socketProtocol _ = "UNKNOWN"
 
-match :: Int -> String
-match 1 = "QNAME"
-match 2 = "CLIENT_IP"
-match 3 = "RESPONSE_IP"
-match 4 = "NS_NAME"
-match 5 = "NS_IP"
-match _ = "UNKNOWN"
-
-action :: Int -> String
-action 1 = "NXDOMAIN"
-action 2 = "NODATA"
-action 3 = "PASS"
-action 4 = "DROP"
-action 5 = "TRUNCATE"
-action 6 = "LOCAL_DATA"
-action _ = "UNKNOWN"
-
-messageType :: Int -> String
-messageType 1 = "AUTH_QUERY"
-messageType 2 = "AUTH_RESPONSE"
-messageType 3 = "RESOLVER_QUERY"
-messageType 4 = "RESOLVER_RESPONSE"
-messageType 5 = "CLIENT_QUERY"
-messageType 6 = "CLIENT_RESPONSE"
-messageType 7 = "FORWARDER_QUERY"
-messageType 8 = "FORWARDER_RESPONSE"
-messageType 9 = "STUB_QUERY"
-messageType 10 = "STUB_RESPONSE"
-messageType 11 = "TOOL_QUERY"
-messageType 12 = "TOOL_RESPONSE"
-messageType 13 = "UPDATE_QUERY"
-messageType 14 = "UPDATE_RESPONSE"
-messageType _ = "UNKNOWN"
+messageType' :: Int -> String
+messageType' 1 = "AUTH_QUERY"
+messageType' 2 = "AUTH_RESPONSE"
+messageType' 3 = "RESOLVER_QUERY"
+messageType' 4 = "RESOLVER_RESPONSE"
+messageType' 5 = "CLIENT_QUERY"
+messageType' 6 = "CLIENT_RESPONSE"
+messageType' 7 = "FORWARDER_QUERY"
+messageType' 8 = "FORWARDER_RESPONSE"
+messageType' 9 = "STUB_QUERY"
+messageType' 10 = "STUB_RESPONSE"
+messageType' 11 = "TOOL_QUERY"
+messageType' 12 = "TOOL_RESPONSE"
+messageType' 13 = "UPDATE_QUERY"
+messageType' 14 = "UPDATE_RESPONSE"
+messageType' _ = "UNKNOWN"
