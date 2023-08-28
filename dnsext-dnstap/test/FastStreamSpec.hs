@@ -23,7 +23,7 @@ spec = do
 readWrite :: Config -> IO ()
 readWrite conf = do
     mvar <- newEmptyMVar
-    E.bracket (forkIO $ server mvar ) killThread $ \_ -> client mvar
+    E.bracket (forkIO $ server mvar) killThread $ \_ -> client mvar
   where
     n = 10 :: Int
     client mvar = do
@@ -35,14 +35,14 @@ readWrite conf = do
                 i <- readIORef ref
                 if i < n
                     then do
-                      let i' = i + 1
-                      writeIORef ref i'
-                      return "foo!"
+                        let i' = i + 1
+                        writeIORef ref i'
+                        return "foo!"
                     else return ""
             takeMVar mvar `shouldReturn` ()
     server mvar = runTCPServer (Just "127.0.0.1") "50002" $ \sock -> do
         ctx <- newReaderContext sock conf
         ref <- newIORef 0
-        reader ctx $ \_ -> modifyIORef' ref (+1)
+        reader ctx $ \_ -> modifyIORef' ref (+ 1)
         readIORef ref `shouldReturn` n
         putMVar mvar ()

@@ -213,8 +213,8 @@ sendData :: Context -> ByteString -> IO ()
 sendData Context{..} bs
     | ctxReader = throwIO $ FSException "server cannot use sendData"
     | otherwise = do
-          let len = bytestring32 $ fromIntegral $ C8.length bs
-          ctxSend [len, bs]
+        let len = bytestring32 $ fromIntegral $ C8.length bs
+        ctxSend [len, bs]
 
 -- | Tearing down the connection.
 bye :: Context -> IO ()
