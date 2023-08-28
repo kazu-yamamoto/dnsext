@@ -229,6 +229,7 @@ bye ctx@Context{..}
 ----------------------------------------------------------------
 
 -- | Reading loop.
+--   The loop is finished when the writer stops writing.
 reader :: Context -> (ByteString -> IO ()) -> IO ()
 reader ctx body = do
     handshake ctx
@@ -244,6 +245,7 @@ reader ctx body = do
                 loop
 
 -- | Writing loop.
+--   Generating an empty string stops the loop.
 writer :: Context -> IO ByteString -> IO ()
 writer ctx body = do
     handshake ctx
