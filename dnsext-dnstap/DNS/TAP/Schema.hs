@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | DNSTAP Schema.
 --
@@ -14,10 +15,13 @@ module DNS.TAP.Schema (
     -- * Decoding
     decodeDnstap,
     decodeMessage,
+    -- * Encoding
+    encodeDnstap,
 ) where
 
 import DNS.Types (DNSMessage, DNSError)
 import qualified DNS.Types.Decode as DNS
+import qualified DNS.Types.Encode as DNS
 import qualified Data.ByteString as BS
 import qualified Data.IP as IP
 import Network.ByteOrder
@@ -27,7 +31,7 @@ import DNS.TAP.ProtocolBuffer
 {- FOURMOLU_DISABLE -}
 data DNSTAP = DNSTAP
     { dnstapIdentity :: Maybe ByteString
-    , dnstapVresion  :: Maybe ByteString
+    , dnstapVersion  :: Maybe ByteString
     , dnstapMessage  :: Maybe Message
     , dnstapType     :: DnstapType
     }
@@ -37,7 +41,7 @@ decodeDnstap :: ByteString -> DNSTAP
 decodeDnstap bs =
     DNSTAP
         { dnstapIdentity = getOptS obj 1 id
-        , dnstapVresion  = getOptS obj 2 id
+        , dnstapVersion  = getOptS obj 2 id
         , dnstapMessage  = decodeMessage <$> getOptS obj 14 id
         , dnstapType     = getI obj 15 DnstapType
         }
@@ -54,11 +58,11 @@ data Message = Message
     , messageResponsePort     :: Maybe Int
     , messageQueryTimeSec     :: Maybe Int
     , messageQueryTimeNsec    :: Maybe Int
-    , messageQueryMessage     :: Maybe (Either DNSError DNSMessage)
+    , messageQueryMessage     :: Maybe (Either (DNSError,ByteString) DNSMessage)
     , messageQueryZone        :: Maybe ByteString
     , messageResponseTimeSec  :: Maybe Int
     , messageResponseTimeNsec :: Maybe Int
-    , messageResponseMessage  :: Maybe (Either DNSError DNSMessage)
+    , messageResponseMessage  :: Maybe (Either (DNSError,ByteString) DNSMessage)
     }
     deriving (Eq, Show)
 
@@ -68,24 +72,68 @@ decodeMessage bs =
         { messageType             = getI    obj  1 MessageType
         , messageSocketFamily     = getOptI obj  2 SocketFamily
         , messageSocketProtocol   = getOptI obj  3 SocketProtocol
-        , messageQueryAddress     = getOptS obj  4 ip
-        , messageResponseAddress  = getOptS obj  5 ip
+        , messageQueryAddress     = getOptS obj  4 decodeIP
+        , messageResponseAddress  = getOptS obj  5 decodeIP
         , messageQueryPort        = getOptI obj  6 id
         , messageResponsePort     = getOptI obj  7 id
         , messageQueryTimeSec     = getOptI obj  8 id
         , messageQueryTimeNsec    = getOptI obj  9 id
-        , messageQueryMessage     = getOptS obj 10 DNS.decode
+        , messageQueryMessage     = getOptS obj 10 decodeDNS
         , messageQueryZone        = getOptS obj 11 id
         , messageResponseTimeSec  = getOptI obj 12 id
         , messageResponseTimeNsec = getOptI obj 13 id
-        , messageResponseMessage  = getOptS obj 14 DNS.decode
+        , messageResponseMessage  = getOptS obj 14 decodeDNS
         }
   where
     obj = decode bs
 
+decodeDNS :: ByteString -> Either (DNSError, ByteString) DNSMessage
+decodeDNS bs0 = case DNS.decode bs0 of
+  Right msg -> Right msg
+  Left err  -> Left (err,bs0)
+
+decodeIP :: ByteString -> IP.IP
+decodeIP bs
+  | BS.length bs == 4 = IP.IPv4 $ IP.toIPv4  $ map fromIntegral $ BS.unpack bs
+  | otherwise         = IP.IPv6 $ IP.toIPv6b $ map fromIntegral $ BS.unpack bs
+
 ----------------------------------------------------------------
 
-newtype DnstapType = DnstapType Int deriving Eq
+encodeDnstap :: DNSTAP -> ByteString
+encodeDnstap DNSTAP{..} = encode $
+    setVAR  15 (fromDnstapType dnstapType) $
+    setOptS 14 (encodeMessage <$> dnstapMessage) $
+    setOptS  2 dnstapVersion $
+    setOptS  1 dnstapIdentity empty
+
+encodeMessage :: Message -> ByteString
+encodeMessage Message{..} = encode $
+    setOptS   14 (encodeDNS <$> messageResponseMessage) $
+    setOptI32 13 messageResponseTimeNsec $
+    setOptI64 12 messageResponseTimeSec $
+    setOptS   11 messageQueryZone $
+    setOptS   10 (encodeDNS <$> messageQueryMessage) $
+    setOptI32  9 messageQueryTimeNsec $
+    setOptI64  8 messageQueryTimeSec $
+    setOptI32  7 messageResponsePort $
+    setOptI32  6 messageQueryPort $
+    setOptS    5 (encodeIP <$> messageResponseAddress) $
+    setOptS    4 (encodeIP <$> messageQueryAddress) $
+    setOptVAR  3 (fromSocketProtocol <$> messageSocketProtocol) $
+    setOptVAR  2 (fromSocketFamily <$> messageSocketFamily) $
+    setVAR     1 (fromMessageType messageType) empty
+
+encodeDNS :: Either (DNSError, ByteString) DNSMessage -> ByteString
+encodeDNS (Right msg)   = DNS.encode msg
+encodeDNS (Left (_,bs)) = bs
+
+encodeIP :: IP.IP -> ByteString
+encodeIP (IP.IPv4 ip) = BS.pack $ map fromIntegral $ IP.fromIPv4 ip
+encodeIP (IP.IPv6 ip) = BS.pack $ map fromIntegral $ IP.fromIPv6b ip
+
+----------------------------------------------------------------
+
+newtype DnstapType = DnstapType { fromDnstapType :: Int } deriving Eq
 
 pattern MESSAGE :: DnstapType
 pattern MESSAGE  = DnstapType 1
@@ -96,7 +144,7 @@ instance Show DnstapType where
 
 ----------------------------------------------------------------
 
-newtype SocketFamily = SocketFamily Int deriving Eq
+newtype SocketFamily = SocketFamily { fromSocketFamily :: Int } deriving Eq
 
 pattern IPv4 :: SocketFamily
 pattern IPv4  = SocketFamily 1
@@ -110,7 +158,7 @@ instance Show SocketFamily where
 
 ----------------------------------------------------------------
 
-newtype SocketProtocol = SocketProtocol Int deriving Eq
+newtype SocketProtocol = SocketProtocol { fromSocketProtocol :: Int } deriving Eq
 
 pattern UDP         :: SocketProtocol
 pattern UDP          = SocketProtocol 1
@@ -139,7 +187,7 @@ instance Show SocketProtocol where
 
 ----------------------------------------------------------------
 
-newtype MessageType = MessageType Int deriving Eq
+newtype MessageType = MessageType { fromMessageType :: Int } deriving Eq
 
 pattern AUTH_QUERY         :: MessageType
 pattern AUTH_QUERY          = MessageType  1
@@ -187,8 +235,4 @@ instance Show MessageType where
     show UPDATE_RESPONSE    = "UPDATE_RESPONSE"
     show (MessageType  x)   = "MessageType " ++ show x
 
-ip :: ByteString -> IP.IP
-ip bs
-  | BS.length bs == 4 = IP.IPv4 $ IP.toIPv4  $ map fromIntegral $ BS.unpack bs
-  | otherwise         = IP.IPv6 $ IP.toIPv6b $ map fromIntegral $ BS.unpack bs
 {- FOURMOLU_ENABLE -}
