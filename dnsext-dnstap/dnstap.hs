@@ -22,4 +22,4 @@ main = do
     loop lsock = forever $ do
         (sock, _) <- accept lsock
         ctx <- newReaderContext sock $ Config True True
-        void $ forkIO $ reader ctx (\bs -> dnstap bs >>= print)
+        void $ forkIO $ reader ctx (print . dnstap)

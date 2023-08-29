@@ -21,17 +21,15 @@ data DNSTAP = DNSTAP
     }
     deriving (Eq, Show)
 
-dnstap :: ByteString -> IO DNSTAP
-dnstap bs = do
-    obj <- decode bs
-    msg <- message (getS obj 14 id)
-    return
-        DNSTAP
+dnstap :: ByteString -> DNSTAP
+dnstap bs = DNSTAP
             { dnstapIdentity = getSm obj 1 id
             , dnstapVresion = getSm obj 2 id
-            , dnstapMessage = msg
+            , dnstapMessage = message (getS obj 14 id)
             , dnstapType = getI obj 15 dnstapType'
             }
+  where
+    obj = decode bs
 
 data Message = Message
     { messageType :: String
@@ -51,11 +49,8 @@ data Message = Message
     }
     deriving (Eq, Show)
 
-message :: ByteString -> IO Message
-message bs = do
-    obj <- decode bs
-    return
-        Message
+message :: ByteString -> Message
+message bs = Message
             { messageType = getI obj 1 messageType'
             , messageSocketFamily = getIm obj 2 socketFamily
             , messageSocketProtocol = getIm obj 3 socketProtocol
@@ -71,6 +66,8 @@ message bs = do
             , messageResponseTimeNsec = getIm obj 13 id
             , messageResponseMessage = getSm obj 14 decodeDNSMessage
             }
+  where
+    obj = decode bs
 
 ----------------------------------------------------------------
 

@@ -13,6 +13,7 @@ module DNS.TAP.ProtocolBuffer (
     getSm,
 ) where
 
+import System.IO.Unsafe (unsafeDupablePerformIO)
 import Data.Bits
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -79,8 +80,8 @@ tag rbuf = do
         num = n `shiftR` 3
     return (num, WireType wtyp)
 
-decode :: ByteString -> IO Object
-decode bs = do
+decode :: ByteString -> Object
+decode bs = unsafeDupablePerformIO $
     withReadBuffer bs $ \rbuf -> Object <$> loop rbuf IM.empty
   where
     loop rbuf m0 = do
