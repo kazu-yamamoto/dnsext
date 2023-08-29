@@ -19,6 +19,7 @@ library
         bytestring,
         containers,
         dnsext-types,
+        iproute,
         network,
         network-byte-order,
         recv,

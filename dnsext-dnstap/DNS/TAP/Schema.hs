@@ -12,6 +12,8 @@ module DNS.TAP.Schema (
 
 import DNS.Types (DNSMessage, DNSError)
 import qualified DNS.Types.Decode as DNS
+import qualified Data.ByteString as BS
+import Data.IP
 import Network.ByteOrder
 
 import DNS.TAP.ProtocolBuffer
@@ -40,8 +42,8 @@ data Message = Message
     { messageType             :: String
     , messageSocketFamily     :: Maybe String
     , messageSocketProtocol   :: Maybe String
-    , messageQueryAddress     :: Maybe ByteString -- fixme
-    , messageResponseAddress  :: Maybe ByteString -- fixme
+    , messageQueryAddress     :: Maybe IP
+    , messageResponseAddress  :: Maybe IP
     , messageQueryPort        :: Maybe Int
     , messageResponsePort     :: Maybe Int
     , messageQueryTimeSec     :: Maybe Int
@@ -60,8 +62,8 @@ decodeMessage bs =
         { messageType             = getI    obj  1 messageType'
         , messageSocketFamily     = getOptI obj  2 socketFamily
         , messageSocketProtocol   = getOptI obj  3 socketProtocol
-        , messageQueryAddress     = getOptS obj  4 id
-        , messageResponseAddress  = getOptS obj  5 id
+        , messageQueryAddress     = getOptS obj  4 ip
+        , messageResponseAddress  = getOptS obj  5 ip
         , messageQueryPort        = getOptI obj  6 id
         , messageResponsePort     = getOptI obj  7 id
         , messageQueryTimeSec     = getOptI obj  8 id
@@ -113,4 +115,9 @@ messageType' 12 = "TOOL_RESPONSE"
 messageType' 13 = "UPDATE_QUERY"
 messageType' 14 = "UPDATE_RESPONSE"
 messageType' _  = "UNKNOWN"
+
+ip :: ByteString -> IP
+ip bs
+  | BS.length bs == 4 = IPv4 $ toIPv4  $ map fromIntegral $ BS.unpack bs
+  | otherwise         = IPv6 $ toIPv6b $ map fromIntegral $ BS.unpack bs
 {- FOURMOLU_ENABLE -}
