@@ -2,9 +2,12 @@
 --
 -- * Spec: https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
 module DNS.TAP.Schema (
-    dnstap,
+    -- * Types
     DNSTAP (..),
     Message (..),
+    -- * Decoding
+    dnstap,
+    message,
 ) where
 
 import DNS.Types (DNSMessage)
@@ -13,60 +16,61 @@ import Network.ByteOrder
 
 import DNS.TAP.ProtocolBuffer
 
+{- FOURMOLU_DISABLE -}
 data DNSTAP = DNSTAP
     { dnstapIdentity :: Maybe ByteString
-    , dnstapVresion :: Maybe ByteString
-    , dnstapMessage :: Message
-    , dnstapType :: String
+    , dnstapVresion  :: Maybe ByteString
+    , dnstapMessage  :: Message
+    , dnstapType     :: String
     }
     deriving (Eq, Show)
 
 dnstap :: ByteString -> DNSTAP
 dnstap bs =
     DNSTAP
-        { dnstapIdentity = getSm obj 1 id
-        , dnstapVresion = getSm obj 2 id
-        , dnstapMessage = message (getS obj 14 id)
-        , dnstapType = getI obj 15 dnstapType'
+        { dnstapIdentity = getOptS obj 1 id
+        , dnstapVresion  = getOptS obj 2 id
+        , dnstapMessage  = message $ getS obj 14 id
+        , dnstapType     = getI obj 15 dnstapType'
         }
   where
     obj = decode bs
 
 data Message = Message
-    { messageType :: String
-    , messageSocketFamily :: Maybe String
-    , messageSocketProtocol :: Maybe String
-    , messageQueryAddress :: Maybe ByteString -- fixme
-    , messageResponseAddress :: Maybe ByteString -- fixme
-    , messageQueryPort :: Maybe Int
-    , messageResponsePort :: Maybe Int
-    , messageQueryTimeSec :: Maybe Int
-    , messageQueryTimeNsec :: Maybe Int
-    , messageQueryMessage :: Maybe DNSMessage
-    , messageQueryZone :: Maybe ByteString
-    , messageResponseTimeSec :: Maybe Int
+    { messageType             :: String
+    , messageSocketFamily     :: Maybe String
+    , messageSocketProtocol   :: Maybe String
+    , messageQueryAddress     :: Maybe ByteString -- fixme
+    , messageResponseAddress  :: Maybe ByteString -- fixme
+    , messageQueryPort        :: Maybe Int
+    , messageResponsePort     :: Maybe Int
+    , messageQueryTimeSec     :: Maybe Int
+    , messageQueryTimeNsec    :: Maybe Int
+    , messageQueryMessage     :: Maybe DNSMessage
+    , messageQueryZone        :: Maybe ByteString
+    , messageResponseTimeSec  :: Maybe Int
     , messageResponseTimeNsec :: Maybe Int
-    , messageResponseMessage :: Maybe DNSMessage
+    , messageResponseMessage  :: Maybe DNSMessage
     }
     deriving (Eq, Show)
 
 message :: ByteString -> Message
 message bs =
     Message
-        { messageType = getI obj 1 messageType'
-        , messageSocketFamily = getIm obj 2 socketFamily
-        , messageSocketProtocol = getIm obj 3 socketProtocol
-        , messageQueryAddress = getSm obj 4 id
-        , messageResponseAddress = getSm obj 5 id
-        , messageQueryPort = getIm obj 6 id
-        , messageResponsePort = getIm obj 7 id
-        , messageQueryTimeSec = getIm obj 8 id
-        , messageQueryTimeNsec = getIm obj 9 id
-        , messageQueryMessage = getSm obj 10 decodeDNSMessage
-        , messageQueryZone = getSm obj 11 id
-        , messageResponseTimeSec = getIm obj 12 id
-        , messageResponseTimeNsec = getIm obj 13 id
-        , messageResponseMessage = getSm obj 14 decodeDNSMessage
+        { messageType             = getI    obj  1 messageType'
+        , messageSocketFamily     = getOptI obj  2 socketFamily
+        , messageSocketProtocol   = getOptI obj  3 socketProtocol
+        , messageQueryAddress     = getOptS obj  4 id
+        , messageResponseAddress  = getOptS obj  5 id
+        , messageQueryPort        = getOptI obj  6 id
+        , messageResponsePort     = getOptI obj  7 id
+        , messageQueryTimeSec     = getOptI obj  8 id
+        , messageQueryTimeNsec    = getOptI obj  9 id
+        , messageQueryMessage     = getOptS obj 10 decodeDNSMessage
+        , messageQueryZone        = getOptS obj 11 id
+        , messageResponseTimeSec  = getOptI obj 12 id
+        , messageResponseTimeNsec = getOptI obj 13 id
+        , messageResponseMessage  = getOptS obj 14 decodeDNSMessage
         }
   where
     obj = decode bs
@@ -101,18 +105,19 @@ socketProtocol 7 = "DOQ"
 socketProtocol _ = "UNKNOWN"
 
 messageType' :: Int -> String
-messageType' 1 = "AUTH_QUERY"
-messageType' 2 = "AUTH_RESPONSE"
-messageType' 3 = "RESOLVER_QUERY"
-messageType' 4 = "RESOLVER_RESPONSE"
-messageType' 5 = "CLIENT_QUERY"
-messageType' 6 = "CLIENT_RESPONSE"
-messageType' 7 = "FORWARDER_QUERY"
-messageType' 8 = "FORWARDER_RESPONSE"
-messageType' 9 = "STUB_QUERY"
+messageType'  1 = "AUTH_QUERY"
+messageType'  2 = "AUTH_RESPONSE"
+messageType'  3 = "RESOLVER_QUERY"
+messageType'  4 = "RESOLVER_RESPONSE"
+messageType'  5 = "CLIENT_QUERY"
+messageType'  6 = "CLIENT_RESPONSE"
+messageType'  7 = "FORWARDER_QUERY"
+messageType'  8 = "FORWARDER_RESPONSE"
+messageType'  9 = "STUB_QUERY"
 messageType' 10 = "STUB_RESPONSE"
 messageType' 11 = "TOOL_QUERY"
 messageType' 12 = "TOOL_RESPONSE"
 messageType' 13 = "UPDATE_QUERY"
 messageType' 14 = "UPDATE_RESPONSE"
-messageType' _ = "UNKNOWN"
+messageType' _  = "UNKNOWN"
+{- FOURMOLU_ENABLE -}

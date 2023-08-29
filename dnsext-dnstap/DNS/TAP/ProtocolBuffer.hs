@@ -5,12 +5,14 @@
 --
 -- Spec: https://protobuf.dev/programming-guides/encoding/
 module DNS.TAP.ProtocolBuffer (
+    -- * Types
     Object,
+    -- * Decoding
     decode,
     getI,
-    getIm,
+    getOptI,
     getS,
-    getSm,
+    getOptS,
 ) where
 
 import Data.Bits
@@ -27,29 +29,34 @@ data Value
     | VSTR ByteString
     deriving (Eq, Show)
 
+-- | Object type for protocol buffer
 newtype Object = Object (IntMap Value) deriving (Eq, Show)
 
-getIm :: Object -> Int -> (Int -> a) -> Maybe a
-getIm (Object m) k f = case IM.lookup k m of
+-- | Getting a optional integer field.
+getOptI :: Object -> Int -> (Int -> a) -> Maybe a
+getOptI (Object m) k f = case IM.lookup k m of
     Just (VINT i) -> Just (f i)
-    Just _ -> error "getIm"
+    Just _ -> error "getOptI"
     _ -> Nothing
 
+-- | Getting a required integer field.
 getI :: Object -> Int -> (Int -> a) -> a
 getI (Object m) k f = case IM.lookup k m of
     Just (VINT i) -> f i
-    _ -> error "getIm"
+    _ -> error "getOptI"
 
-getSm :: Object -> Int -> (ByteString -> a) -> Maybe a
-getSm (Object m) k f = case IM.lookup k m of
+-- | Getting a optional string field.
+getOptS :: Object -> Int -> (ByteString -> a) -> Maybe a
+getOptS (Object m) k f = case IM.lookup k m of
     Just (VSTR s) -> Just (f s)
-    Just _ -> error "getIm"
+    Just _ -> error "getOptI"
     _ -> Nothing
 
+-- | Getting a required string field.
 getS :: Object -> Int -> (ByteString -> a) -> a
 getS (Object m) k f = case IM.lookup k m of
     Just (VSTR s) -> f s
-    _ -> error "getIm"
+    _ -> error "getOptI"
 
 ----------------------------------------------------------------
 
@@ -80,6 +87,7 @@ tag rbuf = do
         num = n `shiftR` 3
     return (num, WireType wtyp)
 
+-- | Decoding
 decode :: ByteString -> Object
 decode bs = unsafeDupablePerformIO $
     withReadBuffer bs $
