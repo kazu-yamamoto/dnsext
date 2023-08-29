@@ -13,11 +13,11 @@ module DNS.TAP.ProtocolBuffer (
     getSm,
 ) where
 
-import System.IO.Unsafe (unsafeDupablePerformIO)
 import Data.Bits
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Network.ByteOrder
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 ----------------------------------------------------------------
 
@@ -82,7 +82,8 @@ tag rbuf = do
 
 decode :: ByteString -> Object
 decode bs = unsafeDupablePerformIO $
-    withReadBuffer bs $ \rbuf -> Object <$> loop rbuf IM.empty
+    withReadBuffer bs $
+        \rbuf -> Object <$> loop rbuf IM.empty
   where
     loop rbuf m0 = do
         (field, wt) <- tag rbuf
@@ -130,4 +131,13 @@ i64 rbuf = do
     n5 <- fromIntegral <$> read8 rbuf
     n6 <- fromIntegral <$> read8 rbuf
     n7 <- fromIntegral <$> read8 rbuf
-    return ((n7 `shiftL` 56) .|. (n6 `shiftL` 48) .|. (n5 `shiftL` 40) .|. (n4 `shiftL` 32) .|. (n3 `shiftL` 24) .|. (n2 `shiftL` 16) .|. (n1 `shiftL` 8) .|. n0)
+    return
+        ( (n7 `shiftL` 56)
+            .|. (n6 `shiftL` 48)
+            .|. (n5 `shiftL` 40)
+            .|. (n4 `shiftL` 32)
+            .|. (n3 `shiftL` 24)
+            .|. (n2 `shiftL` 16)
+            .|. (n1 `shiftL` 8)
+            .|. n0
+        )

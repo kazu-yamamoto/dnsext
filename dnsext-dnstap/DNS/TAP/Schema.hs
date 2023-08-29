@@ -22,12 +22,13 @@ data DNSTAP = DNSTAP
     deriving (Eq, Show)
 
 dnstap :: ByteString -> DNSTAP
-dnstap bs = DNSTAP
-            { dnstapIdentity = getSm obj 1 id
-            , dnstapVresion = getSm obj 2 id
-            , dnstapMessage = message (getS obj 14 id)
-            , dnstapType = getI obj 15 dnstapType'
-            }
+dnstap bs =
+    DNSTAP
+        { dnstapIdentity = getSm obj 1 id
+        , dnstapVresion = getSm obj 2 id
+        , dnstapMessage = message (getS obj 14 id)
+        , dnstapType = getI obj 15 dnstapType'
+        }
   where
     obj = decode bs
 
@@ -50,22 +51,23 @@ data Message = Message
     deriving (Eq, Show)
 
 message :: ByteString -> Message
-message bs = Message
-            { messageType = getI obj 1 messageType'
-            , messageSocketFamily = getIm obj 2 socketFamily
-            , messageSocketProtocol = getIm obj 3 socketProtocol
-            , messageQueryAddress = getSm obj 4 id
-            , messageResponseAddress = getSm obj 5 id
-            , messageQueryPort = getIm obj 6 id
-            , messageResponsePort = getIm obj 7 id
-            , messageQueryTimeSec = getIm obj 8 id
-            , messageQueryTimeNsec = getIm obj 9 id
-            , messageQueryMessage = getSm obj 10 decodeDNSMessage
-            , messageQueryZone = getSm obj 11 id
-            , messageResponseTimeSec = getIm obj 12 id
-            , messageResponseTimeNsec = getIm obj 13 id
-            , messageResponseMessage = getSm obj 14 decodeDNSMessage
-            }
+message bs =
+    Message
+        { messageType = getI obj 1 messageType'
+        , messageSocketFamily = getIm obj 2 socketFamily
+        , messageSocketProtocol = getIm obj 3 socketProtocol
+        , messageQueryAddress = getSm obj 4 id
+        , messageResponseAddress = getSm obj 5 id
+        , messageQueryPort = getIm obj 6 id
+        , messageResponsePort = getIm obj 7 id
+        , messageQueryTimeSec = getIm obj 8 id
+        , messageQueryTimeNsec = getIm obj 9 id
+        , messageQueryMessage = getSm obj 10 decodeDNSMessage
+        , messageQueryZone = getSm obj 11 id
+        , messageResponseTimeSec = getIm obj 12 id
+        , messageResponseTimeNsec = getIm obj 13 id
+        , messageResponseMessage = getSm obj 14 decodeDNSMessage
+        }
   where
     obj = decode bs
 
