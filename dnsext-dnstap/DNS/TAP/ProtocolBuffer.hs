@@ -13,6 +13,9 @@ module DNS.TAP.ProtocolBuffer (
     getOptI,
     getS,
     getOptS,
+    -- * Encoding
+    setI,
+    setS,
 ) where
 
 import Data.Bits
@@ -31,32 +34,6 @@ data Value
 
 -- | Object type for protocol buffer
 newtype Object = Object (IntMap Value) deriving (Eq, Show)
-
--- | Getting a optional integer field.
-getOptI :: Object -> Int -> (Int -> a) -> Maybe a
-getOptI (Object m) k f = case IM.lookup k m of
-    Just (VINT i) -> Just (f i)
-    Just _ -> error "getOptI"
-    _ -> Nothing
-
--- | Getting a required integer field.
-getI :: Object -> Int -> (Int -> a) -> a
-getI (Object m) k f = case IM.lookup k m of
-    Just (VINT i) -> f i
-    _ -> error "getOptI"
-
--- | Getting a optional string field.
-getOptS :: Object -> Int -> (ByteString -> a) -> Maybe a
-getOptS (Object m) k f = case IM.lookup k m of
-    Just (VSTR s) -> Just (f s)
-    Just _ -> error "getOptS"
-    _ -> Nothing
-
--- | Getting a required string field.
-getS :: Object -> Int -> (ByteString -> a) -> a
-getS (Object m) k f = case IM.lookup k m of
-    Just (VSTR s) -> f s
-    _ -> error "getS"
 
 ----------------------------------------------------------------
 
@@ -78,6 +55,46 @@ instance Show WireType where
     show (WireType 5) = "I32"
     show (WireType x) = "WireType " ++ show x
 
+----------------------------------------------------------------
+
+-- | Getting a required integer field.
+getI :: Object -> Int -> (Int -> a) -> a
+getI (Object m) k f = case IM.lookup k m of
+    Just (VINT i) -> f i
+    _ -> error "getOptI"
+
+-- | Getting a optional integer field.
+getOptI :: Object -> Int -> (Int -> a) -> Maybe a
+getOptI (Object m) k f = case IM.lookup k m of
+    Just (VINT i) -> Just (f i)
+    Just _ -> error "getOptI"
+    _ -> Nothing
+
+-- | Getting a required string field.
+getS :: Object -> Int -> (ByteString -> a) -> a
+getS (Object m) k f = case IM.lookup k m of
+    Just (VSTR s) -> f s
+    _ -> error "getS"
+
+-- | Getting a optional string field.
+getOptS :: Object -> Int -> (ByteString -> a) -> Maybe a
+getOptS (Object m) k f = case IM.lookup k m of
+    Just (VSTR s) -> Just (f s)
+    Just _ -> error "getOptS"
+    _ -> Nothing
+
+----------------------------------------------------------------
+
+-- | Setting an integer field.
+setI :: Object -> Int -> Int -> Object
+setI (Object m) k i = Object $ IM.insert k (VINT i) m
+
+-- | Setting a string field.
+setS :: Object -> Int -> ByteString -> Object
+setS (Object m) k s = Object $ IM.insert k (VSTR s) m
+
+----------------------------------------------------------------
+-- Decoding
 ----------------------------------------------------------------
 
 tag :: Readable p => p -> IO (Int, WireType)
