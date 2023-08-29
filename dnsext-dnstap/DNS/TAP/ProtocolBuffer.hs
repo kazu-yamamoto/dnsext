@@ -49,14 +49,14 @@ getI (Object m) k f = case IM.lookup k m of
 getOptS :: Object -> Int -> (ByteString -> a) -> Maybe a
 getOptS (Object m) k f = case IM.lookup k m of
     Just (VSTR s) -> Just (f s)
-    Just _ -> error "getOptI"
+    Just _ -> error "getOptS"
     _ -> Nothing
 
 -- | Getting a required string field.
 getS :: Object -> Int -> (ByteString -> a) -> a
 getS (Object m) k f = case IM.lookup k m of
     Just (VSTR s) -> f s
-    _ -> error "getOptI"
+    _ -> error "getS"
 
 ----------------------------------------------------------------
 

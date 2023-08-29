@@ -6,11 +6,11 @@ module DNS.TAP.Schema (
     DNSTAP (..),
     Message (..),
     -- * Decoding
-    dnstap,
-    message,
+    decodeDnstap,
+    decodeMessage,
 ) where
 
-import DNS.Types (DNSMessage)
+import DNS.Types (DNSMessage, DNSError)
 import qualified DNS.Types.Decode as DNS
 import Network.ByteOrder
 
@@ -20,17 +20,17 @@ import DNS.TAP.ProtocolBuffer
 data DNSTAP = DNSTAP
     { dnstapIdentity :: Maybe ByteString
     , dnstapVresion  :: Maybe ByteString
-    , dnstapMessage  :: Message
+    , dnstapMessage  :: Maybe Message
     , dnstapType     :: String
     }
     deriving (Eq, Show)
 
-dnstap :: ByteString -> DNSTAP
-dnstap bs =
+decodeDnstap :: ByteString -> DNSTAP
+decodeDnstap bs =
     DNSTAP
         { dnstapIdentity = getOptS obj 1 id
         , dnstapVresion  = getOptS obj 2 id
-        , dnstapMessage  = message $ getS obj 14 id
+        , dnstapMessage  = decodeMessage <$> getOptS obj 14 id
         , dnstapType     = getI obj 15 dnstapType'
         }
   where
@@ -46,16 +46,16 @@ data Message = Message
     , messageResponsePort     :: Maybe Int
     , messageQueryTimeSec     :: Maybe Int
     , messageQueryTimeNsec    :: Maybe Int
-    , messageQueryMessage     :: Maybe DNSMessage
+    , messageQueryMessage     :: Maybe (Either DNSError DNSMessage)
     , messageQueryZone        :: Maybe ByteString
     , messageResponseTimeSec  :: Maybe Int
     , messageResponseTimeNsec :: Maybe Int
-    , messageResponseMessage  :: Maybe DNSMessage
+    , messageResponseMessage  :: Maybe (Either DNSError DNSMessage)
     }
     deriving (Eq, Show)
 
-message :: ByteString -> Message
-message bs =
+decodeMessage :: ByteString -> Message
+decodeMessage bs =
     Message
         { messageType             = getI    obj  1 messageType'
         , messageSocketFamily     = getOptI obj  2 socketFamily
@@ -66,21 +66,14 @@ message bs =
         , messageResponsePort     = getOptI obj  7 id
         , messageQueryTimeSec     = getOptI obj  8 id
         , messageQueryTimeNsec    = getOptI obj  9 id
-        , messageQueryMessage     = getOptS obj 10 decodeDNSMessage
+        , messageQueryMessage     = getOptS obj 10 DNS.decode
         , messageQueryZone        = getOptS obj 11 id
         , messageResponseTimeSec  = getOptI obj 12 id
         , messageResponseTimeNsec = getOptI obj 13 id
-        , messageResponseMessage  = getOptS obj 14 decodeDNSMessage
+        , messageResponseMessage  = getOptS obj 14 DNS.decode
         }
   where
     obj = decode bs
-
-----------------------------------------------------------------
-
-decodeDNSMessage :: ByteString -> DNSMessage
-decodeDNSMessage bs = case DNS.decode bs of
-    Right x -> x
-    Left e -> error (show e)
 
 ----------------------------------------------------------------
 -- enum
