@@ -31,6 +31,9 @@ import DNS.Types.Internal (section)
 import Network.Socket (HostName, PortNumber)
 import Prelude hiding (lookup)
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+
 ----------------------------------------------------------------
 
 -- | Look up resource records of a specified type for a domain,

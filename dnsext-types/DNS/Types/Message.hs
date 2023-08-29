@@ -13,9 +13,6 @@ import DNS.Types.RData
 import DNS.Types.Seconds
 import DNS.Types.Type
 
--- $setup
--- >>> import DNS.Types
-
 ----------------------------------------------------------------
 
 -- | Data type representing the optional EDNS pseudo-header of a 'DNSMessage'
