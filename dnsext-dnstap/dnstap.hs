@@ -6,6 +6,7 @@ module Main where
 import Control.Concurrent
 import Control.Monad
 import Network.Socket
+import Text.Pretty.Simple
 
 import DNS.TAP.FastStream
 import DNS.TAP.Schema
@@ -22,4 +23,4 @@ main = do
     loop lsock = forever $ do
         (sock, _) <- accept lsock
         ctx <- newReaderContext sock $ Config True True
-        void $ forkIO $ reader ctx (print . dnstap)
+        void $ forkIO $ reader ctx (pPrint . decodeDnstap)
