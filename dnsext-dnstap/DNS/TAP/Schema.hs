@@ -1,10 +1,16 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 -- | DNSTAP Schema.
 --
 -- * Spec: https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
 module DNS.TAP.Schema (
     -- * Types
     DNSTAP (..),
+    DnstapType(MESSAGE),
     Message (..),
+    SocketFamily(IPv4,IPv6),
+    SocketProtocol(UDP,TCP,DOT,DOH,DNSCryptUDP,DNSCryptTCP,DOQ),
+    MessageType (AUTH_QUERY,AUTH_RESPONSE,RESOLVER_QUERY,RESOLVER_RESPONSE,CLIENT_QUERY,CLIENT_RESPONSE,FORWARDER_QUERY,FORWARDER_RESPONSE,STUB_QUERY,STUB_RESPONSE,TOOL_QUERY,TOOL_RESPONSE,UPDATE_QUERY,UPDATE_RESPONSE),
     -- * Decoding
     decodeDnstap,
     decodeMessage,
@@ -13,7 +19,7 @@ module DNS.TAP.Schema (
 import DNS.Types (DNSMessage, DNSError)
 import qualified DNS.Types.Decode as DNS
 import qualified Data.ByteString as BS
-import Data.IP
+import qualified Data.IP as IP
 import Network.ByteOrder
 
 import DNS.TAP.ProtocolBuffer
@@ -23,7 +29,7 @@ data DNSTAP = DNSTAP
     { dnstapIdentity :: Maybe ByteString
     , dnstapVresion  :: Maybe ByteString
     , dnstapMessage  :: Maybe Message
-    , dnstapType     :: String
+    , dnstapType     :: DnstapType
     }
     deriving (Eq, Show)
 
@@ -33,17 +39,17 @@ decodeDnstap bs =
         { dnstapIdentity = getOptS obj 1 id
         , dnstapVresion  = getOptS obj 2 id
         , dnstapMessage  = decodeMessage <$> getOptS obj 14 id
-        , dnstapType     = getI obj 15 dnstapType'
+        , dnstapType     = getI obj 15 DnstapType
         }
   where
     obj = decode bs
 
 data Message = Message
-    { messageType             :: String
-    , messageSocketFamily     :: Maybe String
-    , messageSocketProtocol   :: Maybe String
-    , messageQueryAddress     :: Maybe IP
-    , messageResponseAddress  :: Maybe IP
+    { messageType             :: MessageType
+    , messageSocketFamily     :: Maybe SocketFamily
+    , messageSocketProtocol   :: Maybe SocketProtocol
+    , messageQueryAddress     :: Maybe IP.IP
+    , messageResponseAddress  :: Maybe IP.IP
     , messageQueryPort        :: Maybe Int
     , messageResponsePort     :: Maybe Int
     , messageQueryTimeSec     :: Maybe Int
@@ -59,9 +65,9 @@ data Message = Message
 decodeMessage :: ByteString -> Message
 decodeMessage bs =
     Message
-        { messageType             = getI    obj  1 messageType'
-        , messageSocketFamily     = getOptI obj  2 socketFamily
-        , messageSocketProtocol   = getOptI obj  3 socketProtocol
+        { messageType             = getI    obj  1 MessageType
+        , messageSocketFamily     = getOptI obj  2 SocketFamily
+        , messageSocketProtocol   = getOptI obj  3 SocketProtocol
         , messageQueryAddress     = getOptS obj  4 ip
         , messageResponseAddress  = getOptS obj  5 ip
         , messageQueryPort        = getOptI obj  6 id
@@ -78,46 +84,111 @@ decodeMessage bs =
     obj = decode bs
 
 ----------------------------------------------------------------
--- enum
 
-dnstapType' :: Int -> String
-dnstapType' 1 = "MESSAGE"
-dnstapType' _ = "UNKNOWN"
+newtype DnstapType = DnstapType Int deriving Eq
 
-socketFamily :: Int -> String
-socketFamily 1 = "IPv4"
-socketFamily 2 = "IPv6"
-socketFamily _ = "UNKNOWN"
+pattern MESSAGE :: DnstapType
+pattern MESSAGE  = DnstapType 1
 
-socketProtocol :: Int -> String
-socketProtocol 1 = "UDP"
-socketProtocol 2 = "TCP"
-socketProtocol 3 = "DOT"
-socketProtocol 4 = "DOH"
-socketProtocol 5 = "DNSCryptUDP"
-socketProtocol 6 = "DNSCryptTCP"
-socketProtocol 7 = "DOQ"
-socketProtocol _ = "UNKNOWN"
+instance Show DnstapType where
+    show MESSAGE        = "MESSAGE"
+    show (DnstapType x) = "DnstapType " ++ show x
 
-messageType' :: Int -> String
-messageType'  1 = "AUTH_QUERY"
-messageType'  2 = "AUTH_RESPONSE"
-messageType'  3 = "RESOLVER_QUERY"
-messageType'  4 = "RESOLVER_RESPONSE"
-messageType'  5 = "CLIENT_QUERY"
-messageType'  6 = "CLIENT_RESPONSE"
-messageType'  7 = "FORWARDER_QUERY"
-messageType'  8 = "FORWARDER_RESPONSE"
-messageType'  9 = "STUB_QUERY"
-messageType' 10 = "STUB_RESPONSE"
-messageType' 11 = "TOOL_QUERY"
-messageType' 12 = "TOOL_RESPONSE"
-messageType' 13 = "UPDATE_QUERY"
-messageType' 14 = "UPDATE_RESPONSE"
-messageType' _  = "UNKNOWN"
+----------------------------------------------------------------
 
-ip :: ByteString -> IP
+newtype SocketFamily = SocketFamily Int deriving Eq
+
+pattern IPv4 :: SocketFamily
+pattern IPv4  = SocketFamily 1
+pattern IPv6 :: SocketFamily
+pattern IPv6  = SocketFamily 2
+
+instance Show SocketFamily where
+    show IPv4 = "IPv4"
+    show IPv6 = "IPv6"
+    show (SocketFamily x) = "SocketFamily " ++ show x
+
+----------------------------------------------------------------
+
+newtype SocketProtocol = SocketProtocol Int deriving Eq
+
+pattern UDP         :: SocketProtocol
+pattern UDP          = SocketProtocol 1
+pattern TCP         :: SocketProtocol
+pattern TCP          = SocketProtocol 2
+pattern DOT         :: SocketProtocol
+pattern DOT          = SocketProtocol 3
+pattern DOH         :: SocketProtocol
+pattern DOH          = SocketProtocol 4
+pattern DNSCryptUDP :: SocketProtocol
+pattern DNSCryptUDP  = SocketProtocol 5
+pattern DNSCryptTCP :: SocketProtocol
+pattern DNSCryptTCP  = SocketProtocol 6
+pattern DOQ         :: SocketProtocol
+pattern DOQ          = SocketProtocol 7
+
+instance Show SocketProtocol where
+    show UDP                = "UDP"
+    show TCP                = "TCP"
+    show DOT                = "DOT"
+    show DOH                = "DOH"
+    show DNSCryptUDP        = "DNSCryptUDP"
+    show DNSCryptTCP        = "DNSCryptTCP"
+    show DOQ                = "DOQ"
+    show (SocketProtocol x) = "SocketProtocol " ++ show x
+
+----------------------------------------------------------------
+
+newtype MessageType = MessageType Int deriving Eq
+
+pattern AUTH_QUERY         :: MessageType
+pattern AUTH_QUERY          = MessageType  1
+pattern AUTH_RESPONSE      :: MessageType
+pattern AUTH_RESPONSE       = MessageType  2
+pattern RESOLVER_QUERY     :: MessageType
+pattern RESOLVER_QUERY      = MessageType  3
+pattern RESOLVER_RESPONSE  :: MessageType
+pattern RESOLVER_RESPONSE   = MessageType  4
+pattern CLIENT_QUERY       :: MessageType
+pattern CLIENT_QUERY        = MessageType  5
+pattern CLIENT_RESPONSE    :: MessageType
+pattern CLIENT_RESPONSE     = MessageType  6
+pattern FORWARDER_QUERY    :: MessageType
+pattern FORWARDER_QUERY     = MessageType  7
+pattern FORWARDER_RESPONSE :: MessageType
+pattern FORWARDER_RESPONSE  = MessageType  8
+pattern STUB_QUERY         :: MessageType
+pattern STUB_QUERY          = MessageType  9
+pattern STUB_RESPONSE      :: MessageType
+pattern STUB_RESPONSE       = MessageType 10
+pattern TOOL_QUERY         :: MessageType
+pattern TOOL_QUERY          = MessageType 11
+pattern TOOL_RESPONSE      :: MessageType
+pattern TOOL_RESPONSE       = MessageType 12
+pattern UPDATE_QUERY       :: MessageType
+pattern UPDATE_QUERY        = MessageType 13
+pattern UPDATE_RESPONSE    :: MessageType
+pattern UPDATE_RESPONSE     = MessageType 14
+
+instance Show MessageType where
+    show AUTH_QUERY         = "AUTH_QUERY"
+    show AUTH_RESPONSE      = "AUTH_RESPONSE"
+    show RESOLVER_QUERY     = "RESOLVER_QUERY"
+    show RESOLVER_RESPONSE  = "RESOLVER_RESPONSE"
+    show CLIENT_QUERY       = "CLIENT_QUERY"
+    show CLIENT_RESPONSE    = "CLIENT_RESPONSE"
+    show FORWARDER_QUERY    = "FORWARDER_QUERY"
+    show FORWARDER_RESPONSE = "FORWARDER_RESPONSE"
+    show STUB_QUERY         = "STUB_QUERY"
+    show STUB_RESPONSE      = "STUB_RESPONSE"
+    show TOOL_QUERY         = "TOOL_QUERY"
+    show TOOL_RESPONSE      = "TOOL_RESPONSE"
+    show UPDATE_QUERY       = "UPDATE_QUERY"
+    show UPDATE_RESPONSE    = "UPDATE_RESPONSE"
+    show (MessageType  x)   = "MessageType " ++ show x
+
+ip :: ByteString -> IP.IP
 ip bs
-  | BS.length bs == 4 = IPv4 $ toIPv4  $ map fromIntegral $ BS.unpack bs
-  | otherwise         = IPv6 $ toIPv6b $ map fromIntegral $ BS.unpack bs
+  | BS.length bs == 4 = IP.IPv4 $ IP.toIPv4  $ map fromIntegral $ BS.unpack bs
+  | otherwise         = IP.IPv6 $ IP.toIPv6b $ map fromIntegral $ BS.unpack bs
 {- FOURMOLU_ENABLE -}
