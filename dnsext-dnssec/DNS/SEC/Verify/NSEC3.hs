@@ -31,7 +31,7 @@ getResult n3logic mayZone n3s qname qtype = do
     maybe (Right ()) guardZone mayZone
     let subs = zoneSubDomains qname zone
     when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
-    let noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
+    let noEncloser = Left $ unlines $ "NSEC3.getResult: no NSEC3 encloser:" : ["  " ++ show o ++ " " ++ show rd | ((o, rd), _) <- n3s]
     fromMaybe noEncloser $ n3logic refine qtype $ map refine subs
 
 ---

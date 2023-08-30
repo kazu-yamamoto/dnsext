@@ -18,7 +18,7 @@ getResult nlogic zone ranges qname qtype = do
     refine <- nsecRefineWithRanges ranges
     let qnames = refine qname
         coverwild = refine (fromString "*" <> zone)
-        noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
+        noEncloser = Left $ unlines $ "NSEC.getResult: no NSEC encloser:" : ["  " ++ show o ++ " " ++ show rd | (o, rd) <- ranges]
     fromMaybe noEncloser $ nlogic (Zone zone) qtype qnames coverwild
 
 newtype Zone = Zone Domain
