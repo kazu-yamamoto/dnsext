@@ -225,9 +225,13 @@ cacheNoDelegation d zone dnskeys dom msg
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = lift $ cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg []
+    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg =<< witnessNameErr
     ncCNAME = cacheNoDataNS
+    {- not always possible to obtain NoData witness for NS
+       * no NSEC/NSEC3 records - ex. A record exists
+       * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
     cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
+    (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
 {- FOURMOLU_DISABLE -}
