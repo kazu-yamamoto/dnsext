@@ -335,20 +335,20 @@ detectNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.detect qtype) zone r
 
 ---
 
-detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
-detectNSEC = NSEC.getResult NSEC.detect
-
-nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NameError
+nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_NameError
 nameErrorNSEC = NSEC.getResult NSEC.get_nameError
 
 noDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NoData
-noDataNSEC = NSEC.getResult NSEC.get_noData
+noDataNSEC zone ranges qname qtype = NSEC.getResult (NSEC.get_noData qtype) zone ranges qname
 
-unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_UnsignedDelegation
-unsignedDelegationNSEC = NSEC.getResult NSEC.get_unsignedDelegation
+unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_UnsignedDelegation
+unsignedDelegationNSEC zone = NSEC.getResult (NSEC.get_unsignedDelegation zone) zone
 
-wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardExpansion
+wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_WildcardExpansion
 wildcardExpansionNSEC = NSEC.getResult NSEC.get_wildcardExpansion
 
 wildcardNoDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardNoData
-wildcardNoDataNSEC = NSEC.getResult NSEC.get_wildcardNoData
+wildcardNoDataNSEC zone ranges qname qtype = NSEC.getResult (NSEC.get_wildcardNoData qtype) zone ranges qname
+
+detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+detectNSEC zone ranges qname qtype = NSEC.getResult (NSEC.detect zone qtype) zone ranges qname
