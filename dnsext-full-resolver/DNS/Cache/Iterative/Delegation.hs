@@ -22,6 +22,7 @@ import DNS.Do53.Memo (
 import qualified DNS.Log as Log
 import DNS.SEC
 import DNS.Types
+import qualified DNS.SEC.Verify as SEC
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types
@@ -102,16 +103,17 @@ nsDomain (DEonlyNS dom) = dom
 
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
-delegationWithCache zoneDom dnskeys dom msg = do
+delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
     maybe (notFound $> noDelegation) (fmap hasDelegation . found) $ findDelegation nsps adds
   where
     found k = Verify.with dnskeys rankedAuthority msg dom DS fromDS (nullDS k) (ncDS k) (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
-    nullDS k = lift $ do
-        vrfyLog (Just Yellow) "delegation - no DS, so no verify"
-        caches $> k []
+    nullDS k = do
+        unsignedDelegationOrNoData $> ()
+        lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        lift $ caches $> k []
     ncDS _ = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
         | rrsetValid dsRRset = lift $ do
@@ -125,7 +127,7 @@ delegationWithCache zoneDom dnskeys dom msg = do
 
     notFound = lift $ vrfyLog Nothing "no delegation"
     vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
-    domTraceMsg = show zoneDom ++ " -> " ++ show dom
+    domTraceMsg = show zone ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
         let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
@@ -135,3 +137,53 @@ delegationWithCache zoneDom dnskeys dom msg = do
       where
         match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
         nsSet = Set.fromList $ map fst nsps
+
+    unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
+
+{- FOURMOLU_DISABLE -}
+unsignedDelegationOrNoDataAction
+    :: Domain -> [RD_DNSKEY]
+    -> Domain -> TYPE -> DNSMessage
+    -> DNSQuery [RRset]
+unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift nsec
+  where
+    nsec  = Verify.nsecWithValid   dnskeys rankedAuthority msg nullNSEC invalidK nsecK
+    nullNSEC = nsec3
+    nsecK  ranges rrsets doCache =
+        Verify.runHandlers "cannot handle NSEC UnsignedDelegation/NoDatas:"  noWitnessK $
+        handle unsignedDelegation resultK .
+        handle wildcardNoData     resultK .
+        handle noData             resultK
+      where
+        handle = Verify.mkHandler ranges rrsets doCache
+        unsignedDelegation rs  = SEC.unsignedDelegationNSEC   zone rs qname_
+        wildcardNoData     rs  = SEC.wildcardNoDataNSEC       zone rs qname_ qtype_
+        noData             rs  = SEC.noDataNSEC               zone rs qname_ qtype_
+
+    nsec3 = Verify.nsec3WithValid  dnskeys rankedAuthority msg nullK    invalidK nsec3K
+    nsec3K ranges rrsets doCache =
+        Verify.runHandlers "cannot handle NSEC3 UnsignedDelegation/NoDatas:" noWitnessK $
+        handle unsignedDelegation resultK .
+        handle wildcardNoData     resultK .
+        handle noData             resultK
+      where
+        handle = Verify.mkHandler ranges rrsets doCache
+        unsignedDelegation rs  = SEC.unsignedDelegationNSEC3  zone rs qname_
+        wildcardNoData     rs  = SEC.wildcardNoDataNSEC3      zone rs qname_ qtype_
+        noData             rs  = SEC.noDataNSEC3              zone rs qname_ qtype_
+
+    nullK = pure $ noverify "no NSEC/NSEC3 records" $> []
+    invalidK s = failed $ "invalid NSEC/NSEC3: " ++ traceInfo ++ " : " ++ s
+    noWitnessK s = pure $ noverify ("nsec witness not found: " ++ traceInfo ++ " : " ++ s) $> []
+    resultK w rrsets _ = pure $ success w $> rrsets
+
+    success w = putLog (Just Green) $ "nsec verification success - " ++ witnessInfo w
+    noverify s = putLog (Just Yellow) $ "nsec no verification - " ++ s
+    failed s = pure $ (putLog (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+
+    putLog color s = lift $ clogLn Log.DEMO color s
+
+    witnessInfo w = SEC.witnessName w ++ ": " ++ SEC.witnessDelegation w traceInfo qinfo
+    traceInfo = show zone ++ " -> " ++ show qname_
+    qinfo = show qname_ ++ " " ++ show qtype_
+{- FOURMOLU_ENABLE -}
