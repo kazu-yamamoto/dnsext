@@ -18,6 +18,7 @@ module DNS.TAP.Schema (
     decodeMessage,
     -- * Encoding
     encodeDnstap,
+    encodeMessage,
 ) where
 
 import DNS.Types (DNSMessage, DNSError)
