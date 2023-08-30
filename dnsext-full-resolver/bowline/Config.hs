@@ -48,6 +48,7 @@ data Config = Config
     , cnf_monitor_port :: Int
     , cnf_addrs :: [String]
     , cnf_monitor_stdio :: Bool
+    , cnf_dnstap_socket_path :: FilePath
     }
     deriving (Show)
 
@@ -84,6 +85,7 @@ defaultConfig =
         , cnf_monitor_port = 10023
         , cnf_addrs = []
         , cnf_monitor_stdio = False
+        , cnf_dnstap_socket_path = "/tmp/bowline.sock"
         }
 
 ----------------------------------------------------------------
@@ -151,6 +153,7 @@ makeConfig def conf =
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_addrs = get "addrs" cnf_addrs
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
+        , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
         }
   where
     get k func = maybe (func def) fromConf $ lookup k conf

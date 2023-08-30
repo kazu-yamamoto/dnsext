@@ -12,7 +12,7 @@ import System.Environment (getArgs)
 
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
-import DNS.TAP.FastStream (newReaderContext, Config(..), reader)
+import DNS.TAP.FastStream (Config(..), reader)
 import DNS.TAP.Schema (decodeDnstap)
 import DNS.Types (runInitIO)
 
@@ -31,5 +31,5 @@ main = do
   where
     loop lsock = forever $ do
         (sock, _) <- accept lsock
-        ctx <- newReaderContext sock $ Config True True
-        void $ forkIO $ reader ctx (pPrint . decodeDnstap)
+        let conf = Config True True
+        void $ forkIO $ reader sock conf (pPrint . decodeDnstap)

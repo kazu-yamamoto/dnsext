@@ -93,6 +93,7 @@ executable bowline
         base,
         bytestring,
         dnsext-dnssec,
+        dnsext-dnstap,
         dnsext-do53,
         dnsext-full-resolver,
         dnsext-log,

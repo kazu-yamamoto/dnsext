@@ -8,8 +8,10 @@
 module DNS.TAP.Schema (
     -- * Types
     DNSTAP (..),
+    defaultDNSTAP,
     DnstapType(MESSAGE),
     Message (..),
+    defaultMessage,
     SocketFamily(IPv4,IPv6),
     SocketProtocol(UDP,TCP,DOT,DOH,DNSCryptUDP,DNSCryptTCP,DOQ),
     MessageType (AUTH_QUERY,AUTH_RESPONSE,RESOLVER_QUERY,RESOLVER_RESPONSE,CLIENT_QUERY,CLIENT_RESPONSE,FORWARDER_QUERY,FORWARDER_RESPONSE,STUB_QUERY,STUB_RESPONSE,TOOL_QUERY,TOOL_RESPONSE,UPDATE_QUERY,UPDATE_RESPONSE),
@@ -39,6 +41,15 @@ data DNSTAP = DNSTAP
     }
     deriving (Eq, Show)
 
+defaultDNSTAP :: DNSTAP
+defaultDNSTAP =
+    DNSTAP
+        { dnstapIdentity = Nothing
+        , dnstapVersion  = Nothing
+        , dnstapMessage  = Nothing
+        , dnstapType     = MESSAGE
+        }
+
 decodeDnstap :: ByteString -> DNSTAP
 decodeDnstap bs =
     DNSTAP
@@ -67,6 +78,25 @@ data Message = Message
     , messageResponseMessage  :: Maybe (Either (DNSError,ByteString) DNSMessage)
     }
     deriving (Eq, Show)
+
+defaultMessage :: Message
+defaultMessage =
+    Message
+    { messageType             = CLIENT_RESPONSE
+    , messageSocketFamily     = Nothing
+    , messageSocketProtocol   = Nothing
+    , messageQueryAddress     = Nothing
+    , messageResponseAddress  = Nothing
+    , messageQueryPort        = Nothing
+    , messageResponsePort     = Nothing
+    , messageQueryTimeSec     = Nothing
+    , messageQueryTimeNsec    = Nothing
+    , messageQueryMessage     = Nothing
+    , messageQueryZone        = Nothing
+    , messageResponseTimeSec  = Nothing
+    , messageResponseTimeNsec = Nothing
+    , messageResponseMessage  = Nothing
+    }
 
 decodeMessage :: ByteString -> Message
 decodeMessage bs =
