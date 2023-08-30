@@ -42,15 +42,14 @@ detect getPropSet qtype props =
     {- `stepNE` detects UnsignedDelegation case.
         Run this loop before `getNoData` to apply delegation
         for both UnsignedDelegation and NoData properties -}
-    msum (map stepNE pps)                                                            <|>
+    n3GetNonExistence (\_ _ ps -> stepNE ps)                getPropSet qtype props   <|>
     fmap N3R_NoData             <$> get_noData              getPropSet qtype props   <|>
     fmap N3R_WildcardExpansion  <$> get_wildcardExpansion   getPropSet qtype props
   where
     stepNE ps =
-        fmap N3R_NameError           <$> step_nameError getPropSet ps             <|>
+        fmap N3R_NameError           <$> step_nameError      getPropSet       ps  <|>
         fmap N3R_WildcardNoData      <$> step_wildcardNoData getPropSet qtype ps  <|>
-        fmap N3R_UnsignedDelegation  <$> step_unsignedDelegation ps
-    pps = zip props (tail props)  {- reuse computed range-props for closest-name and next-closer-name -}
+        fmap N3R_UnsignedDelegation  <$> step_unsignedDelegation              ps
 {- FOURMOLU_ENABLE -}
 
 ---
@@ -59,11 +58,7 @@ detect getPropSet qtype props =
    to recognize non-existence of domain or non-existence of RRset -}
 
 get_nameError :: Logic NSEC3_NameError
-get_nameError getPropSet _qtype props = msum $ map step pps
-  where
-    step = step_nameError getPropSet
-    {- reuse computed range-props for closest-name and next-closer-name -}
-    pps = zip props (tail props)
+get_nameError = n3GetNonExistence $ \getPropSet _ -> step_nameError getPropSet
 
 {- find just qname matches -}
 get_noData :: Logic NSEC3_NoData
@@ -75,26 +70,25 @@ get_noData _ qtype (exists : _) = notElemBitmap <$> propMatch exists
         | otherwise = Right $ n3_noData m
 
 get_unsignedDelegation :: Logic NSEC3_UnsignedDelegation
-get_unsignedDelegation _ _ props = msum $ map step pps
-  where
-    step = step_unsignedDelegation
-    {- reuse computed range-props for closest-name and next-closer-name -}
-    pps = zip props (tail props)
+get_unsignedDelegation = n3GetNonExistence $ \_ _ props -> step_unsignedDelegation props
 
+{- loop for not-zipped prop-set list to check last zone-apex domain -}
 get_wildcardExpansion :: Logic NSEC3_WildcardExpansion
-get_wildcardExpansion _ _ = {- first result -} msum . map step
+get_wildcardExpansion _ _ = {- longest result -} msum . map step
   where
     step nexts = Right . n3_wildcardExpansion <$> propCover nexts
 
 get_wildcardNoData :: Logic NSEC3_WildcardNoData
-get_wildcardNoData getPropSet qtype props = msum $ map step pps
-  where
-    step = step_wildcardNoData getPropSet qtype
-    {- reuse computed range-props for closest-name and next-closer-name -}
-    pps = zip props (tail props)
+get_wildcardNoData = n3GetNonExistence step_wildcardNoData
 
 ---
 
+n3GetNonExistence :: ((Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String r)) -> Logic r
+n3GetNonExistence neStep getPropSet qtype props = {- longest result -} msum $ map step pps
+  where
+    step = neStep getPropSet qtype
+    {- reuse computed range-props for closest-name and next-closer-name -}
+    pps = zip props (tail props)
 
 step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_NameError)
 step_nameError getPropSet =
