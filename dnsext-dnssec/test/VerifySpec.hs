@@ -982,10 +982,10 @@ caseNSEC ((zone, rds, qname, qtype), expect) = either expectationFailure (const 
   where
     ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
     getEach ex z rs qn qt = case ex of
-        NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn qt
+        NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn
         NSEC_Expect_NoData{} -> NSECR_NoData <$> noDataNSEC z rs qn qt
-        NSEC_Expect_UnsignedDelegation{} -> NSECR_UnsignedDelegation <$> unsignedDelegationNSEC z rs qn qt
-        NSEC_Expect_WildcardExpansion{} -> NSECR_WildcardExpansion <$> wildcardExpansionNSEC z rs qn qt
+        NSEC_Expect_UnsignedDelegation{} -> NSECR_UnsignedDelegation <$> unsignedDelegationNSEC z rs qn
+        NSEC_Expect_WildcardExpansion{} -> NSECR_WildcardExpansion <$> wildcardExpansionNSEC z rs qn
         NSEC_Expect_WildcardNoData{} -> NSECR_WildcardNoData <$> wildcardNoDataNSEC z rs qn qt
 
 -- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2
