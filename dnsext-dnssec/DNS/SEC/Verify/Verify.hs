@@ -305,9 +305,9 @@ hashNSEC3PARAM nsec3p domain =
 
 ---
 
-getNSEC3Result :: NSEC3.Logic a -> Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String a
-getNSEC3Result hl mayZone cs qname qtype =
-    withImpls $ \ps -> NSEC3.getResult hl mayZone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname qtype
+getNSEC3Result :: NSEC3.Logic a -> Domain -> [NSEC3_Range] -> Domain -> Either String a
+getNSEC3Result hl zone cs qname =
+    withImpls $ \ps -> NSEC3.getResult hl zone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname
   where
     withImpls h = h =<< mapM addImpl cs
     addImpl r@(_, nsec3) = do
@@ -315,23 +315,23 @@ getNSEC3Result hl mayZone cs qname qtype =
         impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
         return (impl, r)
 
-nameErrorNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NameError
+nameErrorNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_NameError
 nameErrorNSEC3 = getNSEC3Result NSEC3.get_nameError
 
-noDataNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NoData
-noDataNSEC3 = getNSEC3Result NSEC3.get_noData
+noDataNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NoData
+noDataNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.get_noData qtype) zone ranges qname
 
-unsignedDelegationNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_UnsignedDelegation
+unsignedDelegationNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_UnsignedDelegation
 unsignedDelegationNSEC3 = getNSEC3Result NSEC3.get_unsignedDelegation
 
-wildcardExpansionNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardExpansion
+wildcardExpansionNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_WildcardExpansion
 wildcardExpansionNSEC3 = getNSEC3Result NSEC3.get_wildcardExpansion
 
-wildcardNoDataNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardNoData
-wildcardNoDataNSEC3 = getNSEC3Result NSEC3.get_wildcardNoData
+wildcardNoDataNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardNoData
+wildcardNoDataNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.get_wildcardNoData qtype) zone ranges qname
 
-detectNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
-detectNSEC3 = getNSEC3Result NSEC3.detect
+detectNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+detectNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.detect qtype) zone ranges qname
 
 ---
 
