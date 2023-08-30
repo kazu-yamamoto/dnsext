@@ -39,6 +39,10 @@ import qualified Data.IntMap.Strict as IM
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO, unsafePerformIO)
 
+-- $setup
+-- >>> import Data.ByteString
+-- >>> :set -XOverloadedStrings
+
 ----------------------------------------------------------------
 
 -- assuming that Int is 64bit
@@ -186,6 +190,10 @@ decodeTag rbuf = do
 
 ----------------------------------------------------------------
 
+-- |
+--
+-- >>> withReadBuffer "\x96\x01" $ \rbuf -> decodeVarint rbuf
+-- 150
 decodeVarint :: Readable p => p -> IO Int
 decodeVarint rbuf = loop 0 0
   where
@@ -273,6 +281,11 @@ encodeTag wbuf field wt =
 
 ----------------------------------------------------------------
 
+-- |
+--
+-- >>> bs <- withWriteBuffer 10 $ \wbuf -> encodeVarint wbuf 150
+-- >>> bs == "\x96\x01"
+-- True
 encodeVarint :: WriteBuffer -> Int -> IO ()
 encodeVarint wbuf n0 = loop n0
   where
