@@ -2,13 +2,14 @@
 
 module FastStreamSpec where
 
-import DNS.TAP.FastStream
 import Data.ByteString ()
 import Data.IORef
 import Network.Run.TCP
 import Test.Hspec
 import UnliftIO.Concurrent
 import qualified UnliftIO.Exception as E
+
+import DNS.TAP.FastStream
 
 spec :: Spec
 spec = do
