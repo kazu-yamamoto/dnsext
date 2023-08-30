@@ -3,11 +3,12 @@
 
 -- | Protocol buffer implementaion
 --
--- Spec: https://protobuf.dev/programming-guides/encoding/
+-- Spec: <https://protobuf.dev/programming-guides/encoding/>
 --
 -- This library assumes that 'Int' is 64bit.
 -- VARINT, I32 and I64 is stored as 'Int' in an 'Object'.
 -- LEN is stored as 'ByteString'.
+
 module DNS.TAP.ProtocolBuffer (
     -- * Types
     Object,

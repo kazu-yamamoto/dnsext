@@ -3,7 +3,8 @@
 
 -- | DNSTAP Schema.
 --
--- * Spec: https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto
+-- * Spec: <https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto>
+
 module DNS.TAP.Schema (
     -- * Types
     DNSTAP (..),

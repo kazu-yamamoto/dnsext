@@ -5,7 +5,8 @@
 
 -- | Fast stream implementaion.
 --
--- * Spec: https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h
+-- * Spec: <https://github.com/farsightsec/fstrm/blob/master/fstrm/control.h>
+
 module DNS.TAP.FastStream (
     -- * Types
     Config (..),
