@@ -213,21 +213,21 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
 
-cacheNoDelegation :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
-cacheNoDelegation zone dnskeys dom msg
+cacheNoDelegation :: Delegation -> Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery ()
+cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NoErr = cacheNoDataNS $> ()
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = Verify.withCanonical dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
-        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
+    nameErrors = Verify.with dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+        \_rds _cnRRset cacheCNAME -> lift cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg []
+    nullCNAME = lift $ cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg []
     ncCNAME = cacheNoDataNS
-    cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
+    cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
 
 {- FOURMOLU_DISABLE -}
