@@ -16,39 +16,37 @@ import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
 
-type Logic a = (Domain -> [RangeProp]) -> TYPE -> [[RangeProp]] -> Maybe (Either String a)
+type Logic a = (Domain -> [RangeProp]) -> [[RangeProp]] -> Maybe (Either String a)
 
 getResult
     :: Logic a
-    -> Maybe Domain
+    -> Domain
     -> [(NSEC3_Range, Hash)]
     -> Domain
-    -> TYPE
     -> Either String a
-getResult n3logic mayZone n3s qname qtype = do
-    (zone, refine) <- n3RefineWithRanges n3s
-    let guardZone z = when (z /= zone) $ Left $ "NSEC3.getResult: zone " ++ show z ++ " is not consistent for NSEC3 records"
-    maybe (Right ()) guardZone mayZone
+getResult n3logic zone n3s qname = do
+    (z, refine) <- n3RefineWithRanges n3s
+    when (z /= zone) $ Left $ "NSEC3.getResult: zone from NSEC3 " ++ show z ++ " is not consistent for " ++ show zone
     let subs = zoneSubDomains qname zone
     when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
     let noEncloser = Left $ unlines $ "NSEC3.getResult: no NSEC3 encloser:" : ["  " ++ show o ++ " " ++ show rd | ((o, rd), _) <- n3s]
-    fromMaybe noEncloser $ n3logic refine qtype $ map refine subs
+    fromMaybe noEncloser $ n3logic refine $ map refine subs
 
 ---
 
 {- FOURMOLU_DISABLE -}
-detect :: Logic NSEC3_Result
-detect getPropSet qtype props =
+detect :: TYPE -> Logic NSEC3_Result
+detect qtype getPropSet props =
     {- `stepNE` detects UnsignedDelegation case.
         Run this loop before `getNoData` to apply delegation
         for both UnsignedDelegation and NoData properties -}
-    n3GetNonExistence (\_ _ ps -> stepNE ps)                getPropSet qtype props   <|>
-    fmap N3R_NoData             <$> get_noData              getPropSet qtype props   <|>
-    fmap N3R_WildcardExpansion  <$> get_wildcardExpansion   getPropSet qtype props
+    n3GetNonExistence (\_ ps -> stepNE ps)                       getPropSet props  <|>
+    fmap N3R_NoData             <$> get_noData             qtype getPropSet props  <|>
+    fmap N3R_WildcardExpansion  <$> get_wildcardExpansion        getPropSet props
   where
     stepNE ps =
-        fmap N3R_NameError           <$> step_nameError      getPropSet       ps  <|>
-        fmap N3R_WildcardNoData      <$> step_wildcardNoData getPropSet qtype ps  <|>
+        fmap N3R_NameError           <$> step_nameError            getPropSet ps  <|>
+        fmap N3R_WildcardNoData      <$> step_wildcardNoData qtype getPropSet ps  <|>
         fmap N3R_UnsignedDelegation  <$> step_unsignedDelegation              ps
 {- FOURMOLU_ENABLE -}
 
@@ -58,35 +56,35 @@ detect getPropSet qtype props =
    to recognize non-existence of domain or non-existence of RRset -}
 
 get_nameError :: Logic NSEC3_NameError
-get_nameError = n3GetNonExistence $ \getPropSet _ -> step_nameError getPropSet
+get_nameError = n3GetNonExistence step_nameError
 
 {- find just qname matches -}
-get_noData :: Logic NSEC3_NoData
+get_noData :: TYPE -> Logic NSEC3_NoData
 get_noData _ _ [] = Just $ Left "NSEC3.NoData: no prop-set"
-get_noData _ qtype (exists : _) = notElemBitmap <$> propMatch exists
+get_noData qtype _ (exists : _) = notElemBitmap <$> propMatch exists
   where
     notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
         | qtype `elem` nsec3_types = Left $ "NSEC3.NoData: type bitmap has query type `" ++ show qtype ++ "`."
         | otherwise = Right $ n3_noData m
 
 get_unsignedDelegation :: Logic NSEC3_UnsignedDelegation
-get_unsignedDelegation = n3GetNonExistence $ \_ _ props -> step_unsignedDelegation props
+get_unsignedDelegation = n3GetNonExistence $ \_ props -> step_unsignedDelegation props
 
 {- loop for not-zipped prop-set list to check last zone-apex domain -}
 get_wildcardExpansion :: Logic NSEC3_WildcardExpansion
-get_wildcardExpansion _ _ = {- longest result -} msum . map step
+get_wildcardExpansion _ = {- longest result -} msum . map step
   where
     step nexts = Right . n3_wildcardExpansion <$> propCover nexts
 
-get_wildcardNoData :: Logic NSEC3_WildcardNoData
-get_wildcardNoData = n3GetNonExistence step_wildcardNoData
+get_wildcardNoData :: TYPE -> Logic NSEC3_WildcardNoData
+get_wildcardNoData qtype = n3GetNonExistence $ step_wildcardNoData qtype
 
 ---
 
-n3GetNonExistence :: ((Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String r)) -> Logic r
-n3GetNonExistence neStep getPropSet qtype props = {- longest result -} msum $ map step pps
+n3GetNonExistence :: ((Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String r)) -> Logic r
+n3GetNonExistence neStep getPropSet props = {- longest result -} msum $ map step pps
   where
-    step = neStep getPropSet qtype
+    step = neStep getPropSet
     {- reuse computed range-props for closest-name and next-closer-name -}
     pps = zip props (tail props)
 
@@ -104,8 +102,8 @@ step_unsignedDelegation =
                 | otherwise = Left $ "NSEC3.UnsignedDelegation: No OptOut flag. Not NameErr, wildcard is not matched or covered."
         pure unsignedDelegation
 
-step_wildcardNoData :: (Domain -> [RangeProp]) -> TYPE -> RangeProps -> Maybe (Either String NSEC3_WildcardNoData)
-step_wildcardNoData getPropSet qtype =
+step_wildcardNoData :: TYPE -> (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_WildcardNoData)
+step_wildcardNoData qtype getPropSet =
     n3StepNonExistence $ \nextCloser closest@(Matches (_, clname)) -> do
         let wildcardProps = getPropSet (fromString "*" <> clname)
             notElemBitmap m@(Matches ((_, RD_NSEC3{..}), _))
