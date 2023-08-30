@@ -160,20 +160,21 @@ decode bs = unsafeDupablePerformIO $
         \rbuf -> Object <$> loop rbuf IM.empty
   where
     loop rbuf m0 = do
-        (field, wt) <- decodeTag rbuf
-        v <- case wt of
-            VAR -> VVAR <$> decodeVarint rbuf
-            I32 -> VI32 <$> decodeI32 rbuf
-            LEN -> do
-                lenPref <- decodeVarint rbuf
-                VSTR <$> extractByteString rbuf lenPref
-            I64 -> VI64 <$> decodeI64 rbuf
-            _ -> error "unknown wiretype"
-        let m = IM.insert field v m0
         rest <- remainingSize rbuf
         if rest == 0
-            then return m
-            else loop rbuf m
+            then return m0
+            else do
+                (field, wt) <- decodeTag rbuf
+                v <- case wt of
+                    VAR -> VVAR <$> decodeVarint rbuf
+                    I32 -> VI32 <$> decodeI32 rbuf
+                    LEN -> do
+                        lenPref <- decodeVarint rbuf
+                        VSTR <$> extractByteString rbuf lenPref
+                    I64 -> VI64 <$> decodeI64 rbuf
+                    _ -> error "unknown wiretype"
+                let m = IM.insert field v m0
+                loop rbuf m
 
 decodeTag :: Readable p => p -> IO (FieldNumber, WireType)
 decodeTag rbuf = do
