@@ -138,14 +138,15 @@ cacheSectionNegative
     :: Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([ResourceRecord], Ranking)) -> DNSMessage
+    -> [RRset]
     -> ContextT IO [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
-cacheSectionNegative zone dnskeys dom typ getRanked msg = do
+cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     Verify.withCanonical dnskeys rankedAuthority msg zone SOA fromSOA nullSOA (pure []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
-        either (ncWarn >>> ($> [])) (doCache >>> ($> [soaRRset])) $ single ps
+        either (ncWarn >>> ($> [])) (doCache >>> ($> soaRRset : nws)) $ single ps
   where
     fromSOA :: ResourceRecord -> Maybe (Domain, TTL)
     fromSOA ResourceRecord{..} = (,) rrname . soaTTL <$> DNS.fromRData rdata
@@ -177,15 +178,16 @@ cacheNegative zone dom typ ttl rank = do
     insertRRSet <- asks insert_
     liftIO $ insertSetEmpty zone dom typ ttl rank insertRRSet
 
+{- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
-cacheAnswer Delegation{..} dom typ msg = do
+cacheAnswer d@Delegation{..} dom typ msg = do
     (result, cacheX) <- verify
     lift cacheX
     return result
   where
+    qinfo = show dom ++ " " ++ show typ
     verify = Verify.with dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
-        let qinfo = show dom ++ " " ++ show typ
-            (verifyMsg, verifyColor, raiseOnVerifyFailure)
+        let (verifyMsg, verifyColor, raiseOnVerifyFailure)
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
@@ -193,16 +195,23 @@ cacheAnswer Delegation{..} dom typ msg = do
         lift $ clogLn Log.DEMO verifyColor verifyMsg
         raiseOnVerifyFailure
         pure (([xRRset], []), cacheX)
-    nullX = lift $ doCacheEmpty <&> \e -> (([], e), pure ())
+
+    nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr -> cacheSectionNegative zone dnskeys dom typ rankedAnswer msg
-        DNS.NameErr -> cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg
-        _ -> return []
+        DNS.NoErr   -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
+        _ -> pure []
+      where
+        nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
+        (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
+
     ncX = pure (([], []), pure ())
+
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
     zone = delegationZone
     dnskeys = delegationDNSKEY
+{- FOURMOLU_ENABLE -}
 
 cacheNoDelegation :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> ContextT IO ()
 cacheNoDelegation zone dnskeys dom msg
@@ -216,7 +225,38 @@ cacheNoDelegation zone dnskeys dom msg
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg
+    nullCNAME = cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg []
     ncCNAME = cacheNoDataNS
-    cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg
+    cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+
+{- FOURMOLU_DISABLE -}
+negativeWitnessActions :: DNSQuery [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (DNSQuery [RRset], DNSQuery [RRset])
+negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, witnessNameError)
+  where
+    witnessNoData
+        | noDS          = pure []
+        | otherwise     = Verify.getNoDatas   zone dnskeys rankedAuthority msg qname qtype
+                          nullK invalidK (noWitnessK "NoData")
+                          resultK resultK resultK resultK
+    witnessNameError
+        | noDS          = pure []
+        | otherwise     = Verify.getNameError zone dnskeys rankedAuthority msg qname
+                          nullK invalidK (noWitnessK "NameError")
+                          resultK resultK
+    invalidK s = failed $ "NSEC/NSEC3 NameErr/NoData: " ++ qinfo ++ " :\n" ++ s
+    noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
+    resultK w rrsets _ = lift $ success w $> rrsets
+    success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
+    failed = nsecFailed
+    qinfo = show qname ++ " " ++ show qtype
+
+    zone = delegationZone
+    dnskeys = delegationDNSKEY
+    noDS = case delegationDS of
+        FilledDS [] -> True
+        _           -> False
+{- FOURMOLU_ENABLE -}
+
+nsecFailed :: String -> DNSQuery a
+nsecFailed s = lift (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
