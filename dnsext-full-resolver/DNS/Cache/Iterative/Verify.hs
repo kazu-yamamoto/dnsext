@@ -81,23 +81,24 @@ withCanonical'
 {- FOURMOLU_ENABLE -}
 withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
     | null xRRs = nullK
-    | otherwise = either (leftK xRRs) rightK $ canonicalRRset xRRs
+    | otherwise = canonicalRRset xRRs (leftK xRRs) rightK
   where
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
     sigs = rrsigList rrn rrty srrs
-    rightK p = do
+    rightK rrs sortedRRs = do
         now <- liftIO =<< asks currentSeconds_
-        withVerifiedRRset now dnskeys p sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
+        withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
             rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
 
+{- FOURMOLU_DISABLE -}
 withVerifiedRRset
     :: EpochTime
     -> [RD_DNSKEY]
-    -> (RRset, [DNS.SPut ()])
-    -> [(RD_RRSIG, TTL)]
+    -> RRset -> [DNS.SPut ()] -> [(RD_RRSIG, TTL)]
     -> (RRset -> a)
     -> a
-withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
+{- FOURMOLU_ENABLE -}
+withVerifiedRRset now dnskeys RRset{..} sortedRDatas sigs vk =
     vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas goodSigRDs
   where
     expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
@@ -132,11 +133,11 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
 
 {- get not verified canonical RRset -}
-canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
-canonicalRRset rrs =
-    either Left (Right . ($ rightK)) $ SEC.canonicalRRsetSorted sortedRRs
+canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [DNS.SPut ()] -> a) -> a
+canonicalRRset rrs leftK rightK =
+    SEC.canonicalRRsetSorted' sortedRRs leftK mkRRset
   where
-    rightK dom typ cls ttl rds = (RRset dom typ cls ttl rds NotVerifiedRRS, sortedRDatas)
+    mkRRset dom typ cls ttl rds = rightK (RRset dom typ cls ttl rds NotVerifiedRRS) sortedRDatas
     (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset
