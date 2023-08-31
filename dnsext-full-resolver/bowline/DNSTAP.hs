@@ -12,8 +12,6 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import qualified DNS.TAP.FastStream as FSTRM
 import DNS.TAP.Schema
-import DNS.Types
-import Data.ByteString (ByteString)
 import Network.Socket
 import qualified UnliftIO.Exception as E
 
