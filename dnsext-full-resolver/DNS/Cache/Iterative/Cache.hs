@@ -187,6 +187,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
   where
     qinfo = show dom ++ " " ++ show typ
     verify = Verify.with dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+        nws <- witnessWildcardExpansion
         let (verifyMsg, verifyColor, raiseOnVerifyFailure)
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
@@ -194,7 +195,9 @@ cacheAnswer d@Delegation{..} dom typ msg = do
                 | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
         lift $ clogLn Log.DEMO verifyColor verifyMsg
         raiseOnVerifyFailure
-        pure (([xRRset], []), cacheX)
+        pure (([xRRset], nws), cacheX)
+      where
+        witnessWildcardExpansion = wildcardWitnessAction d dom typ msg
 
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
@@ -233,6 +236,30 @@ cacheNoDelegation d zone dnskeys dom msg
     cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+
+{- FOURMOLU_DISABLE -}
+wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> ExceptT QueryError (ContextT IO) [RRset]
+wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
+  where
+    witnessWildcardExpansion
+        | noDS          = pure []
+        | otherwise     = Verify.getWildcardExpansion zone dnskeys rankedAuthority msg qname
+                          nullK invalidK (noWitnessK "WildcardExpansion")
+                          resultK resultK
+    nullK = pure []
+    invalidK s = failed $ "NSEC/NSEC3 WildcardExpansion: " ++ qinfo ++ " :\n" ++ s
+    noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
+    resultK w rrsets _ = lift $ success w $> rrsets
+    success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
+    failed = nsecFailed
+    qinfo = show qname ++ " " ++ show qtype
+
+    zone = delegationZone
+    dnskeys = delegationDNSKEY
+    noDS = case delegationDS of
+        FilledDS [] -> True
+        _           -> False
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 negativeWitnessActions :: DNSQuery [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (DNSQuery [RRset], DNSQuery [RRset])
