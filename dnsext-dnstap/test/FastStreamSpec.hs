@@ -30,9 +30,8 @@ readWrite conf = do
     client mvar = do
         threadDelay 10000
         runTCPClient "127.0.0.1" "50002" $ \sock -> do
-            ctx <- newWriterContext sock conf
             ref <- newIORef 0
-            writer ctx $ do
+            writer sock conf $ do
                 i <- readIORef ref
                 if i < n
                     then do
@@ -42,8 +41,7 @@ readWrite conf = do
                     else return ""
             takeMVar mvar `shouldReturn` ()
     server mvar = runTCPServer (Just "127.0.0.1") "50002" $ \sock -> do
-        ctx <- newReaderContext sock conf
         ref <- newIORef 0
-        reader ctx $ \_ -> modifyIORef' ref (+ 1)
+        reader sock conf $ \_ -> modifyIORef' ref (+ 1)
         readIORef ref `shouldReturn` n
         putMVar mvar ()

@@ -202,7 +202,7 @@ getEnv Config{..} = do
             memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTripble False updateCache tcache
+    Iterative.newEnv logTripble (\_ -> return ()) False updateCache tcache
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

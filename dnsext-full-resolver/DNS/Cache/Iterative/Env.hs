@@ -12,6 +12,7 @@ import Data.IORef (newIORef)
 import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
+import qualified DNS.TAP.Schema as DNSTAP
 
 -- this package
 import DNS.Cache.Iterative.Types
@@ -27,12 +28,13 @@ getUpdateCache cacheConf = do
 -- | Creating a new 'Env'.
 newEnv
     :: (Log.PutLines, Log.GetQueueSize, Log.Terminate)
+    -> (DNSTAP.Message -> IO ())
     -> Bool
     -- ^ disabling IPv6
     -> UpdateCache
     -> TimeCache
     -> IO Env
-newEnv (putLines, getQSize, terminate) disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
+newEnv (putLines, getQSize, terminate) putDNSTAP disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     let cxt =
@@ -40,6 +42,7 @@ newEnv (putLines, getQSize, terminate) disableV6NS (ins, getCache, expire) (curS
                 { logLines_ = putLines
                 , logQSize_ = getQSize
                 , logTerminate_ = terminate
+                , logDNSTAP = putDNSTAP
                 , disableV6NS_ = disableV6NS
                 , insert_ = ins
                 , getCache_ = getCache

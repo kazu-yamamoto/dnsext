@@ -19,6 +19,7 @@ import DNS.Cache.Server
 import qualified DNS.Cache.TimeCache as TimeCache
 
 import Config
+import DNSTAP
 import qualified Monitor as Mon
 
 ----------------------------------------------------------------
@@ -33,7 +34,8 @@ run conf@Config{..} = do
     DNS.runInitIO $ do
         DNS.addResourceDataForDNSSEC
         DNS.addResourceDataForSVCB
-    env <- getEnv conf
+    (writer, putDNSTAP) <- newDnstapWriter conf
+    env <- getEnv conf putDNSTAP
     creds <-
         if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
             then do
@@ -51,7 +53,7 @@ run conf@Config{..} = do
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     monitor <- getMonitor env conf $ concat statuses
-    race_ (conc $ concat servers) (conc monitor)
+    race_ (conc (writer : concat servers)) (conc monitor)
   where
     conc = foldr concurrently_ $ return ()
     udpconf =
@@ -103,8 +105,8 @@ getMonitor env conf qsizes = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> IO Env
-getEnv Config{..} = do
+getEnv :: Config -> (Message -> IO ()) -> IO Env
+getEnv Config{..} putDNSTAP = do
     logTriple@(putLines, _, _) <- Log.new cnf_log_output cnf_log_level
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
@@ -114,4 +116,4 @@ getEnv Config{..} = do
                 putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTriple cnf_disable_v6_ns updateCache tcache
+    Iterative.newEnv logTriple putDNSTAP cnf_disable_v6_ns updateCache tcache

@@ -231,32 +231,34 @@ bye ctx@Context{..}
 
 -- | Reading loop.
 --   The loop is finished when the writer stops writing.
-reader :: Context -> (ByteString -> IO ()) -> IO ()
-reader ctx body = do
-    handshake ctx
-    loop
-    bye ctx
+reader :: Socket -> Config -> (ByteString -> IO ()) -> IO ()
+reader sock conf body = E.bracket open bye loop
   where
-    loop = do
+    open = do
+        ctx <- newReaderContext sock conf
+        handshake ctx
+        return ctx
+    loop ctx = do
         bs <- recvData ctx
         if bs == ""
             then return ()
             else do
                 body bs
-                loop
+                loop ctx
 
 -- | Writing loop.
 --   Generating an empty string stops the loop.
-writer :: Context -> IO ByteString -> IO ()
-writer ctx body = do
-    handshake ctx
-    loop
-    bye ctx
+writer :: Socket -> Config -> IO ByteString -> IO ()
+writer sock conf body = E.bracket open bye loop
   where
-    loop = do
+    open = do
+        ctx <- newWriterContext sock conf
+        handshake ctx
+        return ctx
+    loop ctx = do
         bs <- body
         if bs == ""
             then return ()
             else do
                 sendData ctx bs
-                loop
+                loop ctx

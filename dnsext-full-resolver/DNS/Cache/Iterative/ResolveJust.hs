@@ -228,6 +228,7 @@ _newTestEnv putLines =
             { logLines_ = \_ _ -> putLines
             , logQSize_ = pure (-1, -1)
             , logTerminate_ = pure ()
+            , logDNSTAP = \_ -> return ()
             , disableV6NS_ = True
             , insert_ = ins
             , getCache_ = getCache
