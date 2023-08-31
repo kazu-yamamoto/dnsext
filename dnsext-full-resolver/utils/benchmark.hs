@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, getNumCapabilities)
+import Control.Concurrent (forkIO, killThread, getNumCapabilities)
 import Control.DeepSeq (deepseq)
 import Control.Monad (replicateM, unless, (>=>))
 import qualified DNS.Types as DNS
@@ -162,8 +162,10 @@ runBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
-    env <- getEnv conf
+runBenchmark conf@Config{..} udpconf@UdpServerConfig{..} noop gplot size = do
+    (logger, putLines, flush) <- Log.new logOutput logLevel
+    tid <- forkIO logger
+    env <- getEnv conf putLines
 
     (workers, enqueueReq, dequeueResp) <- benchServer udpconf env noop
     _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
@@ -192,17 +194,18 @@ runBenchmark conf udpconf@UdpServerConfig{..} noop gplot size = do
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show (toDouble elapsed) ++ " (sec)"
             putStrLn $ "rate: " ++ show (toDouble rate)
+    killThread tid
+    flush
 
-getEnv :: Config -> IO Env
-getEnv Config{..} = do
-    logTripble@(putLines, _, _) <- Log.new logOutput logLevel
+getEnv :: Config -> Log.PutLines -> IO Env
+getEnv Config{..} putLines = do
     tcache@(getSec, _) <- TimeCache.new
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn = putLines Log.WARN Nothing . (: [])
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv logTripble (\_ -> return ()) False updateCache tcache
+    Iterative.newEnv putLines (\_ -> return ()) False updateCache tcache
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

@@ -1,18 +1,12 @@
 module DNS.Log (
     new,
-    Output (..),
-    FileLogSpec (..),
-    BufSize,
-    PutLines,
-    GetQueueSize,
-    Terminate,
     Level (..),
+    Output (..),
+    PutLines,
 ) where
 
 -- GHC packages
-import Control.Concurrent (forkIO, killThread)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
-import Control.Monad (forever, when)
+import Control.Monad (forever, when, void)
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
@@ -25,19 +19,10 @@ import System.IO (
 -- other packages
 import System.Console.ANSI (hSetSGR, hSupportsANSIColor)
 import System.Console.ANSI.Types
-import System.Log.FastLogger (
-    BufSize,
-    FileLogSpec (..),
-    LogType,
-    LogType' (..),
-    newFastLogger1,
-    toLogStr,
- )
-import UnliftIO (tryAny)
+import qualified UnliftIO.Exception as E
+import UnliftIO.STM
 
 -- this package
-import DNS.Queue (newQueue, readQueue, writeQueue)
-import qualified DNS.Queue as Queue
 
 data Level
     = DEBUG
@@ -48,70 +33,48 @@ data Level
 data Output
     = Stdout
     | Stderr
-    | RouteFile FileLogSpec BufSize
 
 instance Show Output where
     show Stdout = "Stdout"
     show Stderr = "Stderr"
-    show (RouteFile _ _) = "RouteFile"
 
 type PutLines = Level -> Maybe Color -> [String] -> IO ()
-type GetQueueSize = IO (Int, Int)
-type Terminate = IO ()
 
-new :: Output -> Level -> IO (PutLines, GetQueueSize, Terminate)
+new :: Output -> Level -> IO (IO (), PutLines, IO ())
 new Stdout = newHandleLogger stdout
 new Stderr = newHandleLogger stderr
-new (RouteFile fs sz) = newFileLogger $ LogFile fs sz
-
-newFileLogger
-    :: LogType -> Level -> IO (PutLines, GetQueueSize, Terminate)
-newFileLogger lt loggerLevel = do
-    (put, kill) <- newFastLogger1 lt
-    return (logLines put, getQSize, kill)
-  where
-    logLines put lv _ xs =
-        when (loggerLevel <= lv) $
-            put $
-                toLogStr $
-                    unlines xs
-
-    getQSize = return (-1, -1)
 
 newHandleLogger
-    :: Handle -> Level -> IO (PutLines, GetQueueSize, Terminate)
+    :: Handle -> Level -> IO (IO (), PutLines, IO ())
 newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     colorize <- hSupportsANSIColor outFh
-    inQ <- newQueue 8
-    flushMutex <- newEmptyMVar
-    tid <- forkIO $ logLoop inQ flushMutex
-    return (logLines colorize inQ, getQSize inQ, kill inQ flushMutex tid)
+    inQ <- newTQueueIO
+    let logger = logLoop inQ
+        put = logLines colorize inQ
+    return (logger, put, flush inQ)
   where
     logLines colorize inQ lv color xs
         | colorize = withColor color
         | otherwise = withColor Nothing
       where
-        withColor c = when (loggerLevel <= lv) $ writeQueue inQ $ Just (c, xs)
+        withColor c = when (loggerLevel <= lv) $
+            atomically $ writeTQueue inQ (c, xs)
 
-    getQSize inQ = do
-        s <- fst <$> Queue.readSizes inQ
-        let m = Queue.sizeMaxBound inQ
-        return (s, m)
+    logLoop inQ = forever write
+      where
+        write = void $ E.tryAny (atomically (readTQueue inQ) >>= logit)
 
-    kill inQ flushMutex tid = do
-        () <- writeQueue inQ Nothing >> takeMVar flushMutex
-        killThread tid
+    flush inQ = do
+        mx <- atomically $ tryReadTQueue inQ
+        case mx of
+            Nothing -> return ()
+            Just x -> do
+                logit x
+                flush inQ
 
-    logLoop inQ flushMutex = forever $ do
-        _ex <- tryAny (readQueue inQ >>= logit flushMutex)
-        return ()
-    logit flushMutex mx = case mx of
-        Nothing -> putMVar flushMutex ()
-        Just x -> case x of
-            (Nothing, xs) -> do
-                hPutStr outFh $ unlines xs
-            (Just c, xs) -> do
-                hSetSGR outFh [SetColor Foreground Vivid c]
-                hPutStr outFh $ unlines xs
-                hSetSGR outFh [Reset]
+    logit (Nothing, xs) = hPutStr outFh $ unlines xs
+    logit (Just c, xs) = do
+        hSetSGR outFh [SetColor Foreground Vivid c]
+        hPutStr outFh $ unlines xs
+        hSetSGR outFh [Reset]

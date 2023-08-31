@@ -2,7 +2,8 @@ module QuerySpec where
 
 import Test.Hspec
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (threadDelay, forkIO)
+import Control.Monad (void)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.SEC as DNS
 import DNS.Types (TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA))
@@ -51,7 +52,8 @@ spec = do
     debug <- getEnvBool "QTEST_DEBUG"
     runIO $ DNS.runInitIO DNS.addResourceDataForDNSSEC
     let debugLog = do
-            (putLines, _, _) <- Log.new Log.Stdout Log.DEBUG
+            (logger, putLines) <- Log.new Log.Stdout Log.DEBUG
+            void $ forkIO logger -- fixme
             pure $ \lv c xs -> putLines lv c [show lv ++ ": " ++ x | x <- xs]
         quiet = \_ _ _ -> pure ()
     putLines <- if debug then runIO debugLog else pure quiet
@@ -71,7 +73,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv (putLines, return (0, 0), return ()) (\_ -> return ()) disableV6NS updateCache tcache
+            cxt <- newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache
             eresult <- fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
@@ -104,9 +106,9 @@ querySpec disableV6NS putLines = describe "query" $ do
     tcache@(getSec, _) <- runIO TimeCache.new
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
     updateCache <- runIO $ getUpdateCache cacheConf
-    let getCXT = newEnv (putLines, return (0, 0), return ()) (\_ -> return ()) disableV6NS updateCache tcache
+    let getCXT = newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache
     cxt <- runIO getCXT
-    cxt4 <- runIO $ newEnv (putLines, return (0, 0), return ()) (\_ -> return ()) True updateCache tcache
+    cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True updateCache tcache
     let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
         runExactCXT cxt_ n ty = Iterative.runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
@@ -148,7 +150,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
     root <- runIO $ do
-        icxt <- newEnv (\_ _ _ -> pure (), return (0, 0), return ()) (\_ -> return ()) disableV6NS updateCache tcache
+        icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS updateCache tcache
         failLeft "refresh-root error" =<< runDNSQuery Iterative.refreshRoot icxt mempty
 
     it "iterative" $ do

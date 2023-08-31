@@ -27,21 +27,19 @@ getUpdateCache cacheConf = do
 
 -- | Creating a new 'Env'.
 newEnv
-    :: (Log.PutLines, Log.GetQueueSize, Log.Terminate)
+    :: Log.PutLines
     -> (DNSTAP.Message -> IO ())
     -> Bool
     -- ^ disabling IPv6
     -> UpdateCache
     -> TimeCache
     -> IO Env
-newEnv (putLines, getQSize, terminate) putDNSTAP disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
+newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     let cxt =
             Env
                 { logLines_ = putLines
-                , logQSize_ = getQSize
-                , logTerminate_ = terminate
                 , logDNSTAP = putDNSTAP
                 , disableV6NS_ = disableV6NS
                 , insert_ = ins

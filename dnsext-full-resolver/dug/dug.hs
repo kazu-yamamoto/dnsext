@@ -3,6 +3,7 @@
 
 module Main (main) where
 
+import Control.Concurrent (forkIO, killThread)
 import Control.Monad (when)
 import DNS.Do53.Client (
     FlagOp (..),
@@ -126,8 +127,8 @@ main = do
     let (at, plus, targets) = divide args
     (dom, typ) <- getDomTyp targets
     port <- getPort optPort optDoX
-    (putLines, _, terminate) <- Log.new Log.Stdout optLogLevel
-    ----
+    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    tid <- forkIO logger
     t0 <- T.getUnixTime
     (msg, header) <-
         if optIterative
@@ -135,14 +136,14 @@ main = do
                 let ctl = mconcat $ map toFlag plus
                 ex <- iterativeQuery optDisableV6NS putLines ctl dom typ
                 case ex of
-                    Left e -> terminate >> fail e
+                    Left e -> fail e
                     Right msg -> return (msg, ";; ")
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
                 ex <- recursiveQeury mserver port optDoX putLines ctl dom typ
                 case ex of
-                    Left e -> terminate >> fail (show e)
+                    Left e -> fail (show e)
                     Right Result{..} -> do
                         let Reply{..} = resultReply
                         let h =
@@ -174,7 +175,8 @@ main = do
             | optJSON = showJSON msg
             | otherwise = pprResult msg
     putLines Log.WARN Nothing [res]
-    terminate
+    killThread tid
+    flush
 
 ----------------------------------------------------------------
 

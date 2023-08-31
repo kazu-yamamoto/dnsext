@@ -115,7 +115,6 @@ showConfig conf =
     field' label' get = field'_ label' (show . get)
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
-    showOut _ = "rotate file"
     hosts = cnf_addrs conf
 
 ----------------------------------------------------------------

@@ -73,10 +73,9 @@ data Command
 monitor
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int), IO (Int, Int))
-    -> IO ()
+    -> ([IO Status], IO (Int, Int))
     -> IO [IO ()]
-monitor conf env getsSizeInfo terminate = do
+monitor conf env getsSizeInfo = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
     let ss = map fst ps
@@ -91,7 +90,7 @@ monitor conf env getsSizeInfo terminate = do
   where
     runStdConsole monQuit = do
         let repl =
-                console conf env getsSizeInfo terminate monQuit stdin stdout "<std>"
+                console conf env getsSizeInfo monQuit stdin stdout "<std>"
         void $ forkIO repl
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
@@ -101,7 +100,7 @@ monitor conf env getsSizeInfo terminate = do
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
                 let repl =
-                        console conf env getsSizeInfo terminate monQuit sockh sockh $
+                        console conf env getsSizeInfo monQuit sockh sockh $
                             show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
@@ -114,14 +113,13 @@ monitor conf env getsSizeInfo terminate = do
 console
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int), IO (Int, Int))
-    -> IO ()
+    -> ([IO Status], IO (Int, Int))
     -> (STM (), STM ())
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env (iss, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) inH outH ainfo = do
+console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -169,7 +167,7 @@ console conf env (iss, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) in
 
     outLn = hPutStrLn outH
 
-    runCmd Quit = terminate *> atomically issueQuit $> True
+    runCmd Quit = atomically issueQuit $> True
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
@@ -198,8 +196,6 @@ console conf env (iss, ucacheQSize, logQSize) terminate (issueQuit, waitQuit) in
                 outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
         mapM_ (\action -> action >>= outLn . show) iss
         psize "ucache queue" ucacheQSize
-        lmx <- snd <$> logQSize
-        when (lmx >= 0) $ psize "log queue" logQSize
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]
