@@ -96,6 +96,7 @@ executable bowline
         dnsext-do53,
         dnsext-full-resolver,
         dnsext-log,
+        dnsext-svcb,
         dnsext-types,
         iproute,
         network,

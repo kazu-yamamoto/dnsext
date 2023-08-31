@@ -6,6 +6,7 @@ module Main where
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
+import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
 import Network.Socket
 import Network.TLS (Credentials (..), credentialLoadX509)
@@ -29,7 +30,9 @@ help = putStrLn "bowline [<confFile>]"
 
 run :: Config -> IO ()
 run conf@Config{..} = do
-    DNS.runInitIO DNS.addResourceDataForDNSSEC
+    DNS.runInitIO $ do
+        DNS.addResourceDataForDNSSEC
+        DNS.addResourceDataForSVCB
     env <- getEnv conf
     creds <-
         if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
