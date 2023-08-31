@@ -25,9 +25,10 @@ newDnstapQ :: IO DnstapQ
 newDnstapQ = DnstapQ <$> newTQueueIO
 
 composeMessage :: ByteString -> Message
-composeMessage bs = defaultMessage {
-    messageResponseMessage = Just $ Left (UnknownDNSError, bs) -- fixme: dummy
-  }
+composeMessage bs =
+    defaultMessage
+        { messageResponseMessage = Just $ Left (UnknownDNSError, bs) -- fixme: dummy
+        }
 
 writeDnstapQ :: DnstapQ -> Message -> IO ()
 writeDnstapQ (DnstapQ q) msg = atomically $ writeTQueue q msg
@@ -45,7 +46,7 @@ exec Config{..} q = E.bracket setup close $ \sock -> do
     let fconf = FSTRM.Config True False
     FSTRM.writer sock fconf $ do
         msg <- readDnsTapQ q
-        let d = defaultDNSTAP { dnstapMessage = Just msg }
+        let d = defaultDNSTAP{dnstapMessage = Just msg}
         return $ encodeDnstap d
   where
     setup = E.bracketOnError open close conn
