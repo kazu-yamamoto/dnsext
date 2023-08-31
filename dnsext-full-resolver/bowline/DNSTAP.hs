@@ -39,7 +39,9 @@ readDnsTapQ (DnstapQ q) = atomically $ readTQueue q
 newDnstapWriter :: Config -> IO (IO (), Message -> IO ())
 newDnstapWriter conf = do
     q <- newDnstapQ
-    return (control (exec conf q), writeDnstapQ q)
+    let logger = control conf $ exec conf q
+        put = writeDnstapQ q
+    return (logger, put)
 
 exec :: Config -> DnstapQ -> IO ()
 exec Config{..} q = E.bracket setup close $ \sock -> do
@@ -56,11 +58,13 @@ exec Config{..} q = E.bracket setup close $ \sock -> do
             connect sock $ SockAddrUnix cnf_dnstap_socket_path
             return sock
 
-control :: IO () -> IO ()
-control body = do
-    ex <- E.try body
-    case ex of
-        Right () -> return ()
-        Left (E.SomeException _e) -> do
-            threadDelay 60000000 -- fixme
-            control body
+control :: Config -> IO () -> IO ()
+control Config{..} body = loop
+  where
+    loop = do
+        ex <- E.try body
+        case ex of
+            Right () -> return ()
+            Left (E.SomeException _e) -> do
+                threadDelay (cnf_dnstap_reconnect_interval * 1000000)
+                loop
