@@ -3,6 +3,7 @@ packages:
   dnsext-log
   dnsext-do53
   dnsext-dnssec
+  dnsext-dnstap
   dnsext-svcb
   dnsext-dox
   dnsext-full-resolver
