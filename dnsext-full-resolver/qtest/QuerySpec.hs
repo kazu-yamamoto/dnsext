@@ -194,9 +194,21 @@ querySpec disableV6NS putLines = describe "query" $ do
         printQueryError result
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
-    it "resolve-just - nx" $ do
+    it "resolve-just - nx NSEC" $ do
         result <- runJust "does-not-exist.dns-oarc.net." A
         checkResult result `shouldBe` Empty DNS.NameErr
+
+    it "resolve-just - nodata NSEC" $ do
+        result <- runJust "mail.dns-oarc.net." NS
+        checkResult result `shouldBe` Empty DNS.NoErr
+
+    it "resolve-just - nx NSEC3" $ do
+        result <- runJust "does-not-exist.iij.ad.jp." A
+        checkResult result `shouldBe` Empty DNS.NameErr
+
+    it "resolve-just - nodata NSEC3" $ do
+        result <- runJust "www.iij.ad.jp." NS
+        checkResult result `shouldBe` Empty DNS.NoErr
 
     it "resolve-just - nx on iterative" $ do
         result <- runJust "media-router-aol1.prod.media.yahoo.com." CNAME

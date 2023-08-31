@@ -284,10 +284,10 @@ iterative_ dc nss0 (x : xs) =
         msg <- norec dnssecOK sas name A
         let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
             sharedHandler = servsChildZone dc nss name msg
-            cacheHandler = cacheNoDelegation zone dnskeys name msg $> noDelegation
+            cacheHandler = cacheNoDelegation nss zone dnskeys name msg $> noDelegation
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
-            >>= lift . withNoDelegation cacheHandler
+            >>= withNoDelegation cacheHandler
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do

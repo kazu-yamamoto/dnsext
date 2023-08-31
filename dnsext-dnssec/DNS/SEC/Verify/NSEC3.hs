@@ -15,6 +15,42 @@ import DNS.SEC.Flags (NSEC3_Flag (OptOut))
 import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
+import qualified DNS.SEC.Verify.NSECxRange as NRange
+
+{- FOURMOLU_DISABLE -}
+-- | range type guaranteed to yield a lower boundary (hashed-owner) and upper boundary (next-hashed-owner)
+data NSEC3_Refined =
+    NSEC3_Refined
+    { n3range_hashed_owner :: Opaque
+    , n3range_data :: NSEC3_Range
+    }
+    deriving Show
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+rangeImpl :: NRange.Impl NSEC3_Range NSEC3_Refined
+rangeImpl =
+    NRange.Impl
+    { nrangeTYPE = NSEC3
+    , nrangeTake = takeRange
+    , nrangeRefine = refineRange
+    , nrangeLower = n3range_hashed_owner
+    , nrangeUpper = nsec3_next_hashed_owner_name . snd . n3range_data
+    }
+  where
+    takeRange ResourceRecord{..} = (,) rrname <$> fromRData rdata
+{- FOURMOLU_ENABLE -}
+
+refineRange :: Domain -> NSEC3_Range -> Either String NSEC3_Refined
+refineRange zone range@(rrn, _rd) = do
+    (owner32h, zname) <- unconsLabels rrn (Left "NSEC3.range: owner has no zone-name") (curry Right)
+    when (zname /= zone) $ Left $ mismatch zname
+    ownerBytes <- either (Left . ("NSEC3.range: " ++)) Right $ Opaque.fromBase32Hex $ fromShort owner32h
+    Right $ NSEC3_Refined ownerBytes range
+  where
+    mismatch zname = "NSEC3.range: owner-zone: " ++ show zname ++ " =/= zone: " ++ show zone
+
+---
 
 type Logic a = (Domain -> [RangeProp]) -> [[RangeProp]] -> Maybe (Either String a)
 
@@ -25,8 +61,7 @@ getResult
     -> Domain
     -> Either String a
 getResult n3logic zone n3s qname = do
-    (z, refine) <- n3RefineWithRanges n3s
-    when (z /= zone) $ Left $ "NSEC3.getResult: zone from NSEC3 " ++ show z ++ " is not consistent for " ++ show zone
+    refine <- n3RefineWithRanges zone n3s
     let subs = zoneSubDomains qname zone
     when (null subs) $ Left $ "NSEC3.getResult: qname: " ++ show qname ++ " is not under zone: " ++ show zone
     let noEncloser = Left $ unlines $ "NSEC3.getResult: no NSEC3 encloser:" : ["  " ++ show o ++ " " ++ show rd | ((o, rd), _) <- n3s]
@@ -219,28 +254,16 @@ n3CoversR lower upper qv = qv < upper || lower < qv
 
 {- get func to compute 'match' or 'cover' with ranges from NSEC3 record-set -}
 n3RefineWithRanges
-    :: [(NSEC3_Range, Hash)]
-    -> Either String (Domain, Domain -> [RangeProp])
-n3RefineWithRanges ranges0 = do
-    (((owner1, _), _), _) <- maybe (Left "NSEC3.n3RefineWithRanges: no NSEC3 records") Right $ uncons ranges0
-    zname <- unconsLabels owner1 (Left "NSEC3.n3RefineWithRanges: no zone name") (const Right)
-
-    let rs =
-            [ (ownerBytes, r)
-            | r@((rrn, RD_NSEC3{..}), _) <- ranges0
-            , nsec3_flags `elem` [[], [OptOut]]
-            , {- https://datatracker.ietf.org/doc/html/rfc5155#section-8.2
-                 "A validator MUST ignore NSEC3 RRs with a Flag fields value other than zero or one." -}
-            (owner32h, parent) <- unconsLabels rrn [] (\x y -> [(x, y)])
-            , parent == zname
-            , ownerBytes <- decodeBase32 owner32h
-            ]
-    (,) zname <$> takeRefines rs
+    :: Domain
+    -> [(NSEC3_Range, Hash)]
+    -> Either String (Domain -> [RangeProp])
+n3RefineWithRanges zone ranges0 = do
+    ranges <- sequence [ (,) <$> refineRange zone range <*> pure hash | (range, hash) <- ranges0 ]
+    uniqueSorted $ map fst ranges
+    takeRefines ranges
   where
-    decodeBase32 :: ShortByteString -> [Opaque]
-    decodeBase32 part = either (const []) (: []) $ Opaque.fromBase32Hex $ fromShort part
-
-    takeRefines :: [(Opaque, (NSEC3_Range, Hash))] -> Either String (Domain -> [RangeProp])
+    uniqueSorted = NRange.uniqueSorted rangeImpl
+    takeRefines :: [(NSEC3_Refined, Hash)] -> Either String (Domain -> [RangeProp])
     takeRefines ranges
         | length (filter fst results) > 1 = Left "NSEC3.n3RefineWithRanges: multiple rotated records found."
         | otherwise = Right props
@@ -248,14 +271,17 @@ n3RefineWithRanges ranges0 = do
         props qname = [prop | (_, refine) <- results, Just prop <- [refine qname]]
         results =
             [ (rotated, result)
-            | (owner, (rangeB32H@(_, RD_NSEC3{..}), hash)) <- ranges
-            , let next = nsec3_next_hashed_owner_name {- binary hashed value, not base32hex -}
+            | (NSEC3_Refined{..}, hash) <- ranges
+            , let owner = n3range_hashed_owner
+                  rangeData@(_, RD_NSEC3{..}) = n3range_data
+                  next = nsec3_next_hashed_owner_name {- binary hashed value, not base32hex -}
                   rotated = owner > next
                   refineWithRange cover qname
                     {- owner and next are decoded range, not base32hex -}
-                    | hash qname == owner = Just $ M $ Matches (rangeB32H, qname)
-                    | cover owner next (hash qname) = Just $ C $ Covers (rangeB32H, qname)
+                    | hqname == owner = Just $ M $ Matches (rangeData, qname)
+                    | cover owner next hqname = Just $ C $ Covers (rangeData, qname)
                     | otherwise = Nothing
+                    where hqname = hash qname
                   result
                     | rotated = refineWithRange n3CoversR
                     | otherwise = refineWithRange n3Covers

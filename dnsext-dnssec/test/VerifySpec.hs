@@ -9,6 +9,7 @@ import DNS.SEC.Verify
 import DNS.Types
 import qualified DNS.Types.Opaque as Opaque
 import Data.ByteString (ByteString)
+import Data.List (sortOn)
 import Data.String (fromString)
 import Data.Word
 import Test.Hspec
@@ -761,7 +762,7 @@ caseNSEC3 ((zone, rds, qname, qtype), expect) = either expectationFailure (const
     result <- detectNSEC3 zone ranges qname qtype
     nsec3CheckResult result expect
   where
-    ranges = [(owner, nsec3) | (owner, rd) <- rds, Just nsec3 <- [fromRData rd]]
+    ranges = sortOn fst [(owner, nsec3) | (owner, rd) <- rds, Just nsec3 <- [fromRData rd]]
     getEach ex mz rs qn qt = case ex of
         N3Expect_NameError{} -> N3R_NameError <$> nameErrorNSEC3 mz rs qn
         N3Expect_NoData{} -> N3R_NoData <$> noDataNSEC3 mz rs qn qt
@@ -980,7 +981,7 @@ caseNSEC ((zone, rds, qname, qtype), expect) = either expectationFailure (const 
     result <- detectNSEC zone ranges qname qtype
     nsecCheckResult result expect
   where
-    ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
+    ranges = sortOn fst [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
     getEach ex z rs qn qt = case ex of
         NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn
         NSEC_Expect_NoData{} -> NSECR_NoData <$> noDataNSEC z rs qn qt
