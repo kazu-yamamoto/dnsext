@@ -132,29 +132,36 @@ sortRDataCanonical rrs =
   where
     putRData' = putRData Canonical . rdata
 
+{- FOURMOLU_DISABLE -}
 {- assume sorted input. generalized RRset with CPS -}
-canonicalRRsetSorted
+canonicalRRsetSorted'
     :: [ResourceRecord]
-    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
-canonicalRRsetSorted rrs = do
-    (hd, xs) <-
-        maybe (Left "canonicalRRsetSorted: require non-empty RRset") Right $ uncons rrs
-    let eqhd x =
-            ((==) `on` rrname) hd x
-                && ((==) `on` rrtype) hd x
-                && ((==) `on` rrclass) hd x
+    -> (String -> a) -> (Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a
+canonicalRRsetSorted' rrs leftK rightK = either leftK id $ do
+    (hd, xs) <- maybe (Left "canonicalRRsetSorted: require non-empty RRset") Right $ uncons rrs
+    let eqhd x = ((==) `on` rrname)  hd x  &&
+                 ((==) `on` rrtype)  hd x  &&
+                 ((==) `on` rrclass) hd x
     unless (all eqhd xs) $
         Left "canonicalRRsetSorted: requires same ( rrname, rrtype, rrclass )"
     let rds = [rdata rr | rr <- rrs]
     unless (all ((== 1) . length) $ group rds) $
         Left "canonicalRRsetSorted: requires unique RData set"
-    return $ \h -> h (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) rds
+    return $ rightK (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) rds
+{- FOURMOLU_ENABLE -}
 
+canonicalRRsetSorted
+    :: [ResourceRecord]
+    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRsetSorted rrs = canonicalRRsetSorted' rrs Left (\n ty cls ttl rd -> Right $ \h -> h n ty cls ttl rd)
+
+{- FOURMOLU_DISABLE -}
 {- generalized RRset with CPS -}
 canonicalRRset
     :: [ResourceRecord]
-    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
-canonicalRRset rrs = canonicalRRsetSorted [rr | (_, rr) <- sortRDataCanonical rrs]
+    -> (String -> a) -> ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRset rrs = canonicalRRsetSorted' [rr | (_, rr) <- sortRDataCanonical rrs]
+{- FOURMOLU_ENABLE -}
 
 rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
@@ -184,6 +191,7 @@ verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     alg = dnskey_pubalg dnskey
     verify impl = verifyRRSIGwith impl now dnskey rrsig name typ cls sortedRDatas
 
+{- FOURMOLU_DISABLE -}
 verifyRRSIG
     :: DNSTime
     -> Domain
@@ -192,25 +200,24 @@ verifyRRSIG
     -> RD_RRSIG
     -> [ResourceRecord]
     -> Either String ()
-verifyRRSIG now zoneDom dnskey owner rrsig@RD_RRSIG{..} rrs = do
-    unless (rrsig_zone == zoneDom) $
-        Left $
-            "verifyRRSIG: RRSIG zone mismatch: "
-                ++ show rrsig_zone
-                ++ " =/= "
-                ++ show zoneDom
-    let (sortedRDatas, sortedRRs) = unzip $ sortRDataCanonical rrs
+verifyRRSIG now zone dnskey owner rrsig@RD_RRSIG{..} rrs = do
+    unless (rrsig_zone == zone) $
+        Left $ "verifyRRSIG: RRSIG zone mismatch: "
+            ++ show rrsig_zone
+            ++ " =/= "
+            ++ show zone
     {- The RRset MUST be sorted in canonical order.
        https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
-    h <- canonicalRRsetSorted sortedRRs
-    h $ \rrset_dom typ cls _ttl _rds -> do
-        unless (rrset_dom == owner) $
-            Left $
-                "verifyRRSIG: RRset domain mismatch with owner-domain: "
+    let (sortedRDatas, sortedRRs) = unzip $ sortRDataCanonical rrs
+    canonicalRRsetSorted' sortedRRs Left $
+        \rrset_dom typ cls _ttl _rds -> do
+            unless (rrset_dom == owner) $
+                Left $ "verifyRRSIG: RRset domain mismatch with owner-domain: "
                     ++ show rrset_dom
                     ++ " =/= "
                     ++ show owner
-        verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
+            verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
+{- FOURMOLU_ENABLE -}
 
 ---
 
