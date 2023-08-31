@@ -10,24 +10,26 @@ import DNS.SEC.PubKey
 import DNS.SEC.Types (RD_NSEC, RD_NSEC3)
 import DNS.Types
 
-data RRSIGImpl = forall pubkey sig.
-      RRSIGImpl
+{- FOURMOLU_DISABLE -}
+data RRSIGImpl = forall pubkey sig .
+    RRSIGImpl
     { rrsigIGetKey :: PubKey -> Either String pubkey
     , rrsigIGetSig :: Opaque -> Either String sig
     , rrsigIVerify :: pubkey -> sig -> ByteString -> Either String Bool
     }
 
-data DSImpl = forall digest.
-      DSImpl
+data DSImpl = forall digest .
+    DSImpl
     { dsIGetDigest :: ByteString -> digest
     , dsIVerify :: digest -> ByteString -> Bool
     }
 
-data NSEC3Impl = forall hash.
-      NSEC3Impl
+data NSEC3Impl = forall hash .
+    NSEC3Impl
     { nsec3IGetHash :: ByteString -> hash
     , nsec3IGetBytes :: hash -> ByteString
     }
+{- FOURMOLU_DISABLE -}
 
 ---
 

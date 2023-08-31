@@ -13,44 +13,42 @@ import DNS.SEC.Imports
 import DNS.SEC.Types
 import DNS.SEC.Verify.Types
 
-getResult :: Logic a -> Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String a
-getResult nlogic zone ranges qname qtype = do
+getResult :: Logic a -> Domain -> [NSEC_Range] -> Domain -> Either String a
+getResult nlogic zone ranges qname = do
     refine <- nsecRefineWithRanges ranges
     let qnames = refine qname
         coverwild = refine (fromString "*" <> zone)
-        noEncloser = Left "NSEC3.getResult: no NSEC3 encloser"
-    fromMaybe noEncloser $ nlogic (Zone zone) qtype qnames coverwild
+        noEncloser = Left $ unlines $ "NSEC.getResult: no NSEC encloser:" : ["  " ++ show o ++ " " ++ show rd | (o, rd) <- ranges]
+    fromMaybe noEncloser $ nlogic qnames coverwild
 
-newtype Zone = Zone Domain
-
-type Logic a = Zone -> TYPE -> [RangeProp] -> [RangeProp] -> Maybe (Either String a)
+type Logic a = [RangeProp] -> [RangeProp] -> Maybe (Either String a)
 
 ---
 
 {- FOURMOLU_DISABLE -}
-detect :: Logic NSEC_Result
+detect :: Domain -> TYPE -> Logic NSEC_Result
 detect zone qtype qnames coverwild =
-    fmap NSECR_WildcardNoData      <$> get_wildcardNoData      zone qtype qnames coverwild  <|>
-    fmap NSECR_NameError           <$> get_nameError           zone qtype qnames coverwild  <|>
-    fmap NSECR_UnsignedDelegation  <$> get_unsignedDelegation  zone qtype qnames coverwild  <|>
-    fmap NSECR_NoData              <$> get_noData              zone qtype qnames coverwild  <|>
-    fmap NSECR_WildcardExpansion   <$> get_wildcardExpansion   zone qtype qnames coverwild
+    fmap NSECR_WildcardNoData      <$> get_wildcardNoData           qtype qnames coverwild  <|>
+    fmap NSECR_NameError           <$> get_nameError                      qnames coverwild  <|>
+    fmap NSECR_UnsignedDelegation  <$> get_unsignedDelegation  zone       qnames coverwild  <|>
+    fmap NSECR_NoData              <$> get_noData                   qtype qnames coverwild  <|>
+    fmap NSECR_WildcardExpansion   <$> get_wildcardExpansion              qnames coverwild
 {- FOURMOLU_ENABLE -}
 
 ---
 
 get_nameError :: Logic NSEC_NameError
-get_nameError _zone _qtype qnames coverwild = Right <$> (nsec_NameError <$> propCover qnames <*> propCover coverwild)
+get_nameError qnames coverwild = Right <$> (nsec_NameError <$> propCover qnames <*> propCover coverwild)
 
-get_noData :: Logic NSEC_NoData
-get_noData _zone qtype qnames _coverwild = notElemBitmap <$> propMatch qnames
+get_noData :: TYPE -> Logic NSEC_NoData
+get_noData qtype qnames _coverwild = notElemBitmap <$> propMatch qnames
   where
     notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
         | qtype `elem` nsecTypes = Left $ "NSEC.NoData: type bitmap has query type `" ++ show qtype ++ "`."
         | otherwise = Right $ nsec_NoData m
 
-get_unsignedDelegation :: Logic NSEC_UnsignedDelegation
-get_unsignedDelegation (Zone zone) _qtype qnames _coverwild = do
+get_unsignedDelegation :: Domain -> Logic NSEC_UnsignedDelegation
+get_unsignedDelegation zone qnames _coverwild = do
     c@(Covers ((owner, RD_NSEC{..}), qn)) <- propCover qnames
     guard $ owner /= zone {- owner MUST be sub-level, not zone-top -}
     guard $ qn `isSubDomainOf` owner && NS `elem` nsecTypes {- super-domain is NS -}
@@ -58,10 +56,10 @@ get_unsignedDelegation (Zone zone) _qtype qnames _coverwild = do
     pure $ Right $ nsec_UnsignedDelegation c
 
 get_wildcardExpansion :: Logic NSEC_WildcardExpansion
-get_wildcardExpansion _zone _qtype qnames _coverwild = Right . nsec_WildcardExpansion <$> propCover qnames
+get_wildcardExpansion qnames _coverwild = Right . nsec_WildcardExpansion <$> propCover qnames
 
-get_wildcardNoData :: Logic NSEC_WildcardNoData
-get_wildcardNoData _zone qtype qnames _coverwild = do
+get_wildcardNoData :: TYPE -> Logic NSEC_WildcardNoData
+get_wildcardNoData  qtype qnames _coverwild = do
     c <- propCover qnames
     let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
             | qtype `elem` nsecTypes = Left $ "NSEC.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."

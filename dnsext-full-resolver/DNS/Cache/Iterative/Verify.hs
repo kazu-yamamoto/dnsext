@@ -28,6 +28,10 @@ import DNS.Cache.Iterative.Helpers
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 
+-- |
+-- null case is no RR for specified type.
+-- left case is not canonical RRset.
+-- righ case is after verified, with valid or invalid RRset.
 {- FOURMOLU_DISABLE -}
 with
     :: [RD_DNSKEY]
@@ -51,9 +55,8 @@ withCanonical
     -> ContextT IO b -> ContextT IO b -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
     -> ContextT IO b
 {- FOURMOLU_ENABLE -}
-withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
-    now <- liftIO =<< asks currentSeconds_
-    withSection getRanked msg $ \srrs rank -> withCanonical' now dnskeys rrn rrty h srrs rank nullK ncK withRRS
+withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK =
+    withSection getRanked msg $ \srrs rank -> withCanonical' dnskeys rrn rrty h srrs rank nullK ncK withRRS
   where
     ncK rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
     withRRS x rrset cache = do
@@ -68,31 +71,34 @@ withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
 
 {- FOURMOLU_DISABLE -}
 withCanonical'
-    :: EpochTime
-    -> [RD_DNSKEY]
+    :: [RD_DNSKEY]
     -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
     -> [ResourceRecord] -> Ranking
-    -> b -> ([ResourceRecord] -> String -> b) -> ([a] -> RRset -> ContextT IO () -> b)
-    -> b
+    -> ContextT IO b -> ([ResourceRecord] -> String -> ContextT IO b)
+    -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
+    -> ContextT IO b
 {- FOURMOLU_ENABLE -}
-withCanonical' now dnskeys rrn rrty h srrs rank nullK leftK rightK0
+withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
     | null xRRs = nullK
-    | otherwise = either (leftK xRRs) rightK $ canonicalRRset xRRs
+    | otherwise = canonicalRRset xRRs (leftK xRRs) rightK
   where
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
     sigs = rrsigList rrn rrty srrs
-    rightK p = withVerifiedRRset now dnskeys p sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
-        rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
+    rightK rrs sortedRRs = do
+        now <- liftIO =<< asks currentSeconds_
+        withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
+            rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
 
+{- FOURMOLU_DISABLE -}
 withVerifiedRRset
     :: EpochTime
     -> [RD_DNSKEY]
-    -> (RRset, [DNS.SPut ()])
-    -> [(RD_RRSIG, TTL)]
+    -> RRset -> [DNS.SPut ()] -> [(RD_RRSIG, TTL)]
     -> (RRset -> a)
     -> a
-withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
+{- FOURMOLU_ENABLE -}
+withVerifiedRRset now dnskeys RRset{..} sortedRDatas sigs vk =
     vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas goodSigRDs
   where
     expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
@@ -127,11 +133,11 @@ withVerifiedRRset now dnskeys (RRset{..}, sortedRDatas) sigs vk =
     showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
 
 {- get not verified canonical RRset -}
-canonicalRRset :: [ResourceRecord] -> Either String (RRset, [DNS.SPut ()])
-canonicalRRset rrs =
-    either Left (Right . ($ rightK)) $ SEC.canonicalRRsetSorted sortedRRs
+canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [DNS.SPut ()] -> a) -> a
+canonicalRRset rrs leftK rightK =
+    SEC.canonicalRRsetSorted' sortedRRs leftK mkRRset
   where
-    rightK dom typ cls ttl rds = (RRset dom typ cls ttl rds NotVerifiedRRS, sortedRDatas)
+    mkRRset dom typ cls ttl rds = rightK (RRset dom typ cls ttl rds NotVerifiedRRS) sortedRDatas
     (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset

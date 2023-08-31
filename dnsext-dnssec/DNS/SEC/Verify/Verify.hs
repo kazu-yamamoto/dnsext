@@ -2,7 +2,15 @@
 
 module DNS.SEC.Verify.Verify where
 
+-- GHC packages
+import qualified Data.ByteString as BS
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 -- dnsext-types
+import DNS.Types
+import DNS.Types.Internal
+import qualified DNS.Types.Opaque as Opaque
 
 -- this package
 
@@ -11,13 +19,7 @@ import DNS.SEC.HashAlg
 import DNS.SEC.Imports
 import DNS.SEC.PubAlg
 import DNS.SEC.Time (DNSTime, putDNSTime)
-import DNS.SEC.Types (
-    RD_DNSKEY (..),
-    RD_DS (..),
-    RD_NSEC3 (..),
-    RD_NSEC3PARAM (..),
-    RD_RRSIG (..),
- )
+import DNS.SEC.Types
 import DNS.SEC.Verify.ECDSA (ecdsaP256SHA, ecdsaP384SHA)
 import DNS.SEC.Verify.EdDSA (ed25519, ed448)
 import qualified DNS.SEC.Verify.N3SHA as NSEC3
@@ -26,12 +28,6 @@ import qualified DNS.SEC.Verify.NSEC3 as NSEC3
 import DNS.SEC.Verify.RSA (rsaSHA1, rsaSHA256, rsaSHA512)
 import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
-import DNS.Types
-import DNS.Types.Internal
-import qualified DNS.Types.Opaque as Opaque
-import qualified Data.ByteString as BS
-import Data.Map (Map)
-import qualified Data.Map as Map
 
 keyTag :: RD_DNSKEY -> Word16
 keyTag = keyTagFromBS . runSPut . putResourceData Canonical
@@ -136,29 +132,36 @@ sortRDataCanonical rrs =
   where
     putRData' = putRData Canonical . rdata
 
+{- FOURMOLU_DISABLE -}
 {- assume sorted input. generalized RRset with CPS -}
-canonicalRRsetSorted
+canonicalRRsetSorted'
     :: [ResourceRecord]
-    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
-canonicalRRsetSorted rrs = do
-    (hd, xs) <-
-        maybe (Left "canonicalRRsetSorted: require non-empty RRset") Right $ uncons rrs
-    let eqhd x =
-            ((==) `on` rrname) hd x
-                && ((==) `on` rrtype) hd x
-                && ((==) `on` rrclass) hd x
+    -> (String -> a) -> (Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a
+canonicalRRsetSorted' rrs leftK rightK = either leftK id $ do
+    (hd, xs) <- maybe (Left "canonicalRRsetSorted: require non-empty RRset") Right $ uncons rrs
+    let eqhd x = ((==) `on` rrname)  hd x  &&
+                 ((==) `on` rrtype)  hd x  &&
+                 ((==) `on` rrclass) hd x
     unless (all eqhd xs) $
         Left "canonicalRRsetSorted: requires same ( rrname, rrtype, rrclass )"
     let rds = [rdata rr | rr <- rrs]
     unless (all ((== 1) . length) $ group rds) $
         Left "canonicalRRsetSorted: requires unique RData set"
-    return $ \h -> h (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) rds
+    return $ rightK (rrname hd) (rrtype hd) (rrclass hd) (rrttl hd) rds
+{- FOURMOLU_ENABLE -}
 
+canonicalRRsetSorted
+    :: [ResourceRecord]
+    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRsetSorted rrs = canonicalRRsetSorted' rrs Left (\n ty cls ttl rd -> Right $ \h -> h n ty cls ttl rd)
+
+{- FOURMOLU_DISABLE -}
 {- generalized RRset with CPS -}
 canonicalRRset
     :: [ResourceRecord]
-    -> Either String ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
-canonicalRRset rrs = canonicalRRsetSorted [rr | (_, rr) <- sortRDataCanonical rrs]
+    -> (String -> a) -> ((Domain -> TYPE -> CLASS -> TTL -> [RData] -> a) -> a)
+canonicalRRset rrs = canonicalRRsetSorted' [rr | (_, rr) <- sortRDataCanonical rrs]
+{- FOURMOLU_ENABLE -}
 
 rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
@@ -188,6 +191,7 @@ verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     alg = dnskey_pubalg dnskey
     verify impl = verifyRRSIGwith impl now dnskey rrsig name typ cls sortedRDatas
 
+{- FOURMOLU_DISABLE -}
 verifyRRSIG
     :: DNSTime
     -> Domain
@@ -196,25 +200,24 @@ verifyRRSIG
     -> RD_RRSIG
     -> [ResourceRecord]
     -> Either String ()
-verifyRRSIG now zoneDom dnskey owner rrsig@RD_RRSIG{..} rrs = do
-    unless (rrsig_zone == zoneDom) $
-        Left $
-            "verifyRRSIG: RRSIG zone mismatch: "
-                ++ show rrsig_zone
-                ++ " =/= "
-                ++ show zoneDom
-    let (sortedRDatas, sortedRRs) = unzip $ sortRDataCanonical rrs
+verifyRRSIG now zone dnskey owner rrsig@RD_RRSIG{..} rrs = do
+    unless (rrsig_zone == zone) $
+        Left $ "verifyRRSIG: RRSIG zone mismatch: "
+            ++ show rrsig_zone
+            ++ " =/= "
+            ++ show zone
     {- The RRset MUST be sorted in canonical order.
        https://datatracker.ietf.org/doc/html/rfc4034#section-3.1.8.1 -}
-    h <- canonicalRRsetSorted sortedRRs
-    h $ \rrset_dom typ cls _ttl _rds -> do
-        unless (rrset_dom == owner) $
-            Left $
-                "verifyRRSIG: RRset domain mismatch with owner-domain: "
+    let (sortedRDatas, sortedRRs) = unzip $ sortRDataCanonical rrs
+    canonicalRRsetSorted' sortedRRs Left $
+        \rrset_dom typ cls _ttl _rds -> do
+            unless (rrset_dom == owner) $
+                Left $ "verifyRRSIG: RRset domain mismatch with owner-domain: "
                     ++ show rrset_dom
                     ++ " =/= "
                     ++ show owner
-        verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
+            verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
+{- FOURMOLU_ENABLE -}
 
 ---
 
@@ -281,21 +284,13 @@ hashNSEC3PARAMwith :: NSEC3Impl -> RD_NSEC3PARAM -> Domain -> Opaque
 hashNSEC3PARAMwith impl RD_NSEC3PARAM{..} domain =
     hashNSEC3with' impl nsec3param_iterations nsec3param_salt domain
 
-getNSEC3Result :: NSEC3.Logic a -> Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String a
-getNSEC3Result hl mayZone cs qname qtype =
-    withImpls $ \ps -> NSEC3.getResult hl mayZone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname qtype
-  where
-    withImpls h = h =<< mapM addImpl cs
-    addImpl r@(_, nsec3) = do
-        let alg = nsec3_hashalg nsec3
-        impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
-        return (impl, r)
-
 nsec3Dicts :: Map HashAlg NSEC3Impl
 nsec3Dicts =
     Map.fromList
         [ (Hash_SHA1, NSEC3.n3sha1)
         ]
+
+---
 
 hashNSEC3 :: RD_NSEC3 -> Domain -> Either String Opaque
 hashNSEC3 nsec3 domain =
@@ -315,40 +310,52 @@ hashNSEC3PARAM nsec3p domain =
     alg = nsec3param_hashalg nsec3p
     hash impl = hashNSEC3PARAMwith impl nsec3p domain
 
-nameErrorNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NameError
+---
+
+getNSEC3Result :: NSEC3.Logic a -> Domain -> [NSEC3_Range] -> Domain -> Either String a
+getNSEC3Result hl zone cs qname =
+    withImpls $ \ps -> NSEC3.getResult hl zone [(c, hashNSEC3with impl nsec3) | (impl, c@(_, nsec3)) <- ps] qname
+  where
+    withImpls h = h =<< mapM addImpl cs
+    addImpl r@(_, nsec3) = do
+        let alg = nsec3_hashalg nsec3
+        impl <- maybe (Left $ "NSEC3: unsupported algorithm: " ++ show alg) Right $ Map.lookup alg nsec3Dicts
+        return (impl, r)
+
+nameErrorNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_NameError
 nameErrorNSEC3 = getNSEC3Result NSEC3.get_nameError
 
-noDataNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NoData
-noDataNSEC3 = getNSEC3Result NSEC3.get_noData
+noDataNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_NoData
+noDataNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.get_noData qtype) zone ranges qname
 
-unsignedDelegationNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_UnsignedDelegation
+unsignedDelegationNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_UnsignedDelegation
 unsignedDelegationNSEC3 = getNSEC3Result NSEC3.get_unsignedDelegation
 
-wildcardExpansionNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardExpansion
+wildcardExpansionNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> Either String NSEC3_WildcardExpansion
 wildcardExpansionNSEC3 = getNSEC3Result NSEC3.get_wildcardExpansion
 
-wildcardNoDataNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardNoData
-wildcardNoDataNSEC3 = getNSEC3Result NSEC3.get_wildcardNoData
+wildcardNoDataNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_WildcardNoData
+wildcardNoDataNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.get_wildcardNoData qtype) zone ranges qname
 
-detectNSEC3 :: Maybe Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
-detectNSEC3 = getNSEC3Result NSEC3.detect
+detectNSEC3 :: Domain -> [NSEC3_Range] -> Domain -> TYPE -> Either String NSEC3_Result
+detectNSEC3 zone ranges qname qtype = getNSEC3Result (NSEC3.detect qtype) zone ranges qname
 
 ---
 
-detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
-detectNSEC = NSEC.getResult NSEC.detect
-
-nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NameError
+nameErrorNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_NameError
 nameErrorNSEC = NSEC.getResult NSEC.get_nameError
 
 noDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_NoData
-noDataNSEC = NSEC.getResult NSEC.get_noData
+noDataNSEC zone ranges qname qtype = NSEC.getResult (NSEC.get_noData qtype) zone ranges qname
 
-unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_UnsignedDelegation
-unsignedDelegationNSEC = NSEC.getResult NSEC.get_unsignedDelegation
+unsignedDelegationNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_UnsignedDelegation
+unsignedDelegationNSEC zone = NSEC.getResult (NSEC.get_unsignedDelegation zone) zone
 
-wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardExpansion
+wildcardExpansionNSEC :: Domain -> [NSEC_Range] -> Domain -> Either String NSEC_WildcardExpansion
 wildcardExpansionNSEC = NSEC.getResult NSEC.get_wildcardExpansion
 
 wildcardNoDataNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_WildcardNoData
-wildcardNoDataNSEC = NSEC.getResult NSEC.get_wildcardNoData
+wildcardNoDataNSEC zone ranges qname qtype = NSEC.getResult (NSEC.get_wildcardNoData qtype) zone ranges qname
+
+detectNSEC :: Domain -> [NSEC_Range] -> Domain -> TYPE -> Either String NSEC_Result
+detectNSEC zone ranges qname qtype = NSEC.getResult (NSEC.detect zone qtype) zone ranges qname

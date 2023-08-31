@@ -725,7 +725,7 @@ data NSEC3_Expect
     | N3Expect_WildcardNoData NSEC3_EW NSEC3_EW NSEC3_EW
     deriving (Eq, Show)
 
-type NSEC3_CASE = (([(Domain, RData)], Domain, TYPE), NSEC3_Expect)
+type NSEC3_CASE = ((Domain, [(Domain, RData)], Domain, TYPE), NSEC3_Expect)
 
 nsec3CheckResult :: NSEC3_Result -> NSEC3_Expect -> Either String ()
 nsec3CheckResult result expect = case (result, expect) of
@@ -754,24 +754,24 @@ nsec3CheckResult result expect = case (result, expect) of
         | otherwise = Left $ tag ++ ": " ++ show r ++ " =/= " ++ show e
 
 caseNSEC3 :: NSEC3_CASE -> Expectation
-caseNSEC3 ((rds, qname, qtype), expect) = either expectationFailure (const $ pure ()) $ do
+caseNSEC3 ((zone, rds, qname, qtype), expect) = either expectationFailure (const $ pure ()) $ do
     let checkEach = getEach expect
-    resEach <- checkEach Nothing ranges qname qtype
+    resEach <- checkEach zone ranges qname qtype
     nsec3CheckResult resEach expect
-    result <- detectNSEC3 Nothing ranges qname qtype
+    result <- detectNSEC3 zone ranges qname qtype
     nsec3CheckResult result expect
   where
     ranges = [(owner, nsec3) | (owner, rd) <- rds, Just nsec3 <- [fromRData rd]]
     getEach ex mz rs qn qt = case ex of
-        N3Expect_NameError{} -> N3R_NameError <$> nameErrorNSEC3 mz rs qn qt
+        N3Expect_NameError{} -> N3R_NameError <$> nameErrorNSEC3 mz rs qn
         N3Expect_NoData{} -> N3R_NoData <$> noDataNSEC3 mz rs qn qt
-        N3Expect_UnsignedDelegation{} -> N3R_UnsignedDelegation <$> unsignedDelegationNSEC3 mz rs qn qt
-        N3Expect_WildcardExpansion{} -> N3R_WildcardExpansion <$> wildcardExpansionNSEC3 mz rs qn qt
+        N3Expect_UnsignedDelegation{} -> N3R_UnsignedDelegation <$> unsignedDelegationNSEC3 mz rs qn
+        N3Expect_WildcardExpansion{} -> N3R_WildcardExpansion <$> wildcardExpansionNSEC3 mz rs qn
         N3Expect_WildcardNoData{} -> N3R_WildcardNoData <$> wildcardNoDataNSEC3 mz rs qn qt
 
 -- example from https://datatracker.ietf.org/doc/html/rfc7129#section-5.5
 nsec3RFC7129NameError :: NSEC3_CASE
-nsec3RFC7129NameError = ((rdatas, fromString "x.2.example.org.", TXT), expect)
+nsec3RFC7129NameError = (("example.org.", rdatas, fromString "x.2.example.org.", TXT), expect)
   where
     rdatas =
         [
@@ -802,7 +802,7 @@ nsec3RFC7129NameError = ((rdatas, fromString "x.2.example.org.", TXT), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.1
 -- Name Error
 nsec3RFC5155NameError :: NSEC3_CASE
-nsec3RFC5155NameError = ((rdatas, "a.c.x.w.example.", A), expect)
+nsec3RFC5155NameError = (("example.", rdatas, "a.c.x.w.example.", A), expect)
   where
     rdatas =
         [
@@ -833,7 +833,7 @@ nsec3RFC5155NameError = ((rdatas, "a.c.x.w.example.", A), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2
 -- No Data Error
 nsec3RFC5155NoData1 :: NSEC3_CASE
-nsec3RFC5155NoData1 = ((rdatas, "ns1.example.", MX), expect)
+nsec3RFC5155NoData1 = (("example.", rdatas, "ns1.example.", MX), expect)
   where
     rdatas =
         [
@@ -846,7 +846,7 @@ nsec3RFC5155NoData1 = ((rdatas, "ns1.example.", MX), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2.1
 -- No Data Error, Empty Non-Terminal
 nsec3RFC5155NoData2 :: NSEC3_CASE
-nsec3RFC5155NoData2 = ((rdatas, "y.w.example.", A), expect)
+nsec3RFC5155NoData2 = (("example.", rdatas, "y.w.example.", A), expect)
   where
     rdatas =
         [
@@ -859,7 +859,7 @@ nsec3RFC5155NoData2 = ((rdatas, "y.w.example.", A), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.6
 -- DS Child Zone No Data Error
 nsec3RFC5155NoData3 :: NSEC3_CASE
-nsec3RFC5155NoData3 = ((rdatas, "example.", DS), expect)
+nsec3RFC5155NoData3 = (("example.", rdatas, "example.", DS), expect)
   where
     rdatas =
         [
@@ -872,7 +872,7 @@ nsec3RFC5155NoData3 = ((rdatas, "example.", DS), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3
 -- Referral to an Opt-Out Unsigned Zone
 nsec3RFC5155UnsignedDelegation :: NSEC3_CASE
-nsec3RFC5155UnsignedDelegation = ((rdatas, "mc.c.example.", MX), expect)
+nsec3RFC5155UnsignedDelegation = (("example.", rdatas, "mc.c.example.", MX), expect)
   where
     rdatas =
         [
@@ -898,7 +898,7 @@ nsec3RFC5155UnsignedDelegation = ((rdatas, "mc.c.example.", MX), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.4
 -- Wildcard Expansion
 nsec3RFC5155WildcardExpansion :: NSEC3_CASE
-nsec3RFC5155WildcardExpansion = ((rdatas, "a.z.w.example.", MX), expect)
+nsec3RFC5155WildcardExpansion = (("example.", rdatas, "a.z.w.example.", MX), expect)
   where
     rdatas =
         [
@@ -913,7 +913,7 @@ nsec3RFC5155WildcardExpansion = ((rdatas, "a.z.w.example.", MX), expect)
 -- example from https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.5
 -- Wildcard No Data Error
 nsec3RFC5155WildcardNoData :: NSEC3_CASE
-nsec3RFC5155WildcardNoData = ((rdatas, "a.z.w.example.", AAAA), expect)
+nsec3RFC5155WildcardNoData = (("example.", rdatas, "a.z.w.example.", AAAA), expect)
   where
     rdatas =
         [
@@ -949,10 +949,10 @@ data NSEC_Expect
 
 nsecCheckResult :: NSEC_Result -> NSEC_Expect -> Either String ()
 nsecCheckResult result expect = case (result, expect) of
-    (NSECR_NameError (NSEC_NameError {..}), NSEC_Expect_NameError eq ew) -> do
+    (NSECR_NameError (NSEC_NameError{..}), NSEC_Expect_NameError eq ew) -> do
         check "name-error: qname_cover" (w2e nsec_nameError_qname_cover) eq
         check "name-error: wildcard_cover" (w2e nsec_nameError_wildcard_cover) ew
-    (NSECR_NoData (NSEC_NoData {..}), NSEC_Expect_NoData eq) -> do
+    (NSECR_NoData (NSEC_NoData{..}), NSEC_Expect_NoData eq) -> do
         check "no-data: qname_match" (w2e nsec_noData_qname_match) eq
     (NSECR_UnsignedDelegation (NSEC_UnsignedDelegation{..}), NSEC_Expect_UnsignedDelegation eq) -> do
         check "unsigned: ns_qname_cover" (w2e nsec_unsignedDelegation_ns_qname_cover) eq
@@ -982,10 +982,10 @@ caseNSEC ((zone, rds, qname, qtype), expect) = either expectationFailure (const 
   where
     ranges = [(owner, nsec) | (owner, rd) <- rds, Just nsec <- [fromRData rd]]
     getEach ex z rs qn qt = case ex of
-        NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn qt
+        NSEC_Expect_NameError{} -> NSECR_NameError <$> nameErrorNSEC z rs qn
         NSEC_Expect_NoData{} -> NSECR_NoData <$> noDataNSEC z rs qn qt
-        NSEC_Expect_UnsignedDelegation{} -> NSECR_UnsignedDelegation <$> unsignedDelegationNSEC z rs qn qt
-        NSEC_Expect_WildcardExpansion{} -> NSECR_WildcardExpansion <$> wildcardExpansionNSEC z rs qn qt
+        NSEC_Expect_UnsignedDelegation{} -> NSECR_UnsignedDelegation <$> unsignedDelegationNSEC z rs qn
+        NSEC_Expect_WildcardExpansion{} -> NSECR_WildcardExpansion <$> wildcardExpansionNSEC z rs qn
         NSEC_Expect_WildcardNoData{} -> NSECR_WildcardNoData <$> wildcardNoDataNSEC z rs qn qt
 
 -- example from https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2
