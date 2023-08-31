@@ -4,8 +4,8 @@
 module DNSTAP (
     DnstapQ,
     writeDnstapQ,
-    composeMessage,
     newDnstapWriter,
+    Message
 ) where
 
 import Control.Concurrent
@@ -23,12 +23,6 @@ newtype DnstapQ = DnstapQ (TQueue Message)
 
 newDnstapQ :: IO DnstapQ
 newDnstapQ = DnstapQ <$> newTQueueIO
-
-composeMessage :: ByteString -> Message
-composeMessage bs =
-    defaultMessage
-        { messageResponseMessage = Just $ Left (UnknownDNSError, bs) -- fixme: dummy
-        }
 
 writeDnstapQ :: DnstapQ -> Message -> IO ()
 writeDnstapQ (DnstapQ q) msg = atomically $ writeTQueue q msg

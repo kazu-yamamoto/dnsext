@@ -34,6 +34,7 @@ import DNS.Do53.Memo (
  )
 import qualified DNS.Log as Log
 import DNS.SEC
+import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP)
@@ -54,6 +55,7 @@ data Env = Env
     { logLines_ :: Log.PutLines
     , logQSize_ :: Log.GetQueueSize
     , logTerminate_ :: Log.Terminate
+    , logDNSTAP :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache

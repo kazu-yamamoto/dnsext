@@ -10,6 +10,7 @@ import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
+import qualified DNS.TAP.Schema as DNSTAP
 
 -- other packages
 import qualified DNS.Log as Log
@@ -74,7 +75,9 @@ cacherLogic env CntInc{..} send decode toResolver req = do
                 None -> toResolver reqMsg
                 Positive rspMsg -> do
                     incHit
-                    send $ DNS.encode rspMsg
+                    let bs = DNS.encode rspMsg
+                    send bs
+                    logDNSTAP env $ DNSTAP.composeMessage bs
                 Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
@@ -96,9 +99,11 @@ workerLogic
 workerLogic env CntInc{..} send reqMsg = do
     ex <- getResponseIterative env reqMsg
     case ex of
-        Right x -> do
+        Right rspMsg -> do
             incMiss
-            send $ DNS.encode x
+            let bs = DNS.encode rspMsg
+            send bs
+            logDNSTAP env $ DNSTAP.composeMessage bs
         Left e -> do
             incFailed
             logLn Log.WARN $

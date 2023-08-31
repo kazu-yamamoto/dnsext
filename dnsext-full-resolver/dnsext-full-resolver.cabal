@@ -55,6 +55,7 @@ library
         dnsext-dnssec,
         dnsext-do53,
         dnsext-log,
+        dnsext-dnstap,
         dnsext-types,
         http-types,
         http2,
@@ -84,6 +85,7 @@ executable bowline
     hs-source-dirs:   bowline
     other-modules:
         Config
+        DNSTAP
         Monitor
         Parser
         SocketUtil
