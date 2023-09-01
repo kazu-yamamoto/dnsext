@@ -9,7 +9,7 @@ import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
-import DNS.TAP.Schema (SocketProtocol(..))
+import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 import qualified Network.HTTP2.TLS.Server as H2

@@ -2,7 +2,7 @@ module QuerySpec where
 
 import Test.Hspec
 
-import Control.Concurrent (threadDelay, forkIO)
+import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (void)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.SEC as DNS

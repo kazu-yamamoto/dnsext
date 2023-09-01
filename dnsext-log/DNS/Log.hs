@@ -6,7 +6,7 @@ module DNS.Log (
 ) where
 
 -- GHC packages
-import Control.Monad (forever, when, void)
+import Control.Monad (forever, void, when)
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
@@ -58,8 +58,10 @@ newHandleLogger outFh loggerLevel = do
         | colorize = withColor color
         | otherwise = withColor Nothing
       where
-        withColor c = when (loggerLevel <= lv) $
-            atomically $ writeTQueue inQ (c, xs)
+        withColor c =
+            when (loggerLevel <= lv) $
+                atomically $
+                    writeTQueue inQ (c, xs)
 
     logLoop inQ = forever write
       where

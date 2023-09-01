@@ -6,12 +6,12 @@ module DNS.Cache.Server.TCP where
 import Control.Monad (when)
 
 -- dnsext-* packages
-import DNS.TAP.Schema (SocketProtocol(..))
+import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 import qualified DNS.Do53.Internal as DNS
 import Network.Run.TCP
-import Network.Socket (getSocketName, getPeerName)
+import Network.Socket (getPeerName, getSocketName)
 import qualified System.TimeManager as T
 
 -- this package

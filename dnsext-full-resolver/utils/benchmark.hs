@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, killThread, getNumCapabilities)
+import Control.Concurrent (forkIO, getNumCapabilities, killThread)
 import Control.DeepSeq (deepseq)
 import Control.Monad (replicateM, unless, (>=>))
 import qualified DNS.Types as DNS

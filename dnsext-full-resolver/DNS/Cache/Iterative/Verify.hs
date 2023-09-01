@@ -207,11 +207,21 @@ getNameError' zone dnskeys getRanked msg qname =
 
 getUnsignedDelegation' :: GetNE (ContextT IO) m NSEC_UnsignedDelegation NSEC3_UnsignedDelegation a
 getUnsignedDelegation' zone dnskeys getRanked msg qname =
-    getWithFallback (\rs -> SEC.unsignedDelegationNSEC zone rs qname) (\rs -> SEC.unsignedDelegationNSEC3 zone rs qname) dnskeys getRanked msg
+    getWithFallback
+        (\rs -> SEC.unsignedDelegationNSEC zone rs qname)
+        (\rs -> SEC.unsignedDelegationNSEC3 zone rs qname)
+        dnskeys
+        getRanked
+        msg
 
 getWildcardExpansion' :: GetNE (ContextT IO) m NSEC_WildcardExpansion NSEC3_WildcardExpansion a
 getWildcardExpansion' zone dnskeys getRanked msg qname =
-    getWithFallback (\rs -> SEC.wildcardExpansionNSEC zone rs qname) (\rs -> SEC.wildcardExpansionNSEC3 zone rs qname) dnskeys getRanked msg
+    getWithFallback
+        (\rs -> SEC.wildcardExpansionNSEC zone rs qname)
+        (\rs -> SEC.wildcardExpansionNSEC3 zone rs qname)
+        dnskeys
+        getRanked
+        msg
 
 ---
 

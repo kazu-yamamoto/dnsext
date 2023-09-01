@@ -132,7 +132,7 @@ genCrsAssoc =
     ]
   where
     crset [] = error "genCrsAssoc: only not empty allowed"
-    crset (d:ds) = Cache.mkNotVerified d ds
+    crset (d : ds) = Cache.mkNotVerified d ds
 
 toULString :: String -> Gen String
 toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s

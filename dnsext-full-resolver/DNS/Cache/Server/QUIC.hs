@@ -10,7 +10,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
-import DNS.TAP.Schema (SocketProtocol(..))
+import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 import qualified DNS.Do53.Internal as DNS

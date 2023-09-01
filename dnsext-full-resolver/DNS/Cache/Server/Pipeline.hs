@@ -7,11 +7,12 @@ import Data.ByteString (ByteString)
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 
 -- dnsext-* packages
+
+import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.TAP.Schema as DNSTAP
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import DNS.TAP.Schema (SocketProtocol(..))
-import qualified DNS.TAP.Schema as DNSTAP
 
 -- other packages
 import qualified DNS.Log as Log

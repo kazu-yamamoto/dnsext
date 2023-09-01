@@ -31,7 +31,7 @@ import DNS.Cache.Queue (
 import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.Types
-import DNS.TAP.Schema (SocketProtocol(..))
+import DNS.TAP.Schema (SocketProtocol (..))
 
 ----------------------------------------------------------------
 
