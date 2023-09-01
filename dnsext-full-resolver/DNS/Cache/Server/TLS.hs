@@ -9,6 +9,7 @@ import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
+import DNS.TAP.Schema (SocketProtocol(..))
 
 -- other packages
 import qualified Network.HTTP2.TLS.Server as H2
@@ -27,7 +28,9 @@ tlsServer creds VcServerConfig{..} env port host = do
             let sendDoT = DNS.sendVC $ H2.sendMany backend
                 recvDoT = DNS.recvVC maxSize recvN
             (_n, bss) <- recvDoT
-            cacheWorkerLogic env cntinc sendDoT bss
+            let mysa = H2.mySockAddr backend
+                peersa = H2.peerSockAddr backend
+            cacheWorkerLogic env cntinc sendDoT DOT mysa peersa bss
     return ([tlsserver], [readCounters cntget])
   where
     maxSize = fromIntegral vc_query_max_size

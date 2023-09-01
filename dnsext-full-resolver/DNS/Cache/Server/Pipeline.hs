@@ -10,10 +10,12 @@ import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
+import DNS.TAP.Schema (SocketProtocol(..))
 import qualified DNS.TAP.Schema as DNSTAP
 
 -- other packages
 import qualified DNS.Log as Log
+import Network.Socket (SockAddr)
 
 -- this package
 import DNS.Cache.Iterative (CacheResult (..), Env (..), getResponseCached, getResponseIterative)
@@ -63,9 +65,12 @@ cacherLogic
     -> (ByteString -> IO ())
     -> (DNS.EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
     -> (DNS.DNSMessage -> IO ())
+    -> SocketProtocol
+    -> Maybe SockAddr
+    -> Maybe SockAddr
     -> a
     -> IO ()
-cacherLogic env CntInc{..} send decode toResolver req = do
+cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
     now <- currentSeconds_ env
     case decode now req of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
@@ -77,7 +82,8 @@ cacherLogic env CntInc{..} send decode toResolver req = do
                     incHit
                     let bs = DNS.encode rspMsg
                     send bs
-                    logDNSTAP env $ DNSTAP.composeMessage bs
+                    now' <- currentSeconds_ env
+                    logDNSTAP env $ DNSTAP.composeMessage proto mysa peersa now' bs
                 Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
@@ -94,16 +100,20 @@ workerLogic
     :: Env
     -> CntInc
     -> (ByteString -> IO ())
+    -> SocketProtocol
+    -> Maybe SockAddr
+    -> Maybe SockAddr
     -> DNS.DNSMessage
     -> IO ()
-workerLogic env CntInc{..} send reqMsg = do
+workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
     ex <- getResponseIterative env reqMsg
     case ex of
         Right rspMsg -> do
             incMiss
             let bs = DNS.encode rspMsg
             send bs
-            logDNSTAP env $ DNSTAP.composeMessage bs
+            now' <- currentSeconds_ env
+            logDNSTAP env $ DNSTAP.composeMessage proto mysa peersa now' bs
         Left e -> do
             incFailed
             logLn Log.WARN $
@@ -120,11 +130,14 @@ cacheWorkerLogic
     :: Env
     -> CntInc
     -> (ByteString -> IO ())
+    -> SocketProtocol
+    -> Maybe SockAddr
+    -> Maybe SockAddr
     -> [ByteString]
     -> IO ()
-cacheWorkerLogic env cntinc send req = do
-    let worker = workerLogic env cntinc send
-    cacherLogic env cntinc send decode worker req
+cacheWorkerLogic env cntinc send proto mysa peersa req = do
+    let worker = workerLogic env cntinc send proto mysa peersa
+    cacherLogic env cntinc send decode worker proto mysa peersa req
   where
     decode t bss = case DNS.decodeChunks t bss of
         Left e -> Left e

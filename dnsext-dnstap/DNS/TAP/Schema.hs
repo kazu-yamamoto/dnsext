@@ -4,33 +4,50 @@
 -- | DNSTAP Schema.
 --
 -- * Spec: <https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto>
-
 module DNS.TAP.Schema (
     -- * Types
     DNSTAP (..),
     defaultDNSTAP,
-    DnstapType(MESSAGE),
+    DnstapType (MESSAGE),
     Message (..),
     TapMsg (..),
     defaultMessage,
     composeMessage,
-    SocketFamily(IPv4,IPv6),
-    SocketProtocol(UDP,TCP,DOT,DOH,DNSCryptUDP,DNSCryptTCP,DOQ),
-    MessageType (AUTH_QUERY,AUTH_RESPONSE,RESOLVER_QUERY,RESOLVER_RESPONSE,CLIENT_QUERY,CLIENT_RESPONSE,FORWARDER_QUERY,FORWARDER_RESPONSE,STUB_QUERY,STUB_RESPONSE,TOOL_QUERY,TOOL_RESPONSE,UPDATE_QUERY,UPDATE_RESPONSE),
+    SocketFamily (IPv4, IPv6),
+    SocketProtocol (UDP, TCP, DOT, DOH, DNSCryptUDP, DNSCryptTCP, DOQ),
+    MessageType (
+        AUTH_QUERY,
+        AUTH_RESPONSE,
+        RESOLVER_QUERY,
+        RESOLVER_RESPONSE,
+        CLIENT_QUERY,
+        CLIENT_RESPONSE,
+        FORWARDER_QUERY,
+        FORWARDER_RESPONSE,
+        STUB_QUERY,
+        STUB_RESPONSE,
+        TOOL_QUERY,
+        TOOL_RESPONSE,
+        UPDATE_QUERY,
+        UPDATE_RESPONSE
+    ),
+
     -- * Decoding
     decodeDnstap,
     decodeMessage,
+
     -- * Encoding
     encodeDnstap,
     encodeMessage,
 ) where
 
-import DNS.Types (DNSMessage, DNSError(..))
+import DNS.Types (DNSError (..), DNSMessage)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified Data.ByteString as BS
 import qualified Data.IP as IP
 import Network.ByteOrder
+import Network.Socket (SockAddr (..))
 
 import DNS.TAP.ProtocolBuffer
 
@@ -106,11 +123,34 @@ defaultMessage =
     , messageResponseMessage  = Nothing
     }
 
-composeMessage :: ByteString -> Message
-composeMessage bs =
+composeMessage
+    :: SocketProtocol
+    -> Maybe SockAddr
+    -> Maybe SockAddr
+    -> DNS.EpochTime
+    -> ByteString
+    -> Message
+composeMessage proto mysa peersa t bs =
     defaultMessage
-        { messageResponseMessage = Just $ WireFt bs
+        { messageSocketFamily    = peersa >>= toFamily
+        , messageSocketProtocol  = Just proto
+        , messageQueryAddress    = peersa >>= toIP
+        , messageResponseAddress = mysa >>= toIP
+        , messageQueryPort       = peersa >>= toPort
+        , messageResponsePort    = mysa >>= toPort
+        , messageResponseTimeSec = Just $ fromIntegral t
+        , messageResponseMessage = Just $ WireFt bs
         }
+ where
+   toFamily sa = case sa of
+     SockAddrInet{}  -> Just IPv4
+     SockAddrInet6{} -> Just IPv6
+     _               -> Nothing
+   toPort sa = case sa of
+     SockAddrInet  p _     -> Just $ fromIntegral p
+     SockAddrInet6 p _ _ _ -> Just $ fromIntegral p
+     _                     -> Nothing
+   toIP sa = fst <$> IP.fromSockAddr sa
 
 decodeMessage :: ByteString -> Message
 decodeMessage bs =
