@@ -125,19 +125,19 @@ defaultMessage =
 
 composeMessage
     :: SocketProtocol
-    -> Maybe SockAddr
-    -> Maybe SockAddr
+    -> SockAddr
+    -> SockAddr
     -> DNS.EpochTime
     -> ByteString
     -> Message
 composeMessage proto mysa peersa t bs =
     defaultMessage
-        { messageSocketFamily    = peersa >>= toFamily
+        { messageSocketFamily    = toFamily peersa
         , messageSocketProtocol  = Just proto
-        , messageQueryAddress    = peersa >>= toIP
-        , messageResponseAddress = mysa >>= toIP
-        , messageQueryPort       = peersa >>= toPort
-        , messageResponsePort    = mysa >>= toPort
+        , messageQueryAddress    = toIP peersa
+        , messageResponseAddress = toIP mysa
+        , messageQueryPort       = toPort peersa
+        , messageResponsePort    = toPort mysa
         , messageResponseTimeSec = Just $ fromIntegral t
         , messageResponseMessage = Just $ WireFt bs
         }

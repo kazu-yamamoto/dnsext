@@ -67,8 +67,8 @@ cacherLogic
     -> (DNS.EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
     -> (DNS.DNSMessage -> IO ())
     -> SocketProtocol
-    -> Maybe SockAddr
-    -> Maybe SockAddr
+    -> SockAddr
+    -> SockAddr
     -> a
     -> IO ()
 cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
@@ -102,8 +102,8 @@ workerLogic
     -> CntInc
     -> (ByteString -> IO ())
     -> SocketProtocol
-    -> Maybe SockAddr
-    -> Maybe SockAddr
+    -> SockAddr
+    -> SockAddr
     -> DNS.DNSMessage
     -> IO ()
 workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
@@ -132,8 +132,8 @@ cacheWorkerLogic
     -> CntInc
     -> (ByteString -> IO ())
     -> SocketProtocol
-    -> Maybe SockAddr
-    -> Maybe SockAddr
+    -> SockAddr
+    -> SockAddr
     -> [ByteString]
     -> IO ()
 cacheWorkerLogic env cntinc send proto mysa peersa req = do

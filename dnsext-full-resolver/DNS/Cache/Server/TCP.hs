@@ -35,7 +35,7 @@ tcpServer VcServerConfig{..} env port host = do
                         when (siz > vc_slowloris_size) $ T.tickle th
                         return bss
                 (_n, bss) <- recv
-                cacheWorkerLogic env cntinc send TCP (Just mysa) (Just peersa) bss
+                cacheWorkerLogic env cntinc send TCP mysa peersa bss
     return ([tcpserver], [readCounters cntget])
   where
     maxSize = fromIntegral vc_query_max_size

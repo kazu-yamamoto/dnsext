@@ -138,7 +138,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
         let loop = handledLoop logr $ do
                 (reqMsg, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue inQ
                 let enqueueResp' x = enqueueResp (x, clisa)
-                workerLogic env cntinc enqueueResp' UDP (Just mysa) (Just peersa) reqMsg
+                workerLogic env cntinc enqueueResp' UDP mysa peersa reqMsg
         return (loop, writeQueue inQ, queueSize inQ)
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
@@ -146,7 +146,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
             (req, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue reqQ
             let enqueueDec' x = enqueueDec (x, clisa)
                 enqueueResp' x = enqueueResp (x, clisa)
-            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' UDP (Just mysa) (Just peersa) req
+            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' UDP mysa peersa req
 
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]

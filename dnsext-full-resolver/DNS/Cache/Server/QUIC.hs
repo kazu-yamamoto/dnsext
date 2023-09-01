@@ -46,7 +46,7 @@ quicServer creds VcServerConfig{..} env port host = do
                                     when (siz > vc_slowloris_size) $ T.tickle th
                                     return bss
                             (_n, bss) <- recv
-                            cacheWorkerLogic env cntinc send DOQ (Just mysa) (Just peersa) bss
+                            cacheWorkerLogic env cntinc send DOQ mysa peersa bss
                     void $ forkFinally server (\_ -> QUIC.closeStream strm)
     return ([quicserver], [readCounters cntget])
   where
