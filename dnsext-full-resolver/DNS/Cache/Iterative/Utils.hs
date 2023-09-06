@@ -39,12 +39,34 @@ printResult = either print (putStr . unlines . concat . result)
         , "additional:" : map show (DNS.additional msg) ++ [""]
         ]
 
+{- FOURMOLU_DISABLE -}
+data PPMode
+    = PPShort
+    | PPFull
+    deriving Show
+
+putDelegation :: Applicative f => PPMode -> NE DEntry -> (String -> f ()) -> (String -> f ()) -> f ()
+putDelegation pprs des h fallback  = case pprs of
+    PPFull   -> h ppFull
+    PPShort  -> h ppShort *> unless (null suffix) (fallback ppFull)
+  where
+    ppFull  = "\t" ++ intercalate "\n\t" (map fst pps)
+    ppShort = "\t" ++ intercalate "\n\t" (map fst hd ++ suffix)
+    suffix = [ "... " ++ note  ++ " ..." | not $ null tl ]
+    note = "plus " ++ show (length tl) ++ " names and " ++ show (sum $ map snd tl) ++ " glues"
+    (hd, tl) = splitAt 2 pps
+    pps = ppDelegations des
+{- FOURMOLU_ENABLE -}
+
 ppDelegation :: NE DEntry -> String
-ppDelegation des =
-    "\t" ++ (intercalate "\n\t" $ map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT (fst des : snd des))
+ppDelegation des = "\t" ++ intercalate "\n\t" (map fst $ ppDelegations des)
+
+ppDelegations :: NE DEntry -> [(String, Int)]
+ppDelegations des =
+    map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT (fst des : snd des)
   where
     toT (DEwithAx d i) = (d, show i)
     toT (DEonlyNS d) = (d, "")
     bundle xss@(x : _) = (fst x, filter (/= "") $ map snd xss)
     bundle [] = ("", []) -- never reach
-    pp (d, is) = show d ++ " " ++ show is
+    pp (d, is) = (show d ++ " " ++ show is, length is)
