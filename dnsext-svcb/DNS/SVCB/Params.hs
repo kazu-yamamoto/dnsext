@@ -9,7 +9,7 @@ import qualified Data.IntMap as M
 newtype SvcParams = SvcParams (IntMap SvcParamValue) deriving (Eq, Ord)
 
 instance Show SvcParams where
-    show (SvcParams m) = "[" ++ intercalate ", " (M.foldrWithKey f [] m) ++ "]"
+    show (SvcParams m) = "{" ++ intercalate ", " (M.foldrWithKey f [] m) ++ "}"
       where
         showkv k v =
             show (toSvcParamKey $ fromIntegral k)
