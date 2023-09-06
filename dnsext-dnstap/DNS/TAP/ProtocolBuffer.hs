@@ -8,18 +8,19 @@
 -- This library assumes that 'Int' is 64bit.
 -- VARINT, I32 and I64 is stored as 'Int' in an 'Object'.
 -- LEN is stored as 'ByteString'.
-
 module DNS.TAP.ProtocolBuffer (
     -- * Types
     Object,
     empty,
     FieldNumber,
+
     -- * Decoding
     decode,
     getI,
     getOptI,
     getS,
     getOptS,
+
     -- * Encoding
     encode,
     setVAR,
@@ -66,8 +67,9 @@ type FieldNumber = Int
 ----------------------------------------------------------------
 
 -- | Wire type.
-newtype WireType = WireType { fromWireType :: Int } deriving (Eq)
+newtype WireType = WireType {fromWireType :: Int} deriving (Eq)
 
+{- FOURMOLU_DISABLE -}
 pattern VAR :: WireType
 pattern VAR  = WireType 0
 pattern I64 :: WireType
@@ -76,12 +78,13 @@ pattern LEN :: WireType
 pattern LEN  = WireType 2
 pattern I32 :: WireType
 pattern I32  = WireType 5
+{- FOURMOLU_ENABLE -}
 
 instance Show WireType where
-    show VAR          = "VARINT"
-    show I64          = "I64"
-    show LEN          = "LEN"
-    show I32          = "I32"
+    show VAR = "VARINT"
+    show I64 = "I64"
+    show LEN = "LEN"
+    show I32 = "I32"
     show (WireType x) = "WireType " ++ show x
 
 ----------------------------------------------------------------
@@ -212,6 +215,7 @@ decodeI32 rbuf = do
     n3 <- fromIntegral <$> read8 rbuf
     return ((n3 `shiftL` 24) .|. (n2 `shiftL` 16) .|. (n1 `shiftL` 8) .|. n0)
 
+{- FOURMOLU_DISABLE -}
 decodeI64 :: Readable a => a -> IO Int
 decodeI64 rbuf = do
     n0 <- fromIntegral <$> read8 rbuf
@@ -224,14 +228,15 @@ decodeI64 rbuf = do
     n7 <- fromIntegral <$> read8 rbuf
     return
         ( (n7 `shiftL` 56)
-            .|. (n6 `shiftL` 48)
-            .|. (n5 `shiftL` 40)
-            .|. (n4 `shiftL` 32)
-            .|. (n3 `shiftL` 24)
-            .|. (n2 `shiftL` 16)
-            .|. (n1 `shiftL` 8)
-            .|. n0
+      .|. (n6 `shiftL` 48)
+      .|. (n5 `shiftL` 40)
+      .|. (n4 `shiftL` 32)
+      .|. (n3 `shiftL` 24)
+      .|. (n2 `shiftL` 16)
+      .|. (n1 `shiftL`  8)
+      .|. n0
         )
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 -- Encoding
@@ -240,20 +245,21 @@ decodeI64 rbuf = do
 -- | Encoding
 encode :: Object -> ByteString
 encode (Object m) = unsafePerformIO $
-    withWriteBuffer len $ \wbuf -> loop wbuf lst
+    withWriteBuffer len $
+        \wbuf -> loop wbuf lst
   where
     lst = IM.toAscList m
-    len = sum $ map (\(_,v) -> vlen v) lst
+    len = sum $ map (\(_, v) -> vlen v) lst
     loop _ [] = return ()
-    loop wbuf ((field,v):vs) = do
+    loop wbuf ((field, v) : vs) = do
         encodeTag wbuf field $ vwt v
         case v of
-          VVAR i -> encodeVarint wbuf i
-          VI32 i -> encodeI32 wbuf i
-          VI64 i -> encodeI64 wbuf i
-          VSTR s -> do
-              encodeVarint wbuf $ BS.length s
-              copyByteString wbuf s
+            VVAR i -> encodeVarint wbuf i
+            VI32 i -> encodeI32 wbuf i
+            VI64 i -> encodeI64 wbuf i
+            VSTR s -> do
+                encodeVarint wbuf $ BS.length s
+                copyByteString wbuf s
         loop wbuf vs
 
 varintLength :: Int
@@ -263,9 +269,9 @@ tagLength :: Int
 tagLength = varintLength
 
 vlen :: Value -> Int
-vlen (VVAR _)  = tagLength + varintLength
-vlen (VI32 _)  = tagLength + 4
-vlen (VI64 _)  = tagLength + 8
+vlen (VVAR _) = tagLength + varintLength
+vlen (VI32 _) = tagLength + 4
+vlen (VI64 _) = tagLength + 8
 vlen (VSTR bs) = tagLength + varintLength + BS.length bs
 
 vwt :: Value -> WireType
@@ -273,7 +279,6 @@ vwt (VVAR _) = VAR
 vwt (VI32 _) = I32
 vwt (VI64 _) = I64
 vwt (VSTR _) = LEN
-
 
 encodeTag :: WriteBuffer -> FieldNumber -> WireType -> IO ()
 encodeTag wbuf field wt =
@@ -294,6 +299,7 @@ encodeVarint wbuf n0 = loop n0
         write8 wbuf $ fromIntegral ((n .&. 0x7f) `setBit` 7)
         loop (n `shiftR` 7)
 
+{- FOURMOLU_DISABLE -}
 encodeI32 :: WriteBuffer -> Int -> IO ()
 encodeI32 wbuf i = do
     write8 wbuf $ fromIntegral  (i              .&. 0xff)
@@ -311,3 +317,4 @@ encodeI64 wbuf i = do
     write8 wbuf $ fromIntegral ((i `shiftR` 40) .&. 0xff)
     write8 wbuf $ fromIntegral ((i `shiftR` 48) .&. 0xff)
     write8 wbuf $ fromIntegral ((i `shiftR` 54) .&. 0xff)
+{- FOURMOLU_ENABLE -}

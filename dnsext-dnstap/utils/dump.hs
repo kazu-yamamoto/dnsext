@@ -7,12 +7,12 @@ module Main where
 import Control.Concurrent (forkIO)
 import Control.Monad (forever, void)
 import Network.Socket
-import Text.Pretty.Simple (pPrint)
 import System.Environment (getArgs)
+import Text.Pretty.Simple (pPrint)
 
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
-import DNS.TAP.FastStream (Config(..), reader)
+import DNS.TAP.FastStream (Config (..), reader)
 import DNS.TAP.Schema (decodeDnstap)
 import DNS.Types (runInitIO)
 

@@ -4,32 +4,50 @@
 -- | DNSTAP Schema.
 --
 -- * Spec: <https://github.com/dnstap/dnstap.pb/blob/master/dnstap.proto>
-
 module DNS.TAP.Schema (
     -- * Types
     DNSTAP (..),
     defaultDNSTAP,
-    DnstapType(MESSAGE),
+    DnstapType (MESSAGE),
     Message (..),
+    TapMsg (..),
     defaultMessage,
     composeMessage,
-    SocketFamily(IPv4,IPv6),
-    SocketProtocol(UDP,TCP,DOT,DOH,DNSCryptUDP,DNSCryptTCP,DOQ),
-    MessageType (AUTH_QUERY,AUTH_RESPONSE,RESOLVER_QUERY,RESOLVER_RESPONSE,CLIENT_QUERY,CLIENT_RESPONSE,FORWARDER_QUERY,FORWARDER_RESPONSE,STUB_QUERY,STUB_RESPONSE,TOOL_QUERY,TOOL_RESPONSE,UPDATE_QUERY,UPDATE_RESPONSE),
+    SocketFamily (IPv4, IPv6),
+    SocketProtocol (UDP, TCP, DOT, DOH, DNSCryptUDP, DNSCryptTCP, DOQ),
+    MessageType (
+        AUTH_QUERY,
+        AUTH_RESPONSE,
+        RESOLVER_QUERY,
+        RESOLVER_RESPONSE,
+        CLIENT_QUERY,
+        CLIENT_RESPONSE,
+        FORWARDER_QUERY,
+        FORWARDER_RESPONSE,
+        STUB_QUERY,
+        STUB_RESPONSE,
+        TOOL_QUERY,
+        TOOL_RESPONSE,
+        UPDATE_QUERY,
+        UPDATE_RESPONSE
+    ),
+
     -- * Decoding
     decodeDnstap,
     decodeMessage,
+
     -- * Encoding
     encodeDnstap,
     encodeMessage,
 ) where
 
-import DNS.Types (DNSMessage, DNSError(..))
+import DNS.Types (DNSError (..), DNSMessage)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified Data.ByteString as BS
 import qualified Data.IP as IP
 import Network.ByteOrder
+import Network.Socket (SockAddr (..))
 
 import DNS.TAP.ProtocolBuffer
 
@@ -62,6 +80,12 @@ decodeDnstap bs =
   where
     obj = decode bs
 
+data TapMsg =
+    DnsMsg DNSMessage
+  | DecErr DNSError ByteString
+  | WireFt ByteString
+  deriving (Eq, Show)
+
 data Message = Message
     { messageType             :: MessageType
     , messageSocketFamily     :: Maybe SocketFamily
@@ -72,11 +96,11 @@ data Message = Message
     , messageResponsePort     :: Maybe Int
     , messageQueryTimeSec     :: Maybe Int
     , messageQueryTimeNsec    :: Maybe Int
-    , messageQueryMessage     :: Maybe (Either (DNSError,ByteString) DNSMessage)
+    , messageQueryMessage     :: Maybe TapMsg
     , messageQueryZone        :: Maybe ByteString
     , messageResponseTimeSec  :: Maybe Int
     , messageResponseTimeNsec :: Maybe Int
-    , messageResponseMessage  :: Maybe (Either (DNSError,ByteString) DNSMessage)
+    , messageResponseMessage  :: Maybe TapMsg
     }
     deriving (Eq, Show)
 
@@ -99,11 +123,34 @@ defaultMessage =
     , messageResponseMessage  = Nothing
     }
 
-composeMessage :: ByteString -> Message
-composeMessage bs =
+composeMessage
+    :: SocketProtocol
+    -> SockAddr
+    -> SockAddr
+    -> DNS.EpochTime
+    -> ByteString
+    -> Message
+composeMessage proto mysa peersa t bs =
     defaultMessage
-        { messageResponseMessage = Just $ Left (UnknownDNSError, bs) -- fixme: dummy
+        { messageSocketFamily    = toFamily peersa
+        , messageSocketProtocol  = Just proto
+        , messageQueryAddress    = toIP peersa
+        , messageResponseAddress = toIP mysa
+        , messageQueryPort       = toPort peersa
+        , messageResponsePort    = toPort mysa
+        , messageResponseTimeSec = Just $ fromIntegral t
+        , messageResponseMessage = Just $ WireFt bs
         }
+ where
+   toFamily sa = case sa of
+     SockAddrInet{}  -> Just IPv4
+     SockAddrInet6{} -> Just IPv6
+     _               -> Nothing
+   toPort sa = case sa of
+     SockAddrInet  p _     -> Just $ fromIntegral p
+     SockAddrInet6 p _ _ _ -> Just $ fromIntegral p
+     _                     -> Nothing
+   toIP sa = fst <$> IP.fromSockAddr sa
 
 decodeMessage :: ByteString -> Message
 decodeMessage bs =
@@ -126,10 +173,10 @@ decodeMessage bs =
   where
     obj = decode bs
 
-decodeDNS :: ByteString -> Either (DNSError, ByteString) DNSMessage
-decodeDNS bs0 = case DNS.decode bs0 of
-  Right msg -> Right msg
-  Left err  -> Left (err,bs0)
+decodeDNS :: ByteString -> TapMsg
+decodeDNS bs = case DNS.decode bs of
+  Right msg -> DnsMsg msg
+  Left err  -> DecErr err bs
 
 decodeIP :: ByteString -> IP.IP
 decodeIP bs
@@ -162,9 +209,10 @@ encodeMessage Message{..} = encode $
     setOptVAR  2 (fromSocketFamily <$> messageSocketFamily) $
     setVAR     1 (fromMessageType messageType) empty
 
-encodeDNS :: Either (DNSError, ByteString) DNSMessage -> ByteString
-encodeDNS (Right msg)   = DNS.encode msg
-encodeDNS (Left (_,bs)) = bs
+encodeDNS :: TapMsg -> ByteString
+encodeDNS (DnsMsg msg)  = DNS.encode msg
+encodeDNS (DecErr _ bs) = bs
+encodeDNS (WireFt bs)   = bs
 
 encodeIP :: IP.IP -> ByteString
 encodeIP (IP.IPv4 ip) = BS.pack $ map fromIntegral $ IP.fromIPv4 ip

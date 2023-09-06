@@ -21,8 +21,8 @@ import DNS.Do53.Memo (
  )
 import qualified DNS.Log as Log
 import DNS.SEC
-import DNS.Types
 import qualified DNS.SEC.Verify as SEC
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types

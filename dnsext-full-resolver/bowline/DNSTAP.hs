@@ -5,7 +5,7 @@ module DNSTAP (
     DnstapQ,
     writeDnstapQ,
     newDnstapWriter,
-    Message
+    Message,
 ) where
 
 import Control.Concurrent

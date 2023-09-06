@@ -300,7 +300,7 @@ lookup_ mk k (Cache cache _) = do
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
-    updateAll = foldr compU (const Nothing) [ u | cps <- is, let u = update cps ]
+    updateAll = foldr compU (const Nothing) [u | cps <- is, let u = update cps]
     update rrsetCPS c = rrsetCPS $ \key ttl cr srank -> insert now key ttl cr srank c
     (_errs, is) = insertSetFromSection rrs rank
 

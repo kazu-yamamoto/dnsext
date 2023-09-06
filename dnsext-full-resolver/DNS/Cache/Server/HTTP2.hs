@@ -10,6 +10,7 @@ import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
 import DNS.Do53.Internal
+import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 
@@ -55,11 +56,13 @@ doHTTP
     :: Env
     -> CntInc
     -> H2.Server
-doHTTP env cntinc req _aux sendResponse = do
+doHTTP env cntinc req aux sendResponse = do
     (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
     let send res = do
             let response = H2.responseBuilder HT.ok200 header $ byteString res
             sendResponse response []
-    cacheWorkerLogic env cntinc send rqs
+        mysa = H2.auxMySockAddr aux
+        peersa = H2.auxPeerSockAddr aux
+    cacheWorkerLogic env cntinc send DOH mysa peersa rqs
   where
     header = [(HT.hContentType, "application/dns-message")]

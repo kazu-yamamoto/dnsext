@@ -5,9 +5,9 @@ module DNS.SEC.Time where
 import DNS.SEC.Imports
 import DNS.Types.Internal
 
-import Data.String (IsString, fromString)
 import qualified Data.ByteString.Char8 as C8
 import Data.Int (Int64)
+import Data.String (IsString, fromString)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 
@@ -26,7 +26,7 @@ readDigDNSTime s = DNSTime i
     UnixTime (CTime i) _ = parseUnixTimeGMT (fromString "%Y%m%d%H%M%S") $ C8.pack s
 
 instance IsString DNSTime where
-  fromString = readDigDNSTime
+    fromString = readDigDNSTime
 
 -- | Given a 32-bit circle-arithmetic DNS time, and the current absolute epoch
 -- time, return the epoch time corresponding to the DNS timestamp.

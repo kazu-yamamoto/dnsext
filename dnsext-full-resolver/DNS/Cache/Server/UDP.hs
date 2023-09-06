@@ -13,6 +13,7 @@ import qualified DNS.Types.Decode as DNS
 
 -- other packages
 import qualified DNS.Log as Log
+import Network.Socket (SockAddr)
 import qualified Network.UDP as UDP
 import UnliftIO (SomeException, handle)
 
@@ -30,6 +31,7 @@ import DNS.Cache.Queue (
 import qualified DNS.Cache.Queue as Queue
 import DNS.Cache.Server.Pipeline
 import DNS.Cache.Server.Types
+import DNS.TAP.Schema (SocketProtocol (..))
 
 ----------------------------------------------------------------
 
@@ -69,40 +71,41 @@ type EnqueueResp a = Response a -> IO ()
 
 udpServer :: UdpServerConfig -> Server
 udpServer conf env port addr = do
-    sock <- UDP.serverSocket (read addr, port)
-    let putLn lv = logLines_ env lv Nothing . (: [])
+    lsock <- UDP.serverSocket (read addr, port)
+    let mysa = UDP.mySockAddr lsock
+        putLn lv = logLines_ env lv Nothing . (: [])
 
-    (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env
+    (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env mysa
     (pipelines, getsStatus) <- unzip <$> sequence mkPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
-        receiver = handledLoop onErrorR (UDP.recvFrom sock >>= enqueueReq)
+        receiver = handledLoop onErrorR (UDP.recvFrom lsock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
-        sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo sock))
+        sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo lsock))
     return (receiver : sender : concat pipelines, getsStatus)
 
 ----------------------------------------------------------------
 
 getPipelines
-    :: Show a
-    => UdpServerConfig
+    :: UdpServerConfig
     -> Env
-    -> IO ([IO ([IO ()], IO Status)], Request a -> IO (), IO (Response a))
-getPipelines udpconf@UdpServerConfig{..} env
+    -> SockAddr
+    -> IO ([IO ([IO ()], IO Status)], Request UDP.ClientSockAddr -> IO (), IO (Response UDP.ClientSockAddr))
+getPipelines udpconf@UdpServerConfig{..} env mysa
     | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
         resQ <- newQueueChan
         {- share request queue and response queue -}
         let udpconf' = udpconf{udp_queue_size_per_pipeline = 8}
-            wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env
+            wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf' env mysa
         return (wps, writeQueue reqQ, readQueue resQ)
     | udp_pipeline_share_queue = do
         let qsize = udp_queue_size_per_pipeline * udp_pipelines_per_socket
         reqQ <- newQueue qsize
         resQ <- newQueue qsize
         {- share request queue and response queue -}
-        let wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf env
+        let wps = replicate udp_pipelines_per_socket $ getCacherWorkers reqQ resQ udpconf env mysa
         return (wps, writeQueue reqQ, readQueue resQ)
     | otherwise = do
         reqQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
@@ -110,7 +113,7 @@ getPipelines udpconf@UdpServerConfig{..} env
         resQs <- replicateM udp_pipelines_per_socket $ newQueue udp_queue_size_per_pipeline
         dequeueResp <- Queue.readQueue <$> Queue.makeGetAny resQs
         let wps =
-                [ getCacherWorkers reqQ resQ udpconf env
+                [ getCacherWorkers reqQ resQ udpconf env mysa
                 | reqQ <- reqQs
                 | resQ <- resQs
                 ]
@@ -119,30 +122,31 @@ getPipelines udpconf@UdpServerConfig{..} env
 ----------------------------------------------------------------
 
 getCacherWorkers
-    :: (Show a, ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
-    => rq (Request a)
-    -> wq (Response a)
+    :: (ReadQueue rq, QueueSize rq, WriteQueue wq, QueueSize wq)
+    => rq (Request UDP.ClientSockAddr)
+    -> wq (Response UDP.ClientSockAddr)
     -> UdpServerConfig
     -> Env
+    -> SockAddr
     -> IO ([IO ()], IO Status)
-getCacherWorkers reqQ resQ UdpServerConfig{..} env = do
+getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
     (cntget, cntinc) <- newCounters
 
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
     (resolvLoop, enqueueDec, decQSize) <- do
         inQ <- newQueue udp_queue_size_per_pipeline
         let loop = handledLoop logr $ do
-                (reqMsg, addr) <- readQueue inQ
-                let enqueueResp' x = enqueueResp (x, addr)
-                workerLogic env cntinc enqueueResp' reqMsg
+                (reqMsg, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue inQ
+                let enqueueResp' x = enqueueResp (x, clisa)
+                workerLogic env cntinc enqueueResp' UDP mysa peersa reqMsg
         return (loop, writeQueue inQ, queueSize inQ)
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
         cachedLoop = handledLoop logc $ do
-            (req, addr) <- readQueue reqQ
-            let enqueueDec' x = enqueueDec (x, addr)
-                enqueueResp' x = enqueueResp (x, addr)
-            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' req
+            (req, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue reqQ
+            let enqueueDec' x = enqueueDec (x, clisa)
+                enqueueResp' x = enqueueResp (x, clisa)
+            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' UDP mysa peersa req
 
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
