@@ -12,6 +12,8 @@ import Control.Monad (forever)
 -- dnsext-* packages
 
 -- other packages
+import Network.Socket
+import qualified Network.UDP as UDP
 
 -- this package
 import DNS.Cache.Queue (
@@ -38,10 +40,18 @@ benchServer UdpServerConfig{..} _ True = do
     let pipelines = replicate udp_pipelines_per_socket [forever $ writeQueue resQ =<< readQueue reqQ]
     return (pipelines, writeQueue reqQ, readQueue resQ)
 benchServer udpconf env _ = do
-    (workerPipelines, enqueueReq, dequeueRes) <- undefined
-    {-
-            getPipelines udpconf env undefined
-                :: IO ([IO ([IO ()], IO Status)], Request () -> IO (), IO (Response ()))
-    -}
+    myDummy <- getSockAddr "127.1.1.1" "53"
+    clntDummy <- UDP.ClientSockAddr <$> getSockAddr "127.2.1.1" "53" <*> pure []
+
+    (workerPipelines, enqueueReq, dequeueRes) <- getPipelines udpconf env myDummy
     (workers, _getsStatus) <- unzip <$> sequence workerPipelines
-    return (workers, enqueueReq, dequeueRes)
+
+    let enqueueReq' (bs, ()) = enqueueReq (bs, clntDummy)
+        dequeueRes' = (\(bs, _) -> (bs, ())) <$> dequeueRes
+    return (workers, enqueueReq', dequeueRes')
+  where
+    getSockAddr host port = do
+        as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram}) (Just host) (Just port)
+        case as of
+            a : _ -> pure $ addrAddress a
+            [] -> fail $ "benchServer: fail to get addr for " ++ host ++ ":" ++ port
