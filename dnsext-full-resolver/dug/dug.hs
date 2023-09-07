@@ -174,7 +174,7 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let oflags = concatFlags $ map toOutputFlag plus
+    let oflags = catMaybes $ map toOutputFlag plus
         res
             | optJSON = showJSON msg
             | otherwise = pprResult oflags msg
@@ -253,19 +253,15 @@ toFlag "+adflag"    = adFlag FlagSet
 toFlag "+noadflag"  = adFlag FlagClear
 toFlag _            = mempty -- fixme
 
-toOutputFlag :: String -> [OutputFlag] -> [OutputFlag]
-toOutputFlag "+multi"     = (Multiline :)
-toOutputFlag "+nomulti"   = id
-toOutputFlag  _           = id
-
-concatFlags :: [[f] -> [f]] -> [f]
-concatFlags fs = foldr (.) id fs []
+toOutputFlag :: String -> Maybe OutputFlag
+toOutputFlag "+multi"   = Just Multiline
+toOutputFlag "+nomulti" = Nothing
+toOutputFlag  _         = Nothing
 
 toResolvActionsFlag :: String -> Maybe ResolvActionsFlag
-toResolvActionsFlag "+multi"     = Just RAFlagMultiLine
-toResolvActionsFlag "+nomulti"   = Nothing
-toResolvActionsFlag  _           = Nothing
-
+toResolvActionsFlag "+multi"   = Just RAFlagMultiLine
+toResolvActionsFlag "+nomulti" = Nothing
+toResolvActionsFlag  _         = Nothing
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
