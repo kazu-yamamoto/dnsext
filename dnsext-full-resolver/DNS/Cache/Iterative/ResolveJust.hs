@@ -289,8 +289,9 @@ iterative_ dc nss0 (x : xs) =
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
             >>= mayDelegation (pure noDelegation) logFound
-    logDelegation Delegation{..} =
-        logLn Log.DEMO $ "zone: " ++ show delegationZone ++ ":\n" ++ ppDelegation delegationNS
+    logDelegation Delegation{..} = do
+        let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
+        putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
