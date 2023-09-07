@@ -273,7 +273,6 @@ iterative_ dc nss0 (x : xs) =
     stepQuery nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
-        lift . logLn Log.DEMO $ "zone: " ++ show zone ++ ":\n" ++ ppDelegation delegationNS
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs dc nss
         lift . logLn Log.DEMO . unwords $ ["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas]
@@ -285,9 +284,14 @@ iterative_ dc nss0 (x : xs) =
         let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
             sharedHandler = servsChildZone dc nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg $> noDelegation
+            logFound d = lift (logDelegation d) $> hasDelegation d
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
+            >>= mayDelegation (pure noDelegation) logFound
+    logDelegation Delegation{..} = do
+        let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
+        putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do

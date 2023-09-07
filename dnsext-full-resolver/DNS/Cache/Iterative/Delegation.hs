@@ -119,7 +119,6 @@ delegationWithCache zone dnskeys dom msg = do
         | rrsetValid dsRRset = lift $ do
             let x = k dsrds
             vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
-            clogLn Log.DEMO Nothing $ ppDelegation (delegationNS x)
             caches *> cacheDS $> x
         | otherwise =
             lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
