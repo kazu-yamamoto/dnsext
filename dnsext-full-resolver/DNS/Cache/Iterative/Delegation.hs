@@ -134,7 +134,7 @@ delegationWithCache zone dnskeys dom msg = do
     (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
         let axs = filter match rrs in (axs, cacheSection axs rank)
       where
-        match rr = rrtype rr `elem` [A, AAAA] && rrname rr `Set.member` nsSet
+        match rr = rrtype rr `elem` [A, AAAA] && rrname rr `isSubDomainOf` zone && rrname rr `Set.member` nsSet
         nsSet = Set.fromList $ map fst nsps
 
     unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
