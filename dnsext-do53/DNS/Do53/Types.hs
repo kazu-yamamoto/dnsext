@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Types (
@@ -24,6 +25,7 @@ module DNS.Do53.Types (
     defaultResolvInfo,
     ResolvActions (..),
     defaultResolvActions,
+    ResolvActionsFlag (RAFlagMultiLine),
     Result (..),
     Reply (..),
     Resolver,
@@ -228,12 +230,18 @@ type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
 
 ----------------------------------------------------------------
 
+newtype ResolvActionsFlag = ResolvActionsFlag Int deriving Eq
+
+pattern RAFlagMultiLine :: ResolvActionsFlag
+pattern RAFlagMultiLine = ResolvActionsFlag 1
+
 data ResolvActions = ResolvActions
     { ractionTimeout :: IO Reply -> IO (Maybe Reply)
     , ractionGenId :: IO Identifier
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
     , ractionLog :: PutLines
+    , ractionFlags :: [ResolvActionsFlag]
     }
 
 defaultResolvActions :: ResolvActions
@@ -244,6 +252,7 @@ defaultResolvActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
+        , ractionFlags = []
         }
 
 rsso :: Socket -> IO ()

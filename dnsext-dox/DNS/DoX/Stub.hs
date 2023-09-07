@@ -64,7 +64,11 @@ lookupDoX conf domain typ = do
             Right Result{..} -> do
                 let Reply{..} = resultReply
                     ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
-                ractionLog (lconfActions conf) Log.DEMO Nothing $ map (prettyShowRData . toRData) ss
+                    multi = RAFlagMultiLine `elem` ractionFlags (lconfActions conf)
+                    r = if multi
+                            then map (prettyShowRData . toRData) ss
+                            else map show ss
+                ractionLog (lconfActions conf) Log.DEMO Nothing r
                 auto domain typ (unVCLimit lim) (lenvActions lenv) resultHostName ss
 
 auto
