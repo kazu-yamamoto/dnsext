@@ -34,7 +34,7 @@ import qualified DNS.Log as Log
 
 import Iterative (iterativeQuery)
 import JSON (showJSON)
-import Output (pprResult)
+import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQeury)
 
 options :: [OptDescr (Options -> Options)]
@@ -171,9 +171,10 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let res
+    let oflags = concatFlags $ map toOutputFlag plus
+        res
             | optJSON = showJSON msg
-            | otherwise = pprResult msg
+            | otherwise = pprResult oflags msg
     putLines Log.WARN Nothing [res]
     killThread tid
     flush
@@ -248,6 +249,14 @@ toFlag "+nocdflag"  = cdFlag FlagClear
 toFlag "+adflag"    = adFlag FlagSet
 toFlag "+noadflag"  = adFlag FlagClear
 toFlag _            = mempty -- fixme
+
+toOutputFlag :: String -> [OutputFlag] -> [OutputFlag]
+toOutputFlag "+multi"     = (Multiline :)
+toOutputFlag "+nomulti"   = id
+toOutputFlag  _           = id
+
+concatFlags :: [[f] -> [f]] -> [f]
+concatFlags fs = foldr (.) id fs []
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -265,6 +274,7 @@ help =
         , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
         , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
         , "  +[no]adflag: [un]set AD (Authentic Data) bit"
+        , "  +[no]multi:  [un]set flag for multi-line format"
         , ""
         , "options:"
         ]
