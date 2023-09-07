@@ -145,7 +145,7 @@ rr ResourceRecord{..} = do
     string $ show rrtype
     tab
     let prettyRData oflags
-            | Multiline `elem` oflags  = prettyRecords $ show rdata
+            | Multiline `elem` oflags  = prettyShowRData rdata
             | otherwise                = show rdata
     string . prettyRData =<< getFlags
     let keyTag dnskey = string (" (key_tag: " ++ show (Verify.keyTag dnskey) ++ ")")
@@ -186,21 +186,3 @@ tab = char '\t'
 
 nl :: Print ()
 nl = char '\n'
-
-prettyRecords :: String -> String
-prettyRecords cs0 = loop cs0
-  where
-    loop [] = []
-    loop (c:cs)
-      | c == '=' && take 5 cs `elem` dows = c : take 5 cs ++ loop (drop 5 cs)
-      | c == '['  = c : opaque ']' cs
-      | c == '"'  = c : opaque '"' cs
-      | c == '{'  = "{\n      " ++ loop cs
---      | c == '}'  = "\n    }"  ++ loop cs
-      | c == ','  = "\n    ,"  ++ loop cs
-      | otherwise = c : loop cs
-    opaque _ [] = []
-    opaque k (c:cs)
-      | c == k    = c : loop cs
-      | otherwise = c : opaque k cs
-    dows = [" Sun,"," Mon,"," Tue,"," Wed,"," Thu,"," Fri,"," Sat,"]
