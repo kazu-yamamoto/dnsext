@@ -12,6 +12,7 @@ import DNS.Do53.Client (
     cdFlag,
     doFlag,
     rdFlag,
+    ResolvActionsFlag(..)
  )
 import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
@@ -22,6 +23,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.List (intercalate, isPrefixOf)
+import Data.Maybe (catMaybes)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -141,7 +143,8 @@ main = do
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
-                ex <- recursiveQeury mserver port optDoX putLines ctl dom typ
+                    raflags = catMaybes $ map toResolvActionsFlag plus
+                ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
                 case ex of
                     Left e -> fail (show e)
                     Right Result{..} -> do
@@ -171,7 +174,7 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let oflags = concatFlags $ map toOutputFlag plus
+    let oflags = catMaybes $ map toOutputFlag plus
         res
             | optJSON = showJSON msg
             | otherwise = pprResult oflags msg
@@ -250,13 +253,15 @@ toFlag "+adflag"    = adFlag FlagSet
 toFlag "+noadflag"  = adFlag FlagClear
 toFlag _            = mempty -- fixme
 
-toOutputFlag :: String -> [OutputFlag] -> [OutputFlag]
-toOutputFlag "+multi"     = (Multiline :)
-toOutputFlag "+nomulti"   = id
-toOutputFlag  _           = id
+toOutputFlag :: String -> Maybe OutputFlag
+toOutputFlag "+multi"   = Just Multiline
+toOutputFlag "+nomulti" = Nothing
+toOutputFlag  _         = Nothing
 
-concatFlags :: [[f] -> [f]] -> [f]
-concatFlags fs = foldr (.) id fs []
+toResolvActionsFlag :: String -> Maybe ResolvActionsFlag
+toResolvActionsFlag "+multi"   = Just RAFlagMultiLine
+toResolvActionsFlag "+nomulti" = Nothing
+toResolvActionsFlag  _         = Nothing
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------

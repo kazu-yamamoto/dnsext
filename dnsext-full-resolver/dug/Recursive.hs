@@ -31,15 +31,16 @@ recursiveQeury
     -> PortNumber
     -> ShortByteString
     -> Log.PutLines
+    -> [DNS.ResolvActionsFlag]
     -> QueryControls
     -> HostName
     -> TYPE
     -> IO (Either DNSError Result)
-recursiveQeury mserver port dox putLines ctl domain typ | dox == "auto" = do
-    conf <- getCustomConf mserver port ctl putLines
+recursiveQeury mserver port dox putLines raflags ctl domain typ | dox == "auto" = do
+    conf <- getCustomConf mserver port ctl putLines raflags
     lookupDoX conf domain typ
-recursiveQeury mserver port dox putLines ctl domain typ = do
-    conf <- getCustomConf mserver port ctl putLines
+recursiveQeury mserver port dox putLines raflags ctl domain typ = do
+    conf <- getCustomConf mserver port ctl putLines raflags
     let lim = DNS.lconfLimit conf
         resolver = case makeResolver dox lim Nothing of
             Just r -> r
@@ -51,8 +52,13 @@ recursiveQeury mserver port dox putLines ctl domain typ = do
         DNS.lookupRaw env q
 
 getCustomConf
-    :: [HostName] -> PortNumber -> QueryControls -> Log.PutLines -> IO LookupConf
-getCustomConf mserver port ctl putLines = case mserver of
+    :: [HostName]
+    -> PortNumber
+    -> QueryControls
+    -> Log.PutLines
+    -> [DNS.ResolvActionsFlag]
+    -> IO LookupConf
+getCustomConf mserver port ctl putLines raflags = case mserver of
     [] -> return conf
     hs -> do
         as <- concat <$> mapM toNumeric hs
@@ -67,6 +73,7 @@ getCustomConf mserver port ctl putLines = case mserver of
             , lconfActions =
                 DNS.defaultResolvActions
                     { ractionLog = putLines
+                    , ractionFlags = raflags
                     }
             }
 

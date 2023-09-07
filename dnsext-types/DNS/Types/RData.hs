@@ -63,6 +63,26 @@ rdataField rd f = case fromRData rd of
 
 ---------------------------------------------------------------
 
+prettyShowRData :: RData -> String
+prettyShowRData rd = loop $ show rd
+  where
+    loop [] = []
+    loop (c:cs)
+      | c == '=' && take 5 cs `elem` dows = c : take 5 cs ++ loop (drop 5 cs)
+      | c == '['  = c : opaque ']' cs
+      | c == '"'  = c : opaque '"' cs
+      | c == '{'  = "{\n      " ++ loop cs
+--      | c == '}'  = "\n    }"  ++ loop cs
+      | c == ','  = "\n    ,"  ++ loop cs
+      | otherwise = c : loop cs
+    opaque _ [] = []
+    opaque k (c:cs)
+      | c == k    = c : loop cs
+      | otherwise = c : opaque k cs
+    dows = [" Sun,"," Mon,"," Tue,"," Wed,"," Thu,"," Fri,"," Sat,"]
+
+---------------------------------------------------------------
+
 -- | IPv4 Address (RFC1035)
 newtype RD_A = RD_A
     { a_ipv4 :: IPv4
