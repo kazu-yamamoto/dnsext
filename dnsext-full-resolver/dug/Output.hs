@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Output (pprResult) where
+module Output (pprResult, OutputFlag (..)) where
 
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Reader (ReaderT (..), ask)
 import Control.Monad.Trans.Writer (Writer, execWriter, tell)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Endo (..))
@@ -11,16 +13,26 @@ import DNS.Types
 
 ----------------------------------------------------------------
 
-type Print = Writer (Endo String)
+{- FOURMOLU_DISABLE -}
+data OutputFlag
+    = Multiline
+    deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
+
+type Flags = [OutputFlag]
+type Print = ReaderT Flags (Writer (Endo String))
 type Printer a = a -> Print ()
 
 ----------------------------------------------------------------
 
-pprResult :: DNSMessage -> String
+pprResult :: [OutputFlag] -> DNSMessage -> String
 pprResult = runPrinter result
 
-runPrinter :: Printer a -> a -> String
-runPrinter p = ($ "") . appEndo . execWriter . p
+runPrinter :: Printer a -> Flags -> a -> String
+runPrinter p oflags x = execWriter (runReaderT (p x) oflags) `appEndo` ""
+
+getFlags :: Print Flags
+getFlags = ask
 
 ----------------------------------------------------------------
 
@@ -121,6 +133,7 @@ rrs name rs = do
     dsemi *> sp *> string name *> nl
     mapM_ rr rs
 
+{- FOURMOLU_DISABLE -}
 rr :: Printer ResourceRecord
 rr ResourceRecord{..} = do
     string $ toRepresentation rrname
@@ -131,10 +144,14 @@ rr ResourceRecord{..} = do
     tab
     string $ show rrtype
     tab
-    string $ prettyRecords $ show rdata
+    let prettyRData oflags
+            | Multiline `elem` oflags  = prettyRecords $ show rdata
+            | otherwise                = show rdata
+    string . prettyRData =<< getFlags
     let keyTag dnskey = string (" (key_tag: " ++ show (Verify.keyTag dnskey) ++ ")")
     maybe (pure ()) keyTag $ fromRData rdata
     nl
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -146,7 +163,7 @@ cls c
 ----------------------------------------------------------------
 
 char :: Printer Char
-char = tell . Endo . (:)
+char = lift . tell . Endo . (:)
 
 string :: Printer String
 string = mapM_ char
