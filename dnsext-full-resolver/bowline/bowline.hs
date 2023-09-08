@@ -153,4 +153,4 @@ getStatus' env iss ucacheQSize = do
     return $ "capabilities: " ++ show caps ++
              "cache size: " ++ csiz ++
              hits ++ "\n" ++
-             qsiz
+             qsiz ++ "\n"

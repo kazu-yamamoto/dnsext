@@ -11,8 +11,6 @@
 module WebAPI (runAPI) where
 
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson
-import GHC.Generics
 import Network.Socket
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -21,30 +19,28 @@ import qualified UnliftIO.Exception as E
 
 import Manage
 
-newtype Status = Status { content :: String } deriving Generic
+-- newtype Status = Status { content :: String } deriving Generic
 
-type StatusAPI = "status" :> Get '[JSON] Status
-            :<|> "reload" :> Get '[JSON] Status
-            :<|> "quit" :> Get '[JSON] Status
-
-instance ToJSON Status
+type StatusAPI = "status" :> Get '[PlainText] String
+            :<|> "reload" :> Get '[PlainText] String
+            :<|> "quit"   :> Get '[PlainText] String
 
 server :: Manage -> Server StatusAPI
-server mng@Manage{..} = Status <$> liftIO getStatus
+server mng@Manage{..} = liftIO getStatus
                    :<|> reload mng
                    :<|> quit mng
 
-reload :: Manage -> Handler Status
+reload :: Manage -> Handler String
 reload Manage{..} = do
     liftIO $ do
         setReload
         quitServer
-    return $ Status "OK"
+    return "bowline is reloaded\n"
 
-quit :: Manage -> Handler Status
+quit :: Manage -> Handler String
 quit Manage{..} = do
     liftIO $ quitServer
-    return $ Status "OK"
+    return "bowline is quit"
 
 statusAPI :: Proxy StatusAPI
 statusAPI = Proxy

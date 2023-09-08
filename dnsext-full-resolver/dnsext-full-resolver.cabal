@@ -94,7 +94,6 @@ executable bowline
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
-        aeson,
         base,
         bytestring,
         dnsext-dnssec,
