@@ -39,15 +39,13 @@ run readConfig = newManage >>= go
     go mng = do
         readConfig >>= runConfig mng
         cont <- getReloadAndClear mng
-        when cont $ do
-            putStrLn "reloading..."
-            go mng
+        when cont $ go mng
 
 runConfig :: Manage -> Config -> IO ()
 runConfig mng conf@Config{..} = do
     (writer, putDNSTAP) <- newDnstapWriter conf
     (logger, putLines, flush) <- Log.new cnf_log_output cnf_log_level
-    tid <- forkIO logger
+    tidL <- forkIO logger
     env <- getEnv conf putLines putDNSTAP
     creds <-
         if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
@@ -73,9 +71,11 @@ runConfig mng conf@Config{..} = do
                    }
         api = runAPI cnf_webapi_addr cnf_webapi_port mng'
     monitor <- getMonitor env conf mng'
-    race_ (conc (api : writer : concat servers)) (conc monitor)
-    threadDelay 1000000
-    killThread tid
+    tidA <- forkIO api
+    race_ (conc (writer : concat servers)) (conc monitor)
+    threadDelay 500000
+    killThread tidA
+    killThread tidL
     flush
   where
     conc = foldr concurrently_ $ return ()
