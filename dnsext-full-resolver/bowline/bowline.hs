@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent (forkIO, killThread, getNumCapabilities)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -13,6 +13,7 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
+import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
@@ -20,6 +21,7 @@ import UnliftIO (concurrently_, race_)
 import Config
 import DNSTAP
 import qualified Monitor as Mon
+import WebAPI
 
 ----------------------------------------------------------------
 
@@ -53,8 +55,11 @@ run conf@Config{..} = do
             , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
             ]
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
-    monitor <- getMonitor env conf $ concat statuses
-    race_ (conc (writer : concat servers)) (conc monitor)
+    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
+        gs = getStatus env (concat statuses) ucacheQSize
+        api = runAPI 8080 gs
+    monitor <- getMonitor env conf gs
+    race_ (conc (api : writer : concat servers)) (conc monitor)
     killThread tid
     flush
   where
@@ -99,12 +104,10 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> [IO Status] -> IO [IO ()]
-getMonitor env conf qsizes = do
+getMonitor :: Env -> Config -> IO String -> IO [IO ()]
+getMonitor env conf gstatus = do
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
-
-    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    Mon.monitor conf env (qsizes, ucacheQSize)
+    Mon.monitor conf env gstatus
 
 ----------------------------------------------------------------
 
@@ -119,3 +122,17 @@ getEnv Config{..} putLines putDNSTAP = do
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+
+----------------------------------------------------------------
+
+getStatus :: Env -> [IO Status] -> IO (Int, Int) -> IO String
+getStatus env iss ucacheQSize = do
+    caps <- getNumCapabilities
+    csiz <- show . Cache.size <$> getCache_ env
+    hits <- intercalate "\n" <$>  mapM (\action -> show <$> action) iss
+    (cur, mx) <- ucacheQSize
+    let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
+    return $ "capabilities: " ++ show caps ++
+             "cache size: " ++ csiz ++
+             hits ++ "\n" ++
+             qsiz

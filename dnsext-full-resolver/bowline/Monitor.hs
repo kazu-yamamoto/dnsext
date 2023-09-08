@@ -6,7 +6,7 @@ module Monitor (
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
+import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
 import Control.Monad (guard, unless, void, when, (<=<))
 import DNS.Types.Decode (EpochTime)
@@ -73,9 +73,9 @@ data Command
 monitor
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int))
+    -> IO String
     -> IO [IO ()]
-monitor conf env getsSizeInfo = do
+monitor conf env getStatus = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
     let ss = map fst ps
@@ -90,7 +90,7 @@ monitor conf env getsSizeInfo = do
   where
     runStdConsole monQuit = do
         let repl =
-                console conf env getsSizeInfo monQuit stdin stdout "<std>"
+                console conf env getStatus monQuit stdin stdout "<std>"
         void $ forkIO repl
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
@@ -100,7 +100,7 @@ monitor conf env getsSizeInfo = do
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
                 let repl =
-                        console conf env getsSizeInfo monQuit sockh sockh $
+                        console conf env getStatus monQuit sockh sockh $
                             show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
@@ -113,13 +113,13 @@ monitor conf env getsSizeInfo = do
 console
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int))
+    -> IO String
     -> (STM (), STM ())
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
+console conf env getStatus (issueQuit, waitQuit) inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -182,20 +182,10 @@ console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
                 ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Status = printStatus
+        dispatch Status = getStatus >>= outLn
         dispatch (Expire offset) = expireCache env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
-
-    printStatus = do
-        caps <- getNumCapabilities
-        outLn $ "capabilities: " ++ show caps
-        outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
-        let psize s getSize = do
-                (cur, mx) <- getSize
-                outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
-        mapM_ (\action -> action >>= outLn . show) iss
-        psize "ucache queue" ucacheQSize
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]
