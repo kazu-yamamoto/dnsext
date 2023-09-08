@@ -78,7 +78,7 @@ monitor
     -> IO [IO ()]
 monitor conf env mng@Manage{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
-    ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
+    ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
     sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
     mapM_ (uncurry S.bind) ps

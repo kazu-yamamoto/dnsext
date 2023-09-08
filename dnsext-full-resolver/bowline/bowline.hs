@@ -41,7 +41,6 @@ run readConfig = newManage >>= go
         cont <- getReloadAndClear mng
         when cont $ do
             putStrLn "reloading..."
-            threadDelay 100000
             go mng
 
 runConfig :: Manage -> Config -> IO ()
@@ -65,7 +64,7 @@ runConfig mng conf@Config{..} = do
             , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
             , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
             ]
-    (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
+    (servers, statuses) <- unzip <$> mapM (getServers env cnf_dns_addrs) trans
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng' = mng { getStatus = getStatus' env (concat statuses) ucacheQSize
@@ -75,6 +74,7 @@ runConfig mng conf@Config{..} = do
         api = runAPI cnf_webapi_addr cnf_webapi_port mng'
     monitor <- getMonitor env conf mng'
     race_ (conc (api : writer : concat servers)) (conc monitor)
+    threadDelay 100000
     killThread tid
     flush
   where
