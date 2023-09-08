@@ -30,11 +30,11 @@ help = putStrLn "bowline [<confFile>]"
 
 ----------------------------------------------------------------
 
-run :: Config -> IO ()
-run conf@Config{..} = do
-    DNS.runInitIO $ do
-        DNS.addResourceDataForDNSSEC
-        DNS.addResourceDataForSVCB
+run :: IO Config -> IO ()
+run readConfig = readConfig >>= runConfig
+
+runConfig :: Config -> IO ()
+runConfig conf@Config{..} = do
     (writer, putDNSTAP) <- newDnstapWriter conf
     (logger, putLines, flush) <- Log.new cnf_log_output cnf_log_level
     tid <- forkIO logger
@@ -80,10 +80,13 @@ run conf@Config{..} = do
 
 main :: IO ()
 main = do
+    DNS.runInitIO $ do
+        DNS.addResourceDataForDNSSEC
+        DNS.addResourceDataForSVCB
     args <- getArgs
     case args of
-        [] -> run defaultConfig
-        [confFile] -> parseConfig confFile >>= run
+        [] -> run (return defaultConfig)
+        [confFile] -> run (parseConfig confFile)
         _ -> help
 
 ----------------------------------------------------------------
