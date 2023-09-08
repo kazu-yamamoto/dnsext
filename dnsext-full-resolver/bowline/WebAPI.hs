@@ -24,11 +24,20 @@ import Manage
 newtype Status = Status { content :: String } deriving Generic
 
 type StatusAPI = "status" :> Get '[JSON] Status
+            :<|> "reload" :> Get '[JSON] Status
 
 instance ToJSON Status
 
 server :: Manage -> Server StatusAPI
-server Manage{..} = Status <$> liftIO getStatus
+server mng@Manage{..} = Status <$> liftIO getStatus
+                   :<|> reload mng
+
+reload :: Manage -> Handler Status
+reload Manage{..} = do
+    liftIO $ do
+        setReload
+        quitServer
+    return $ Status "OK"
 
 statusAPI :: Proxy StatusAPI
 statusAPI = Proxy

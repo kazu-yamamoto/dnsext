@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, killThread, getNumCapabilities)
+import Control.Concurrent (forkIO, killThread, getNumCapabilities, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (when, guard)
 import DNS.Cache.Iterative (Env (..))
@@ -39,7 +39,10 @@ run readConfig = newManage >>= go
     go mng = do
         readConfig >>= runConfig mng
         cont <- getReloadAndClear mng
-        when cont $ go mng
+        when cont $ do
+            putStrLn "reloading..."
+            threadDelay 100000
+            go mng
 
 runConfig :: Manage -> Config -> IO ()
 runConfig mng conf@Config{..} = do
