@@ -57,7 +57,7 @@ run conf@Config{..} = do
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         gs = getStatus env (concat statuses) ucacheQSize
-        api = runAPI cnf_webapi_port gs
+        api = runAPI cnf_webapi_addr cnf_webapi_port gs
     monitor <- getMonitor env conf gs
     race_ (conc (api : writer : concat servers)) (conc monitor)
     killThread tid

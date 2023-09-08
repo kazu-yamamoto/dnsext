@@ -51,6 +51,7 @@ data Config = Config
     , cnf_dnstap :: Bool
     , cnf_dnstap_socket_path :: FilePath
     , cnf_dnstap_reconnect_interval :: Int
+    , cnf_webapi_addr :: String
     , cnf_webapi_port :: Int
     }
     deriving (Show)
@@ -91,6 +92,7 @@ defaultConfig =
         , cnf_dnstap = True
         , cnf_dnstap_socket_path = "/tmp/bowline.sock"
         , cnf_dnstap_reconnect_interval = 60
+        , cnf_webapi_addr = "127.0.0.1"
         , cnf_webapi_port = 8080
         }
 
@@ -161,6 +163,7 @@ makeConfig def conf =
         , cnf_dnstap = get "dnstap" cnf_dnstap
         , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
         , cnf_dnstap_reconnect_interval = get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval
+        , cnf_webapi_addr = get "webapi-addr" cnf_webapi_addr
         , cnf_webapi_port = get "webapi-port" cnf_webapi_port
         }
   where
