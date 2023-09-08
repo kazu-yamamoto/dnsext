@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -18,26 +19,28 @@ import Network.Wai.Handler.Warp
 import Servant
 import qualified UnliftIO.Exception as E
 
+import Manage
+
 newtype Status = Status { content :: String } deriving Generic
 
 type StatusAPI = "status" :> Get '[JSON] Status
 
 instance ToJSON Status
 
-server :: IO String -> Server StatusAPI
-server getStatus = Status <$> liftIO getStatus
+server :: Manage -> Server StatusAPI
+server Manage{..} = Status <$> liftIO getStatus
 
 statusAPI :: Proxy StatusAPI
 statusAPI = Proxy
 
-app :: IO String -> Application
-app getStatus = serve statusAPI $ server getStatus
+app :: Manage -> Application
+app mng  = serve statusAPI $ server mng
 
-runAPI :: String -> Int -> IO String -> IO ()
-runAPI addr port getStatus = withSocketsDo $ do
+runAPI :: String -> Int -> Manage -> IO ()
+runAPI addr port mng = withSocketsDo $ do
     ai <- resolve
     E.bracket (open ai) close $ \sock ->
-      runSettingsSocket defaultSettings sock $ app getStatus
+      runSettingsSocket defaultSettings sock $ app mng
   where
     resolve = do
         let hints = defaultHints {

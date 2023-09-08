@@ -86,6 +86,7 @@ executable bowline
     other-modules:
         Config
         DNSTAP
+        Manage
         Monitor
         Parser
         SocketUtil
