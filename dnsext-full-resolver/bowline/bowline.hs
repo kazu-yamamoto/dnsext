@@ -74,7 +74,7 @@ runConfig mng conf@Config{..} = do
         api = runAPI cnf_webapi_addr cnf_webapi_port mng'
     monitor <- getMonitor env conf mng'
     race_ (conc (api : writer : concat servers)) (conc monitor)
-    threadDelay 100000
+    threadDelay 1000000
     killThread tid
     flush
   where
