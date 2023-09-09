@@ -150,7 +150,7 @@ getStatus' env iss ucacheQSize = do
     hits <- intercalate "\n" <$>  mapM (\action -> show <$> action) iss
     (cur, mx) <- ucacheQSize
     let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
-    return $ "capabilities: " ++ show caps ++
-             "cache size: " ++ csiz ++
+    return $ "capabilities: " ++ show caps ++ "\n" ++
+             "cache size: " ++ csiz ++ "\n" ++
              hits ++ "\n" ++
              qsiz ++ "\n"
