@@ -83,9 +83,9 @@ runConfig mng conf@Config{..} = do
     tidA <- API.new conf mng'
     monitor <- getMonitor env conf mng'
     race_ (conc $ concat servers) (conc monitor)
-    threadDelay 500000
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
+    threadDelay 500000 -- avoiding address already in use
   where
     conc = foldr concurrently_ $ return ()
     udpconf =
