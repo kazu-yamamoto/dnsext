@@ -3,9 +3,9 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, killThread, getNumCapabilities, threadDelay)
+import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (when, guard)
+import Control.Monad (guard, when)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -65,10 +65,12 @@ runConfig mng conf@Config{..} = do
     (servers, statuses) <- unzip <$> mapM (getServers env cnf_dns_addrs) trans
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-        mng' = mng { getStatus = getStatus' env (concat statuses) ucacheQSize
-                   , quitServer = atomically $ writeTVar qRef True
-                   , waitQuit = readTVar qRef >>= guard
-                   }
+        mng' =
+            mng
+                { getStatus = getStatus' env (concat statuses) ucacheQSize
+                , quitServer = atomically $ writeTVar qRef True
+                , waitQuit = readTVar qRef >>= guard
+                }
         api = runAPI cnf_webapi_addr cnf_webapi_port mng'
     monitor <- getMonitor env conf mng'
     tidA <- forkIO api
@@ -122,7 +124,7 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> Manage-> IO [IO ()]
+getMonitor :: Env -> Config -> Manage -> IO [IO ()]
 getMonitor env conf mng = do
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
     Mon.monitor conf env mng
@@ -147,10 +149,17 @@ getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO String
 getStatus' env iss ucacheQSize = do
     caps <- getNumCapabilities
     csiz <- show . Cache.size <$> getCache_ env
-    hits <- intercalate "\n" <$>  mapM (\action -> show <$> action) iss
+    hits <- intercalate "\n" <$> mapM (\action -> show <$> action) iss
     (cur, mx) <- ucacheQSize
     let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
-    return $ "capabilities: " ++ show caps ++ "\n" ++
-             "cache size: " ++ csiz ++ "\n" ++
-             hits ++ "\n" ++
-             qsiz ++ "\n"
+    return $
+        "capabilities: "
+            ++ show caps
+            ++ "\n"
+            ++ "cache size: "
+            ++ csiz
+            ++ "\n"
+            ++ hits
+            ++ "\n"
+            ++ qsiz
+            ++ "\n"

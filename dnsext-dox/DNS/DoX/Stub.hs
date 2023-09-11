@@ -65,7 +65,8 @@ lookupDoX conf domain typ = do
                 let Reply{..} = resultReply
                     ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
                     multi = RAFlagMultiLine `elem` ractionFlags (lconfActions conf)
-                    r = if multi
+                    r =
+                        if multi
                             then map (prettyShowRData . toRData) ss
                             else map show ss
                 ractionLog (lconfActions conf) Log.DEMO Nothing r

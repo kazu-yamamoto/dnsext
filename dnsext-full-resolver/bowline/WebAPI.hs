@@ -36,8 +36,8 @@ app mng req sendResp = getResp >>= sendResp
         | requestMethod req == methodGet = case rawPathInfo req of
             "/status" -> doStatus mng
             "/reload" -> doReload mng
-            "/quit"   -> doQuit mng
-            _         -> return $ ng badRequest400
+            "/quit" -> doQuit mng
+            _ -> return $ ng badRequest400
         | otherwise = return $ ng methodNotAllowed405
 
 ok :: Response
@@ -50,13 +50,14 @@ runAPI :: String -> Int -> Manage -> IO ()
 runAPI addr port mng = withSocketsDo $ do
     ai <- resolve
     E.bracket (open ai) close $ \sock ->
-      runSettingsSocket defaultSettings sock $ app mng
+        runSettingsSocket defaultSettings sock $ app mng
   where
     resolve = do
-        let hints = defaultHints {
-                addrFlags = [AI_PASSIVE, AI_NUMERICHOST, AI_NUMERICSERV]
-              , addrSocketType = Stream
-              }
+        let hints =
+                defaultHints
+                    { addrFlags = [AI_PASSIVE, AI_NUMERICHOST, AI_NUMERICSERV]
+                    , addrSocketType = Stream
+                    }
         head <$> getAddrInfo (Just hints) (Just addr) (Just $ show port)
     open ai = E.bracketOnError (openSocket ai) close $ \sock -> do
         setSocketOption sock ReuseAddr 1

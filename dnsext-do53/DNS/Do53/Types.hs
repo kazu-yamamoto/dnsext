@@ -230,7 +230,7 @@ type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
 
 ----------------------------------------------------------------
 
-newtype ResolvActionsFlag = ResolvActionsFlag Int deriving Eq
+newtype ResolvActionsFlag = ResolvActionsFlag Int deriving (Eq)
 
 pattern RAFlagMultiLine :: ResolvActionsFlag
 pattern RAFlagMultiLine = ResolvActionsFlag 1

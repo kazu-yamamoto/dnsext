@@ -8,11 +8,11 @@ import Control.Monad (when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
+    ResolvActionsFlag (..),
     adFlag,
     cdFlag,
     doFlag,
     rdFlag,
-    ResolvActionsFlag(..)
  )
 import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
