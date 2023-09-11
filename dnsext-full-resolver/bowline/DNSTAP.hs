@@ -2,8 +2,7 @@
 
 module DNSTAP (
     DnstapQ,
-    writeDnstapQ,
-    newDnstapWriter,
+    new,
     Message,
 ) where
 
@@ -15,6 +14,15 @@ import Network.Socket
 import qualified UnliftIO.Exception as E
 
 import Config
+
+new :: Config -> IO (IO (Maybe ThreadId), Message -> IO ())
+new conf@Config{..}
+  | cnf_dnstap = do
+        (writer, put) <- newDnstapWriter conf
+        return (Just <$> forkIO writer, put)
+  | otherwise = do
+        let put ~_ = return ()
+        return (return Nothing, put)
 
 newtype DnstapQ = DnstapQ (TQueue Message)
 

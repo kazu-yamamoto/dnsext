@@ -21,10 +21,10 @@ import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
 
 import Config
-import DNSTAP
+import qualified DNSTAP as TAP
 import Manage
 import qualified Monitor as Mon
-import WebAPI
+import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
@@ -43,9 +43,18 @@ run readConfig = newManage >>= go
 
 runConfig :: Manage -> Config -> IO ()
 runConfig mng conf@Config{..} = do
-    (writer, putDNSTAP) <- newDnstapWriter conf
-    (logger, putLines, flush) <- Log.new cnf_log_output cnf_log_level
-    tidL <- forkIO logger
+    (runWriter, putDNSTAP) <- TAP.new conf
+    tidW <- runWriter
+    (runLogger, putLines, flush) <-
+        if cnf_log
+            then do
+                 (r, p, f) <- Log.new cnf_log_output cnf_log_level
+                 return (Just <$> forkIO r, p, f)
+            else do
+                 let p _ _ ~_ = return ()
+                     f = return ()
+                 return (return Nothing, p, f)
+    tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
     creds <-
         if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
@@ -71,13 +80,11 @@ runConfig mng conf@Config{..} = do
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
-        api = runAPI cnf_webapi_addr cnf_webapi_port mng'
+    tidA <- API.new conf mng'
     monitor <- getMonitor env conf mng'
-    tidA <- forkIO api
-    race_ (conc (writer : concat servers)) (conc monitor)
+    race_ (conc $ concat servers) (conc monitor)
     threadDelay 500000
-    killThread tidA
-    killThread tidL
+    mapM_ (maybe (return ()) killThread) [tidA,tidL,tidW]
     flush
   where
     conc = foldr concurrently_ $ return ()
@@ -131,7 +138,7 @@ getMonitor env conf mng = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> Log.PutLines -> (Message -> IO ()) -> IO Env
+getEnv :: Config -> Log.PutLines -> (TAP.Message -> IO ()) -> IO Env
 getEnv Config{..} putLines putDNSTAP = do
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions

@@ -18,7 +18,8 @@ import Text.Parsec.ByteString.Lazy
 import Parser
 
 data Config = Config
-    { cnf_log_output :: Log.Output
+    { cnf_log :: Bool
+    , cnf_log_output :: Log.Output
     , cnf_log_level :: Log.Level
     , cnf_cert_file :: FilePath
     , cnf_key_file :: FilePath
@@ -52,6 +53,7 @@ data Config = Config
     , cnf_dnstap :: Bool
     , cnf_dnstap_socket_path :: FilePath
     , cnf_dnstap_reconnect_interval :: Int
+    , cnf_webapi :: Bool
     , cnf_webapi_addr :: String
     , cnf_webapi_port :: Int
     }
@@ -60,7 +62,8 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
     Config
-        { cnf_log_output = Log.Stdout
+        { cnf_log = True
+        , cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
         , cnf_cert_file = "fullchain.pem"
         , cnf_key_file = "privkey.pem"
@@ -94,6 +97,7 @@ defaultConfig =
         , cnf_dnstap = True
         , cnf_dnstap_socket_path = "/tmp/bowline.sock"
         , cnf_dnstap_reconnect_interval = 60
+        , cnf_webapi = True
         , cnf_webapi_addr = "127.0.0.1"
         , cnf_webapi_port = 8080
         }
@@ -132,7 +136,8 @@ parseConfig file = makeConfig defaultConfig <$> readConfig file
 makeConfig :: Config -> [Conf] -> Config
 makeConfig def conf =
     Config
-        { cnf_log_output = Log.Stdout -- fixme
+        { cnf_log = get "log" cnf_log
+        , cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
         , cnf_cert_file = get "cert-file" cnf_cert_file
         , cnf_key_file = get "key-file" cnf_key_file
@@ -166,6 +171,7 @@ makeConfig def conf =
         , cnf_dnstap = get "dnstap" cnf_dnstap
         , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
         , cnf_dnstap_reconnect_interval = get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval
+        , cnf_webapi = get "webapi" cnf_webapi
         , cnf_webapi_addr = get "webapi-addr" cnf_webapi_addr
         , cnf_webapi_port = get "webapi-port" cnf_webapi_port
         }
