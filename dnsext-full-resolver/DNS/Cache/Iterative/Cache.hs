@@ -47,11 +47,12 @@ withLookupCache h logMark dom typ = do
         cache <- getCache
         ts <- getSec
         return $ h ts dom typ DNS.classIN cache
-    logLn Log.DEBUG $ let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
-                          mark ws
-                              | null logMark = ws
-                              | otherwise = (logMark ++ ":") : ws
-                          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.classIN, ":", pprResult]
+    logLn Log.DEBUG $
+        let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+            mark ws
+                | null logMark = ws
+                | otherwise = (logMark ++ ":") : ws
+         in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.classIN, ":", pprResult]
     return result
 
 lookupRRset :: String -> Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))

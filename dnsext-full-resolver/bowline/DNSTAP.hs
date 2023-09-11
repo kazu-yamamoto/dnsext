@@ -17,10 +17,10 @@ import Config
 
 new :: Config -> IO (IO (Maybe ThreadId), Message -> IO ())
 new conf@Config{..}
-  | cnf_dnstap = do
+    | cnf_dnstap = do
         (writer, put) <- newDnstapWriter conf
         return (Just <$> forkIO writer, put)
-  | otherwise = do
+    | otherwise = do
         let put ~_ = return ()
         return (return Nothing, put)
 

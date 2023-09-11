@@ -48,12 +48,12 @@ runConfig mng conf@Config{..} = do
     (runLogger, putLines, flush) <-
         if cnf_log
             then do
-                 (r, p, f) <- Log.new cnf_log_output cnf_log_level
-                 return (Just <$> forkIO r, p, f)
+                (r, p, f) <- Log.new cnf_log_output cnf_log_level
+                return (Just <$> forkIO r, p, f)
             else do
-                 let p _ _ ~_ = return ()
-                     f = return ()
-                 return (return Nothing, p, f)
+                let p _ _ ~_ = return ()
+                    f = return ()
+                return (return Nothing, p, f)
     tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
     creds <-
@@ -84,7 +84,7 @@ runConfig mng conf@Config{..} = do
     monitor <- getMonitor env conf mng'
     race_ (conc $ concat servers) (conc monitor)
     threadDelay 500000
-    mapM_ (maybe (return ()) killThread) [tidA,tidL,tidW]
+    mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
   where
     conc = foldr concurrently_ $ return ()

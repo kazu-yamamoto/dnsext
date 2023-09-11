@@ -48,8 +48,8 @@ ng st = responseLBS st [] "NG\n"
 
 new :: Config -> Manage -> IO (Maybe ThreadId)
 new Config{..} mng
-  | cnf_webapi = Just <$> forkIO (runAPI cnf_webapi_addr cnf_webapi_port mng)
-  | otherwise  = return Nothing
+    | cnf_webapi = Just <$> forkIO (runAPI cnf_webapi_addr cnf_webapi_port mng)
+    | otherwise = return Nothing
 
 runAPI :: String -> Int -> Manage -> IO ()
 runAPI addr port mng = withSocketsDo $ do
