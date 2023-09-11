@@ -86,9 +86,11 @@ executable bowline
     other-modules:
         Config
         DNSTAP
+        Manage
         Monitor
         Parser
         SocketUtil
+        WebAPI
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
@@ -101,13 +103,16 @@ executable bowline
         dnsext-log,
         dnsext-svcb,
         dnsext-types,
+        http-types,
         iproute,
         network,
         parsec,
         split,
         stm,
         tls,
-        unliftio
+        unliftio,
+        wai,
+        warp
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native

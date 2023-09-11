@@ -3,7 +3,9 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, killThread)
+import Control.Concurrent (forkIO, killThread, getNumCapabilities, threadDelay)
+import Control.Concurrent.STM
+import Control.Monad (when, guard)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -13,13 +15,16 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
+import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, race_)
 
 import Config
 import DNSTAP
+import Manage
 import qualified Monitor as Mon
+import WebAPI
 
 ----------------------------------------------------------------
 
@@ -28,14 +33,19 @@ help = putStrLn "bowline [<confFile>]"
 
 ----------------------------------------------------------------
 
-run :: Config -> IO ()
-run conf@Config{..} = do
-    DNS.runInitIO $ do
-        DNS.addResourceDataForDNSSEC
-        DNS.addResourceDataForSVCB
+run :: IO Config -> IO ()
+run readConfig = newManage >>= go
+  where
+    go mng = do
+        readConfig >>= runConfig mng
+        cont <- getReloadAndClear mng
+        when cont $ go mng
+
+runConfig :: Manage -> Config -> IO ()
+runConfig mng conf@Config{..} = do
     (writer, putDNSTAP) <- newDnstapWriter conf
     (logger, putLines, flush) <- Log.new cnf_log_output cnf_log_level
-    tid <- forkIO logger
+    tidL <- forkIO logger
     env <- getEnv conf putLines putDNSTAP
     creds <-
         if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
@@ -52,10 +62,20 @@ run conf@Config{..} = do
             , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
             , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
             ]
-    (servers, statuses) <- unzip <$> mapM (getServers env cnf_addrs) trans
-    monitor <- getMonitor env conf $ concat statuses
+    (servers, statuses) <- unzip <$> mapM (getServers env cnf_dns_addrs) trans
+    qRef <- newTVarIO False
+    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
+        mng' = mng { getStatus = getStatus' env (concat statuses) ucacheQSize
+                   , quitServer = atomically $ writeTVar qRef True
+                   , waitQuit = readTVar qRef >>= guard
+                   }
+        api = runAPI cnf_webapi_addr cnf_webapi_port mng'
+    monitor <- getMonitor env conf mng'
+    tidA <- forkIO api
     race_ (conc (writer : concat servers)) (conc monitor)
-    killThread tid
+    threadDelay 500000
+    killThread tidA
+    killThread tidL
     flush
   where
     conc = foldr concurrently_ $ return ()
@@ -75,10 +95,13 @@ run conf@Config{..} = do
 
 main :: IO ()
 main = do
+    DNS.runInitIO $ do
+        DNS.addResourceDataForDNSSEC
+        DNS.addResourceDataForSVCB
     args <- getArgs
     case args of
-        [] -> run defaultConfig
-        [confFile] -> parseConfig confFile >>= run
+        [] -> run (return defaultConfig)
+        [confFile] -> run (parseConfig confFile)
         _ -> help
 
 ----------------------------------------------------------------
@@ -99,12 +122,10 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> [IO Status] -> IO [IO ()]
-getMonitor env conf qsizes = do
+getMonitor :: Env -> Config -> Manage-> IO [IO ()]
+getMonitor env conf mng = do
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
-
-    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-    Mon.monitor conf env (qsizes, ucacheQSize)
+    Mon.monitor conf env mng
 
 ----------------------------------------------------------------
 
@@ -119,3 +140,17 @@ getEnv Config{..} putLines putDNSTAP = do
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+
+----------------------------------------------------------------
+
+getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO String
+getStatus' env iss ucacheQSize = do
+    caps <- getNumCapabilities
+    csiz <- show . Cache.size <$> getCache_ env
+    hits <- intercalate "\n" <$>  mapM (\action -> show <$> action) iss
+    (cur, mx) <- ucacheQSize
+    let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
+    return $ "capabilities: " ++ show caps ++ "\n" ++
+             "cache size: " ++ csiz ++ "\n" ++
+             hits ++ "\n" ++
+             qsiz ++ "\n"

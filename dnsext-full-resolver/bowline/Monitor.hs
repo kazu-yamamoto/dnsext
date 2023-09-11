@@ -6,9 +6,9 @@ module Monitor (
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
-import Control.Concurrent.STM (STM, atomically, newTVarIO, readTVar, writeTVar)
-import Control.Monad (guard, unless, void, when, (<=<))
+import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
+import Control.Concurrent.STM (STM, atomically)
+import Control.Monad (unless, void, when, (<=<))
 import DNS.Types.Decode (EpochTime)
 import Data.Char (toUpper)
 import Data.Functor (($>))
@@ -48,6 +48,7 @@ import DNS.Cache.Server
 import qualified DNS.Log as Log
 
 import Config
+import Manage
 import SocketUtil (addrInfo)
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
@@ -73,34 +74,30 @@ data Command
 monitor
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int))
+    -> Manage
     -> IO [IO ()]
-monitor conf env getsSizeInfo = do
+monitor conf env mng@Manage{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
-    ps <- monitorSockets monPort' ["::1", "127.0.0.1"]
+    ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
     sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
     mapM_ (uncurry S.bind) ps
     sequence_ [S.listen sock 5 | sock <- ss]
-    monQuit <- do
-        qRef <- newTVarIO False
-        return (writeTVar qRef True, readTVar qRef >>= guard)
-    when (cnf_monitor_stdio conf) $ runStdConsole monQuit
-    return $ map (monitorServer monQuit) ss
+    when (cnf_monitor_stdio conf) runStdConsole
+    return $ map monitorServer ss
   where
-    runStdConsole monQuit = do
-        let repl =
-                console conf env getsSizeInfo monQuit stdin stdout "<std>"
+    runStdConsole = do
+        let repl = console conf env mng stdin stdout "<std>"
         void $ forkIO repl
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
-    monitorServer monQuit@(_, waitQuit) s = do
+    monitorServer s = do
         let step = do
                 socketWaitRead s
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
                 let repl =
-                        console conf env getsSizeInfo monQuit sockh sockh $
+                        console conf env mng sockh sockh $
                             show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
@@ -113,13 +110,12 @@ monitor conf env getsSizeInfo = do
 console
     :: Config
     -> Env
-    -> ([IO Status], IO (Int, Int))
-    -> (STM (), STM ())
+    -> Manage
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
+console conf env Manage{..} inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -167,7 +163,7 @@ console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
 
     outLn = hPutStrLn outH
 
-    runCmd Quit = atomically issueQuit $> True
+    runCmd Quit = quitServer $> True
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
@@ -182,20 +178,10 @@ console conf env (iss, ucacheQSize) (issueQuit, waitQuit) inH outH ainfo = do
                 ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Status = printStatus
+        dispatch Status = getStatus >>= outLn
         dispatch (Expire offset) = expireCache env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
-
-    printStatus = do
-        caps <- getNumCapabilities
-        outLn $ "capabilities: " ++ show caps
-        outLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
-        let psize s getSize = do
-                (cur, mx) <- getSize
-                outLn $ s ++ " size: " ++ show cur ++ " / " ++ show mx
-        mapM_ (\action -> action >>= outLn . show) iss
-        psize "ucache queue" ucacheQSize
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]

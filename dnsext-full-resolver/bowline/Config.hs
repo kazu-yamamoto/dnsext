@@ -24,6 +24,7 @@ data Config = Config
     , cnf_key_file :: FilePath
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
+    , cnf_dns_addrs :: [String]
     , cnf_udp :: Bool
     , cnf_udp_port :: Int
     , cnf_udp_pipelines_per_socket :: Int
@@ -46,11 +47,13 @@ data Config = Config
     , cnf_h3 :: Bool
     , cnf_h3_port :: Int
     , cnf_monitor_port :: Int
-    , cnf_addrs :: [String]
+    , cnf_monitor_addrs :: [String]
     , cnf_monitor_stdio :: Bool
     , cnf_dnstap :: Bool
     , cnf_dnstap_socket_path :: FilePath
     , cnf_dnstap_reconnect_interval :: Int
+    , cnf_webapi_addr :: String
+    , cnf_webapi_port :: Int
     }
     deriving (Show)
 
@@ -63,6 +66,7 @@ defaultConfig =
         , cnf_key_file = "privkey.pem"
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
+        , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_udp = True
         , cnf_udp_port = 53
         , cnf_udp_pipelines_per_socket = 2
@@ -85,11 +89,13 @@ defaultConfig =
         , cnf_h3 = True
         , cnf_h3_port = 443
         , cnf_monitor_port = 10023
-        , cnf_addrs = []
+        , cnf_monitor_addrs = []
         , cnf_monitor_stdio = False
         , cnf_dnstap = True
         , cnf_dnstap_socket_path = "/tmp/bowline.sock"
         , cnf_dnstap_reconnect_interval = 60
+        , cnf_webapi_addr = "127.0.0.1"
+        , cnf_webapi_port = 8080
         }
 
 ----------------------------------------------------------------
@@ -115,7 +121,7 @@ showConfig conf =
     field' label' get = field'_ label' (show . get)
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
-    hosts = cnf_addrs conf
+    hosts = cnf_dns_addrs conf
 
 ----------------------------------------------------------------
 
@@ -132,6 +138,7 @@ makeConfig def conf =
         , cnf_key_file = get "key-file" cnf_key_file
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
+        , cnf_dns_addrs = get "cnf_dns_addrs" cnf_dns_addrs
         , cnf_udp = get "udp" cnf_udp
         , cnf_udp_port = get "udp-port" cnf_udp_port
         , cnf_udp_pipelines_per_socket = get "udp-pipelines-per-socket" cnf_udp_pipelines_per_socket
@@ -154,11 +161,13 @@ makeConfig def conf =
         , cnf_h3 = get "h3" cnf_h3
         , cnf_h3_port = get "h3-port" cnf_h3_port
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
-        , cnf_addrs = get "addrs" cnf_addrs
+        , cnf_monitor_addrs = get "monitor-addrs" cnf_monitor_addrs
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
         , cnf_dnstap = get "dnstap" cnf_dnstap
         , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
         , cnf_dnstap_reconnect_interval = get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval
+        , cnf_webapi_addr = get "webapi-addr" cnf_webapi_addr
+        , cnf_webapi_port = get "webapi-port" cnf_webapi_port
         }
   where
     get k func = maybe (func def) fromConf $ lookup k conf
@@ -190,7 +199,7 @@ instance FromConf (Maybe String) where
     fromConf _ = error "fromConf string"
 
 instance FromConf [String] where
-    fromConf (CV_String s) = splitOn "," s
+    fromConf (CV_String s) = filter (/= "") $ splitOn "," s
     fromConf _ = error "fromConf string"
 
 instance FromConf Log.Level where
@@ -220,13 +229,7 @@ config = commentLines *> many cfield <* eof
     cfield = field <* commentLines
 
 field :: Parser Conf
-field = do
-    k <- key
-    sep
-    v <- value
-    if v == CV_String ""
-        then fail ("\"" ++ k ++ ":\" does not specify a value")
-        else return (k, v)
+field = (,) <$> key <*> (sep *> value)
 
 key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
