@@ -188,7 +188,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     qinfo = show dom ++ " " ++ show typ
     verify = Verify.with dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
-        let (verifyMsg, verifyColor, raiseOnVerifyFailure)
+        let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
@@ -280,7 +280,7 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
     resultK w rrsets _ = lift $ success w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
     failed = nsecFailed
-    qinfo = show qname ++ " " ++ show qtype
+    ~qinfo = show qname ++ " " ++ show qtype
 
     zone = delegationZone
     dnskeys = delegationDNSKEY

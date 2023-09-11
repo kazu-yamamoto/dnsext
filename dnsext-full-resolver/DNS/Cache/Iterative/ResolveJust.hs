@@ -80,7 +80,7 @@ resolveExactDC dc n typ
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
         sas <- delegationIPs dc nss
-        lift . logLn Log.DEMO . unwords $ ["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas]
+        lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
   where
@@ -153,7 +153,7 @@ resolveNS disableV6NS dc ns = do
                 xs <- qx
                 if null xs then qy else pure xs
             querySection typ = do
-                lift . logLn Log.DEMO . unwords $ ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
+                lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
                 lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
 
@@ -191,7 +191,7 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
     nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-    verifyFailed es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
+    verifyFailed ~es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
     query = do
         ips <- delegationIPs dc d
         if null ips
@@ -275,7 +275,7 @@ iterative_ dc nss0 (x : xs) =
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs dc nss
-        lift . logLn Log.DEMO . unwords $ ["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas]
+        lift . logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
@@ -383,10 +383,10 @@ fillDelegationDS dc src dest
         ips <- delegationIPs dc src
         let nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
             domTraceMsg = show (delegationZone src) ++ " -> " ++ show (delegationZone dest)
-            verifyFailed es = do
+            verifyFailed ~es = do
                 lift (logLn Log.WARN $ "fillDelegationDS: " ++ es)
                 throwDnsError DNS.ServerFailure
-            result (e, verifyColor, verifyMsg) = do
+            result (e, ~verifyColor, ~verifyMsg) = do
                 lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
         if null ips

@@ -119,12 +119,12 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
             Left e -> do
-                let showHex8 w
-                        | w >= 16 = showHex w
-                        | otherwise = ('0' :) . showHex w
-                    dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
                 ractionLog rinfoActions Log.DEBUG Nothing $
-                    ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
+                    let showHex8 w
+                            | w >= 16 = showHex w
+                            | otherwise = ('0' :) . showHex w
+                        dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
+                    in ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
                 E.throwIO e
             Right msg
                 | checkResp q ident msg -> do
