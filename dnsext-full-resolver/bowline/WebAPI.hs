@@ -1,52 +1,50 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
 
 module WebAPI (runAPI) where
 
-import Control.Monad.IO.Class (liftIO)
+import Data.ByteString ()
+import qualified Data.ByteString.Lazy.Char8 as LBS
+import Network.HTTP.Types
 import Network.Socket
 import Network.Wai
 import Network.Wai.Handler.Warp
-import Servant
 import qualified UnliftIO.Exception as E
 
 import Manage
 
--- newtype Status = Status { content :: String } deriving Generic
+doStatus :: Manage -> IO Response
+doStatus Manage{..} = do
+    str <- getStatus
+    return $ responseLBS ok200 [] $ LBS.pack str
 
-type StatusAPI = "status" :> Get '[PlainText] String
-            :<|> "reload" :> Get '[PlainText] String
-            :<|> "quit"   :> Get '[PlainText] String
+doReload :: Manage -> IO Response
+doReload Manage{..} = do
+    setReload
+    quitServer
+    return ok
 
-server :: Manage -> Server StatusAPI
-server mng@Manage{..} = liftIO getStatus
-                   :<|> reload mng
-                   :<|> quit mng
-
-reload :: Manage -> Handler String
-reload Manage{..} = do
-    liftIO $ do
-        setReload
-        quitServer
-    return "bowline is reloaded\n"
-
-quit :: Manage -> Handler String
-quit Manage{..} = do
-    liftIO $ quitServer
-    return "bowline is quit"
-
-statusAPI :: Proxy StatusAPI
-statusAPI = Proxy
+doQuit :: Manage -> IO Response
+doQuit Manage{..} = do
+    quitServer
+    return ok
 
 app :: Manage -> Application
-app mng  = serve statusAPI $ server mng
+app mng req sendResp = getResp >>= sendResp
+  where
+    getResp
+        | requestMethod req == methodGet = case rawPathInfo req of
+            "/status" -> doStatus mng
+            "/reload" -> doReload mng
+            "/quit"   -> doQuit mng
+            _         -> return $ ng badRequest400
+        | otherwise = return $ ng methodNotAllowed405
+
+ok :: Response
+ok = responseLBS ok200 [] "OK\n"
+
+ng :: Status -> Response
+ng st = responseLBS st [] "NG\n"
 
 runAPI :: String -> Int -> Manage -> IO ()
 runAPI addr port mng = withSocketsDo $ do
