@@ -14,9 +14,7 @@ import qualified UnliftIO.Exception as E
 import Manage
 
 doStatus :: Manage -> IO Response
-doStatus Manage{..} = do
-    str <- getStatus
-    return $ responseLBS ok200 [] $ LBS.pack str
+doStatus Manage{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
 
 doReload :: Manage -> IO Response
 doReload Manage{..} = do

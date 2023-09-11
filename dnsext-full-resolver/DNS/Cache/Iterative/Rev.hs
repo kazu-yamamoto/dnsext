@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.Rev (
     takeSpecialRevDomainResult,

@@ -65,7 +65,7 @@ spec = do
 envSpec :: Spec
 envSpec = describe "env" $ do
     it "rootHint" $ do
-        let sp p = case p of Delegation _ _ _ _ -> True -- check not error
+        let sp p = case p of Delegation{} -> True -- check not error
         rootHint `shouldSatisfy` sp
 
 cacheStateSpec :: Bool -> Log.PutLines -> Spec

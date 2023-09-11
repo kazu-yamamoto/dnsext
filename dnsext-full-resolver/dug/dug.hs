@@ -23,7 +23,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.List (intercalate, isPrefixOf)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -143,7 +143,7 @@ main = do
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
-                    raflags = catMaybes $ map toResolvActionsFlag plus
+                    raflags = mapMaybe toResolvActionsFlag plus
                 ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
                 case ex of
                     Left e -> fail (show e)
@@ -165,7 +165,7 @@ main = do
                                     ++ ", "
                         return (replyDNSMessage, h)
     t1 <- T.getUnixTime
-    let T.UnixDiffTime s u = (t1 `T.diffUnixTime` t0)
+    let T.UnixDiffTime s u = t1 `T.diffUnixTime` t0
     let sec = if s /= 0 then show s ++ "sec " else ""
         tm =
             header
@@ -174,7 +174,7 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let oflags = catMaybes $ map toOutputFlag plus
+    let oflags = mapMaybe toOutputFlag plus
         res
             | optJSON = showJSON msg
             | otherwise = pprResult oflags msg

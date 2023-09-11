@@ -185,7 +185,7 @@ fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFil
     return d
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
-fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS (dss@(_ : _)), delegationDNSKEY = [], ..} =
+fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
     maybe query (lift . fill . toDNSKEYs) =<< lift (lookupValid delegationZone DNSKEY)
   where
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]

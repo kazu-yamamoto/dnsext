@@ -36,7 +36,7 @@ http2Server creds VcServerConfig{..} env port host = do
             , H2TLS.settingsSlowlorisSize = vc_slowloris_size
             }
 
-data Http2cServerConfig = Http2cServerConfig
+newtype Http2cServerConfig = Http2cServerConfig
     { http2c_idle_timeout :: Int
     }
 

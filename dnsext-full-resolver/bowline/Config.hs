@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Config (
     Config (..),
@@ -9,6 +8,7 @@ module Config (
     showConfig,
 ) where
 
+import Control.Monad (void)
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
 import Data.List.Split (splitOn)
@@ -235,7 +235,7 @@ key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
 
 sep :: Parser ()
-sep = () <$ char ':' *> spcs
+sep = void $ char ':' *> spcs
 
 value :: Parser ConfValue
 value = choice [try cv_int, try cv_bool, cv_string]

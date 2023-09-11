@@ -86,7 +86,7 @@ instance WriteQueueSTM (Queue STM) where
 
 makeReadSizesAny :: QueueSize q => [q a] -> IO (Int, Int)
 makeReadSizesAny qs = do
-    (ss, xs) <- unzip <$> mapM readSizes qs
+    (ss, xs) <- mapAndUnzipM readSizes qs
     return (sum ss, sum xs)
 
 data GetAny a = GetAny

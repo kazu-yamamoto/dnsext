@@ -128,14 +128,14 @@ cachedDNSKEY dss aservers dom = do
     verifyDNSKEY msg sepps = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null" {- guarded by verifySEP, null case, SEP is null too -}
-            ncDNSKEY = pure $ Left $ "cachedDNSKEY: not canonical"
+            ncDNSKEY = pure $ Left "cachedDNSKEY: not canonical"
         Verify.with (map fst sepps) rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 verifySEP
     :: [RD_DS]
     -> Domain
     -> [ResourceRecord]
-    -> Either String ([(RD_DNSKEY, RD_DS)])
+    -> Either String [(RD_DNSKEY, RD_DS)]
 verifySEP dss dom rrs = do
     let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
         seps =

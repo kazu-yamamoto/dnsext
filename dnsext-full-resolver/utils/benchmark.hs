@@ -132,9 +132,8 @@ help =
 parseOptions :: [String] -> IO (Maybe Config)
 parseOptions args
     | not (null errs) = mapM putStrLn errs *> return Nothing
-    | otherwise = either helpOnLeft (return . Just) $ do
-        opt <- foldr (>=>) return ars defaultOptions
-        return opt
+    | otherwise = either helpOnLeft (return . Just) $
+        foldr (>=>) return ars defaultOptions
   where
     (ars, _rest, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing

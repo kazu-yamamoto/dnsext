@@ -13,6 +13,7 @@ module Parser (
 ) where
 
 import Control.Exception
+import Control.Monad (void)
 import qualified Data.ByteString.Lazy.Char8 as BL
 import System.IO
 import Text.Parsec
@@ -41,7 +42,7 @@ parseFile p file = do
 -- >>> parse spcs "" ""
 -- Right ()
 spcs :: Parser ()
-spcs = () <$ many spc
+spcs = void $ many spc
 
 -- | 'Parser' to consume one or more white spaces
 --
@@ -52,7 +53,7 @@ spcs = () <$ many spc
 -- >>> isLeft $ parse spcs1 "" ""
 -- True
 spcs1 :: Parser ()
-spcs1 = () <$ many1 spc
+spcs1 = void $ many1 spc
 
 -- | 'Parser' to consume exactly one white space
 --
@@ -68,7 +69,7 @@ spc = satisfy (`elem` " \t")
 -- >>> parse commentLines "" "# comments\n# comments\n# comments\n"
 -- Right ()
 commentLines :: Parser ()
-commentLines = () <$ many commentLine
+commentLines = void $ many commentLine
   where
     commentLine = trailing
 
@@ -79,7 +80,7 @@ commentLines = () <$ many commentLine
 -- >>> isLeft $ parse trailing "" "X# comments\n"
 -- True
 trailing :: Parser ()
-trailing = () <$ (spcs *> comment *> newline <|> spcs *> newline)
+trailing = void (spcs *> comment *> newline <|> spcs *> newline)
 
 -- | 'Parser' to consume a trailing comment
 --
@@ -88,4 +89,4 @@ trailing = () <$ (spcs *> comment *> newline <|> spcs *> newline)
 -- >>> isLeft $ parse comment "" "foo"
 -- True
 comment :: Parser ()
-comment = () <$ char '#' <* many (noneOf "\n")
+comment = void $ char '#' <* many (noneOf "\n")

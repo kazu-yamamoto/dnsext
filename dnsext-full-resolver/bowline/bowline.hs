@@ -5,7 +5,7 @@ module Main where
 
 import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (guard, when)
+import Control.Monad (guard, mapAndUnzipM, when)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -62,7 +62,7 @@ runConfig mng conf@Config{..} = do
             , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
             , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
             ]
-    (servers, statuses) <- unzip <$> mapM (getServers env cnf_dns_addrs) trans
+    (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) trans
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng' =
@@ -115,7 +115,7 @@ getServers
     -> IO ([IO ()], [IO Status])
 getServers _ _ (False, _, _) = return ([], [])
 getServers env hosts (True, server, port') = do
-    (xss, yss) <- unzip <$> mapM (server env port) hosts
+    (xss, yss) <- mapAndUnzipM (server env port) hosts
     let xs = concat xss
         ys = concat yss
     return (xs, ys)
@@ -149,7 +149,7 @@ getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO String
 getStatus' env iss ucacheQSize = do
     caps <- getNumCapabilities
     csiz <- show . Cache.size <$> getCache_ env
-    hits <- intercalate "\n" <$> mapM (\action -> show <$> action) iss
+    hits <- intercalate "\n" <$> mapM (show <$>) iss
     (cur, mx) <- ucacheQSize
     let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
     return $

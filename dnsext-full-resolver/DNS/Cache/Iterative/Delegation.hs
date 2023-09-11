@@ -178,7 +178,7 @@ unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift ns
 
     success w = putLog (Just Green) $ "nsec verification success - " ++ witnessInfo w
     noverify s = putLog (Just Yellow) $ "nsec no verification - " ++ s
-    failed s = pure $ (putLog (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+    failed s = pure $ putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
 
     putLog color s = lift $ clogLn Log.DEMO color s
 
