@@ -225,8 +225,8 @@ _newTestEnv putLines =
     (curSec, timeStr) = TimeCache.none
     env rootRef genId =
         Env
-            { logLines_ = \_ _ -> putLines
-            , logDNSTAP = \_ -> return ()
+            { logLines_ = \_ ~_ -> putLines
+            , logDNSTAP = \ ~_ -> return ()
             , disableV6NS_ = True
             , insert_ = ins
             , getCache_ = getCache

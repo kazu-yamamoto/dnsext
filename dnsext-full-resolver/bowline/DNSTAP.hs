@@ -22,7 +22,7 @@ newDnstapQ :: IO DnstapQ
 newDnstapQ = DnstapQ <$> newTQueueIO
 
 writeDnstapQ :: DnstapQ -> Message -> IO ()
-writeDnstapQ (DnstapQ q) msg = atomically $ writeTQueue q msg
+writeDnstapQ (DnstapQ q) ~msg = atomically $ writeTQueue q msg
 
 readDnsTapQ :: DnstapQ -> IO Message
 readDnsTapQ (DnstapQ q) = atomically $ readTQueue q
