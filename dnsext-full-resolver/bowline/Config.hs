@@ -11,6 +11,7 @@ module Config (
 import Control.Monad (void)
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
+import Data.List
 import Data.List.Split (splitOn)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
@@ -114,18 +115,27 @@ showConfig conf =
     , field' "pipelines per socket" cnf_udp_pipelines_per_socket
     , field' "worker shared queue" cnf_udp_pipeline_share_queue
     , field' "queue size per worker" cnf_udp_queue_size_per_pipeline
-    , field' "DNS port" cnf_udp_port
     , field' "Monitor port" cnf_monitor_port
+    , showAddrPort "UDP" (cnf_udp conf) (cnf_udp_port conf)
+    , showAddrPort "TCP" (cnf_tcp conf) (cnf_tcp_port conf)
+    , showAddrPort "TLS" (cnf_tls conf) (cnf_tls_port conf)
+    , showAddrPort "QUIC" (cnf_quic conf) (cnf_quic_port conf)
+    , showAddrPort "H2C" (cnf_h2c conf) (cnf_h2c_port conf)
+    , showAddrPort "H2" (cnf_h2 conf) (cnf_h2_port conf)
+    , showAddrPort "H3" (cnf_h3 conf) (cnf_h3_port conf)
     ]
-        ++ if null hosts
-            then ["DNS host list: null"]
-            else "DNS host list:" : map ("DNS host: " ++) hosts
   where
-    field'_ label' toS = label' ++ ": " ++ toS conf
     field' label' get = field'_ label' (show . get)
+    field'_ label' toS = label' ++ ": " ++ toS conf
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
-    hosts = cnf_dns_addrs conf
+    addrs = cnf_dns_addrs conf
+    showAddrPort tag enable port
+      | enable = tag ++ ": " ++ intercalate ", " (map (addrport port) addrs)
+      | otherwise = tag ++ ": disabled"
+    addrport port a
+      | ':' `elem` a = "[" ++ a ++ "]:" ++ show port
+      | otherwise    = a ++ ":" ++ show port
 
 ----------------------------------------------------------------
 
