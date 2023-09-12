@@ -39,7 +39,9 @@ run readConfig = newManage >>= go
     go mng = do
         readConfig >>= runConfig mng
         cont <- getReloadAndClear mng
-        when cont $ go mng
+        when cont $ do
+            putStrLn "\nReloading..." -- fixme
+            go mng
 
 runConfig :: Manage -> Config -> IO ()
 runConfig mng0 conf@Config{..} = do
@@ -51,7 +53,7 @@ runConfig mng0 conf@Config{..} = do
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
     mng <- getManage env mng0 statuses
-    monitor <- getMonitor conf env mng
+    monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
     tidL <- runLogger
@@ -112,13 +114,6 @@ getServers env hosts (True, server, port') = do
     return (xs, ys)
   where
     port = fromIntegral port'
-
-----------------------------------------------------------------
-
-getMonitor :: Config -> Env -> Manage -> IO [IO ()]
-getMonitor conf env mng = do
-    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
-    Mon.monitor conf env mng
 
 ----------------------------------------------------------------
 

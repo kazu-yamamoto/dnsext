@@ -133,6 +133,7 @@ console conf env Manage{..} inH outH ainfo = do
                 (\exit -> unless exit repl)
                 =<< withWait waitQuit (handle (($> False) . print) step)
 
+    mapM_ outLn $ showConfig conf
     repl
   where
     handle onError = either onError return <=< tryAny
