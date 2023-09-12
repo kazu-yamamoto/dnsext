@@ -48,12 +48,7 @@ runConfig mng conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
-    creds <-
-        if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
-            then do
-                Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
-                return $ Credentials [cred]
-            else return $ Credentials []
+    creds <- getCreds conf
     let trans =
             [ (cnf_udp, udpServer udpconf, cnf_udp_port)
             , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
@@ -153,6 +148,15 @@ getLogger Config{..}
         let p _ _ ~_ = return ()
             f = return ()
         return (return Nothing, p, f)
+
+----------------------------------------------------------------
+
+getCreds :: Config -> IO Credentials
+getCreds Config{..}
+ | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
+       Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
+       return $ Credentials [cred]
+ | otherwise =  return $ Credentials []
 
 ----------------------------------------------------------------
 
