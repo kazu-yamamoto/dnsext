@@ -50,9 +50,9 @@ runConfig mng0 conf@Config{..} = do
     env <- getEnv conf putLines putDNSTAP
     creds <- getCreds conf
     (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    mng <- getManage mng0 env statuses
+    mng <- getManage env mng0 statuses
     tidA <- API.new conf mng
-    monitor <- getMonitor env conf mng
+    monitor <- getMonitor conf env mng
     race_ (conc $ concat servers) (conc monitor)
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
@@ -111,8 +111,8 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> Manage -> IO [IO ()]
-getMonitor env conf mng = do
+getMonitor :: Config -> Env -> Manage -> IO [IO ()]
+getMonitor conf env mng = do
     logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
     Mon.monitor conf env mng
 
@@ -153,8 +153,8 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getManage :: Manage -> Env -> [[IO Status]] -> IO Manage
-getManage mng0 env statuses = do
+getManage :: Env -> Manage -> [[IO Status]] -> IO Manage
+getManage env mng0 statuses = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
