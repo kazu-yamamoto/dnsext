@@ -15,7 +15,6 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
-import qualified DNS.Types.Decode as DNS
 import qualified Data.IORef as I
 import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
@@ -30,6 +29,14 @@ import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
+type GlobalCache =
+    ( Iterative.TimeCache
+    , Iterative.UpdateCache
+    , Log.PutLines -> IO ()
+    )
+
+----------------------------------------------------------------
+
 help :: IO ()
 help = putStrLn "bowline [<confFile>]"
 
@@ -37,10 +44,9 @@ help = putStrLn "bowline [<confFile>]"
 
 run :: IO Config -> IO ()
 run readConfig = do
-    conf0 <- readConfig
-    cache <- getCache $ cnf_cache_size conf0
-    mng <- newManage
-    go cache mng
+    -- Read config only to get cache size, sigh
+    cache <- readConfig >>= getCache
+    newManage >>= go cache
   where
     go cache mng = do
         readConfig >>= runConfig cache mng
@@ -49,7 +55,7 @@ run readConfig = do
             putStrLn "\nReloading..." -- fixme
             go cache mng
 
-runConfig :: (Iterative.TimeCache, Iterative.UpdateCache, Log.PutLines -> IO ()) -> Manage -> Config -> IO ()
+runConfig :: GlobalCache -> Manage -> Config -> IO ()
 runConfig (tcache, updateCache, setLogger) mng0 conf@Config{..} = do
     -- Setup
     (runWriter, putDNSTAP) <- TAP.new conf
@@ -124,21 +130,19 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getCache :: Int -> IO ((IO DNS.EpochTime, IO ShowS)
-                                , Iterative.UpdateCache
-                                , Log.PutLines -> IO ())
-getCache siz = do
+getCache :: Config -> IO GlobalCache
+getCache Config{..} = do
     ref <- I.newIORef Nothing
     tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf siz 1800 memoActions
+    let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
           where
             memoLogLn msg = do
                 mx <- I.readIORef ref
                 case mx of
-                  Nothing -> return ()
-                  Just putLines -> do
-                      tstr <- getTimeStr
-                      putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+                    Nothing -> return ()
+                    Just putLines -> do
+                        tstr <- getTimeStr
+                        putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     return (tcache, updateCache, I.writeIORef ref . Just)
