@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay, ThreadId)
+import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM, when)
 import DNS.Cache.Iterative (Env (..))
@@ -134,10 +134,10 @@ getEnv Config{..} putLines putDNSTAP = do
 
 getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines, IO ())
 getLogger Config{..}
-  | cnf_log = do
+    | cnf_log = do
         (r, p, f) <- Log.new cnf_log_output cnf_log_level
         return (Just <$> forkIO r, p, f)
-  | otherwise = do
+    | otherwise = do
         let p _ _ ~_ = return ()
             f = return ()
         return (return Nothing, p, f)
@@ -146,10 +146,10 @@ getLogger Config{..}
 
 getCreds :: Config -> IO Credentials
 getCreds Config{..}
- | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
-       Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
-       return $ Credentials [cred]
- | otherwise =  return $ Credentials []
+    | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
+        Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
+        return $ Credentials [cred]
+    | otherwise = return $ Credentials []
 
 ----------------------------------------------------------------
 
