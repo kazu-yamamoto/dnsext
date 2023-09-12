@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay)
+import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay, ThreadId)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM, when)
 import DNS.Cache.Iterative (Env (..))
@@ -45,15 +45,7 @@ runConfig :: Manage -> Config -> IO ()
 runConfig mng conf@Config{..} = do
     (runWriter, putDNSTAP) <- TAP.new conf
     tidW <- runWriter
-    (runLogger, putLines, flush) <-
-        if cnf_log
-            then do
-                (r, p, f) <- Log.new cnf_log_output cnf_log_level
-                return (Just <$> forkIO r, p, f)
-            else do
-                let p _ _ ~_ = return ()
-                    f = return ()
-                return (return Nothing, p, f)
+    (runLogger, putLines, flush) <- getLogger conf
     tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
     creds <-
@@ -149,6 +141,18 @@ getEnv Config{..} putLines putDNSTAP = do
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+
+----------------------------------------------------------------
+
+getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines, IO ())
+getLogger Config{..}
+  | cnf_log = do
+        (r, p, f) <- Log.new cnf_log_output cnf_log_level
+        return (Just <$> forkIO r, p, f)
+  | otherwise = do
+        let p _ _ ~_ = return ()
+            f = return ()
+        return (return Nothing, p, f)
 
 ----------------------------------------------------------------
 
