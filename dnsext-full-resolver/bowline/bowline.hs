@@ -42,7 +42,7 @@ run readConfig = newManage >>= go
         when cont $ go mng
 
 runConfig :: Manage -> Config -> IO ()
-runConfig mng conf@Config{..} = do
+runConfig mng0 conf@Config{..} = do
     (runWriter, putDNSTAP) <- TAP.new conf
     tidW <- runWriter
     (runLogger, putLines, flush) <- getLogger conf
@@ -52,14 +52,14 @@ runConfig mng conf@Config{..} = do
     (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-        mng' =
-            mng
+        mng =
+            mng0
                 { getStatus = getStatus' env (concat statuses) ucacheQSize
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
-    tidA <- API.new conf mng'
-    monitor <- getMonitor env conf mng'
+    tidA <- API.new conf mng
+    monitor <- getMonitor env conf mng
     race_ (conc $ concat servers) (conc monitor)
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
