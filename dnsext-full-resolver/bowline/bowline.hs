@@ -15,6 +15,8 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
+import qualified DNS.Types.Decode as DNS
+import qualified Data.IORef as I
 import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
@@ -34,21 +36,26 @@ help = putStrLn "bowline [<confFile>]"
 ----------------------------------------------------------------
 
 run :: IO Config -> IO ()
-run readConfig = newManage >>= go
+run readConfig = do
+    conf0 <- readConfig
+    cache <- getCache $ cnf_cache_size conf0
+    mng <- newManage
+    go cache mng
   where
-    go mng = do
-        readConfig >>= runConfig mng
+    go cache mng = do
+        readConfig >>= runConfig cache mng
         cont <- getReloadAndClear mng
         when cont $ do
             putStrLn "\nReloading..." -- fixme
-            go mng
+            go cache mng
 
-runConfig :: Manage -> Config -> IO ()
-runConfig mng0 conf@Config{..} = do
+runConfig :: (Iterative.TimeCache, Iterative.UpdateCache, Log.PutLines -> IO ()) -> Manage -> Config -> IO ()
+runConfig (tcache, updateCache, setLogger) mng0 conf@Config{..} = do
     -- Setup
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
-    env <- getEnv conf putLines putDNSTAP
+    setLogger putLines
+    env <- Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
@@ -117,17 +124,24 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> Log.PutLines -> (TAP.Message -> IO ()) -> IO Env
-getEnv Config{..} putLines putDNSTAP = do
+getCache :: Int -> IO ((IO DNS.EpochTime, IO ShowS)
+                                , Iterative.UpdateCache
+                                , Log.PutLines -> IO ())
+getCache siz = do
+    ref <- I.newIORef Nothing
     tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
+    let cacheConf = Cache.MemoConf siz 1800 memoActions
           where
             memoLogLn msg = do
-                tstr <- getTimeStr
-                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+                mx <- I.readIORef ref
+                case mx of
+                  Nothing -> return ()
+                  Just putLines -> do
+                      tstr <- getTimeStr
+                      putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+    return (tcache, updateCache, I.writeIORef ref . Just)
 
 ----------------------------------------------------------------
 
