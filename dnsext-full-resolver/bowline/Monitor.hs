@@ -96,9 +96,7 @@ monitor conf env mng@Manage{..} = do
                 socketWaitRead s
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
-                let repl =
-                        console conf env mng sockh sockh $
-                            show addr
+                let repl = console conf env mng sockh sockh $ show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
                 either (const $ return ()) (const loop)
