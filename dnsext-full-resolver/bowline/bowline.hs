@@ -49,16 +49,7 @@ runConfig mng conf@Config{..} = do
     tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
     creds <- getCreds conf
-    let trans =
-            [ (cnf_udp, udpServer udpconf, cnf_udp_port)
-            , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
-            , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
-            , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
-            , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
-            , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
-            , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
-            ]
-    (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) trans
+    (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng' =
@@ -74,6 +65,15 @@ runConfig mng conf@Config{..} = do
     flush
     threadDelay 500000 -- avoiding address already in use
   where
+    trans creds =
+        [ (cnf_udp, udpServer udpconf, cnf_udp_port)
+        , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
+        , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
+        , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
+        , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
+        , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
+        , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
+        ]
     conc = foldr concurrently_ $ return ()
     udpconf =
         UdpServerConfig
