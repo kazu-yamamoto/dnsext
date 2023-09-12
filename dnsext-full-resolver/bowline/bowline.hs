@@ -50,14 +50,7 @@ runConfig mng0 conf@Config{..} = do
     env <- getEnv conf putLines putDNSTAP
     creds <- getCreds conf
     (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    qRef <- newTVarIO False
-    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-        mng =
-            mng0
-                { getStatus = getStatus' env (concat statuses) ucacheQSize
-                , quitServer = atomically $ writeTVar qRef True
-                , waitQuit = readTVar qRef >>= guard
-                }
+    mng <- getManage mng0 env statuses
     tidA <- API.new conf mng
     monitor <- getMonitor env conf mng
     race_ (conc $ concat servers) (conc monitor)
@@ -157,6 +150,20 @@ getCreds Config{..}
        Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
        return $ Credentials [cred]
  | otherwise =  return $ Credentials []
+
+----------------------------------------------------------------
+
+getManage :: Manage -> Env -> [[IO Status]] -> IO Manage
+getManage mng0 env statuses = do
+    qRef <- newTVarIO False
+    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
+        mng =
+            mng0
+                { getStatus = getStatus' env (concat statuses) ucacheQSize
+                , quitServer = atomically $ writeTVar qRef True
+                , waitQuit = readTVar qRef >>= guard
+                }
+    return mng
 
 ----------------------------------------------------------------
 
