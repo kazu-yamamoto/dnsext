@@ -48,7 +48,8 @@ runConfig mng0 conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     env <- getEnv conf putLines putDNSTAP
     creds <- getCreds conf
-    (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
+    (servers, statuses) <-
+        mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
     mng <- getManage env mng0 statuses
     monitor <- getMonitor conf env mng
     -- Run
