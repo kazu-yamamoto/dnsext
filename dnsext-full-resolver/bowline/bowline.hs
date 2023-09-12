@@ -5,7 +5,7 @@ module Main where
 
 import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (guard, mapAndUnzipM, when)
+import Control.Monad (guard, mapAndUnzipM)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -46,18 +46,26 @@ run :: IO Config -> IO ()
 run readConfig = do
     -- Read config only to get cache size, sigh
     cache <- readConfig >>= getCache
-    newManage >>= go cache
+    newManage >>= go (Just cache)
   where
-    go cache mng = do
-        readConfig >>= runConfig cache mng
-        cont <- getReloadAndClear mng
-        when cont $ do
-            putStrLn "\nReloading..." -- fixme
-            go cache mng
+    go mcache mng = do
+        cache <- readConfig >>= runConfig mcache mng
+        ctl <- getControlAndClear mng
+        case ctl of
+            Quit -> putStrLn "\nQuiting..." -- fixme
+            Reload -> do
+                putStrLn "\nReloading..." -- fixme
+                go Nothing mng
+            KeepCache -> do
+                putStrLn "\nReloading with the current cache..." -- fixme
+                go (Just cache) mng
 
-runConfig :: GlobalCache -> Manage -> Config -> IO ()
-runConfig (tcache, updateCache, setLogger) mng0 conf@Config{..} = do
+runConfig :: Maybe GlobalCache -> Manage -> Config -> IO GlobalCache
+runConfig mcache mng0 conf@Config{..} = do
     -- Setup
+    cache@(tcache, updateCache, setLogger) <- case mcache of
+        Nothing -> getCache conf -- fixme: reaper leak
+        Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
     setLogger putLines
@@ -76,6 +84,7 @@ runConfig (tcache, updateCache, setLogger) mng0 conf@Config{..} = do
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
     threadDelay 500000 -- avoiding address already in use
+    return cache
   where
     trans creds =
         [ (cnf_udp, udpServer udpconf, cnf_udp_port)

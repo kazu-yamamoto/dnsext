@@ -48,7 +48,7 @@ import DNS.Cache.Server
 import qualified DNS.Log as Log
 
 import Config
-import Manage
+import Manage (Manage (..))
 import SocketUtil (addrInfo)
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
