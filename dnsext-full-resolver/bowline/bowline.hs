@@ -45,16 +45,16 @@ runConfig :: Manage -> Config -> IO ()
 runConfig mng0 conf@Config{..} = do
     -- Setup
     (runWriter, putDNSTAP) <- TAP.new conf
-    tidW <- runWriter
     (runLogger, putLines, flush) <- getLogger conf
-    tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
     creds <- getCreds conf
     (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
     mng <- getManage env mng0 statuses
-    tidA <- API.new conf mng
     monitor <- getMonitor conf env mng
     -- Run
+    tidW <- runWriter
+    tidL <- runLogger
+    tidA <- API.new conf mng
     race_ (conc $ concat servers) (conc monitor)
     -- Teardown
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
