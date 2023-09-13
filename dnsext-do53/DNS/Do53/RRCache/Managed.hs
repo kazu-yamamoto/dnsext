@@ -1,19 +1,20 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Do53.RRCache.Managed (
+    -- * Configuration
     RRCacheConf (..),
-    RRCacheActions (..),
     getDefaultStubConf,
     noCacheConf,
+    -- * Resource record cache
     RRCache,
-    readRRCache,
-    expiresRRCache,
-    insertWithExpiresRRCache,
+    newRRCache,
+    -- * Operations
     Prio,
     Entry,
-    newRRCache,
-    lookupCache,
+    insertWithExpiresRRCache,
     insertCache,
+    lookupCache,
+    expiresRRCache,
     keyForNX,
 )
 where
@@ -30,21 +31,17 @@ import DNS.Types.Decode (EpochTime)
 data RRCacheConf = RRCacheConf
     { maxCacheSize :: Int
     , expiresDelay :: Int
-    , memoActions :: RRCacheActions
-    }
-
-data RRCacheActions = RRCacheActions
-    { memoLogLn :: String -> IO ()
-    , memoGetTime :: IO EpochTime
+    , rrCacheLogLn :: String -> IO ()
+    , rrCacheGetTime :: IO EpochTime
     }
 
 getDefaultStubConf :: Int -> Int -> IO EpochTime -> RRCacheConf
-getDefaultStubConf sz delay getSec = RRCacheConf sz delay $ RRCacheActions noLog getSec
+getDefaultStubConf sz delay getSec = RRCacheConf sz delay noLog getSec
   where
     noLog ~_ = pure ()
 
 noCacheConf :: RRCacheConf
-noCacheConf = RRCacheConf 0 1800 $ RRCacheActions noLog (pure 0)
+noCacheConf = RRCacheConf 0 1800 noLog (pure 0)
   where
     noLog ~_ = pure ()
 
@@ -52,13 +49,12 @@ data RRCache = RRCache RRCacheConf (Reaper Cache)
 
 getRRCache :: RRCacheConf -> IO RRCache
 getRRCache conf@RRCacheConf{..} = do
-    let RRCacheActions{..} = memoActions
-        expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
+    let expiredLog c = rrCacheLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
     reaper <-
         mkReaper
             defaultReaperSettings
-                { reaperAction = Cache.expires <$> memoGetTime
+                { reaperAction = Cache.expires <$> rrCacheGetTime
                 , reaperCallback = maybe (return ()) expiredLog
                 , reaperDelay = expiresDelay * 1000 * 1000
                 , reaperNull = Cache.null
@@ -81,8 +77,7 @@ expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
 {- for full-resolver. using current EpochTime -}
 insertWithExpiresRRCache :: Key -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
 insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
-    let RRCacheActions{..} = memoActions
-    t <- memoGetTime
+    t <- rrCacheGetTime
     let ins = Cache.insert t k ttl crs rank
         withExpire cache = maybe (ins cache) ins $ Cache.expires t cache {- expires before insert -}
     reaperUpdate reaper $ \cache -> maybe cache id $ withExpire cache
@@ -99,7 +94,7 @@ newRRCache = getRRCache
 
 {- for stub. no alive check -}
 lookupCache :: Key -> RRCache -> IO (Maybe (Prio, Entry))
-lookupCache k memo = Cache.stubLookup k <$> readRRCache memo
+lookupCache k rrCache = Cache.stubLookup k <$> readRRCache rrCache
 
 {- for stub. not using current EpochTime -}
 insertCache :: Key -> Prio -> Entry -> RRCache -> IO ()
