@@ -102,12 +102,12 @@ lookupCacheSection
     -> Question
     -> IO (Either DNSError [RData])
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
-    nx <- lookupCache (keyForNX q) c
+    nx <- lookupRRCache (keyForNX q) c
     case nx of
         Just (_, Negative{}) -> return $ Left NameError
         Just (_, _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
         Nothing -> do
-            mx <- lookupCache q c
+            mx <- lookupRRCache q c
             case mx of
                 Nothing -> notCached
                 Just (_, Negative{}) -> return $ Right [] {- NoData -}
@@ -150,7 +150,7 @@ cachePositive cconf c k now rss
 insertPositive :: CacheConf -> RRCache -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
-    insertCache k p v c
+    insertRRCache k p v c
   where
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
@@ -164,7 +164,7 @@ cacheNegative cconf c k now ans = case soas of
 insertNegative :: CacheConf -> RRCache -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertNegative _ c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
-    insertCache k p v c
+    insertRRCache k p v c
   where
     life = fromIntegral ttl
 
