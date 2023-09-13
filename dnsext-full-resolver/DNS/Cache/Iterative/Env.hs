@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Cache.Iterative.Env (
+    Env(..),
     newEnv,
 ) where
 
@@ -34,11 +35,11 @@ newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
     let cxt =
             Env
                 { logLines_ = putLines
-                , logDNSTAP = putDNSTAP
+                , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disableV6NS
                 , insert_ = insertCache
                 , getCache_ = readCache
-                , expireCache = expireCache
+                , expireCache_ = expireCache
                 , currentRoot_ = rootRef
                 , currentSeconds_ = getTime
                 , timeString_ = getTimeStr

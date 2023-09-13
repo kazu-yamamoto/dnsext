@@ -226,11 +226,11 @@ _newTestEnv putLines =
     env rootRef genId =
         Env
             { logLines_ = \_ ~_ -> putLines
-            , logDNSTAP = \ ~_ -> return ()
+            , logDNSTAP_ = \ ~_ -> return ()
             , disableV6NS_ = True
             , insert_ = ins
             , getCache_ = getCache
-            , expireCache = expire
+            , expireCache_ = expire
             , currentRoot_ = rootRef
             , currentSeconds_ = getTime
             , timeString_ = getTimeStr

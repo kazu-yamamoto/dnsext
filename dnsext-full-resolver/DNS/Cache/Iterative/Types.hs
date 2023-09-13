@@ -42,11 +42,11 @@ import DNS.Cache.Types (NE)
 
 data Env = Env
     { logLines_ :: Log.PutLines
-    , logDNSTAP :: DNSTAP.Message -> IO ()
+    , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
-    , expireCache :: EpochTime -> IO ()
+    , expireCache_ :: EpochTime -> IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS

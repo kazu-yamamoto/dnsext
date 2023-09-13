@@ -6,10 +6,7 @@ module Main where
 import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
-import DNS.Cache.Iterative (Env (..))
-import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
-import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
 import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
@@ -69,7 +66,7 @@ runConfig mcache mng0 conf@Config{..} = do
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
     setLogger putLines
-    env <- Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds

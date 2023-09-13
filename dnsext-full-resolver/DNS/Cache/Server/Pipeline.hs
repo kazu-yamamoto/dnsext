@@ -84,7 +84,7 @@ cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
                     let bs = DNS.encode rspMsg
                     send bs
                     now' <- currentSeconds_ env
-                    logDNSTAP env $ DNSTAP.composeMessage proto mysa peersa now' bs
+                    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa now' bs
                 Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
@@ -114,7 +114,7 @@ workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
             let bs = DNS.encode rspMsg
             send bs
             now' <- currentSeconds_ env
-            logDNSTAP env $ DNSTAP.composeMessage proto mysa peersa now' bs
+            logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa now' bs
         Left e -> do
             incFailed
             logLn Log.WARN $

@@ -43,8 +43,7 @@ import qualified Network.Socket as S
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import DNS.Cache.Iterative (Env (..))
-import DNS.Cache.Server
+import DNS.Cache.Server (PortNumber, HostName, Env (..))
 import qualified DNS.Log as Log
 
 import Config
@@ -178,7 +177,7 @@ console conf env Control{..} inH outH ainfo = do
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status = getStatus >>= outLn
-        dispatch (Expire offset) = expireCache env . (+ offset) =<< currentSeconds_ env
+        dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
 
