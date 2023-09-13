@@ -50,7 +50,7 @@ run readConfig = do
   where
     go mcache mng = do
         cache <- readConfig >>= runConfig mcache mng
-        ctl <- getControlAndClear mng
+        ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do

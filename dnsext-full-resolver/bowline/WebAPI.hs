@@ -18,9 +18,9 @@ import Types
 doStatus :: Manage -> IO Response
 doStatus Manage{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
 
-doReload :: Manage -> Control -> IO Response
+doReload :: Manage -> Command -> IO Response
 doReload Manage{..} ctl = do
-    setControl ctl
+    setCommand ctl
     quitServer
     return ok
 
