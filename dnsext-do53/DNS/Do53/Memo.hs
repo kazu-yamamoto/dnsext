@@ -43,12 +43,12 @@ data MemoActions = MemoActions
 getDefaultStubConf :: Int -> Int -> IO EpochTime -> MemoConf
 getDefaultStubConf sz delay getSec = MemoConf sz delay $ MemoActions noLog getSec
   where
-    noLog _ = pure ()
+    noLog ~_ = pure ()
 
 noCacheConf :: MemoConf
 noCacheConf = MemoConf 0 1800 $ MemoActions noLog (pure 0)
   where
-    noLog _ = pure ()
+    noLog ~_ = pure ()
 
 data Memo = Memo MemoConf (Reaper Cache)
 

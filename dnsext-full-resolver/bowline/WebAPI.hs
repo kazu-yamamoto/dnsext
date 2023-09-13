@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module WebAPI (runAPI) where
+module WebAPI (new) where
 
+import Control.Concurrent
 import Data.ByteString ()
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import Network.HTTP.Types
@@ -11,6 +12,7 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 import qualified UnliftIO.Exception as E
 
+import Config
 import Manage
 
 doStatus :: Manage -> IO Response
@@ -43,6 +45,11 @@ ok = responseLBS ok200 [] "OK\n"
 
 ng :: Status -> Response
 ng st = responseLBS st [] "NG\n"
+
+new :: Config -> Manage -> IO (Maybe ThreadId)
+new Config{..} mng
+    | cnf_webapi = Just <$> forkIO (runAPI cnf_webapi_addr cnf_webapi_port mng)
+    | otherwise = return Nothing
 
 runAPI :: String -> Int -> Manage -> IO ()
 runAPI addr port mng = withSocketsDo $ do

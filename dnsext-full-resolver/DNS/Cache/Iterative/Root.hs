@@ -73,7 +73,7 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
-    lift . logLn Log.DEMO . unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
+    lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     body ips
   where
     left s = pure $ Left $ "rootPriming: " ++ s

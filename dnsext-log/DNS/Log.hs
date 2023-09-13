@@ -54,7 +54,7 @@ newHandleLogger outFh loggerLevel = do
         put = logLines colorize inQ
     return (logger, put, flush inQ)
   where
-    logLines colorize inQ lv color xs
+    logLines colorize inQ lv color ~xs
         | colorize = withColor color
         | otherwise = withColor Nothing
       where
