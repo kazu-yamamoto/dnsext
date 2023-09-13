@@ -1,4 +1,5 @@
 packages:
+  psqueues-ext
   dnsext-types
   dnsext-dnssec
   dnsext-svcb

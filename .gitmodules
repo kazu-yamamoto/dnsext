@@ -1,0 +1,4 @@
+[submodule "psqueues-ext"]
+	path = psqueues-ext
+	url = https://github.com/khibino/psqueues-ext
+	branch = ext-lookup-lg
