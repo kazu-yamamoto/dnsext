@@ -1,6 +1,13 @@
 module DNS.Cache.Server (
+    -- * Types
+    Server,
+    Env,
+    HostName,
+    PortNumber,
+    -- * UDP
     UdpServerConfig (..),
     udpServer,
+    -- * Virtual circuit
     VcServerConfig (..),
     tcpServer,
     http2cServer,
@@ -8,11 +15,8 @@ module DNS.Cache.Server (
     http3Server,
     tlsServer,
     quicServer,
+    -- * Misc
     Status,
-    Server,
-    Env,
-    HostName,
-    PortNumber,
 ) where
 
 import DNS.Cache.Server.HTTP2
