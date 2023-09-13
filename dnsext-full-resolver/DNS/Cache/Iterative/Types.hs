@@ -1,6 +1,5 @@
 module DNS.Cache.Iterative.Types (
     UpdateCache,
-    TimeCache,
     Result,
     ResultRRS,
     Env (..),
@@ -48,8 +47,6 @@ type UpdateCache =
     , IO Cache
     , EpochTime -> IO ()
     )
-
-type TimeCache = (IO EpochTime, IO ShowS)
 
 data Env = Env
     { logLines_ :: Log.PutLines

@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DNS.Cache.Iterative.Env (
     newEnv,
     getUpdateCache,
@@ -16,6 +18,7 @@ import qualified DNS.TAP.Schema as DNSTAP
 
 -- this package
 import DNS.Cache.Iterative.Types
+import DNS.Cache.TimeCache (TimeCache(..))
 
 getUpdateCache :: Cache.MemoConf -> IO UpdateCache
 getUpdateCache cacheConf = do
@@ -34,7 +37,7 @@ newEnv
     -> UpdateCache
     -> TimeCache
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) (curSec, timeStr) = do
+newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) TimeCache{..} = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     let cxt =
@@ -46,8 +49,8 @@ newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) (curSec, timeStr) 
                 , getCache_ = getCache
                 , expireCache = expire
                 , currentRoot_ = rootRef
-                , currentSeconds_ = curSec
-                , timeString_ = timeStr
+                , currentSeconds_ = getTime
+                , timeString_ = getTimeStr
                 , idGen_ = genId
                 }
     return cxt

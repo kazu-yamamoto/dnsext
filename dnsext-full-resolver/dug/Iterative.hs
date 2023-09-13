@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Iterative (iterativeQuery) where
 
 import DNS.Do53.Client (QueryControls)
@@ -6,7 +8,7 @@ import Data.String (fromString)
 
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
-import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.TimeCache (TimeCache(..), new)
 import qualified DNS.Log as Log
 import Network.Socket (HostName)
 
@@ -25,8 +27,8 @@ iterativeQuery disableV6NS putLines ctl domain typ = do
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
-    tcache@(getSec, _) <- TimeCache.new
-    let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getSec
+    tcache@TimeCache{..} <- new
+    let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     updateCache <- Iterative.getUpdateCache cacheConf
     Iterative.newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache
 

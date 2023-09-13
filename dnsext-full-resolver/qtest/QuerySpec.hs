@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module QuerySpec where
 
 import Test.Hspec
@@ -26,7 +28,7 @@ import DNS.Cache.Iterative (
     runDNSQuery,
  )
 import qualified DNS.Cache.Iterative as Iterative
-import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.TimeCache (TimeCache(..), new)
 
 data AnswerResult
     = Empty DNS.RCODE
@@ -70,8 +72,8 @@ envSpec = describe "env" $ do
 
 cacheStateSpec :: Bool -> Log.PutLines -> Spec
 cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
-    tcache@(getSec, _) <- runIO TimeCache.new
-    let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+    tcache@TimeCache{..} <- runIO new
+    let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
             cxt <- newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache
@@ -104,8 +106,8 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
 
 querySpec :: Bool -> Log.PutLines -> Spec
 querySpec disableV6NS putLines = describe "query" $ do
-    tcache@(getSec, _) <- runIO TimeCache.new
-    let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getSec
+    tcache@TimeCache{..} <- runIO new
+    let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     updateCache <- runIO $ getUpdateCache cacheConf
     let getCXT = newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache
     cxt <- runIO getCXT

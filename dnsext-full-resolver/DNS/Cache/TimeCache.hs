@@ -1,4 +1,5 @@
 module DNS.Cache.TimeCache (
+    TimeCache(..),
     new,
     none,
 ) where
@@ -21,12 +22,15 @@ import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 -- this package
 import DNS.Cache.Imports
 
-new :: IO (IO EpochTime, IO ShowS)
+data TimeCache = TimeCache
+    { getTime :: IO EpochTime
+    , getTimeStr :: IO ShowS
+    }
+
+new :: IO TimeCache
 new = do
     getUTime <- mkAutoUnixTime
-    getSec <- mkAutoSeconds getUTime
-    getShowS <- mkAutoTimeShowS getUTime
-    pure (getSec, getShowS)
+    TimeCache <$> mkAutoSeconds getUTime <*> mkAutoTimeShowS getUTime
 
 mkAutoUnixTime :: IO (IO UnixTime)
 mkAutoUnixTime = mostOncePerSecond getUnixTime

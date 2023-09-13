@@ -9,7 +9,7 @@ import Control.Monad (guard, mapAndUnzipM)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
-import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.TimeCache (TimeCache(..), new)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
@@ -30,7 +30,7 @@ import qualified WebAPI as API
 ----------------------------------------------------------------
 
 type GlobalCache =
-    ( Iterative.TimeCache
+    ( TimeCache
     , Iterative.UpdateCache
     , Log.PutLines -> IO ()
     )
@@ -142,7 +142,7 @@ getServers env hosts (True, server, port') = do
 getCache :: Config -> IO GlobalCache
 getCache Config{..} = do
     ref <- I.newIORef Nothing
-    tcache@(getSec, getTimeStr) <- TimeCache.new
+    tcache@TimeCache{..} <- new
     let memoLogLn msg = do
             mx <- I.readIORef ref
             case mx of
@@ -150,7 +150,7 @@ getCache Config{..} = do
                 Just putLines -> do
                     tstr <- getTimeStr
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-        memoActions = Cache.MemoActions memoLogLn getSec
+        memoActions = Cache.MemoActions memoLogLn getTime
         cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
     updateCache <- Iterative.getUpdateCache cacheConf
     return (tcache, updateCache, I.writeIORef ref . Just)
