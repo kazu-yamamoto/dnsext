@@ -5,7 +5,7 @@ module Main where
 
 import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (guard, mapAndUnzipM, when)
+import Control.Monad (guard, mapAndUnzipM)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
@@ -15,6 +15,7 @@ import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
+import qualified Data.IORef as I
 import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
@@ -28,27 +29,47 @@ import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
+type GlobalCache =
+    ( Iterative.TimeCache
+    , Iterative.UpdateCache
+    , Log.PutLines -> IO ()
+    )
+
+----------------------------------------------------------------
+
 help :: IO ()
 help = putStrLn "bowline [<confFile>]"
 
 ----------------------------------------------------------------
 
 run :: IO Config -> IO ()
-run readConfig = newManage >>= go
+run readConfig = do
+    -- Read config only to get cache size, sigh
+    cache <- readConfig >>= getCache
+    newManage >>= go (Just cache)
   where
-    go mng = do
-        readConfig >>= runConfig mng
-        cont <- getReloadAndClear mng
-        when cont $ do
-            putStrLn "\nReloading..." -- fixme
-            go mng
+    go mcache mng = do
+        cache <- readConfig >>= runConfig mcache mng
+        ctl <- getControlAndClear mng
+        case ctl of
+            Quit -> putStrLn "\nQuiting..." -- fixme
+            Reload -> do
+                putStrLn "\nReloading..." -- fixme
+                go Nothing mng
+            KeepCache -> do
+                putStrLn "\nReloading with the current cache..." -- fixme
+                go (Just cache) mng
 
-runConfig :: Manage -> Config -> IO ()
-runConfig mng0 conf@Config{..} = do
+runConfig :: Maybe GlobalCache -> Manage -> Config -> IO GlobalCache
+runConfig mcache mng0 conf@Config{..} = do
     -- Setup
+    cache@(tcache, updateCache, setLogger) <- case mcache of
+        Nothing -> getCache conf -- fixme: reaper leak
+        Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
-    env <- getEnv conf putLines putDNSTAP
+    setLogger putLines
+    env <- Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
@@ -63,6 +84,7 @@ runConfig mng0 conf@Config{..} = do
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
     threadDelay 500000 -- avoiding address already in use
+    return cache
   where
     trans creds =
         [ (cnf_udp, udpServer udpconf, cnf_udp_port)
@@ -117,17 +139,22 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getEnv :: Config -> Log.PutLines -> (TAP.Message -> IO ()) -> IO Env
-getEnv Config{..} putLines putDNSTAP = do
+getCache :: Config -> IO GlobalCache
+getCache Config{..} = do
+    ref <- I.newIORef Nothing
     tcache@(getSec, getTimeStr) <- TimeCache.new
     let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
           where
             memoLogLn msg = do
-                tstr <- getTimeStr
-                putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+                mx <- I.readIORef ref
+                case mx of
+                    Nothing -> return ()
+                    Just putLines -> do
+                        tstr <- getTimeStr
+                        putLines Log.WARN Nothing [tstr $ ": " ++ msg]
             memoActions = Cache.MemoActions memoLogLn getSec
     updateCache <- Iterative.getUpdateCache cacheConf
-    Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+    return (tcache, updateCache, I.writeIORef ref . Just)
 
 ----------------------------------------------------------------
 

@@ -3,22 +3,24 @@ module Manage where
 import Control.Concurrent.STM
 import Data.IORef
 
+data Control = Quit | Reload | KeepCache
+
 data Manage = Manage
     { getStatus :: IO String
     , quitServer :: IO ()
     , waitQuit :: STM ()
-    , getReloadAndClear :: IO Bool
-    , setReload :: IO ()
+    , getControlAndClear :: IO Control
+    , setControl :: Control -> IO ()
     }
 
 newManage :: IO Manage
 newManage = do
-    ref <- newIORef False
+    ref <- newIORef Quit
     return
         Manage
             { getStatus = return ""
             , quitServer = return ()
             , waitQuit = return ()
-            , getReloadAndClear = atomicModifyIORef' ref (\x -> (False, x))
-            , setReload = atomicWriteIORef ref True
+            , getControlAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
+            , setControl = atomicWriteIORef ref
             }

@@ -18,9 +18,9 @@ import Manage
 doStatus :: Manage -> IO Response
 doStatus Manage{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
 
-doReload :: Manage -> IO Response
-doReload Manage{..} = do
-    setReload
+doReload :: Manage -> Control -> IO Response
+doReload Manage{..} ctl = do
+    setControl ctl
     quitServer
     return ok
 
@@ -35,7 +35,8 @@ app mng req sendResp = getResp >>= sendResp
     getResp
         | requestMethod req == methodGet = case rawPathInfo req of
             "/status" -> doStatus mng
-            "/reload" -> doReload mng
+            "/reload" -> doReload mng Reload
+            "/keep-cache" -> doReload mng KeepCache
             "/quit" -> doQuit mng
             _ -> return $ ng badRequest400
         | otherwise = return $ ng methodNotAllowed405
