@@ -22,7 +22,7 @@ where
 import Control.Exception as E
 import DNS.Do53.Do53
 import DNS.Do53.Imports
-import DNS.Do53.Memo hiding (lookup)
+import DNS.Do53.RRCache hiding (lookup)
 import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types
@@ -102,12 +102,12 @@ lookupCacheSection
     -> Question
     -> IO (Either DNSError [RData])
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
-    nx <- lookupCache (keyForNX q) c
+    nx <- lookupRRCache (keyForNX q) c
     case nx of
         Just (_, Negative{}) -> return $ Left NameError
         Just (_, _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
         Nothing -> do
-            mx <- lookupCache q c
+            mx <- lookupRRCache q c
             case mx of
                 Nothing -> notCached
                 Just (_, Negative{}) -> return $ Right [] {- NoData -}
@@ -139,7 +139,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     (c, cconf) = fromJust lenvCache
 
 cachePositive
-    :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
+    :: CacheConf -> RRCache -> Question -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
     | ttl == 0 = return () -- does not cache anything
     | otherwise = notVerified rds (return ()) $ \v -> insertPositive cconf c k now v ttl
@@ -147,24 +147,24 @@ cachePositive cconf c k now rss
     rds = map rdata rss
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
-insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertPositive :: CacheConf -> RRCache -> Question -> EpochTime -> CRSet -> TTL -> IO ()
 insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
-    insertCache k p v c
+    insertRRCache k p v c
   where
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
-cacheNegative :: CacheConf -> Memo -> Key -> EpochTime -> DNSMessage -> IO ()
+cacheNegative :: CacheConf -> RRCache -> Question -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
     [] -> return () -- does not cache anything
     soa : _ -> insertNegative cconf c k now (Negative $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
-insertNegative :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertNegative :: CacheConf -> RRCache -> Question -> EpochTime -> CRSet -> TTL -> IO ()
 insertNegative _ c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
-    insertCache k p v c
+    insertRRCache k p v c
   where
     life = fromIntegral ttl
 
@@ -280,7 +280,7 @@ withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
         Just cacheconf -> do
             let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
-            cache <- newCache memoConf
+            cache <- newRRCache memoConf
             return $ Just (cache, cacheconf)
         Nothing -> return Nothing
     ris <- findAddrPorts lconfSeeds

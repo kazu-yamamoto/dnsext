@@ -28,10 +28,9 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 
 -- this package
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     CRSet,
     Cache,
-    Key,
     Question (..),
     Ranking (..),
     Val (Val),
@@ -39,7 +38,7 @@ import DNS.Do53.Memo (
     takeRRSet,
     (<+),
  )
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 
 -----
 
@@ -93,7 +92,7 @@ cacheEmpty = Cache.empty 4096
 -----
 
 data Update
-    = I Key TTL Val
+    = I Question TTL Val
     | E
     deriving (Show)
 
@@ -107,7 +106,7 @@ runUpdate t u = case u of
 foldUpdates :: [(EpochTime, Update)] -> Cache -> Cache
 foldUpdates = foldr (\p k -> k . uncurry runUpdate p) id
 
-removeKeyUpdates :: Key -> [(EpochTime, Update)] -> [(EpochTime, Update)]
+removeKeyUpdates :: Question -> [(EpochTime, Update)] -> [(EpochTime, Update)]
 removeKeyUpdates k = filter (not . match)
   where
     match (_, I ik _ _) = k == ik
@@ -141,7 +140,7 @@ toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
         | upper = toUpper
         | otherwise = toLower
 
-genWrongCRPair :: Gen (Key, CRSet)
+genWrongCRPair :: Gen (Question, CRSet)
 genWrongCRPair = do
     (typ, genCrs) <- elements wrongs
     key <- Question <$> elements sbsDomainList <*> pure typ <*> pure DNS.classIN
@@ -155,7 +154,7 @@ genWrongCRPair = do
         , typ /= gtyp
         ]
 
-genCRsRec :: Gen ((Key, Gen CRSet), Domain)
+genCRsRec :: Gen ((Question, Gen CRSet), Domain)
 genCRsRec = do
     (typ, genCrs) <- elements genCrsAssoc
     let labelList
@@ -165,10 +164,10 @@ genCRsRec = do
     (,) (Question (DNS.fromRepresentation lbl) typ DNS.classIN, genCrs)
         <$> (DNS.fromRepresentation <$> toULString lbl)
 
-genCRsPair :: Gen (Key, Gen CRSet)
+genCRsPair :: Gen (Question, Gen CRSet)
 genCRsPair = fst <$> genCRsRec
 
-genCRPair :: Gen (Key, CRSet)
+genCRPair :: Gen (Question, CRSet)
 genCRPair = do
     (key, genCrs) <- genCRsPair
     crs <- genCrs
@@ -216,7 +215,7 @@ genRankOrdsCo = elements ordsCo
 
 -----
 
-newtype AKey = AKey Key deriving (Show)
+newtype AKey = AKey Question deriving (Show)
 
 instance Arbitrary AKey where
     arbitrary =
@@ -227,7 +226,7 @@ instance Arbitrary AKey where
                     <*> pure DNS.classIN
                 )
 
-newtype AWrongCRPair = AWrongCRPair (Key, CRSet) deriving (Show)
+newtype AWrongCRPair = AWrongCRPair (Question, CRSet) deriving (Show)
 
 instance Arbitrary AWrongCRPair where
     arbitrary = AWrongCRPair <$> genWrongCRPair
@@ -237,12 +236,12 @@ newtype ATTL = ATTL TTL deriving (Show)
 instance Arbitrary ATTL where
     arbitrary = ATTL <$> genTTL
 
-newtype ACRPair = ACRPair (Key, CRSet) deriving (Show)
+newtype ACRPair = ACRPair (Question, CRSet) deriving (Show)
 
 instance Arbitrary ACRPair where
     arbitrary = ACRPair <$> genCRPair
 
-newtype ACRRec = ACRRec (Key, CRSet, Domain) deriving (Show)
+newtype ACRRec = ACRRec (Question, CRSet, Domain) deriving (Show)
 
 instance Arbitrary ACRRec where
     arbitrary =
@@ -276,7 +275,7 @@ newtype ARankOrdsCo = ARankOrdsCo (Ranking, Ranking) deriving (Show)
 instance Arbitrary ARankOrdsCo where
     arbitrary = ARankOrdsCo <$> genRankOrdsCo
 
-newtype ACR2 = ACR2 (Key, (CRSet, CRSet)) deriving (Show)
+newtype ACR2 = ACR2 (Question, (CRSet, CRSet)) deriving (Show)
 
 instance Arbitrary ACR2 where
     arbitrary = ACR2 <$> gen

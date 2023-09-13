@@ -1,6 +1,4 @@
 module DNS.Cache.Iterative.Types (
-    UpdateCache,
-    TimeCache,
     Result,
     ResultRRS,
     Env (..),
@@ -26,10 +24,9 @@ import Data.IORef (IORef)
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     CRSet,
     Cache,
-    Key,
     Ranking,
  )
 import qualified DNS.Log as Log
@@ -43,21 +40,13 @@ import Data.IP (IP)
 import DNS.Cache.Imports
 import DNS.Cache.Types (NE)
 
-type UpdateCache =
-    ( Key -> TTL -> CRSet -> Ranking -> IO ()
-    , IO Cache
-    , EpochTime -> IO ()
-    )
-
-type TimeCache = (IO EpochTime, IO ShowS)
-
 data Env = Env
     { logLines_ :: Log.PutLines
-    , logDNSTAP :: DNSTAP.Message -> IO ()
+    , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
-    , insert_ :: Key -> TTL -> CRSet -> Ranking -> IO ()
+    , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
-    , expireCache :: EpochTime -> IO ()
+    , expireCache_ :: EpochTime -> IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS

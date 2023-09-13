@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module DNS.Do53.Cache (
+module DNS.Do53.RRCache.Types (
     -- * cache interfaces
     empty,
     null,
@@ -23,7 +23,6 @@ module DNS.Do53.Cache (
 
     -- * low-level interfaces
     Cache (..),
-    Key,
     Question (..),
     Val (..),
     extractRRSet,
@@ -214,11 +213,9 @@ rankedAdditional =
 
 ---
 
-type Key = Question
-
 data Val = Val CRSet Ranking deriving (Show)
 
-data Cache = Cache (OrdPSQ Key EpochTime Val) Int {- max size -}
+data Cache = Cache (OrdPSQ Question EpochTime Val) Int {- max size -}
 
 empty :: Int -> Cache
 empty = Cache PSQ.empty
@@ -271,14 +268,14 @@ lookupAlive now mk dom typ cls = lookup_ mkAlive $ Question dom typ cls
         mk ttl crset rank
 
 -- lookup interface for stub resolver
-stubLookup :: Key -> Cache -> Maybe (EpochTime, CRSet)
+stubLookup :: Question -> Cache -> Maybe (EpochTime, CRSet)
 stubLookup k = lookup_ result k
   where
     result eol crs _ = Just (eol, crs)
 
 lookup_
     :: (EpochTime -> CRSet -> Ranking -> Maybe a)
-    -> Key
+    -> Question
     -> Cache
     -> Maybe a
 lookup_ mk k (Cache cache _) = do
@@ -325,7 +322,7 @@ insertRRs now rrs rank = updateAll
 -- @
 --    insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 -- @
-insert :: EpochTime -> Key -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insert :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
     maybe sized withOldRank lookupRank
   where
@@ -350,7 +347,7 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
             Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
 
 -- insert interface for stub resolver
-stubInsert :: Key -> EpochTime -> CRSet -> Cache -> Maybe Cache
+stubInsert :: Question -> EpochTime -> CRSet -> Cache -> Maybe Cache
 stubInsert k eol crs (Cache c xsz) =
     sized
   where
@@ -404,10 +401,10 @@ member
     -> Bool
 member now dom typ cls = isJust . lookupAlive now (\_ _ _ -> Just ()) dom typ cls
 
-dump :: Cache -> [(Key, (EpochTime, Val))]
+dump :: Cache -> [(Question, (EpochTime, Val))]
 dump (Cache c _) = [(k, (eol, v)) | (k, eol, v) <- PSQ.toAscList c]
 
-dumpKeys :: Cache -> [(Key, EpochTime)]
+dumpKeys :: Cache -> [(Question, EpochTime)]
 dumpKeys (Cache c _) = [(k, eol) | (k, eol, _v) <- PSQ.toAscList c]
 
 ---
@@ -428,13 +425,13 @@ fromRDatas rds = rds `listseq` notVerified rds Nothing Just
     listseq :: [a] -> b -> b
     listseq ps q = case listRnf ps of () -> q
 
-rrSetKey :: ResourceRecord -> Maybe Key
+rrSetKey :: ResourceRecord -> Maybe Question
 rrSetKey (ResourceRecord rrname rrtype rrclass _rrttl rd)
     | rrclass == DNS.classIN && DNS.rdataType rd == rrtype =
         Just (Question rrname rrtype rrclass)
     | otherwise = Nothing
 
-takeRRSet :: [ResourceRecord] -> Maybe ((Key -> TTL -> CRSet -> a) -> a)
+takeRRSet :: [ResourceRecord] -> Maybe ((Question -> TTL -> CRSet -> a) -> a)
 takeRRSet [] = Nothing
 takeRRSet rrs@(_ : _) = do
     ps <- mapM rrSetKey rrs -- rrtype and rdata are consistent for each RR
@@ -456,7 +453,7 @@ extractRRSet dom ty cls ttl crs =
 insertSetFromSection
     :: [ResourceRecord]
     -> Ranking
-    -> ([[ResourceRecord]], [(Key -> TTL -> CRSet -> Ranking -> a) -> a])
+    -> ([[ResourceRecord]], [(Question -> TTL -> CRSet -> Ranking -> a) -> a])
 insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
   where
     key rr = (DNS.rrname rr, DNS.rrtype rr, DNS.rrclass rr)
@@ -470,7 +467,7 @@ insertSetEmpty
     -> TYPE
     -> TTL
     -> Ranking
-    -> ((Key -> TTL -> CRSet -> Ranking -> a) -> a)
+    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
 insertSetEmpty soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
   where
     key = Question dom typ DNS.classIN

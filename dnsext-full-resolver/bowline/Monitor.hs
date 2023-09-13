@@ -29,7 +29,7 @@ import Text.Read (readMaybe)
 
 -- dnsext-* packages
 
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Types as DNS
 import Network.Socket (
     AddrInfo (..),
@@ -43,13 +43,12 @@ import qualified Network.Socket as S
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import DNS.Cache.Iterative (Env (..))
-import DNS.Cache.Server
+import DNS.Cache.Server (PortNumber, HostName, Env (..))
 import qualified DNS.Log as Log
 
 import Config
-import Manage (Manage (..))
 import SocketUtil (addrInfo)
+import Types (Control (..))
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -74,9 +73,9 @@ data Command
 monitor
     :: Config
     -> Env
-    -> Manage
+    -> Control
     -> IO [IO ()]
-monitor conf env mng@Manage{..} = do
+monitor conf env mng@Control{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
@@ -108,12 +107,12 @@ monitor conf env mng@Manage{..} = do
 console
     :: Config
     -> Env
-    -> Manage
+    -> Control
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env Manage{..} inH outH ainfo = do
+console conf env Control{..} inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -178,7 +177,7 @@ console conf env Manage{..} inH outH ainfo = do
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Status = getStatus >>= outLn
-        dispatch (Expire offset) = expireCache env . (+ offset) =<< currentSeconds_ env
+        dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
 

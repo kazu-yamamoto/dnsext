@@ -26,18 +26,19 @@ library
     exposed-modules:
         DNS.Do53.Client
         DNS.Do53.Internal
-        DNS.Do53.Memo
+        DNS.Do53.RRCache
 
     other-modules:
-        DNS.Do53.Cache
         DNS.Do53.Do53
-        DNS.Do53.Imports
-        DNS.Do53.Id
         DNS.Do53.IO
+        DNS.Do53.Id
+        DNS.Do53.Imports
         DNS.Do53.Lookup
         DNS.Do53.LookupX
         DNS.Do53.Query
-        DNS.Do53.ReaperReduced
+        DNS.Do53.RRCache.Managed
+        DNS.Do53.RRCache.ReaperReduced
+        DNS.Do53.RRCache.Types
         DNS.Do53.Resolve
         DNS.Do53.System
         DNS.Do53.Types

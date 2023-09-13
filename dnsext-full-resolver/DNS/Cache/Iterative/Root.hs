@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     rankedAdditional,
     rankedAnswer,
  )

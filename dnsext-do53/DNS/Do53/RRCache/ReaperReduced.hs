@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Do53.ReaperReduced (
+module DNS.Do53.RRCache.ReaperReduced (
     -- * Example: Regularly cleaning a cache
     -- $example1
 

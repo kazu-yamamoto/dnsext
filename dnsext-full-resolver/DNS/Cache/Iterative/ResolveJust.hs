@@ -20,11 +20,11 @@ import Data.IORef (newIORef)
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Internal (newConcurrentGenId)
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     rankedAnswer,
     rankedAuthority,
  )
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import DNS.SEC
 import DNS.Types
@@ -43,7 +43,7 @@ import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.TimeCache (TimeCache(..), noneTimeCache)
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
@@ -222,18 +222,18 @@ _newTestEnv putLines =
     env <$> newIORef Nothing <*> newConcurrentGenId
   where
     (ins, getCache, expire) = (\_ _ _ _ -> pure (), pure $ Cache.empty 0, const $ pure ())
-    (curSec, timeStr) = TimeCache.none
+    TimeCache{..} = noneTimeCache
     env rootRef genId =
         Env
             { logLines_ = \_ ~_ -> putLines
-            , logDNSTAP = \ ~_ -> return ()
+            , logDNSTAP_ = \ ~_ -> return ()
             , disableV6NS_ = True
             , insert_ = ins
             , getCache_ = getCache
-            , expireCache = expire
+            , expireCache_ = expire
             , currentRoot_ = rootRef
-            , currentSeconds_ = curSec
-            , timeString_ = timeStr
+            , currentSeconds_ = getTime
+            , timeString_ = getTimeStr
             , idGen_ = genId
             }
 

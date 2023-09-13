@@ -30,8 +30,8 @@ module DNS.Cache.Iterative.Verify (
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Memo (Ranking)
-import qualified DNS.Do53.Memo as Cache
+import DNS.Do53.RRCache (Ranking)
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC

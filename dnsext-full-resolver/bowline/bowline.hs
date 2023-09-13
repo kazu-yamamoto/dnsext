@@ -6,11 +6,8 @@ module Main where
 import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
-import DNS.Cache.Iterative (Env (..))
-import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
-import qualified DNS.Cache.TimeCache as TimeCache
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
@@ -23,15 +20,15 @@ import UnliftIO (concurrently_, race_)
 
 import Config
 import qualified DNSTAP as TAP
-import Manage
 import qualified Monitor as Mon
+import Types
 import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
 type GlobalCache =
-    ( Iterative.TimeCache
-    , Iterative.UpdateCache
+    ( TimeCache
+    , Cache.RRCacheOps
     , Log.PutLines -> IO ()
     )
 
@@ -46,11 +43,11 @@ run :: IO Config -> IO ()
 run readConfig = do
     -- Read config only to get cache size, sigh
     cache <- readConfig >>= getCache
-    newManage >>= go (Just cache)
+    newControl >>= go (Just cache)
   where
     go mcache mng = do
         cache <- readConfig >>= runConfig mcache mng
-        ctl <- getControlAndClear mng
+        ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do
@@ -60,7 +57,7 @@ run readConfig = do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go (Just cache) mng
 
-runConfig :: Maybe GlobalCache -> Manage -> Config -> IO GlobalCache
+runConfig :: Maybe GlobalCache -> Control -> Config -> IO GlobalCache
 runConfig mcache mng0 conf@Config{..} = do
     -- Setup
     cache@(tcache, updateCache, setLogger) <- case mcache of
@@ -69,11 +66,11 @@ runConfig mcache mng0 conf@Config{..} = do
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
     setLogger putLines
-    env <- Iterative.newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    mng <- getManage env mng0 statuses
+    mng <- getControl env mng0 statuses
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
@@ -142,19 +139,17 @@ getServers env hosts (True, server, port') = do
 getCache :: Config -> IO GlobalCache
 getCache Config{..} = do
     ref <- I.newIORef Nothing
-    tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
-          where
-            memoLogLn msg = do
-                mx <- I.readIORef ref
-                case mx of
-                    Nothing -> return ()
-                    Just putLines -> do
-                        tstr <- getTimeStr
-                        putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-            memoActions = Cache.MemoActions memoLogLn getSec
-    updateCache <- Iterative.getUpdateCache cacheConf
-    return (tcache, updateCache, I.writeIORef ref . Just)
+    tcache@TimeCache{..} <- newTimeCache
+    let memoLogLn msg = do
+            mx <- I.readIORef ref
+            case mx of
+                Nothing -> return ()
+                Just putLines -> do
+                    tstr <- getTimeStr
+                    putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+        cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn getTime
+    cacheOps <- Cache.newRRCacheOps cacheConf
+    return (tcache, cacheOps, I.writeIORef ref . Just)
 
 ----------------------------------------------------------------
 
@@ -179,8 +174,8 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getManage :: Env -> Manage -> [[IO Status]] -> IO Manage
-getManage env mng0 statuses = do
+getControl :: Env -> Control -> [[IO Status]] -> IO Control
+getControl env mng0 statuses = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =

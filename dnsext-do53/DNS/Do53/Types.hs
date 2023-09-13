@@ -48,7 +48,7 @@ import Network.Socket (setSocketOption, SocketOption(..))
 #endif
 import DNS.Do53.Id
 import DNS.Do53.Imports
-import DNS.Do53.Memo
+import DNS.Do53.RRCache
 import DNS.Do53.Query
 import DNS.Log (PutLines)
 import System.Timeout (timeout)
@@ -180,7 +180,7 @@ defaultLookupConf =
 --   This includes newly seeded identifier generators for all
 --   specified DNS servers and a cache database.
 data LookupEnv = LookupEnv
-    { lenvCache :: Maybe (Memo, CacheConf)
+    { lenvCache :: Maybe (RRCache, CacheConf)
     , lenvQueryControls :: QueryControls
     , lenvConcurrent :: Bool
     , lenvResolvEnv :: ResolvEnv

@@ -1,6 +1,7 @@
 module DNS.Cache.TimeCache (
-    new,
-    none,
+    TimeCache(..),
+    newTimeCache,
+    noneTimeCache,
 ) where
 
 -- GHC packages
@@ -21,12 +22,15 @@ import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 -- this package
 import DNS.Cache.Imports
 
-new :: IO (IO EpochTime, IO ShowS)
-new = do
+data TimeCache = TimeCache
+    { getTime :: IO EpochTime
+    , getTimeStr :: IO ShowS
+    }
+
+newTimeCache :: IO TimeCache
+newTimeCache = do
     getUTime <- mkAutoUnixTime
-    getSec <- mkAutoSeconds getUTime
-    getShowS <- mkAutoTimeShowS getUTime
-    pure (getSec, getShowS)
+    TimeCache <$> mkAutoSeconds getUTime <*> mkAutoTimeShowS getUTime
 
 mkAutoUnixTime :: IO (IO UnixTime)
 mkAutoUnixTime = mostOncePerSecond getUnixTime
@@ -45,8 +49,11 @@ mostOncePerSecond upd =
             , updateFreq = 1000 * 1000
             }
 
-none :: (IO EpochTime, IO ShowS)
-none = (unixToEpoch <$> getUnixTime, getTimeShowS =<< getUnixTime)
+noneTimeCache :: TimeCache
+noneTimeCache = TimeCache
+    { getTime = unixToEpoch <$> getUnixTime
+    , getTimeStr = getTimeShowS =<< getUnixTime
+    }
 
 ---
 
