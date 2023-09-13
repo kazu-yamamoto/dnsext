@@ -23,8 +23,8 @@ import UnliftIO (concurrently_, race_)
 
 import Config
 import qualified DNSTAP as TAP
-import Manage
 import qualified Monitor as Mon
+import Types
 import qualified WebAPI as API
 
 ----------------------------------------------------------------

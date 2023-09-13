@@ -86,10 +86,10 @@ executable bowline
     other-modules:
         Config
         DNSTAP
-        Manage
         Monitor
         Parser
         SocketUtil
+        Types
         WebAPI
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"

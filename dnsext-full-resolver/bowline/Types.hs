@@ -1,4 +1,4 @@
-module Manage where
+module Types where
 
 import Control.Concurrent.STM
 import Data.IORef

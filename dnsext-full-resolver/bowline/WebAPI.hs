@@ -13,7 +13,7 @@ import Network.Wai.Handler.Warp
 import qualified UnliftIO.Exception as E
 
 import Config
-import Manage
+import Types
 
 doStatus :: Manage -> IO Response
 doStatus Manage{..} = responseLBS ok200 [] . LBS.pack <$> getStatus

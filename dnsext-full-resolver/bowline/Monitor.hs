@@ -48,8 +48,8 @@ import DNS.Cache.Server
 import qualified DNS.Log as Log
 
 import Config
-import Manage (Manage (..))
 import SocketUtil (addrInfo)
+import Types (Manage (..))
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
