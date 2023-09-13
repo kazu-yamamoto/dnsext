@@ -1,5 +1,4 @@
 module DNS.Cache.Iterative.Types (
-    UpdateCache,
     Result,
     ResultRRS,
     Env (..),
@@ -25,7 +24,7 @@ import Data.IORef (IORef)
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     CRSet,
     Cache,
     Key,
@@ -41,12 +40,6 @@ import Data.IP (IP)
 -- this package
 import DNS.Cache.Imports
 import DNS.Cache.Types (NE)
-
-type UpdateCache =
-    ( Key -> TTL -> CRSet -> Ranking -> IO ()
-    , IO Cache
-    , EpochTime -> IO ()
-    )
 
 data Env = Env
     { logLines_ :: Log.PutLines

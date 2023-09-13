@@ -13,11 +13,11 @@ module DNS.Cache.Iterative.Resolve (
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     Ranking (RankAdditional),
     rankedAnswer,
  )
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import DNS.Types
 import qualified DNS.Types as DNS

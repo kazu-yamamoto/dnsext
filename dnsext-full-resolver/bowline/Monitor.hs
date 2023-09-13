@@ -29,7 +29,7 @@ import Text.Read (readMaybe)
 
 -- dnsext-* packages
 
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Types as DNS
 import Network.Socket (
     AddrInfo (..),

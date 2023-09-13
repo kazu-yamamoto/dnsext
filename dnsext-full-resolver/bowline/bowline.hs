@@ -10,7 +10,7 @@ import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
 import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
@@ -31,7 +31,7 @@ import qualified WebAPI as API
 
 type GlobalCache =
     ( TimeCache
-    , Iterative.UpdateCache
+    , Cache.RRCacheOps
     , Log.PutLines -> IO ()
     )
 
@@ -150,10 +150,9 @@ getCache Config{..} = do
                 Just putLines -> do
                     tstr <- getTimeStr
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-        memoActions = Cache.MemoActions memoLogLn getTime
-        cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
-    updateCache <- Iterative.getUpdateCache cacheConf
-    return (tcache, updateCache, I.writeIORef ref . Just)
+        cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn getTime
+    cacheOps <- Cache.newRRCacheOps cacheConf
+    return (tcache, cacheOps, I.writeIORef ref . Just)
 
 ----------------------------------------------------------------
 

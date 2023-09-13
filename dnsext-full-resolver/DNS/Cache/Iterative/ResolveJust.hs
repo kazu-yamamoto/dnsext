@@ -20,11 +20,11 @@ import Data.IORef (newIORef)
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Internal (newConcurrentGenId)
-import DNS.Do53.Memo (
+import DNS.Do53.RRCache (
     rankedAnswer,
     rankedAuthority,
  )
-import qualified DNS.Do53.Memo as Cache
+import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import DNS.SEC
 import DNS.Types

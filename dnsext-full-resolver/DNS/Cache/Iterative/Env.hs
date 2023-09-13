@@ -2,7 +2,6 @@
 
 module DNS.Cache.Iterative.Env (
     newEnv,
-    getUpdateCache,
 ) where
 
 -- GHC packages
@@ -12,7 +11,7 @@ import Data.IORef (newIORef)
 
 -- dnsext packages
 import DNS.Do53.Internal (newConcurrentGenId)
-import qualified DNS.Do53.Memo as Cache
+import DNS.Do53.RRCache (RRCacheOps(..))
 import qualified DNS.Log as Log
 import qualified DNS.TAP.Schema as DNSTAP
 
@@ -20,24 +19,16 @@ import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Cache.Iterative.Types
 import DNS.Cache.TimeCache (TimeCache(..))
 
-getUpdateCache :: Cache.MemoConf -> IO UpdateCache
-getUpdateCache cacheConf = do
-    memo <- Cache.getMemo cacheConf
-    let insert k ttl crset rank = Cache.insertWithExpiresMemo k ttl crset rank memo
-        expire now = Cache.expiresMemo now memo
-        read' = Cache.readMemo memo
-    return (insert, read', expire)
-
 -- | Creating a new 'Env'.
 newEnv
     :: Log.PutLines
     -> (DNSTAP.Message -> IO ())
     -> Bool
     -- ^ disabling IPv6
-    -> UpdateCache
+    -> RRCacheOps
     -> TimeCache
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) TimeCache{..} = do
+newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     let cxt =
@@ -45,9 +36,9 @@ newEnv putLines putDNSTAP disableV6NS (ins, getCache, expire) TimeCache{..} = do
                 { logLines_ = putLines
                 , logDNSTAP = putDNSTAP
                 , disableV6NS_ = disableV6NS
-                , insert_ = ins
-                , getCache_ = getCache
-                , expireCache = expire
+                , insert_ = insertCache
+                , getCache_ = readCache
+                , expireCache = expireCache
                 , currentRoot_ = rootRef
                 , currentSeconds_ = getTime
                 , timeString_ = getTimeStr
