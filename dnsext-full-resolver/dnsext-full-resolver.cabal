@@ -13,7 +13,6 @@ library
         DNS.Cache.Server
         DNS.Cache.Server.Bench
         DNS.Cache.TimeCache
-        DNS.Cache.Types
 
     other-modules:
         DNS.Cache.Imports
@@ -42,6 +41,7 @@ library
         DNS.Cache.Server.TLS
         DNS.Cache.Server.Types
         DNS.Cache.Server.UDP
+        DNS.Cache.Types
 
     default-language: Haskell2010
     ghc-options:      -Wall
