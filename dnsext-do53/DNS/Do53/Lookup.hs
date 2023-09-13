@@ -139,7 +139,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     (c, cconf) = fromJust lenvCache
 
 cachePositive
-    :: CacheConf -> Memo -> Key -> EpochTime -> [ResourceRecord] -> IO ()
+    :: CacheConf -> RRCache -> Key -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
     | ttl == 0 = return () -- does not cache anything
     | otherwise = notVerified rds (return ()) $ \v -> insertPositive cconf c k now v ttl
@@ -147,21 +147,21 @@ cachePositive cconf c k now rss
     rds = map rdata rss
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
-insertPositive :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertPositive :: CacheConf -> RRCache -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertCache k p v c
   where
     life = fromIntegral (minimumTTL `max` (maximumTTL `min` ttl))
 
-cacheNegative :: CacheConf -> Memo -> Key -> EpochTime -> DNSMessage -> IO ()
+cacheNegative :: CacheConf -> RRCache -> Key -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
     [] -> return () -- does not cache anything
     soa : _ -> insertNegative cconf c k now (Negative $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
-insertNegative :: CacheConf -> Memo -> Key -> EpochTime -> Entry -> TTL -> IO ()
+insertNegative :: CacheConf -> RRCache -> Key -> EpochTime -> Entry -> TTL -> IO ()
 insertNegative _ c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertCache k p v c
@@ -280,7 +280,7 @@ withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
         Just cacheconf -> do
             let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
-            cache <- newCache memoConf
+            cache <- newRRCache memoConf
             return $ Just (cache, cacheconf)
         Nothing -> return Nothing
     ris <- findAddrPorts lconfSeeds

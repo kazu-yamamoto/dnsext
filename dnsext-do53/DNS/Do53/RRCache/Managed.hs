@@ -1,18 +1,17 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Do53.RRCache.Managed (
-    MemoConf (..),
-    MemoActions (..),
+    RRCacheConf (..),
+    RRCacheActions (..),
     getDefaultStubConf,
     noCacheConf,
-    Memo,
-    getMemo,
-    readMemo,
-    expiresMemo,
-    insertWithExpiresMemo,
+    RRCache,
+    readRRCache,
+    expiresRRCache,
+    insertWithExpiresRRCache,
     Prio,
     Entry,
-    newCache,
+    newRRCache,
     lookupCache,
     insertCache,
     keyForNX,
@@ -28,32 +27,32 @@ import qualified DNS.Do53.RRCache.Types as Cache
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
 
-data MemoConf = MemoConf
+data RRCacheConf = RRCacheConf
     { maxCacheSize :: Int
     , expiresDelay :: Int
-    , memoActions :: MemoActions
+    , memoActions :: RRCacheActions
     }
 
-data MemoActions = MemoActions
+data RRCacheActions = RRCacheActions
     { memoLogLn :: String -> IO ()
     , memoGetTime :: IO EpochTime
     }
 
-getDefaultStubConf :: Int -> Int -> IO EpochTime -> MemoConf
-getDefaultStubConf sz delay getSec = MemoConf sz delay $ MemoActions noLog getSec
+getDefaultStubConf :: Int -> Int -> IO EpochTime -> RRCacheConf
+getDefaultStubConf sz delay getSec = RRCacheConf sz delay $ RRCacheActions noLog getSec
   where
     noLog ~_ = pure ()
 
-noCacheConf :: MemoConf
-noCacheConf = MemoConf 0 1800 $ MemoActions noLog (pure 0)
+noCacheConf :: RRCacheConf
+noCacheConf = RRCacheConf 0 1800 $ RRCacheActions noLog (pure 0)
   where
     noLog ~_ = pure ()
 
-data Memo = Memo MemoConf (Reaper Cache)
+data RRCache = RRCache RRCacheConf (Reaper Cache)
 
-getMemo :: MemoConf -> IO Memo
-getMemo conf@MemoConf{..} = do
-    let MemoActions{..} = memoActions
+getRRCache :: RRCacheConf -> IO RRCache
+getRRCache conf@RRCacheConf{..} = do
+    let RRCacheActions{..} = memoActions
         expiredLog c = memoLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
     reaper <-
@@ -66,23 +65,23 @@ getMemo conf@MemoConf{..} = do
                 , reaperEmpty = Cache.empty maxCacheSize
                 }
 
-    return (Memo conf reaper)
+    return (RRCache conf reaper)
 
 {- for full-resolver. lookup variants in Cache module
    - with alive checks which requires current EpochTime
    - with rank checks                                   -}
-readMemo :: Memo -> IO Cache
-readMemo (Memo _ reaper) = reaperRead reaper
+readRRCache :: RRCache -> IO Cache
+readRRCache (RRCache _ reaper) = reaperRead reaper
 
-expiresMemo :: EpochTime -> Memo -> IO ()
-expiresMemo ts (Memo _ reaper) = reaperUpdate reaper expires_
+expiresRRCache :: EpochTime -> RRCache -> IO ()
+expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
   where
     expires_ c = maybe c id $ Cache.expires ts c
 
 {- for full-resolver. using current EpochTime -}
-insertWithExpiresMemo :: Key -> TTL -> CRSet -> Ranking -> Memo -> IO ()
-insertWithExpiresMemo k ttl crs rank (Memo MemoConf{..} reaper) = do
-    let MemoActions{..} = memoActions
+insertWithExpiresRRCache :: Key -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
+insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
+    let RRCacheActions{..} = memoActions
     t <- memoGetTime
     let ins = Cache.insert t k ttl crs rank
         withExpire cache = maybe (ins cache) ins $ Cache.expires t cache {- expires before insert -}
@@ -95,16 +94,16 @@ type Prio = EpochTime
 
 type Entry = CRSet
 
-newCache :: MemoConf -> IO Memo
-newCache = getMemo
+newRRCache :: RRCacheConf -> IO RRCache
+newRRCache = getRRCache
 
 {- for stub. no alive check -}
-lookupCache :: Key -> Memo -> IO (Maybe (Prio, Entry))
-lookupCache k memo = Cache.stubLookup k <$> readMemo memo
+lookupCache :: Key -> RRCache -> IO (Maybe (Prio, Entry))
+lookupCache k memo = Cache.stubLookup k <$> readRRCache memo
 
 {- for stub. not using current EpochTime -}
-insertCache :: Key -> Prio -> Entry -> Memo -> IO ()
-insertCache k tim crs (Memo _ reaper) = do
+insertCache :: Key -> Prio -> Entry -> RRCache -> IO ()
+insertCache k tim crs (RRCache _ reaper) = do
     let ins = Cache.stubInsert k tim crs
     reaperUpdate reaper $ \cache -> maybe cache id $ ins cache
 
