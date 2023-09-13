@@ -22,7 +22,7 @@ where
 import Control.Exception as E
 import DNS.Do53.Do53
 import DNS.Do53.Imports
-import DNS.Do53.Memo hiding (lookup)
+import DNS.Do53.RRCache hiding (lookup)
 import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types

@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Do53.Memo (
+module DNS.Do53.RRCache.Managed (
     MemoConf (..),
     MemoActions (..),
     getDefaultStubConf,
@@ -16,16 +16,15 @@ module DNS.Do53.Memo (
     lookupCache,
     insertCache,
     keyForNX,
-    module DNS.Do53.Cache,
 )
 where
 
 -- dnsext-* packages
 
 -- this package
-import DNS.Do53.Cache
-import qualified DNS.Do53.Cache as Cache
-import DNS.Do53.ReaperReduced
+import DNS.Do53.RRCache.ReaperReduced
+import DNS.Do53.RRCache.Types
+import qualified DNS.Do53.RRCache.Types as Cache
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
 
