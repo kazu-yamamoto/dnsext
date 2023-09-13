@@ -28,7 +28,7 @@ import DNS.Cache.Iterative (
     runDNSQuery,
  )
 import qualified DNS.Cache.Iterative as Iterative
-import DNS.Cache.TimeCache (TimeCache(..), new)
+import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
 
 data AnswerResult
     = Empty DNS.RCODE
@@ -72,7 +72,7 @@ envSpec = describe "env" $ do
 
 cacheStateSpec :: Bool -> Log.PutLines -> Spec
 cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
-    tcache@TimeCache{..} <- runIO new
+    tcache@TimeCache{..} <- runIO newTimeCache
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     updateCache <- runIO $ getUpdateCache cacheConf
     let getResolveCache n ty = do
@@ -106,7 +106,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
 
 querySpec :: Bool -> Log.PutLines -> Spec
 querySpec disableV6NS putLines = describe "query" $ do
-    tcache@TimeCache{..} <- runIO new
+    tcache@TimeCache{..} <- runIO newTimeCache
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     updateCache <- runIO $ getUpdateCache cacheConf
     let getCXT = newEnv putLines (\_ -> return ()) disableV6NS updateCache tcache

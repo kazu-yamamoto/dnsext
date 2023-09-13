@@ -43,7 +43,7 @@ import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import qualified DNS.Cache.TimeCache as TimeCache
+import DNS.Cache.TimeCache (TimeCache(..), noneTimeCache)
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
@@ -222,7 +222,7 @@ _newTestEnv putLines =
     env <$> newIORef Nothing <*> newConcurrentGenId
   where
     (ins, getCache, expire) = (\_ _ _ _ -> pure (), pure $ Cache.empty 0, const $ pure ())
-    (curSec, timeStr) = TimeCache.none
+    TimeCache{..} = noneTimeCache
     env rootRef genId =
         Env
             { logLines_ = \_ ~_ -> putLines
@@ -232,8 +232,8 @@ _newTestEnv putLines =
             , getCache_ = getCache
             , expireCache = expire
             , currentRoot_ = rootRef
-            , currentSeconds_ = curSec
-            , timeString_ = timeStr
+            , currentSeconds_ = getTime
+            , timeString_ = getTimeStr
             , idGen_ = genId
             }
 

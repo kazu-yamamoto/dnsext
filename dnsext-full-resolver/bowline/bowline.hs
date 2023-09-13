@@ -9,7 +9,7 @@ import Control.Monad (guard, mapAndUnzipM)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server
-import DNS.Cache.TimeCache (TimeCache(..), new)
+import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 import qualified DNS.SEC as DNS
@@ -142,7 +142,7 @@ getServers env hosts (True, server, port') = do
 getCache :: Config -> IO GlobalCache
 getCache Config{..} = do
     ref <- I.newIORef Nothing
-    tcache@TimeCache{..} <- new
+    tcache@TimeCache{..} <- newTimeCache
     let memoLogLn msg = do
             mx <- I.readIORef ref
             case mx of

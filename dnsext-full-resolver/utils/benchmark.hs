@@ -25,7 +25,7 @@ import UnliftIO (concurrently_)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server.Bench
-import DNS.Cache.TimeCache (TimeCache(..), new)
+import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
 import qualified DNS.Do53.Memo as Cache
 import qualified DNS.Log as Log
 
@@ -198,7 +198,7 @@ runBenchmark conf@Config{..} udpconf@UdpServerConfig{..} noop gplot size = do
 
 getEnv :: Config -> Log.PutLines -> IO Env
 getEnv Config{..} putLines = do
-    tcache@TimeCache{..} <- new
+    tcache@TimeCache{..} <- newTimeCache
     let cacheConf = Cache.MemoConf maxCacheSize 1800 memoActions
           where
             memoLogLn = putLines Log.WARN Nothing . (: [])
