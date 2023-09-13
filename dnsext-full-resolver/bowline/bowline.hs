@@ -46,7 +46,7 @@ run :: IO Config -> IO ()
 run readConfig = do
     -- Read config only to get cache size, sigh
     cache <- readConfig >>= getCache
-    newManage >>= go (Just cache)
+    newControl >>= go (Just cache)
   where
     go mcache mng = do
         cache <- readConfig >>= runConfig mcache mng
@@ -60,7 +60,7 @@ run readConfig = do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go (Just cache) mng
 
-runConfig :: Maybe GlobalCache -> Manage -> Config -> IO GlobalCache
+runConfig :: Maybe GlobalCache -> Control -> Config -> IO GlobalCache
 runConfig mcache mng0 conf@Config{..} = do
     -- Setup
     cache@(tcache, updateCache, setLogger) <- case mcache of
@@ -73,7 +73,7 @@ runConfig mcache mng0 conf@Config{..} = do
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    mng <- getManage env mng0 statuses
+    mng <- getControl env mng0 statuses
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
@@ -178,8 +178,8 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getManage :: Env -> Manage -> [[IO Status]] -> IO Manage
-getManage env mng0 statuses = do
+getControl :: Env -> Control -> [[IO Status]] -> IO Control
+getControl env mng0 statuses = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =

@@ -15,21 +15,21 @@ import qualified UnliftIO.Exception as E
 import Config
 import Types
 
-doStatus :: Manage -> IO Response
-doStatus Manage{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
+doStatus :: Control -> IO Response
+doStatus Control{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
 
-doReload :: Manage -> Command -> IO Response
-doReload Manage{..} ctl = do
+doReload :: Control -> Command -> IO Response
+doReload Control{..} ctl = do
     setCommand ctl
     quitServer
     return ok
 
-doQuit :: Manage -> IO Response
-doQuit Manage{..} = do
+doQuit :: Control -> IO Response
+doQuit Control{..} = do
     quitServer
     return ok
 
-app :: Manage -> Application
+app :: Control -> Application
 app mng req sendResp = getResp >>= sendResp
   where
     getResp
@@ -47,12 +47,12 @@ ok = responseLBS ok200 [] "OK\n"
 ng :: Status -> Response
 ng st = responseLBS st [] "NG\n"
 
-new :: Config -> Manage -> IO (Maybe ThreadId)
+new :: Config -> Control -> IO (Maybe ThreadId)
 new Config{..} mng
     | cnf_webapi = Just <$> forkIO (runAPI cnf_webapi_addr cnf_webapi_port mng)
     | otherwise = return Nothing
 
-runAPI :: String -> Int -> Manage -> IO ()
+runAPI :: String -> Int -> Control -> IO ()
 runAPI addr port mng = withSocketsDo $ do
     ai <- resolve
     E.bracket (open ai) close $ \sock ->

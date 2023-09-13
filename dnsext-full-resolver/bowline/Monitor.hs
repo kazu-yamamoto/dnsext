@@ -49,7 +49,7 @@ import qualified DNS.Log as Log
 
 import Config
 import SocketUtil (addrInfo)
-import Types (Manage (..))
+import Types (Control (..))
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket . filter ((== Stream) . addrSocketType) <=< addrInfo port
@@ -74,9 +74,9 @@ data Command
 monitor
     :: Config
     -> Env
-    -> Manage
+    -> Control
     -> IO [IO ()]
-monitor conf env mng@Manage{..} = do
+monitor conf env mng@Control{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
@@ -108,12 +108,12 @@ monitor conf env mng@Manage{..} = do
 console
     :: Config
     -> Env
-    -> Manage
+    -> Control
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env Manage{..} inH outH ainfo = do
+console conf env Control{..} inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =

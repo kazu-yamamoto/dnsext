@@ -5,7 +5,7 @@ import Data.IORef
 
 data Command = Quit | Reload | KeepCache
 
-data Manage = Manage
+data Control = Control
     { getStatus :: IO String
     , quitServer :: IO ()
     , waitQuit :: STM ()
@@ -13,11 +13,11 @@ data Manage = Manage
     , setCommand :: Command -> IO ()
     }
 
-newManage :: IO Manage
-newManage = do
+newControl :: IO Control
+newControl = do
     ref <- newIORef Quit
     return
-        Manage
+        Control
             { getStatus = return ""
             , quitServer = return ()
             , waitQuit = return ()
