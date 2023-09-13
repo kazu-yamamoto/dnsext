@@ -12,8 +12,6 @@ module DNS.Do53.RRCache.Managed (
     RRCache,
     newRRCache,
     -- * Operations
-    Prio,
-    Entry,
     insertWithExpiresRRCache,
     insertRRCache,
     lookupRRCache,
@@ -78,7 +76,7 @@ expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
     expires_ c = maybe c id $ Cache.expires ts c
 
 {- for full-resolver. using current EpochTime -}
-insertWithExpiresRRCache :: Key -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
+insertWithExpiresRRCache :: Question -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
 insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     t <- rrCacheGetTime
     let ins = Cache.insert t k ttl crs rank
@@ -88,29 +86,25 @@ insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
 ---
 {- for stub -}
 
-type Prio = EpochTime
-
-type Entry = CRSet
-
 newRRCache :: RRCacheConf -> IO RRCache
 newRRCache = getRRCache
 
 {- for stub. no alive check -}
-lookupRRCache :: Key -> RRCache -> IO (Maybe (Prio, Entry))
+lookupRRCache :: Question -> RRCache -> IO (Maybe (EpochTime, CRSet))
 lookupRRCache k rrCache = Cache.stubLookup k <$> readRRCache rrCache
 
 {- for stub. not using current EpochTime -}
-insertRRCache :: Key -> Prio -> Entry -> RRCache -> IO ()
+insertRRCache :: Question -> EpochTime -> CRSet -> RRCache -> IO ()
 insertRRCache k tim crs (RRCache _ reaper) = do
     let ins = Cache.stubInsert k tim crs
     reaperUpdate reaper $ \cache -> maybe cache id $ ins cache
 
 {- NameError is cached using private NX, instead of each type -}
-keyForNX :: Key -> Key
+keyForNX :: Question -> Question
 keyForNX k = k{qtype = Cache.NX}
 
 data RRCacheOps = RRCacheOps {
-    insertCache :: Key -> TTL -> CRSet -> Ranking -> IO ()
+    insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
   , readCache :: IO Cache
   , expireCache :: EpochTime -> IO ()
   }
