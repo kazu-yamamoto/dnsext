@@ -143,16 +143,15 @@ getCache :: Config -> IO GlobalCache
 getCache Config{..} = do
     ref <- I.newIORef Nothing
     tcache@(getSec, getTimeStr) <- TimeCache.new
-    let cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
-          where
-            memoLogLn msg = do
-                mx <- I.readIORef ref
-                case mx of
-                    Nothing -> return ()
-                    Just putLines -> do
-                        tstr <- getTimeStr
-                        putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-            memoActions = Cache.MemoActions memoLogLn getSec
+    let memoLogLn msg = do
+            mx <- I.readIORef ref
+            case mx of
+                Nothing -> return ()
+                Just putLines -> do
+                    tstr <- getTimeStr
+                    putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+        memoActions = Cache.MemoActions memoLogLn getSec
+        cacheConf = Cache.MemoConf cnf_cache_size 1800 memoActions
     updateCache <- Iterative.getUpdateCache cacheConf
     return (tcache, updateCache, I.writeIORef ref . Just)
 
