@@ -3,7 +3,7 @@
 
 module Main where
 
-import Control.Concurrent (forkIO, getNumCapabilities, killThread, threadDelay, ThreadId)
+import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM, when)
 import DNS.Cache.Iterative (Env (..))
@@ -39,46 +39,40 @@ run readConfig = newManage >>= go
     go mng = do
         readConfig >>= runConfig mng
         cont <- getReloadAndClear mng
-        when cont $ go mng
+        when cont $ do
+            putStrLn "\nReloading..." -- fixme
+            go mng
 
 runConfig :: Manage -> Config -> IO ()
-runConfig mng conf@Config{..} = do
+runConfig mng0 conf@Config{..} = do
+    -- Setup
     (runWriter, putDNSTAP) <- TAP.new conf
-    tidW <- runWriter
     (runLogger, putLines, flush) <- getLogger conf
-    tidL <- runLogger
     env <- getEnv conf putLines putDNSTAP
-    creds <-
-        if cnf_tls || cnf_quic || cnf_h2 || cnf_h3
-            then do
-                Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
-                return $ Credentials [cred]
-            else return $ Credentials []
-    let trans =
-            [ (cnf_udp, udpServer udpconf, cnf_udp_port)
-            , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
-            , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
-            , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
-            , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
-            , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
-            , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
-            ]
-    (servers, statuses) <- mapAndUnzipM (getServers env cnf_dns_addrs) trans
-    qRef <- newTVarIO False
-    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
-        mng' =
-            mng
-                { getStatus = getStatus' env (concat statuses) ucacheQSize
-                , quitServer = atomically $ writeTVar qRef True
-                , waitQuit = readTVar qRef >>= guard
-                }
-    tidA <- API.new conf mng'
-    monitor <- getMonitor env conf mng'
+    creds <- getCreds conf
+    (servers, statuses) <-
+        mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
+    mng <- getManage env mng0 statuses
+    monitor <- Mon.monitor conf env mng
+    -- Run
+    tidW <- runWriter
+    tidL <- runLogger
+    tidA <- API.new conf mng
     race_ (conc $ concat servers) (conc monitor)
+    -- Teardown
     mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
     flush
     threadDelay 500000 -- avoiding address already in use
   where
+    trans creds =
+        [ (cnf_udp, udpServer udpconf, cnf_udp_port)
+        , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
+        , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
+        , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
+        , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
+        , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
+        , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
+        ]
     conc = foldr concurrently_ $ return ()
     udpconf =
         UdpServerConfig
@@ -123,13 +117,6 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getMonitor :: Env -> Config -> Manage -> IO [IO ()]
-getMonitor env conf mng = do
-    logLines_ env Log.WARN Nothing $ map ("params: " ++) $ showConfig conf
-    Mon.monitor conf env mng
-
-----------------------------------------------------------------
-
 getEnv :: Config -> Log.PutLines -> (TAP.Message -> IO ()) -> IO Env
 getEnv Config{..} putLines putDNSTAP = do
     tcache@(getSec, getTimeStr) <- TimeCache.new
@@ -146,13 +133,36 @@ getEnv Config{..} putLines putDNSTAP = do
 
 getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines, IO ())
 getLogger Config{..}
-  | cnf_log = do
+    | cnf_log = do
         (r, p, f) <- Log.new cnf_log_output cnf_log_level
         return (Just <$> forkIO r, p, f)
-  | otherwise = do
+    | otherwise = do
         let p _ _ ~_ = return ()
             f = return ()
         return (return Nothing, p, f)
+
+----------------------------------------------------------------
+
+getCreds :: Config -> IO Credentials
+getCreds Config{..}
+    | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
+        Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
+        return $ Credentials [cred]
+    | otherwise = return $ Credentials []
+
+----------------------------------------------------------------
+
+getManage :: Env -> Manage -> [[IO Status]] -> IO Manage
+getManage env mng0 statuses = do
+    qRef <- newTVarIO False
+    let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
+        mng =
+            mng0
+                { getStatus = getStatus' env (concat statuses) ucacheQSize
+                , quitServer = atomically $ writeTVar qRef True
+                , waitQuit = readTVar qRef >>= guard
+                }
+    return mng
 
 ----------------------------------------------------------------
 

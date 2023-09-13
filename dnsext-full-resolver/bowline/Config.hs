@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Config (
     Config (..),
@@ -11,6 +12,7 @@ module Config (
 import Control.Monad (void)
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
+import Data.List
 import Data.List.Split (splitOn)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
@@ -105,27 +107,45 @@ defaultConfig =
 ----------------------------------------------------------------
 
 showConfig :: Config -> [String]
-showConfig conf =
+showConfig conf = showConfig1 conf ++ showConfig2 conf
+
+{- FOURMOLU_DISABLE -}
+showConfig1 :: Config -> [String]
+showConfig1 Config{..} =
+    [ showAddrPort "Mointor" True     cnf_monitor_addrs cnf_monitor_port
+    , showAddrPort "UDP"     cnf_udp  cnf_dns_addrs     cnf_udp_port
+    , showAddrPort "TCP"     cnf_tcp  cnf_dns_addrs     cnf_tcp_port
+    , showAddrPort "TLS"     cnf_tls  cnf_dns_addrs     cnf_tls_port
+    , showAddrPort "QUIC"    cnf_quic cnf_dns_addrs     cnf_quic_port
+    , showAddrPort "H2C"     cnf_h2c  cnf_dns_addrs     cnf_h2c_port
+    , showAddrPort "H2"      cnf_h2   cnf_dns_addrs     cnf_h2_port
+    , showAddrPort "H3"      cnf_h3   cnf_dns_addrs     cnf_h3_port
+    ]
+  where
+    showAddrPort tag enable addrs port
+        | enable = tag ++ ": " ++ intercalate ", " (map (addrport port) addrs)
+        | otherwise = tag ++ ": disabled"
+    addrport port a
+        | ':' `elem` a = "[" ++ a ++ "]:" ++ show port
+        | otherwise = a ++ ":" ++ show port
+{- FOURMOLU_ENABLE -}
+
+showConfig2 :: Config -> [String]
+showConfig2 conf =
     [ -- field "capabilities" numCapabilities
       field'_ "log output" (showOut . cnf_log_output)
     , field' "log level" cnf_log_level
     , field' "max cache size" cnf_cache_size
     , field' "disable queries to IPv6 NS" cnf_disable_v6_ns
-    , field' "pipelines per socket" cnf_udp_pipelines_per_socket
-    , field' "worker shared queue" cnf_udp_pipeline_share_queue
-    , field' "queue size per worker" cnf_udp_queue_size_per_pipeline
-    , field' "DNS port" cnf_udp_port
-    , field' "Monitor port" cnf_monitor_port
+    , field' "udp pipelines per socket" cnf_udp_pipelines_per_socket
+    , field' "udp worker shared queue" cnf_udp_pipeline_share_queue
+    , field' "udp queue size per worker" cnf_udp_queue_size_per_pipeline
     ]
-        ++ if null hosts
-            then ["DNS host list: null"]
-            else "DNS host list:" : map ("DNS host: " ++) hosts
   where
-    field'_ label' toS = label' ++ ": " ++ toS conf
     field' label' get = field'_ label' (show . get)
+    field'_ label' toS = label' ++ ": " ++ toS conf
     showOut Log.Stdout = "stdout"
     showOut Log.Stderr = "stderr"
-    hosts = cnf_dns_addrs conf
 
 ----------------------------------------------------------------
 
