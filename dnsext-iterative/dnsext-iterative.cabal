@@ -100,8 +100,9 @@ executable workers-benchmark
 
 test-suite spec
     type:             exitcode-stdio-1.0
-    main-is:          qtest.hs
-    hs-source-dirs:   qtest
+    main-is:          Spec.hs
+    build-tool-depends: hspec-discover:hspec-discover
+    hs-source-dirs:   test
     other-modules:    QuerySpec
     default-language: Haskell2010
     ghc-options:      -Wall -threaded
