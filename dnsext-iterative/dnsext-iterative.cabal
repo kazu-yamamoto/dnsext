@@ -98,13 +98,13 @@ executable workers-benchmark
         default-extensions: Strict StrictData
 
 test-suite spec
-    type:             exitcode-stdio-1.0
-    main-is:          Spec.hs
+    type:               exitcode-stdio-1.0
+    main-is:            Spec.hs
     build-tool-depends: hspec-discover:hspec-discover
-    hs-source-dirs:   test
-    other-modules:    QuerySpec
-    default-language: Haskell2010
-    ghc-options:      -Wall -threaded
+    hs-source-dirs:     test
+    other-modules:      QuerySpec
+    default-language:   Haskell2010
+    ghc-options:        -Wall -threaded
     build-depends:
         base,
         dnsext-dnssec,
