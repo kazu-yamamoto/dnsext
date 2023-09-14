@@ -25,9 +25,9 @@ import UnliftIO (concurrently_)
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
 import DNS.Cache.Server.Bench
-import DNS.TimeCache (TimeCache(..), newTimeCache)
-import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
+import DNS.TimeCache (TimeCache(..), newTimeCache)
 
 data Config = Config
     { logOutput :: Log.Output

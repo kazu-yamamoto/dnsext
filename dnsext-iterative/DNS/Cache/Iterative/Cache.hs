@@ -16,14 +16,14 @@ module DNS.Cache.Iterative.Cache (
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.RRCache (
+import qualified DNS.Log as Log
+import DNS.RRCache (
     Ranking,
     insertSetEmpty,
     rankedAnswer,
     rankedAuthority,
  )
-import qualified DNS.Do53.RRCache as Cache
-import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types

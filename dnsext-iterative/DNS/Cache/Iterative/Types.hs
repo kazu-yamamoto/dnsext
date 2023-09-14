@@ -24,7 +24,7 @@ import Data.IORef (IORef)
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
-import DNS.Do53.RRCache (
+import DNS.RRCache (
     CRSet,
     Cache,
     Ranking,

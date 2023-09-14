@@ -6,7 +6,7 @@ import Test.Hspec
 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (void)
-import qualified DNS.Do53.RRCache as Cache
+import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
 import DNS.Types (TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA))
 import qualified DNS.Types as DNS

@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Do53.RRCache.ReaperReduced (
+module DNS.RRCache.ReaperReduced (
     -- * Example: Regularly cleaning a cache
     -- $example1
 
@@ -198,7 +198,7 @@ mkListAction f =
 -- -- @
 --
 -- import Data.Time (UTCTime, getCurrentTime, diffUTCTime)
--- import DNS.Do53.ReaperReduced
+-- import DNS.ReaperReduced
 -- import Control.Concurrent (threadDelay)
 -- import Data.Map.Strict (Map)
 -- import qualified Data.Map.Strict as Map

@@ -2,14 +2,13 @@
 
 module Iterative (iterativeQuery) where
 
-import DNS.Do53.Client (QueryControls)
-import qualified DNS.Do53.RRCache as Cache
-import Data.String (fromString)
-
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
+import DNS.Do53.Client (QueryControls)
 import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache(..), newTimeCache)
+import Data.String (fromString)
 import Network.Socket (HostName)
 
 import DNS.Types

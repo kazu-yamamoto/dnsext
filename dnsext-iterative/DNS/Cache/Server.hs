@@ -32,5 +32,5 @@ import DNS.Cache.Server.TCP
 import DNS.Cache.Server.TLS
 import DNS.Cache.Server.Types
 import DNS.Cache.Server.UDP
+import DNS.RRCache (RRCacheOps(..), newRRCacheOps)
 import DNS.TimeCache (TimeCache(..), newTimeCache)
-import DNS.Do53.RRCache (RRCacheOps(..), newRRCacheOps)

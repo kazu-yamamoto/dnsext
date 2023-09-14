@@ -7,8 +7,8 @@ import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, thr
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
 import DNS.Cache.Server
-import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS

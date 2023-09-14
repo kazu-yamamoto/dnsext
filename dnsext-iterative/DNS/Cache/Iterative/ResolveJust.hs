@@ -22,12 +22,12 @@ import System.Console.ANSI.Types
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
 import DNS.Do53.Internal (newConcurrentGenId)
-import DNS.Do53.RRCache (
+import qualified DNS.Log as Log
+import DNS.RRCache (
     rankedAnswer,
     rankedAuthority,
  )
-import qualified DNS.Do53.RRCache as Cache
-import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.TimeCache (TimeCache(..), noneTimeCache)
 import DNS.Types

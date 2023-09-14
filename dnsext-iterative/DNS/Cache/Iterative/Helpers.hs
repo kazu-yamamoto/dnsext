@@ -5,7 +5,7 @@ module DNS.Cache.Iterative.Helpers where
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.RRCache (Ranking)
+import DNS.RRCache (Ranking)
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS

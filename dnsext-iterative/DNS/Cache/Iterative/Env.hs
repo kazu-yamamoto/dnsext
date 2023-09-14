@@ -12,8 +12,8 @@ import Data.IORef (newIORef)
 
 -- dnsext packages
 import DNS.Do53.Internal (newConcurrentGenId)
-import DNS.Do53.RRCache (RRCacheOps(..))
 import qualified DNS.Log as Log
+import DNS.RRCache (RRCacheOps(..))
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.TimeCache (TimeCache(..))
 

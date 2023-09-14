@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Do53.RRCache.Managed (
+module DNS.RRCache.Managed (
     -- * Configuration
     RRCacheConf (..),
     getDefaultStubConf,
@@ -23,9 +23,9 @@ where
 -- dnsext-* packages
 
 -- this package
-import DNS.Do53.RRCache.ReaperReduced
-import DNS.Do53.RRCache.Types
-import qualified DNS.Do53.RRCache.Types as Cache
+import DNS.RRCache.ReaperReduced
+import DNS.RRCache.Types
+import qualified DNS.RRCache.Types as Cache
 import DNS.Types (TTL)
 import DNS.Types.Decode (EpochTime)
 

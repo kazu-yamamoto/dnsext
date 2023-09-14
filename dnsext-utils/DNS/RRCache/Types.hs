@@ -1,6 +1,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module DNS.Do53.RRCache.Types (
+module DNS.RRCache.Types (
     -- * cache interfaces
     empty,
     null,

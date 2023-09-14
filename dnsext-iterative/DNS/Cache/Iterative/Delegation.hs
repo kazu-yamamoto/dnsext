@@ -15,11 +15,11 @@ import qualified Data.Set as Set
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.RRCache (
+import qualified DNS.Log as Log
+import DNS.RRCache (
     rankedAdditional,
     rankedAuthority,
  )
-import qualified DNS.Log as Log
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types

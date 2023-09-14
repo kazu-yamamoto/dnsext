@@ -28,7 +28,7 @@ import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 
 -- this package
-import DNS.Do53.RRCache (
+import DNS.RRCache (
     CRSet,
     Cache,
     Question (..),
@@ -38,7 +38,7 @@ import DNS.Do53.RRCache (
     takeRRSet,
     (<+),
  )
-import qualified DNS.Do53.RRCache as Cache
+import qualified DNS.RRCache as Cache
 
 -----
 
