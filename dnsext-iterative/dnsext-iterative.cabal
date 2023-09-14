@@ -76,7 +76,7 @@ library
         network-run,
         network-udp,
         mtl,
-        psqueues,
+        psqueues-ext,
         quic,
         random,
         recv,
