@@ -12,7 +12,6 @@ library
         DNS.Cache.Iterative
         DNS.Cache.Server
         DNS.Cache.Server.Bench
-        DNS.Cache.TimeCache
 
     other-modules:
         DNS.Cache.Imports
@@ -49,7 +48,6 @@ library
         base >=4 && <5,
         ansi-terminal,
         async,
-        auto-update,
         bytestring,
         containers,
         dnsext-dnssec,
@@ -72,7 +70,6 @@ library
         time-manager,
         tls,
         transformers,
-        unix-time,
         unliftio,
         word8
 

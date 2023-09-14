@@ -16,6 +16,8 @@ module DNS.Cache.Iterative.ResolveJust (
 import Data.IORef (newIORef)
 
 -- other packages
+import Data.IP (IP)
+import System.Console.ANSI.Types
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
@@ -27,10 +29,9 @@ import DNS.Do53.RRCache (
 import qualified DNS.Do53.RRCache as Cache
 import qualified DNS.Log as Log
 import DNS.SEC
+import DNS.TimeCache (TimeCache(..), noneTimeCache)
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
-import System.Console.ANSI.Types
 
 -- this package
 import DNS.Cache.Imports
@@ -43,7 +44,6 @@ import DNS.Cache.Iterative.Root
 import DNS.Cache.Iterative.Types
 import DNS.Cache.Iterative.Utils
 import qualified DNS.Cache.Iterative.Verify as Verify
-import DNS.Cache.TimeCache (TimeCache(..), noneTimeCache)
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust

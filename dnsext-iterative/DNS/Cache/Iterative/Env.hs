@@ -15,10 +15,10 @@ import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.Do53.RRCache (RRCacheOps(..))
 import qualified DNS.Log as Log
 import qualified DNS.TAP.Schema as DNSTAP
+import DNS.TimeCache (TimeCache(..))
 
 -- this package
 import DNS.Cache.Iterative.Types
-import DNS.Cache.TimeCache (TimeCache(..))
 
 -- | Creating a new 'Env'.
 newEnv

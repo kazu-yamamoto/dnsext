@@ -8,8 +8,8 @@ import Data.String (fromString)
 
 import DNS.Cache.Iterative (Env (..))
 import qualified DNS.Cache.Iterative as Iterative
-import DNS.Cache.TimeCache (TimeCache(..), newTimeCache)
 import qualified DNS.Log as Log
+import DNS.TimeCache (TimeCache(..), newTimeCache)
 import Network.Socket (HostName)
 
 import DNS.Types

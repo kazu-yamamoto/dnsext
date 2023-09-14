@@ -1,4 +1,4 @@
-module DNS.Cache.TimeCache (
+module DNS.TimeCache (
     TimeCache(..),
     newTimeCache,
     noneTimeCache,
@@ -6,6 +6,7 @@ module DNS.Cache.TimeCache (
 
 -- GHC packages
 import qualified Data.ByteString.Char8 as C8
+import Data.String (fromString)
 import Foreign.C.Types (CTime (..))
 
 -- other packages
@@ -15,12 +16,12 @@ import Control.AutoUpdate (
     updateAction,
     updateFreq,
  )
-
--- dnsext packages
 import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 
+-- dnsext packages
+import DNS.Types.Decode (EpochTime)
+
 -- this package
-import DNS.Cache.Imports
 
 data TimeCache = TimeCache
     { getTime :: IO EpochTime
