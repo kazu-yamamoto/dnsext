@@ -53,7 +53,6 @@ library
         bytestring,
         containers,
         dnsext-dnssec,
-        dnsext-dnstap,
         dnsext-do53,
         dnsext-types,
         dnsext-utils,
@@ -76,82 +75,6 @@ library
         unix-time,
         unliftio,
         word8
-
-    if impl(ghc >=8)
-        default-extensions: Strict StrictData
-
-executable bowline
-    main-is:          bowline.hs
-    hs-source-dirs:   bowline
-    other-modules:
-        Config
-        DNSTAP
-        Monitor
-        Parser
-        SocketUtil
-        Types
-        WebAPI
-    default-language: Haskell2010
-    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
-    build-depends:
-        base,
-        bytestring,
-        dnsext-dnssec,
-        dnsext-dnstap,
-        dnsext-do53,
-        dnsext-full-resolver,
-        dnsext-svcb,
-        dnsext-types,
-        dnsext-utils,
-        http-types,
-        iproute,
-        network,
-        parsec,
-        split,
-        stm,
-        tls,
-        unliftio,
-        wai,
-        warp
-
-    if (os(windows) && impl(ghc >=9.0))
-        ghc-options: -with-rtsopts=--io-manager=native
-
-    if impl(ghc >=8)
-        default-extensions: Strict StrictData
-
-executable dug
-    main-is:          dug.hs
-    hs-source-dirs:   dug
-    other-modules:
-        Iterative
-        JSON
-        Output
-        Recursive
-
-    default-language: Haskell2010
-    ghc-options:      -Wall -threaded
-    build-depends:
-        base,
-        ansi-terminal,
-        base16-bytestring,
-        bytestring,
-        dnsext-dnssec,
-        dnsext-do53,
-        dnsext-dox,
-        dnsext-full-resolver,
-        dnsext-svcb,
-        dnsext-types,
-        dnsext-utils,
-        iproute,
-        network,
-        prettyprinter,
-        random,
-        transformers,
-        unix-time
-
-    if (os(windows) && impl(ghc >=9.0))
-        ghc-options: -with-rtsopts=--io-manager=native
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
