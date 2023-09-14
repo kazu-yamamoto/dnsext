@@ -48,9 +48,9 @@ import Network.Socket (setSocketOption, SocketOption(..))
 #endif
 import DNS.Do53.Id
 import DNS.Do53.Imports
-import DNS.Do53.RRCache
 import DNS.Do53.Query
 import DNS.Log (PutLines)
+import DNS.RRCache
 import System.Timeout (timeout)
 import Prelude
 

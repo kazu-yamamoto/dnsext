@@ -1,0 +1,121 @@
+cabal-version:      >=1.10
+name:               dnsext-iterative
+version:            0.1.0.0
+license-file:       LICENSE
+maintainer:         ex8k.hibino@gmail.com
+author:             Kei Hibino
+build-type:         Simple
+extra-source-files: CHANGELOG.md
+
+library
+    exposed-modules:
+        DNS.Iterative.Query
+        DNS.Iterative.Server
+        DNS.Iterative.Server.Bench
+
+    other-modules:
+        DNS.Iterative.Imports
+        DNS.Iterative.Query.API
+        DNS.Iterative.Query.Cache
+        DNS.Iterative.Query.Delegation
+        DNS.Iterative.Query.Env
+        DNS.Iterative.Query.Helpers
+        DNS.Iterative.Query.Norec
+        DNS.Iterative.Query.Random
+        DNS.Iterative.Query.Resolve
+        DNS.Iterative.Query.ResolveJust
+        DNS.Iterative.Query.Rev
+        DNS.Iterative.Query.Root
+        DNS.Iterative.Query.Types
+        DNS.Iterative.Query.Utils
+        DNS.Iterative.Query.Verify
+        DNS.Iterative.Queue
+        DNS.Iterative.RootServers
+        DNS.Iterative.RootTrustAnchors
+        DNS.Iterative.Server.HTTP2
+        DNS.Iterative.Server.HTTP3
+        DNS.Iterative.Server.Pipeline
+        DNS.Iterative.Server.QUIC
+        DNS.Iterative.Server.TCP
+        DNS.Iterative.Server.TLS
+        DNS.Iterative.Server.Types
+        DNS.Iterative.Server.UDP
+
+    default-language: Haskell2010
+    ghc-options:      -Wall
+    build-depends:
+        base >=4 && <5,
+        ansi-terminal,
+        async,
+        bytestring,
+        containers,
+        dnsext-dnssec,
+        dnsext-do53,
+        dnsext-types,
+        dnsext-utils,
+        http-types,
+        http2,
+        http2-tls,
+        http3,
+        iproute,
+        network,
+        network-run,
+        network-udp,
+        psqueues,
+        quic,
+        random,
+        recv,
+        stm,
+        time-manager,
+        tls,
+        transformers,
+        unliftio,
+        word8
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData
+
+executable workers-benchmark
+    main-is:          benchmark.hs
+    hs-source-dirs:   bench
+    default-language: Haskell2010
+    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
+    build-depends:
+        base,
+        bytestring,
+        deepseq,
+        dnsext-do53,
+        dnsext-iterative,
+        dnsext-types,
+        dnsext-utils,
+        unix-time,
+        unliftio
+
+    if (os(windows) && impl(ghc >=9.0))
+        ghc-options: -with-rtsopts=--io-manager=native
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData
+
+test-suite spec
+    type:               exitcode-stdio-1.0
+    main-is:            Spec.hs
+    build-tool-depends: hspec-discover:hspec-discover
+    hs-source-dirs:     test
+    other-modules:      QuerySpec
+    default-language:   Haskell2010
+    ghc-options:        -Wall -threaded
+    build-depends:
+        base,
+        dnsext-dnssec,
+        dnsext-do53,
+        dnsext-iterative,
+        dnsext-types,
+        dnsext-utils,
+        hspec
+
+    if (os(windows) && impl(ghc >=9.0))
+        ghc-options: -with-rtsopts=--io-manager=native
+
+    if impl(ghc >=8)
+        default-extensions: Strict StrictData

@@ -26,7 +26,6 @@ library
     exposed-modules:
         DNS.Do53.Client
         DNS.Do53.Internal
-        DNS.Do53.RRCache
 
     other-modules:
         DNS.Do53.Do53
@@ -36,9 +35,6 @@ library
         DNS.Do53.Lookup
         DNS.Do53.LookupX
         DNS.Do53.Query
-        DNS.Do53.RRCache.Managed
-        DNS.Do53.RRCache.ReaperReduced
-        DNS.Do53.RRCache.Types
         DNS.Do53.Resolve
         DNS.Do53.System
         DNS.Do53.Types
@@ -53,15 +49,12 @@ library
         base >=4 && <5,
         bytestring,
         containers,
-        deepseq,
-        dnsext-log,
         dnsext-types,
-        dnsext-dnssec,
+        dnsext-utils,
         iproute >=1.3.2,
         mtl,
         network >=3.1.4,
         network-udp,
-        psqueues,
         random >=1.2,
         stm,
         unix-time
@@ -93,24 +86,6 @@ test-suite spec
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
-
-    if impl(ghc >=8)
-        default-extensions: Strict StrictData
-
-test-suite cache-test
-    type:             exitcode-stdio-1.0
-    main-is:          cache.hs
-    hs-source-dirs:   test
-    other-modules:    CacheProp
-    default-language: Haskell2010
-    ghc-options:      -Wall
-    build-depends:
-        base,
-        bytestring,
-        dnsext-types,
-        dnsext-do53,
-        QuickCheck,
-        unix-time
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
