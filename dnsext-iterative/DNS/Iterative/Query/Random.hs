@@ -10,11 +10,11 @@ module DNS.Iterative.Query.Random (
 import System.Random (getStdRandom, randomR)
 
 -- dnsext packages
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types (NE)
 
 randomSelect :: Bool
 randomSelect = True
@@ -24,13 +24,14 @@ randomizedIndex range
     | randomSelect = getStdRandom $ randomR range
     | otherwise = return 0
 
-randomizedSelectN :: MonadIO m => NE a -> m a
+randomizedSelectN :: MonadIO m => NonEmpty a -> m a
 randomizedSelectN
     | randomSelect = d
-    | otherwise = return . fst -- naive implementation
+    | otherwise = d' -- naive implementation
   where
-    d (x, []) = return x
-    d (x, xs@(_ : _)) = do
+    d' (x :| _) = return x
+    d (x :| []) = return x
+    d (x :| xs@(_ : _)) = do
         let xxs = x : xs
         ix <- randomizedIndex (0, length xxs - 1)
         return $ xxs !! ix

@@ -14,6 +14,7 @@ module DNS.Iterative.Query.ResolveJust (
 
 -- GHC packages
 import Data.IORef (newIORef)
+import Data.List.NonEmpty (nonEmpty)
 
 -- other packages
 import Data.IP (IP)
@@ -101,11 +102,11 @@ delegationIPs dc Delegation{..} = do
         --    {- skip sub-domain without glue to avoid loop -}
         takeNames _ xs = xs
 
-        names = foldr takeNames [] $ uncurry (:) delegationNS
+        names = foldr takeNames [] delegationNS
 
         result
             | not (null ips) = selectIPs ipnum ips
-            | Just names1 <- uncons names = do
+            | Just names1 <- nonEmpty names = do
                 {- case for not (null names) -}
                 name <- randomizedSelectN names1
                 (: []) . fst <$> resolveNS disableV6NS dc name
@@ -123,7 +124,7 @@ delegationIPs dc Delegation{..} = do
             | name `DNS.isSubDomainOf` delegationZone =
                 name : xs {- sub-domain name without glue -}
         takeSubNames _ xs = xs
-        subNames = foldr takeSubNames [] $ uncurry (:) delegationNS
+        subNames = foldr takeSubNames [] delegationNS
 
     result
 
@@ -133,7 +134,7 @@ resolveNS disableV6NS dc ns = do
 
         lookupAx
             | disableV6NS = lk4
-            | otherwise = join $ randomizedSelectN (lk46, [lk64])
+            | otherwise = join $ randomizedSelectN (lk46 :| [lk64])
           where
             lk46 = lk4 +? lk6
             lk64 = lk6 +? lk4
@@ -143,7 +144,7 @@ resolveNS disableV6NS dc ns = do
 
         query1Ax
             | disableV6NS = q4
-            | otherwise = join $ randomizedSelectN (q46, [q64])
+            | otherwise = join $ randomizedSelectN (q46 :| [q64])
           where
             q46 = q4 +!? q6
             q64 = q6 +!? q4
@@ -352,7 +353,7 @@ fillsDNSSEC dc nss d = do
 -- >>> dummyDNSKEY = RD_DNSKEY [ZONE] 3 RSASHA256 $ toPubKey RSASHA256 dummyKey
 -- >>> Right dummyDS_ = Opaque.fromBase16 "0123456789ABCD0123456789ABCD0123456789ABCD0123456789ABCD"
 -- >>> dummyDS = RD_DS 0 RSASHA256 SHA256 dummyDS_
--- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithAx h1 a1, [DEwithAx h2 a2]) ds [dummyDNSKEY]
+-- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithAx h1 a1 :| [DEwithAx h2 a2]) ds [dummyDNSKEY]
 -- >>> parent = withNS2 "org." "a0.org.afilias-nst.info." "199.19.56.1" "a2.org.afilias-nst.info." "199.249.112.1" (FilledDS [dummyDS])
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
 -- >>> isFilled d = case (delegationDS d) of { NotFilledDS _ -> False; FilledDS _ -> True }

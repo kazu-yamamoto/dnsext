@@ -5,12 +5,13 @@ module DNS.Iterative.Query.Utils where
 -- GHC packages
 
 -- other packages
+import Data.List.NonEmpty (toList)
+import System.Console.ANSI.Types
 
 -- dnsext packages
 import qualified DNS.Log as Log
 import DNS.Types (DNSMessage)
 import qualified DNS.Types as DNS
-import System.Console.ANSI.Types
 
 -- this package
 import DNS.Iterative.Imports
@@ -44,7 +45,7 @@ data PPMode
     | PPFull
     deriving Show
 
-putDelegation :: Applicative f => PPMode -> NE DEntry -> (String -> f ()) -> (String -> f ()) -> f ()
+putDelegation :: Applicative f => PPMode -> NonEmpty DEntry -> (String -> f ()) -> (String -> f ()) -> f ()
 putDelegation pprs des h fallback  = case pprs of
     PPFull   -> h ppFull
     PPShort  -> h ppShort *> unless (null suffix) (fallback ppFull)
@@ -57,12 +58,12 @@ putDelegation pprs des h fallback  = case pprs of
     pps = ppDelegations des
 {- FOURMOLU_ENABLE -}
 
-ppDelegation :: NE DEntry -> String
+ppDelegation :: NonEmpty DEntry -> String
 ppDelegation des = "\t" ++ intercalate "\n\t" (map fst $ ppDelegations des)
 
-ppDelegations :: NE DEntry -> [(String, Int)]
+ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
-    map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT (fst des : snd des)
+    map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT $ toList des
   where
     toT (DEwithAx d i) = (d, show i)
     toT (DEonlyNS d) = (d, "")

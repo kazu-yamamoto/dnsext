@@ -15,13 +15,15 @@ module DNS.Iterative.Query.Types (
     mayVerifiedRRS,
     runDNSQuery,
     throwDnsError,
-    NE,
+    NonEmpty(..)
 ) where
 
 -- GHC packages
 import Data.IORef (IORef)
 
 -- other packages
+import Data.IP (IP)
+import Data.List.NonEmpty (NonEmpty(..))
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
@@ -35,7 +37,6 @@ import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
@@ -71,7 +72,7 @@ data MayFilledDS
 data Delegation = Delegation
     { delegationZone :: Domain
     -- ^ Destination zone domain
-    , delegationNS :: NE DEntry
+    , delegationNS :: NonEmpty DEntry
     -- ^ NS infos of destination zone, get from source zone NS
     , delegationDS :: MayFilledDS
     -- ^ SEP DNSKEY signature of destination zone, get from source zone NS
@@ -138,5 +139,3 @@ data RRset = RRset
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 type ResultRRS = (RCODE, [RRset], [RRset])
-
-type NE a = (a, [a])

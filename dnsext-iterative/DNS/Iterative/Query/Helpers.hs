@@ -3,6 +3,7 @@ module DNS.Iterative.Query.Helpers where
 -- GHC packages
 
 -- other packages
+import Data.List.NonEmpty (nonEmpty)
 
 -- dnsext packages
 import DNS.RRCache (Ranking)
@@ -90,7 +91,7 @@ findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_D
 findDelegation nsps adds = do
     (p@(_, rr), ps) <- uncons nsps
     let nss = map fst (p : ps)
-    ents <- uncons $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
+    ents <- nonEmpty $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
     {- only data from delegation source zone. get DNSKEY from destination zone -}
     pure $ \dss -> Delegation (rrname rr) ents (FilledDS dss) []
   where

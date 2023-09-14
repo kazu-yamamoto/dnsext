@@ -13,6 +13,7 @@ module DNS.Iterative.Query.Delegation (
 import qualified Data.Set as Set
 
 -- other packages
+import Data.List.NonEmpty (nonEmpty)
 
 -- dnsext packages
 import qualified DNS.Log as Log
@@ -73,7 +74,7 @@ lookupDelegation dom = do
             | noCachedV4NS es = Nothing
             --
             {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
-            | otherwise = (\des -> hasDelegation $ Delegation dom des (NotFilledDS CachedDelegation) []) <$> uncons es
+            | otherwise = (\des -> hasDelegation $ Delegation dom des (NotFilledDS CachedDelegation) []) <$> nonEmpty es
 
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do

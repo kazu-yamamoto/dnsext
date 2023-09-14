@@ -36,7 +36,6 @@ module DNS.RRCache.Types (
     Positive (..),
     RDatas,
     RRSIGs,
-    NE(..),
     positiveHit,
     positiveRDatas,
     positiveRRSIGs,
@@ -83,22 +82,17 @@ import DNS.Types (
 import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 
 ---
-data NE a = NE a [a] deriving (Eq)
-
-neList :: NE a -> [a]
-neList (NE x xs) = x : xs
 
 cons1 :: [a] -> b -> (a -> [a] -> b) -> b
 cons1 [] nil _ = nil
 cons1 (x : xs) _ cons = cons x xs
 
-instance Show a => Show (NE a) where
-    show = show . neList
-
-type RDatas = NE RData
-type RRSIGs = NE RD_RRSIG
+type RDatas = NonEmpty RData
+type RRSIGs = NonEmpty RD_RRSIG
 
 {- FOURMOLU_DISABLE -}
 data Positive
@@ -109,8 +103,8 @@ data Positive
 
 positiveHit :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
 positiveHit notVerified_ valid_ pos = case pos of
-    NotVerified rds -> notVerified_ $ neList rds
-    Valid rds ss  -> valid_ (neList rds) (neList ss)
+    NotVerified rds -> notVerified_ $ NE.toList rds
+    Valid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
 
 data Hit
     = Negative Domain           {- Negative hit, NXDOMAIN or NODATA, hold zone-domain delegation from -}
@@ -126,13 +120,13 @@ hitEither negative positive hit = case hit of
 type CRSet = Hit
 
 mkNotVerified :: RData -> [RData] -> CRSet
-mkNotVerified d ds = Positive $ NotVerified $ NE d ds
+mkNotVerified d ds = Positive $ NotVerified (d :| ds)
 
 notVerified :: [RData] -> a -> (CRSet -> a) -> a
 notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
 
 mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> CRSet
-mkValid d ds s ss = Positive $ Valid (NE d ds) (NE s ss)
+mkValid d ds s ss = Positive $ Valid (d :| ds) (s :| ss)
 
 valid :: [RData] -> [RD_RRSIG] -> a -> (CRSet -> a) -> a
 valid rds sigs nothing just = cons1 rds nothing withRds
@@ -295,8 +289,8 @@ lookup_ mk k (Cache cache _) = do
 -- Nothing
 -- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.classIN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified [192.168.1.1,192.168.1.2])) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified [192.168.32.1])) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified (192.168.32.1 :| []))) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where

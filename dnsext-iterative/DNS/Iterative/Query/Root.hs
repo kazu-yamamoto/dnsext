@@ -153,8 +153,8 @@ rootHint =
   where
     (ns, as) = rootServers
 
-takeDEntryIPs :: Bool -> NE DEntry -> [IP]
-takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] (fst des : snd des)
+takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
+takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
   where
     unique = Set.toList . Set.fromList
     takeDEntryIP (DEonlyNS{}) xs = xs
