@@ -22,9 +22,9 @@ import System.Environment (getArgs)
 import Text.Read (readEither)
 import UnliftIO (concurrently_)
 
-import DNS.Cache.Iterative (Env (..))
-import qualified DNS.Cache.Iterative as Iterative
-import DNS.Cache.Server.Bench
+import DNS.Iterative.Query (Env (..))
+import qualified DNS.Iterative.Query as Iterative
+import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache(..), newTimeCache)

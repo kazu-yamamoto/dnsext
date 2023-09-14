@@ -2,8 +2,8 @@
 
 module Iterative (iterativeQuery) where
 
-import DNS.Cache.Iterative (Env (..))
-import qualified DNS.Cache.Iterative as Iterative
+import DNS.Iterative.Query (Env (..))
+import qualified DNS.Iterative.Query as Iterative
 import DNS.Do53.Client (QueryControls)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache

@@ -17,7 +17,7 @@ import System.Environment (lookupEnv)
 
 import qualified DNS.Log as Log
 
-import DNS.Cache.Iterative (
+import DNS.Iterative.Query (
     Delegation (..),
     Env (..),
     getResultIterative,
@@ -26,7 +26,7 @@ import DNS.Cache.Iterative (
     rootHint,
     runDNSQuery,
  )
-import qualified DNS.Cache.Iterative as Iterative
+import qualified DNS.Iterative.Query as Iterative
 import DNS.TimeCache (TimeCache(..), newTimeCache)
 
 data AnswerResult

@@ -28,23 +28,22 @@ import System.IO (
 import Text.Read (readMaybe)
 
 -- dnsext-* packages
-
+import DNS.Iterative.Server (PortNumber, HostName, Env (..))
+import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.Types as DNS
+import qualified Network.Socket as S
+
+-- other packages
 import Network.Socket (
     AddrInfo (..),
     SockAddr,
     Socket,
     SocketType (Stream),
  )
-import qualified Network.Socket as S
-
--- other packages
 import UnliftIO (tryAny, waitSTM, withAsync)
 
 -- this package
-import DNS.Cache.Server (PortNumber, HostName, Env (..))
-import qualified DNS.Log as Log
 
 import Config
 import SocketUtil (addrInfo)
