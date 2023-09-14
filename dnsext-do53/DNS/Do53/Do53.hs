@@ -124,7 +124,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
                             | w >= 16 = showHex w
                             | otherwise = ('0' :) . showHex w
                         dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
-                    in ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
+                     in ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
                 E.throwIO e
             Right msg
                 | checkResp q ident msg -> do

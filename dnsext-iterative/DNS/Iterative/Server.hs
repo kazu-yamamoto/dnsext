@@ -3,15 +3,17 @@ module DNS.Iterative.Server (
     Server,
     HostName,
     PortNumber,
-    Env(..),
+    Env (..),
     newEnv,
-    RRCacheOps(..),
+    RRCacheOps (..),
     newRRCacheOps,
-    TimeCache(..),
+    TimeCache (..),
     newTimeCache,
+
     -- * UDP
     UdpServerConfig (..),
     udpServer,
+
     -- * Virtual circuit
     VcServerConfig (..),
     tcpServer,
@@ -20,6 +22,7 @@ module DNS.Iterative.Server (
     http3Server,
     tlsServer,
     quicServer,
+
     -- * Misc
     Status,
 ) where
@@ -32,5 +35,5 @@ import DNS.Iterative.Server.TCP
 import DNS.Iterative.Server.TLS
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.UDP
-import DNS.RRCache (RRCacheOps(..), newRRCacheOps)
-import DNS.TimeCache (TimeCache(..), newTimeCache)
+import DNS.RRCache (RRCacheOps (..), newRRCacheOps)
+import DNS.TimeCache (TimeCache (..), newTimeCache)

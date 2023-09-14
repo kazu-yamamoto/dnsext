@@ -5,12 +5,15 @@ module DNS.RRCache.Managed (
     RRCacheConf (..),
     getDefaultStubConf,
     noCacheConf,
+
     -- * High level operations
     RRCacheOps (..),
     newRRCacheOps,
+
     -- * Resource record cache
     RRCache,
     newRRCache,
+
     -- * Operations
     insertWithExpiresRRCache,
     insertRRCache,
@@ -103,11 +106,11 @@ insertRRCache k tim crs (RRCache _ reaper) = do
 keyForNX :: Question -> Question
 keyForNX k = k{qtype = Cache.NX}
 
-data RRCacheOps = RRCacheOps {
-    insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
-  , readCache :: IO Cache
-  , expireCache :: EpochTime -> IO ()
-  }
+data RRCacheOps = RRCacheOps
+    { insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
+    , readCache :: IO Cache
+    , expireCache :: EpochTime -> IO ()
+    }
 
 newRRCacheOps :: RRCacheConf -> IO RRCacheOps
 newRRCacheOps cacheConf = do

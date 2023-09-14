@@ -51,8 +51,8 @@ import DNS.Do53.Imports
 import DNS.Do53.Query
 import DNS.Log (PutLines)
 import DNS.RRCache
-import Prelude
 import System.Timeout (timeout)
+import Prelude
 
 ----------------------------------------------------------------
 

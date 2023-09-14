@@ -29,7 +29,7 @@ import DNS.RRCache (
  )
 import qualified DNS.RRCache as Cache
 import DNS.SEC
-import DNS.TimeCache (TimeCache(..), noneTimeCache)
+import DNS.TimeCache (TimeCache (..), noneTimeCache)
 import DNS.Types
 import qualified DNS.Types as DNS
 

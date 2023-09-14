@@ -25,12 +25,12 @@ import Data.IORef (IORef)
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
+import qualified DNS.Log as Log
 import DNS.RRCache (
     CRSet,
     Cache,
     Ranking,
  )
-import qualified DNS.Log as Log
 import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types

@@ -28,7 +28,7 @@ import System.IO (
 import Text.Read (readMaybe)
 
 -- dnsext-* packages
-import DNS.Iterative.Server (PortNumber, HostName, Env (..))
+import DNS.Iterative.Server (Env (..), HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.Types as DNS

@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Env (
-    Env(..),
+    Env (..),
     newEnv,
 ) where
 
@@ -13,9 +13,9 @@ import Data.IORef (newIORef)
 -- dnsext packages
 import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Log as Log
-import DNS.RRCache (RRCacheOps(..))
+import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.TimeCache (TimeCache(..))
+import DNS.TimeCache (TimeCache (..))
 
 -- this package
 import DNS.Iterative.Query.Types

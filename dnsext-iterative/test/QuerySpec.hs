@@ -27,7 +27,7 @@ import DNS.Iterative.Query (
     runDNSQuery,
  )
 import qualified DNS.Iterative.Query as Iterative
-import DNS.TimeCache (TimeCache(..), newTimeCache)
+import DNS.TimeCache (TimeCache (..), newTimeCache)
 
 data AnswerResult
     = Empty DNS.RCODE

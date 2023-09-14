@@ -27,7 +27,7 @@ import qualified DNS.Iterative.Query as Iterative
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
-import DNS.TimeCache (TimeCache(..), newTimeCache)
+import DNS.TimeCache (TimeCache (..), newTimeCache)
 
 data Config = Config
     { logOutput :: Log.Output
@@ -132,8 +132,9 @@ help =
 parseOptions :: [String] -> IO (Maybe Config)
 parseOptions args
     | not (null errs) = mapM putStrLn errs *> return Nothing
-    | otherwise = either helpOnLeft (return . Just) $
-        foldr (>=>) return ars defaultOptions
+    | otherwise =
+        either helpOnLeft (return . Just) $
+            foldr (>=>) return ars defaultOptions
   where
     (ars, _rest, errs) = getOpt RequireOrder descs args
     helpOnLeft e = putStrLn e *> help *> return Nothing

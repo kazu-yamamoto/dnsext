@@ -1,5 +1,5 @@
 module DNS.TimeCache (
-    TimeCache(..),
+    TimeCache (..),
     newTimeCache,
     noneTimeCache,
 ) where
@@ -51,10 +51,11 @@ mostOncePerSecond upd =
             }
 
 noneTimeCache :: TimeCache
-noneTimeCache = TimeCache
-    { getTime = unixToEpoch <$> getUnixTime
-    , getTimeStr = getTimeShowS =<< getUnixTime
-    }
+noneTimeCache =
+    TimeCache
+        { getTime = unixToEpoch <$> getUnixTime
+        , getTimeStr = getTimeShowS =<< getUnixTime
+        }
 
 ---
 
