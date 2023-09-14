@@ -34,6 +34,9 @@ module DNS.RRCache.Types (
 
     -- * low-level, cache entry
     Positive (..),
+    RDatas,
+    RRSIGs,
+    NE(..),
     positiveHit,
     positiveRDatas,
     positiveRRSIGs,
