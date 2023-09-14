@@ -78,7 +78,7 @@ library
 
 executable workers-benchmark
     main-is:          benchmark.hs
-    hs-source-dirs:   utils
+    hs-source-dirs:   bench
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
