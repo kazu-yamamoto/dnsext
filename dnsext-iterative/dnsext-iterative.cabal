@@ -1,5 +1,5 @@
 cabal-version:      >=1.10
-name:               dnsext-full-resolver
+name:               dnsext-iterative
 version:            0.1.0.0
 license-file:       LICENSE
 maintainer:         ex8k.hibino@gmail.com
@@ -89,7 +89,7 @@ executable workers-benchmark
         bytestring,
         deepseq,
         dnsext-do53,
-        dnsext-full-resolver,
+        dnsext-iterative,
         dnsext-types,
         dnsext-utils,
         unix-time,
@@ -112,7 +112,7 @@ test-suite spec
         base,
         dnsext-dnssec,
         dnsext-do53,
-        dnsext-full-resolver,
+        dnsext-iterative,
         dnsext-types,
         dnsext-utils,
         hspec
