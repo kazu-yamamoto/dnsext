@@ -14,7 +14,7 @@ import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Types (NE)
+import DNS.Iterative.Query.Types (NE)
 
 randomSelect :: Bool
 randomSelect = True

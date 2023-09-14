@@ -39,7 +39,6 @@ import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
-import DNS.Iterative.Types (NE)
 
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do

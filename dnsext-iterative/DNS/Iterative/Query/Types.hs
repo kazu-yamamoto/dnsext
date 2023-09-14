@@ -15,6 +15,7 @@ module DNS.Iterative.Query.Types (
     mayVerifiedRRS,
     runDNSQuery,
     throwDnsError,
+    NE,
 ) where
 
 -- GHC packages
@@ -38,7 +39,6 @@ import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Types (NE)
 
 data Env = Env
     { logLines_ :: Log.PutLines
@@ -138,3 +138,5 @@ data RRset = RRset
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
 type ResultRRS = (RCODE, [RRset], [RRset])
+
+type NE a = (a, [a])

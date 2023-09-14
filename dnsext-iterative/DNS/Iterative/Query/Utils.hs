@@ -15,7 +15,6 @@ import System.Console.ANSI.Types
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
-import DNS.Iterative.Types (NE)
 
 logLines :: Log.Level -> [String] -> ContextT IO ()
 logLines level xs = do
