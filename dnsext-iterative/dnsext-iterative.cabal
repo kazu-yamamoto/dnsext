@@ -9,6 +9,7 @@ extra-source-files: CHANGELOG.md
 
 library
     exposed-modules:
+        DNS.Iterative.Internal
         DNS.Iterative.Query
         DNS.Iterative.Server
         DNS.Iterative.Server.Bench

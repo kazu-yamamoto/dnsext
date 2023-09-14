@@ -6,6 +6,7 @@ module Main where
 import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache

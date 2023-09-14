@@ -18,7 +18,7 @@ import qualified Network.UDP as UDP
 import UnliftIO (SomeException, handle)
 
 -- this package
-import DNS.Iterative.Query (Env (..))
+import DNS.Iterative.Internal (Env(..))
 import DNS.Iterative.Queue (
     QueueSize,
     ReadQueue,

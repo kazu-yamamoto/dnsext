@@ -17,16 +17,21 @@ import System.Environment (lookupEnv)
 
 import qualified DNS.Log as Log
 
-import DNS.Iterative.Query (
+import DNS.Iterative.Internal (
     Delegation (..),
-    Env (..),
-    getResultIterative,
-    newEnv,
-    replyMessage,
     rootHint,
     runDNSQuery,
+    runResolve,
+    refreshRoot,
+    rootPriming,
+    runResolveExact,
+    runIterative,
+    getResultIterative,
+    rrsetValid,
+    Env (..),
+    newEnv,
+    replyMessage,
  )
-import qualified DNS.Iterative.Query as Iterative
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 
 data AnswerResult
@@ -76,7 +81,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
     let getResolveCache n ty = do
             cxt <- newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
-            eresult <- fmap snd <$> Iterative.runResolve cxt (fromString n) ty mempty
+            eresult <- fmap snd <$> runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -111,11 +116,11 @@ querySpec disableV6NS putLines = describe "query" $ do
     let getCXT = newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
     cxt <- runIO getCXT
     cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True cacheOps tcache
-    let runIterative ns n = Iterative.runIterative cxt ns (fromString n) mempty
-        runExactCXT cxt_ n ty = Iterative.runResolveExact cxt_ (fromString n) ty mempty
+    let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
+        runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
-        runResolveCXT cxt_ n ty = fmap snd <$> Iterative.runResolve cxt_ (fromString n) ty mempty
-        runResolve = runResolveCXT cxt
+        runResolveCXT cxt_ n ty = fmap snd <$> runResolve cxt_ (fromString n) ty mempty
+        runResolve_ = runResolveCXT cxt
         getReply n ty ident = do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
             return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
@@ -137,7 +142,7 @@ querySpec disableV6NS putLines = describe "query" $ do
           where
             rcode = DNS.rcode $ DNS.flags $ DNS.header msg
         verified rrsets
-            | all Iterative.rrsetValid rrsets = Verified
+            | all rrsetValid rrsets = Verified
             | otherwise = NotVerified
         checkVAnswer (msg, (vans, _))
             | null vans = VEmpty rcode
@@ -147,21 +152,21 @@ querySpec disableV6NS putLines = describe "query" $ do
         checkResult = either (const Failed) (checkAnswer . fst)
 
     it "root-priming" $ do
-        result <- runDNSQuery Iterative.rootPriming cxt mempty
+        result <- runDNSQuery rootPriming cxt mempty
         printQueryError result
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
     root <- runIO $ do
         icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS cacheOps tcache
-        failLeft "refresh-root error" =<< runDNSQuery Iterative.refreshRoot icxt mempty
+        failLeft "refresh-root error" =<< runDNSQuery refreshRoot icxt mempty
 
     it "iterative" $ do
-        result <- runIterative root "iij.ad.jp."
+        result <- runIterative_ root "iij.ad.jp."
         printQueryError result
         result `shouldSatisfy` isRight
 
     it "iterative - many" $ do
-        result <- runIterative root "media-router-aol1.prod.g03.yahoodns.net."
+        result <- runIterative_ root "media-router-aol1.prod.g03.yahoodns.net."
         printQueryError result
         result `shouldSatisfy` isRight
 
@@ -232,7 +237,7 @@ querySpec disableV6NS putLines = describe "query" $ do
             `shouldBe` VNotEmpty DNS.NoErr Verified
 
     it "resolve - a via cname" $ do
-        result <- runResolve "clients4.google.com." A
+        result <- runResolve_ "clients4.google.com." A
         printQueryError result
         isRight result `shouldBe` True
 

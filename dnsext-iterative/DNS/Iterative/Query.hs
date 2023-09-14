@@ -1,33 +1,22 @@
 module DNS.Iterative.Query (
-    -- * resolve interfaces
+    -- * Env
+    Env,
     newEnv,
+    -- * Iterative query
+    resolveResponseIterative,
     getResponseIterative,
-    CacheResult (..),
+    -- * Cache
     getResponseCached,
-    getResultIterative,
-    getResultCached,
-    replyMessage,
-
-    -- * types
-    module DNS.Iterative.Query.Types,
-
-    -- * testing
-    runResolve,
-    runResolveExact,
-    runResolveJust,
-    rootHint,
-    runIterative,
-    printResult,
-    refreshRoot,
-    rootPriming,
-    rrsetValid,
+    CacheResult (..),
 ) where
 
+import DNS.Do53.Client
 import DNS.Iterative.Query.API
 import DNS.Iterative.Query.Env
-import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Resolve
-import DNS.Iterative.Query.ResolveJust
-import DNS.Iterative.Query.Root
 import DNS.Iterative.Query.Types
-import DNS.Iterative.Query.Utils
+import DNS.Types
+
+resolveResponseIterative :: Env -> Domain -> TYPE -> QueryControls -> IO (Either String DNSMessage)
+resolveResponseIterative env domain typ ictl = do
+    ers <- runDNSQuery (getResultIterative domain typ) env ictl
+    return $ replyMessage ers 0 {- dummy id -} [Question domain typ classIN]

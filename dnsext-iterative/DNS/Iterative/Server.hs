@@ -3,7 +3,7 @@ module DNS.Iterative.Server (
     Server,
     HostName,
     PortNumber,
-    Env (..),
+    Env,
     newEnv,
     RRCacheOps (..),
     newRRCacheOps,

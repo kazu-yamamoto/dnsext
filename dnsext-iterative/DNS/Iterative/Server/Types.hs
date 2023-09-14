@@ -7,7 +7,7 @@ module DNS.Iterative.Server.Types (
     VcServerConfig (..),
 ) where
 
-import DNS.Iterative.Query (Env (..))
+import DNS.Iterative.Query (Env)
 import Network.Socket
 
 type Status = [(String, Int)]

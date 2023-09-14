@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Server.Bench (

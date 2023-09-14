@@ -22,7 +22,7 @@ import System.Environment (getArgs)
 import Text.Read (readEither)
 import UnliftIO (concurrently_)
 
-import DNS.Iterative.Query (Env (..))
+import DNS.Iterative.Internal (Env (..))
 import qualified DNS.Iterative.Query as Iterative
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log

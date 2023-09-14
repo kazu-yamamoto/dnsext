@@ -3,8 +3,7 @@
 module Iterative (iterativeQuery) where
 
 import DNS.Do53.Client (QueryControls)
-import DNS.Iterative.Query (Env (..))
-import qualified DNS.Iterative.Query as Iterative
+import DNS.Iterative.Query (Env, resolveResponseIterative, newEnv)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
@@ -21,21 +20,18 @@ iterativeQuery
     -> TYPE
     -> IO (Either String DNSMessage)
 iterativeQuery disableV6NS putLines ctl domain typ = do
-    cxt <- setup disableV6NS putLines
-    resolve cxt ctl domain typ
+    env <- setup disableV6NS putLines
+    resolve env ctl domain typ
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
     tcache@TimeCache{..} <- newTimeCache
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
-    Iterative.newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
+    newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
-resolve cxt ictl n ty =
-    toMessage
-        <$> Iterative.runDNSQuery (Iterative.getResultIterative domain ty) cxt ictl
+resolve env ictl n ty = resolveResponseIterative env domain ty ictl
   where
     domain = fromString n
-    toMessage er = Iterative.replyMessage er 0 {- dummy id -} [Question domain ty classIN]
