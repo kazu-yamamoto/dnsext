@@ -17,7 +17,7 @@ import qualified Data.IORef as I
 import Data.List (intercalate)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
-import UnliftIO (concurrently_, race_)
+import UnliftIO (concurrently_, finally, race_)
 
 import Config
 import qualified DNSTAP as TAP
@@ -78,12 +78,14 @@ runConfig mcache mng0 conf@Config{..} = do
     tidL <- runLogger
     tidA <- API.new conf mng
     race_ (conc $ concat servers) (conc monitor)
-    -- Teardown
-    mapM_ (maybe (return ()) killThread) [tidA, tidL, tidW]
-    flush
+        -- Teardown
+        `finally` do
+            mapM_ maybeKill [tidA, tidL, tidW]
+            flush
     threadDelay 500000 -- avoiding address already in use
     return cache
   where
+    maybeKill = maybe (return ()) killThread
     trans creds =
         [ (cnf_udp, udpServer udpconf, cnf_udp_port)
         , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
