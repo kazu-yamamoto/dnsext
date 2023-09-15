@@ -51,8 +51,8 @@ noCacheConf = RRCacheConf 0 1800 noLog (pure 0)
 
 data RRCache = RRCache RRCacheConf (Reaper Cache)
 
-getRRCache :: RRCacheConf -> IO RRCache
-getRRCache conf@RRCacheConf{..} = do
+newRRCache :: RRCacheConf -> IO RRCache
+newRRCache conf@RRCacheConf{..} = do
     let expiredLog c = rrCacheLogLn $ "some records expired: size = " ++ show (Cache.size c)
 
     reaper <-
@@ -87,11 +87,6 @@ insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     reaperUpdate reaper $ \cache -> maybe cache id $ withExpire cache
 
 ---
-{- for stub -}
-
-newRRCache :: RRCacheConf -> IO RRCache
-newRRCache = getRRCache
-
 {- for stub. no alive check -}
 lookupRRCache :: Question -> RRCache -> IO (Maybe (EpochTime, CRSet))
 lookupRRCache k rrCache = Cache.stubLookup k <$> readRRCache rrCache
@@ -110,12 +105,17 @@ data RRCacheOps = RRCacheOps
     { insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , readCache :: IO Cache
     , expireCache :: EpochTime -> IO ()
+    , stopCache :: IO ()
     }
 
 newRRCacheOps :: RRCacheConf -> IO RRCacheOps
 newRRCacheOps cacheConf = do
     rrCache <- newRRCache cacheConf
-    let ins k ttl crset rank = insertWithExpiresRRCache k ttl crset rank rrCache
-        expire now = expiresRRCache now rrCache
-        read' = readRRCache rrCache
-    return $ RRCacheOps ins read' expire
+    let insert_ k ttl crset rank = insertWithExpiresRRCache k ttl crset rank rrCache
+        read_ = readRRCache rrCache
+        expire_ now = expiresRRCache now rrCache
+        stop_ = stopRRCache rrCache
+    return $ RRCacheOps insert_ read_ expire_ stop_
+
+stopRRCache :: RRCache -> IO ()
+stopRRCache (RRCache _ reaper) = reaperKill reaper

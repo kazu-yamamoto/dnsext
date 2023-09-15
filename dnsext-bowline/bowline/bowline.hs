@@ -27,10 +27,10 @@ import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
-type GlobalCache =
-    ( Cache.RRCacheOps
-    , Log.PutLines -> IO ()
-    )
+data GlobalCache = GlobalCache
+    { gcacheRRCacheOps :: Cache.RRCacheOps
+    , gcacheSetLogLn :: Log.PutLines -> IO ()
+    }
 
 ----------------------------------------------------------------
 
@@ -55,6 +55,7 @@ run readConfig = do
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do
                 putStrLn "\nReloading..." -- fixme
+                stopCache $ gcacheRRCacheOps cache
                 go tcache Nothing mng
             KeepCache -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
@@ -63,13 +64,13 @@ run readConfig = do
 runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
 runConfig tcache mcache mng0 conf@Config{..} = do
     -- Setup
-    cache@(updateCache, setLogger) <- case mcache of
+    gcache@GlobalCache{..} <- case mcache of
         Nothing -> getCache tcache conf
         Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
-    setLogger putLines
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns updateCache tcache
+    gcacheSetLogLn putLines
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache
     creds <- getCreds conf
     (servers, statuses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
@@ -85,7 +86,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             mapM_ maybeKill [tidA, tidL, tidW]
             flush
     threadDelay 500000 -- avoiding address already in use
-    return cache
+    return gcache
   where
     maybeKill = maybe (return ()) killThread
     trans creds =
@@ -153,7 +154,8 @@ getCache TimeCache{..} Config{..} = do
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
         cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
-    return (cacheOps, I.writeIORef ref . Just)
+    let setLog = I.writeIORef ref . Just
+    return $ GlobalCache cacheOps setLog
 
 ----------------------------------------------------------------
 
