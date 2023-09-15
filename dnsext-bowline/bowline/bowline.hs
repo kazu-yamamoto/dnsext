@@ -28,8 +28,7 @@ import qualified WebAPI as API
 ----------------------------------------------------------------
 
 type GlobalCache =
-    ( TimeCache
-    , Cache.RRCacheOps
+    ( Cache.RRCacheOps
     , Log.PutLines -> IO ()
     )
 
@@ -42,27 +41,30 @@ help = putStrLn "bowline [<confFile>]"
 
 run :: IO Config -> IO ()
 run readConfig = do
+    -- TimeCache uses Control.AutoUpdate which
+    -- does not provide a way to kill the internal thread.
+    tcache <- newTimeCache
     -- Read config only to get cache size, sigh
-    cache <- readConfig >>= getCache
-    newControl >>= go (Just cache)
+    cache <- readConfig >>= getCache tcache
+    newControl >>= go tcache (Just cache)
   where
-    go mcache mng = do
-        cache <- readConfig >>= runConfig mcache mng
+    go tcache mcache mng = do
+        cache <- readConfig >>= runConfig tcache mcache mng
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do
                 putStrLn "\nReloading..." -- fixme
-                go Nothing mng
+                go tcache Nothing mng
             KeepCache -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
-                go (Just cache) mng
+                go tcache (Just cache) mng
 
-runConfig :: Maybe GlobalCache -> Control -> Config -> IO GlobalCache
-runConfig mcache mng0 conf@Config{..} = do
+runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
+runConfig tcache mcache mng0 conf@Config{..} = do
     -- Setup
-    cache@(tcache, updateCache, setLogger) <- case mcache of
-        Nothing -> getCache conf -- fixme: reaper leak
+    cache@(updateCache, setLogger) <- case mcache of
+        Nothing -> getCache tcache conf
         Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
@@ -139,10 +141,9 @@ getServers env hosts (True, server, port') = do
 
 ----------------------------------------------------------------
 
-getCache :: Config -> IO GlobalCache
-getCache Config{..} = do
+getCache :: TimeCache -> Config -> IO GlobalCache
+getCache TimeCache{..} Config{..} = do
     ref <- I.newIORef Nothing
-    tcache@TimeCache{..} <- newTimeCache
     let memoLogLn msg = do
             mx <- I.readIORef ref
             case mx of
@@ -152,7 +153,7 @@ getCache Config{..} = do
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
         cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
-    return (tcache, cacheOps, I.writeIORef ref . Just)
+    return (cacheOps, I.writeIORef ref . Just)
 
 ----------------------------------------------------------------
 
