@@ -39,8 +39,13 @@ http2Resolver path lim ri@ResolvInfo{..} q qctl = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
-        H2.run rinfoHostName rinfoPortNumber $
+        H2.run settings rinfoHostName rinfoPortNumber $
             doHTTP proto ident path lim ri q qctl
+  where
+    settings =
+        H2.defaultSettings
+            { H2.settingsValidateCert = False
+            }
 
 http2cResolver :: ShortByteString -> VCLimit -> Resolver
 http2cResolver path lim ri@ResolvInfo{..} q qctl = do
