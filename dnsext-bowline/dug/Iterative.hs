@@ -3,7 +3,7 @@
 module Iterative (iterativeQuery) where
 
 import DNS.Do53.Client (QueryControls)
-import DNS.Iterative.Query (Env, resolveResponseIterative, newEnv)
+import DNS.Iterative.Query (Env, newEnv, resolveResponseIterative)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), newTimeCache)

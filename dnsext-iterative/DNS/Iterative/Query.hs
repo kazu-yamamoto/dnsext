@@ -2,9 +2,11 @@ module DNS.Iterative.Query (
     -- * Env
     Env,
     newEnv,
+
     -- * Iterative query
     resolveResponseIterative,
     getResponseIterative,
+
     -- * Cache
     getResponseCached,
     CacheResult (..),

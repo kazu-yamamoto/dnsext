@@ -15,7 +15,7 @@ module DNS.Iterative.Query.Types (
     mayVerifiedRRS,
     runDNSQuery,
     throwDnsError,
-    NonEmpty(..)
+    NonEmpty (..),
 ) where
 
 -- GHC packages
@@ -23,7 +23,7 @@ import Data.IORef (IORef)
 
 -- other packages
 import Data.IP (IP)
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))

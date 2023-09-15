@@ -19,7 +19,7 @@ import qualified DNS.Log as Log
 import Network.Socket (SockAddr)
 
 -- this package
-import DNS.Iterative.Internal (Env(..))
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
 
 ----------------------------------------------------------------

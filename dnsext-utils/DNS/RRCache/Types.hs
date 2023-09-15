@@ -82,7 +82,7 @@ import DNS.Types (
 import qualified DNS.Types as DNS
 import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
-import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NE
 
 ---

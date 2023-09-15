@@ -19,18 +19,18 @@ import qualified DNS.Log as Log
 
 import DNS.Iterative.Internal (
     Delegation (..),
-    rootHint,
-    runDNSQuery,
-    runResolve,
-    refreshRoot,
-    rootPriming,
-    runResolveExact,
-    runIterative,
-    getResultIterative,
-    rrsetValid,
     Env (..),
+    getResultIterative,
     newEnv,
+    refreshRoot,
     replyMessage,
+    rootHint,
+    rootPriming,
+    rrsetValid,
+    runDNSQuery,
+    runIterative,
+    runResolve,
+    runResolveExact,
  )
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 
