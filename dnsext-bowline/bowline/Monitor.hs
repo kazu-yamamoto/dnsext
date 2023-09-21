@@ -5,11 +5,13 @@ module Monitor (
 ) where
 
 -- GHC packages
+import Control.Concurrent (getNumCapabilities)
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
-import DNS.Types.Decode (EpochTime)
+import Data.ByteString.Builder
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Char (toUpper)
 import Data.Functor (($>))
 import Data.List (find, isInfixOf)
@@ -33,6 +35,7 @@ import DNS.Iterative.Server (HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
 import qualified Network.Socket as S
 
 -- other packages
@@ -62,7 +65,7 @@ data Command
     = Param
     | Find String
     | Lookup DNS.Domain DNS.TYPE
-    | Status
+    | Stats
     | Expire EpochTime
     | Noop
     | Exit
@@ -132,7 +135,7 @@ console conf env Control{..} inH outH ainfo = do
                 (\exit -> unless exit repl)
                 =<< withWait waitQuit (handle (($> False) . print) step)
 
-    mapM_ outLn $ showConfig conf
+    showParam outLn conf
     repl
   where
     handle onError = either onError return <=< tryAny
@@ -149,7 +152,7 @@ console conf env Control{..} inH outH ainfo = do
         "param" : _ -> Just Param
         "find" : s : _ -> Just $ Find s
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
-        "status" : _ -> Just Status
+        "stats" : _ -> Just Stats
         "expire" : args -> case args of
             [] -> Just $ Expire 0
             x : _ -> Expire <$> readMaybe x
@@ -165,7 +168,7 @@ console conf env Control{..} inH outH ainfo = do
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch Param = mapM_ outLn $ showConfig conf
+        dispatch Param = showParam outLn conf
         dispatch Noop = return ()
         dispatch (Find s) =
             mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
@@ -176,7 +179,7 @@ console conf env Control{..} inH outH ainfo = do
                 ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Status = getStatus >>= outLn
+        dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
@@ -192,7 +195,7 @@ console conf env Control{..} inH outH ainfo = do
             [ ("param", ("param", "show server parameters"))
             , ("find", ("find STRING", "find sub-string from dumped cache"))
             , ("lookup", ("lookup DOMAIN TYPE", "lookup cache"))
-            , ("status", ("status", "show current server status"))
+            , ("stats", ("stats", "show current server stats"))
             ,
                 ( "expire"
                 , ("expire [SECONDS]", "expire cache at the time SECONDS later")
@@ -211,3 +214,9 @@ withWait qstm blockAct =
 
 socketWaitRead :: Socket -> IO ()
 socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
+
+showParam :: (String -> IO ()) -> Config -> IO ()
+showParam outLn conf = do
+    mapM_ outLn $ showConfig conf
+    n <- getNumCapabilities
+    outLn $ "capabilities: " ++ show n
