@@ -3,10 +3,9 @@
 
 module Main where
 
-import Control.Concurrent (ThreadId, forkIO, getNumCapabilities, killThread, threadDelay)
+import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
-import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -14,7 +13,7 @@ import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
 import qualified Data.IORef as I
-import Data.List (intercalate)
+import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import UnliftIO (concurrently_, finally, race_)
@@ -22,6 +21,7 @@ import UnliftIO (concurrently_, finally, race_)
 import Config
 import qualified DNSTAP as TAP
 import qualified Monitor as Mon
+import Prometheus
 import Types
 import qualified WebAPI as API
 
@@ -195,7 +195,12 @@ getControl env mng0 statuses = do
 ----------------------------------------------------------------
 
 getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO String
-getStatus' env iss ucacheQSize = do
+getStatus' _env _iss _ucacheQSize = do
+    enabled <- getRTSStatsEnabled
+    if enabled
+       then showRTSStats <$> getRTSStats
+       else return ""
+{-
     caps <- getNumCapabilities
     csiz <- show . Cache.size <$> getCache_ env
     hits <- intercalate "\n" <$> mapM (show <$>) iss
@@ -212,3 +217,4 @@ getStatus' env iss ucacheQSize = do
             ++ "\n"
             ++ qsiz
             ++ "\n"
+-}

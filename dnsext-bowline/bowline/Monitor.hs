@@ -5,6 +5,7 @@ module Monitor (
 ) where
 
 -- GHC packages
+import Control.Concurrent (getNumCapabilities)
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically)
@@ -132,7 +133,7 @@ console conf env Control{..} inH outH ainfo = do
                 (\exit -> unless exit repl)
                 =<< withWait waitQuit (handle (($> False) . print) step)
 
-    mapM_ outLn $ showConfig conf
+    showParam outLn conf
     repl
   where
     handle onError = either onError return <=< tryAny
@@ -165,7 +166,7 @@ console conf env Control{..} inH outH ainfo = do
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch Param = mapM_ outLn $ showConfig conf
+        dispatch Param = showParam outLn conf
         dispatch Noop = return ()
         dispatch (Find s) =
             mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
@@ -211,3 +212,9 @@ withWait qstm blockAct =
 
 socketWaitRead :: Socket -> IO ()
 socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
+
+showParam :: (String -> IO ()) -> Config -> IO ()
+showParam outLn conf = do
+    mapM_ outLn $ showConfig conf
+    n <- getNumCapabilities
+    outLn $ "capabilities: " ++ show n

@@ -15,12 +15,13 @@ executable bowline
         DNSTAP
         Monitor
         Parser
+        Prometheus
         SocketUtil
         Types
         WebAPI
 
     default-language: Haskell2010
-    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
+    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1 -T"
     build-depends:
         base,
         bytestring,
