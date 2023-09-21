@@ -75,9 +75,9 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     gcacheSetLogLn putLines
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache
     creds <- getCreds conf
-    (servers, statuses) <-
+    (servers, statses) <-
         mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    mng <- getControl env mng0 statuses
+    mng <- getControl env mng0 statses
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
@@ -133,7 +133,7 @@ getServers
     :: Env
     -> [HostName]
     -> (Bool, Server, Int)
-    -> IO ([IO ()], [IO Status])
+    -> IO ([IO ()], [IO Stats])
 getServers _ _ (False, _, _) = return ([], [])
 getServers env hosts (True, server, port') = do
     (xss, yss) <- mapAndUnzipM (server env port) hosts
@@ -183,13 +183,13 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getControl :: Env -> Control -> [[IO Status]] -> IO Control
-getControl env mng0 statuses = do
+getControl :: Env -> Control -> [[IO Stats]] -> IO Control
+getControl env mng0 statses = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
             mng0
-                { getStatus = getStatus' env (concat statuses) ucacheQSize
+                { getStats = getStats' env (concat statses) ucacheQSize
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
@@ -197,30 +197,16 @@ getControl env mng0 statuses = do
 
 ----------------------------------------------------------------
 
-getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO Builder
-getStatus' env _iss _ucacheQSize = do
+getStats' :: Env -> [IO Stats] -> IO (Int, Int) -> IO Builder
+getStats' env iss _ucacheQSize = do
     enabled <- getRTSStatsEnabled
     gc <- if enabled
         then fromRTSStats <$> getRTSStats
         else return mempty
     csiz <- toB . Cache.size <$> getCache_ env
-    return (gc <> "blowline_cache_size " <> csiz <> "\n")
-
-{-
-    caps <- getNumCapabilities
-    csiz <- show . Cache.size <$> getCache_ env
-    hits <- intercalate "\n" <$> mapM (show <$>) iss
-    (cur, mx) <- ucacheQSize
-    let qsiz = "ucache queue" ++ " size: " ++ show cur ++ " / " ++ show mx
-    return $
-        "capabilities: "
-            ++ show caps
-            ++ "\n"
-            ++ "cache size: "
-            ++ csiz
-            ++ "\n"
-            ++ hits
-            ++ "\n"
-            ++ qsiz
-            ++ "\n"
--}
+    hits <- foldr (<>) defaultStats <$> sequence iss
+    let st = "blowline_cache_size " <> csiz <> "\n"
+          <> "blowline_cache_hits " <> toB (statsHit hits)  <> "\n"
+          <> "blowline_cache_miss " <> toB (statsMiss hits) <> "\n"
+          <> "blowline_cache_fail " <> toB (statsFail hits) <> "\n"
+    return (gc <> st)

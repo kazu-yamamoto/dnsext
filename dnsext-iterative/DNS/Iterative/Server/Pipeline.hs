@@ -21,6 +21,7 @@ import Network.Socket (SockAddr)
 -- this package
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Server.Types (Stats(..))
 
 ----------------------------------------------------------------
 
@@ -48,16 +49,8 @@ newCounters = do
         ref <- newIORef 0
         return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
 
-readCounters :: CntGet -> IO [(String, Int)]
-readCounters CntGet{..} = do
-    hit <- getHit
-    miss <- getMiss
-    fail_ <- getFailed
-    return
-        [ ("hit", hit)
-        , ("miss", miss)
-        , ("fail", fail_)
-        ]
+readCounters :: CntGet -> IO Stats
+readCounters CntGet{..} = Stats <$> getHit <*> getMiss <*> getFailed
 
 ----------------------------------------------------------------
 

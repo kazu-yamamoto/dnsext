@@ -76,14 +76,14 @@ udpServer conf env port addr = do
         putLn lv = logLines_ env lv Nothing . (: [])
 
     (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env mysa
-    (pipelines, getsStatus) <- unzip <$> sequence mkPipelines
+    (pipelines, getsStats) <- unzip <$> sequence mkPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
         receiver = handledLoop onErrorR (UDP.recvFrom lsock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
         sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo lsock))
-    return (receiver : sender : concat pipelines, getsStatus)
+    return (receiver : sender : concat pipelines, getsStats)
 
 ----------------------------------------------------------------
 
@@ -91,7 +91,7 @@ getPipelines
     :: UdpServerConfig
     -> Env
     -> SockAddr
-    -> IO ([IO ([IO ()], IO Status)], Request UDP.ClientSockAddr -> IO (), IO (Response UDP.ClientSockAddr))
+    -> IO ([IO ([IO ()], IO Stats)], Request UDP.ClientSockAddr -> IO (), IO (Response UDP.ClientSockAddr))
 getPipelines udpconf@UdpServerConfig{..} env mysa
     | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
@@ -128,7 +128,7 @@ getCacherWorkers
     -> UdpServerConfig
     -> Env
     -> SockAddr
-    -> IO ([IO ()], IO Status)
+    -> IO ([IO ()], IO Stats)
 getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
     (cntget, cntinc) <- newCounters
 
@@ -151,7 +151,7 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        status = getStatus reqQSize decQSize resQSize cntget
+        status = getStats reqQSize decQSize resQSize cntget
 
     return (loops, status)
   where
@@ -175,18 +175,5 @@ queueSize q = do
 
 ----------------------------------------------------------------
 
-getStatus :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> CntGet -> IO [(String, Int)]
-getStatus reqQSize decQSize resQSize cntget = do
-    (nreq, mreq) <- reqQSize
-    (ndec, mdec) <- decQSize
-    (nres, mres) <- resQSize
-    xs <- readCounters cntget
-    return $
-        [ ("request queue size", nreq)
-        , ("decoded queue size", ndec)
-        , ("response queue size", nres)
-        , ("request queue max size", mreq)
-        , ("decoded queue max size", mdec)
-        , ("response queue max size", mres)
-        ]
-            ++ xs
+getStats :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> CntGet -> IO Stats
+getStats _reqQSize _decQSize _resQSize cntget = readCounters cntget

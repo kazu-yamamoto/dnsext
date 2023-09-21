@@ -24,7 +24,8 @@ module DNS.Iterative.Server (
     quicServer,
 
     -- * Misc
-    Status,
+    Stats(..),
+    defaultStats,
 ) where
 
 import DNS.Iterative.Query.Env

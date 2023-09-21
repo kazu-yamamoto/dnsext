@@ -5,7 +5,7 @@ module WebAPI (new) where
 
 import Control.Concurrent
 import Data.ByteString ()
-import Network.HTTP.Types
+import qualified Network.HTTP.Types as HTTP
 import Network.Socket
 import Network.Wai
 import Network.Wai.Handler.Warp
@@ -14,8 +14,8 @@ import qualified UnliftIO.Exception as E
 import Config
 import Types
 
-doStatus :: Control -> IO Response
-doStatus Control{..} = responseBuilder ok200 [] <$> getStatus
+doStats :: Control -> IO Response
+doStats Control{..} = responseBuilder HTTP.ok200 [] <$> getStats
 
 doReload :: Control -> Command -> IO Response
 doReload Control{..} ctl = do
@@ -32,18 +32,18 @@ app :: Control -> Application
 app mng req sendResp = getResp >>= sendResp
   where
     getResp
-        | requestMethod req == methodGet = case rawPathInfo req of
-            "/status" -> doStatus mng
+        | requestMethod req == HTTP.methodGet = case rawPathInfo req of
+            "/stats" -> doStats mng
             "/reload" -> doReload mng Reload
             "/keep-cache" -> doReload mng KeepCache
             "/quit" -> doQuit mng
-            _ -> return $ ng badRequest400
-        | otherwise = return $ ng methodNotAllowed405
+            _ -> return $ ng HTTP.badRequest400
+        | otherwise = return $ ng HTTP.methodNotAllowed405
 
 ok :: Response
-ok = responseLBS ok200 [] "OK\n"
+ok = responseLBS HTTP.ok200 [] "OK\n"
 
-ng :: Status -> Response
+ng :: HTTP.Status -> Response
 ng st = responseLBS st [] "NG\n"
 
 new :: Config -> Control -> IO (Maybe ThreadId)

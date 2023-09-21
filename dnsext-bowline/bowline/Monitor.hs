@@ -65,7 +65,7 @@ data Command
     = Param
     | Find String
     | Lookup DNS.Domain DNS.TYPE
-    | Status
+    | Stats
     | Expire EpochTime
     | Noop
     | Exit
@@ -152,7 +152,7 @@ console conf env Control{..} inH outH ainfo = do
         "param" : _ -> Just Param
         "find" : s : _ -> Just $ Find s
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
-        "status" : _ -> Just Status
+        "stats" : _ -> Just Stats
         "expire" : args -> case args of
             [] -> Just $ Expire 0
             x : _ -> Expire <$> readMaybe x
@@ -179,7 +179,7 @@ console conf env Control{..} inH outH ainfo = do
                 ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Status = toLazyByteString <$> getStatus >>= BL.hPutStrLn outH
+        dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
@@ -195,7 +195,7 @@ console conf env Control{..} inH outH ainfo = do
             [ ("param", ("param", "show server parameters"))
             , ("find", ("find STRING", "find sub-string from dumped cache"))
             , ("lookup", ("lookup DOMAIN TYPE", "lookup cache"))
-            , ("status", ("status", "show current server status"))
+            , ("stats", ("stats", "show current server stats"))
             ,
                 ( "expire"
                 , ("expire [SECONDS]", "expire cache at the time SECONDS later")

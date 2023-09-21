@@ -7,7 +7,7 @@ import Data.IORef
 data Command = Quit | Reload | KeepCache
 
 data Control = Control
-    { getStatus :: IO Builder
+    { getStats :: IO Builder
     , quitServer :: IO ()
     , waitQuit :: STM ()
     , getCommandAndClear :: IO Command
@@ -19,7 +19,7 @@ newControl = do
     ref <- newIORef Quit
     return
         Control
-            { getStatus = return mempty
+            { getStats = return mempty
             , quitServer = return ()
             , waitQuit = return ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
