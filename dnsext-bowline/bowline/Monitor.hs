@@ -10,7 +10,8 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
-import DNS.Types.Decode (EpochTime)
+import Data.ByteString.Builder
+import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Char (toUpper)
 import Data.Functor (($>))
 import Data.List (find, isInfixOf)
@@ -34,6 +35,7 @@ import DNS.Iterative.Server (HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.Types as DNS
+import DNS.Types.Decode (EpochTime)
 import qualified Network.Socket as S
 
 -- other packages
@@ -177,7 +179,7 @@ console conf env Control{..} inH outH ainfo = do
                 ts <- currentSeconds_ env
                 return $ Cache.lookup ts dom typ DNS.classIN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Status = getStatus >>= outLn
+        dispatch Status = toLazyByteString <$> getStatus >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x

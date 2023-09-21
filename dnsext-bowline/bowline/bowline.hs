@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main where
@@ -6,12 +7,14 @@ module Main where
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.STM
 import Control.Monad (guard, mapAndUnzipM)
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
+import Data.ByteString.Builder
 import qualified Data.IORef as I
 import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
@@ -194,12 +197,15 @@ getControl env mng0 statuses = do
 
 ----------------------------------------------------------------
 
-getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO String
-getStatus' _env _iss _ucacheQSize = do
+getStatus' :: Env -> [IO Status] -> IO (Int, Int) -> IO Builder
+getStatus' env _iss _ucacheQSize = do
     enabled <- getRTSStatsEnabled
-    if enabled
-       then showRTSStats <$> getRTSStats
-       else return ""
+    gc <- if enabled
+        then fromRTSStats <$> getRTSStats
+        else return mempty
+    csiz <- toB . Cache.size <$> getCache_ env
+    return (gc <> "blowline_cache_size " <> csiz <> "\n")
+
 {-
     caps <- getNumCapabilities
     csiz <- show . Cache.size <$> getCache_ env

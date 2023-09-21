@@ -5,7 +5,6 @@ module WebAPI (new) where
 
 import Control.Concurrent
 import Data.ByteString ()
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import Network.HTTP.Types
 import Network.Socket
 import Network.Wai
@@ -16,7 +15,7 @@ import Config
 import Types
 
 doStatus :: Control -> IO Response
-doStatus Control{..} = responseLBS ok200 [] . LBS.pack <$> getStatus
+doStatus Control{..} = responseBuilder ok200 [] <$> getStatus
 
 doReload :: Control -> Command -> IO Response
 doReload Control{..} ctl = do

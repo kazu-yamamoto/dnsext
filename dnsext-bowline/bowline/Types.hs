@@ -1,12 +1,13 @@
 module Types where
 
 import Control.Concurrent.STM
+import Data.ByteString.Builder
 import Data.IORef
 
 data Command = Quit | Reload | KeepCache
 
 data Control = Control
-    { getStatus :: IO String
+    { getStatus :: IO Builder
     , quitServer :: IO ()
     , waitQuit :: STM ()
     , getCommandAndClear :: IO Command
@@ -18,7 +19,7 @@ newControl = do
     ref <- newIORef Quit
     return
         Control
-            { getStatus = return ""
+            { getStatus = return mempty
             , quitServer = return ()
             , waitQuit = return ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
