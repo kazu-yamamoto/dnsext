@@ -53,7 +53,7 @@ data RRCache = RRCache RRCacheConf (Reaper Cache)
 
 newRRCache :: RRCacheConf -> IO RRCache
 newRRCache conf@RRCacheConf{..} = do
-    let expiredLog c = rrCacheLogLn $ "some records expired: size = " ++ show (Cache.size c)
+    let expiredLog c = rrCacheLogLn $ "some records expired: current size = " ++ show (Cache.size c)
 
     reaper <-
         mkReaper
