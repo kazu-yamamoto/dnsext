@@ -195,7 +195,9 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
     verifyFailed ~es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) *> return d
     query ips
         | null ips = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-        | otherwise = lift . either verifyFailed fill =<< cachedDNSKEY dss ips zone
+        | otherwise = do
+            lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
+            lift . either verifyFailed fill =<< cachedDNSKEY dss ips zone
 
 -- 反復後の委任情報を得る
 runIterative
@@ -387,6 +389,7 @@ fillDelegationDS dc src dest
                   let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
                   lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                   either verifyFailed fill e
+          lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
           result =<< queryDS (delegationDNSKEY src) ips zone
 
 queryDS
