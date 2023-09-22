@@ -74,7 +74,7 @@ lookupDelegation dom = do
             | noCachedV4NS es = Nothing
             --
             {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
-            | otherwise = (\des -> hasDelegation $ Delegation dom des (NotFilledDS CachedDelegation) []) <$> nonEmpty es
+            | otherwise = (\des -> hasDelegation $ Delegation dom des (NotFilledDS CachedDelegation) [] CachedD) <$> nonEmpty es
 
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do

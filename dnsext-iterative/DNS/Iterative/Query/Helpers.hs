@@ -93,7 +93,7 @@ findDelegation nsps adds = do
     let nss = map fst (p : ps)
     ents <- nonEmpty $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
     {- only data from delegation source zone. get DNSKEY from destination zone -}
-    pure $ \dss -> Delegation (rrname rr) ents (FilledDS dss) []
+    pure $ \dss -> Delegation (rrname rr) ents (FilledDS dss) [] FreshD
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d [] = [DEonlyNS d]
