@@ -298,9 +298,8 @@ iterative_ dc nss0 (x : xs) =
         let withNXC nxc
                 | nxc = pure noDelegation
                 | otherwise = stepQuery nss
-        lift (lookupDelegation name)
-            >>= maybe (lift lookupNX >>= withNXC) pure
-            >>= mapM (fillsDNSSEC dc nss)
+            getDelegation = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
+        getDelegation >>= mapM (fillsDNSSEC dc nss)
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
