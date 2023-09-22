@@ -196,13 +196,13 @@ encodeMessage :: Message -> ByteString
 encodeMessage Message{..} = encode $
     setOptS   14 (encodeDNS <$> messageResponseMessage) $
     setOptI32 13 messageResponseTimeNsec $
-    setOptI64 12 messageResponseTimeSec $
+    setOptVAR 12 messageResponseTimeSec $
     setOptS   11 messageQueryZone $
     setOptS   10 (encodeDNS <$> messageQueryMessage) $
     setOptI32  9 messageQueryTimeNsec $
-    setOptI64  8 messageQueryTimeSec $
-    setOptI32  7 messageResponsePort $
-    setOptI32  6 messageQueryPort $
+    setOptVAR  8 messageQueryTimeSec $
+    setOptVAR  7 messageResponsePort $
+    setOptVAR  6 messageQueryPort $
     setOptS    5 (encodeIP <$> messageResponseAddress) $
     setOptS    4 (encodeIP <$> messageQueryAddress) $
     setOptVAR  3 (fromSocketProtocol <$> messageSocketProtocol) $
