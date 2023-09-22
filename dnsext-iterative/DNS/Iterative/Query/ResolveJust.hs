@@ -375,21 +375,20 @@ fillDelegationDS dc src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (query =<< delegationIPs dc src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
+            maybe (list1 nullIPs query =<< delegationIPs dc src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
   where
     toDSs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dss = return dest{delegationDS = FilledDS dss}
+    nullIPs = lift $ logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDS: " ++ es) *> throwDnsError DNS.ServerFailure
-    query ips
-      | null ips = lift $ logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
-      | otherwise = do
-          let zone = delegationZone dest
-              result (e, ~verifyColor, ~verifyMsg) = do
-                  let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
-                  lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                  either verifyFailed fill e
-          lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
-          result =<< queryDS (delegationDNSKEY src) ips zone
+    query ips = do
+        let zone = delegationZone dest
+            result (e, ~verifyColor, ~verifyMsg) = do
+                let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
+                lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
+                either verifyFailed fill e
+        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
+        result =<< queryDS (delegationDNSKEY src) ips zone
 
 queryDS
     :: [RD_DNSKEY]
