@@ -294,12 +294,13 @@ iterative_ dc nss0 (x : xs) =
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
     step :: Delegation -> DNSQuery MayDelegation
-    step nss = do
+    step nss@Delegation{..} = do
         let withNXC nxc
                 | nxc = pure noDelegation
                 | otherwise = stepQuery nss
-            getDelegation = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
-        getDelegation >>= mapM (fillsDNSSEC dc nss)
+            getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
+            getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
+        getDelegation delegationFresh >>= mapM (fillsDNSSEC dc nss)
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
