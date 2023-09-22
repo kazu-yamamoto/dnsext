@@ -95,14 +95,14 @@ rootPriming = do
                 Just k | Delegation{..} <- k [rootSepDS] -> do
                     cacheNS *> cacheAX
                     logResult delegationNS Green "verification success - RRSIG of NS: \".\""
-                    pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys
+                    pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys FreshD
 
     body ips = runExceptT $ do
         dnskeys <- either (throwE . ("rootPriming: " ++)) pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
         msgNS <- lift $ norec True ips "." NS
         ExceptT $ lift $ verify dnskeys msgNS
 
-    Delegation _dot hintDes _ _ = rootHint
+    Delegation{delegationNS = hintDes} = rootHint
 
 {-
 steps to get verified and cached DNSKEY RRset

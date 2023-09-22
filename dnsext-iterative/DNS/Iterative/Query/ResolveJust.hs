@@ -294,13 +294,13 @@ iterative_ dc nss0 (x : xs) =
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
     step :: Delegation -> DNSQuery MayDelegation
-    step nss = do
+    step nss@Delegation{..} = do
         let withNXC nxc
                 | nxc = pure noDelegation
                 | otherwise = stepQuery nss
-        lift (lookupDelegation name)
-            >>= maybe (lift lookupNX >>= withNXC) pure
-            >>= mapM (fillsDNSSEC dc nss)
+            getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
+            getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
+        getDelegation delegationFresh >>= mapM (fillsDNSSEC dc nss)
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
@@ -324,7 +324,7 @@ servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \srrs _rank ->
         lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
         lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
         throwDnsError DNS.ServerFailure
-    getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [])
+    getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
     verifySOA wd
         | null dnskeys = pure $ hasDelegation wd
         | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result

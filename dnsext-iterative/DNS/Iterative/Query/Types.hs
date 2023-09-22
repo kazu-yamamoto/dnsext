@@ -13,6 +13,7 @@ module DNS.Iterative.Query.Types (
     DNSQuery,
     MayVerifiedRRS (..),
     mayVerifiedRRS,
+    DFreshState (..),
     runDNSQuery,
     throwDnsError,
     NonEmpty (..),
@@ -66,6 +67,11 @@ data MayFilledDS
     = NotFilledDS CasesNotFilledDS
     | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
     deriving (Show)
+
+data DFreshState
+    = FreshD   {- Got from authoritative server directly -}
+    | CachedD  {- From cache -}
+    deriving Show
 {- FOURMOLU_ENABLE -}
 
 -- | Delegation information for domain
@@ -78,6 +84,8 @@ data Delegation = Delegation
     -- ^ SEP DNSKEY signature of destination zone, get from source zone NS
     , delegationDNSKEY :: [RD_DNSKEY]
     -- ^ Destination DNSKEY set, get from destination NS
+    , delegationFresh :: DFreshState
+    -- ^ Fresh or Cached
     }
     deriving (Show)
 
