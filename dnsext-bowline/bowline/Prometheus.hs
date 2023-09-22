@@ -53,7 +53,9 @@ fromRTSStats RTSStats{..} =
  <> "ghc_gcdetails_copied_bytes " <> toB gcdetails_copied_bytes <> "\n"
  <> "ghc_gcdetails_par_max_copied_bytes " <> toB gcdetails_par_max_copied_bytes <> "\n"
  <> "ghc_gcdetails_par_balanced_copied_bytes " <> toB gcdetails_par_balanced_copied_bytes <> "\n"
+{-
  <> "ghc_gcdetails_block_fragmentation_bytes " <> toB gcdetails_block_fragmentation_bytes <> "\n"
+-}
  <> "ghc_gcdetails_sync_elapsed_ns " <> toB gcdetails_sync_elapsed_ns <> "\n"
  <> "ghc_gcdetails_cpu_ns " <> toB gcdetails_cpu_ns <> "\n"
  <> "ghc_gcdetails_elapsed_ns " <> toB gcdetails_elapsed_ns <> "\n"
