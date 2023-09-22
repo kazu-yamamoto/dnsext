@@ -123,3 +123,13 @@ rrnamePairs dds@(d : ds) ggs@(g : gs)
   where
     an = rrname a
     a = head g
+
+{- FOURMOLU_DISABLE -}
+list1 :: b -> ([a] -> b) ->  [a] -> b
+list1 nil _        []   =  nil
+list1 _   cons xs@(_:_) =  cons xs
+
+list :: b -> (a -> [a] -> b) ->  [a] -> b
+list nil _     []    =  nil
+list _   cons (x:xs) =  cons x xs
+{- FOURMOLU_ENABLE -}

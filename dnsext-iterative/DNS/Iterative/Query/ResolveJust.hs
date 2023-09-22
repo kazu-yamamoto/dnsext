@@ -187,17 +187,16 @@ fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFil
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
 fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
-    maybe (query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
+    maybe (list1 nullIPs query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
   where
     zone = delegationZone
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
+    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> throwDnsError DNS.ServerFailure
-    query ips
-        | null ips = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-        | otherwise = do
-            lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-            either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
+    query ips = do
+        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
+        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
 
 -- 反復後の委任情報を得る
 runIterative
@@ -297,10 +296,10 @@ iterative_ dc nss0 (x : xs) =
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
         let withNXC nxc
-                | nxc = return noDelegation
+                | nxc = pure noDelegation
                 | otherwise = stepQuery nss
         lift (lookupDelegation name)
-            >>= maybe (withNXC =<< lift lookupNX) return
+            >>= maybe (lift lookupNX >>= withNXC) pure
             >>= mapM (fillsDNSSEC dc nss)
 
 maxNotSublevelDelegation :: Int
@@ -376,21 +375,20 @@ fillDelegationDS dc src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (query =<< delegationIPs dc src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
+            maybe (list1 nullIPs query =<< delegationIPs dc src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
   where
     toDSs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dss = return dest{delegationDS = FilledDS dss}
+    nullIPs = lift $ logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDS: " ++ es) *> throwDnsError DNS.ServerFailure
-    query ips
-      | null ips = lift $ logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
-      | otherwise = do
-          let zone = delegationZone dest
-              result (e, ~verifyColor, ~verifyMsg) = do
-                  let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
-                  lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                  either verifyFailed fill e
-          lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
-          result =<< queryDS (delegationDNSKEY src) ips zone
+    query ips = do
+        let zone = delegationZone dest
+            result (e, ~verifyColor, ~verifyMsg) = do
+                let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
+                lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
+                either verifyFailed fill e
+        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
+        result =<< queryDS (delegationDNSKEY src) ips zone
 
 queryDS
     :: [RD_DNSKEY]

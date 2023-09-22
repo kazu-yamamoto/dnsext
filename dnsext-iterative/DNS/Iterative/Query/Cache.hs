@@ -159,7 +159,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         maxNCacheTTL = 21600
     nullSOA = ncWarn "no SOA records found" $> []
 
-    single list = case list of
+    single xs = case xs of
         [] -> Left "no SOA records found"
         [x] -> Right x
         _ : _ : _ -> Left "multiple SOA records found"
