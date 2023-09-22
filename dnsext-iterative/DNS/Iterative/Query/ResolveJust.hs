@@ -296,10 +296,10 @@ iterative_ dc nss0 (x : xs) =
     step :: Delegation -> DNSQuery MayDelegation
     step nss = do
         let withNXC nxc
-                | nxc = return noDelegation
+                | nxc = pure noDelegation
                 | otherwise = stepQuery nss
         lift (lookupDelegation name)
-            >>= maybe (withNXC =<< lift lookupNX) return
+            >>= maybe (lift lookupNX >>= withNXC) pure
             >>= mapM (fillsDNSSEC dc nss)
 
 maxNotSublevelDelegation :: Int
