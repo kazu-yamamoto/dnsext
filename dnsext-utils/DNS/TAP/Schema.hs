@@ -132,14 +132,15 @@ composeMessage
     -> Message
 composeMessage proto mysa peersa t bs =
     defaultMessage
-        { messageSocketFamily    = toFamily peersa
-        , messageSocketProtocol  = Just proto
-        , messageQueryAddress    = toIP peersa
-        , messageResponseAddress = toIP mysa
-        , messageQueryPort       = toPort peersa
-        , messageResponsePort    = toPort mysa
-        , messageResponseTimeSec = Just $ fromIntegral t
-        , messageResponseMessage = Just $ WireFt bs
+        { messageSocketFamily     = toFamily peersa
+        , messageSocketProtocol   = Just proto
+        , messageQueryAddress     = toIP peersa
+        , messageResponseAddress  = toIP mysa
+        , messageQueryPort        = toPort peersa
+        , messageResponsePort     = toPort mysa
+        , messageResponseTimeSec  = Just $ fromIntegral t
+        , messageResponseTimeNsec = Just 0
+        , messageResponseMessage  = Just $ WireFt bs
         }
  where
    toFamily sa = case sa of
