@@ -42,11 +42,12 @@ module DNS.TAP.Schema (
 ) where
 
 import DNS.Types (DNSError (..), DNSMessage)
-import DNS.Types.Time (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
+import DNS.Types.Time (EpochTime)
 import qualified Data.ByteString as BS
 import qualified Data.IP as IP
+import Data.Int (Int64)
 import Network.ByteOrder
 import Network.Socket (SockAddr (..))
 
@@ -129,9 +130,10 @@ composeMessage
     -> SockAddr
     -> SockAddr
     -> EpochTime
+    -> Int64
     -> ByteString
     -> Message
-composeMessage proto mysa peersa t bs =
+composeMessage proto mysa peersa s ns bs =
     defaultMessage
         { messageSocketFamily     = toFamily peersa
         , messageSocketProtocol   = Just proto
@@ -139,8 +141,8 @@ composeMessage proto mysa peersa t bs =
         , messageResponseAddress  = toIP mysa
         , messageQueryPort        = toPort peersa
         , messageResponsePort     = toPort mysa
-        , messageResponseTimeSec  = Just $ fromIntegral t
-        , messageResponseTimeNsec = Just 0
+        , messageResponseTimeSec  = Just $ fromIntegral s
+        , messageResponseTimeNsec = Just $ fromIntegral ns
         , messageResponseMessage  = Just $ WireFt bs
         }
  where

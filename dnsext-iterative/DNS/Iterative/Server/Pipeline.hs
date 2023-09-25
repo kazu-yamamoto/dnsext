@@ -13,7 +13,7 @@ import qualified DNS.TAP.Schema as DNSTAP
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
-import DNS.Types.Time (EpochTime)
+import DNS.Types.Time
 
 -- other packages
 import qualified DNS.Log as Log
@@ -78,8 +78,8 @@ cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
                     incHit
                     let bs = DNS.encode rspMsg
                     send bs
-                    now' <- currentSeconds_ env
-                    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa now' bs
+                    (s,ns) <- getCurrentTimeNsec
+                    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
                 Negative replyErr -> do
                     incFailed
                     logLn Log.WARN $
@@ -108,8 +108,8 @@ workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
             incMiss
             let bs = DNS.encode rspMsg
             send bs
-            now' <- currentSeconds_ env
-            logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa now' bs
+            (s,ns) <- getCurrentTimeNsec
+            logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
         Left e -> do
             incFailed
             logLn Log.WARN $
