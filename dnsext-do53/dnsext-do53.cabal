@@ -14,8 +14,7 @@ description:
 category:           Network
 build-type:         Simple
 extra-source-files:
-    Changelog.md
-    cabal.project
+    CHANGELOG.md
     cbits/dns.c
 
 source-repository head
