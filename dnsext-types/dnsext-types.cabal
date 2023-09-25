@@ -13,7 +13,7 @@ description:
 
 category:           Network
 build-type:         Simple
-extra-source-files: Changelog.md
+extra-source-files: CHANGELOG.md
 
 source-repository head
     type:     git

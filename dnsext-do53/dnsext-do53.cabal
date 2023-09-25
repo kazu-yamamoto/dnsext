@@ -14,7 +14,7 @@ description:
 category:           Network
 build-type:         Simple
 extra-source-files:
-    Changelog.md
+    CHANGELOG.md
     cbits/dns.c
 
 source-repository head
