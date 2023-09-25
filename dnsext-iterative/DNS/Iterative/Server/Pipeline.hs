@@ -13,6 +13,7 @@ import qualified DNS.TAP.Schema as DNSTAP
 import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
+import DNS.Types.Time (EpochTime)
 
 -- other packages
 import qualified DNS.Log as Log
@@ -58,7 +59,7 @@ cacherLogic
     :: Env
     -> CntInc
     -> (ByteString -> IO ())
-    -> (DNS.EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
+    -> (EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
     -> (DNS.DNSMessage -> IO ())
     -> SocketProtocol
     -> SockAddr

@@ -42,6 +42,7 @@ module DNS.TAP.Schema (
 ) where
 
 import DNS.Types (DNSError (..), DNSMessage)
+import DNS.Types.Time (EpochTime)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import qualified Data.ByteString as BS
@@ -127,7 +128,7 @@ composeMessage
     :: SocketProtocol
     -> SockAddr
     -> SockAddr
-    -> DNS.EpochTime
+    -> EpochTime
     -> ByteString
     -> Message
 composeMessage proto mysa peersa t bs =

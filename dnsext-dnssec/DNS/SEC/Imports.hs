@@ -34,7 +34,7 @@ import Data.Word
 import Numeric
 
 import DNS.Types (Domain, IsRepresentation (..))
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)
 
 unconsLabels :: Domain -> a -> (ShortByteString -> Domain -> a) -> a
 unconsLabels = unconsLabels_

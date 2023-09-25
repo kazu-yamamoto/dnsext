@@ -65,6 +65,8 @@ import Data.Maybe (isJust)
 import Prelude hiding (lookup, null)
 
 -- others
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NE
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as PSQ
 
@@ -80,10 +82,8 @@ import DNS.Types (
     TTL,
  )
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
 import DNS.Types.Internal (TYPE (..))
-import Data.List.NonEmpty (NonEmpty (..))
-import qualified Data.List.NonEmpty as NE
+import DNS.Types.Time (EpochTime)
 
 ---
 

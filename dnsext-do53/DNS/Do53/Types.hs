@@ -41,7 +41,6 @@ module DNS.Do53.Types (
 where
 
 import DNS.Types
-import DNS.Types.Decode
 import Network.Socket (HostName, PortNumber, Socket)
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))

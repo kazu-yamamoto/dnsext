@@ -19,7 +19,7 @@ where
 
 import Control.Applicative
 import Control.Monad
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (ShortByteString)
