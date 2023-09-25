@@ -47,6 +47,7 @@ import qualified Data.IntMap as IM
 import DNS.StateBinary.Types
 import DNS.Types.Error
 import DNS.Types.Imports
+import DNS.Types.Time
 
 ----------------------------------------------------------------
 
