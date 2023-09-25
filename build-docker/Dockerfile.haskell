@@ -1,0 +1,106 @@
+
+ARG HAKELL_TAG
+ARG DEBIAN_TAG
+
+FROM haskell:${HAKELL_TAG} as builder
+
+ARG DNSEXT_REV
+
+ARG PRIVKEY_ALG
+ARG PRIVKEY_ALGOPT
+ARG CHAIN_SUBJ_CN
+
+ARG GHC_OPTIMIZE
+ARG GHC_PARALLEL
+ARG CABAL_PARALLEL
+
+## Install tools
+RUN <<EOF
+set -e -x
+apt-get update
+DEBIAN_FRONTEND=noninteractive \
+  apt-get install -y --no-install-recommends \
+  build-essential binutils ca-certificates curl git openssl
+EOF
+
+WORKDIR /tmp/src
+
+## Setup source tree
+RUN <<EOF
+set -e -x
+git clone http://github.com/kazu-yamamoto/dnsext dnsext
+( cd dnsext
+  git checkout ${DNSEXT_REV}
+  for dir in \
+    dnsext-types     \
+    dnsext-svcb      \
+    dnsext-dnssec    \
+    dnsext-utils     \
+    dnsext-do53      \
+    dnsext-iterative \
+    dnsext-dox       \
+    dnsext-bowline   \
+  ; do
+      touch ${dir}/CHANGELOG.md
+  done )
+EOF
+
+## Configs
+RUN <<EOF
+set -e -x
+sed \
+  -e 's@^disable-v6-ns: .*$@disable-v6-ns: yes@' \
+  -e 's@^cnf_dns_addrs: .*$@cnf_dns_addrs: 0.0.0.0@' \
+  -e 's@^monitor-addrs: .*$@monitor-addrs: 0.0.0.0@' \
+  -e 's@^webapi-addr: .*$@webapi-addr: 0.0.0.0@' \
+  -e 's@^cert-file: .*$@cert-file: etc/fullchain.pem@' \
+  -e 's@^key-file: .*$@key-file: etc/privkey.pem@' \
+  < dnsext/dnsext-bowline/bowline/bowline.conf > bowline.conf
+
+openssl genpkey -algorithm ${PRIVKEY_ALG} -pkeyopt "${PRIVKEY_ALGOPT}" -out privkey.pem && \
+openssl req -x509 -key privkey.pem -subj /CN=${CHAIN_SUBJ_CN} -out fullchain.pem && \
+
+mkdir -p -m 755 /opt/bowline/etc
+install -m 444 bowline.conf /opt/bowline/etc/bowline.conf
+install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
+EOF
+
+## Build and Install
+RUN <<EOF
+set -e -x
+cabal v2-update
+( cd dnsext
+  cabal v2-configure ${GHC_OPTIMIZE} \
+    --enable-split-sections \
+    --enable-split-objs \
+    --ghc-options="-j${GHC_PARALLEL} +RTS -qg -RTS"
+  mkdir -p -m 755 /opt/bowline/bin
+  cabal v2-install dnsext-bowline \
+    -j${CABAL_PARALLEL} --install-method=copy --installdir /opt/bowline/bin/ )
+strip /opt/bowline/bin/*
+EOF
+
+
+FROM debian:${DEBIAN_TAG}
+
+COPY --from=builder /opt/bowline /opt/bowline
+COPY scripts /
+
+WORKDIR /opt/bowline/
+
+ENV PATH /opt/bowline/bin:"$PATH"
+
+EXPOSE 53/tcp
+EXPOSE 53/udp
+
+EXPOSE 853/tcp
+EXPOSE 853/udp
+
+EXPOSE 80/tcp
+EXPOSE 443/tcp
+
+EXPOSE 10023/tcp
+
+EXPOSE 8080/tcp
+
+CMD ["/bowline.sh"]
