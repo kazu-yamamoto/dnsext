@@ -53,7 +53,7 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       run: |
         cabal install doctest --overwrite-policy=always
-        for package in `cat cabal.project | sed 's/packages://g' | sec 's/dnsext-bowline//g'`
+        for package in `cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g'`
         do
           env DISABLE_V6_NS=1 cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
         done
