@@ -9,6 +9,7 @@ extra-source-files: CHANGELOG.md
 
 library
     exposed-modules:
+        DNS.Array
         DNS.Log
         DNS.TAP.FastStream
         DNS.TAP.ProtocolBuffer
@@ -25,6 +26,7 @@ library
     ghc-options:      -Wall
     build-depends:
         ansi-terminal,
+        array,
         auto-update,
         base >=4 && <5,
         base16-bytestring,
@@ -34,9 +36,11 @@ library
         dnsext-dnssec,
         dnsext-types,
         fast-logger,
+        ghc-prim,
         iproute,
         network,
         network-byte-order,
+        primitive,
         psqueues,
         recv,
         stm,
