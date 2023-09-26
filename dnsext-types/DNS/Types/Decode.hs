@@ -14,7 +14,6 @@
 -- network.
 module DNS.Types.Decode (
     -- * Decoding a single DNS message
-    EpochTime,
     decodeAt,
     decode,
 
@@ -47,6 +46,7 @@ import DNS.Types.Error
 import DNS.Types.Imports
 import DNS.Types.Message
 import DNS.Types.RData
+import DNS.Types.Time
 import DNS.Types.Type
 
 ----------------------------------------------------------------

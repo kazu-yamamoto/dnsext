@@ -35,7 +35,7 @@ import DNS.Iterative.Server (HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
 
 -- other packages

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DNS.TimeCache (
     TimeCache (..),
     newTimeCache,
@@ -6,7 +8,6 @@ module DNS.TimeCache (
 
 -- GHC packages
 import qualified Data.ByteString.Char8 as C8
-import Data.String (fromString)
 import Foreign.C.Types (CTime (..))
 
 -- other packages
@@ -19,7 +20,7 @@ import Control.AutoUpdate (
 import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 
 -- dnsext packages
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time
 
 -- this package
 
@@ -53,14 +54,14 @@ mostOncePerSecond upd =
 noneTimeCache :: TimeCache
 noneTimeCache =
     TimeCache
-        { getTime = unixToEpoch <$> getUnixTime
+        { getTime = getCurrentTime
         , getTimeStr = getTimeShowS =<< getUnixTime
         }
 
 ---
 
 getTimeShowS :: UnixTime -> IO ShowS
-getTimeShowS ts = (++) . C8.unpack <$> formatUnixTime (fromString "%Y-%m-%d %H:%M:%S %Z") ts
+getTimeShowS ts = (++) . C8.unpack <$> formatUnixTime "%Y-%m-%d %H:%M:%S %Z" ts
 
 unixToEpoch :: UnixTime -> EpochTime
 unixToEpoch (UnixTime (CTime tim) _) = tim

@@ -44,4 +44,4 @@ import Data.Word
 import Numeric
 
 -- dns packages
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)

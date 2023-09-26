@@ -25,7 +25,7 @@ import Test.QuickCheck
 -- dnsext packages
 import DNS.Types (Domain, Seconds (..), TTL, TYPE (..))
 import qualified DNS.Types as DNS
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)
 
 -- this package
 import DNS.RRCache (

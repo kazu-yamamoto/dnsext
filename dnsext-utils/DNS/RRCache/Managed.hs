@@ -30,7 +30,7 @@ import DNS.RRCache.ReaperReduced
 import DNS.RRCache.Types
 import qualified DNS.RRCache.Types as Cache
 import DNS.Types (TTL)
-import DNS.Types.Decode (EpochTime)
+import DNS.Types.Time (EpochTime)
 
 data RRCacheConf = RRCacheConf
     { maxCacheSize :: Int
