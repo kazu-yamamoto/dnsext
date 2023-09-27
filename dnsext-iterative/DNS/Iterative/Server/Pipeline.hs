@@ -21,6 +21,7 @@ import Network.Socket (SockAddr)
 -- this package
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Stats
 
 ----------------------------------------------------------------
 
@@ -43,13 +44,13 @@ cacherLogic env send decode toResolver proto mysa peersa req = do
             case mx of
                 None -> toResolver reqMsg
                 Positive rspMsg -> do
-                    undefined -- incHit fixme
+                    incStats (stats_ env) CacheHit
                     let bs = DNS.encode rspMsg
                     send bs
                     (s,ns) <- getCurrentTimeNsec
                     logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
                 Negative replyErr -> do
-                    undefined -- incFailed fixme
+                    incStats (stats_ env) CacheFailed
                     logLn Log.WARN $
                         "cached: response cannot be generated: "
                             ++ replyErr
@@ -72,13 +73,13 @@ workerLogic env send proto mysa peersa reqMsg = do
     ex <- getResponseIterative env reqMsg
     case ex of
         Right rspMsg -> do
-            undefined -- incMiss fixme
+            incStats (stats_ env) CacheMiss
             let bs = DNS.encode rspMsg
             send bs
             (s,ns) <- getCurrentTimeNsec
             logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
         Left e -> do
-            undefined -- incFailed fixme
+            incStats (stats_ env) CacheFailed
             logLn Log.WARN $
                 "resolv: response cannot be generated: "
                     ++ e

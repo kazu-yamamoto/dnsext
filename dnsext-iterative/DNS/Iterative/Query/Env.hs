@@ -19,6 +19,7 @@ import DNS.TimeCache (TimeCache (..))
 
 -- this package
 import DNS.Iterative.Query.Types
+import DNS.Iterative.Stats
 
 -- | Creating a new 'Env'.
 newEnv
@@ -32,6 +33,7 @@ newEnv
 newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
+    stats <- newStats
     let cxt =
             Env
                 { logLines_ = putLines
@@ -44,5 +46,6 @@ newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
                 , currentSeconds_ = getTime
                 , timeString_ = getTimeStr
                 , idGen_ = genId
+                , stats_ = stats
                 }
     return cxt

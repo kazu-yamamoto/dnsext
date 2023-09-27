@@ -41,6 +41,7 @@ import qualified DNS.Types as DNS
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Stats
 
 data Env = Env
     { logLines_ :: Log.PutLines
@@ -53,6 +54,7 @@ data Env = Env
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
+    , stats_ :: Stats
     }
 
 {- FOURMOLU_DISABLE -}
