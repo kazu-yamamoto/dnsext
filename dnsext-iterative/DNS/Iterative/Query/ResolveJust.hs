@@ -45,6 +45,7 @@ import DNS.Iterative.Query.Root
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
+import DNS.Iterative.Stats
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
@@ -219,11 +220,11 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
 -- test env use from doctest
 _newTestEnv :: ([String] -> IO ()) -> IO Env
 _newTestEnv putLines =
-    env <$> newIORef Nothing <*> newConcurrentGenId
+    env <$> newIORef Nothing <*> newConcurrentGenId <*> newStats
   where
     (ins, getCache, expire) = (\_ _ _ _ -> pure (), pure $ Cache.empty 0, const $ pure ())
     TimeCache{..} = noneTimeCache
-    env rootRef genId =
+    env rootRef genId stats =
         Env
             { logLines_ = \_ ~_ -> putLines
             , logDNSTAP_ = \ ~_ -> return ()
@@ -235,6 +236,7 @@ _newTestEnv putLines =
             , currentSeconds_ = getTime
             , timeString_ = getTimeStr
             , idGen_ = genId
+            , stats_ = stats
             }
 
 _findConsumed :: [String] -> IO ()

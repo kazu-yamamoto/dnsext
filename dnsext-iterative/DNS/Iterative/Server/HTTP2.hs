@@ -26,9 +26,8 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 http2Server :: Credentials -> VcServerConfig -> Server
 http2Server creds VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.run settings creds host port $ doHTTP env cntinc
-    return ([http2server], [readCounters cntget])
+    let http2server = H2TLS.run settings creds host port $ doHTTP env
+    return [http2server]
   where
     settings =
         H2TLS.defaultSettings
@@ -42,9 +41,8 @@ newtype Http2cServerConfig = Http2cServerConfig
 
 http2cServer :: VcServerConfig -> Server
 http2cServer VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
-    let http2server = H2TLS.runH2C settings host port $ doHTTP env cntinc
-    return ([http2server], [readCounters cntget])
+    let http2server = H2TLS.runH2C settings host port $ doHTTP env
+    return [http2server]
   where
     settings =
         H2TLS.defaultSettings
@@ -54,15 +52,14 @@ http2cServer VcServerConfig{..} env port host = do
 
 doHTTP
     :: Env
-    -> CntInc
     -> H2.Server
-doHTTP env cntinc req aux sendResponse = do
+doHTTP env req aux sendResponse = do
     (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
     let send res = do
             let response = H2.responseBuilder HT.ok200 header $ byteString res
             sendResponse response []
         mysa = H2.auxMySockAddr aux
         peersa = H2.auxPeerSockAddr aux
-    cacheWorkerLogic env cntinc send DOH mysa peersa rqs
+    cacheWorkerLogic env send DOH mysa peersa rqs
   where
     header = [(HT.hContentType, "application/dns-message")]

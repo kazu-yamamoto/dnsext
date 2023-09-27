@@ -27,7 +27,6 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 quicServer :: Credentials -> VcServerConfig -> Server
 quicServer creds VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
     let quicserver = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             QUIC.run sconf $ \conn -> do
                 info <- QUIC.getConnectionInfo conn
@@ -46,9 +45,9 @@ quicServer creds VcServerConfig{..} env port host = do
                                     when (siz > vc_slowloris_size) $ T.tickle th
                                     return bss
                             (_n, bss) <- recv
-                            cacheWorkerLogic env cntinc send DOQ mysa peersa bss
+                            cacheWorkerLogic env send DOQ mysa peersa bss
                     void $ forkFinally server (\_ -> QUIC.closeStream strm)
-    return ([quicserver], [readCounters cntget])
+    return [quicserver]
   where
     sconf = getServerConfig creds host port "doq"
     maxSize = fromIntegral vc_query_max_size

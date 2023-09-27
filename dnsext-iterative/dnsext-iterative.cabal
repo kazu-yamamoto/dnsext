@@ -41,17 +41,20 @@ library
         DNS.Iterative.Server.TLS
         DNS.Iterative.Server.Types
         DNS.Iterative.Server.UDP
+        DNS.Iterative.Stats
 
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:
         base >=4 && <5,
         ansi-terminal,
+        array,
         async,
         bytestring,
         containers,
         dnsext-dnssec,
         dnsext-do53,
+        dnsext-svcb,
         dnsext-types,
         dnsext-utils,
         http-types,

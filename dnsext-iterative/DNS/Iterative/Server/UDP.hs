@@ -76,14 +76,14 @@ udpServer conf env port addr = do
         putLn lv = logLines_ env lv Nothing . (: [])
 
     (mkPipelines, enqueueReq, dequeueResp) <- getPipelines conf env mysa
-    (pipelines, getsStats) <- unzip <$> sequence mkPipelines
+    pipelines <- sequence mkPipelines
 
     let onErrorR = putLn Log.WARN . ("Server.recvRequest: error: " ++) . show
         receiver = handledLoop onErrorR (UDP.recvFrom lsock >>= enqueueReq)
 
     let onErrorS = putLn Log.WARN . ("Server.sendResponse: error: " ++) . show
         sender = handledLoop onErrorS (dequeueResp >>= uncurry (UDP.sendTo lsock))
-    return (receiver : sender : concat pipelines, getsStats)
+    return (receiver : sender : concat pipelines)
 
 ----------------------------------------------------------------
 
@@ -91,7 +91,7 @@ getPipelines
     :: UdpServerConfig
     -> Env
     -> SockAddr
-    -> IO ([IO ([IO ()], IO Stats)], Request UDP.ClientSockAddr -> IO (), IO (Response UDP.ClientSockAddr))
+    -> IO ([IO [IO ()]], Request UDP.ClientSockAddr -> IO (), IO (Response UDP.ClientSockAddr))
 getPipelines udpconf@UdpServerConfig{..} env mysa
     | udp_queue_size_per_pipeline <= 0 = do
         reqQ <- newQueueChan
@@ -128,17 +128,15 @@ getCacherWorkers
     -> UdpServerConfig
     -> Env
     -> SockAddr
-    -> IO ([IO ()], IO Stats)
+    -> IO ([IO ()])
 getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
-    (cntget, cntinc) <- newCounters
-
     let logr = putLn Log.WARN . ("Server.worker: error: " ++) . show
-    (resolvLoop, enqueueDec, decQSize) <- do
+    (resolvLoop, enqueueDec, _decQSize) <- do
         inQ <- newQueue udp_queue_size_per_pipeline
         let loop = handledLoop logr $ do
                 (reqMsg, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue inQ
                 let enqueueResp' x = enqueueResp (x, clisa)
-                workerLogic env cntinc enqueueResp' UDP mysa peersa reqMsg
+                workerLogic env enqueueResp' UDP mysa peersa reqMsg
         return (loop, writeQueue inQ, queueSize inQ)
 
     let logc = putLn Log.WARN . ("Server.cacher: error: " ++) . show
@@ -146,19 +144,15 @@ getCacherWorkers reqQ resQ UdpServerConfig{..} env mysa = do
             (req, clisa@(UDP.ClientSockAddr peersa _)) <- readQueue reqQ
             let enqueueDec' x = enqueueDec (x, clisa)
                 enqueueResp' x = enqueueResp (x, clisa)
-            cacherLogic env cntinc enqueueResp' DNS.decodeAt enqueueDec' UDP mysa peersa req
+            cacherLogic env enqueueResp' DNS.decodeAt enqueueDec' UDP mysa peersa req
 
         resolvLoops = replicate udp_workers_per_pipeline resolvLoop
         loops = resolvLoops ++ [cachedLoop]
 
-        status = getStats reqQSize decQSize resQSize cntget
-
-    return (loops, status)
+    return loops
   where
     putLn lv = logLines_ env lv Nothing . (: [])
     enqueueResp = writeQueue resQ
-    resQSize = queueSize resQ
-    reqQSize = queueSize reqQ
 
 ----------------------------------------------------------------
 
@@ -172,8 +166,3 @@ queueSize q = do
     a <- fst <$> Queue.readSizes q
     let b = Queue.sizeMaxBound q
     return (a, b)
-
-----------------------------------------------------------------
-
-getStats :: IO (Int, Int) -> IO (Int, Int) -> IO (Int, Int) -> CntGet -> IO Stats
-getStats _reqQSize _decQSize _resQSize cntget = readCounters cntget
