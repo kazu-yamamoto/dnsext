@@ -54,6 +54,7 @@ library
         containers,
         dnsext-dnssec,
         dnsext-do53,
+        dnsext-svcb,
         dnsext-types,
         dnsext-utils,
         http-types,

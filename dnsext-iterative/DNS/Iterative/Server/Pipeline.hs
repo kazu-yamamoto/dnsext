@@ -48,6 +48,8 @@ cacherLogic env send decode toResolver proto mysa peersa req = do
                     let bs = DNS.encode rspMsg
                     send bs
                     (s,ns) <- getCurrentTimeNsec
+                    let DNS.Question{..} = head $ DNS.question rspMsg
+                    incStatsM (stats_ env) fromQueryTypes qtype
                     logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
                 Negative replyErr -> do
                     incStats (stats_ env) CacheFailed
@@ -77,6 +79,8 @@ workerLogic env send proto mysa peersa reqMsg = do
             let bs = DNS.encode rspMsg
             send bs
             (s,ns) <- getCurrentTimeNsec
+            let DNS.Question{..} = head $ DNS.question rspMsg
+            incStatsM (stats_ env) fromQueryTypes qtype
             logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
         Left e -> do
             incStats (stats_ env) CacheFailed
