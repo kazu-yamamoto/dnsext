@@ -37,49 +37,51 @@ pattern QueryTypeA6     :: StatsIx
 pattern QueryTypeA6      = StatsIx 5
 pattern QueryTypeAAAA   :: StatsIx
 pattern QueryTypeAAAA    = StatsIx 6
+pattern QueryTypeANY    :: StatsIx
+pattern QueryTypeANY     = StatsIx 7
 pattern QueryTypeCNAME  :: StatsIx
-pattern QueryTypeCNAME   = StatsIx 7
+pattern QueryTypeCNAME   = StatsIx 8
 pattern QueryTypeDNSKEY :: StatsIx
-pattern QueryTypeDNSKEY  = StatsIx 8
+pattern QueryTypeDNSKEY  = StatsIx 9
 pattern QueryTypeDS     :: StatsIx
-pattern QueryTypeDS      = StatsIx 9
+pattern QueryTypeDS      = StatsIx 10
 pattern QueryTypeHINFO  :: StatsIx
-pattern QueryTypeHINFO   = StatsIx 10
+pattern QueryTypeHINFO   = StatsIx 11
 pattern QueryTypeHTTPS  :: StatsIx
-pattern QueryTypeHTTPS   = StatsIx 11
+pattern QueryTypeHTTPS   = StatsIx 12
 pattern QueryTypeMX     :: StatsIx
-pattern QueryTypeMX      = StatsIx 12
+pattern QueryTypeMX      = StatsIx 13
 pattern QueryTypeNAPTR  :: StatsIx
-pattern QueryTypeNAPTR   = StatsIx 13
+pattern QueryTypeNAPTR   = StatsIx 14
 pattern QueryTypeNS     :: StatsIx
-pattern QueryTypeNS      = StatsIx 14
+pattern QueryTypeNS      = StatsIx 15
 pattern QueryTypeNULL   :: StatsIx
-pattern QueryTypeNULL    = StatsIx 15
+pattern QueryTypeNULL    = StatsIx 16
 pattern QueryTypePTR    :: StatsIx
-pattern QueryTypePTR     = StatsIx 16
+pattern QueryTypePTR     = StatsIx 17
 pattern QueryTypeRRSIG  :: StatsIx
-pattern QueryTypeRRSIG   = StatsIx 17
+pattern QueryTypeRRSIG   = StatsIx 18
 pattern QueryTypeSOA    :: StatsIx
-pattern QueryTypeSOA     = StatsIx 18
+pattern QueryTypeSOA     = StatsIx 19
 pattern QueryTypeSPF    :: StatsIx
-pattern QueryTypeSPF     = StatsIx 19
+pattern QueryTypeSPF     = StatsIx 20
 pattern QueryTypeSRV    :: StatsIx
-pattern QueryTypeSRV     = StatsIx 20
+pattern QueryTypeSRV     = StatsIx 21
 pattern QueryTypeSSHFP  :: StatsIx
-pattern QueryTypeSSHFP   = StatsIx 21
+pattern QueryTypeSSHFP   = StatsIx 22
 pattern QueryTypeSVCB   :: StatsIx
-pattern QueryTypeSVCB    = StatsIx 22
+pattern QueryTypeSVCB    = StatsIx 23
 pattern QueryTypeTLSA   :: StatsIx
-pattern QueryTypeTLSA    = StatsIx 23
+pattern QueryTypeTLSA    = StatsIx 24
 pattern QueryTypeTXT    :: StatsIx
-pattern QueryTypeTXT     = StatsIx 24
+pattern QueryTypeTXT     = StatsIx 25
 pattern QueryTypeWKS    :: StatsIx
-pattern QueryTypeWKS     = StatsIx 25
+pattern QueryTypeWKS     = StatsIx 26
 pattern QueryTypeOther  :: StatsIx
-pattern QueryTypeOther   = StatsIx 26
+pattern QueryTypeOther   = StatsIx 27
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 26
+pattern StatsIxMax       = StatsIx 27
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -90,6 +92,7 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeA,       "query_types_total{type=\"A\"}")
   , (QueryTypeA6,      "query_types_total{type=\"A6\"}")
   , (QueryTypeAAAA,    "query_types_total{type=\"AAAA\"}")
+  , (QueryTypeANY,     "query_types_total{type=\"ANY\"}")
   , (QueryTypeCNAME,   "query_types_total{type=\"CANME\"}")
   , (QueryTypeDNSKEY,  "query_types_total{type=\"DNSKEY\"}")
   , (QueryTypeDS,      "query_types_total{type=\"DS\"}")
@@ -116,29 +119,30 @@ newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
 
 fromQueryTypes :: Map TYPE StatsIx
 fromQueryTypes = Map.fromList [
-    (TYPE 0,  QueryTypeRes)
-  , (A,       QueryTypeA)
-  , (TYPE 38, QueryTypeA6)
-  , (AAAA,    QueryTypeAAAA)
-  , (CNAME,   QueryTypeCNAME)
-  , (DNSKEY,  QueryTypeDNSKEY)
-  , (DS,      QueryTypeDS)
-  , (TYPE 13, QueryTypeHINFO)
-  , (HTTPS,   QueryTypeHTTPS)
-  , (MX,      QueryTypeMX)
-  , (TYPE 35, QueryTypeNAPTR)
-  , (NS,      QueryTypeNS)
-  , (NULL,    QueryTypeNULL)
-  , (PTR,     QueryTypePTR)
-  , (RRSIG,   QueryTypeRRSIG)
-  , (SOA,     QueryTypeSOA)
-  , (TYPE 99, QueryTypeSPF)
-  , (SRV,     QueryTypeSRV)
-  , (TYPE 44, QueryTypeSSHFP)
-  , (SVCB,    QueryTypeSVCB)
-  , (TLSA,    QueryTypeTLSA)
-  , (TXT,     QueryTypeTXT)
-  , (TYPE 11, QueryTypeWKS)
+    (TYPE 0,   QueryTypeRes)
+  , (A,        QueryTypeA)
+  , (TYPE 38,  QueryTypeA6)
+  , (AAAA,     QueryTypeAAAA)
+  , (TYPE 255, QueryTypeANY)
+  , (CNAME,    QueryTypeCNAME)
+  , (DNSKEY,   QueryTypeDNSKEY)
+  , (DS,       QueryTypeDS)
+  , (TYPE 13,  QueryTypeHINFO)
+  , (HTTPS,    QueryTypeHTTPS)
+  , (MX,       QueryTypeMX)
+  , (TYPE 35,  QueryTypeNAPTR)
+  , (NS,       QueryTypeNS)
+  , (NULL,     QueryTypeNULL)
+  , (PTR,      QueryTypePTR)
+  , (RRSIG,    QueryTypeRRSIG)
+  , (SOA,      QueryTypeSOA)
+  , (TYPE 99,  QueryTypeSPF)
+  , (SRV,      QueryTypeSRV)
+  , (TYPE 44,  QueryTypeSSHFP)
+  , (SVCB,     QueryTypeSVCB)
+  , (TLSA,     QueryTypeTLSA)
+  , (TXT,      QueryTypeTXT)
+  , (TYPE 11,  QueryTypeWKS)
   ]
 
 newStats :: IO Stats
