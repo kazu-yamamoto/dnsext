@@ -49,27 +49,37 @@ pattern QueryTypeHTTPS  :: StatsIx
 pattern QueryTypeHTTPS   = StatsIx 11
 pattern QueryTypeMX     :: StatsIx
 pattern QueryTypeMX      = StatsIx 12
+pattern QueryTypeNAPTR  :: StatsIx
+pattern QueryTypeNAPTR   = StatsIx 13
 pattern QueryTypeNS     :: StatsIx
-pattern QueryTypeNS      = StatsIx 13
+pattern QueryTypeNS      = StatsIx 14
 pattern QueryTypeNULL   :: StatsIx
-pattern QueryTypeNULL    = StatsIx 14
+pattern QueryTypeNULL    = StatsIx 15
 pattern QueryTypePTR    :: StatsIx
-pattern QueryTypePTR     = StatsIx 15
+pattern QueryTypePTR     = StatsIx 16
 pattern QueryTypeRRSIG  :: StatsIx
-pattern QueryTypeRRSIG   = StatsIx 16
+pattern QueryTypeRRSIG   = StatsIx 17
 pattern QueryTypeSOA    :: StatsIx
-pattern QueryTypeSOA     = StatsIx 17
+pattern QueryTypeSOA     = StatsIx 18
 pattern QueryTypeSPF    :: StatsIx
-pattern QueryTypeSPF     = StatsIx 18
+pattern QueryTypeSPF     = StatsIx 19
 pattern QueryTypeSRV    :: StatsIx
-pattern QueryTypeSRV     = StatsIx 19
+pattern QueryTypeSRV     = StatsIx 20
 pattern QueryTypeSSHFP  :: StatsIx
-pattern QueryTypeSSHFP   = StatsIx 20
+pattern QueryTypeSSHFP   = StatsIx 21
+pattern QueryTypeSVCB   :: StatsIx
+pattern QueryTypeSVCB    = StatsIx 22
+pattern QueryTypeTLSA   :: StatsIx
+pattern QueryTypeTLSA    = StatsIx 23
+pattern QueryTypeTXT    :: StatsIx
+pattern QueryTypeTXT     = StatsIx 24
+pattern QueryTypeWKS    :: StatsIx
+pattern QueryTypeWKS     = StatsIx 25
 pattern QueryTypeOther  :: StatsIx
-pattern QueryTypeOther   = StatsIx 21
+pattern QueryTypeOther   = StatsIx 26
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 21
+pattern StatsIxMax       = StatsIx 26
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -86,6 +96,7 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeHINFO,   "query_types_total{type=\"HINFO\"}")
   , (QueryTypeHTTPS,   "query_types_total{type=\"HTTPS\"}")
   , (QueryTypeMX,      "query_types_total{type=\"MX\"}")
+  , (QueryTypeNAPTR,   "query_types_total{type=\"NAPTR\"}")
   , (QueryTypeNS,      "query_types_total{type=\"NS\"}")
   , (QueryTypeNULL,    "query_types_total{type=\"NULL\"}")
   , (QueryTypePTR,     "query_types_total{type=\"PTR\"}")
@@ -94,6 +105,10 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeSPF,     "query_types_total{type=\"SPF\"}")
   , (QueryTypeSRV,     "query_types_total{type=\"SRV\"}")
   , (QueryTypeSSHFP,   "query_types_total{type=\"SSHFP\"}")
+  , (QueryTypeSVCB,    "query_types_total{type=\"SVCB\"}")
+  , (QueryTypeTLSA,    "query_types_total{type=\"TLSA\"}")
+  , (QueryTypeTXT,     "query_types_total{type=\"TXT\"}")
+  , (QueryTypeWKS,     "query_types_total{type=\"WKS\"}")
   , (QueryTypeOther,   "query_types_total{type=\"other\"}")
   ]
 
@@ -111,6 +126,7 @@ fromQueryTypes = Map.fromList [
   , (TYPE 13, QueryTypeHINFO)
   , (HTTPS,   QueryTypeHTTPS)
   , (MX,      QueryTypeMX)
+  , (TYPE 35, QueryTypeNAPTR)
   , (NS,      QueryTypeNS)
   , (NULL,    QueryTypeNULL)
   , (PTR,     QueryTypePTR)
@@ -119,6 +135,10 @@ fromQueryTypes = Map.fromList [
   , (TYPE 99, QueryTypeSPF)
   , (SRV,     QueryTypeSRV)
   , (TYPE 44, QueryTypeSSHFP)
+  , (SVCB,    QueryTypeSVCB)
+  , (TLSA,    QueryTypeTLSA)
+  , (TXT,     QueryTypeTXT)
+  , (TYPE 11, QueryTypeWKS)
   ]
 
 newStats :: IO Stats
