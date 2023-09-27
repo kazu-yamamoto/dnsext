@@ -65,9 +65,11 @@ pattern QueryTypeSRV    :: StatsIx
 pattern QueryTypeSRV     = StatsIx 19
 pattern QueryTypeSSHFP  :: StatsIx
 pattern QueryTypeSSHFP   = StatsIx 20
+pattern QueryTypeOther  :: StatsIx
+pattern QueryTypeOther   = StatsIx 21
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 20
+pattern StatsIxMax       = StatsIx 21
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -92,6 +94,7 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeSPF,     "query_types_total{type=\"SPF\"}")
   , (QueryTypeSRV,     "query_types_total{type=\"SRV\"}")
   , (QueryTypeSSHFP,   "query_types_total{type=\"SSHFP\"}")
+  , (QueryTypeOther,   "query_types_total{type=\"other\"}")
   ]
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
@@ -130,11 +133,13 @@ incStats (Stats stats) ix = do
     (i,_) <- myThreadId >>= threadCapability
     void $ atomicModifyIntArray (stats ! i) ix (+1)
 
-incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> IO ()
-incStatsM s m k = do
+incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
+incStatsM s m k mk = do
     case Map.lookup k m of
-      Nothing -> return ()
-      Just ix -> incStats s ix
+      Nothing -> case mk of
+        Nothing -> return ()
+        Just dx -> incStats s dx
+      Just ix   -> incStats s ix
 
 readStats :: Stats -> Builder -> IO Builder
 readStats (Stats stats) prefix = do
