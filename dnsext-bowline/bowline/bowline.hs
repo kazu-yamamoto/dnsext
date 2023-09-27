@@ -6,9 +6,8 @@ module Main where
 
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.STM
-import Control.Monad (guard, mapAndUnzipM)
-import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Server
+import Control.Monad (guard)
+import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
@@ -75,9 +74,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     gcacheSetLogLn putLines
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache
     creds <- getCreds conf
-    (servers, statses) <-
-        mapAndUnzipM (getServers env cnf_dns_addrs) $ trans creds
-    mng <- getControl env mng0 statses
+    servers <- mapM (getServers env cnf_dns_addrs) $ trans creds
+    mng <- getControl env mng0
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
@@ -133,13 +131,10 @@ getServers
     :: Env
     -> [HostName]
     -> (Bool, Server, Int)
-    -> IO ([IO ()], [IO Stats])
-getServers _ _ (False, _, _) = return ([], [])
-getServers env hosts (True, server, port') = do
-    (xss, yss) <- mapAndUnzipM (server env port) hosts
-    let xs = concat xss
-        ys = concat yss
-    return (xs, ys)
+    -> IO [IO ()]
+getServers _ _ (False, _, _) = return []
+getServers env hosts (True, server, port') =
+    concat <$> mapM (server env port) hosts
   where
     port = fromIntegral port'
 
@@ -183,13 +178,13 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getControl :: Env -> Control -> [[IO Stats]] -> IO Control
-getControl env mng0 statses = do
+getControl :: Env -> Control -> IO Control
+getControl env mng0 = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
             mng0
-                { getStats = getStats' env (concat statses) ucacheQSize
+                { getStats = getStats' env ucacheQSize
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
@@ -197,16 +192,11 @@ getControl env mng0 statses = do
 
 ----------------------------------------------------------------
 
-getStats' :: Env -> [IO Stats] -> IO (Int, Int) -> IO Builder
-getStats' env iss _ucacheQSize = do
+getStats' :: Env -> IO (Int, Int) -> IO Builder
+getStats' env _ucacheQSize = do
     enabled <- getRTSStatsEnabled
     gc <- if enabled
         then fromRTSStats <$> getRTSStats
         else return mempty
-    csiz <- toB . Cache.size <$> getCache_ env
-    hits <- foldr (<>) defaultStats <$> sequence iss
-    let st = "blowline_cache_size " <> csiz <> "\n"
-          <> "blowline_cache_hits " <> toB (statsHit hits)  <> "\n"
-          <> "blowline_cache_miss " <> toB (statsMiss hits) <> "\n"
-          <> "blowline_cache_fail " <> toB (statsFail hits) <> "\n"
+    st <- Server.getStats env "bowline_"
     return (gc <> st)

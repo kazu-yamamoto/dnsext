@@ -58,7 +58,7 @@ readStats (Stats stats) prefix = do
       | ix > StatsIxMax = return b
       | otherwise = do
             v <- sumup 0 n ix 0
-            let b' = b <> prefix <> (labels ! ix) <> toB v <> "\n"
+            let b' = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
             go n (succ ix) b'
     sumup :: Int -> Int -> StatsIx -> Int -> IO Int
     sumup i n ix acc
