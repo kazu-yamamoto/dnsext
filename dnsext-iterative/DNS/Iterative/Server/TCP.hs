@@ -21,7 +21,6 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 tcpServer :: VcServerConfig -> Server
 tcpServer VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
     let tcpserver = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             runTCPServer (Just host) (show port) $ \sock -> do
                 mysa <- getSocketName sock
@@ -35,7 +34,7 @@ tcpServer VcServerConfig{..} env port host = do
                         when (siz > vc_slowloris_size) $ T.tickle th
                         return bss
                 (_n, bss) <- recv
-                cacheWorkerLogic env cntinc send TCP mysa peersa bss
-    return ([tcpserver], [readCounters cntget])
+                cacheWorkerLogic env send TCP mysa peersa bss
+    return ([tcpserver])
   where
     maxSize = fromIntegral vc_query_max_size

@@ -22,10 +22,6 @@ module DNS.Iterative.Server (
     http3Server,
     tlsServer,
     quicServer,
-
-    -- * Misc
-    Stats(..),
-    defaultStats,
 ) where
 
 import DNS.Iterative.Query.Env

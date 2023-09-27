@@ -22,7 +22,6 @@ import DNS.Iterative.Server.Types
 
 tlsServer :: Credentials -> VcServerConfig -> Server
 tlsServer creds VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
     let tlsserver = H2.runTLS settings creds host port "dot" $ \_ backend -> do
             recvN <- makeRecvN "" $ H2.recv backend
             let sendDoT = DNS.sendVC $ H2.sendMany backend
@@ -30,8 +29,8 @@ tlsServer creds VcServerConfig{..} env port host = do
             (_n, bss) <- recvDoT
             let mysa = H2.mySockAddr backend
                 peersa = H2.peerSockAddr backend
-            cacheWorkerLogic env cntinc sendDoT DOT mysa peersa bss
-    return ([tlsserver], [readCounters cntget])
+            cacheWorkerLogic env sendDoT DOT mysa peersa bss
+    return [tlsserver]
   where
     maxSize = fromIntegral vc_query_max_size
     settings =

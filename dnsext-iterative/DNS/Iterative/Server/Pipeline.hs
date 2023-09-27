@@ -4,7 +4,6 @@ module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
 import Data.ByteString (ByteString)
-import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 
 -- dnsext-* packages
 
@@ -22,42 +21,11 @@ import Network.Socket (SockAddr)
 -- this package
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
-import DNS.Iterative.Server.Types (Stats(..))
-
-----------------------------------------------------------------
-
-data CntGet = CntGet
-    { getHit :: IO Int
-    , getMiss :: IO Int
-    , getFailed :: IO Int
-    }
-
-data CntInc = CntInc
-    { incHit :: IO ()
-    , incMiss :: IO ()
-    , incFailed :: IO ()
-    }
-
-newCounters :: IO (CntGet, CntInc)
-newCounters = do
-    (g0, i0) <- counter
-    (g1, i1) <- counter
-    (g2, i2) <- counter
-    return (CntGet g0 g1 g2, CntInc i0 i1 i2)
-  where
-    counter :: IO (IO Int, IO ())
-    counter = do
-        ref <- newIORef 0
-        return (readIORef ref, atomicModifyIORef' ref (\x -> (x + 1, ())))
-
-readCounters :: CntGet -> IO Stats
-readCounters CntGet{..} = Stats <$> getHit <*> getMiss <*> getFailed
 
 ----------------------------------------------------------------
 
 cacherLogic
     :: Env
-    -> CntInc
     -> (ByteString -> IO ())
     -> (EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
     -> (DNS.DNSMessage -> IO ())
@@ -66,7 +34,7 @@ cacherLogic
     -> SockAddr
     -> a
     -> IO ()
-cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
+cacherLogic env send decode toResolver proto mysa peersa req = do
     now <- currentSeconds_ env
     case decode now req of
         Left e -> logLn Log.WARN $ "decode-error: " ++ show e
@@ -75,13 +43,13 @@ cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
             case mx of
                 None -> toResolver reqMsg
                 Positive rspMsg -> do
-                    incHit
+                    undefined -- incHit fixme
                     let bs = DNS.encode rspMsg
                     send bs
                     (s,ns) <- getCurrentTimeNsec
                     logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
                 Negative replyErr -> do
-                    incFailed
+                    undefined -- incFailed fixme
                     logLn Log.WARN $
                         "cached: response cannot be generated: "
                             ++ replyErr
@@ -94,24 +62,23 @@ cacherLogic env CntInc{..} send decode toResolver proto mysa peersa req = do
 
 workerLogic
     :: Env
-    -> CntInc
     -> (ByteString -> IO ())
     -> SocketProtocol
     -> SockAddr
     -> SockAddr
     -> DNS.DNSMessage
     -> IO ()
-workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
+workerLogic env send proto mysa peersa reqMsg = do
     ex <- getResponseIterative env reqMsg
     case ex of
         Right rspMsg -> do
-            incMiss
+            undefined -- incMiss fixme
             let bs = DNS.encode rspMsg
             send bs
             (s,ns) <- getCurrentTimeNsec
             logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
         Left e -> do
-            incFailed
+            undefined -- incFailed fixme
             logLn Log.WARN $
                 "resolv: response cannot be generated: "
                     ++ e
@@ -124,16 +91,15 @@ workerLogic env CntInc{..} send proto mysa peersa reqMsg = do
 
 cacheWorkerLogic
     :: Env
-    -> CntInc
     -> (ByteString -> IO ())
     -> SocketProtocol
     -> SockAddr
     -> SockAddr
     -> [ByteString]
     -> IO ()
-cacheWorkerLogic env cntinc send proto mysa peersa req = do
-    let worker = workerLogic env cntinc send proto mysa peersa
-    cacherLogic env cntinc send decode worker proto mysa peersa req
+cacheWorkerLogic env send proto mysa peersa req = do
+    let worker = workerLogic env send proto mysa peersa
+    cacherLogic env send decode worker proto mysa peersa req
   where
     decode t bss = case DNS.decodeChunks t bss of
         Left e -> Left e

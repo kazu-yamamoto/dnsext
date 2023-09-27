@@ -45,7 +45,7 @@ benchServer udpconf env _ = do
     clntDummy <- UDP.ClientSockAddr <$> getSockAddr "127.2.1.1" "53" <*> pure []
 
     (workerPipelines, enqueueReq, dequeueRes) <- getPipelines udpconf env myDummy
-    (workers, _getsStatus) <- unzip <$> sequence workerPipelines
+    workers <- sequence workerPipelines
 
     let enqueueReq' (bs, ()) = enqueueReq (bs, clntDummy)
         dequeueRes' = (\(bs, _) -> (bs, ())) <$> dequeueRes

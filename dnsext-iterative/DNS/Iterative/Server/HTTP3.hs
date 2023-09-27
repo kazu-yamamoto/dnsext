@@ -17,18 +17,16 @@ import qualified System.TimeManager as T
 
 -- this package
 import DNS.Iterative.Server.HTTP2
-import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.Types
 
 ----------------------------------------------------------------
 http3Server :: Credentials -> VcServerConfig -> Server
 http3Server creds VcServerConfig{..} env port host = do
-    (cntget, cntinc) <- newCounters
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             QUIC.run sconf $ \conn ->
-                H3.run conn (conf mgr) $ doHTTP env cntinc
-    return ([http3server], [readCounters cntget])
+                H3.run conn (conf mgr) $ doHTTP env
+    return [http3server]
   where
     sconf = getServerConfig creds host port "h3"
     conf mgr =
