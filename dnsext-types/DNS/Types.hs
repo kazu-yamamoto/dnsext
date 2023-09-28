@@ -14,7 +14,6 @@ module DNS.Types (
     Identifier,
     DNSFlags (..),
     defaultDNSFlags,
-    QorR (..),
 
     -- ** EDNS header
     EDNSheader (..),

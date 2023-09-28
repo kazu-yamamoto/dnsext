@@ -18,7 +18,7 @@ showJSON DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
     DNSFlags{..} = flags
     hd =
         [ ("ID", pretty identifier)
-        , ("QR", pretty $ fromQR qOrR)
+        , ("QR", pretty $ fromBool isResponse)
         , ("Opcode", pretty $ fromOPCODE opcode)
         , ("comment", string opcode)
         , ("AA", pretty $ fromBool authAnswer)
@@ -104,7 +104,3 @@ pair (k, v) = dquotes (pretty k) <> colon <+> v
 fromBool :: Bool -> Int
 fromBool False = 0
 fromBool True = 1
-
-fromQR :: QorR -> Int
-fromQR QR_Query = 0
-fromQR QR_Response = 1

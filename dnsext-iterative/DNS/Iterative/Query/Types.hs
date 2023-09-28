@@ -104,7 +104,7 @@ data DEntry
 
 data QueryError
     = DnsError DNSError
-    | NotResponse DNS.QorR DNSMessage
+    | NotResponse Bool DNSMessage
     | InvalidEDNS DNS.EDNSheader DNSMessage
     | HasError DNS.RCODE DNSMessage
     deriving (Show)

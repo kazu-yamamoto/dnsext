@@ -66,7 +66,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
 
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
-    | DNS.qOrR flags /= DNS.QR_Response = e $ NotResponse (DNS.qOrR flags) msg
+    | not (DNS.isResponse flags) = e $ NotResponse (DNS.isResponse flags) msg
     | DNS.ednsHeader msg == DNS.InvalidEDNS =
         e $ InvalidEDNS (DNS.ednsHeader msg) msg
     | DNS.rcode flags

@@ -52,7 +52,7 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
     when authAnswer $ incStats st FlagAA
     when authenData $ incStats st FlagAD
     when chkDisable $ incStats st FlagCD
-    when (qOrR == DNS.QR_Response) $ incStats st FlagQR
+    when isResponse $ incStats st FlagQR
     when recAvailable $ incStats st FlagRA
     when recDesired $ incStats st FlagRD
     when trunCation $ incStats st FlagTC
