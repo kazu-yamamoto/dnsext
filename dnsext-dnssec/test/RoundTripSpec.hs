@@ -109,16 +109,19 @@ pubKey_RSA_bin1 bsize e =
         ]
 
 pubKey_RSA_bin2 :: Int -> Opaque -> Opaque
-pubKey_RSA_bin2 bsize e =
-    Opaque.concat
-        [ Opaque.singleton 0
-        , Opaque.singleton $ fromIntegral x
-        , Opaque.singleton $ fromIntegral y
-        , e
-        , fromString $ replicate bsize '\xff'
-        ]
+pubKey_RSA_bin2 bsize e
+    | elen > 65535 = error $ "pubKey_RSA_bin2: too long e!, e length: " ++ show elen
+    | otherwise =
+        Opaque.concat
+            [ Opaque.singleton 0
+            , Opaque.singleton $ fromIntegral x
+            , Opaque.singleton $ fromIntegral y
+            , e
+            , fromString $ replicate bsize '\xff'
+            ]
   where
-    (x, y) = Opaque.length e `divMod` 256
+    elen = Opaque.length e
+    (x, y) = elen `divMod` 256
 
 genOpaque :: Gen Opaque
 genOpaque =
