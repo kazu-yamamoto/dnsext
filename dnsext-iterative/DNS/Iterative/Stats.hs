@@ -106,11 +106,9 @@ pattern FlagRD          :: StatsIx
 pattern FlagRD           = StatsIx 38
 pattern FlagTC          :: StatsIx
 pattern FlagTC           = StatsIx 39
-pattern FlagZ           :: StatsIx
-pattern FlagZ            = StatsIx 40
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 40
+pattern StatsIxMax       = StatsIx 39
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -154,7 +152,6 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (FlagRA,           "query_flags_total{type=\"RA\"}")
   , (FlagRD,           "query_flags_total{type=\"RD\"}")
   , (FlagTC,           "query_flags_total{type=\"TC\"}")
-  , (FlagZ,            "query_flags_total{type=\"Z\"}")
   ]
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
