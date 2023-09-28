@@ -41,7 +41,7 @@ genResourceRecord =
     genRR = do
         dom <- genDomain
         t <- elements [DS, NSEC, NSEC3]
-        ResourceRecord dom t classIN <$> genTTL <*> mkRData t
+        ResourceRecord dom t IN <$> genTTL <*> mkRData t
 
 mkRData :: TYPE -> Gen RData
 mkRData typ =

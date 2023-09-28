@@ -243,12 +243,12 @@ lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
   where
     result ttl crs rank = case crs of
         Negative soaDom -> do
-            sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.classIN cache {- EMPTY hit. empty ranking and SOA result. -}
+            sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache {- EMPTY hit. empty ranking and SOA result. -}
             return (Left sp, rank)
         _ ->
-            Just (Right $ extractRRSet dom typ DNS.classIN ttl crs, rank)
+            Just (Right $ extractRRSet dom typ DNS.IN ttl crs, rank)
     soaResult ettl srcDom ttl crs rank =
-        Just (extractRRSet srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -}) crs, rank)
+        Just (extractRRSet srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -}) crs, rank)
 
 lookupAlive
     :: EpochTime
@@ -287,10 +287,10 @@ lookup_ mk k (Cache cache _) = do
 -- >>> c0 = empty 256
 -- >>> dump <$> insertRRs 0 [] RankAnswer c0
 -- Nothing
--- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.classIN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.classIN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
+-- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.IN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = 1},(1,Val (Positive (NotVerified (192.168.32.1 :| []))) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (NotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (NotVerified (192.168.32.1 :| []))) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
@@ -424,7 +424,7 @@ fromRDatas rds = rds `listseq` notVerified rds Nothing Just
 
 rrSetKey :: ResourceRecord -> Maybe Question
 rrSetKey (ResourceRecord rrname rrtype rrclass _rrttl rd)
-    | rrclass == DNS.classIN && DNS.rdataType rd == rrtype =
+    | rrclass == DNS.IN && DNS.rdataType rd == rrtype =
         Just (Question rrname rrtype rrclass)
     | otherwise = Nothing
 
@@ -467,4 +467,4 @@ insertSetEmpty
     -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
 insertSetEmpty soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
   where
-    key = Question dom typ DNS.classIN
+    key = Question dom typ DNS.IN

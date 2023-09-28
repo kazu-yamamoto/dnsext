@@ -177,7 +177,7 @@ console conf env Control{..} inH outH ainfo = do
             lookupCache = do
                 cache <- getCache_ env
                 ts <- currentSeconds_ env
-                return $ Cache.lookup ts dom typ DNS.classIN cache
+                return $ Cache.lookup ts dom typ DNS.IN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env

@@ -12,7 +12,7 @@ import Test.Hspec
 
 spec :: Spec
 spec = describe "solvers" $ do
-    let q = Question "www.mew.org" A classIN
+    let q = Question "www.mew.org" A IN
     it "resolves well with TLS" $ do
         let ri0 =
                 defaultResolvInfo

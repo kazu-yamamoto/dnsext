@@ -123,7 +123,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         runResolve_ = runResolveCXT cxt
         getReply n ty ident = do
             e <- runDNSQuery (getResultIterative (fromString n) ty) cxt mempty
-            return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.classIN]
+            return $ replyMessage e ident [DNS.Question (fromString n) ty DNS.IN]
 
     let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure
         printQueryError :: Show e => Either e a -> IO ()

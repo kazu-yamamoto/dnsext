@@ -53,9 +53,9 @@ test_mx =
 -- as a pointer to the question domain.
 test_soa :: DNSMessage
 test_soa =
-    let q = [Question "hostmaster.example.com." A classIN]
+    let q = [Question "hostmaster.example.com." A IN]
         soard = rd_soa "ns1.example.com." "hostmaster@example.com." 0 0 0 0 0
-        soarr = ResourceRecord "example.com." SOA 1 3600 soard
+        soarr = ResourceRecord "example.com." SOA IN 3600 soard
      in defaultResponse
             { question = q
             , authority = [soarr]

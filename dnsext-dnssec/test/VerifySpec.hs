@@ -75,7 +75,7 @@ keyTagRFC5702 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -112,14 +112,14 @@ dsSHA1 =
     ( ResourceRecord
         { rrname = "dskey.example.com."
         , rrttl = 86400
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
     , ResourceRecord
         { rrname = "dskey.example.com."
         , rrttl = 86400
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DS
         , rdata = ds_rd
         }
@@ -152,14 +152,14 @@ dsSHA256 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
     , ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DS
         , rdata = ds_rd
         }
@@ -186,14 +186,14 @@ dsSHA384 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
     , ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DS
         , rdata = ds_rd
         }
@@ -247,7 +247,7 @@ rsaSHA256 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -255,7 +255,7 @@ rsaSHA256 =
         [ ResourceRecord
             { rrname = "www.example.net."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a $ read "192.0.2.91"
             }
@@ -263,7 +263,7 @@ rsaSHA256 =
     , ResourceRecord
         { rrname = "www.example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -294,7 +294,7 @@ rsaSHA256_RECONS =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -302,7 +302,7 @@ rsaSHA256_RECONS =
         [ ResourceRecord
             { rrname = "www.example.net."
             , rrttl = 1800 {- value different from original TTL -}
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a $ read "192.0.2.91"
             }
@@ -310,7 +310,7 @@ rsaSHA256_RECONS =
     , ResourceRecord
         { rrname = "www.example.net."
         , rrttl = 1200
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -338,7 +338,7 @@ rsaSHA256_RRset =
     ( ResourceRecord
         { rrname = "iij.ad.jp."
         , rrttl = 86400
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -346,14 +346,14 @@ rsaSHA256_RRset =
         [ ResourceRecord
             { rrname = "omgi.iij.ad.jp."
             , rrttl = 600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a "202.214.79.36"
             }
         , ResourceRecord
             { rrname = "omgi.iij.ad.jp."
             , rrttl = 600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a "202.32.225.116"
             }
@@ -361,7 +361,7 @@ rsaSHA256_RRset =
     , ResourceRecord
         { rrname = "omgi.iij.ad.jp."
         , rrttl = 600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -392,7 +392,7 @@ rsaSHA512 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -400,7 +400,7 @@ rsaSHA512 =
         [ ResourceRecord
             { rrname = "www.example.net."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a $ read "192.0.2.91"
             }
@@ -408,7 +408,7 @@ rsaSHA512 =
     , ResourceRecord
         { rrname = "www.example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -440,7 +440,7 @@ ecdsaP256 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -448,7 +448,7 @@ ecdsaP256 =
         [ ResourceRecord
             { rrname = "www.example.net."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a $ read "192.0.2.1"
             }
@@ -456,7 +456,7 @@ ecdsaP256 =
     , ResourceRecord
         { rrname = "www.example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -483,7 +483,7 @@ ecdsaP384 =
     ( ResourceRecord
         { rrname = "example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -491,7 +491,7 @@ ecdsaP384 =
         [ ResourceRecord
             { rrname = "www.example.net."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = A
             , rdata = rd_a $ read "192.0.2.1"
             }
@@ -499,7 +499,7 @@ ecdsaP384 =
     , ResourceRecord
         { rrname = "www.example.net."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -528,7 +528,7 @@ ed25519 =
     ( ResourceRecord
         { rrname = "example.com."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -536,7 +536,7 @@ ed25519 =
         [ ResourceRecord
             { rrname = "example.com."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = MX
             , rdata = rd_mx 10 "mail.example.com."
             }
@@ -544,7 +544,7 @@ ed25519 =
     , ResourceRecord
         { rrname = "example.com."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -570,7 +570,7 @@ ed448 =
     ( ResourceRecord
         { rrname = "example.com."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
@@ -578,7 +578,7 @@ ed448 =
         [ ResourceRecord
             { rrname = "example.com."
             , rrttl = 3600
-            , rrclass = classIN
+            , rrclass = IN
             , rrtype = MX
             , rdata = rd_mx 10 "mail.example.com."
             }
@@ -586,7 +586,7 @@ ed448 =
     , ResourceRecord
         { rrname = "example.com."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }
@@ -613,42 +613,42 @@ someRDataLength =
     ( ResourceRecord
         { rrname = "1.in-addr.arpa."
         , rrttl = 3600
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = DNSKEY
         , rdata = key_rd
         }
     , [ ResourceRecord
           { rrname = "1.in-addr.arpa."
           , rrttl = 86400
-          , rrclass = classIN
+          , rrclass = IN
           , rrtype = NS
           , rdata = rd_ns "apnic1.dnsnode.net."
           }
       , ResourceRecord
           { rrname = "1.in-addr.arpa."
           , rrttl = 86400
-          , rrclass = classIN
+          , rrclass = IN
           , rrtype = NS
           , rdata = rd_ns "rirns.arin.net."
           }
       , ResourceRecord
           { rrname = "1.in-addr.arpa."
           , rrttl = 86400
-          , rrclass = classIN
+          , rrclass = IN
           , rrtype = NS
           , rdata = rd_ns "ns2.apnic.net."
           }
       , ResourceRecord
           { rrname = "1.in-addr.arpa."
           , rrttl = 86400
-          , rrclass = classIN
+          , rrclass = IN
           , rrtype = NS
           , rdata = rd_ns "ns3.lacnic.net."
           }
       , ResourceRecord
           { rrname = "1.in-addr.arpa."
           , rrttl = 86400
-          , rrclass = classIN
+          , rrclass = IN
           , rrtype = NS
           , rdata = rd_ns "apnic.authdns.ripe.net."
           }
@@ -656,7 +656,7 @@ someRDataLength =
     , ResourceRecord
         { rrname = "1.in-addr.arpa."
         , rrttl = 86400
-        , rrclass = classIN
+        , rrclass = IN
         , rrtype = RRSIG
         , rdata = sig_rd
         }

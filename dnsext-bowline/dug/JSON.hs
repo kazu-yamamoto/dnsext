@@ -40,7 +40,7 @@ showJSON DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
             [ ("QNAME", domain qname)
             , ("QTYPE", pretty $ fromTYPE qtype)
             , ("QTYPEname", string qtype)
-            , ("QCLASS", pretty qclass)
+            , ("QCLASS", pretty $ fromCLASS qclass)
             ]
     an = rrs "answerRRs" answer
     au = rrs "authorityRRs" authority

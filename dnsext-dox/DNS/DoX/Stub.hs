@@ -56,7 +56,7 @@ lookupDoX conf domain typ = do
     let lim = lconfLimit conf
         retry = lconfRetry conf
         resolver = udpTcpResolver retry lim
-        q = Question "_dns.resolver.arpa" SVCB classIN
+        q = Question "_dns.resolver.arpa" SVCB IN
     withLookupConfAndResolver conf resolver $ \lenv -> do
         er <- lookupRaw lenv q
         case er of
@@ -98,7 +98,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
                 case mrply of
                     Left _ -> go alpns
                     _ -> return mrply
-    q = Question (fromRepresentation domain) typ classIN
+    q = Question (fromRepresentation domain) typ IN
     resolveDoX s alpn resolver = try $ resolve renv q mempty
       where
         port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s

@@ -115,7 +115,7 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     {- "Reconstructing the Signed Data"
        https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
        RR(i) = name | type | class | OrigTTL | RDATA length | RDATA -}
-    let putRRH = putDomainRFC1035 Canonical rrset_name >> putTYPE rrset_type >> put16 rrset_class >> putSeconds rrsig_ttl
+    let putRRH = putDomainRFC1035 Canonical rrset_name >> putTYPE rrset_type >> putCLASS rrset_class >> putSeconds rrsig_ttl
         str = runSPut (putRRSIGHeader rrsig >> mapM_ (putRRH >>) sortedRDatas)
     {- `Data.List.sort` is linear for sorted case -}
     good <- rrsigIVerify pubkey sig str

@@ -99,7 +99,7 @@ genDNSMessage =
                 else pure NoEDNS
 
 genQuestion :: Gen Question
-genQuestion = Question <$> genDomain <*> genTYPE <*> pure classIN
+genQuestion = Question <$> genDomain <*> genTYPE <*> pure IN
 
 genTYPE :: Gen TYPE
 genTYPE =
@@ -121,7 +121,7 @@ genResourceRecord =
     genRR = do
         dom <- genDomain
         t <- elements [A, AAAA, NS, TXT, MX, CNAME, SOA, PTR, SRV, DNAME, TLSA]
-        ResourceRecord dom t classIN <$> genSeconds <*> mkRData dom t
+        ResourceRecord dom t IN <$> genSeconds <*> mkRData dom t
 
 mkRData :: Domain -> TYPE -> Gen RData
 mkRData dom typ =

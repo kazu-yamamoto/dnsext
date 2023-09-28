@@ -4,6 +4,7 @@ module DNS.Types.Internal (
     OptCode (..),
     RCODE (..),
     CanonicalFlag (..),
+    CLASS(..),
 
     -- * Classes
     ResourceData (..),
@@ -45,6 +46,8 @@ module DNS.Types.Internal (
     getLenOpaque,
     putTYPE,
     getTYPE,
+    putCLASS,
+    getCLASS,
     putSeconds,
     getSeconds,
 

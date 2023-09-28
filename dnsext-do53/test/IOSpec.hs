@@ -9,7 +9,7 @@ import System.Timeout
 import Test.Hspec
 
 q :: Question
-q = Question "www.mew.org" A classIN
+q = Question "www.mew.org" A IN
 
 google :: ResolvInfo
 google =

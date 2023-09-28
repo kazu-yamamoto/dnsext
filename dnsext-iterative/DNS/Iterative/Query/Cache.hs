@@ -46,13 +46,13 @@ withLookupCache h logMark dom typ = do
     result <- liftIO $ do
         cache <- getCache
         ts <- getSec
-        return $ h ts dom typ DNS.classIN cache
+        return $ h ts dom typ DNS.IN cache
     logLn Log.DEBUG $
         let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
             mark ws
                 | null logMark = ws
                 | otherwise = (logMark ++ ":") : ws
-         in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.classIN, ":", pprResult]
+         in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
 lookupRRset :: String -> Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
@@ -63,8 +63,8 @@ lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
     result ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
-        notVerified = notVerifiedRRset dom typ DNS.classIN ttl
-        valid = validRRset dom typ DNS.classIN ttl
+        notVerified = notVerifiedRRset dom typ DNS.IN ttl
+        valid = validRRset dom typ DNS.IN ttl
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
 guardValid m = do
@@ -84,16 +84,16 @@ lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
     result now cache ttl crs rank = (,) <$> Cache.hitEither (fmap Left . negative) (Just . Right . positive) crs <*> pure rank
       where
         {- EMPTY hit. empty ranking and SOA result. -}
-        negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.classIN cache
+        negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         positive = Cache.positiveHit notVerified valid
-        notVerified rds = notVerifiedRRset dom typ DNS.classIN ttl rds
-        valid rds sigs = validRRset dom typ DNS.classIN ttl rds sigs
+        notVerified rds = notVerifiedRRset dom typ DNS.IN ttl rds
+        valid rds sigs = validRRset dom typ DNS.IN ttl rds sigs
 
     soaResult ettl srcDom ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
-        notVerified = notVerifiedRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -})
-        valid = validRRset srcDom SOA DNS.classIN (ettl `min` ttl {- treated as TTL of empty data -})
+        notVerified = notVerifiedRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
+        valid = validRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
 
 notVerifiedRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
 notVerifiedRRset dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS

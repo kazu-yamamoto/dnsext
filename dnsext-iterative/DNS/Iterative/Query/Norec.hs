@@ -54,7 +54,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                 , renvConcurrent = True -- should set True if multiple RIs are provided
                 , renvResolvInfos = ris
                 }
-        q = Question name typ classIN
+        q = Question name typ IN
         doFlagSet
             | dnsssecOK = FlagSet
             | otherwise = FlagClear

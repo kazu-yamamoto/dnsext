@@ -47,7 +47,7 @@ recursiveQeury mserver port dox putLines raflags ctl domain typ = do
                 let retry = DNS.lconfRetry conf
                  in udpTcpResolver retry lim
     withLookupConfAndResolver conf resolver $ \env -> do
-        let q = Question (DNS.fromRepresentation domain) typ DNS.classIN
+        let q = Question (DNS.fromRepresentation domain) typ DNS.IN
         DNS.lookupRaw env q
 
 getCustomConf

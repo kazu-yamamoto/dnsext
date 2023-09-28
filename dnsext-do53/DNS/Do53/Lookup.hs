@@ -50,7 +50,7 @@ import Prelude hiding (lookup)
 lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookup env dom typ = lookupSection Answer env q
   where
-    q = Question dom typ classIN
+    q = Question dom typ IN
 
 -- | Look up resource records of a specified type for a domain,
 --   collecting the results
@@ -61,7 +61,7 @@ lookup env dom typ = lookupSection Answer env q
 lookupAuth :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookupAuth env dom typ = lookupSection Authority env q
   where
-    q = Question dom typ classIN
+    q = Question dom typ IN
 
 ----------------------------------------------------------------
 
@@ -210,7 +210,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --   The example code:
 --
 --   @
---   withLookupConf defaultLookupConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A classIN
+--   withLookupConf defaultLookupConf $ \\env -> lookupRaw env $ Question \"www.example.com\" A IN
 --   @
 --
 --   And the (formatted) expected output:
@@ -243,7 +243,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --
 --  AXFR requests cannot be performed with this interface.
 --
---   >>> withLookupConf defaultLookupConf $ \env -> lookupRaw env $ Question "mew.org" AXFR classIN
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupRaw env $ Question "mew.org" AXFR IN
 --   Left InvalidAXFRLookup
 lookupRaw
     :: LookupEnv

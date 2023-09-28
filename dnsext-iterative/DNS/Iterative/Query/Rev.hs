@@ -43,7 +43,7 @@ runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
         RRset
             { rrsName = dom
             , rrsType = SOA
-            , rrsClass = classIN
+            , rrsClass = IN
             , rrsTTL = ncttl
             , rrsRDatas = [DNS.rd_soa mname mail ser refresh retry expire ncttl]
             , rrsMayVerified = NotVerifiedRRS

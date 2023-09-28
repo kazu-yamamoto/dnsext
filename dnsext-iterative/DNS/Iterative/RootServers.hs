@@ -59,7 +59,7 @@ rootServers =
         ResourceRecord
             { rrname = n
             , rrtype = ty
-            , DNS.rrclass = DNS.classIN
+            , DNS.rrclass = DNS.IN
             , DNS.rrttl = tt
             , rdata = rd
             }

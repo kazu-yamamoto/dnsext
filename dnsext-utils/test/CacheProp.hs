@@ -143,7 +143,7 @@ toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
 genWrongCRPair :: Gen (Question, CRSet)
 genWrongCRPair = do
     (typ, genCrs) <- elements wrongs
-    key <- Question <$> elements sbsDomainList <*> pure typ <*> pure DNS.classIN
+    key <- Question <$> elements sbsDomainList <*> pure typ <*> pure DNS.IN
     crs <- genCrs
     pure (key, crs)
   where
@@ -161,7 +161,7 @@ genCRsRec = do
             | typ `elem` [NS, SOA, MX] = domainList
             | otherwise = nameList
     lbl <- elements labelList
-    (,) (Question (DNS.fromRepresentation lbl) typ DNS.classIN, genCrs)
+    (,) (Question (DNS.fromRepresentation lbl) typ DNS.IN, genCrs)
         <$> (DNS.fromRepresentation <$> toULString lbl)
 
 genCRsPair :: Gen (Question, Gen CRSet)
@@ -223,7 +223,7 @@ instance Arbitrary AKey where
             <$> ( Question
                     <$> elements sbsDomainList
                     <*> elements [A, NS, AAAA]
-                    <*> pure DNS.classIN
+                    <*> pure DNS.IN
                 )
 
 newtype AWrongCRPair = AWrongCRPair (Question, CRSet) deriving (Show)

@@ -157,7 +157,7 @@ rr ResourceRecord{..} = do
 
 cls :: CLASS -> String
 cls c
-    | c == classIN = "IN"
+    | c == IN = "IN"
     | otherwise = "#<" ++ show c ++ ">"
 
 ----------------------------------------------------------------

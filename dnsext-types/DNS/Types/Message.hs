@@ -147,7 +147,7 @@ putDNSMessage msg = do
               where
                 name' = "."
                 type' = OPT
-                class' = maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns)
+                class' = CLASS (maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns))
                 ttl0' = fromIntegral (rc' .&. 0xff0) `shiftL` 20
                 vers' = fromIntegral (ednsVersion edns) `shiftL` 16
                 ttl'
@@ -184,7 +184,7 @@ getDNSMessage = do
       where
         -- \| Extract EDNS information from an OPT RR.
         optEDNS :: ResourceRecord -> Maybe (EDNS, Word16)
-        optEDNS (ResourceRecord "." OPT udpsiz ttl' rd) = case fromRData rd of
+        optEDNS (ResourceRecord "." OPT (CLASS udpsiz) ttl' rd) = case fromRData rd of
             Just (RD_OPT opts) ->
                 let hrc = fromIntegral rc .&. 0x0f
                     erc = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
@@ -665,17 +665,27 @@ getQuestion =
 ----------------------------------------------------------------
 
 -- | Resource record class.
-type CLASS = Word16
+newtype CLASS = CLASS
+    { fromCLASS :: Word16
+    -- ^ Convert an 'CLASS' to its numeric value.
+    } deriving (Eq, Ord)
+
+toCLASS :: Word16 -> CLASS
+toCLASS = CLASS
 
 -- | Resource record class for the Internet.
-classIN :: CLASS
-classIN = 1
+pattern IN :: CLASS
+pattern IN = CLASS 1
+
+instance Show CLASS where
+    show IN = "IN"
+    show (CLASS n) = "CLASS " ++ show n
 
 putCLASS :: CLASS -> SPut ()
-putCLASS = put16
+putCLASS (CLASS x) = put16 x
 
 getCLASS :: SGet CLASS
-getCLASS = get16
+getCLASS = CLASS <$> get16
 
 -- | Time to live in second.
 type TTL = Seconds

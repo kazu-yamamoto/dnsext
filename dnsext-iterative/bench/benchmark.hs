@@ -223,7 +223,7 @@ benchQueries =
     dh = DNS.header DNS.defaultQuery
     rootAs =
         [ DNS.defaultQuery
-            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.classIN]
+            { DNS.question = [DNS.Question (fromString name) DNS.A DNS.IN]
             }
         | c1 <- ["a", "b", "c", "d"]
         , let name = c1 ++ ".root-servers.net."
