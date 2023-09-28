@@ -92,8 +92,23 @@ pattern DNSClassIN       = StatsIx 31
 pattern DNSClassOther   :: StatsIx
 pattern DNSClassOther    = StatsIx 32
 
+pattern FlagAA          :: StatsIx
+pattern FlagAA           = StatsIx 33
+pattern FlagAD          :: StatsIx
+pattern FlagAD           = StatsIx 34
+pattern FlagCD          :: StatsIx
+pattern FlagCD           = StatsIx 35
+pattern FlagQR          :: StatsIx
+pattern FlagQR           = StatsIx 36
+pattern FlagRA          :: StatsIx
+pattern FlagRA           = StatsIx 37
+pattern FlagRD          :: StatsIx
+pattern FlagRD           = StatsIx 38
+pattern FlagTC          :: StatsIx
+pattern FlagTC           = StatsIx 39
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 32
+pattern StatsIxMax       = StatsIx 39
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -130,6 +145,13 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (DNSClassCH,       "query_classes_total{type=\"CH\"}")
   , (DNSClassIN,       "query_classes_total{type=\"IN\"}")
   , (DNSClassOther,    "query_classes_total{type=\"Other\"}")
+  , (FlagAA,           "query_flags_total{type=\"AA\"}")
+  , (FlagAD,           "query_flags_total{type=\"AD\"}")
+  , (FlagCD,           "query_flags_total{type=\"CD\"}")
+  , (FlagQR,           "query_flags_total{type=\"QR\"}")
+  , (FlagRA,           "query_flags_total{type=\"RA\"}")
+  , (FlagRD,           "query_flags_total{type=\"RD\"}")
+  , (FlagTC,           "query_flags_total{type=\"TC\"}")
   ]
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
