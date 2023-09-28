@@ -26,6 +26,35 @@ import DNS.Iterative.Stats
 
 ----------------------------------------------------------------
 
+record
+    :: Env
+    -> DNS.DNSMessage
+    -> DNS.DNSMessage
+    -> ByteString
+    -> SocketProtocol
+    -> SockAddr
+    -> SockAddr
+    -> IO ()
+record env reqMsg rspMsg rspWire proto mysa peersa = do
+    (s, ns) <- getCurrentTimeNsec
+    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns rspWire
+    let st = stats_ env
+        DNS.Question{..} = head $ DNS.question reqMsg
+        DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg
+    incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
+    incStatsM st fromDNSClass qclass (Just DNSClassOther)
+    let rc = DNS.rcode $ DNS.flags $ DNS.header rspMsg
+    incStatsM st fromRcode rc Nothing
+    when authAnswer $ incStats st FlagAA
+    when authenData $ incStats st FlagAD
+    when chkDisable $ incStats st FlagCD
+    when (qOrR == DNS.QR_Response) $ incStats st FlagQR
+    when recAvailable $ incStats st FlagRA
+    when recDesired $ incStats st FlagRD
+    when trunCation $ incStats st FlagTC
+
+----------------------------------------------------------------
+
 cacherLogic
     :: Env
     -> (ByteString -> IO ())
@@ -48,20 +77,7 @@ cacherLogic env send decode toResolver proto mysa peersa req = do
                     incStats (stats_ env) CacheHit
                     let bs = DNS.encode rspMsg
                     send bs
-                    (s, ns) <- getCurrentTimeNsec
-                    let st = stats_ env
-                        DNS.Question{..} = head $ DNS.question reqMsg
-                        DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg
-                    incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
-                    incStatsM st fromDNSClass qclass (Just DNSClassOther)
-                    when authAnswer $ incStats st FlagAA
-                    when authenData $ incStats st FlagAD
-                    when chkDisable $ incStats st FlagCD
-                    when (qOrR == DNS.QR_Response) $ incStats st FlagQR
-                    when recAvailable $ incStats st FlagRA
-                    when recDesired $ incStats st FlagRD
-                    when trunCation $ incStats st FlagTC
-                    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
+                    record env reqMsg rspMsg bs proto mysa peersa
                 Negative replyErr -> do
                     incStats (stats_ env) CacheFailed
                     logLn Log.WARN $
@@ -89,20 +105,7 @@ workerLogic env send proto mysa peersa reqMsg = do
             incStats (stats_ env) CacheMiss
             let bs = DNS.encode rspMsg
             send bs
-            (s, ns) <- getCurrentTimeNsec
-            let st = stats_ env
-                DNS.Question{..} = head $ DNS.question reqMsg
-                DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg
-            incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
-            incStatsM st fromDNSClass qclass (Just DNSClassOther)
-            when authAnswer $ incStats st FlagAA
-            when authenData $ incStats st FlagAD
-            when chkDisable $ incStats st FlagCD
-            when (qOrR == DNS.QR_Response) $ incStats st FlagQR
-            when recAvailable $ incStats st FlagRA
-            when recDesired $ incStats st FlagRD
-            when trunCation $ incStats st FlagTC
-            logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns bs
+            record env reqMsg rspMsg bs proto mysa peersa
         Left e -> do
             incStats (stats_ env) CacheFailed
             logLn Log.WARN $

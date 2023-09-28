@@ -494,7 +494,7 @@ newtype RCODE = RCODE
     { fromRCODE :: Word16
     -- ^ Convert an 'RCODE' to its numeric value.
     }
-    deriving (Eq)
+    deriving (Eq, Ord)
 
 -- | Provide an Enum instance for backwards compatibility
 instance Enum RCODE where

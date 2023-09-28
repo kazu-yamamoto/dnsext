@@ -108,8 +108,23 @@ pattern FlagRD           = StatsIx 38
 pattern FlagTC          :: StatsIx
 pattern FlagTC           = StatsIx 39
 
+pattern RcodeFormErr    :: StatsIx
+pattern RcodeFormErr     = StatsIx 40
+pattern RcodeNoError    :: StatsIx
+pattern RcodeNoError     = StatsIx 41
+pattern RcodeNXDomain   :: StatsIx
+pattern RcodeNXDomain    = StatsIx 42
+pattern RcodeNotImpl    :: StatsIx
+pattern RcodeNotImpl     = StatsIx 43
+pattern RcodeRefused    :: StatsIx
+pattern RcodeRefused     = StatsIx 44
+pattern RcodeServFail   :: StatsIx
+pattern RcodeServFail    = StatsIx 45
+pattern RcodeNoData     :: StatsIx
+pattern RcodeNoData      = StatsIx 46
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 39
+pattern StatsIxMax       = StatsIx 46
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -155,6 +170,13 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (FlagRA,           "query_flags_total{type=\"RA\"}")
   , (FlagRD,           "query_flags_total{type=\"RD\"}")
   , (FlagTC,           "query_flags_total{type=\"TC\"}")
+  , (RcodeFormErr,     "answer_rcodes_total{type=\"FORMERR\"}")
+  , (RcodeNoError,     "answer_rcodes_total{type=\"NOERROR\"}")
+  , (RcodeNotImpl,     "answer_rcodes_total{type=\"NOTIMPL\"}")
+  , (RcodeNXDomain,    "answer_rcodes_total{type=\"NXDOMAIN\"}")
+  , (RcodeRefused,     "answer_rcodes_total{type=\"REFUSED\"}")
+  , (RcodeServFail,    "answer_rcodes_total{type=\"SERVFAIL\"}")
+  , (RcodeNoData,      "answer_rcodes_total{type=\"nodata\"}")
   ]
 {- FOURMOLU_ENABLE -}
 
@@ -197,6 +219,17 @@ fromDNSClass = Map.fromList [
   , (CLASS 255, DNSClassANY)
   , (CLASS 3,   DNSClassCH)
   , (IN,        DNSClassIN)
+  ]
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+fromRcode :: Map RCODE StatsIx
+fromRcode = Map.fromList [
+    (FormatErr, RcodeFormErr)
+  , (NotImpl,   RcodeNotImpl)
+  , (NameErr,   RcodeNXDomain)
+  , (Refused,   RcodeRefused)
+  , (ServFail,  RcodeServFail)
   ]
 {- FOURMOLU_ENABLE -}
 
