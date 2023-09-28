@@ -45,6 +45,10 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
     let rc = DNS.rcode $ DNS.flags $ DNS.header rspMsg
     incStatsM st fromRcode rc Nothing
+    when (rc == DNS.NoErr) $
+       if DNS.answer rspMsg == []
+            then incStats st RcodeNoData
+            else incStats st RcodeNoError
     when authAnswer $ incStats st FlagAA
     when authenData $ incStats st FlagAD
     when chkDisable $ incStats st FlagCD
