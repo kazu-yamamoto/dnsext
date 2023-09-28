@@ -90,13 +90,15 @@ genPubKey_RSA_bin =
         , (1, pubKey_RSA_bin2 <$> genBSize <*> genE2)
         ]
   where
-    genE1 = estring <$> frequency [(1, pure 1), (1, pure 255), (3, choose (2, 254))]
-    genE2 = estring <$> frequency [(1, pure 256), (3, choose (257, 65535))]
+    genE1 = example_estring <$> frequency [(1, pure 1), (1, pure 255), (3, choose (2, 254))]
+    genE2 = example_estring <$> frequency [(1, pure 256), (3, choose (257, 65535))]
 
     genBSize = elements [64, 128, 256, 512]
-    estring len
-        | len > 1 = fromString $ "\x01" <> replicate len '\x00' <> "\x01"
-        | otherwise = "\x01"
+
+example_estring :: Int -> Opaque
+example_estring len
+    | len > 1 = fromString $ "\x01" <> replicate len '\x00' <> "\x01"
+    | otherwise = "\x01"
 
 pubKey_RSA_bin1 :: Int -> Opaque -> Opaque
 pubKey_RSA_bin1 bsize e =
