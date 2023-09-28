@@ -29,6 +29,7 @@ pattern CacheMiss       :: StatsIx
 pattern CacheMiss        = StatsIx 1
 pattern CacheFailed     :: StatsIx
 pattern CacheFailed      = StatsIx 2
+
 pattern QueryTypeRes    :: StatsIx
 pattern QueryTypeRes     = StatsIx 3
 pattern QueryTypeA      :: StatsIx
@@ -37,37 +38,62 @@ pattern QueryTypeA6     :: StatsIx
 pattern QueryTypeA6      = StatsIx 5
 pattern QueryTypeAAAA   :: StatsIx
 pattern QueryTypeAAAA    = StatsIx 6
+pattern QueryTypeANY    :: StatsIx
+pattern QueryTypeANY     = StatsIx 7
 pattern QueryTypeCNAME  :: StatsIx
-pattern QueryTypeCNAME   = StatsIx 7
+pattern QueryTypeCNAME   = StatsIx 8
 pattern QueryTypeDNSKEY :: StatsIx
-pattern QueryTypeDNSKEY  = StatsIx 8
+pattern QueryTypeDNSKEY  = StatsIx 9
 pattern QueryTypeDS     :: StatsIx
-pattern QueryTypeDS      = StatsIx 9
+pattern QueryTypeDS      = StatsIx 10
 pattern QueryTypeHINFO  :: StatsIx
-pattern QueryTypeHINFO   = StatsIx 10
+pattern QueryTypeHINFO   = StatsIx 11
 pattern QueryTypeHTTPS  :: StatsIx
-pattern QueryTypeHTTPS   = StatsIx 11
+pattern QueryTypeHTTPS   = StatsIx 12
 pattern QueryTypeMX     :: StatsIx
-pattern QueryTypeMX      = StatsIx 12
+pattern QueryTypeMX      = StatsIx 13
+pattern QueryTypeNAPTR  :: StatsIx
+pattern QueryTypeNAPTR   = StatsIx 14
 pattern QueryTypeNS     :: StatsIx
-pattern QueryTypeNS      = StatsIx 13
+pattern QueryTypeNS      = StatsIx 15
 pattern QueryTypeNULL   :: StatsIx
-pattern QueryTypeNULL    = StatsIx 14
+pattern QueryTypeNULL    = StatsIx 16
 pattern QueryTypePTR    :: StatsIx
-pattern QueryTypePTR     = StatsIx 15
+pattern QueryTypePTR     = StatsIx 17
 pattern QueryTypeRRSIG  :: StatsIx
-pattern QueryTypeRRSIG   = StatsIx 16
+pattern QueryTypeRRSIG   = StatsIx 18
 pattern QueryTypeSOA    :: StatsIx
-pattern QueryTypeSOA     = StatsIx 17
+pattern QueryTypeSOA     = StatsIx 19
 pattern QueryTypeSPF    :: StatsIx
-pattern QueryTypeSPF     = StatsIx 18
+pattern QueryTypeSPF     = StatsIx 20
 pattern QueryTypeSRV    :: StatsIx
-pattern QueryTypeSRV     = StatsIx 19
+pattern QueryTypeSRV     = StatsIx 21
 pattern QueryTypeSSHFP  :: StatsIx
-pattern QueryTypeSSHFP   = StatsIx 20
+pattern QueryTypeSSHFP   = StatsIx 22
+pattern QueryTypeSVCB   :: StatsIx
+pattern QueryTypeSVCB    = StatsIx 23
+pattern QueryTypeTLSA   :: StatsIx
+pattern QueryTypeTLSA    = StatsIx 24
+pattern QueryTypeTXT    :: StatsIx
+pattern QueryTypeTXT     = StatsIx 25
+pattern QueryTypeWKS    :: StatsIx
+pattern QueryTypeWKS     = StatsIx 26
+pattern QueryTypeOther  :: StatsIx
+pattern QueryTypeOther   = StatsIx 27
+
+pattern DNSClassRes     :: StatsIx
+pattern DNSClassRes      = StatsIx 28
+pattern DNSClassANY     :: StatsIx
+pattern DNSClassANY      = StatsIx 29
+pattern DNSClassCH      :: StatsIx
+pattern DNSClassCH       = StatsIx 30
+pattern DNSClassIN      :: StatsIx
+pattern DNSClassIN       = StatsIx 31
+pattern DNSClassOther   :: StatsIx
+pattern DNSClassOther    = StatsIx 32
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 20
+pattern StatsIxMax       = StatsIx 32
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -78,12 +104,14 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeA,       "query_types_total{type=\"A\"}")
   , (QueryTypeA6,      "query_types_total{type=\"A6\"}")
   , (QueryTypeAAAA,    "query_types_total{type=\"AAAA\"}")
+  , (QueryTypeANY,     "query_types_total{type=\"ANY\"}")
   , (QueryTypeCNAME,   "query_types_total{type=\"CANME\"}")
   , (QueryTypeDNSKEY,  "query_types_total{type=\"DNSKEY\"}")
   , (QueryTypeDS,      "query_types_total{type=\"DS\"}")
   , (QueryTypeHINFO,   "query_types_total{type=\"HINFO\"}")
   , (QueryTypeHTTPS,   "query_types_total{type=\"HTTPS\"}")
   , (QueryTypeMX,      "query_types_total{type=\"MX\"}")
+  , (QueryTypeNAPTR,   "query_types_total{type=\"NAPTR\"}")
   , (QueryTypeNS,      "query_types_total{type=\"NS\"}")
   , (QueryTypeNULL,    "query_types_total{type=\"NULL\"}")
   , (QueryTypePTR,     "query_types_total{type=\"PTR\"}")
@@ -92,30 +120,54 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeSPF,     "query_types_total{type=\"SPF\"}")
   , (QueryTypeSRV,     "query_types_total{type=\"SRV\"}")
   , (QueryTypeSSHFP,   "query_types_total{type=\"SSHFP\"}")
+  , (QueryTypeSVCB,    "query_types_total{type=\"SVCB\"}")
+  , (QueryTypeTLSA,    "query_types_total{type=\"TLSA\"}")
+  , (QueryTypeTXT,     "query_types_total{type=\"TXT\"}")
+  , (QueryTypeWKS,     "query_types_total{type=\"WKS\"}")
+  , (QueryTypeOther,   "query_types_total{type=\"other\"}")
+  , (DNSClassRes,      "query_classes_total{type=\"Reserved\"}")
+  , (DNSClassANY,      "query_classes_total{type=\"ANY\"}")
+  , (DNSClassCH,       "query_classes_total{type=\"CH\"}")
+  , (DNSClassIN,       "query_classes_total{type=\"IN\"}")
+  , (DNSClassOther,    "query_classes_total{type=\"Other\"}")
   ]
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
 
 fromQueryTypes :: Map TYPE StatsIx
 fromQueryTypes = Map.fromList [
-    (TYPE 0,  QueryTypeRes)
-  , (A,       QueryTypeA)
-  , (TYPE 38, QueryTypeA6)
-  , (AAAA,    QueryTypeAAAA)
-  , (CNAME,   QueryTypeCNAME)
-  , (DNSKEY,  QueryTypeDNSKEY)
-  , (DS,      QueryTypeDS)
-  , (TYPE 13, QueryTypeHINFO)
-  , (HTTPS,   QueryTypeHTTPS)
-  , (MX,      QueryTypeMX)
-  , (NS,      QueryTypeNS)
-  , (NULL,    QueryTypeNULL)
-  , (PTR,     QueryTypePTR)
-  , (RRSIG,   QueryTypeRRSIG)
-  , (SOA,     QueryTypeSOA)
-  , (TYPE 99, QueryTypeSPF)
-  , (SRV,     QueryTypeSRV)
-  , (TYPE 44, QueryTypeSSHFP)
+    (TYPE 0,   QueryTypeRes)
+  , (A,        QueryTypeA)
+  , (TYPE 38,  QueryTypeA6)
+  , (AAAA,     QueryTypeAAAA)
+  , (TYPE 255, QueryTypeANY)
+  , (CNAME,    QueryTypeCNAME)
+  , (DNSKEY,   QueryTypeDNSKEY)
+  , (DS,       QueryTypeDS)
+  , (TYPE 13,  QueryTypeHINFO)
+  , (HTTPS,    QueryTypeHTTPS)
+  , (MX,       QueryTypeMX)
+  , (TYPE 35,  QueryTypeNAPTR)
+  , (NS,       QueryTypeNS)
+  , (NULL,     QueryTypeNULL)
+  , (PTR,      QueryTypePTR)
+  , (RRSIG,    QueryTypeRRSIG)
+  , (SOA,      QueryTypeSOA)
+  , (TYPE 99,  QueryTypeSPF)
+  , (SRV,      QueryTypeSRV)
+  , (TYPE 44,  QueryTypeSSHFP)
+  , (SVCB,     QueryTypeSVCB)
+  , (TLSA,     QueryTypeTLSA)
+  , (TXT,      QueryTypeTXT)
+  , (TYPE 11,  QueryTypeWKS)
+  ]
+
+fromDNSClass :: Map CLASS StatsIx
+fromDNSClass = Map.fromList [
+    (CLASS 0,   DNSClassRes)
+  , (CLASS 255, DNSClassANY)
+  , (CLASS 3,   DNSClassCH)
+  , (IN,        DNSClassIN)
   ]
 
 newStats :: IO Stats
@@ -130,11 +182,13 @@ incStats (Stats stats) ix = do
     (i,_) <- myThreadId >>= threadCapability
     void $ atomicModifyIntArray (stats ! i) ix (+1)
 
-incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> IO ()
-incStatsM s m k = do
+incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
+incStatsM s m k mk = do
     case Map.lookup k m of
-      Nothing -> return ()
-      Just ix -> incStats s ix
+      Nothing -> case mk of
+        Nothing -> return ()
+        Just dx -> incStats s dx
+      Just ix   -> incStats s ix
 
 readStats :: Stats -> Builder -> IO Builder
 readStats (Stats stats) prefix = do
