@@ -90,23 +90,6 @@ genPubKey_RSA_bin =
         , (1, pubKey_RSA_bin2 <$> genBSize <*> genE2)
         ]
   where
-    pubKey_RSA_bin1 bsize e =
-        Opaque.concat
-            [ Opaque.singleton $ fromIntegral $ Opaque.length e
-            , e
-            , fromString $ replicate bsize '\xff'
-            ]
-    pubKey_RSA_bin2 bsize e =
-        Opaque.concat
-            [ Opaque.singleton 0
-            , Opaque.singleton $ fromIntegral x
-            , Opaque.singleton $ fromIntegral y
-            , e
-            , fromString $ replicate bsize '\xff'
-            ]
-      where
-        (x, y) = Opaque.length e `divMod` 256
-
     genE1 = estring <$> frequency [(1, pure 1), (1, pure 255), (3, choose (2, 254))]
     genE2 = estring <$> frequency [(1, pure 256), (3, choose (257, 65535))]
 
@@ -114,6 +97,26 @@ genPubKey_RSA_bin =
     estring len
         | len > 1 = fromString $ "\x01" <> replicate len '\x00' <> "\x01"
         | otherwise = "\x01"
+
+pubKey_RSA_bin1 :: Int -> Opaque -> Opaque
+pubKey_RSA_bin1 bsize e =
+    Opaque.concat
+        [ Opaque.singleton $ fromIntegral $ Opaque.length e
+        , e
+        , fromString $ replicate bsize '\xff'
+        ]
+
+pubKey_RSA_bin2 :: Int -> Opaque -> Opaque
+pubKey_RSA_bin2 bsize e =
+    Opaque.concat
+        [ Opaque.singleton 0
+        , Opaque.singleton $ fromIntegral x
+        , Opaque.singleton $ fromIntegral y
+        , e
+        , fromString $ replicate bsize '\xff'
+        ]
+  where
+    (x, y) = Opaque.length e `divMod` 256
 
 genOpaque :: Gen Opaque
 genOpaque =
