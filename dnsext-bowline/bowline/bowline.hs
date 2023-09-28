@@ -195,8 +195,9 @@ getControl env mng0 = do
 getStats' :: Env -> IO (Int, Int) -> IO Builder
 getStats' env _ucacheQSize = do
     enabled <- getRTSStatsEnabled
-    gc <- if enabled
-        then fromRTSStats <$> getRTSStats
-        else return mempty
+    gc <-
+        if enabled
+            then fromRTSStats <$> getRTSStats
+            else return mempty
     st <- Server.getStats env "bowline_"
     return (gc <> st)

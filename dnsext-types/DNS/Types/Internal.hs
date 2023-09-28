@@ -4,7 +4,7 @@ module DNS.Types.Internal (
     OptCode (..),
     RCODE (..),
     CanonicalFlag (..),
-    CLASS(..),
+    CLASS (..),
 
     -- * Classes
     ResourceData (..),

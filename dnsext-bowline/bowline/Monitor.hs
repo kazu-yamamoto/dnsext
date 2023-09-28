@@ -5,9 +5,9 @@ module Monitor (
 ) where
 
 -- GHC packages
-import Control.Concurrent (getNumCapabilities)
+
 import Control.Applicative ((<|>))
-import Control.Concurrent (forkFinally, forkIO, threadWaitRead)
+import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
 import Data.ByteString.Builder

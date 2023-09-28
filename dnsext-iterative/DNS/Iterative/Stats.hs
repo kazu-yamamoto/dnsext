@@ -7,10 +7,10 @@ module DNS.Iterative.Stats where
 import Control.Concurrent
 import Control.Monad
 import DNS.Array
-import DNS.Types
-import DNS.Types.Internal
 import DNS.SEC
 import DNS.SVCB
+import DNS.Types
+import DNS.Types.Internal
 import Data.Array
 import Data.Array.IO
 import Data.ByteString.Builder
@@ -18,8 +18,9 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
-newtype StatsIx = StatsIx Int deriving (Eq,Ord,Enum,Ix)
+newtype StatsIx = StatsIx Int deriving (Eq, Ord, Enum, Ix)
 
+{- FOURMOLU_DISABLE -}
 pattern StatsIxMin      :: StatsIx
 pattern StatsIxMin       = StatsIx 0
 
@@ -109,7 +110,9 @@ pattern FlagTC           = StatsIx 39
 
 pattern StatsIxMax      :: StatsIx
 pattern StatsIxMax       = StatsIx 39
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
     (CacheHit,         "cache_hit")
@@ -153,9 +156,11 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (FlagRD,           "query_flags_total{type=\"RD\"}")
   , (FlagTC,           "query_flags_total{type=\"TC\"}")
   ]
+{- FOURMOLU_ENABLE -}
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
 
+{- FOURMOLU_DISABLE -}
 fromQueryTypes :: Map TYPE StatsIx
 fromQueryTypes = Map.fromList [
     (TYPE 0,   QueryTypeRes)
@@ -183,7 +188,9 @@ fromQueryTypes = Map.fromList [
   , (TXT,      QueryTypeTXT)
   , (TYPE 11,  QueryTypeWKS)
   ]
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 fromDNSClass :: Map CLASS StatsIx
 fromDNSClass = Map.fromList [
     (CLASS 0,   DNSClassRes)
@@ -191,6 +198,7 @@ fromDNSClass = Map.fromList [
   , (CLASS 3,   DNSClassCH)
   , (IN,        DNSClassIN)
   ]
+{- FOURMOLU_ENABLE -}
 
 newStats :: IO Stats
 newStats = do
@@ -201,16 +209,16 @@ newStats = do
 
 incStats :: Stats -> StatsIx -> IO ()
 incStats (Stats stats) ix = do
-    (i,_) <- myThreadId >>= threadCapability
-    void $ atomicModifyIntArray (stats ! i) ix (+1)
+    (i, _) <- myThreadId >>= threadCapability
+    void $ atomicModifyIntArray (stats ! i) ix (+ 1)
 
 incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
 incStatsM s m k mk = do
     case Map.lookup k m of
-      Nothing -> case mk of
-        Nothing -> return ()
-        Just dx -> incStats s dx
-      Just ix   -> incStats s ix
+        Nothing -> case mk of
+            Nothing -> return ()
+            Just dx -> incStats s dx
+        Just ix -> incStats s ix
 
 readStats :: Stats -> Builder -> IO Builder
 readStats (Stats stats) prefix = do
@@ -221,14 +229,14 @@ readStats (Stats stats) prefix = do
     toB = lazyByteString . BL.pack . show
     go :: Int -> StatsIx -> Builder -> IO Builder
     go n ix b
-      | ix > StatsIxMax = return b
-      | otherwise = do
+        | ix > StatsIxMax = return b
+        | otherwise = do
             v <- sumup 0 n ix 0
             let b' = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
             go n (succ ix) b'
     sumup :: Int -> Int -> StatsIx -> Int -> IO Int
     sumup i n ix acc
-      | i < n = do
-          v <- readArray (stats ! i) ix
-          sumup (i + 1) n ix (acc + v)
-      | otherwise = return acc
+        | i < n = do
+            v <- readArray (stats ! i) ix
+            sumup (i + 1) n ix (acc + v)
+        | otherwise = return acc

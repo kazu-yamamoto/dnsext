@@ -48,7 +48,7 @@ cacherLogic env send decode toResolver proto mysa peersa req = do
                     incStats (stats_ env) CacheHit
                     let bs = DNS.encode rspMsg
                     send bs
-                    (s,ns) <- getCurrentTimeNsec
+                    (s, ns) <- getCurrentTimeNsec
                     let st = stats_ env
                         DNS.Question{..} = head $ DNS.question reqMsg
                         DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg
@@ -89,7 +89,7 @@ workerLogic env send proto mysa peersa reqMsg = do
             incStats (stats_ env) CacheMiss
             let bs = DNS.encode rspMsg
             send bs
-            (s,ns) <- getCurrentTimeNsec
+            (s, ns) <- getCurrentTimeNsec
             let st = stats_ env
                 DNS.Question{..} = head $ DNS.question reqMsg
                 DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg

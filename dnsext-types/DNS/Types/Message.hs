@@ -668,7 +668,8 @@ getQuestion =
 newtype CLASS = CLASS
     { fromCLASS :: Word16
     -- ^ Convert an 'CLASS' to its numeric value.
-    } deriving (Eq, Ord)
+    }
+    deriving (Eq, Ord)
 
 toCLASS :: Word16 -> CLASS
 toCLASS = CLASS
