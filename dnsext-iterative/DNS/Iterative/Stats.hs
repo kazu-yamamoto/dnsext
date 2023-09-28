@@ -29,6 +29,7 @@ pattern CacheMiss       :: StatsIx
 pattern CacheMiss        = StatsIx 1
 pattern CacheFailed     :: StatsIx
 pattern CacheFailed      = StatsIx 2
+
 pattern QueryTypeRes    :: StatsIx
 pattern QueryTypeRes     = StatsIx 3
 pattern QueryTypeA      :: StatsIx
@@ -80,8 +81,19 @@ pattern QueryTypeWKS     = StatsIx 26
 pattern QueryTypeOther  :: StatsIx
 pattern QueryTypeOther   = StatsIx 27
 
+pattern DNSClassRes     :: StatsIx
+pattern DNSClassRes      = StatsIx 28
+pattern DNSClassANY     :: StatsIx
+pattern DNSClassANY      = StatsIx 29
+pattern DNSClassCH      :: StatsIx
+pattern DNSClassCH       = StatsIx 30
+pattern DNSClassIN      :: StatsIx
+pattern DNSClassIN       = StatsIx 31
+pattern DNSClassOther   :: StatsIx
+pattern DNSClassOther    = StatsIx 32
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 27
+pattern StatsIxMax       = StatsIx 32
 
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
@@ -113,6 +125,11 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryTypeTXT,     "query_types_total{type=\"TXT\"}")
   , (QueryTypeWKS,     "query_types_total{type=\"WKS\"}")
   , (QueryTypeOther,   "query_types_total{type=\"other\"}")
+  , (DNSClassRes,      "query_classes_total{type=\"Reserved\"}")
+  , (DNSClassANY,      "query_classes_total{type=\"ANY\"}")
+  , (DNSClassCH,       "query_classes_total{type=\"CH\"}")
+  , (DNSClassIN,       "query_classes_total{type=\"IN\"}")
+  , (DNSClassOther,    "query_classes_total{type=\"Other\"}")
   ]
 
 newtype Stats = Stats (Array Int (IOUArray StatsIx Int))
@@ -143,6 +160,14 @@ fromQueryTypes = Map.fromList [
   , (TLSA,     QueryTypeTLSA)
   , (TXT,      QueryTypeTXT)
   , (TYPE 11,  QueryTypeWKS)
+  ]
+
+fromDNSClass :: Map CLASS StatsIx
+fromDNSClass = Map.fromList [
+    (CLASS 0,   DNSClassRes)
+  , (CLASS 255, DNSClassANY)
+  , (CLASS 3,   DNSClassCH)
+  , (IN,        DNSClassIN)
   ]
 
 newStats :: IO Stats
