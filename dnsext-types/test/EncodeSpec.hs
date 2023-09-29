@@ -70,7 +70,7 @@ testResponseA =
                 { identifier = 61046
                 , flags =
                     DNSFlags
-                        { qOrR = QR_Response
+                        { isResponse = True
                         , opcode = OP_STD
                         , authAnswer = False
                         , trunCation = False
@@ -179,7 +179,7 @@ testResponseTXT =
                 { identifier = 48724
                 , flags =
                     DNSFlags
-                        { qOrR = QR_Response
+                        { isResponse = True
                         , opcode = OP_STD
                         , authAnswer = False
                         , trunCation = False

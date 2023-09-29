@@ -175,7 +175,7 @@ genDNSHeader maxrc = DNSHeader <$> genWord16 <*> genDNSFlags maxrc
 genDNSFlags :: Word16 -> Gen DNSFlags
 genDNSFlags maxrc =
     DNSFlags
-        <$> genQorR
+        <$> genBool
         <*> genOPCODE
         <*> genBool
         <*> genBool
@@ -199,9 +199,6 @@ genWord8 = arbitrary
 
 genBool :: Gen Bool
 genBool = elements [True, False]
-
-genQorR :: Gen QorR
-genQorR = elements [minBound .. maxBound]
 
 genOPCODE :: Gen OPCODE
 genOPCODE = elements [OP_STD, OP_INV, OP_SSR, OP_NOTIFY, OP_UPDATE]

@@ -220,7 +220,7 @@ minUdpSize = 512
 -- the message 'DNSHeader' and 'EDNSheader'.
 --
 -- >>> defaultQuery
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {qOrR = QR_Query, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
@@ -264,7 +264,7 @@ makeQuery idt q =
 -- EDNS OPT record).  See 'EDNSheader' for more details.
 --
 -- >>> defaultResponse
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {qOrR = QR_Response, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = True, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
@@ -273,7 +273,7 @@ defaultResponse =
                 { identifier = 0
                 , flags =
                     defaultDNSFlags
-                        { qOrR = QR_Response
+                        { isResponse = True
                         , authAnswer = True
                         , recAvailable = True
                         , authenData = False
@@ -314,8 +314,8 @@ data DNSHeader = DNSHeader
 
 -- | Raw data format for the flags of DNS Query and Response.
 data DNSFlags = DNSFlags
-    { qOrR :: QorR
-    -- ^ Query or response.
+    { isResponse :: Bool
+    -- ^ QR (Queary or Response) bit - this bit is set if the message is response.
     , opcode :: OPCODE
     -- ^ Kind of query.
     , authAnswer :: Bool
@@ -369,11 +369,11 @@ getHeader =
 -- the RD bit is set, and the AD and CD bits are cleared.
 --
 -- >>> defaultDNSFlags
--- DNSFlags {qOrR = QR_Query, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}
+-- DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}
 defaultDNSFlags :: DNSFlags
 defaultDNSFlags =
     DNSFlags
-        { qOrR = QR_Query
+        { isResponse = False
         , opcode = OP_STD
         , authAnswer = False
         , trunCation = False
@@ -401,7 +401,7 @@ putDNSFlags DNSFlags{..} = put16 word
             , when trunCation $ set (bit 9)
             , when authAnswer $ set (bit 10)
             , set (fromOPCODE opcode `shiftL` 11)
-            , when (qOrR == QR_Response) $ set (bit 15)
+            , when isResponse $ set (bit 15)
             ]
 
     word = execState st 0
@@ -412,7 +412,7 @@ getDNSFlags = do
     let oc = getOpcode flgs
     return $
         DNSFlags
-            (getQorR flgs)
+            (getIsResponse flgs)
             oc
             (getAuthAnswer flgs)
             (getTrunCation flgs)
@@ -422,7 +422,7 @@ getDNSFlags = do
             (getAuthenData flgs)
             (getChkDisable flgs)
   where
-    getQorR w = if testBit w 15 then QR_Response else QR_Query
+    getIsResponse w = testBit w 15
     getOpcode w = toOPCODE (shiftR w 11 .&. 0x0f)
     getAuthAnswer w = testBit w 10
     getTrunCation w = testBit w 9
@@ -431,16 +431,6 @@ getDNSFlags = do
     getRcode w = toRCODE $ w .&. 0x0f
     getAuthenData w = testBit w 5
     getChkDisable w = testBit w 4
-
-----------------------------------------------------------------
-
--- | Query or response.
-data QorR
-    = -- | Query.
-      QR_Query
-    | -- | Response.
-      QR_Response
-    deriving (Eq, Show, Enum, Bounded)
 
 ----------------------------------------------------------------
 
