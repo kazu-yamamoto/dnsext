@@ -9,7 +9,7 @@ import Data.String (fromString)
 import Data.UnixTime (UnixTime (..), getUnixTime)
 import Data.Word (Word16)
 import Foreign.C.Types (CTime (..))
-import System.Environment (getArgs)
+import System.Environment (getProgName, getArgs)
 import Text.Read (readEither)
 
 -- dnsext-* package
@@ -128,6 +128,7 @@ query re name typ =
 
 type Result = Either DNSError DNSMessage
 
+{- FOURMOLU_DISABLE -}
 compareResult :: Result -> Result -> (Int, String)
 compareResult x1 x2 = case (x1, x2) of
     (Left e1, Left e2) -> compareDnsError e1 e2
@@ -146,24 +147,15 @@ compareResult x1 x2 = case (x1, x2) of
         | rd m1 /= rd m2 = (1, "recDesired not match: " ++ show (rd m1, rd m2))
         | neqAnswer1 m1 m2 =
             ( 1
-            , "answer types not match: "
-                ++ show (DNS.answer m1)
-                ++ ", "
-                ++ show (DNS.answer m2)
+            , showCompared DNS.answer "answer types not match" m1 m2
             )
         | neqAnswer2 m1 m2 =
             ( 2
-            , "answer data not match: "
-                ++ show m1
-                ++ ", "
-                ++ show (DNS.answer m2)
+            , showCompared DNS.answer "answer data not match" m1 m2
             )
         | neqAuthority2 m1 m2 =
             ( 2
-            , "authority data not match: "
-                ++ show (DNS.authority m1)
-                ++ ", "
-                ++ show (DNS.authority m2)
+            , showCompared DNS.authority "authority data not match" m1 m2
             )
         | otherwise = (0, "OK, replies match")
 
@@ -175,6 +167,17 @@ compareResult x1 x2 = case (x1, x2) of
     neqAnswer1 m1 m2 = not $ (eqSection1 `on` DNS.answer) m1 m2
     neqAnswer2 m1 m2 = not $ (eqSection2 `on` DNS.answer) m1 m2
     neqAuthority2 m1 m2 = not $ (eqSection2 `on` DNS.authority) m1 m2
+    showRR indent rr = indent ++ show rr
+    showCompared getSect h m1 m2 =
+        unlines $
+        [h ++ ":"]
+        ++
+        map (showRR "  ") (getSect m1)
+        ++
+        ["  ------------------------------"]
+        ++
+        map (showRR "  ") (getSect m2)
+{- FOURMOLU_ENABLE -}
 
 eqSection2 :: [ResourceRecord] -> [ResourceRecord] -> Bool
 eqSection2 s1 s2 =
@@ -195,6 +198,16 @@ eqSection1 s1 s2 =
 
 ---
 
+usage :: IO ()
+usage = do
+    prog <- getProgName
+    putStr $ unlines
+        [ "Usage: " ++ prog ++ " host1[:port1] host2[:port2]"
+        , ""
+        , "       " ++ prog ++ " host1[:port1] host2[:port2] input_file"
+        , ""
+        ]
+
 main :: IO ()
 main = do
     args <- getArgs
@@ -209,5 +222,5 @@ main = do
             inputs = case xs of
                 [] -> getContents
                 fn : _ -> readFile fn
-        _ -> fail "two server addresses required."
+        _ -> usage *> fail "two server addresses required."
     run a1 a2 . lines =<< getInputs
