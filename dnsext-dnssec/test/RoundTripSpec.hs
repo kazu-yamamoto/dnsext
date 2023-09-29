@@ -97,7 +97,7 @@ genPubKey_RSA_bin =
 
 example_estring :: Int -> Opaque
 example_estring len
-    | len > 1 = fromString $ "\x01" <> replicate len '\x00' <> "\x01"
+    | len > 1 = fromString $ "\x01" <> replicate (65535 `min` len - 2) '\x00' <> "\x01"
     | otherwise = "\x01"
 
 pubKey_RSA_bin1 :: Int -> Opaque -> Opaque
