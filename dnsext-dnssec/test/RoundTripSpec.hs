@@ -90,13 +90,28 @@ genPubKey_RSA_bin =
         , (1, pubKey_RSA_bin2 <$> genBSize <*> genE2)
         ]
   where
-    pubKey_RSA_bin1 bsize e =
-        Opaque.concat
-            [ Opaque.singleton $ fromIntegral $ Opaque.length e
-            , e
-            , fromString $ replicate bsize '\xff'
-            ]
-    pubKey_RSA_bin2 bsize e =
+    genE1 = example_estring <$> frequency [(1, pure 1), (1, pure 255), (3, choose (2, 254))]
+    genE2 = example_estring <$> frequency [(1, pure 256), (3, choose (257, 65535))]
+
+    genBSize = elements [64, 128, 256, 512]
+
+example_estring :: Int -> Opaque
+example_estring len
+    | len > 1 = fromString $ "\x01" <> replicate (65535 `min` len - 2) '\x00' <> "\x01"
+    | otherwise = "\x01"
+
+pubKey_RSA_bin1 :: Int -> Opaque -> Opaque
+pubKey_RSA_bin1 bsize e =
+    Opaque.concat
+        [ Opaque.singleton $ fromIntegral $ Opaque.length e
+        , e
+        , fromString $ replicate bsize '\xff'
+        ]
+
+pubKey_RSA_bin2 :: Int -> Opaque -> Opaque
+pubKey_RSA_bin2 bsize e
+    | elen > 65535 = error $ "pubKey_RSA_bin2: too long e!, e length: " ++ show elen
+    | otherwise =
         Opaque.concat
             [ Opaque.singleton 0
             , Opaque.singleton $ fromIntegral x
@@ -104,16 +119,9 @@ genPubKey_RSA_bin =
             , e
             , fromString $ replicate bsize '\xff'
             ]
-      where
-        (x, y) = Opaque.length e `divMod` 256
-
-    genE1 = estring <$> frequency [(1, pure 1), (1, pure 255), (3, choose (2, 254))]
-    genE2 = estring <$> frequency [(1, pure 256), (3, choose (257, 65535))]
-
-    genBSize = elements [64, 128, 256, 512]
-    estring len
-        | len > 1 = fromString $ "\x01" <> replicate len '\x00' <> "\x01"
-        | otherwise = "\x01"
+  where
+    elen = Opaque.length e
+    (x, y) = elen `divMod` 256
 
 genOpaque :: Gen Opaque
 genOpaque =
