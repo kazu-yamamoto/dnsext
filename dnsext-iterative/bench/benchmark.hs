@@ -19,6 +19,7 @@ import System.Console.GetOpt (
     usageInfo,
  )
 import System.Environment (getArgs)
+import System.Timeout (timeout)
 import Text.Read (readEither)
 import UnliftIO (concurrently_)
 
@@ -202,8 +203,9 @@ getEnv Config{..} putLines = do
     tcache@TimeCache{..} <- newTimeCache
     let memoLogLn = putLines Log.WARN Nothing . (: [])
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn getTime
+        tmout = timeout 3000000
     cacheOps <- Cache.newRRCacheOps cacheConf
-    Iterative.newEnv putLines (\_ -> return ()) False cacheOps tcache
+    Iterative.newEnv putLines (\_ -> return ()) False cacheOps tcache tmout
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

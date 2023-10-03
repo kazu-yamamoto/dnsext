@@ -11,6 +11,7 @@ import Data.IORef (newIORef)
 -- other packages
 
 -- dnsext packages
+import DNS.Do53.Client (Reply)
 import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Log as Log
 import DNS.RRCache (RRCacheOps (..))
@@ -29,8 +30,9 @@ newEnv
     -- ^ disabling IPv6
     -> RRCacheOps
     -> TimeCache
+    -> (IO Reply -> IO (Maybe Reply))
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
+newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} tmout = do
     genId <- newConcurrentGenId
     rootRef <- newIORef Nothing
     stats <- newStats
@@ -47,5 +49,6 @@ newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} = do
                 , timeString_ = getTimeStr
                 , idGen_ = genId
                 , stats_ = stats
+                , timeout_ = tmout
                 }
     return cxt
