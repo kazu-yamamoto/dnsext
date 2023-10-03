@@ -2,6 +2,7 @@ module DNS.Iterative.Query.Norec (norec) where
 
 -- GHC packages
 import qualified Control.Exception as E
+import System.Timeout (timeout)
 
 -- other packages
 
@@ -13,6 +14,7 @@ import DNS.Do53.Client (
     ractionGenId,
     ractionGetTime,
     ractionLog,
+    ractionTimeout,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -44,6 +46,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
+                        , ractionTimeout = timeout 10000000
                         }
                 }
             | aserver <- aservers

@@ -18,6 +18,7 @@ import qualified Data.IORef as I
 import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
+import System.Timeout (timeout)
 import UnliftIO (concurrently_, finally, race_)
 
 import Config
@@ -72,7 +73,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (runWriter, putDNSTAP) <- TAP.new conf
     (runLogger, putLines, flush) <- getLogger conf
     gcacheSetLogLn putLines
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache
+    let tmout = timeout cnf_resolve_timeout
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     servers <- mapM (getServers env cnf_dns_addrs) $ trans creds
     mng <- getControl env mng0

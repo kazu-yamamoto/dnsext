@@ -9,6 +9,7 @@ import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 import Data.String (fromString)
 import Network.Socket (HostName)
+import System.Timeout (timeout)
 
 import DNS.Types
 
@@ -28,7 +29,8 @@ setup disableV6NS putLines = do
     tcache@TimeCache{..} <- newTimeCache
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
-    newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
+    let tmout = timeout 3000000
+    newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache tmout
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)

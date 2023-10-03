@@ -15,6 +15,7 @@ module DNS.Iterative.Query.ResolveJust (
 -- GHC packages
 import Data.IORef (newIORef)
 import Data.List.NonEmpty (nonEmpty)
+import System.Timeout (timeout)
 
 -- other packages
 import Data.IP (IP)
@@ -237,6 +238,7 @@ _newTestEnv putLines =
             , timeString_ = getTimeStr
             , idGen_ = genId
             , stats_ = stats
+            , timeout_ = timeout 3000000
             }
 
 _findConsumed :: [String] -> IO ()

@@ -28,6 +28,7 @@ data Config = Config
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
     , cnf_dns_addrs :: [String]
+    , cnf_resolve_timeout :: Int
     , cnf_udp :: Bool
     , cnf_udp_port :: Int
     , cnf_udp_pipelines_per_socket :: Int
@@ -72,6 +73,7 @@ defaultConfig =
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
+        , cnf_resolve_timeout = 10000000
         , cnf_udp = True
         , cnf_udp_port = 53
         , cnf_udp_pipelines_per_socket = 2
@@ -164,6 +166,7 @@ makeConfig def conf =
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_dns_addrs = get "cnf_dns_addrs" cnf_dns_addrs
+        , cnf_resolve_timeout = get "resolve_timeout" cnf_resolve_timeout
         , cnf_udp = get "udp" cnf_udp
         , cnf_udp_port = get "udp-port" cnf_udp_port
         , cnf_udp_pipelines_per_socket = get "udp-pipelines-per-socket" cnf_udp_pipelines_per_socket

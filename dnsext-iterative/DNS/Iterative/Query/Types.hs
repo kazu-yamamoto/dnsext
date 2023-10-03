@@ -27,7 +27,7 @@ import Data.IP (IP)
 import Data.List.NonEmpty (NonEmpty (..))
 
 -- dnsext packages
-import DNS.Do53.Client (QueryControls (..))
+import DNS.Do53.Client (QueryControls (..), Reply)
 import qualified DNS.Log as Log
 import DNS.RRCache (
     CRSet,
@@ -55,6 +55,7 @@ data Env = Env
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
     , stats_ :: Stats
+    , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
 
 {- FOURMOLU_DISABLE -}
