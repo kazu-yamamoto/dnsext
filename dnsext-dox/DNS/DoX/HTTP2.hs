@@ -72,7 +72,7 @@ doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest = do
         now <- getTime
         case decodeChunks now bss of
             Left e -> E.throwIO e
-            Right (msg, _) -> case checkRespM q ident msg of -- fixme
+            Right msg -> case checkRespM q ident msg of -- fixme
                 Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
   where

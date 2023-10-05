@@ -17,12 +17,6 @@ module DNS.Types.Decode (
     decodeAt,
     decode,
 
-    -- * Decoding multple length-encoded DNS messages,
-
-    -- e.g., from TCP traffic.
-    decodeManyAt,
-    decodeMany,
-
     -- * Generic decoder
     decodeChunks,
 
@@ -62,7 +56,7 @@ decodeAt
     -- ^ encoded input buffer
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
-decodeAt t bs = fst <$> runSGetAt t (fitSGet (BS.length bs) getDNSMessage) bs
+decodeAt t bs = runSGetAt t getDNSMessage bs
 
 -- | Decode an input buffer containing a single encoded DNS message.  If the
 -- input buffer has excess content beyond the end of the message an error is
@@ -76,85 +70,29 @@ decode
     -- ^ encoded input buffer
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
-decode bs = fst <$> runSGet (fitSGet (BS.length bs) getDNSMessage) bs
-
-----------------------------------------------------------------
-
--- | Decode a buffer containing multiple encoded DNS messages each preceded by
--- a 16-bit length in network byte order.  Any left-over bytes of a partial
--- message after the last complete message are returned as the second element
--- of the result tuple.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG
--- records) are interpreted at the supplied epoch time.
-decodeManyAt
-    :: EpochTime
-    -- ^ current epoch time
-    -> ByteString
-    -- ^ encoded input buffer
-    -> Either DNSError ([DNSMessage], ByteString)
-    -- ^ decoded messages and left-over partial message
-    -- or error if any complete message fails to parse.
-decodeManyAt t bs = decodeMParse (decodeAt t) bs
-
--- | Decode a buffer containing multiple encoded DNS messages each preceded by
--- a 16-bit length in network byte order.  Any left-over bytes of a partial
--- message after the last complete message are returned as the second element
--- of the result tuple.  DNS /circle-arithmetic/ timestamps (e.g. in RRSIG
--- records) are interpreted based on a nominal time in the year 2078 chosen to
--- give correct dates for DNS timestamps over a 136 year time range from the
--- date the root zone was signed on the 15th of July 2010 until the 21st of
--- August in 2146.  Outside this date range the output is off by some non-zero
--- multiple 2\^32 seconds.
-decodeMany
-    :: ByteString
-    -- ^ encoded input buffer
-    -> Either DNSError ([DNSMessage], ByteString)
-    -- ^ decoded messages and left-over partial message
-    -- or error if any complete message fails to parse.
-decodeMany bs = decodeMParse decode bs
-
--- | Decode multiple messages using the given parser.
-decodeMParse
-    :: (ByteString -> Either DNSError DNSMessage)
-    -- ^ message decoder
-    -> ByteString
-    -- ^ enoded input buffer
-    -> Either DNSError ([DNSMessage], ByteString)
-    -- ^ decoded messages and left-over partial message
-    -- or error if any complete message fails to parse.
-decodeMParse decoder bs = do
-    ((bss, _), leftovers) <- runSGetWithLeftovers lengthEncoded bs
-    msgs <- mapM decoder bss
-    return (msgs, leftovers)
-  where
-    -- Read a list of length-encoded bytestrings
-    lengthEncoded :: SGet [ByteString]
-    lengthEncoded = many $ getInt16 >>= getNByteString
+decode bs = runSGet getDNSMessage bs
 
 ----------------------------------------------------------------
 
 decodeChunks
     :: EpochTime
     -> [ByteString]
-    -> Either DNSError (DNSMessage, [ByteString])
-decodeChunks t bss = case runSGetChunks t (fitSGet len getDNSMessage) bss of
-    Left err -> Left err
-    Right ((r, _), l) -> Right (r, l)
-  where
-    len = foldr (\x y -> BS.length x + y) 0 bss
+    -> Either DNSError DNSMessage
+decodeChunks t bss = decodeAt t $ BS.concat bss
 
 ----------------------------------------------------------------
 
 -- | Decode DNS header.
 decodeDNSHeader :: ByteString -> Either DNSError DNSHeader
-decodeDNSHeader bs = fst <$> runSGet getHeader bs
+decodeDNSHeader bs = runSGet getHeader bs
 
 -- | Decode DNS flags.
 decodeDNSFlags :: ByteString -> Either DNSError DNSFlags
-decodeDNSFlags bs = fst <$> runSGet getDNSFlags bs
+decodeDNSFlags bs = runSGet getDNSFlags bs
 
 -- | Decode a question.
 decodeQuestion :: ByteString -> Either DNSError Question
-decodeQuestion bs = fst <$> runSGet getQuestion bs
+decodeQuestion bs = runSGet getQuestion bs
 
 -- | Decoding a resource record.
 
@@ -163,7 +101,7 @@ decodeQuestion bs = fst <$> runSGet getQuestion bs
 -- it is not generally possible to decode resource record separately from the
 -- enclosing DNS message.  This is an internal function.
 decodeResourceRecord :: ByteString -> Either DNSError ResourceRecord
-decodeResourceRecord bs = fst <$> runSGet getResourceRecord bs
+decodeResourceRecord bs = runSGet getResourceRecord bs
 
 -- | Decode a resource record with DNS timestamps interpreted at the
 -- supplied epoch time.  Since RRs may use DNS name compression, it is not
@@ -175,11 +113,11 @@ decodeResourceRecordAt
     -> ByteString
     -- ^ encoded resource record
     -> Either DNSError ResourceRecord
-decodeResourceRecordAt t bs = fst <$> runSGetAt t getResourceRecord bs
+decodeResourceRecordAt t bs = runSGetAt t getResourceRecord bs
 
 -- | Decode a resource data.
 decodeRData :: TYPE -> ByteString -> Either DNSError RData
-decodeRData typ bs = fst <$> runSGet (getRData typ len) bs
+decodeRData typ bs = runSGet (getRData typ len) bs
   where
     len = BS.length bs
 
@@ -187,10 +125,10 @@ decodeRData typ bs = fst <$> runSGet (getRData typ len) bs
 -- generally possible to decode the names separately from the enclosing DNS
 -- message.  This is an internal function exposed only for testing.
 decodeDomain :: ByteString -> Either DNSError Domain
-decodeDomain bs = fst <$> runSGet getDomain bs
+decodeDomain bs = runSGet getDomain bs
 
 -- | Decode a mailbox name (e.g. the SOA record /rname/ field).  Since DNS names
 -- may use name compression, it is not generally possible to decode the names
 -- separately from the enclosing DNS message.  This is an internal function.
 decodeMailbox :: ByteString -> Either DNSError Mailbox
-decodeMailbox bs = fst <$> runSGet getMailbox bs
+decodeMailbox bs = runSGet getMailbox bs

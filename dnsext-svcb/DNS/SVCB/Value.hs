@@ -27,7 +27,7 @@ toSPV = SvcParamValue . Opaque.fromByteString . runSPut
 
 fromSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
 fromSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
-    Right (r, _) -> Just r
+    Right r -> Just r
     _ -> Nothing
   where
     bs = Opaque.toByteString o

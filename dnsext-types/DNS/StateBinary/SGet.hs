@@ -6,12 +6,8 @@ module DNS.StateBinary.SGet (
     -- * Parser
     SGet,
     failSGet,
-    fitSGet,
     runSGet,
     runSGetAt,
-    runSGetWithLeftovers,
-    runSGetWithLeftoversAt,
-    runSGetChunks,
 
     -- ** Basic parsers
     get8,
@@ -35,14 +31,15 @@ module DNS.StateBinary.SGet (
     getAtTime,
 ) where
 
-import Control.Monad.State.Strict (StateT)
-import qualified Control.Monad.State.Strict as ST
-import qualified Data.Attoparsec.ByteString as A
-import qualified Data.Attoparsec.Types as AT
+import qualified Control.Exception as E
+import Control.Monad.IO.Class
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
+import Data.IORef
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
+import Network.ByteOrder
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 import DNS.StateBinary.Types
 import DNS.Types.Error
@@ -52,67 +49,62 @@ import DNS.Types.Time
 ----------------------------------------------------------------
 
 -- | Parser type
-type SGet = StateT PState (AT.Parser ByteString)
+newtype SGet a = SGet { runSGet' :: ReadBuffer -> IORef PState -> IO a }
+
+instance Functor SGet where
+    f `fmap` m = SGet $ \rbuf ref -> f `fmap` runSGet' m rbuf ref
+
+instance Applicative SGet where
+    pure x = SGet $ \_ _ -> pure x
+    f <*> g = SGet $ \rbuf ref -> do
+        f' <- runSGet' f rbuf ref
+        g' <- runSGet' g rbuf ref
+        pure $ f' g'
+
+instance Monad SGet where
+    m >>= f = SGet $ \rbuf ref -> do
+        m' <- runSGet' m rbuf ref
+        runSGet' (f m') rbuf ref
+
+instance MonadIO SGet where
+    liftIO m = SGet $ \_ _ -> m
 
 -- | Parser state
 data PState = PState
     { pstDomain :: IntMap [RawDomain]
-    , pstPosition :: Position
     , pstAtTime :: EpochTime
     }
     deriving (Eq, Show)
 
 initialState :: EpochTime -> PState
-initialState t = PState IM.empty 0 t
+initialState t = PState IM.empty t
 
 ----------------------------------------------------------------
 
 parserPosition :: SGet Position
-parserPosition = ST.gets pstPosition
+parserPosition = SGet $ \rbuf _  -> position rbuf
 
 getAtTime :: SGet EpochTime
-getAtTime = ST.gets pstAtTime
-
-addPosition :: Position -> SGet ()
-addPosition n
-    | n < 0 = failSGet "internal error: negative position increment"
-    | otherwise = do
-        PState dom pos t <- ST.get
-        let pos' = pos + n
-        ST.put $ PState dom pos' t
+getAtTime = SGet $ \_ ref -> pstAtTime <$> readIORef ref
 
 pushDomain :: Position -> [RawDomain] -> SGet ()
-pushDomain n d = do
-    PState dom pos t <- ST.get
-    ST.put $ PState (IM.insert n d dom) pos t
+pushDomain n d = SGet $ \_ ref -> do
+    PState dom t <- readIORef ref
+    writeIORef ref $ PState (IM.insert n d dom) t
 
 popDomain :: Position -> SGet (Maybe [RawDomain])
-popDomain n = ST.gets (IM.lookup n . pstDomain)
+popDomain n = SGet $ \_ ref -> IM.lookup n . pstDomain <$> readIORef ref
 
 ----------------------------------------------------------------
 
 get8 :: SGet Word8
-get8 = ST.lift A.anyWord8 <* addPosition 1
+get8 = SGet (\rbuf _ -> read8 rbuf)
 
 get16 :: SGet Word16
-get16 = ST.lift getWord16be <* addPosition 2
-  where
-    word8' = fromIntegral <$> A.anyWord8
-    getWord16be = do
-        a <- word8'
-        b <- word8'
-        return $ a * 0x100 + b
+get16 = SGet (\rbuf _ -> read16 rbuf)
 
 get32 :: SGet Word32
-get32 = ST.lift getWord32be <* addPosition 4
-  where
-    word8' = fromIntegral <$> A.anyWord8
-    getWord32be = do
-        a <- word8'
-        b <- word8'
-        c <- word8'
-        d <- word8'
-        return $ a * 0x1000000 + b * 0x10000 + c * 0x100 + d
+get32 = SGet (\rbuf _ -> read32 rbuf)
 
 getInt8 :: SGet Int
 getInt8 = fromIntegral <$> get8
@@ -125,49 +117,32 @@ getInt32 = fromIntegral <$> get32
 
 ----------------------------------------------------------------
 
-overrun :: SGet a
-overrun = failSGet "malformed or truncated input"
-
 getNBytes :: Int -> SGet [Int]
 getNBytes n
-    | n < 0 = overrun
-    | otherwise = toInts <$> getNByteString n
+    | n < 0 = error "malformed or truncated input"
+    | otherwise = SGet $ \rbuf _ -> toInts <$> extractByteString rbuf n
   where
     toInts = map fromIntegral . BS.unpack
 
 getNOctets :: Int -> SGet [Word8]
 getNOctets n
-    | n < 0 = overrun
-    | otherwise = BS.unpack <$> getNByteString n
+    | n < 0 = error "malformed or truncated input"
+    | otherwise = SGet $ \rbuf _ -> BS.unpack <$> extractByteString rbuf n
 
 skipNBytes :: Int -> SGet ()
 skipNBytes n
-    | n < 0 = overrun
-    | otherwise = ST.lift (A.take n) >> addPosition n
+    | n < 0 = error "malformed or truncated input"
+    | otherwise = SGet $ \rbuf _ -> ff rbuf n
 
 getNByteString :: Int -> SGet ByteString
 getNByteString n
-    | n < 0 = overrun
-    | otherwise = ST.lift (A.take n) <* addPosition n
+    | n < 0 = error "malformed or truncated input"
+    | otherwise = SGet $ \rbuf _ -> extractByteString rbuf n
 
 getNShortByteString :: Int -> SGet ShortByteString
 getNShortByteString n
-    | n < 0 = overrun
-    | otherwise = ST.lift (Short.toShort <$> A.take n) <* addPosition n
-
-fitSGet :: Int -> SGet a -> SGet a
-fitSGet len parser
-    | len < 0 = overrun
-    | otherwise = do
-        pos0 <- parserPosition
-        ret <- parser
-        pos' <- parserPosition
-        if pos' == pos0 + len
-            then return ret
-            else
-                if pos' > pos0 + len
-                    then failSGet "element size exceeds declared size"
-                    else failSGet "element shorter than declared size"
+    | n < 0 = error "malformed or truncated input"
+    | otherwise = SGet $ \rbuf _ -> Short.toShort <$> extractByteString rbuf n
 
 -- | Parse a list of elements that takes up exactly a given number of bytes.
 -- In order to avoid infinite loops, if an element parser succeeds without
@@ -180,20 +155,18 @@ sGetMany
     -> SGet a
     -- ^ element parser
     -> SGet [a]
-sGetMany elemname len parser
-    | len < 0 = overrun
-    | otherwise = go len []
+sGetMany elemname len parser = SGet $ \rbuf ref -> do
+    lim <- (+ len) <$> position rbuf
+    go lim id rbuf ref
   where
-    go n xs
-        | n < 0 = failSGet $ elemname ++ " longer than declared size"
-        | n == 0 = pure $ reverse xs
-        | otherwise = do
-            pos0 <- parserPosition
-            x <- parser
-            pos1 <- parserPosition
-            if pos1 <= pos0
-                then failSGet $ "internal error: in-place success for " ++ elemname
-                else go (n + pos0 - pos1) (x : xs)
+    go lim build rbuf ref = do
+        pos <- position rbuf
+        case pos `compare` lim of
+          EQ -> return $ build []
+          LT -> do
+              x <- runSGet' parser rbuf ref
+              go lim (build . (x :)) rbuf ref
+          GT -> error $ "internal error: in-place success for " ++ elemname
 
 ----------------------------------------------------------------
 
@@ -206,24 +179,22 @@ sGetMany elemname len parser
 dnsTimeMid :: EpochTime
 dnsTimeMid = 3426660848
 
--- Construct our own error message, without the unhelpful AttoParsec
--- \"Failed reading: \" prefix.
---
 failSGet :: String -> SGet a
-failSGet msg = ST.lift (fail "" A.<?> msg)
+failSGet = error
 
-runSGetAt :: EpochTime -> SGet a -> ByteString -> Either DNSError (a, PState)
+runSGetAt :: EpochTime -> SGet a -> ByteString -> Either DNSError a
 runSGetAt t parser inp =
-    toResult $ A.parse (ST.runStateT parser $ initialState t) inp
+    unsafeDupablePerformIO $ E.handle handler parse
   where
-    toResult :: A.Result r -> Either DNSError r
-    toResult (A.Done _ r) = Right r
-    toResult (A.Fail _ ctx msg) = Left $ DecodeError $ head $ ctx ++ [msg]
-    toResult (A.Partial _) = Left $ DecodeError "incomplete input"
+    parse = withReadBuffer inp $ \rbuf -> do
+        ref <- newIORef $ initialState t
+        Right <$> runSGet' parser rbuf ref
+    handler (E.SomeException e) = return $ Left $ DecodeError $ "incomplete input: " ++ show e
 
-runSGet :: SGet a -> ByteString -> Either DNSError (a, PState)
+runSGet :: SGet a -> ByteString -> Either DNSError a
 runSGet = runSGetAt dnsTimeMid
 
+{-
 runSGetWithLeftoversAt
     :: EpochTime
     -- ^ Reference time for DNS clock arithmetic
@@ -231,35 +202,16 @@ runSGetWithLeftoversAt
     -- ^ Parser
     -> ByteString
     -- ^ Encoded message
-    -> Either DNSError ((a, PState), ByteString)
+    -> Either DNSError a
 runSGetWithLeftoversAt t parser inp =
-    toResult $ A.parse (ST.runStateT parser $ initialState t) inp
+    unsafeDupablePerformIO $ E.handle handler parse
   where
-    toResult :: A.Result r -> Either DNSError (r, ByteString)
-    toResult (A.Done i r) = Right (r, i)
-    toResult (A.Partial f) = toResult $ f BS.empty
-    toResult (A.Fail _ ctx e) = Left $ DecodeError $ head $ ctx ++ [e]
+    parse = withReadBuffer inp $ \rbuf -> do
+        ref <- newIORef $ initialState t
+        Right <$> runSGet' parser rbuf ref
+    handler (E.SomeException e) = return $ Left $ DecodeError ("incomplete input: " ++ show e)
 
 runSGetWithLeftovers
-    :: SGet a -> ByteString -> Either DNSError ((a, PState), ByteString)
+    :: SGet a -> ByteString -> Either DNSError a
 runSGetWithLeftovers = runSGetWithLeftoversAt dnsTimeMid
-
-----------------------------------------------------------------
-
-runSGetChunks
-    :: EpochTime
-    -- ^ Reference time for DNS clock arithmetic
-    -> SGet a
-    -- ^ Parser
-    -> [ByteString]
-    -- ^ Encoded message
-    -> Either DNSError ((a, PState), [ByteString])
-runSGetChunks t parser inps0 = go cont0 inps0
-  where
-    st0 = initialState t
-    cont0 = A.parse (ST.runStateT parser st0)
-    go _ [] = Left $ DecodeError "not enough data"
-    go cont (inp : inps) = case cont inp of
-        A.Done i r -> Right (r, if i == "" then inps else i : inps)
-        A.Partial cont' -> go cont' inps
-        A.Fail _ ctx e -> Left $ DecodeError $ head $ ctx ++ [e]
+-}

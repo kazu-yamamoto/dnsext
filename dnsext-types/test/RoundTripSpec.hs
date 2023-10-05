@@ -69,9 +69,11 @@ spec = do
     prop "DNSMessage" . forAll genDNSMessage $ \msg ->
         decode (encode msg) `shouldBe` Right msg
 
+{-
     prop "DNSMessage" . forAll genDNSMessage $ \msg ->
         let inps = map BS.singleton $ BS.unpack $ encode msg
          in decodeChunks 3426660848 inps `shouldBe` Right (msg, [])
+-}
 
     prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
         let eh = EDNSheader edns

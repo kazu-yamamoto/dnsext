@@ -132,8 +132,4 @@ cacheWorkerLogic
     -> IO ()
 cacheWorkerLogic env send proto mysa peersa req = do
     let worker = workerLogic env send proto mysa peersa
-    cacherLogic env send decode worker proto mysa peersa req
-  where
-    decode t bss = case DNS.decodeChunks t bss of
-        Left e -> Left e
-        Right (m, _) -> Right m
+    cacherLogic env send DNS.decodeChunks worker proto mysa peersa req

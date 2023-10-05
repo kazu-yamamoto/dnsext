@@ -200,7 +200,7 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left e -> E.throwIO e
-            Right (msg, _) -> case checkRespM q ident msg of
+            Right msg -> case checkRespM q ident msg of
                 Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
