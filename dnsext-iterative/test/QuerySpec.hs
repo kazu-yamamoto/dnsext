@@ -14,6 +14,7 @@ import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
 import Data.String (fromString)
 import System.Environment (lookupEnv)
+import System.Timeout (timeout)
 
 import qualified DNS.Log as Log
 
@@ -51,6 +52,9 @@ data VAnswerResult
     | VFailed
     deriving (Eq, Show)
 
+tmout :: IO a -> IO (Maybe a)
+tmout = timeout 3000000
+
 spec :: Spec
 spec = do
     let getEnvBool n = runIO $ maybe False ((== "1") . take 1) <$> lookupEnv n
@@ -80,7 +84,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
+            cxt <- newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache tmout
             eresult <- fmap snd <$> runResolve cxt (fromString n) ty mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
@@ -113,9 +117,9 @@ querySpec disableV6NS putLines = describe "query" $ do
     tcache@TimeCache{..} <- runIO newTimeCache
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
-    let getCXT = newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache
+    let getCXT = newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache tmout
     cxt <- runIO getCXT
-    cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True cacheOps tcache
+    cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True cacheOps tcache tmout
     let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
         runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
@@ -157,7 +161,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
     root <- runIO $ do
-        icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS cacheOps tcache
+        icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS cacheOps tcache tmout
         failLeft "refresh-root error" =<< runDNSQuery refreshRoot icxt mempty
 
     it "iterative" $ do
