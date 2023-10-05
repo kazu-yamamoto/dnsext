@@ -342,7 +342,9 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 -- | Getting a domain name.
 --   An error is thrown if name compression is used.
 getDomain :: SGet Domain
-getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' False)
+getDomain rbuf ref = domainFromWireLabels <$> do
+    n <- parserPosition rbuf
+    getDomain' False n rbuf ref
 
 -- | Getting a domain name.
 -- Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
@@ -355,16 +357,22 @@ getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' False)
 -- algorithm, each sequence of valid pointer values is necessarily strictly
 -- decreasing!
 getDomainRFC1035 :: SGet Domain
-getDomainRFC1035 = domainFromWireLabels <$> (parserPosition >>= getDomain' True)
+getDomainRFC1035 rbuf ref = domainFromWireLabels <$> do
+    n <- parserPosition rbuf
+    getDomain' True n rbuf ref
 
 -- | Getting a mailbox.
 --   An error is thrown if name compression is used.
 getMailbox :: SGet Mailbox
-getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' False)
+getMailbox rbuf ref = mailboxFromWireLabels <$> do
+    n <- parserPosition rbuf
+    getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
 getMailboxRFC1035 :: SGet Mailbox
-getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' True)
+getMailboxRFC1035 rbuf ref = mailboxFromWireLabels <$> do
+    n <- parserPosition rbuf
+    getDomain' True n rbuf ref
 
 -- $
 --
@@ -383,15 +391,15 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
 getDomain' :: Bool -> Int -> SGet [ShortByteString]
-getDomain' allowCompression ptrLimit = do
-    pos <- parserPosition
-    c <- getInt8
+getDomain' allowCompression ptrLimit = \rbuf ref -> do
+    pos <- parserPosition rbuf
+    c <- getInt8 rbuf
     let n = getValue c
-    getdomain pos c n
+    getdomain pos c n rbuf ref
   where
-    getdomain pos c n
+    getdomain pos c n rbuf ref
         | c == 0 = do
-            pushDomain pos []
+            pushDomain pos [] ref
             return []
         -- As for now, extended labels have no use.
         -- This may change some time in the future.
@@ -399,23 +407,23 @@ getDomain' allowCompression ptrLimit = do
         | isPointer c && not allowCompression =
             failSGet "name compression is not allowed"
         | isPointer c = do
-            d <- getInt8
+            d <- getInt8 rbuf
             let offset = n * 256 + d
             when (offset == ptrLimit) $ failure "self pointing" pos offset
             when (offset > ptrLimit) $ failure "forward pointing" pos offset
-            mx <- popDomain offset
+            mx <- popDomain offset ref
             case mx of
                 Nothing -> failure "invalid area" pos offset
                 Just lls -> do
                     -- Supporting double pointers.
-                    pushDomain pos lls
+                    pushDomain pos lls ref
                     return lls
         | otherwise = do
-            l <- getNShortByteString n
+            l <- getNShortByteString rbuf n
             -- Registering super domains
-            ls <- getDomain' allowCompression ptrLimit
+            ls <- getDomain' allowCompression ptrLimit rbuf ref
             let lls = l : ls
-            pushDomain pos lls
+            pushDomain pos lls ref
             return lls
     -- The length label is limited to 63.
     getValue c = c .&. 0x3f

@@ -236,7 +236,7 @@ instance OptData OD_NSID where
     putOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
 
 get_nsid :: Int -> SGet OD_NSID
-get_nsid len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
+get_nsid len rbuf _ = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_nsid :: Opaque -> OData
 od_nsid = toOData . OD_NSID
@@ -301,11 +301,11 @@ put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
     putOpaque addr
 
 get_clientSubnet :: Int -> SGet OD_ClientSubnet
-get_clientSubnet len = do
-    family <- get16
-    srcBits <- get8
-    scpBits <- get8
-    addr <- getOpaque (len - 4) -- 4 = 2 + 1 + 1
+get_clientSubnet len rbuf ref = do
+    family <- get16 rbuf
+    srcBits <- get8 rbuf
+    scpBits <- get8 rbuf
+    addr <- getOpaque (len - 4) rbuf ref -- 4 = 2 + 1 + 1
     --
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
@@ -369,7 +369,7 @@ instance OptData OD_Padding where
     putOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
 
 get_padding :: Int -> SGet OD_Padding
-get_padding len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
+get_padding len rbuf _ = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_padding :: Opaque -> OData
 od_padding = toOData . OD_Padding

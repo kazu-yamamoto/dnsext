@@ -225,7 +225,7 @@ addType typ name = do
 ----------------------------------------------------------------
 
 getTYPE :: SGet TYPE
-getTYPE = toTYPE <$> get16
+getTYPE rbuf _ = toTYPE <$> get16 rbuf
 
 putTYPE :: TYPE -> SPut ()
 putTYPE x = put16 $ fromTYPE x

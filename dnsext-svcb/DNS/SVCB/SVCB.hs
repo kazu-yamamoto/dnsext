@@ -46,18 +46,18 @@ instance ResourceData RD_SVCB where
             putOpaque v
 
 get_svcb :: Int -> SGet RD_SVCB
-get_svcb len = do
-    end <- (+) len <$> parserPosition
-    priority <- get16
-    target <- getDomain
-    pos <- parserPosition
-    params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
+get_svcb len rbuf ref = do
+    end <- (+) len <$> parserPosition rbuf
+    priority <- get16 rbuf
+    target <- getDomain rbuf ref
+    pos <- parserPosition rbuf
+    params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam rbuf ref
     return $ RD_SVCB priority target params
   where
-    svcparam = do
-        key <- getInt16 -- intestinally parsing as Int
-        lng <- getInt16
-        val <- getOpaque lng
+    svcparam _ _ = do
+        key <- getInt16 rbuf -- intestinally parsing as Int
+        lng <- getInt16 rbuf
+        val <- getOpaque lng rbuf ref
         return (key, SvcParamValue val)
 
 rd_svcb :: Word16 -> Domain -> SvcParams -> RData
@@ -77,8 +77,8 @@ instance ResourceData RD_HTTPS where
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
 
 get_https :: Int -> SGet RD_HTTPS
-get_https len = do
-    RD_SVCB x y z <- get_svcb len
+get_https len rbuf ref = do
+    RD_SVCB x y z <- get_svcb len rbuf ref
     return $ RD_HTTPS x y z
 
 rd_https :: Word16 -> Domain -> SvcParams -> RData
@@ -88,8 +88,8 @@ rd_https p d s = toRData $ RD_HTTPS p d s
 
 addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
-    extendRR SVCB "SVCB" (\len -> toRData <$> get_svcb len)
-    extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)
+    extendRR SVCB "SVCB" (\len rbuf ref -> toRData <$> get_svcb len rbuf ref)
+    extendRR HTTPS "HTTPS" (\len rbuf ref -> toRData <$> get_https len rbuf ref)
 
 ----------------------------------------------------------------
 

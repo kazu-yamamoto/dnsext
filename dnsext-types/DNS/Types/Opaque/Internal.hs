@@ -101,7 +101,7 @@ putOpaque :: Opaque -> SPut ()
 putOpaque (Opaque o) = putShortByteString o
 
 getOpaque :: Int -> SGet Opaque
-getOpaque len = Opaque <$> getNShortByteString len
+getOpaque len rbuf _ = Opaque <$> getNShortByteString rbuf len
 
 putLenOpaque :: Opaque -> SPut ()
 putLenOpaque (Opaque o) = do
@@ -110,4 +110,4 @@ putLenOpaque (Opaque o) = do
     putShortByteString o
 
 getLenOpaque :: SGet Opaque
-getLenOpaque = Opaque <$> (getInt8 >>= getNShortByteString)
+getLenOpaque rbuf _ = Opaque <$> (getInt8 rbuf >>= getNShortByteString rbuf)

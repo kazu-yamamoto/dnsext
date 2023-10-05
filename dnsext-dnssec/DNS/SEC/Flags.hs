@@ -28,7 +28,7 @@ putDNSKEYflags :: [DNSKEY_Flag] -> SPut ()
 putDNSKEYflags = put16 . fromDNSKEYflags
 
 getDNSKEYflags :: SGet [DNSKEY_Flag]
-getDNSKEYflags = toDNSKEYflags <$> get16
+getDNSKEYflags rbuf _ = toDNSKEYflags <$> get16 rbuf
 
 data NSEC3_Flag = OptOut | NSEC3_Flag_Unknown Word8 deriving (Eq, Ord, Show)
 
@@ -54,4 +54,4 @@ putNSEC3flags :: [NSEC3_Flag] -> SPut ()
 putNSEC3flags = put8 . fromNSEC3flags
 
 getNSEC3flags :: SGet [NSEC3_Flag]
-getNSEC3flags = toNSEC3flags <$> get8
+getNSEC3flags rbuf _ = toNSEC3flags <$> get8 rbuf

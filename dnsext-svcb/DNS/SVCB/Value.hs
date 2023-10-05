@@ -47,8 +47,8 @@ instance SPV SPV_Mandatory where
     toSvcParamValue (SPV_Mandatory ks) =
         toSPV $
             mapM_ (put16 . fromSvcParamKey) ks
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_Mandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_Mandatory <$> sGetMany "Mandatory" len (\_ _ -> toSvcParamKey <$> get16 rbuf) rbuf ref
 
 spv_mandatory :: [SvcParamKey] -> SvcParamValue
 spv_mandatory keys = toSvcParamValue $ SPV_Mandatory keys
@@ -65,7 +65,7 @@ instance Show SPV_Port where
 
 instance SPV SPV_Port where
     toSvcParamValue (SPV_Port p) = toSPV $ put16 $ fromIntegral p
-    fromSvcParamValue = fromSPV $ \_ -> SPV_Port . fromIntegral <$> get16
+    fromSvcParamValue = fromSPV $ \_ rbuf _ -> SPV_Port . fromIntegral <$> get16 rbuf
 
 spv_port :: PortNumber -> SvcParamValue
 spv_port p = toSvcParamValue $ SPV_Port p
@@ -83,8 +83,10 @@ instance Show SPV_IPv4Hint where
 instance SPV SPV_IPv4Hint where
     toSvcParamValue (SPV_IPv4Hint is) = toSPV $ do
         mapM_ (mapM_ putInt8 . fromIPv4) is
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_IPv4Hint <$> sGetMany "IPv4Hint" len (toIPv4 <$> getNBytes 4)
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_IPv4Hint <$> sGetMany "IPv4Hint" len ipv4hint rbuf ref
+      where
+        ipv4hint rbuf _ = toIPv4 <$> getNBytes rbuf 4
 
 spv_ipv4hint :: [IPv4] -> SvcParamValue
 spv_ipv4hint is = toSvcParamValue $ SPV_IPv4Hint is
@@ -102,8 +104,10 @@ instance Show SPV_IPv6Hint where
 instance SPV SPV_IPv6Hint where
     toSvcParamValue (SPV_IPv6Hint is) = toSPV $ do
         mapM_ (mapM_ putInt8 . fromIPv6b) is
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_IPv6Hint <$> sGetMany "IPv6Hint" len ipv6hint rbuf ref
+      where
+        ipv6hint rbuf _ =toIPv6b <$> getNBytes rbuf 16
 
 spv_ipv6hint :: [IPv6] -> SvcParamValue
 spv_ipv6hint is = toSvcParamValue $ SPV_IPv6Hint is
@@ -127,12 +131,12 @@ instance SPV SPV_ALPN where
         alpn bs = do
             putInt8 $ Short.length bs
             putShortByteString bs
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_ALPN <$> sGetMany "ALPN" len alpn
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_ALPN <$> sGetMany "ALPN" len alpn rbuf ref
       where
-        alpn = do
-            len <- getInt8
-            getNShortByteString len
+        alpn rbuf _ = do
+            len <- getInt8 rbuf
+            getNShortByteString rbuf len
 
 spv_alpn :: [ALPN] -> SvcParamValue
 spv_alpn as = toSvcParamValue $ SPV_ALPN as
@@ -163,7 +167,7 @@ instance Show SPV_DoHPath where
 
 instance SPV SPV_DoHPath where
     toSvcParamValue (SPV_DoHPath p) = toSPV $ putShortByteString p
-    fromSvcParamValue = fromSPV $ \len -> SPV_DoHPath <$> getNShortByteString len
+    fromSvcParamValue = fromSPV $ \len rbuf _ -> SPV_DoHPath <$> getNShortByteString rbuf len
 
 spv_dohpath :: ShortByteString -> SvcParamValue
 spv_dohpath as = toSvcParamValue $ SPV_DoHPath as

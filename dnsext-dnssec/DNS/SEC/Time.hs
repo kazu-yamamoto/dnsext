@@ -46,9 +46,9 @@ dnsTime tdns tnow =
 -- | Helper to find position of RData end, that is, the offset of the first
 -- byte /after/ the current RData.
 getDNSTime :: SGet DNSTime
-getDNSTime = do
-    tnow <- getAtTime
-    tdns <- get32
+getDNSTime rbuf ref = do
+    tnow <- getAtTime ref
+    tdns <- get32 rbuf
     return $ dnsTime tdns tnow
 
 putDNSTime :: DNSTime -> SPut ()

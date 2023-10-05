@@ -156,16 +156,16 @@ putDNSMessage msg = do
                 rdata' = RData $ RD_OPT $ ednsOptions edns
 
 getDNSMessage :: SGet DNSMessage
-getDNSMessage = do
-    hm <- getHeader
-    qdCount <- getInt16
-    anCount <- getInt16
-    nsCount <- getInt16
-    arCount <- getInt16
-    queries <- getQuestions qdCount
-    answers <- getResourceRecords anCount
-    authrrs <- getResourceRecords nsCount
-    addnrrs <- getResourceRecords arCount
+getDNSMessage rbuf ref = do
+    hm <- getHeader rbuf ref
+    qdCount <- getInt16 rbuf
+    anCount <- getInt16 rbuf
+    nsCount <- getInt16 rbuf
+    arCount <- getInt16 rbuf
+    queries <- getQuestions qdCount rbuf ref
+    answers <- getResourceRecords anCount rbuf ref
+    authrrs <- getResourceRecords nsCount rbuf ref
+    addnrrs <- getResourceRecords arCount rbuf ref
     let (opts, rest) = partition ((==) OPT . rrtype) addnrrs
         flgs = flags hm
         rc = fromRCODE $ rcode flgs
@@ -358,10 +358,10 @@ putHeader hdr = do
     putIdentifier = put16
 
 getHeader :: SGet DNSHeader
-getHeader =
-    DNSHeader <$> decodeIdentifier <*> getDNSFlags
+getHeader  rbuf ref=
+    DNSHeader <$> getIdentifier rbuf <*> getDNSFlags rbuf ref
   where
-    decodeIdentifier = get16
+    getIdentifier = get16
 
 ----------------------------------------------------------------
 
@@ -407,8 +407,8 @@ putDNSFlags DNSFlags{..} = put16 word
     word = execState st 0
 
 getDNSFlags :: SGet DNSFlags
-getDNSFlags = do
-    flgs <- get16
+getDNSFlags rbuf _ = do
+    flgs <- get16 rbuf
     let oc = getOpcode flgs
     return $
         DNSFlags
@@ -643,14 +643,14 @@ putQuestion cf Question{..} = do
     putCLASS qclass
 
 getQuestions :: Int -> SGet [Question]
-getQuestions n = replicateM n getQuestion
+getQuestions n rbuf ref = replicateM n $ getQuestion rbuf ref
 
 getQuestion :: SGet Question
-getQuestion =
+getQuestion rbuf ref =
     Question
-        <$> getDomainRFC1035
-        <*> getTYPE
-        <*> getCLASS
+        <$> getDomainRFC1035 rbuf ref
+        <*> getTYPE rbuf ref
+        <*> getCLASS rbuf ref
 
 ----------------------------------------------------------------
 
@@ -676,7 +676,7 @@ putCLASS :: CLASS -> SPut ()
 putCLASS (CLASS x) = put16 x
 
 getCLASS :: SGet CLASS
-getCLASS = CLASS <$> get16
+getCLASS rbuf _ = CLASS <$> get16 rbuf
 
 -- | Time to live in second.
 type TTL = Seconds
@@ -714,16 +714,16 @@ putResourceRecord cf ResourceRecord{..} = do
     with16Length $ putRData cf rdata
 
 getResourceRecords :: Int -> SGet [ResourceRecord]
-getResourceRecords n = replicateM n getResourceRecord
+getResourceRecords n rbuf ref = replicateM n $ getResourceRecord rbuf ref
 
 getResourceRecord :: SGet ResourceRecord
-getResourceRecord = do
-    dom <- getDomainRFC1035
-    typ <- getTYPE
-    cls <- getCLASS
-    ttl <- getSeconds
-    len <- getInt16
-    dat <- getRData typ len
+getResourceRecord rbuf ref = do
+    dom <- getDomainRFC1035 rbuf ref
+    typ <- getTYPE rbuf ref
+    cls <- getCLASS rbuf ref
+    ttl <- getSeconds rbuf ref
+    len <- getInt16 rbuf
+    dat <- getRData typ len rbuf ref
     return $ ResourceRecord dom typ cls ttl dat
 
 ----------------------------------------------------------------

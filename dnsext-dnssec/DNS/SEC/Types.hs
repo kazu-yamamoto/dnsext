@@ -106,24 +106,24 @@ instance ResourceData RD_RRSIG where
         putOpaque rrsig_signature
 
 get_rrsig :: Int -> SGet RD_RRSIG
-get_rrsig lim = do
+get_rrsig lim rbuf ref = do
     -- The signature follows a variable length zone name
     -- and occupies the rest of the RData.  Simplest to
     -- checkpoint the position at the start of the RData,
     -- and after reading the zone name, and subtract that
     -- from the RData length.
     --
-    end <- rdataEnd lim
-    typ <- getTYPE
-    alg <- getPubAlg
-    cnt <- get8
-    ttl <- getSeconds
-    tex <- getDNSTime
-    tin <- getDNSTime
-    tag <- get16
-    dom <- getDomain -- XXX: Enforce no compression?
-    pos <- parserPosition
-    val <- getOpaque $ end - pos
+    end <- rdataEnd lim rbuf ref
+    typ <- getTYPE rbuf ref
+    alg <- getPubAlg rbuf ref
+    cnt <- get8 rbuf
+    ttl <- getSeconds rbuf ref
+    tex <- getDNSTime rbuf ref
+    tin <- getDNSTime rbuf ref
+    tag <- get16 rbuf
+    dom <- getDomain rbuf ref -- XXX: Enforce no compression?
+    pos <- parserPosition rbuf
+    val <- getOpaque (end - pos) rbuf ref
     return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
@@ -160,12 +160,12 @@ instance ResourceData RD_DS where
         putOpaque ds_digest
 
 get_ds :: Int -> SGet RD_DS
-get_ds len =
+get_ds len rbuf ref =
     RD_DS
-        <$> get16
-        <*> getPubAlg
-        <*> getDigestAlg
-        <*> getOpaque (len - 4)
+        <$> get16 rbuf
+        <*> getPubAlg rbuf ref
+        <*> getDigestAlg rbuf ref
+        <*> getOpaque (len - 4) rbuf ref
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -187,11 +187,11 @@ instance ResourceData RD_NSEC where
         putNsecTypes nsecTypes
 
 get_nsec :: Int -> SGet RD_NSEC
-get_nsec len = do
-    end <- rdataEnd len
-    dom <- getDomain
-    pos <- parserPosition
-    RD_NSEC dom <$> getNsecTypes (end - pos)
+get_nsec len rbuf ref = do
+    end <- rdataEnd len rbuf ref
+    dom <- getDomain rbuf ref
+    pos <- parserPosition rbuf
+    RD_NSEC dom <$> getNsecTypes (end - pos) rbuf ref
 
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
@@ -217,11 +217,11 @@ instance ResourceData RD_DNSKEY where
         putPubKey dnskey_public_key
 
 get_dnskey :: Int -> SGet RD_DNSKEY
-get_dnskey len = do
-    flags <- getDNSKEYflags
-    proto <- get8
-    pubalg <- getPubAlg
-    pubkey <- getPubKey pubalg (len - 4)
+get_dnskey len rbuf ref = do
+    flags <- getDNSKEYflags rbuf ref
+    proto <- get8 rbuf
+    pubalg <- getPubAlg rbuf ref
+    pubkey <- getPubKey pubalg (len - 4) rbuf ref
     return $ RD_DNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
@@ -252,15 +252,15 @@ instance ResourceData RD_NSEC3 where
         putNsecTypes nsec3_types
 
 get_nsec3 :: Int -> SGet RD_NSEC3
-get_nsec3 len = do
-    dend <- rdataEnd len
-    halg <- getHashAlg
-    flgs <- getNSEC3flags
-    iter <- get16
-    salt <- getLenOpaque
-    hash <- getLenOpaque
-    tpos <- parserPosition
-    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
+get_nsec3 len rbuf ref = do
+    dend <- rdataEnd len rbuf ref
+    halg <- getHashAlg rbuf ref
+    flgs <- getNSEC3flags rbuf ref
+    iter <- get16 rbuf
+    salt <- getLenOpaque rbuf ref
+    hash <- getLenOpaque rbuf ref
+    tpos <- parserPosition rbuf
+    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos) rbuf ref
 
 -- | Smart constructor.
 rd_nsec3
@@ -287,12 +287,12 @@ instance ResourceData RD_NSEC3PARAM where
         putLenOpaque nsec3param_salt
 
 get_nsec3param :: Int -> SGet RD_NSEC3PARAM
-get_nsec3param _ =
+get_nsec3param _ rbuf ref =
     RD_NSEC3PARAM
-        <$> getHashAlg
-        <*> get8
-        <*> get16
-        <*> getLenOpaque
+        <$> getHashAlg rbuf ref
+        <*> get8 rbuf
+        <*> get16 rbuf
+        <*> getLenOpaque rbuf ref
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
@@ -318,12 +318,12 @@ instance ResourceData RD_CDS where
         putOpaque cds_digest
 
 get_cds :: Int -> SGet RD_CDS
-get_cds len =
+get_cds len rbuf ref =
     RD_CDS
-        <$> get16
-        <*> getPubAlg
-        <*> getDigestAlg
-        <*> getOpaque (len - 4)
+        <$> get16 rbuf
+        <*> getPubAlg rbuf ref
+        <*> getDigestAlg rbuf ref
+        <*> getOpaque (len - 4) rbuf ref
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -349,11 +349,11 @@ instance ResourceData RD_CDNSKEY where
         putPubKey cdnskey_public_key
 
 get_cdnskey :: Int -> SGet RD_CDNSKEY
-get_cdnskey len = do
-    flags <- getDNSKEYflags
-    proto <- get8
-    pubalg <- getPubAlg
-    pubkey <- getPubKey pubalg (len - 4)
+get_cdnskey len rbuf ref = do
+    flags <- getDNSKEYflags rbuf ref
+    proto <- get8 rbuf
+    pubalg <- getPubAlg rbuf ref
+    pubkey <- getPubKey pubalg (len - 4) rbuf ref
     return $ RD_CDNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
@@ -367,7 +367,7 @@ rdataEnd
     -- ^ number of bytes left from current position
     -> SGet Int
     -- ^ end position
-rdataEnd lim = (+) lim <$> parserPosition
+rdataEnd lim rbuf _ = (+) lim <$> parserPosition rbuf
 
 ----------------------------------------------------------------
 
@@ -418,15 +418,15 @@ putNsecTypes types = putTypeList $ map fromTYPE types
 -- Parse a list of NSEC type bitmaps
 --
 getNsecTypes :: Int -> SGet [TYPE]
-getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
+getNsecTypes len rbuf ref = concat <$> sGetMany "NSEC type bitmap" len getbits rbuf ref
   where
-    getbits = do
-        window <- flip shiftL 8 <$> getInt8
-        blocks <- getInt8
+    getbits _ _ = do
+        window <- flip shiftL 8 <$> getInt8 rbuf
+        blocks <- getInt8 rbuf
         when (blocks > 32) $
             failSGet $
                 "NSEC bitmap block too long: " ++ show blocks
-        concatMap blkTypes . zip [window, window + 8 ..] <$> getNBytes blocks
+        concatMap blkTypes . zip [window, window + 8 ..] <$> getNBytes rbuf blocks
       where
         blkTypes (bitOffset, byte) =
             [ toTYPE $ fromIntegral $ bitOffset + i

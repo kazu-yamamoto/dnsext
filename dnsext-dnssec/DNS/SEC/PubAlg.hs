@@ -91,4 +91,4 @@ putPubAlg :: PubAlg -> SPut ()
 putPubAlg = put8 . fromPubAlg
 
 getPubAlg :: SGet PubAlg
-getPubAlg = toPubAlg <$> get8
+getPubAlg rbuf _ = toPubAlg <$> get8 rbuf

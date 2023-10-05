@@ -95,7 +95,7 @@ instance ResourceData RD_A where
     putResourceData _ (RD_A ipv4) = mapM_ putInt8 $ fromIPv4 ipv4
 
 get_a :: Int -> SGet RD_A
-get_a _ = RD_A . toIPv4 <$> getNBytes 4
+get_a _ rbuf _ = RD_A . toIPv4 <$> getNBytes rbuf 4
 
 instance Show RD_A where
     show (RD_A ipv4) = show ipv4
@@ -118,7 +118,7 @@ instance ResourceData RD_NS where
     putResourceData cf (RD_NS d) = putDomainRFC1035 cf d
 
 get_ns :: Int -> SGet RD_NS
-get_ns _ = RD_NS <$> getDomainRFC1035
+get_ns _ rbuf ref = RD_NS <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_NS where
     show (RD_NS d) = show d
@@ -141,7 +141,7 @@ instance ResourceData RD_CNAME where
     putResourceData cf (RD_CNAME d) = putDomainRFC1035 cf d
 
 get_cname :: Int -> SGet RD_CNAME
-get_cname _ = RD_CNAME <$> getDomainRFC1035
+get_cname _ rbuf ref = RD_CNAME <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_CNAME where
     show (RD_CNAME d) = show d
@@ -183,15 +183,15 @@ instance ResourceData RD_SOA where
         putSeconds soa_minimum
 
 get_soa :: Int -> SGet RD_SOA
-get_soa _ =
+get_soa _ rbuf ref =
     RD_SOA
-        <$> getDomainRFC1035
-        <*> getMailboxRFC1035
-        <*> get32
-        <*> getSeconds
-        <*> getSeconds
-        <*> getSeconds
-        <*> getSeconds
+        <$> getDomainRFC1035 rbuf ref
+        <*> getMailboxRFC1035 rbuf ref
+        <*> get32 rbuf
+        <*> getSeconds rbuf ref
+        <*> getSeconds rbuf ref
+        <*> getSeconds rbuf ref
+        <*> getSeconds rbuf ref
 
 -- | Smart constructor.
 rd_soa
@@ -212,7 +212,7 @@ instance ResourceData RD_NULL where
     putResourceData _ (RD_NULL o) = putOpaque o
 
 get_null :: Int -> SGet RD_NULL
-get_null len = RD_NULL <$> getOpaque len
+get_null len rbuf ref = RD_NULL <$> getOpaque len rbuf ref
 
 instance Show RD_NULL where
     show (RD_NULL o) = show o
@@ -234,7 +234,7 @@ instance ResourceData RD_PTR where
     putResourceData cf (RD_PTR d) = putDomainRFC1035 cf d
 
 get_ptr :: Int -> SGet RD_PTR
-get_ptr _ = RD_PTR <$> getDomainRFC1035
+get_ptr _ rbuf ref = RD_PTR <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_PTR where
     show (RD_PTR d) = show d
@@ -261,7 +261,7 @@ instance ResourceData RD_MX where
         putDomainRFC1035 cf mx_exchange
 
 get_mx :: Int -> SGet RD_MX
-get_mx _ = RD_MX <$> get16 <*> getDomainRFC1035
+get_mx _ rbuf ref = RD_MX <$> get16 rbuf <*> getDomainRFC1035 rbuf ref
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
@@ -288,7 +288,7 @@ instance ResourceData RD_TXT where
             putLenOpaque h >> next
 
 get_txt :: Int -> SGet RD_TXT
-get_txt len = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque
+get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
 
 instance Show RD_TXT where
     show (RD_TXT o) = '"' : conv o '"'
@@ -329,7 +329,7 @@ instance ResourceData RD_RP where
         putDomain cf d
 
 get_rp :: Int -> SGet RD_RP
-get_rp _ = RD_RP <$> getMailbox <*> getDomain
+get_rp _ rbuf ref = RD_RP <$> getMailbox rbuf ref <*> getDomain rbuf ref
 
 -- | Smart constructor.
 rd_rp :: Mailbox -> Domain -> RData
@@ -349,7 +349,7 @@ instance ResourceData RD_AAAA where
     putResourceData _ (RD_AAAA ipv6) = mapM_ putInt8 $ fromIPv6b ipv6
 
 get_aaaa :: Int -> SGet RD_AAAA
-get_aaaa _ = RD_AAAA . toIPv6b <$> getNBytes 16
+get_aaaa _ rbuf _ = RD_AAAA . toIPv6b <$> getNBytes rbuf 16
 
 instance Show RD_AAAA where
     show (RD_AAAA ipv6) = show ipv6
@@ -378,12 +378,12 @@ instance ResourceData RD_SRV where
         putDomain cf srv_target
 
 get_srv :: Int -> SGet RD_SRV
-get_srv _ =
+get_srv _ rbuf ref =
     RD_SRV
-        <$> get16
-        <*> get16
-        <*> get16
-        <*> getDomain
+        <$> get16 rbuf
+        <*> get16 rbuf
+        <*> get16 rbuf
+        <*> getDomain rbuf ref
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -402,7 +402,7 @@ instance ResourceData RD_DNAME where
     putResourceData cf (RD_DNAME d) = putDomain cf d
 
 get_dname :: Int -> SGet RD_DNAME
-get_dname _ = RD_DNAME <$> getDomain
+get_dname _ rbuf ref = RD_DNAME <$> getDomain rbuf ref
 
 instance Show RD_DNAME where
     show (RD_DNAME d) = show d
@@ -450,12 +450,12 @@ instance ResourceData RD_TLSA where
         putOpaque tlsa_assoc_data
 
 get_tlsa :: Int -> SGet RD_TLSA
-get_tlsa len =
+get_tlsa len rbuf ref =
     RD_TLSA
-        <$> get8
-        <*> get8
-        <*> get8
-        <*> getOpaque (len - 3)
+        <$> get8 rbuf
+        <*> get8 rbuf
+        <*> get8 rbuf
+        <*> getOpaque (len - 3) rbuf ref
 
 -- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData

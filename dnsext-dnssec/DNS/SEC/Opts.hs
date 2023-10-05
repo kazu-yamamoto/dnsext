@@ -48,7 +48,7 @@ instance OptData OD_DAU where
     putOptData (OD_DAU as) = putODWords (fromOptCode DAU) $ map fromPubAlg as
 
 get_dau :: Int -> SGet OD_DAU
-get_dau len = OD_DAU . map toPubAlg <$> getNOctets len
+get_dau len rbuf _ = OD_DAU . map toPubAlg <$> getNOctets rbuf len
 
 od_dau :: [PubAlg] -> OData
 od_dau a = toOData $ OD_DAU a
@@ -67,7 +67,7 @@ instance OptData OD_DHU where
     putOptData (OD_DHU hs) = putODWords (fromOptCode DHU) $ map fromHashAlg hs
 
 get_dhu :: Int -> SGet OD_DHU
-get_dhu len = OD_DHU . map toHashAlg <$> getNOctets len
+get_dhu len rbuf _ = OD_DHU . map toHashAlg <$> getNOctets rbuf len
 
 od_dhu :: [HashAlg] -> OData
 od_dhu a = toOData $ OD_DHU a
@@ -86,7 +86,7 @@ instance OptData OD_N3U where
     putOptData (OD_N3U hs) = putODWords (fromOptCode N3U) $ map fromHashAlg hs
 
 get_n3u :: Int -> SGet OD_N3U
-get_n3u len = OD_N3U . map toHashAlg <$> getNOctets len
+get_n3u len rbuf _ = OD_N3U . map toHashAlg <$> getNOctets rbuf len
 
 od_n3u :: [HashAlg] -> OData
 od_n3u a = toOData $ OD_N3U a

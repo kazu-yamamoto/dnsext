@@ -75,4 +75,4 @@ putPubKey :: PubKey -> SPut ()
 putPubKey pub = putOpaque $ fromPubKey pub
 
 getPubKey :: PubAlg -> Int -> SGet PubKey
-getPubKey alg len = toPubKey alg <$> getOpaque len
+getPubKey alg len rbuf ref = toPubKey alg <$> getOpaque len rbuf ref

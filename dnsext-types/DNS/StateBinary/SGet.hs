@@ -32,7 +32,6 @@ module DNS.StateBinary.SGet (
 ) where
 
 import qualified Control.Exception as E
-import Control.Monad.IO.Class
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
 import Data.IORef
@@ -49,25 +48,7 @@ import DNS.Types.Time
 ----------------------------------------------------------------
 
 -- | Parser type
-newtype SGet a = SGet { runSGet' :: ReadBuffer -> IORef PState -> IO a }
-
-instance Functor SGet where
-    f `fmap` m = SGet $ \rbuf ref -> f `fmap` runSGet' m rbuf ref
-
-instance Applicative SGet where
-    pure x = SGet $ \_ _ -> pure x
-    f <*> g = SGet $ \rbuf ref -> do
-        f' <- runSGet' f rbuf ref
-        g' <- runSGet' g rbuf ref
-        pure $ f' g'
-
-instance Monad SGet where
-    m >>= f = SGet $ \rbuf ref -> do
-        m' <- runSGet' m rbuf ref
-        runSGet' (f m') rbuf ref
-
-instance MonadIO SGet where
-    liftIO m = SGet $ \_ _ -> m
+type SGet a = ReadBuffer -> IORef PState -> IO a
 
 -- | Parser state
 data PState = PState
@@ -81,68 +62,68 @@ initialState t = PState IM.empty t
 
 ----------------------------------------------------------------
 
-parserPosition :: SGet Position
-parserPosition = SGet $ \rbuf _  -> position rbuf
+parserPosition :: ReadBuffer -> IO Int
+parserPosition = position
 
-getAtTime :: SGet EpochTime
-getAtTime = SGet $ \_ ref -> pstAtTime <$> readIORef ref
+getAtTime :: IORef PState -> IO EpochTime
+getAtTime ref = pstAtTime <$> readIORef ref
 
-pushDomain :: Position -> [RawDomain] -> SGet ()
-pushDomain n d = SGet $ \_ ref -> do
+pushDomain :: IM.Key -> [RawDomain] -> IORef PState -> IO ()
+pushDomain n d ref = do
     PState dom t <- readIORef ref
     writeIORef ref $ PState (IM.insert n d dom) t
 
-popDomain :: Position -> SGet (Maybe [RawDomain])
-popDomain n = SGet $ \_ ref -> IM.lookup n . pstDomain <$> readIORef ref
+popDomain :: IM.Key -> IORef PState -> IO (Maybe [RawDomain])
+popDomain n ref = IM.lookup n . pstDomain <$> readIORef ref
 
 ----------------------------------------------------------------
 
-get8 :: SGet Word8
-get8 = SGet (\rbuf _ -> read8 rbuf)
+get8 :: ReadBuffer -> IO Word8
+get8 = read8
 
-get16 :: SGet Word16
-get16 = SGet (\rbuf _ -> read16 rbuf)
+get16 :: ReadBuffer -> IO Word16
+get16 = read16
 
-get32 :: SGet Word32
-get32 = SGet (\rbuf _ -> read32 rbuf)
+get32 :: ReadBuffer -> IO Word32
+get32 = read32
 
-getInt8 :: SGet Int
-getInt8 = fromIntegral <$> get8
+getInt8 :: ReadBuffer -> IO Int
+getInt8 rbuf = fromIntegral <$> get8 rbuf
 
-getInt16 :: SGet Int
-getInt16 = fromIntegral <$> get16
+getInt16 :: ReadBuffer -> IO Int
+getInt16 rbuf = fromIntegral <$> get16 rbuf
 
-getInt32 :: SGet Int
-getInt32 = fromIntegral <$> get32
+getInt32 :: ReadBuffer -> IO Int
+getInt32 rbuf = fromIntegral <$> get32 rbuf
 
 ----------------------------------------------------------------
 
-getNBytes :: Int -> SGet [Int]
-getNBytes n
+getNBytes :: ReadBuffer -> Int -> IO [Int]
+getNBytes rbuf n
     | n < 0 = error "malformed or truncated input"
-    | otherwise = SGet $ \rbuf _ -> toInts <$> extractByteString rbuf n
+    | otherwise = toInts <$> extractByteString rbuf n
   where
     toInts = map fromIntegral . BS.unpack
 
-getNOctets :: Int -> SGet [Word8]
-getNOctets n
+getNOctets :: ReadBuffer -> Int -> IO [Word8]
+getNOctets rbuf n
     | n < 0 = error "malformed or truncated input"
-    | otherwise = SGet $ \rbuf _ -> BS.unpack <$> extractByteString rbuf n
+    | otherwise = BS.unpack <$> extractByteString rbuf n
 
-skipNBytes :: Int -> SGet ()
-skipNBytes n
+skipNBytes :: ReadBuffer -> Int -> IO ()
+skipNBytes rbuf n
     | n < 0 = error "malformed or truncated input"
-    | otherwise = SGet $ \rbuf _ -> ff rbuf n
+    | otherwise = ff rbuf n
 
-getNByteString :: Int -> SGet ByteString
-getNByteString n
+getNByteString :: ReadBuffer -> Int -> IO ByteString
+getNByteString rbuf n
     | n < 0 = error "malformed or truncated input"
-    | otherwise = SGet $ \rbuf _ -> extractByteString rbuf n
+    | otherwise = extractByteString rbuf n
 
-getNShortByteString :: Int -> SGet ShortByteString
-getNShortByteString n
+getNShortByteString :: ReadBuffer -> Int -> IO ShortByteString
+getNShortByteString rbuf n
     | n < 0 = error "malformed or truncated input"
-    | otherwise = SGet $ \rbuf _ -> Short.toShort <$> extractByteString rbuf n
+    | otherwise = Short.toShort <$> extractByteString rbuf n
 
 -- | Parse a list of elements that takes up exactly a given number of bytes.
 -- In order to avoid infinite loops, if an element parser succeeds without
@@ -155,7 +136,7 @@ sGetMany
     -> SGet a
     -- ^ element parser
     -> SGet [a]
-sGetMany elemname len parser = SGet $ \rbuf ref -> do
+sGetMany elemname len parser = \rbuf ref -> do
     lim <- (+ len) <$> position rbuf
     go lim id rbuf ref
   where
@@ -164,7 +145,7 @@ sGetMany elemname len parser = SGet $ \rbuf ref -> do
         case pos `compare` lim of
           EQ -> return $ build []
           LT -> do
-              x <- runSGet' parser rbuf ref
+              x <- parser rbuf ref
               go lim (build . (x :)) rbuf ref
           GT -> error $ "internal error: in-place success for " ++ elemname
 
@@ -179,7 +160,7 @@ sGetMany elemname len parser = SGet $ \rbuf ref -> do
 dnsTimeMid :: EpochTime
 dnsTimeMid = 3426660848
 
-failSGet :: String -> SGet a
+failSGet :: Monad m => String -> m a
 failSGet = error
 
 runSGetAt :: EpochTime -> SGet a -> ByteString -> Either DNSError a
@@ -188,7 +169,7 @@ runSGetAt t parser inp =
   where
     parse = withReadBuffer inp $ \rbuf -> do
         ref <- newIORef $ initialState t
-        Right <$> runSGet' parser rbuf ref
+        Right <$> parser rbuf ref
     handler (E.SomeException e) = return $ Left $ DecodeError $ "incomplete input: " ++ show e
 
 runSGet :: SGet a -> ByteString -> Either DNSError a

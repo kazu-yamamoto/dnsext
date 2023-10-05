@@ -28,4 +28,4 @@ putSeconds :: Seconds -> SPut ()
 putSeconds (Seconds n) = put32 n
 
 getSeconds :: SGet Seconds
-getSeconds = Seconds <$> get32
+getSeconds rbuf _ = Seconds <$> get32 rbuf

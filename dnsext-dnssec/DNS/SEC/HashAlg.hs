@@ -40,7 +40,7 @@ putDigestAlg :: DigestAlg -> SPut ()
 putDigestAlg = put8 . fromDigestAlg
 
 getDigestAlg :: SGet DigestAlg
-getDigestAlg = toDigestAlg <$> get8
+getDigestAlg rbuf _ = toDigestAlg <$> get8 rbuf
 
 -- https://www.iana.org/assignments/dnssec-nsec3-parameters/dnssec-nsec3-parameters.xhtml
 
@@ -63,4 +63,4 @@ putHashAlg :: HashAlg -> SPut ()
 putHashAlg = put8 . fromHashAlg
 
 getHashAlg :: SGet HashAlg
-getHashAlg = toHashAlg <$> get8
+getHashAlg rbuf _ = toHashAlg <$> get8 rbuf
