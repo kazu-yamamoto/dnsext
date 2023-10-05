@@ -54,15 +54,15 @@ keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
 ---
 
 putRRSIGHeader :: RD_RRSIG -> SPut ()
-putRRSIGHeader RD_RRSIG{..} = do
-    put16 $ fromTYPE rrsig_type
-    putPubAlg rrsig_pubalg
-    put8 rrsig_num_labels
-    putSeconds rrsig_ttl
-    putDNSTime rrsig_expiration
-    putDNSTime rrsig_inception
-    put16 rrsig_key_tag
-    putDomain Canonical rrsig_zone
+putRRSIGHeader RD_RRSIG{..} wbuf ref = do
+    put16 wbuf $ fromTYPE rrsig_type
+    putPubAlg rrsig_pubalg wbuf ref
+    put8 wbuf rrsig_num_labels
+    putSeconds rrsig_ttl wbuf ref
+    putDNSTime rrsig_expiration wbuf ref
+    putDNSTime rrsig_inception wbuf ref
+    put16 wbuf rrsig_key_tag
+    putDomain Canonical rrsig_zone wbuf ref
 
 verifyRRSIGwith
     :: RRSIGImpl
@@ -123,8 +123,15 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     {- "Reconstructing the Signed Data"
        https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
        RR(i) = name | type | class | OrigTTL | RDATA length | RDATA -}
-    let putRRH = putDomainRFC1035 Canonical rrset_name >> putTYPE rrset_type >> putCLASS rrset_class >> putSeconds rrsig_ttl
-        str = runSPut (putRRSIGHeader rrsig >> mapM_ (putRRH >>) sortedRDatas)
+    let putRRH wbuf ref = do
+            putDomainRFC1035 Canonical rrset_name wbuf ref
+            putTYPE rrset_type wbuf ref
+            putCLASS rrset_class wbuf ref
+            putSeconds rrsig_ttl wbuf ref
+        putRRS wbuf ref = do
+            putRRSIGHeader rrsig wbuf ref
+            mapM_ (\io -> putRRH wbuf ref >> io wbuf ref) sortedRDatas
+        str = runSPut putRRS
     {- `Data.List.sort` is linear for sorted case -}
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"

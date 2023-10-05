@@ -5,6 +5,7 @@
 module DNS.StateBinary.SGet (
     -- * Parser
     SGet,
+    WriteBuffer,
     failSGet,
     runSGet,
     runSGetAt,

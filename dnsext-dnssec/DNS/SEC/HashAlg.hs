@@ -37,7 +37,7 @@ instance Show DigestAlg where
 {- FOURMOLU_ENABLE -}
 
 putDigestAlg :: DigestAlg -> SPut ()
-putDigestAlg = put8 . fromDigestAlg
+putDigestAlg d wbuf _ = put8 wbuf $ fromDigestAlg d
 
 getDigestAlg :: SGet DigestAlg
 getDigestAlg rbuf _ = toDigestAlg <$> get8 rbuf
@@ -60,7 +60,7 @@ instance Show HashAlg where
     show (HashAlg n) = "HashAlg " ++ show n
 
 putHashAlg :: HashAlg -> SPut ()
-putHashAlg = put8 . fromHashAlg
+putHashAlg h wbuf _ = put8 wbuf $ fromHashAlg h
 
 getHashAlg :: SGet HashAlg
 getHashAlg rbuf _ = toHashAlg <$> get8 rbuf

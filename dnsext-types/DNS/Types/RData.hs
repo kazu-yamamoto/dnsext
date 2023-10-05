@@ -92,7 +92,7 @@ newtype RD_A = RD_A
 
 instance ResourceData RD_A where
     resourceDataType _ = A
-    putResourceData _ (RD_A ipv4) = mapM_ putInt8 $ fromIPv4 ipv4
+    putResourceData _ (RD_A ipv4) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv4 ipv4
 
 get_a :: Int -> SGet RD_A
 get_a _ rbuf _ = RD_A . toIPv4 <$> getNBytes rbuf 4
@@ -173,14 +173,14 @@ data RD_SOA = RD_SOA
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
-    putResourceData cf RD_SOA{..} = do
-        putDomainRFC1035 cf soa_mname
-        putMailboxRFC1035 cf soa_rname
-        put32 soa_serial
-        putSeconds soa_refresh
-        putSeconds soa_retry
-        putSeconds soa_expire
-        putSeconds soa_minimum
+    putResourceData cf RD_SOA{..} = \wbuf ref -> do
+        putDomainRFC1035 cf soa_mname wbuf ref
+        putMailboxRFC1035 cf soa_rname wbuf ref
+        put32 wbuf soa_serial
+        putSeconds soa_refresh wbuf ref
+        putSeconds soa_retry wbuf ref
+        putSeconds soa_expire wbuf ref
+        putSeconds soa_minimum wbuf ref
 
 get_soa :: Int -> SGet RD_SOA
 get_soa _ rbuf ref =
@@ -256,9 +256,9 @@ data RD_MX = RD_MX
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
-    putResourceData cf RD_MX{..} = do
-        put16 mx_preference
-        putDomainRFC1035 cf mx_exchange
+    putResourceData cf RD_MX{..} = \wbuf ref -> do
+        put16 wbuf mx_preference
+        putDomainRFC1035 cf mx_exchange wbuf ref
 
 get_mx :: Int -> SGet RD_MX
 get_mx _ rbuf ref = RD_MX <$> get16 rbuf <*> getDomainRFC1035 rbuf ref
@@ -280,12 +280,12 @@ instance ResourceData RD_TXT where
     resourceDataType _ = TXT
     putResourceData _ (RD_TXT o) = putTXT o
       where
-        putTXT txt = do
+        putTXT txt wbuf ref = do
             let (h, t) = Opaque.splitAt 255 txt
                 next
                     | Opaque.null t = return ()
-                    | otherwise = putTXT t
-            putLenOpaque h >> next
+                    | otherwise = putTXT t wbuf ref
+            putLenOpaque h wbuf ref >> next
 
 get_txt :: Int -> SGet RD_TXT
 get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
@@ -325,7 +325,7 @@ data RD_RP = RD_RP
 instance ResourceData RD_RP where
     resourceDataType _ = RP
     putResourceData cf (RD_RP mbox d) = do
-        putMailbox cf mbox
+        _ <- putMailbox cf mbox
         putDomain cf d
 
 get_rp :: Int -> SGet RD_RP
@@ -346,7 +346,7 @@ newtype RD_AAAA = RD_AAAA
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
-    putResourceData _ (RD_AAAA ipv6) = mapM_ putInt8 $ fromIPv6b ipv6
+    putResourceData _ (RD_AAAA ipv6) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv6b ipv6
 
 get_aaaa :: Int -> SGet RD_AAAA
 get_aaaa _ rbuf _ = RD_AAAA . toIPv6b <$> getNBytes rbuf 16
@@ -371,11 +371,11 @@ data RD_SRV = RD_SRV
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
-    putResourceData cf RD_SRV{..} = do
-        put16 srv_priority
-        put16 srv_weight
-        put16 srv_port
-        putDomain cf srv_target
+    putResourceData cf RD_SRV{..} = \wbuf ref -> do
+        put16 wbuf srv_priority
+        put16 wbuf srv_weight
+        put16 wbuf srv_port
+        putDomain cf srv_target wbuf ref
 
 get_srv :: Int -> SGet RD_SRV
 get_srv _ rbuf ref =
@@ -421,7 +421,7 @@ newtype RD_OPT = RD_OPT
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
-    putResourceData _ (RD_OPT options) = mapM_ putOData options
+    putResourceData _ (RD_OPT options) = \wbuf ref -> mapM_ (\o -> putOData o wbuf ref) options
 
 instance Show RD_OPT where
     show (RD_OPT options) = show options
@@ -443,11 +443,11 @@ data RD_TLSA = RD_TLSA
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
-    putResourceData _ RD_TLSA{..} = do
-        put8 tlsa_usage
-        put8 tlsa_selector
-        put8 tlsa_matching_type
-        putOpaque tlsa_assoc_data
+    putResourceData _ RD_TLSA{..} = \wbuf ref -> do
+        put8 wbuf tlsa_usage
+        put8 wbuf tlsa_selector
+        put8 wbuf tlsa_matching_type
+        putOpaque tlsa_assoc_data wbuf ref
 
 get_tlsa :: Int -> SGet RD_TLSA
 get_tlsa len rbuf ref =

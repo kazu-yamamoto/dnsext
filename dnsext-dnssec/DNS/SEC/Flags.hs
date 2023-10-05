@@ -25,7 +25,7 @@ fromDNSKEYflags flags = foldl' (.|.) 0 $ map toW flags
     toW SecureEntryPoint = 0b0000000000000001
 
 putDNSKEYflags :: [DNSKEY_Flag] -> SPut ()
-putDNSKEYflags = put16 . fromDNSKEYflags
+putDNSKEYflags fs wbuf _ = put16 wbuf $ fromDNSKEYflags fs
 
 getDNSKEYflags :: SGet [DNSKEY_Flag]
 getDNSKEYflags rbuf _ = toDNSKEYflags <$> get16 rbuf
@@ -51,7 +51,7 @@ fromNSEC3flags flags = foldl' (.|.) 0 $ map toW flags
     toW (NSEC3_Flag_Unknown w) = w
 
 putNSEC3flags :: [NSEC3_Flag] -> SPut ()
-putNSEC3flags = put8 . fromNSEC3flags
+putNSEC3flags ns wbuf _ = put8 wbuf $ fromNSEC3flags ns
 
 getNSEC3flags :: SGet [NSEC3_Flag]
 getNSEC3flags rbuf _ = toNSEC3flags <$> get8 rbuf

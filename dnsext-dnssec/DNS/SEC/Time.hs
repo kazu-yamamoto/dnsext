@@ -52,4 +52,4 @@ getDNSTime rbuf ref = do
     return $ dnsTime tdns tnow
 
 putDNSTime :: DNSTime -> SPut ()
-putDNSTime (DNSTime i32) = put32 $ fromIntegral i32
+putDNSTime (DNSTime i32) wbuf _ = put32 wbuf $ fromIntegral i32

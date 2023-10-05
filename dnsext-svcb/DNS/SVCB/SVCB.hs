@@ -31,19 +31,19 @@ data RD_SVCB = RD_SVCB
 
 instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
-    putResourceData cf RD_SVCB{..} = do
-        put16 svcb_priority
+    putResourceData cf RD_SVCB{..} = \wbuf ref -> do
+        put16 wbuf svcb_priority
         -- https://datatracker.ietf.org/doc/html/draft-ietf-dnsop-svcb-https-11#section-2.2
         -- "the uncompressed, fully-qualified TargetName"
-        putDomain cf svcb_target
+        putDomain cf svcb_target wbuf ref
         let SvcParams m = svcb_params
-        void $ M.foldrWithKey f (return ()) m
+        void $ M.foldrWithKey (f wbuf ref) (return ()) m
       where
-        f k v x = encodekv k v >> x
-        encodekv k (SvcParamValue v) = do
-            putInt16 k
-            putInt16 $ Opaque.length v
-            putOpaque v
+        f wbuf ref k v x = encodekv k v wbuf ref >> x
+        encodekv k (SvcParamValue v) wbuf ref = do
+            putInt16 wbuf k
+            putInt16 wbuf $ Opaque.length v
+            putOpaque v wbuf ref
 
 get_svcb :: Int -> SGet RD_SVCB
 get_svcb len rbuf ref = do

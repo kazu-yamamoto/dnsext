@@ -228,4 +228,4 @@ getTYPE :: SGet TYPE
 getTYPE rbuf _ = toTYPE <$> get16 rbuf
 
 putTYPE :: TYPE -> SPut ()
-putTYPE x = put16 $ fromTYPE x
+putTYPE x wbuf _ = put16 wbuf $ fromTYPE x

@@ -286,15 +286,15 @@ data CanonicalFlag
 -- | Putting a domain name.
 --   No name compression for new RRs.
 putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain Original Domain{..} = do
-    mapM_ putPartialDomain wireLabels
-    put8 0
-putDomain Canonical Domain{..} = do
-    mapM_ putPartialDomain $ reverse canonicalLabels
-    put8 0
+putDomain Original Domain{..} wbuf _ = do
+    mapM_ (putPartialDomain wbuf) wireLabels
+    put8 wbuf 0
+putDomain Canonical Domain{..} wbuf _ = do
+    mapM_ (putPartialDomain wbuf) $ reverse canonicalLabels
+    put8 wbuf 0
 
-putPartialDomain :: RawDomain -> SPut ()
-putPartialDomain = putLenShortByteString
+putPartialDomain :: WriteBuffer -> RawDomain -> IO ()
+putPartialDomain wbuf dom = putLenShortByteString wbuf dom
 
 ----------------------------------------------------------------
 
@@ -302,20 +302,20 @@ putCompressedDomain :: Domain -> SPut ()
 putCompressedDomain Domain{..} = putCompress wireLabels
 
 putCompress :: [RawDomain] -> SPut ()
-putCompress [] = put8 0
-putCompress dom@(d : ds) = do
-    mpos <- popPointer dom
-    cur <- builderPosition
+putCompress [] wbuf _ = put8 wbuf 0
+putCompress dom@(d : ds) wbuf ref = do
+    mpos <- popPointer dom ref
+    cur <- builderPosition wbuf
     case mpos of
-        Just pos -> putPointer pos
+        Just pos -> putPointer wbuf pos
         _ -> do
             -- Pointers are limited to 14-bits!
-            when (cur <= 0x3fff) $ pushPointer dom cur
-            putPartialDomain d
-            putCompress ds
+            when (cur <= 0x3fff) $ pushPointer dom cur ref
+            putPartialDomain wbuf d
+            putCompress ds wbuf ref
 
-putPointer :: Int -> SPut ()
-putPointer pos = putInt16 (pos .|. 0xc000)
+putPointer :: WriteBuffer -> Int -> IO ()
+putPointer wbuf pos = putInt16 wbuf (pos .|. 0xc000)
 
 -- | Putting a domain name.
 --   Names are compressed if possible.

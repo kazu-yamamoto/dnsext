@@ -25,7 +25,7 @@ instance Show Seconds where
             | otherwise = mul "sec" i
 
 putSeconds :: Seconds -> SPut ()
-putSeconds (Seconds n) = put32 n
+putSeconds (Seconds n) wbuf _ = put32 wbuf n
 
 getSeconds :: SGet Seconds
 getSeconds rbuf _ = Seconds <$> get32 rbuf

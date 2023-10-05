@@ -98,7 +98,7 @@ _showAlgList nm ws = nm ++ " " ++ intercalate "," (map show ws)
 
 -- | Encode EDNS OPTION consisting of a list of octets.
 putODWords :: Word16 -> [Word8] -> SPut ()
-putODWords code ws = do
-    put16 code
-    putInt16 $ length ws
-    mapM_ put8 ws
+putODWords code ws wbuf _ = do
+    put16 wbuf code
+    putInt16 wbuf $ length ws
+    mapM_ (put8 wbuf) ws

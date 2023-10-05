@@ -108,8 +108,8 @@ data DNSMessage = DNSMessage
 type Identifier = Word16
 
 putDNSMessage :: DNSMessage -> SPut ()
-putDNSMessage msg = do
-    putHeader hd
+putDNSMessage msg wbuf ref = do
+    putHeader hd wbuf ref
     putNums
     mapM_ putQ qs
     mapM_ putRR an
@@ -118,14 +118,14 @@ putDNSMessage msg = do
   where
     putNums =
         mapM_
-            putInt16
+            (putInt16 wbuf)
             [ length qs
             , length an
             , length au
             , length ad
             ]
-    putQ = putQuestion Original
-    putRR = putResourceRecord Original
+    putQ q = putQuestion Original q wbuf ref
+    putRR rr = putResourceRecord Original rr wbuf ref
     hm = header msg
     fl = flags hm
     eh = ednsHeader msg
@@ -351,9 +351,9 @@ data DNSFlags = DNSFlags
     deriving (Eq, Show)
 
 putHeader :: DNSHeader -> SPut ()
-putHeader hdr = do
-    putIdentifier $ identifier hdr
-    putDNSFlags $ flags hdr
+putHeader hdr wbuf ref = do
+    putIdentifier wbuf $ identifier hdr
+    putDNSFlags (flags hdr) wbuf ref
   where
     putIdentifier = put16
 
@@ -385,7 +385,7 @@ defaultDNSFlags =
         }
 
 putDNSFlags :: DNSFlags -> SPut ()
-putDNSFlags DNSFlags{..} = put16 word
+putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
   where
     set :: Word16 -> State Word16 ()
     set byte = modify (.|. byte)
@@ -637,10 +637,10 @@ data Question = Question
     deriving (Eq, Ord, Show)
 
 putQuestion :: CanonicalFlag -> Question -> SPut ()
-putQuestion cf Question{..} = do
-    putDomainRFC1035 cf qname
-    put16 (fromTYPE qtype)
-    putCLASS qclass
+putQuestion cf Question{..} wbuf ref = do
+    putDomainRFC1035 cf qname wbuf ref
+    put16 wbuf $ fromTYPE qtype
+    putCLASS qclass wbuf ref
 
 getQuestions :: Int -> SGet [Question]
 getQuestions n rbuf ref = replicateM n $ getQuestion rbuf ref
@@ -673,7 +673,7 @@ instance Show CLASS where
     show (CLASS n) = "CLASS " ++ show n
 
 putCLASS :: CLASS -> SPut ()
-putCLASS (CLASS x) = put16 x
+putCLASS (CLASS x) wbuf _ = put16 wbuf x
 
 getCLASS :: SGet CLASS
 getCLASS rbuf _ = CLASS <$> get16 rbuf
@@ -706,12 +706,12 @@ type AuthorityRecords = [ResourceRecord]
 type AdditionalRecords = [ResourceRecord]
 
 putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut ()
-putResourceRecord cf ResourceRecord{..} = do
-    putDomainRFC1035 cf rrname
-    putTYPE rrtype
-    putCLASS rrclass
-    putSeconds rrttl
-    with16Length $ putRData cf rdata
+putResourceRecord cf ResourceRecord{..} wbuf ref = do
+    putDomainRFC1035 cf rrname wbuf ref
+    putTYPE rrtype wbuf ref
+    putCLASS rrclass wbuf ref
+    putSeconds rrttl wbuf ref
+    with16Length (putRData cf rdata) wbuf ref
 
 getResourceRecords :: Int -> SGet [ResourceRecord]
 getResourceRecords n rbuf ref = replicateM n $ getResourceRecord rbuf ref

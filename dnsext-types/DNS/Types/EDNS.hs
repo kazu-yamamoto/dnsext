@@ -265,7 +265,7 @@ instance OptData OD_ClientSubnet where
     putOptData = put_clientSubnet
 
 put_clientSubnet :: OD_ClientSubnet -> SPut ()
-put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
+put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) wbuf _ =
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
     -- o  ADDRESS, variable number of octets, contains either an IPv4 or
@@ -286,19 +286,19 @@ put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
             IPv6 ip6 -> (2, take octets $ fromIPv6b $ prefix ip6)
         dataLen = 2 + 2 + octets
      in do
-            put16 $ fromOptCode ClientSubnet
-            putInt16 dataLen
-            put16 family
-            put8 srcBits
-            put8 scpBits
-            mapM_ putInt8 raw
-put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
-    put16 $ fromOptCode ClientSubnet
-    putInt16 $ 4 + Opaque.length addr
-    put16 family
-    put8 srcBits
-    put8 scpBits
-    putOpaque addr
+            put16 wbuf $ fromOptCode ClientSubnet
+            putInt16 wbuf dataLen
+            put16 wbuf family
+            put8 wbuf srcBits
+            put8 wbuf scpBits
+            mapM_ (putInt8 wbuf) raw
+put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) wbuf ref = do
+    put16 wbuf $ fromOptCode ClientSubnet
+    putInt16 wbuf $ 4 + Opaque.length addr
+    put16 wbuf family
+    put8 wbuf srcBits
+    put8 wbuf scpBits
+    putOpaque addr wbuf ref
 
 get_clientSubnet :: Int -> SGet OD_ClientSubnet
 get_clientSubnet len rbuf ref = do
@@ -417,7 +417,7 @@ _showECS family srcBits scpBits address =
 
 -- | Encode an EDNS OPTION byte string.
 putODBytes :: Word16 -> Opaque -> SPut ()
-putODBytes code o = do
-    put16 code
-    putInt16 $ Opaque.length o
-    putOpaque o
+putODBytes code o wbuf ref = do
+    put16 wbuf code
+    putInt16 wbuf $ Opaque.length o
+    putOpaque o wbuf ref

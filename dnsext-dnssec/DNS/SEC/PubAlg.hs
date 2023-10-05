@@ -88,7 +88,7 @@ instance Show PubAlg where
 {- FOURMOLU_ENABLE -}
 
 putPubAlg :: PubAlg -> SPut ()
-putPubAlg = put8 . fromPubAlg
+putPubAlg a wbuf _ = put8 wbuf $ fromPubAlg a
 
 getPubAlg :: SGet PubAlg
 getPubAlg rbuf _ = toPubAlg <$> get8 rbuf
