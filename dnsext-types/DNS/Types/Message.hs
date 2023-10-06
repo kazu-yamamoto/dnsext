@@ -4,6 +4,9 @@
 
 module DNS.Types.Message where
 
+import Control.Monad.State.Strict (State)
+import qualified Control.Monad.State.Strict as ST
+
 import DNS.Wire
 import DNS.Types.Dict
 import DNS.Types.Domain
@@ -388,7 +391,7 @@ putDNSFlags :: DNSFlags -> Builder ()
 putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
   where
     set :: Word16 -> State Word16 ()
-    set byte = modify (.|. byte)
+    set byte = ST.modify (.|. byte)
 
     st :: State Word16 ()
     st =
@@ -404,7 +407,7 @@ putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
             , when isResponse $ set (bit 15)
             ]
 
-    word = execState st 0
+    word = ST.execState st 0
 
 getDNSFlags :: Parser DNSFlags
 getDNSFlags rbuf _ = do

@@ -3,6 +3,7 @@
 module DNS.Wire.Builder (
     -- * Builder
     Builder,
+    WriteBuffer,
     runBuilder,
 
     -- ** Basic builders
@@ -23,15 +24,8 @@ module DNS.Wire.Builder (
     builderPosition,
     pushPointer,
     popPointer,
-
-    -- ** Re-exports (fixme)
-    State,
-    ST.modify,
-    ST.execState,
 ) where
 
-import Control.Monad.State.Strict (State)
-import qualified Control.Monad.State.Strict as ST
 import qualified Data.ByteString.Short as Short
 import Data.IORef
 import Data.Map (Map)

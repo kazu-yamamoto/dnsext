@@ -5,10 +5,10 @@
 module DNS.Wire.Parser (
     -- * Parser
     Parser,
-    WriteBuffer,
-    failParser,
+    ReadBuffer,
     runParser,
     runParserAt,
+    failParser,
 
     -- ** Basic parsers
     get8,
