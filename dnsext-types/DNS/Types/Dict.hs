@@ -14,7 +14,7 @@ import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
 
-import DNS.StateBinary
+import DNS.Wire
 import DNS.Types.EDNS
 import DNS.Types.Opaque.Internal
 import DNS.Types.RData
@@ -30,19 +30,19 @@ globalRDataDict = unsafePerformIO $ newIORef defaultRDataDict
 globalODataDict :: IORef ODataDict
 globalODataDict = unsafePerformIO $ newIORef defaultODataDict
 
-addRData :: TYPE -> (Int -> SGet RData) -> IO ()
+addRData :: TYPE -> (Int -> Parser RData) -> IO ()
 addRData typ dec = atomicModifyIORef' globalRDataDict f
   where
     f dict = (M.insert (toKey typ) dec dict, ())
 
-addOData :: OptCode -> (Int -> SGet OData) -> IO ()
+addOData :: OptCode -> (Int -> Parser OData) -> IO ()
 addOData code dec = atomicModifyIORef' globalODataDict f
   where
     f dict = (M.insert (toKeyO code) dec dict, ())
 
 ----------------------------------------------------------------
 
-getRData :: TYPE -> Int -> SGet RData
+getRData :: TYPE -> Int -> Parser RData
 getRData OPT len rbuf ref = rd_opt <$> sGetMany "EDNS option" len getoption rbuf ref
   where
     dict = unsafePerformIO $ readIORef globalODataDict
@@ -58,12 +58,12 @@ getRData typ len rbuf ref = case M.lookup (toKey typ) dict of
 
 ----------------------------------------------------------------
 
-type RDataDict = M.IntMap (Int -> SGet RData)
+type RDataDict = M.IntMap (Int -> Parser RData)
 
 toKey :: TYPE -> M.Key
 toKey = fromIntegral . fromTYPE
 
-defaultRDataDict :: M.IntMap (Int -> SGet RData)
+defaultRDataDict :: M.IntMap (Int -> Parser RData)
 defaultRDataDict =
     M.insert (toKey A) (\len rbuf ref -> toRData <$> get_a len rbuf ref) $
         M.insert (toKey NS) (\len rbuf ref -> toRData <$> get_ns len rbuf ref) $
@@ -84,9 +84,9 @@ defaultRDataDict =
 
 ----------------------------------------------------------------
 
-type ODataDict = M.IntMap (Int -> SGet OData)
+type ODataDict = M.IntMap (Int -> Parser OData)
 
-getOData :: ODataDict -> OptCode -> Int -> SGet OData
+getOData :: ODataDict -> OptCode -> Int -> Parser OData
 getOData dict code len rbuf ref = case M.lookup (toKeyO code) dict of
     Nothing -> od_unknown (fromOptCode code) <$> getOpaque len rbuf ref
     Just dec -> dec len rbuf ref
@@ -105,12 +105,12 @@ defaultODataDict =
 
 ----------------------------------------------------------------
 
-extendRR :: TYPE -> String -> (Int -> SGet RData) -> InitIO ()
+extendRR :: TYPE -> String -> (Int -> Parser RData) -> InitIO ()
 extendRR typ name proxy = InitIO $ do
     addRData typ proxy
     addType typ name
 
-extendOpt :: OptCode -> String -> (Int -> SGet OData) -> InitIO ()
+extendOpt :: OptCode -> String -> (Int -> Parser OData) -> InitIO ()
 extendOpt code name proxy = InitIO $ do
     addOData code proxy
     addOpt code name

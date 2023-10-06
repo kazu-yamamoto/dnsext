@@ -9,7 +9,7 @@ import Data.Char (chr)
 import Data.IP (IPv4, IPv6, fromIPv4, fromIPv6b, toIPv4, toIPv6b)
 import Data.Word8
 
-import DNS.StateBinary
+import DNS.Wire
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
@@ -28,7 +28,7 @@ import DNS.Types.Type
 
 class (Typeable a, Eq a, Show a) => ResourceData a where
     resourceDataType :: a -> TYPE
-    putResourceData :: CanonicalFlag -> a -> SPut ()
+    putResourceData :: CanonicalFlag -> a -> Builder ()
 
 ---------------------------------------------------------------
 
@@ -53,7 +53,7 @@ instance Eq RData where
 rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
 
-putRData :: CanonicalFlag -> RData -> SPut ()
+putRData :: CanonicalFlag -> RData -> Builder ()
 putRData cf (RData x) = putResourceData cf x
 
 rdataField :: forall a b. Typeable a => RData -> (a -> b) -> Maybe b
@@ -94,7 +94,7 @@ instance ResourceData RD_A where
     resourceDataType _ = A
     putResourceData _ (RD_A ipv4) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv4 ipv4
 
-get_a :: Int -> SGet RD_A
+get_a :: Int -> Parser RD_A
 get_a _ rbuf _ = RD_A . toIPv4 <$> getNBytes rbuf 4
 
 instance Show RD_A where
@@ -117,7 +117,7 @@ instance ResourceData RD_NS where
     resourceDataType _ = NS
     putResourceData cf (RD_NS d) = putDomainRFC1035 cf d
 
-get_ns :: Int -> SGet RD_NS
+get_ns :: Int -> Parser RD_NS
 get_ns _ rbuf ref = RD_NS <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_NS where
@@ -140,7 +140,7 @@ instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
     putResourceData cf (RD_CNAME d) = putDomainRFC1035 cf d
 
-get_cname :: Int -> SGet RD_CNAME
+get_cname :: Int -> Parser RD_CNAME
 get_cname _ rbuf ref = RD_CNAME <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_CNAME where
@@ -182,7 +182,7 @@ instance ResourceData RD_SOA where
         putSeconds soa_expire wbuf ref
         putSeconds soa_minimum wbuf ref
 
-get_soa :: Int -> SGet RD_SOA
+get_soa :: Int -> Parser RD_SOA
 get_soa _ rbuf ref =
     RD_SOA
         <$> getDomainRFC1035 rbuf ref
@@ -211,7 +211,7 @@ instance ResourceData RD_NULL where
     resourceDataType _ = NULL
     putResourceData _ (RD_NULL o) = putOpaque o
 
-get_null :: Int -> SGet RD_NULL
+get_null :: Int -> Parser RD_NULL
 get_null len rbuf ref = RD_NULL <$> getOpaque len rbuf ref
 
 instance Show RD_NULL where
@@ -233,7 +233,7 @@ instance ResourceData RD_PTR where
     resourceDataType _ = PTR
     putResourceData cf (RD_PTR d) = putDomainRFC1035 cf d
 
-get_ptr :: Int -> SGet RD_PTR
+get_ptr :: Int -> Parser RD_PTR
 get_ptr _ rbuf ref = RD_PTR <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_PTR where
@@ -260,7 +260,7 @@ instance ResourceData RD_MX where
         put16 wbuf mx_preference
         putDomainRFC1035 cf mx_exchange wbuf ref
 
-get_mx :: Int -> SGet RD_MX
+get_mx :: Int -> Parser RD_MX
 get_mx _ rbuf ref = RD_MX <$> get16 rbuf <*> getDomainRFC1035 rbuf ref
 
 -- | Smart constructor.
@@ -287,7 +287,7 @@ instance ResourceData RD_TXT where
                     | otherwise = putTXT t wbuf ref
             putLenOpaque h wbuf ref >> next
 
-get_txt :: Int -> SGet RD_TXT
+get_txt :: Int -> Parser RD_TXT
 get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
 
 instance Show RD_TXT where
@@ -328,7 +328,7 @@ instance ResourceData RD_RP where
         _ <- putMailbox cf mbox
         putDomain cf d
 
-get_rp :: Int -> SGet RD_RP
+get_rp :: Int -> Parser RD_RP
 get_rp _ rbuf ref = RD_RP <$> getMailbox rbuf ref <*> getDomain rbuf ref
 
 -- | Smart constructor.
@@ -348,7 +348,7 @@ instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
     putResourceData _ (RD_AAAA ipv6) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv6b ipv6
 
-get_aaaa :: Int -> SGet RD_AAAA
+get_aaaa :: Int -> Parser RD_AAAA
 get_aaaa _ rbuf _ = RD_AAAA . toIPv6b <$> getNBytes rbuf 16
 
 instance Show RD_AAAA where
@@ -377,7 +377,7 @@ instance ResourceData RD_SRV where
         put16 wbuf srv_port
         putDomain cf srv_target wbuf ref
 
-get_srv :: Int -> SGet RD_SRV
+get_srv :: Int -> Parser RD_SRV
 get_srv _ rbuf ref =
     RD_SRV
         <$> get16 rbuf
@@ -401,7 +401,7 @@ instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
     putResourceData cf (RD_DNAME d) = putDomain cf d
 
-get_dname :: Int -> SGet RD_DNAME
+get_dname :: Int -> Parser RD_DNAME
 get_dname _ rbuf ref = RD_DNAME <$> getDomain rbuf ref
 
 instance Show RD_DNAME where
@@ -449,7 +449,7 @@ instance ResourceData RD_TLSA where
         put8 wbuf tlsa_matching_type
         putOpaque tlsa_assoc_data wbuf ref
 
-get_tlsa :: Int -> SGet RD_TLSA
+get_tlsa :: Int -> Parser RD_TLSA
 get_tlsa len rbuf ref =
     RD_TLSA
         <$> get8 rbuf

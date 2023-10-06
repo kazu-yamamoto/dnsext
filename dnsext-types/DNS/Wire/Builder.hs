@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module DNS.StateBinary.SPut (
+module DNS.Wire.Builder (
     -- * Builder
-    SPut,
-    runSPut,
+    Builder,
+    runBuilder,
 
     -- ** Basic builders
     put8,
@@ -39,13 +39,13 @@ import qualified Data.Map as M
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-import DNS.StateBinary.Types
+import DNS.Wire.Types
 import DNS.Types.Imports
 
 ----------------------------------------------------------------
 
 -- | Builder type
-type SPut a = WriteBuffer -> IORef BState -> IO a
+type Builder a = WriteBuffer -> IORef BState -> IO a
 
 ----------------------------------------------------------------
 
@@ -59,8 +59,8 @@ initialBState = BState M.empty
 
 ----------------------------------------------------------------
 
-runSPut :: SPut () -> ByteString
-runSPut builder = unsafeDupablePerformIO $ do
+runBuilder :: Builder () -> ByteString
+runBuilder builder = unsafeDupablePerformIO $ do
     withWriteBuffer 2048 $ \wbuf -> do -- fixme
         ref <- newIORef initialBState
         builder wbuf ref
@@ -112,7 +112,7 @@ putLenShortByteString wbuf txt = do
   where
     len = fromIntegral $ Short.length txt
 
-with16Length :: SPut () -> SPut ()
+with16Length :: Builder () -> Builder ()
 with16Length builder wbuf ref = do
     save wbuf
     write16 wbuf 0 -- reserve space

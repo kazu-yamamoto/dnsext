@@ -29,10 +29,6 @@ library
         DNS.Types.Time
 
     other-modules:
-        DNS.StateBinary
-        DNS.StateBinary.SGet
-        DNS.StateBinary.SPut
-        DNS.StateBinary.Types
         DNS.Types.Base32Hex
         DNS.Types.Dict
         DNS.Types.Domain
@@ -47,6 +43,10 @@ library
         DNS.Types.ShortBuilder
         DNS.Types.ShortParser
         DNS.Types.Type
+        DNS.Wire
+        DNS.Wire.Builder
+        DNS.Wire.Parser
+        DNS.Wire.Types
 
     default-language: Haskell2010
     ghc-options:      -Wall

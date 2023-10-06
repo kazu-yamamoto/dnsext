@@ -2,7 +2,7 @@
 
 module DNS.Types.Seconds where
 
-import DNS.StateBinary
+import DNS.Wire
 import DNS.Types.Imports
 
 newtype Seconds = Seconds Word32
@@ -24,8 +24,8 @@ instance Show Seconds where
                  in show j ++ mul " min" j
             | otherwise = mul "sec" i
 
-putSeconds :: Seconds -> SPut ()
+putSeconds :: Seconds -> Builder ()
 putSeconds (Seconds n) wbuf _ = put32 wbuf n
 
-getSeconds :: SGet Seconds
+getSeconds :: Parser Seconds
 getSeconds rbuf _ = Seconds <$> get32 rbuf

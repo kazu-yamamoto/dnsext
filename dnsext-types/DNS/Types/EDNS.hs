@@ -45,7 +45,7 @@ import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read
 
-import DNS.StateBinary
+import DNS.Wire
 import DNS.Types.Imports
 import DNS.Types.Opaque.Internal (Opaque, getOpaque, putOpaque)
 import qualified DNS.Types.Opaque.Internal as Opaque
@@ -193,7 +193,7 @@ addOpt code name = do
 
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode :: a -> OptCode
-    putOptData :: a -> SPut ()
+    putOptData :: a -> Builder ()
 
 ---------------------------------------------------------------
 
@@ -218,7 +218,7 @@ instance Eq OData where
 odataToOptCode :: OData -> OptCode
 odataToOptCode (OData x) = optDataCode x
 
-putOData :: OData -> SPut ()
+putOData :: OData -> Builder ()
 putOData (OData x) = putOptData x
 
 ---------------------------------------------------------------
@@ -235,7 +235,7 @@ instance OptData OD_NSID where
     optDataCode _ = NSID
     putOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
 
-get_nsid :: Int -> SGet OD_NSID
+get_nsid :: Int -> Parser OD_NSID
 get_nsid len rbuf _ = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_nsid :: Opaque -> OData
@@ -264,7 +264,7 @@ instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
     putOptData = put_clientSubnet
 
-put_clientSubnet :: OD_ClientSubnet -> SPut ()
+put_clientSubnet :: OD_ClientSubnet -> Builder ()
 put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) wbuf _ =
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
@@ -300,7 +300,7 @@ put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) wbuf ref = do
     put8 wbuf scpBits
     putOpaque addr wbuf ref
 
-get_clientSubnet :: Int -> SGet OD_ClientSubnet
+get_clientSubnet :: Int -> Parser OD_ClientSubnet
 get_clientSubnet len rbuf ref = do
     family <- get16 rbuf
     srcBits <- get8 rbuf
@@ -368,7 +368,7 @@ instance OptData OD_Padding where
     optDataCode _ = Padding
     putOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
 
-get_padding :: Int -> SGet OD_Padding
+get_padding :: Int -> Parser OD_Padding
 get_padding len rbuf _ = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_padding :: Opaque -> OData
@@ -416,7 +416,7 @@ _showECS family srcBits scpBits address =
 ---------------------------------------------------------------
 
 -- | Encode an EDNS OPTION byte string.
-putODBytes :: Word16 -> Opaque -> SPut ()
+putODBytes :: Word16 -> Opaque -> Builder ()
 putODBytes code o wbuf ref = do
     put16 wbuf code
     putInt16 wbuf $ Opaque.length o

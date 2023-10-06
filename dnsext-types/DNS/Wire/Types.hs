@@ -1,4 +1,4 @@
-module DNS.StateBinary.Types where
+module DNS.Wire.Types where
 
 import Data.ByteString.Short
 

@@ -33,7 +33,7 @@ module DNS.Types.Decode (
 
 import qualified Data.ByteString as BS
 
-import DNS.StateBinary
+import DNS.Wire
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.Error
@@ -56,7 +56,7 @@ decodeAt
     -- ^ encoded input buffer
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
-decodeAt t bs = runSGetAt t getDNSMessage bs
+decodeAt t bs = runParserAt t getDNSMessage bs
 
 -- | Decode an input buffer containing a single encoded DNS message.  If the
 -- input buffer has excess content beyond the end of the message an error is
@@ -70,7 +70,7 @@ decode
     -- ^ encoded input buffer
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
-decode bs = runSGet getDNSMessage bs
+decode bs = runParser getDNSMessage bs
 
 ----------------------------------------------------------------
 
@@ -84,15 +84,15 @@ decodeChunks t bss = decodeAt t $ BS.concat bss
 
 -- | Decode DNS header.
 decodeDNSHeader :: ByteString -> Either DNSError DNSHeader
-decodeDNSHeader bs = runSGet getHeader bs
+decodeDNSHeader bs = runParser getHeader bs
 
 -- | Decode DNS flags.
 decodeDNSFlags :: ByteString -> Either DNSError DNSFlags
-decodeDNSFlags bs = runSGet getDNSFlags bs
+decodeDNSFlags bs = runParser getDNSFlags bs
 
 -- | Decode a question.
 decodeQuestion :: ByteString -> Either DNSError Question
-decodeQuestion bs = runSGet getQuestion bs
+decodeQuestion bs = runParser getQuestion bs
 
 -- | Decoding a resource record.
 
@@ -101,7 +101,7 @@ decodeQuestion bs = runSGet getQuestion bs
 -- it is not generally possible to decode resource record separately from the
 -- enclosing DNS message.  This is an internal function.
 decodeResourceRecord :: ByteString -> Either DNSError ResourceRecord
-decodeResourceRecord bs = runSGet getResourceRecord bs
+decodeResourceRecord bs = runParser getResourceRecord bs
 
 -- | Decode a resource record with DNS timestamps interpreted at the
 -- supplied epoch time.  Since RRs may use DNS name compression, it is not
@@ -113,11 +113,11 @@ decodeResourceRecordAt
     -> ByteString
     -- ^ encoded resource record
     -> Either DNSError ResourceRecord
-decodeResourceRecordAt t bs = runSGetAt t getResourceRecord bs
+decodeResourceRecordAt t bs = runParserAt t getResourceRecord bs
 
 -- | Decode a resource data.
 decodeRData :: TYPE -> ByteString -> Either DNSError RData
-decodeRData typ bs = runSGet (getRData typ len) bs
+decodeRData typ bs = runParser (getRData typ len) bs
   where
     len = BS.length bs
 
@@ -125,10 +125,10 @@ decodeRData typ bs = runSGet (getRData typ len) bs
 -- generally possible to decode the names separately from the enclosing DNS
 -- message.  This is an internal function exposed only for testing.
 decodeDomain :: ByteString -> Either DNSError Domain
-decodeDomain bs = runSGet getDomain bs
+decodeDomain bs = runParser getDomain bs
 
 -- | Decode a mailbox name (e.g. the SOA record /rname/ field).  Since DNS names
 -- may use name compression, it is not generally possible to decode the names
 -- separately from the enclosing DNS message.  This is an internal function.
 decodeMailbox :: ByteString -> Either DNSError Mailbox
-decodeMailbox bs = runSGet getMailbox bs
+decodeMailbox bs = runParser getMailbox bs

@@ -2,13 +2,13 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module DNS.StateBinary.SGet (
+module DNS.Wire.Parser (
     -- * Parser
-    SGet,
+    Parser,
     WriteBuffer,
-    failSGet,
-    runSGet,
-    runSGetAt,
+    failParser,
+    runParser,
+    runParserAt,
 
     -- ** Basic parsers
     get8,
@@ -41,15 +41,15 @@ import qualified Data.IntMap as IM
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-import DNS.StateBinary.Types
 import DNS.Types.Error
 import DNS.Types.Imports
 import DNS.Types.Time
+import DNS.Wire.Types
 
 ----------------------------------------------------------------
 
 -- | Parser type
-type SGet a = ReadBuffer -> IORef PState -> IO a
+type Parser a = ReadBuffer -> IORef PState -> IO a
 
 -- | Parser state
 data PState = PState
@@ -134,9 +134,9 @@ sGetMany
     -- ^ element type for error messages
     -> Int
     -- ^ input buffer length
-    -> SGet a
+    -> Parser a
     -- ^ element parser
-    -> SGet [a]
+    -> Parser [a]
 sGetMany elemname len parser = \rbuf ref -> do
     lim <- (+ len) <$> position rbuf
     go lim id rbuf ref
@@ -155,17 +155,17 @@ sGetMany elemname len parser = \rbuf ref -> do
 -- | To get a broad range of correct RRSIG inception and expiration times
 -- without over or underflow, we choose a time half way between midnight PDT
 -- 2010-07-15 (the day the root zone was signed) and 2^32 seconds later on
--- 2146-08-21.  Since 'decode' and 'runSGet' are pure, we can't peek at the
+-- 2146-08-21.  Since 'decode' and 'runParser' are pure, we can't peek at the
 -- current time while parsing.  Outside this date range the output is off by
 -- some non-zero multiple 2\^32 seconds.
 dnsTimeMid :: EpochTime
 dnsTimeMid = 3426660848
 
-failSGet :: Monad m => String -> m a
-failSGet = error
+failParser :: Monad m => String -> m a
+failParser = error
 
-runSGetAt :: EpochTime -> SGet a -> ByteString -> Either DNSError a
-runSGetAt t parser inp =
+runParserAt :: EpochTime -> Parser a -> ByteString -> Either DNSError a
+runParserAt t parser inp =
     unsafeDupablePerformIO $ E.handle handler parse
   where
     parse = withReadBuffer inp $ \rbuf -> do
@@ -173,27 +173,5 @@ runSGetAt t parser inp =
         Right <$> parser rbuf ref
     handler (E.SomeException e) = return $ Left $ DecodeError $ "incomplete input: " ++ show e
 
-runSGet :: SGet a -> ByteString -> Either DNSError a
-runSGet = runSGetAt dnsTimeMid
-
-{-
-runSGetWithLeftoversAt
-    :: EpochTime
-    -- ^ Reference time for DNS clock arithmetic
-    -> SGet a
-    -- ^ Parser
-    -> ByteString
-    -- ^ Encoded message
-    -> Either DNSError a
-runSGetWithLeftoversAt t parser inp =
-    unsafeDupablePerformIO $ E.handle handler parse
-  where
-    parse = withReadBuffer inp $ \rbuf -> do
-        ref <- newIORef $ initialState t
-        Right <$> runSGet' parser rbuf ref
-    handler (E.SomeException e) = return $ Left $ DecodeError ("incomplete input: " ++ show e)
-
-runSGetWithLeftovers
-    :: SGet a -> ByteString -> Either DNSError a
-runSGetWithLeftovers = runSGetWithLeftoversAt dnsTimeMid
--}
+runParser :: Parser a -> ByteString -> Either DNSError a
+runParser = runParserAt dnsTimeMid
