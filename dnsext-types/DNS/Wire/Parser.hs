@@ -26,7 +26,7 @@ module DNS.Wire.Parser (
 
     -- ** Parser state
     PState,
-    parserPosition,
+    position,
     pushDomain,
     popDomain,
     getAtTime,
@@ -63,12 +63,6 @@ initialState t = PState IM.empty t
 
 ----------------------------------------------------------------
 
-parserPosition :: ReadBuffer -> IO Int
-parserPosition = position
-
-getAtTime :: IORef PState -> IO EpochTime
-getAtTime ref = pstAtTime <$> readIORef ref
-
 pushDomain :: IM.Key -> [RawDomain] -> IORef PState -> IO ()
 pushDomain n d ref = do
     PState dom t <- readIORef ref
@@ -76,6 +70,9 @@ pushDomain n d ref = do
 
 popDomain :: IM.Key -> IORef PState -> IO (Maybe [RawDomain])
 popDomain n ref = IM.lookup n . pstDomain <$> readIORef ref
+
+getAtTime :: IORef PState -> IO EpochTime
+getAtTime ref = pstAtTime <$> readIORef ref
 
 ----------------------------------------------------------------
 

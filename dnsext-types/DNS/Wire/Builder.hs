@@ -21,7 +21,7 @@ module DNS.Wire.Builder (
 
     -- ** Builder state
     BState,
-    builderPosition,
+    position,
     pushPointer,
     popPointer,
 ) where
@@ -61,17 +61,14 @@ runBuilder builder = unsafeDupablePerformIO $ do
 
 ----------------------------------------------------------------
 
-builderPosition :: WriteBuffer -> IO Position
-builderPosition = position
-
-popPointer :: [RawDomain] -> IORef BState -> IO (Maybe Int)
-popPointer dom ref = M.lookup dom . bstDomain <$> readIORef ref
-
 pushPointer :: [RawDomain] -> Int -> IORef BState -> IO ()
 pushPointer dom pos ref = do
     BState m <- readIORef ref
     let m' = M.insert dom pos m
     writeIORef ref $ BState m'
+
+popPointer :: [RawDomain] -> IORef BState -> IO (Maybe Int)
+popPointer dom ref = M.lookup dom . bstDomain <$> readIORef ref
 
 ----------------------------------------------------------------
 

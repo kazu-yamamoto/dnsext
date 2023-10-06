@@ -304,7 +304,7 @@ putCompress :: [RawDomain] -> Builder ()
 putCompress [] wbuf _ = put8 wbuf 0
 putCompress dom@(d : ds) wbuf ref = do
     mpos <- popPointer dom ref
-    cur <- builderPosition wbuf
+    cur <- position wbuf
     case mpos of
         Just pos -> putPointer wbuf pos
         _ -> do
@@ -342,7 +342,7 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 --   An error is thrown if name compression is used.
 getDomain :: Parser Domain
 getDomain rbuf ref = domainFromWireLabels <$> do
-    n <- parserPosition rbuf
+    n <- position rbuf
     getDomain' False n rbuf ref
 
 -- | Getting a domain name.
@@ -357,20 +357,20 @@ getDomain rbuf ref = domainFromWireLabels <$> do
 -- decreasing!
 getDomainRFC1035 :: Parser Domain
 getDomainRFC1035 rbuf ref = domainFromWireLabels <$> do
-    n <- parserPosition rbuf
+    n <- position rbuf
     getDomain' True n rbuf ref
 
 -- | Getting a mailbox.
 --   An error is thrown if name compression is used.
 getMailbox :: Parser Mailbox
 getMailbox rbuf ref = mailboxFromWireLabels <$> do
-    n <- parserPosition rbuf
+    n <- position rbuf
     getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
 getMailboxRFC1035 :: Parser Mailbox
 getMailboxRFC1035 rbuf ref = mailboxFromWireLabels <$> do
-    n <- parserPosition rbuf
+    n <- position rbuf
     getDomain' True n rbuf ref
 
 -- $
@@ -391,7 +391,7 @@ getMailboxRFC1035 rbuf ref = mailboxFromWireLabels <$> do
 -- loops.
 getDomain' :: Bool -> Int -> Parser [ShortByteString]
 getDomain' allowCompression ptrLimit = \rbuf ref -> do
-    pos <- parserPosition rbuf
+    pos <- position rbuf
     c <- getInt8 rbuf
     let n = getValue c
     getdomain pos c n rbuf ref

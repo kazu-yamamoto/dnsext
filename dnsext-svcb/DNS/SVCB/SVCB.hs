@@ -47,10 +47,10 @@ instance ResourceData RD_SVCB where
 
 get_svcb :: Int -> Parser RD_SVCB
 get_svcb len rbuf ref = do
-    end <- (+) len <$> parserPosition rbuf
+    end <- (+) len <$> position rbuf
     priority <- get16 rbuf
     target <- getDomain rbuf ref
-    pos <- parserPosition rbuf
+    pos <- position rbuf
     params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam rbuf ref
     return $ RD_SVCB priority target params
   where

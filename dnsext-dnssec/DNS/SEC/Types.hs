@@ -122,7 +122,7 @@ get_rrsig lim rbuf ref = do
     tin <- getDNSTime rbuf ref
     tag <- get16 rbuf
     dom <- getDomain rbuf ref -- XXX: Enforce no compression?
-    pos <- parserPosition rbuf
+    pos <- position rbuf
     val <- getOpaque (end - pos) rbuf ref
     return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
@@ -190,7 +190,7 @@ get_nsec :: Int -> Parser RD_NSEC
 get_nsec len rbuf ref = do
     end <- rdataEnd len rbuf ref
     dom <- getDomain rbuf ref
-    pos <- parserPosition rbuf
+    pos <- position rbuf
     RD_NSEC dom <$> getNsecTypes (end - pos) rbuf ref
 
 -- | Smart constructor.
@@ -259,7 +259,7 @@ get_nsec3 len rbuf ref = do
     iter <- get16 rbuf
     salt <- getLenOpaque rbuf ref
     hash <- getLenOpaque rbuf ref
-    tpos <- parserPosition rbuf
+    tpos <- position rbuf
     RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos) rbuf ref
 
 -- | Smart constructor.
@@ -367,7 +367,7 @@ rdataEnd
     -- ^ number of bytes left from current position
     -> Parser Int
     -- ^ end position
-rdataEnd lim rbuf _ = (+) lim <$> parserPosition rbuf
+rdataEnd lim rbuf _ = (+) lim <$> position rbuf
 
 ----------------------------------------------------------------
 
