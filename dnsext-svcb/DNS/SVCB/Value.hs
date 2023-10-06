@@ -22,11 +22,11 @@ class SPV a where
     fromSvcParamValue :: SvcParamValue -> Maybe a
     toSvcParamValue :: a -> SvcParamValue
 
-toSPV :: SPut () -> SvcParamValue
-toSPV = SvcParamValue . Opaque.fromByteString . runSPut
+toSPV :: Builder () -> SvcParamValue
+toSPV = SvcParamValue . Opaque.fromByteString . runBuilder
 
-fromSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
-fromSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
+fromSPV :: (Int -> Parser a) -> SvcParamValue -> Maybe a
+fromSPV parser (SvcParamValue o) = case runParser (parser len) bs of
     Right r -> Just r
     _ -> Nothing
   where

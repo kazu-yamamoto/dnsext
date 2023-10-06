@@ -45,11 +45,11 @@ dnsTime tdns tnow =
 
 -- | Helper to find position of RData end, that is, the offset of the first
 -- byte /after/ the current RData.
-getDNSTime :: SGet DNSTime
+getDNSTime :: Parser DNSTime
 getDNSTime rbuf ref = do
     tnow <- getAtTime ref
     tdns <- get32 rbuf
     return $ dnsTime tdns tnow
 
-putDNSTime :: DNSTime -> SPut ()
+putDNSTime :: DNSTime -> Builder ()
 putDNSTime (DNSTime i32) wbuf _ = put32 wbuf $ fromIntegral i32

@@ -113,7 +113,7 @@ withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
 withVerifiedRRset
     :: EpochTime
     -> [RD_DNSKEY]
-    -> RRset -> [DNS.SPut ()] -> [(RD_RRSIG, TTL)]
+    -> RRset -> [DNS.Builder ()] -> [(RD_RRSIG, TTL)]
     -> (RRset -> a)
     -> a
 {- FOURMOLU_ENABLE -}
@@ -394,7 +394,7 @@ nsecxWithRanges withZippedSigs dnskeys getRanked msg nullK leftK rightK = do
 ---
 
 {- get not verified canonical RRset -}
-canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [DNS.SPut ()] -> a) -> a
+canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [DNS.Builder ()] -> a) -> a
 canonicalRRset rrs leftK rightK =
     SEC.canonicalRRsetSorted' sortedRRs leftK mkRRset
   where

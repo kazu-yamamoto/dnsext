@@ -36,10 +36,10 @@ instance Show DigestAlg where
     show (DigestAlg n) = "DigestAlg " ++ show n
 {- FOURMOLU_ENABLE -}
 
-putDigestAlg :: DigestAlg -> SPut ()
+putDigestAlg :: DigestAlg -> Builder ()
 putDigestAlg d wbuf _ = put8 wbuf $ fromDigestAlg d
 
-getDigestAlg :: SGet DigestAlg
+getDigestAlg :: Parser DigestAlg
 getDigestAlg rbuf _ = toDigestAlg <$> get8 rbuf
 
 -- https://www.iana.org/assignments/dnssec-nsec3-parameters/dnssec-nsec3-parameters.xhtml
@@ -59,8 +59,8 @@ instance Show HashAlg where
     show Hash_SHA1 = "SHA1"
     show (HashAlg n) = "HashAlg " ++ show n
 
-putHashAlg :: HashAlg -> SPut ()
+putHashAlg :: HashAlg -> Builder ()
 putHashAlg h wbuf _ = put8 wbuf $ fromHashAlg h
 
-getHashAlg :: SGet HashAlg
+getHashAlg :: Parser HashAlg
 getHashAlg rbuf _ = toHashAlg <$> get8 rbuf

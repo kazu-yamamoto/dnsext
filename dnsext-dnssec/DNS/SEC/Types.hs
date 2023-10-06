@@ -105,7 +105,7 @@ instance ResourceData RD_RRSIG where
         putDomain cf rrsig_zone wbuf ref
         putOpaque rrsig_signature wbuf ref
 
-get_rrsig :: Int -> SGet RD_RRSIG
+get_rrsig :: Int -> Parser RD_RRSIG
 get_rrsig lim rbuf ref = do
     -- The signature follows a variable length zone name
     -- and occupies the rest of the RData.  Simplest to
@@ -159,7 +159,7 @@ instance ResourceData RD_DS where
         putDigestAlg ds_digestalg wbuf ref
         putOpaque ds_digest wbuf ref
 
-get_ds :: Int -> SGet RD_DS
+get_ds :: Int -> Parser RD_DS
 get_ds len rbuf ref =
     RD_DS
         <$> get16 rbuf
@@ -186,7 +186,7 @@ instance ResourceData RD_NSEC where
         _ <- putDomain cf nsecNextDomain wbuf ref
         putNsecTypes nsecTypes wbuf ref
 
-get_nsec :: Int -> SGet RD_NSEC
+get_nsec :: Int -> Parser RD_NSEC
 get_nsec len rbuf ref = do
     end <- rdataEnd len rbuf ref
     dom <- getDomain rbuf ref
@@ -216,7 +216,7 @@ instance ResourceData RD_DNSKEY where
         putPubAlg dnskey_pubalg wbuf ref
         putPubKey dnskey_public_key wbuf ref
 
-get_dnskey :: Int -> SGet RD_DNSKEY
+get_dnskey :: Int -> Parser RD_DNSKEY
 get_dnskey len rbuf ref = do
     flags <- getDNSKEYflags rbuf ref
     proto <- get8 rbuf
@@ -251,7 +251,7 @@ instance ResourceData RD_NSEC3 where
         putLenOpaque nsec3_next_hashed_owner_name wbuf ref
         putNsecTypes nsec3_types wbuf ref
 
-get_nsec3 :: Int -> SGet RD_NSEC3
+get_nsec3 :: Int -> Parser RD_NSEC3
 get_nsec3 len rbuf ref = do
     dend <- rdataEnd len rbuf ref
     halg <- getHashAlg rbuf ref
@@ -286,7 +286,7 @@ instance ResourceData RD_NSEC3PARAM where
         put16 wbuf nsec3param_iterations
         putLenOpaque nsec3param_salt wbuf ref
 
-get_nsec3param :: Int -> SGet RD_NSEC3PARAM
+get_nsec3param :: Int -> Parser RD_NSEC3PARAM
 get_nsec3param _ rbuf ref =
     RD_NSEC3PARAM
         <$> getHashAlg rbuf ref
@@ -317,7 +317,7 @@ instance ResourceData RD_CDS where
         putDigestAlg cds_digestalg wbuf ref
         putOpaque cds_digest wbuf ref
 
-get_cds :: Int -> SGet RD_CDS
+get_cds :: Int -> Parser RD_CDS
 get_cds len rbuf ref =
     RD_CDS
         <$> get16 rbuf
@@ -348,7 +348,7 @@ instance ResourceData RD_CDNSKEY where
         putPubAlg cdnskey_pubalg wbuf ref
         putPubKey cdnskey_public_key wbuf ref
 
-get_cdnskey :: Int -> SGet RD_CDNSKEY
+get_cdnskey :: Int -> Parser RD_CDNSKEY
 get_cdnskey len rbuf ref = do
     flags <- getDNSKEYflags rbuf ref
     proto <- get8 rbuf
@@ -365,17 +365,17 @@ rd_cdnskey a b c d = toRData $ RD_CDNSKEY a b c d
 rdataEnd
     :: Int
     -- ^ number of bytes left from current position
-    -> SGet Int
+    -> Parser Int
     -- ^ end position
 rdataEnd lim rbuf _ = (+) lim <$> parserPosition rbuf
 
 ----------------------------------------------------------------
 
 -- | Encode DNSSEC NSEC type bits
-putNsecTypes :: [TYPE] -> SPut ()
+putNsecTypes :: [TYPE] -> Builder ()
 putNsecTypes types = putTypeList $ map fromTYPE types
   where
-    putTypeList :: [Word16] -> SPut ()
+    putTypeList :: [Word16] -> Builder ()
     putTypeList ts wbuf ref =
         sequence_
             [ putWindow (the top8) bot8 wbuf ref
@@ -388,7 +388,7 @@ putNsecTypes types = putTypeList $ map fromTYPE types
                 groupWith
             ]
 
-    putWindow :: Int -> [Int] -> SPut ()
+    putWindow :: Int -> [Int] -> Builder ()
     putWindow top8 bot8s wbuf ref= do
         let blks = maximum bot8s `shiftR` 3
         putInt8 wbuf top8
@@ -408,7 +408,7 @@ putNsecTypes types = putTypeList $ map fromTYPE types
         -- \| Combine type bits in network bit order, i.e. bit 0 first.
         mergeBits acc b = setBit acc (7 - b .&. 0x07)
 
-    putBits :: Int -> [(Int, Word8)] -> SPut ()
+    putBits :: Int -> [(Int, Word8)] -> Builder ()
     putBits _ [] _ _ = return ()
     putBits n ((block, octet) : rest) wbuf ref = do
         replicateM_ (block - n) (put8 wbuf 0)
@@ -418,14 +418,14 @@ putNsecTypes types = putTypeList $ map fromTYPE types
 -- <https://tools.ietf.org/html/rfc4034#section-4.1>
 -- Parse a list of NSEC type bitmaps
 --
-getNsecTypes :: Int -> SGet [TYPE]
+getNsecTypes :: Int -> Parser [TYPE]
 getNsecTypes len rbuf ref = concat <$> sGetMany "NSEC type bitmap" len getbits rbuf ref
   where
     getbits _ _ = do
         window <- flip shiftL 8 <$> getInt8 rbuf
         blocks <- getInt8 rbuf
         when (blocks > 32) $
-            failSGet $
+            failParser $
                 "NSEC bitmap block too long: " ++ show blocks
         concatMap blkTypes . zip [window, window + 8 ..] <$> getNBytes rbuf blocks
       where

@@ -45,7 +45,7 @@ instance ResourceData RD_SVCB where
             putInt16 wbuf $ Opaque.length v
             putOpaque v wbuf ref
 
-get_svcb :: Int -> SGet RD_SVCB
+get_svcb :: Int -> Parser RD_SVCB
 get_svcb len rbuf ref = do
     end <- (+) len <$> parserPosition rbuf
     priority <- get16 rbuf
@@ -76,7 +76,7 @@ instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
 
-get_https :: Int -> SGet RD_HTTPS
+get_https :: Int -> Parser RD_HTTPS
 get_https len rbuf ref = do
     RD_SVCB x y z <- get_svcb len rbuf ref
     return $ RD_HTTPS x y z

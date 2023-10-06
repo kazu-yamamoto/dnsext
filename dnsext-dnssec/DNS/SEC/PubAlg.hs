@@ -87,8 +87,8 @@ instance Show PubAlg where
     show (PubAlg n)         = "PubAlg " ++ show n
 {- FOURMOLU_ENABLE -}
 
-putPubAlg :: PubAlg -> SPut ()
+putPubAlg :: PubAlg -> Builder ()
 putPubAlg a wbuf _ = put8 wbuf $ fromPubAlg a
 
-getPubAlg :: SGet PubAlg
+getPubAlg :: Parser PubAlg
 getPubAlg rbuf _ = toPubAlg <$> get8 rbuf
