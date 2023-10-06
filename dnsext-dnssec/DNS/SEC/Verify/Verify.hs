@@ -33,15 +33,23 @@ import DNS.SEC.Verify.Types
 keyTag :: RD_DNSKEY -> Word16
 keyTag = keyTagFromBS . runSPut . putResourceData Canonical
 
+{- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
 keyTagFromBS :: ByteString -> Word16
 keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
   where
-    addHigh w8 = (+ (fromIntegral w8 `shiftL` 8))
-    addLow w8 = (+ fromIntegral w8)
-    loopOps = zipWith ($) (cycle [addHigh, addLow]) (BS.unpack bs)
+    addHigh z w8 = z + (fromIntegral w8 `shiftL` 8)
+    addLow z w8 = z + fromIntegral w8
+    len = BS.length bs
+    foldlBS2' :: (a -> Word8 -> a) -> (a -> Word8 -> a) -> a -> Int -> a
+    foldlBS2' cons1 cons2 nil off
+        | off >= len  = nil
+        | otherwise   = z `seq` foldlBS2' cons2 cons1 z (off + 1)
+        where
+          ~z = cons1 nil (bs `BS.index` off)
     sumK :: Int
-    sumK = foldr ($) 0 loopOps
+    sumK = foldlBS2' addHigh addLow 0 0
+{- FOURMOLU_ENABLE -}
 
 ---
 
