@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 
 module DNS.Wire.Parser (
     -- * Parser
@@ -158,8 +159,8 @@ sGetMany elemname len parser = \rbuf ref -> do
 dnsTimeMid :: EpochTime
 dnsTimeMid = 3426660848
 
-failParser :: Monad m => String -> m a
-failParser = error
+failParser :: String -> IO a
+failParser = E.throwIO . DecodeError
 
 runParserAt :: EpochTime -> Parser a -> ByteString -> Either DNSError a
 runParserAt t parser inp =
@@ -168,7 +169,9 @@ runParserAt t parser inp =
     parse = withReadBuffer inp $ \rbuf -> do
         ref <- newIORef $ initialState t
         Right <$> parser rbuf ref
-    handler (E.SomeException e) = return $ Left $ DecodeError $ "incomplete input: " ++ show e
+    handler se@(E.SomeException e)
+      | Just (DecodeError msg) <- E.fromException se = return $ Left $ DecodeError msg
+      | otherwise  = return $ Left $ DecodeError $ "incomplete input: " ++ show e
 
 runParser :: Parser a -> ByteString -> Either DNSError a
 runParser = runParserAt dnsTimeMid
