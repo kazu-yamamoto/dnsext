@@ -24,6 +24,7 @@ import Data.ByteString.Short (ShortByteString)
 import Data.IP (IPv4, IPv6)
 import Network.Socket (HostName, PortNumber)
 import Text.Read (readMaybe)
+import Data.Either
 
 recursiveQeury
     :: [HostName]
@@ -80,13 +81,11 @@ getCustomConf mserver port ctl putLines raflags = case mserver of
     toNumeric sname | isNumeric sname = return [sname]
     toNumeric sname = DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
         let dom = DNS.fromRepresentation sname
-        eA <- DNS.lookupA env dom
-        eQA <- DNS.lookupAAAA env dom
-        let eas = do
-                as <- eA
-                qas <- eQA
-                return $ map (show . DNS.a_ipv4) as ++ map (show . DNS.aaaa_ipv6) qas
-        either (fail . show) return eas
+        eA <- fmap (fmap (show . DNS.a_ipv4)) <$> DNS.lookupA env dom
+        eAAAA <- fmap (fmap (show . DNS.aaaa_ipv6)) <$> DNS.lookupAAAA env dom
+        case rights [eA,eAAAA] of
+          [] -> fail $ show eA
+          hss -> return $ concat hss
 
 isNumeric :: HostName -> Bool
 isNumeric h = case readMaybe h :: Maybe IPv4 of
