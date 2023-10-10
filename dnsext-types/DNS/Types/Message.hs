@@ -723,10 +723,9 @@ getResourceRecords n rbuf ref = go 0 id
         | i == n = return $ b []
         | otherwise = do
             r <- getResourceRecord rbuf ref
-            if rrclass r == IN
-                then go (i + 1) (b . (r :))
-                else -- skipping greasing RR
-                    go i b
+            if rrtype r == TYPE 0 && rrclass r == CLASS 0 -- skipping greasing RR
+                then go i b
+                else go (i + 1) (b . (r :))
 
 getResourceRecord :: Parser ResourceRecord
 getResourceRecord rbuf ref = do
