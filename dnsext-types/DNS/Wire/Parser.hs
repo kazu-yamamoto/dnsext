@@ -168,7 +168,10 @@ runParserAt t parser inp =
   where
     parse = withReadBuffer inp $ \rbuf -> do
         ref <- newIORef $ initialState t
-        Right <$> parser rbuf ref
+        ret <- parser rbuf ref
+        left <- remainingSize rbuf
+        when (left /= 0) $ failParser "excess input"
+        return $ Right ret
     handler se@(E.SomeException e)
       | Just (DecodeError msg) <- E.fromException se = return $ Left $ DecodeError msg
       | otherwise  = return $ Left $ DecodeError $ "incomplete input: " ++ show e
