@@ -22,12 +22,12 @@ class SPV a where
     fromSvcParamValue :: SvcParamValue -> Maybe a
     toSvcParamValue :: a -> SvcParamValue
 
-toSPV :: SPut () -> SvcParamValue
-toSPV = SvcParamValue . Opaque.fromByteString . runSPut
+toSPV :: Builder () -> SvcParamValue
+toSPV = SvcParamValue . Opaque.fromByteString . runBuilder
 
-fromSPV :: (Int -> SGet a) -> SvcParamValue -> Maybe a
-fromSPV parser (SvcParamValue o) = case runSGet (parser len) bs of
-    Right (r, _) -> Just r
+fromSPV :: (Int -> Parser a) -> SvcParamValue -> Maybe a
+fromSPV parser (SvcParamValue o) = case runParser (parser len) bs of
+    Right r -> Just r
     _ -> Nothing
   where
     bs = Opaque.toByteString o
@@ -45,10 +45,9 @@ instance Show SPV_Mandatory where
 
 instance SPV SPV_Mandatory where
     toSvcParamValue (SPV_Mandatory ks) =
-        toSPV $
-            mapM_ (put16 . fromSvcParamKey) ks
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_Mandatory <$> sGetMany "Mandatory" len (toSvcParamKey <$> get16)
+        toSPV $ \wbuf _ -> mapM_ (put16 wbuf . fromSvcParamKey) ks
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_Mandatory <$> sGetMany "Mandatory" len (\_ _ -> toSvcParamKey <$> get16 rbuf) rbuf ref
 
 spv_mandatory :: [SvcParamKey] -> SvcParamValue
 spv_mandatory keys = toSvcParamValue $ SPV_Mandatory keys
@@ -64,8 +63,8 @@ instance Show SPV_Port where
     show (SPV_Port p) = show p
 
 instance SPV SPV_Port where
-    toSvcParamValue (SPV_Port p) = toSPV $ put16 $ fromIntegral p
-    fromSvcParamValue = fromSPV $ \_ -> SPV_Port . fromIntegral <$> get16
+    toSvcParamValue (SPV_Port p) = toSPV $ \wbuf _ -> put16 wbuf $ fromIntegral p
+    fromSvcParamValue = fromSPV $ \_ rbuf _ -> SPV_Port . fromIntegral <$> get16 rbuf
 
 spv_port :: PortNumber -> SvcParamValue
 spv_port p = toSvcParamValue $ SPV_Port p
@@ -81,10 +80,12 @@ instance Show SPV_IPv4Hint where
     show (SPV_IPv4Hint is) = show is
 
 instance SPV SPV_IPv4Hint where
-    toSvcParamValue (SPV_IPv4Hint is) = toSPV $ do
-        mapM_ (mapM_ putInt8 . fromIPv4) is
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_IPv4Hint <$> sGetMany "IPv4Hint" len (toIPv4 <$> getNBytes 4)
+    toSvcParamValue (SPV_IPv4Hint is) = toSPV $ \wbuf _ -> do
+        mapM_ (mapM_ (putInt8 wbuf) . fromIPv4) is
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_IPv4Hint <$> sGetMany "IPv4Hint" len ipv4hint rbuf ref
+      where
+        ipv4hint rbuf _ = toIPv4 <$> getNBytes rbuf 4
 
 spv_ipv4hint :: [IPv4] -> SvcParamValue
 spv_ipv4hint is = toSvcParamValue $ SPV_IPv4Hint is
@@ -100,10 +101,12 @@ instance Show SPV_IPv6Hint where
     show (SPV_IPv6Hint is) = show is
 
 instance SPV SPV_IPv6Hint where
-    toSvcParamValue (SPV_IPv6Hint is) = toSPV $ do
-        mapM_ (mapM_ putInt8 . fromIPv6b) is
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_IPv6Hint <$> sGetMany "IPv6Hint" len (toIPv6b <$> getNBytes 16)
+    toSvcParamValue (SPV_IPv6Hint is) = toSPV $ \wbuf _ -> do
+        mapM_ (mapM_ (putInt8 wbuf) . fromIPv6b) is
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_IPv6Hint <$> sGetMany "IPv6Hint" len ipv6hint rbuf ref
+      where
+        ipv6hint rbuf _ = toIPv6b <$> getNBytes rbuf 16
 
 spv_ipv6hint :: [IPv6] -> SvcParamValue
 spv_ipv6hint is = toSvcParamValue $ SPV_IPv6Hint is
@@ -122,17 +125,17 @@ instance Show SPV_ALPN where
     show (SPV_ALPN as) = show $ map (C8.unpack . Short.fromShort) as
 
 instance SPV SPV_ALPN where
-    toSvcParamValue (SPV_ALPN as) = toSPV $ mapM_ alpn as
+    toSvcParamValue (SPV_ALPN as) = toSPV $ \wbuf _ -> mapM_ (alpn wbuf) as
       where
-        alpn bs = do
-            putInt8 $ Short.length bs
-            putShortByteString bs
-    fromSvcParamValue = fromSPV $ \len -> do
-        SPV_ALPN <$> sGetMany "ALPN" len alpn
+        alpn wbuf bs = do
+            putInt8 wbuf $ Short.length bs
+            putShortByteString wbuf bs
+    fromSvcParamValue = fromSPV $ \len rbuf ref -> do
+        SPV_ALPN <$> sGetMany "ALPN" len alpn rbuf ref
       where
-        alpn = do
-            len <- getInt8
-            getNShortByteString len
+        alpn rbuf _ = do
+            len <- getInt8 rbuf
+            getNShortByteString rbuf len
 
 spv_alpn :: [ALPN] -> SvcParamValue
 spv_alpn as = toSvcParamValue $ SPV_ALPN as
@@ -162,8 +165,8 @@ instance Show SPV_DoHPath where
     show (SPV_DoHPath p) = show $ C8.unpack $ Short.fromShort p
 
 instance SPV SPV_DoHPath where
-    toSvcParamValue (SPV_DoHPath p) = toSPV $ putShortByteString p
-    fromSvcParamValue = fromSPV $ \len -> SPV_DoHPath <$> getNShortByteString len
+    toSvcParamValue (SPV_DoHPath p) = toSPV $ \wbuf _ -> putShortByteString wbuf p
+    fromSvcParamValue = fromSPV $ \len rbuf _ -> SPV_DoHPath <$> getNShortByteString rbuf len
 
 spv_dohpath :: ShortByteString -> SvcParamValue
 spv_dohpath as = toSvcParamValue $ SPV_DoHPath as

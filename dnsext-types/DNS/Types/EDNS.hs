@@ -45,10 +45,10 @@ import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read
 
-import DNS.StateBinary
 import DNS.Types.Imports
 import DNS.Types.Opaque.Internal (Opaque, getOpaque, putOpaque)
 import qualified DNS.Types.Opaque.Internal as Opaque
+import DNS.Wire
 
 ----------------------------------------------------------------
 -- EDNS (RFC 6891, EDNS(0))
@@ -193,7 +193,7 @@ addOpt code name = do
 
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode :: a -> OptCode
-    putOptData :: a -> SPut ()
+    putOptData :: a -> Builder ()
 
 ---------------------------------------------------------------
 
@@ -218,7 +218,7 @@ instance Eq OData where
 odataToOptCode :: OData -> OptCode
 odataToOptCode (OData x) = optDataCode x
 
-putOData :: OData -> SPut ()
+putOData :: OData -> Builder ()
 putOData (OData x) = putOptData x
 
 ---------------------------------------------------------------
@@ -235,8 +235,8 @@ instance OptData OD_NSID where
     optDataCode _ = NSID
     putOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
 
-get_nsid :: Int -> SGet OD_NSID
-get_nsid len = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString len
+get_nsid :: Int -> Parser OD_NSID
+get_nsid len rbuf _ = OD_NSID . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_nsid :: Opaque -> OData
 od_nsid = toOData . OD_NSID
@@ -264,8 +264,8 @@ instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
     putOptData = put_clientSubnet
 
-put_clientSubnet :: OD_ClientSubnet -> SPut ()
-put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
+put_clientSubnet :: OD_ClientSubnet -> Builder ()
+put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) wbuf _ =
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
     -- o  ADDRESS, variable number of octets, contains either an IPv4 or
@@ -286,26 +286,26 @@ put_clientSubnet (OD_ClientSubnet srcBits scpBits ip) =
             IPv6 ip6 -> (2, take octets $ fromIPv6b $ prefix ip6)
         dataLen = 2 + 2 + octets
      in do
-            put16 $ fromOptCode ClientSubnet
-            putInt16 dataLen
-            put16 family
-            put8 srcBits
-            put8 scpBits
-            mapM_ putInt8 raw
-put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) = do
-    put16 $ fromOptCode ClientSubnet
-    putInt16 $ 4 + Opaque.length addr
-    put16 family
-    put8 srcBits
-    put8 scpBits
-    putOpaque addr
+            put16 wbuf $ fromOptCode ClientSubnet
+            putInt16 wbuf dataLen
+            put16 wbuf family
+            put8 wbuf srcBits
+            put8 wbuf scpBits
+            mapM_ (putInt8 wbuf) raw
+put_clientSubnet (OD_ECSgeneric family srcBits scpBits addr) wbuf ref = do
+    put16 wbuf $ fromOptCode ClientSubnet
+    putInt16 wbuf $ 4 + Opaque.length addr
+    put16 wbuf family
+    put8 wbuf srcBits
+    put8 wbuf scpBits
+    putOpaque addr wbuf ref
 
-get_clientSubnet :: Int -> SGet OD_ClientSubnet
-get_clientSubnet len = do
-    family <- get16
-    srcBits <- get8
-    scpBits <- get8
-    addr <- getOpaque (len - 4) -- 4 = 2 + 1 + 1
+get_clientSubnet :: Int -> Parser OD_ClientSubnet
+get_clientSubnet len rbuf ref = do
+    family <- get16 rbuf
+    srcBits <- get8 rbuf
+    scpBits <- get8 rbuf
+    addr <- getOpaque (len - 4) rbuf ref -- 4 = 2 + 1 + 1
     --
     -- https://tools.ietf.org/html/rfc7871#section-6
     --
@@ -368,8 +368,8 @@ instance OptData OD_Padding where
     optDataCode _ = Padding
     putOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
 
-get_padding :: Int -> SGet OD_Padding
-get_padding len = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString len
+get_padding :: Int -> Parser OD_Padding
+get_padding len rbuf _ = OD_Padding . Opaque.fromShortByteString <$> getNShortByteString rbuf len
 
 od_padding :: Opaque -> OData
 od_padding = toOData . OD_Padding
@@ -416,8 +416,8 @@ _showECS family srcBits scpBits address =
 ---------------------------------------------------------------
 
 -- | Encode an EDNS OPTION byte string.
-putODBytes :: Word16 -> Opaque -> SPut ()
-putODBytes code o = do
-    put16 code
-    putInt16 $ Opaque.length o
-    putOpaque o
+putODBytes :: Word16 -> Opaque -> Builder ()
+putODBytes code o wbuf ref = do
+    put16 wbuf code
+    putInt16 wbuf $ Opaque.length o
+    putOpaque o wbuf ref

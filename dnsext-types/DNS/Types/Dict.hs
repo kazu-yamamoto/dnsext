@@ -14,11 +14,11 @@ import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
 
-import DNS.StateBinary
 import DNS.Types.EDNS
 import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Type
+import DNS.Wire
 
 ----------------------------------------------------------------
 
@@ -30,87 +30,87 @@ globalRDataDict = unsafePerformIO $ newIORef defaultRDataDict
 globalODataDict :: IORef ODataDict
 globalODataDict = unsafePerformIO $ newIORef defaultODataDict
 
-addRData :: TYPE -> (Int -> SGet RData) -> IO ()
+addRData :: TYPE -> (Int -> Parser RData) -> IO ()
 addRData typ dec = atomicModifyIORef' globalRDataDict f
   where
     f dict = (M.insert (toKey typ) dec dict, ())
 
-addOData :: OptCode -> (Int -> SGet OData) -> IO ()
+addOData :: OptCode -> (Int -> Parser OData) -> IO ()
 addOData code dec = atomicModifyIORef' globalODataDict f
   where
     f dict = (M.insert (toKeyO code) dec dict, ())
 
 ----------------------------------------------------------------
 
-getRData :: TYPE -> Int -> SGet RData
-getRData OPT len = rd_opt <$> sGetMany "EDNS option" len getoption
+getRData :: TYPE -> Int -> Parser RData
+getRData OPT len rbuf ref = rd_opt <$> sGetMany "EDNS option" len getoption rbuf ref
   where
     dict = unsafePerformIO $ readIORef globalODataDict
-    getoption = do
-        code <- toOptCode <$> get16
-        olen <- getInt16
-        getOData dict code olen
-getRData typ len = case M.lookup (toKey typ) dict of
-    Nothing -> rd_unknown typ <$> getOpaque len
-    Just dec -> dec len
+    getoption _ _ = do
+        code <- toOptCode <$> get16 rbuf
+        olen <- getInt16 rbuf
+        getOData dict code olen rbuf ref
+getRData typ len rbuf ref = case M.lookup (toKey typ) dict of
+    Nothing -> rd_unknown typ <$> getOpaque len rbuf ref
+    Just dec -> dec len rbuf ref
   where
     dict = unsafePerformIO $ readIORef globalRDataDict
 
 ----------------------------------------------------------------
 
-type RDataDict = M.IntMap (Int -> SGet RData)
+type RDataDict = M.IntMap (Int -> Parser RData)
 
 toKey :: TYPE -> M.Key
 toKey = fromIntegral . fromTYPE
 
-defaultRDataDict :: M.IntMap (Int -> SGet RData)
+defaultRDataDict :: M.IntMap (Int -> Parser RData)
 defaultRDataDict =
-    M.insert (toKey A) (\len -> toRData <$> get_a len) $
-        M.insert (toKey NS) (\len -> toRData <$> get_ns len) $
-            M.insert (toKey CNAME) (\len -> toRData <$> get_cname len) $
-                M.insert (toKey SOA) (\len -> toRData <$> get_soa len) $
-                    M.insert (toKey NULL) (\len -> toRData <$> get_null len) $
-                        M.insert (toKey PTR) (\len -> toRData <$> get_ptr len) $
-                            M.insert (toKey MX) (\len -> toRData <$> get_mx len) $
-                                M.insert (toKey TXT) (\len -> toRData <$> get_txt len) $
-                                    M.insert (toKey RP) (\len -> toRData <$> get_rp len) $
-                                        M.insert (toKey AAAA) (\len -> toRData <$> get_aaaa len) $
-                                            M.insert (toKey SRV) (\len -> toRData <$> get_srv len) $
-                                                M.insert (toKey DNAME) (\len -> toRData <$> get_dname len) $
+    M.insert (toKey A) (\len rbuf ref -> toRData <$> get_a len rbuf ref) $
+        M.insert (toKey NS) (\len rbuf ref -> toRData <$> get_ns len rbuf ref) $
+            M.insert (toKey CNAME) (\len rbuf ref -> toRData <$> get_cname len rbuf ref) $
+                M.insert (toKey SOA) (\len rbuf ref -> toRData <$> get_soa len rbuf ref) $
+                    M.insert (toKey NULL) (\len rbuf ref -> toRData <$> get_null len rbuf ref) $
+                        M.insert (toKey PTR) (\len rbuf ref -> toRData <$> get_ptr len rbuf ref) $
+                            M.insert (toKey MX) (\len rbuf ref -> toRData <$> get_mx len rbuf ref) $
+                                M.insert (toKey TXT) (\len rbuf ref -> toRData <$> get_txt len rbuf ref) $
+                                    M.insert (toKey RP) (\len rbuf ref -> toRData <$> get_rp len rbuf ref) $
+                                        M.insert (toKey AAAA) (\len rbuf ref -> toRData <$> get_aaaa len rbuf ref) $
+                                            M.insert (toKey SRV) (\len rbuf ref -> toRData <$> get_srv len rbuf ref) $
+                                                M.insert (toKey DNAME) (\len rbuf ref -> toRData <$> get_dname len rbuf ref) $
                                                     M.insert
                                                         (toKey TLSA)
-                                                        (\len -> toRData <$> get_tlsa len)
+                                                        (\len rbuf ref -> toRData <$> get_tlsa len rbuf ref)
                                                         M.empty
 
 ----------------------------------------------------------------
 
-type ODataDict = M.IntMap (Int -> SGet OData)
+type ODataDict = M.IntMap (Int -> Parser OData)
 
-getOData :: ODataDict -> OptCode -> Int -> SGet OData
-getOData dict code len = case M.lookup (toKeyO code) dict of
-    Nothing -> od_unknown (fromOptCode code) <$> getOpaque len
-    Just dec -> dec len
+getOData :: ODataDict -> OptCode -> Int -> Parser OData
+getOData dict code len rbuf ref = case M.lookup (toKeyO code) dict of
+    Nothing -> od_unknown (fromOptCode code) <$> getOpaque len rbuf ref
+    Just dec -> dec len rbuf ref
 
 toKeyO :: OptCode -> M.Key
 toKeyO = fromIntegral . fromOptCode
 
 defaultODataDict :: ODataDict
 defaultODataDict =
-    M.insert (toKeyO NSID) (\len -> toOData <$> get_nsid len) $
-        M.insert (toKeyO ClientSubnet) (\len -> toOData <$> get_clientSubnet len) $
+    M.insert (toKeyO NSID) (\len rbuf ref -> toOData <$> get_nsid len rbuf ref) $
+        M.insert (toKeyO ClientSubnet) (\len rbuf ref -> toOData <$> get_clientSubnet len rbuf ref) $
             M.insert
                 (toKeyO Padding)
-                (\len -> toOData <$> get_padding len)
+                (\len rbuf ref -> toOData <$> get_padding len rbuf ref)
                 M.empty
 
 ----------------------------------------------------------------
 
-extendRR :: TYPE -> String -> (Int -> SGet RData) -> InitIO ()
+extendRR :: TYPE -> String -> (Int -> Parser RData) -> InitIO ()
 extendRR typ name proxy = InitIO $ do
     addRData typ proxy
     addType typ name
 
-extendOpt :: OptCode -> String -> (Int -> SGet OData) -> InitIO ()
+extendOpt :: OptCode -> String -> (Int -> Parser OData) -> InitIO ()
 extendOpt code name proxy = InitIO $ do
     addOData code proxy
     addOpt code name

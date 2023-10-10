@@ -7,8 +7,8 @@ import qualified DNS.Types.Base32Hex as B32H
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64 as B64
 
-import DNS.StateBinary
 import DNS.Types.Imports
+import DNS.Wire
 
 ----------------------------------------------------------------
 
@@ -97,17 +97,14 @@ foldr f ini (Opaque sbs) = Short.foldr f ini sbs
 
 ----------------------------------------------------------------
 
-putOpaque :: Opaque -> SPut ()
-putOpaque (Opaque o) = putShortByteString o
+putOpaque :: Opaque -> Builder ()
+putOpaque (Opaque o) wbuf _ = putShortByteString wbuf o
 
-getOpaque :: Int -> SGet Opaque
-getOpaque len = Opaque <$> getNShortByteString len
+getOpaque :: Int -> Parser Opaque
+getOpaque len rbuf _ = Opaque <$> getNShortByteString rbuf len
 
-putLenOpaque :: Opaque -> SPut ()
-putLenOpaque (Opaque o) = do
-    -- put the length of the given string
-    putInt8 (fromIntegral $ Short.length o)
-    putShortByteString o
+putLenOpaque :: Opaque -> Builder ()
+putLenOpaque (Opaque o) wbuf _ = putLenShortByteString wbuf o
 
-getLenOpaque :: SGet Opaque
-getLenOpaque = Opaque <$> (getInt8 >>= getNShortByteString)
+getLenOpaque :: Parser Opaque
+getLenOpaque rbuf _ = Opaque <$> (getInt8 rbuf >>= getNShortByteString rbuf)

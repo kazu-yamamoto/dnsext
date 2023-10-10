@@ -38,8 +38,8 @@ import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read
 
-import DNS.StateBinary
 import DNS.Types.Imports
+import DNS.Wire
 
 ----------------------------------------------------------------
 
@@ -224,8 +224,8 @@ addType typ name = do
 
 ----------------------------------------------------------------
 
-getTYPE :: SGet TYPE
-getTYPE = toTYPE <$> get16
+getTYPE :: Parser TYPE
+getTYPE rbuf _ = toTYPE <$> get16 rbuf
 
-putTYPE :: TYPE -> SPut ()
-putTYPE x = put16 $ fromTYPE x
+putTYPE :: TYPE -> Builder ()
+putTYPE x wbuf _ = put16 wbuf $ fromTYPE x

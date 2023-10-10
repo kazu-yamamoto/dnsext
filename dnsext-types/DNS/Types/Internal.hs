@@ -52,10 +52,9 @@ module DNS.Types.Internal (
     getSeconds,
 
     -- * Low level
-    module DNS.StateBinary,
+    module DNS.Wire,
 ) where
 
-import DNS.StateBinary
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
@@ -64,3 +63,4 @@ import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Seconds
 import DNS.Types.Type
+import DNS.Wire

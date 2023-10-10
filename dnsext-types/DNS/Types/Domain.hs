@@ -27,11 +27,10 @@ import qualified Data.ByteString.Short as Short
 import Data.Functor (($>))
 import Data.Word8
 
-import DNS.StateBinary
 import DNS.Types.Error
 import DNS.Types.Imports
-import DNS.Types.Parser (Builder, Parser)
 import qualified DNS.Types.Parser as P
+import DNS.Wire
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -285,42 +284,42 @@ data CanonicalFlag
 
 -- | Putting a domain name.
 --   No name compression for new RRs.
-putDomain :: CanonicalFlag -> Domain -> SPut ()
-putDomain Original Domain{..} = do
-    mapM_ putPartialDomain wireLabels
-    put8 0
-putDomain Canonical Domain{..} = do
-    mapM_ putPartialDomain $ reverse canonicalLabels
-    put8 0
+putDomain :: CanonicalFlag -> Domain -> Builder ()
+putDomain Original Domain{..} wbuf _ = do
+    mapM_ (putPartialDomain wbuf) wireLabels
+    put8 wbuf 0
+putDomain Canonical Domain{..} wbuf _ = do
+    mapM_ (putPartialDomain wbuf) $ reverse canonicalLabels
+    put8 wbuf 0
 
-putPartialDomain :: RawDomain -> SPut ()
-putPartialDomain = putLenShortByteString
+putPartialDomain :: WriteBuffer -> RawDomain -> IO ()
+putPartialDomain wbuf dom = putLenShortByteString wbuf dom
 
 ----------------------------------------------------------------
 
-putCompressedDomain :: Domain -> SPut ()
+putCompressedDomain :: Domain -> Builder ()
 putCompressedDomain Domain{..} = putCompress wireLabels
 
-putCompress :: [RawDomain] -> SPut ()
-putCompress [] = put8 0
-putCompress dom@(d : ds) = do
-    mpos <- popPointer dom
-    cur <- builderPosition
+putCompress :: [RawDomain] -> Builder ()
+putCompress [] wbuf _ = put8 wbuf 0
+putCompress dom@(d : ds) wbuf ref = do
+    mpos <- popPointer dom ref
+    cur <- position wbuf
     case mpos of
-        Just pos -> putPointer pos
+        Just pos -> putPointer wbuf pos
         _ -> do
             -- Pointers are limited to 14-bits!
-            when (cur <= 0x3fff) $ pushPointer dom cur
-            putPartialDomain d
-            putCompress ds
+            when (cur <= 0x3fff) $ pushPointer dom cur ref
+            putPartialDomain wbuf d
+            putCompress ds wbuf ref
 
-putPointer :: Int -> SPut ()
-putPointer pos = putInt16 (pos .|. 0xc000)
+putPointer :: WriteBuffer -> Int -> IO ()
+putPointer wbuf pos = putInt16 wbuf (pos .|. 0xc000)
 
 -- | Putting a domain name.
 --   Names are compressed if possible.
 --   This should be used only for CNAME, MX, NS, PTR and SOA.
-putDomainRFC1035 :: CanonicalFlag -> Domain -> SPut ()
+putDomainRFC1035 :: CanonicalFlag -> Domain -> Builder ()
 putDomainRFC1035 Original dom = putCompressedDomain dom
 putDomainRFC1035 Canonical dom = putDomain Canonical dom
 
@@ -328,21 +327,24 @@ putDomainRFC1035 Canonical dom = putDomain Canonical dom
 
 -- | Putting a mailbox.
 --   No name compression for new RRs.
-putMailbox :: CanonicalFlag -> Mailbox -> SPut ()
+putMailbox :: CanonicalFlag -> Mailbox -> Builder ()
 putMailbox cf (Mailbox d) = putDomain cf d
 
 -- | Putting a mailbox.
 --   Names are compressed if possible.
 --   This should be used only for SOA.
-putMailboxRFC1035 :: CanonicalFlag -> Mailbox -> SPut ()
+putMailboxRFC1035 :: CanonicalFlag -> Mailbox -> Builder ()
 putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 
 ----------------------------------------------------------------
 
 -- | Getting a domain name.
 --   An error is thrown if name compression is used.
-getDomain :: SGet Domain
-getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' False)
+getDomain :: Parser Domain
+getDomain rbuf ref =
+    domainFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' False n rbuf ref
 
 -- | Getting a domain name.
 -- Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
@@ -354,17 +356,26 @@ getDomain = domainFromWireLabels <$> (parserPosition >>= getDomain' False)
 -- bound for any subsequent pointers.  This results in a simple loop-prevention
 -- algorithm, each sequence of valid pointer values is necessarily strictly
 -- decreasing!
-getDomainRFC1035 :: SGet Domain
-getDomainRFC1035 = domainFromWireLabels <$> (parserPosition >>= getDomain' True)
+getDomainRFC1035 :: Parser Domain
+getDomainRFC1035 rbuf ref =
+    domainFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' True n rbuf ref
 
 -- | Getting a mailbox.
 --   An error is thrown if name compression is used.
-getMailbox :: SGet Mailbox
-getMailbox = mailboxFromWireLabels <$> (parserPosition >>= getDomain' False)
+getMailbox :: Parser Mailbox
+getMailbox rbuf ref =
+    mailboxFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
-getMailboxRFC1035 :: SGet Mailbox
-getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' True)
+getMailboxRFC1035 :: Parser Mailbox
+getMailboxRFC1035 rbuf ref =
+    mailboxFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' True n rbuf ref
 
 -- $
 --
@@ -373,7 +384,7 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 --
 -- >>> let parser = getDomain' True 0
 -- >>> let input = "\3foo\192\0\3bar\0"
--- >>> runSGet parser input
+-- >>> runParser parser input
 -- Left (DecodeError "invalid pointer 0 at 4: self pointing")
 
 -- | Get a domain name.
@@ -382,47 +393,47 @@ getMailboxRFC1035 = mailboxFromWireLabels <$> (parserPosition >>= getDomain' Tru
 -- that precedes the start of the current domain name.  The starting
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
-getDomain' :: Bool -> Int -> SGet [ShortByteString]
-getDomain' allowCompression ptrLimit = do
-    pos <- parserPosition
-    c <- getInt8
+getDomain' :: Bool -> Int -> Parser [ShortByteString]
+getDomain' allowCompression ptrLimit = \rbuf ref -> do
+    pos <- position rbuf
+    c <- getInt8 rbuf
     let n = getValue c
-    getdomain pos c n
+    getdomain pos c n rbuf ref
   where
-    getdomain pos c n
+    getdomain pos c n rbuf ref
         | c == 0 = do
-            pushDomain pos []
+            pushDomain pos [] ref
             return []
         -- As for now, extended labels have no use.
         -- This may change some time in the future.
         | isExtLabel c = return []
         | isPointer c && not allowCompression =
-            failSGet "name compression is not allowed"
+            failParser "name compression is not allowed"
         | isPointer c = do
-            d <- getInt8
+            d <- getInt8 rbuf
             let offset = n * 256 + d
             when (offset == ptrLimit) $ failure "self pointing" pos offset
             when (offset > ptrLimit) $ failure "forward pointing" pos offset
-            mx <- popDomain offset
+            mx <- popDomain offset ref
             case mx of
                 Nothing -> failure "invalid area" pos offset
                 Just lls -> do
                     -- Supporting double pointers.
-                    pushDomain pos lls
+                    pushDomain pos lls ref
                     return lls
         | otherwise = do
-            l <- getNShortByteString n
+            l <- getNShortByteString rbuf n
             -- Registering super domains
-            ls <- getDomain' allowCompression ptrLimit
+            ls <- getDomain' allowCompression ptrLimit rbuf ref
             let lls = l : ls
-            pushDomain pos lls
+            pushDomain pos lls ref
             return lls
     -- The length label is limited to 63.
     getValue c = c .&. 0x3f
     isPointer c = testBit c 7 && testBit c 6
     isExtLabel c = not (testBit c 7) && testBit c 6
     failure msg pos offset =
-        failSGet $
+        failParser $
             "invalid pointer " ++ show offset ++ " at " ++ show pos ++ ": " ++ msg
 
 ----------------------------------------------------------------
@@ -463,7 +474,7 @@ parseLabel sep dom
         | not (Short.null hd) || Short.null tl = Just r
         | otherwise = Nothing
 
-labelParser :: Word8 -> Builder -> Parser Builder
+labelParser :: Word8 -> P.Builder -> P.Parser P.Builder
 labelParser sep bld =
     (P.eof $> bld)
         <|> (P.satisfy (== sep) $> bld)
@@ -488,7 +499,7 @@ labelParser sep bld =
             if d > 255
                 then fail "DDD should be less than 256"
                 else pure (P.toBuilder (fromIntegral d :: Word8))
-        digit :: Parser Int -- Word8 is not good enough for "d > 255"
+        digit :: P.Parser Int -- Word8 is not good enough for "d > 255"
         digit = fromIntegral . subtract _0 <$> P.satisfy isDigit
 
 ----------------------------------------------------------------
@@ -518,7 +529,7 @@ escapeLabel sep label
     toResult (Just r, _) = r
     toResult _ = E.throw UnknownDNSError -- can't happen
 
-labelEscaper :: Word8 -> Builder -> Parser Builder
+labelEscaper :: Word8 -> P.Builder -> P.Parser P.Builder
 labelEscaper sep bld0 =
     (P.eof $> bld0)
         <|> (asis >>= \b -> labelEscaper sep (bld0 <> b))
@@ -542,7 +553,7 @@ labelEscaper sep bld0 =
 
     -- Runs of plain bytes are recognized as a single chunk, which is then
     -- returned as-is.
-    asis :: Parser Builder
+    asis :: P.Parser P.Builder
     asis = do
         (r, _) <- P.match $ P.skipSome $ P.satisfy (isPlain sep)
         return $ P.toBuilder r

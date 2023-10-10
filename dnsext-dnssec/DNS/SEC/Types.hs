@@ -94,36 +94,36 @@ data RD_RRSIG = RD_RRSIG
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
-    putResourceData cf RD_RRSIG{..} = do
-        putTYPE rrsig_type
-        putPubAlg rrsig_pubalg
-        put8 rrsig_num_labels
-        putSeconds rrsig_ttl
-        putDNSTime rrsig_expiration
-        putDNSTime rrsig_inception
-        put16 rrsig_key_tag
-        putDomain cf rrsig_zone
-        putOpaque rrsig_signature
+    putResourceData cf RD_RRSIG{..} = \wbuf ref -> do
+        putTYPE rrsig_type wbuf ref
+        putPubAlg rrsig_pubalg wbuf ref
+        put8 wbuf rrsig_num_labels
+        putSeconds rrsig_ttl wbuf ref
+        putDNSTime rrsig_expiration wbuf ref
+        putDNSTime rrsig_inception wbuf ref
+        put16 wbuf rrsig_key_tag
+        putDomain cf rrsig_zone wbuf ref
+        putOpaque rrsig_signature wbuf ref
 
-get_rrsig :: Int -> SGet RD_RRSIG
-get_rrsig lim = do
+get_rrsig :: Int -> Parser RD_RRSIG
+get_rrsig lim rbuf ref = do
     -- The signature follows a variable length zone name
     -- and occupies the rest of the RData.  Simplest to
     -- checkpoint the position at the start of the RData,
     -- and after reading the zone name, and subtract that
     -- from the RData length.
     --
-    end <- rdataEnd lim
-    typ <- getTYPE
-    alg <- getPubAlg
-    cnt <- get8
-    ttl <- getSeconds
-    tex <- getDNSTime
-    tin <- getDNSTime
-    tag <- get16
-    dom <- getDomain -- XXX: Enforce no compression?
-    pos <- parserPosition
-    val <- getOpaque $ end - pos
+    end <- rdataEnd lim rbuf ref
+    typ <- getTYPE rbuf ref
+    alg <- getPubAlg rbuf ref
+    cnt <- get8 rbuf
+    ttl <- getSeconds rbuf ref
+    tex <- getDNSTime rbuf ref
+    tin <- getDNSTime rbuf ref
+    tag <- get16 rbuf
+    dom <- getDomain rbuf ref -- XXX: Enforce no compression?
+    pos <- position rbuf
+    val <- getOpaque (end - pos) rbuf ref
     return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
 
 -- | Smart constructor.
@@ -153,19 +153,19 @@ data RD_DS = RD_DS
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
-    putResourceData _ RD_DS{..} = do
-        put16 ds_key_tag
-        putPubAlg ds_pubalg
-        putDigestAlg ds_digestalg
-        putOpaque ds_digest
+    putResourceData _ RD_DS{..} = \wbuf ref -> do
+        put16 wbuf ds_key_tag
+        putPubAlg ds_pubalg wbuf ref
+        putDigestAlg ds_digestalg wbuf ref
+        putOpaque ds_digest wbuf ref
 
-get_ds :: Int -> SGet RD_DS
-get_ds len =
+get_ds :: Int -> Parser RD_DS
+get_ds len rbuf ref =
     RD_DS
-        <$> get16
-        <*> getPubAlg
-        <*> getDigestAlg
-        <*> getOpaque (len - 4)
+        <$> get16 rbuf
+        <*> getPubAlg rbuf ref
+        <*> getDigestAlg rbuf ref
+        <*> getOpaque (len - 4) rbuf ref
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -182,16 +182,16 @@ data RD_NSEC = RD_NSEC
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
-    putResourceData cf RD_NSEC{..} = do
-        putDomain cf nsecNextDomain
-        putNsecTypes nsecTypes
+    putResourceData cf RD_NSEC{..} = \wbuf ref -> do
+        _ <- putDomain cf nsecNextDomain wbuf ref
+        putNsecTypes nsecTypes wbuf ref
 
-get_nsec :: Int -> SGet RD_NSEC
-get_nsec len = do
-    end <- rdataEnd len
-    dom <- getDomain
-    pos <- parserPosition
-    RD_NSEC dom <$> getNsecTypes (end - pos)
+get_nsec :: Int -> Parser RD_NSEC
+get_nsec len rbuf ref = do
+    end <- rdataEnd len rbuf ref
+    dom <- getDomain rbuf ref
+    pos <- position rbuf
+    RD_NSEC dom <$> getNsecTypes (end - pos) rbuf ref
 
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
@@ -210,18 +210,18 @@ data RD_DNSKEY = RD_DNSKEY
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
-    putResourceData _ RD_DNSKEY{..} = do
-        putDNSKEYflags dnskey_flags
-        put8 dnskey_protocol
-        putPubAlg dnskey_pubalg
-        putPubKey dnskey_public_key
+    putResourceData _ RD_DNSKEY{..} = \wbuf ref -> do
+        putDNSKEYflags dnskey_flags wbuf ref
+        put8 wbuf dnskey_protocol
+        putPubAlg dnskey_pubalg wbuf ref
+        putPubKey dnskey_public_key wbuf ref
 
-get_dnskey :: Int -> SGet RD_DNSKEY
-get_dnskey len = do
-    flags <- getDNSKEYflags
-    proto <- get8
-    pubalg <- getPubAlg
-    pubkey <- getPubKey pubalg (len - 4)
+get_dnskey :: Int -> Parser RD_DNSKEY
+get_dnskey len rbuf ref = do
+    flags <- getDNSKEYflags rbuf ref
+    proto <- get8 rbuf
+    pubalg <- getPubAlg rbuf ref
+    pubkey <- getPubKey pubalg (len - 4) rbuf ref
     return $ RD_DNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
@@ -243,24 +243,24 @@ data RD_NSEC3 = RD_NSEC3
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
-    putResourceData _ RD_NSEC3{..} = do
-        putHashAlg nsec3_hashalg
-        putNSEC3flags nsec3_flags
-        put16 nsec3_iterations
-        putLenOpaque nsec3_salt
-        putLenOpaque nsec3_next_hashed_owner_name
-        putNsecTypes nsec3_types
+    putResourceData _ RD_NSEC3{..} = \wbuf ref -> do
+        putHashAlg nsec3_hashalg wbuf ref
+        putNSEC3flags nsec3_flags wbuf ref
+        put16 wbuf nsec3_iterations
+        putLenOpaque nsec3_salt wbuf ref
+        putLenOpaque nsec3_next_hashed_owner_name wbuf ref
+        putNsecTypes nsec3_types wbuf ref
 
-get_nsec3 :: Int -> SGet RD_NSEC3
-get_nsec3 len = do
-    dend <- rdataEnd len
-    halg <- getHashAlg
-    flgs <- getNSEC3flags
-    iter <- get16
-    salt <- getLenOpaque
-    hash <- getLenOpaque
-    tpos <- parserPosition
-    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos)
+get_nsec3 :: Int -> Parser RD_NSEC3
+get_nsec3 len rbuf ref = do
+    dend <- rdataEnd len rbuf ref
+    halg <- getHashAlg rbuf ref
+    flgs <- getNSEC3flags rbuf ref
+    iter <- get16 rbuf
+    salt <- getLenOpaque rbuf ref
+    hash <- getLenOpaque rbuf ref
+    tpos <- position rbuf
+    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos) rbuf ref
 
 -- | Smart constructor.
 rd_nsec3
@@ -280,19 +280,19 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
-    putResourceData _ RD_NSEC3PARAM{..} = do
-        putHashAlg nsec3param_hashalg
-        put8 nsec3param_flags
-        put16 nsec3param_iterations
-        putLenOpaque nsec3param_salt
+    putResourceData _ RD_NSEC3PARAM{..} = \wbuf ref -> do
+        putHashAlg nsec3param_hashalg wbuf ref
+        put8 wbuf nsec3param_flags
+        put16 wbuf nsec3param_iterations
+        putLenOpaque nsec3param_salt wbuf ref
 
-get_nsec3param :: Int -> SGet RD_NSEC3PARAM
-get_nsec3param _ =
+get_nsec3param :: Int -> Parser RD_NSEC3PARAM
+get_nsec3param _ rbuf ref =
     RD_NSEC3PARAM
-        <$> getHashAlg
-        <*> get8
-        <*> get16
-        <*> getLenOpaque
+        <$> getHashAlg rbuf ref
+        <*> get8 rbuf
+        <*> get16 rbuf
+        <*> getLenOpaque rbuf ref
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
@@ -311,19 +311,19 @@ data RD_CDS = RD_CDS
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
-    putResourceData _ RD_CDS{..} = do
-        put16 cds_key_tag
-        putPubAlg cds_pubalg
-        putDigestAlg cds_digestalg
-        putOpaque cds_digest
+    putResourceData _ RD_CDS{..} = \wbuf ref -> do
+        put16 wbuf cds_key_tag
+        putPubAlg cds_pubalg wbuf ref
+        putDigestAlg cds_digestalg wbuf ref
+        putOpaque cds_digest wbuf ref
 
-get_cds :: Int -> SGet RD_CDS
-get_cds len =
+get_cds :: Int -> Parser RD_CDS
+get_cds len rbuf ref =
     RD_CDS
-        <$> get16
-        <*> getPubAlg
-        <*> getDigestAlg
-        <*> getOpaque (len - 4)
+        <$> get16 rbuf
+        <*> getPubAlg rbuf ref
+        <*> getDigestAlg rbuf ref
+        <*> getOpaque (len - 4) rbuf ref
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -342,18 +342,18 @@ data RD_CDNSKEY = RD_CDNSKEY
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
-    putResourceData _ RD_CDNSKEY{..} = do
-        putDNSKEYflags cdnskey_flags
-        put8 cdnskey_protocol
-        putPubAlg cdnskey_pubalg
-        putPubKey cdnskey_public_key
+    putResourceData _ RD_CDNSKEY{..} = \wbuf ref -> do
+        putDNSKEYflags cdnskey_flags wbuf ref
+        put8 wbuf cdnskey_protocol
+        putPubAlg cdnskey_pubalg wbuf ref
+        putPubKey cdnskey_public_key wbuf ref
 
-get_cdnskey :: Int -> SGet RD_CDNSKEY
-get_cdnskey len = do
-    flags <- getDNSKEYflags
-    proto <- get8
-    pubalg <- getPubAlg
-    pubkey <- getPubKey pubalg (len - 4)
+get_cdnskey :: Int -> Parser RD_CDNSKEY
+get_cdnskey len rbuf ref = do
+    flags <- getDNSKEYflags rbuf ref
+    proto <- get8 rbuf
+    pubalg <- getPubAlg rbuf ref
+    pubkey <- getPubKey pubalg (len - 4) rbuf ref
     return $ RD_CDNSKEY flags proto pubalg pubkey
 
 -- | Smart constructor.
@@ -365,20 +365,20 @@ rd_cdnskey a b c d = toRData $ RD_CDNSKEY a b c d
 rdataEnd
     :: Int
     -- ^ number of bytes left from current position
-    -> SGet Int
+    -> Parser Int
     -- ^ end position
-rdataEnd lim = (+) lim <$> parserPosition
+rdataEnd lim rbuf _ = (+) lim <$> position rbuf
 
 ----------------------------------------------------------------
 
 -- | Encode DNSSEC NSEC type bits
-putNsecTypes :: [TYPE] -> SPut ()
+putNsecTypes :: [TYPE] -> Builder ()
 putNsecTypes types = putTypeList $ map fromTYPE types
   where
-    putTypeList :: [Word16] -> SPut ()
-    putTypeList ts =
+    putTypeList :: [Word16] -> Builder ()
+    putTypeList ts wbuf ref =
         sequence_
-            [ putWindow (the top8) bot8
+            [ putWindow (the top8) bot8 wbuf ref
             | t <- ts
             , let top8 = fromIntegral t `shiftR` 8
             , let bot8 = fromIntegral t .&. 0xff
@@ -388,11 +388,11 @@ putNsecTypes types = putTypeList $ map fromTYPE types
                 groupWith
             ]
 
-    putWindow :: Int -> [Int] -> SPut ()
-    putWindow top8 bot8s = do
+    putWindow :: Int -> [Int] -> Builder ()
+    putWindow top8 bot8s wbuf ref = do
         let blks = maximum bot8s `shiftR` 3
-        putInt8 top8
-        put8 (1 + fromIntegral blks)
+        putInt8 wbuf top8
+        put8 wbuf (1 + fromIntegral blks)
         putBits
             0
             [ (the block, foldl' mergeBits 0 bot8)
@@ -403,30 +403,32 @@ putNsecTypes types = putTypeList $ map fromTYPE types
               using
                 groupWith
             ]
+            wbuf
+            ref
       where
         -- \| Combine type bits in network bit order, i.e. bit 0 first.
         mergeBits acc b = setBit acc (7 - b .&. 0x07)
 
-    putBits :: Int -> [(Int, Word8)] -> SPut ()
-    putBits _ [] = return ()
-    putBits n ((block, octet) : rest) = do
-        putReplicate (block - n) 0
-        put8 octet
-        putBits (block + 1) rest
+    putBits :: Int -> [(Int, Word8)] -> Builder ()
+    putBits _ [] _ _ = return ()
+    putBits n ((block, octet) : rest) wbuf ref = do
+        replicateM_ (block - n) (put8 wbuf 0)
+        put8 wbuf octet
+        putBits (block + 1) rest wbuf ref
 
 -- <https://tools.ietf.org/html/rfc4034#section-4.1>
 -- Parse a list of NSEC type bitmaps
 --
-getNsecTypes :: Int -> SGet [TYPE]
-getNsecTypes len = concat <$> sGetMany "NSEC type bitmap" len getbits
+getNsecTypes :: Int -> Parser [TYPE]
+getNsecTypes len rbuf ref = concat <$> sGetMany "NSEC type bitmap" len getbits rbuf ref
   where
-    getbits = do
-        window <- flip shiftL 8 <$> getInt8
-        blocks <- getInt8
+    getbits _ _ = do
+        window <- flip shiftL 8 <$> getInt8 rbuf
+        blocks <- getInt8 rbuf
         when (blocks > 32) $
-            failSGet $
+            failParser $
                 "NSEC bitmap block too long: " ++ show blocks
-        concatMap blkTypes . zip [window, window + 8 ..] <$> getNBytes blocks
+        concatMap blkTypes . zip [window, window + 8 ..] <$> getNBytes rbuf blocks
       where
         blkTypes (bitOffset, byte) =
             [ toTYPE $ fromIntegral $ bitOffset + i

@@ -31,7 +31,7 @@ import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
 
 keyTag :: RD_DNSKEY -> Word16
-keyTag = keyTagFromBS . runSPut . putResourceData Canonical
+keyTag = keyTagFromBS . runBuilder . putResourceData Canonical
 
 {- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
@@ -53,16 +53,16 @@ keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
 
 ---
 
-putRRSIGHeader :: RD_RRSIG -> SPut ()
-putRRSIGHeader RD_RRSIG{..} = do
-    put16 $ fromTYPE rrsig_type
-    putPubAlg rrsig_pubalg
-    put8 rrsig_num_labels
-    putSeconds rrsig_ttl
-    putDNSTime rrsig_expiration
-    putDNSTime rrsig_inception
-    put16 rrsig_key_tag
-    putDomain Canonical rrsig_zone
+putRRSIGHeader :: RD_RRSIG -> Builder ()
+putRRSIGHeader RD_RRSIG{..} wbuf ref = do
+    put16 wbuf $ fromTYPE rrsig_type
+    putPubAlg rrsig_pubalg wbuf ref
+    put8 wbuf rrsig_num_labels
+    putSeconds rrsig_ttl wbuf ref
+    putDNSTime rrsig_expiration wbuf ref
+    putDNSTime rrsig_inception wbuf ref
+    put16 wbuf rrsig_key_tag
+    putDomain Canonical rrsig_zone wbuf ref
 
 verifyRRSIGwith
     :: RRSIGImpl
@@ -72,7 +72,7 @@ verifyRRSIGwith
     -> Domain
     -> TYPE
     -> CLASS
-    -> [SPut ()]
+    -> [Builder ()]
     -> Either String ()
 verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas = do
     unless (ZONE `elem` dnskey_flags) $
@@ -123,8 +123,15 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     {- "Reconstructing the Signed Data"
        https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
        RR(i) = name | type | class | OrigTTL | RDATA length | RDATA -}
-    let putRRH = putDomainRFC1035 Canonical rrset_name >> putTYPE rrset_type >> putCLASS rrset_class >> putSeconds rrsig_ttl
-        str = runSPut (putRRSIGHeader rrsig >> mapM_ (putRRH >>) sortedRDatas)
+    let putRRH wbuf ref = do
+            putDomainRFC1035 Canonical rrset_name wbuf ref
+            putTYPE rrset_type wbuf ref
+            putCLASS rrset_class wbuf ref
+            putSeconds rrsig_ttl wbuf ref
+        putRRS wbuf ref = do
+            putRRSIGHeader rrsig wbuf ref
+            mapM_ (\io -> putRRH wbuf ref >> io wbuf ref) sortedRDatas
+        str = runBuilder putRRS
     {- `Data.List.sort` is linear for sorted case -}
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"
@@ -134,10 +141,10 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
    "RRs with the same owner name,
     class, and type are sorted by treating the RDATA portion of the
     canonical form of each RR as a left-justified unsigned octet sequence" -}
-sortRDataCanonical :: [ResourceRecord] -> [(SPut (), ResourceRecord)]
+sortRDataCanonical :: [ResourceRecord] -> [(Builder (), ResourceRecord)]
 sortRDataCanonical rrs =
     {- sortOn "RDATA portion of the canonical form" without RDATA length -}
-    map snd $ sortOn fst [(runSPut sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
+    map snd $ sortOn fst [(runBuilder sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
   where
     putRData' = putRData Canonical . rdata
 
@@ -191,7 +198,7 @@ verifyRRSIGsorted
     -> Domain
     -> TYPE
     -> CLASS
-    -> [SPut ()]
+    -> [Builder ()]
     -> Either String ()
 verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     maybe (Left $ "verifyRRSIGsorted: unsupported algorithm: " ++ show alg) verify $
@@ -242,14 +249,14 @@ verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show ds_pubalg
-    let dnskeyBS = runSPut $ putResourceData Canonical dnskey
+    let dnskeyBS = runBuilder $ putResourceData Canonical dnskey
     unless (dnskey_pubalg == RSAMD5 || keyTagFromBS dnskeyBS == ds_key_tag) $ {- not implement keytag computation for RSAMD5 -}
         Left $
             "verifyRRSIGwith: Key Tag mismatch between DNSKEY and DS: "
                 ++ show (keyTagFromBS dnskeyBS)
                 ++ " =/= "
                 ++ show ds_key_tag
-    let digest = dsIGetDigest $ runSPut (putDomain Canonical owner) <> dnskeyBS
+    let digest = dsIGetDigest $ runBuilder (putDomain Canonical owner) <> dnskeyBS
         ds_digest' = Opaque.toByteString ds_digest
     unless (dsIVerify digest ds_digest') $
         Left "verifyDSwith: rejected on verification"
@@ -277,7 +284,7 @@ hashNSEC3with' NSEC3Impl{..} iter osalt domain =
     Opaque.fromByteString $ recurse iter
   where
     recurse i
-        | i <= 0 = step $ runSPut $ putDomain Canonical domain
+        | i <= 0 = step $ runBuilder $ putDomain Canonical domain
         | otherwise = step $ recurse $ i - 1
     step = nsec3IGetBytes . nsec3IGetHash . (<> salt)
     salt = Opaque.toByteString osalt

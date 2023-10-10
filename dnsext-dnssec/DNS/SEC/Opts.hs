@@ -47,8 +47,8 @@ instance OptData OD_DAU where
     optDataCode _ = DAU
     putOptData (OD_DAU as) = putODWords (fromOptCode DAU) $ map fromPubAlg as
 
-get_dau :: Int -> SGet OD_DAU
-get_dau len = OD_DAU . map toPubAlg <$> getNOctets len
+get_dau :: Int -> Parser OD_DAU
+get_dau len rbuf _ = OD_DAU . map toPubAlg <$> getNOctets rbuf len
 
 od_dau :: [PubAlg] -> OData
 od_dau a = toOData $ OD_DAU a
@@ -66,8 +66,8 @@ instance OptData OD_DHU where
     optDataCode _ = DHU
     putOptData (OD_DHU hs) = putODWords (fromOptCode DHU) $ map fromHashAlg hs
 
-get_dhu :: Int -> SGet OD_DHU
-get_dhu len = OD_DHU . map toHashAlg <$> getNOctets len
+get_dhu :: Int -> Parser OD_DHU
+get_dhu len rbuf _ = OD_DHU . map toHashAlg <$> getNOctets rbuf len
 
 od_dhu :: [HashAlg] -> OData
 od_dhu a = toOData $ OD_DHU a
@@ -85,8 +85,8 @@ instance OptData OD_N3U where
     optDataCode _ = N3U
     putOptData (OD_N3U hs) = putODWords (fromOptCode N3U) $ map fromHashAlg hs
 
-get_n3u :: Int -> SGet OD_N3U
-get_n3u len = OD_N3U . map toHashAlg <$> getNOctets len
+get_n3u :: Int -> Parser OD_N3U
+get_n3u len rbuf _ = OD_N3U . map toHashAlg <$> getNOctets rbuf len
 
 od_n3u :: [HashAlg] -> OData
 od_n3u a = toOData $ OD_N3U a
@@ -97,8 +97,8 @@ _showAlgList :: Show a => String -> [a] -> String
 _showAlgList nm ws = nm ++ " " ++ intercalate "," (map show ws)
 
 -- | Encode EDNS OPTION consisting of a list of octets.
-putODWords :: Word16 -> [Word8] -> SPut ()
-putODWords code ws = do
-    put16 code
-    putInt16 $ length ws
-    mapM_ put8 ws
+putODWords :: Word16 -> [Word8] -> Builder ()
+putODWords code ws wbuf _ = do
+    put16 wbuf code
+    putInt16 wbuf $ length ws
+    mapM_ (put8 wbuf) ws

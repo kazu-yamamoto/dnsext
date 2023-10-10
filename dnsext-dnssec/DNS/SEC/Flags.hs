@@ -24,11 +24,11 @@ fromDNSKEYflags flags = foldl' (.|.) 0 $ map toW flags
     toW REVOKE = 0b0000000010000000
     toW SecureEntryPoint = 0b0000000000000001
 
-putDNSKEYflags :: [DNSKEY_Flag] -> SPut ()
-putDNSKEYflags = put16 . fromDNSKEYflags
+putDNSKEYflags :: [DNSKEY_Flag] -> Builder ()
+putDNSKEYflags fs wbuf _ = put16 wbuf $ fromDNSKEYflags fs
 
-getDNSKEYflags :: SGet [DNSKEY_Flag]
-getDNSKEYflags = toDNSKEYflags <$> get16
+getDNSKEYflags :: Parser [DNSKEY_Flag]
+getDNSKEYflags rbuf _ = toDNSKEYflags <$> get16 rbuf
 
 data NSEC3_Flag = OptOut | NSEC3_Flag_Unknown Word8 deriving (Eq, Ord, Show)
 
@@ -50,8 +50,8 @@ fromNSEC3flags flags = foldl' (.|.) 0 $ map toW flags
     toW OptOut = 0b00000001
     toW (NSEC3_Flag_Unknown w) = w
 
-putNSEC3flags :: [NSEC3_Flag] -> SPut ()
-putNSEC3flags = put8 . fromNSEC3flags
+putNSEC3flags :: [NSEC3_Flag] -> Builder ()
+putNSEC3flags ns wbuf _ = put8 wbuf $ fromNSEC3flags ns
 
-getNSEC3flags :: SGet [NSEC3_Flag]
-getNSEC3flags = toNSEC3flags <$> get8
+getNSEC3flags :: Parser [NSEC3_Flag]
+getNSEC3flags rbuf _ = toNSEC3flags <$> get8 rbuf

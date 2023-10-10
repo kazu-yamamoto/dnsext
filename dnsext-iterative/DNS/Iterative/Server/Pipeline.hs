@@ -46,7 +46,7 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
     let rc = DNS.rcode $ DNS.flags $ DNS.header rspMsg
     incStatsM st fromRcode rc Nothing
     when (rc == DNS.NoErr) $
-       if DNS.answer rspMsg == []
+        if DNS.answer rspMsg == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
     when authAnswer $ incStats st FlagAA
@@ -132,8 +132,4 @@ cacheWorkerLogic
     -> IO ()
 cacheWorkerLogic env send proto mysa peersa req = do
     let worker = workerLogic env send proto mysa peersa
-    cacherLogic env send decode worker proto mysa peersa req
-  where
-    decode t bss = case DNS.decodeChunks t bss of
-        Left e -> Left e
-        Right (m, _) -> Right m
+    cacherLogic env send DNS.decodeChunks worker proto mysa peersa req

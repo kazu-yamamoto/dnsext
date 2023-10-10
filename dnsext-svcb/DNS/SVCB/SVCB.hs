@@ -31,33 +31,33 @@ data RD_SVCB = RD_SVCB
 
 instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
-    putResourceData cf RD_SVCB{..} = do
-        put16 svcb_priority
+    putResourceData cf RD_SVCB{..} = \wbuf ref -> do
+        put16 wbuf svcb_priority
         -- https://datatracker.ietf.org/doc/html/draft-ietf-dnsop-svcb-https-11#section-2.2
         -- "the uncompressed, fully-qualified TargetName"
-        putDomain cf svcb_target
+        putDomain cf svcb_target wbuf ref
         let SvcParams m = svcb_params
-        void $ M.foldrWithKey f (return ()) m
+        void $ M.foldrWithKey (f wbuf ref) (return ()) m
       where
-        f k v x = encodekv k v >> x
-        encodekv k (SvcParamValue v) = do
-            putInt16 k
-            putInt16 $ Opaque.length v
-            putOpaque v
+        f wbuf ref k v x = encodekv k v wbuf ref >> x
+        encodekv k (SvcParamValue v) wbuf ref = do
+            putInt16 wbuf k
+            putInt16 wbuf $ Opaque.length v
+            putOpaque v wbuf ref
 
-get_svcb :: Int -> SGet RD_SVCB
-get_svcb len = do
-    end <- (+) len <$> parserPosition
-    priority <- get16
-    target <- getDomain
-    pos <- parserPosition
-    params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam
+get_svcb :: Int -> Parser RD_SVCB
+get_svcb len rbuf ref = do
+    end <- (+) len <$> position rbuf
+    priority <- get16 rbuf
+    target <- getDomain rbuf ref
+    pos <- position rbuf
+    params <- newSvcParams <$> sGetMany "SVCB Param" (end - pos) svcparam rbuf ref
     return $ RD_SVCB priority target params
   where
-    svcparam = do
-        key <- getInt16 -- intestinally parsing as Int
-        lng <- getInt16
-        val <- getOpaque lng
+    svcparam _ _ = do
+        key <- getInt16 rbuf -- intestinally parsing as Int
+        lng <- getInt16 rbuf
+        val <- getOpaque lng rbuf ref
         return (key, SvcParamValue val)
 
 rd_svcb :: Word16 -> Domain -> SvcParams -> RData
@@ -76,9 +76,9 @@ instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
 
-get_https :: Int -> SGet RD_HTTPS
-get_https len = do
-    RD_SVCB x y z <- get_svcb len
+get_https :: Int -> Parser RD_HTTPS
+get_https len rbuf ref = do
+    RD_SVCB x y z <- get_svcb len rbuf ref
     return $ RD_HTTPS x y z
 
 rd_https :: Word16 -> Domain -> SvcParams -> RData
@@ -88,8 +88,8 @@ rd_https p d s = toRData $ RD_HTTPS p d s
 
 addResourceDataForSVCB :: InitIO ()
 addResourceDataForSVCB = do
-    extendRR SVCB "SVCB" (\len -> toRData <$> get_svcb len)
-    extendRR HTTPS "HTTPS" (\len -> toRData <$> get_https len)
+    extendRR SVCB "SVCB" (\len rbuf ref -> toRData <$> get_svcb len rbuf ref)
+    extendRR HTTPS "HTTPS" (\len rbuf ref -> toRData <$> get_https len rbuf ref)
 
 ----------------------------------------------------------------
 

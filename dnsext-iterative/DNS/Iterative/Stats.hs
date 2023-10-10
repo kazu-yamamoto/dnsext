@@ -10,7 +10,7 @@ import DNS.Array
 import DNS.SEC
 import DNS.SVCB
 import DNS.Types
-import DNS.Types.Internal
+import DNS.Types.Internal hiding (Builder)
 import Data.Array
 import Data.Array.IO
 import Data.ByteString.Builder

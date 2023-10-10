@@ -4,7 +4,9 @@
 
 module DNS.Types.Message where
 
-import DNS.StateBinary
+import Control.Monad.State.Strict (State)
+import qualified Control.Monad.State.Strict as ST
+
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
@@ -12,6 +14,7 @@ import DNS.Types.Imports
 import DNS.Types.RData
 import DNS.Types.Seconds
 import DNS.Types.Type
+import DNS.Wire
 
 ----------------------------------------------------------------
 
@@ -107,9 +110,9 @@ data DNSMessage = DNSMessage
 --   generates any kind of query.
 type Identifier = Word16
 
-putDNSMessage :: DNSMessage -> SPut ()
-putDNSMessage msg = do
-    putHeader hd
+putDNSMessage :: DNSMessage -> Builder ()
+putDNSMessage msg wbuf ref = do
+    putHeader hd wbuf ref
     putNums
     mapM_ putQ qs
     mapM_ putRR an
@@ -118,14 +121,14 @@ putDNSMessage msg = do
   where
     putNums =
         mapM_
-            putInt16
+            (putInt16 wbuf)
             [ length qs
             , length an
             , length au
             , length ad
             ]
-    putQ = putQuestion Original
-    putRR = putResourceRecord Original
+    putQ q = putQuestion Original q wbuf ref
+    putRR rr = putResourceRecord Original rr wbuf ref
     hm = header msg
     fl = flags hm
     eh = ednsHeader msg
@@ -155,17 +158,17 @@ putDNSMessage msg = do
                     | otherwise = ttl0' .|. vers'
                 rdata' = RData $ RD_OPT $ ednsOptions edns
 
-getDNSMessage :: SGet DNSMessage
-getDNSMessage = do
-    hm <- getHeader
-    qdCount <- getInt16
-    anCount <- getInt16
-    nsCount <- getInt16
-    arCount <- getInt16
-    queries <- getQuestions qdCount
-    answers <- getResourceRecords anCount
-    authrrs <- getResourceRecords nsCount
-    addnrrs <- getResourceRecords arCount
+getDNSMessage :: Parser DNSMessage
+getDNSMessage rbuf ref = do
+    hm <- getHeader rbuf ref
+    qdCount <- getInt16 rbuf
+    anCount <- getInt16 rbuf
+    nsCount <- getInt16 rbuf
+    arCount <- getInt16 rbuf
+    queries <- getQuestions qdCount rbuf ref
+    answers <- getResourceRecords anCount rbuf ref
+    authrrs <- getResourceRecords nsCount rbuf ref
+    addnrrs <- getResourceRecords arCount rbuf ref
     let (opts, rest) = partition ((==) OPT . rrtype) addnrrs
         flgs = flags hm
         rc = fromRCODE $ rcode flgs
@@ -350,18 +353,18 @@ data DNSFlags = DNSFlags
     }
     deriving (Eq, Show)
 
-putHeader :: DNSHeader -> SPut ()
-putHeader hdr = do
-    putIdentifier $ identifier hdr
-    putDNSFlags $ flags hdr
+putHeader :: DNSHeader -> Builder ()
+putHeader hdr wbuf ref = do
+    putIdentifier wbuf $ identifier hdr
+    putDNSFlags (flags hdr) wbuf ref
   where
     putIdentifier = put16
 
-getHeader :: SGet DNSHeader
-getHeader =
-    DNSHeader <$> decodeIdentifier <*> getDNSFlags
+getHeader :: Parser DNSHeader
+getHeader rbuf ref =
+    DNSHeader <$> getIdentifier rbuf <*> getDNSFlags rbuf ref
   where
-    decodeIdentifier = get16
+    getIdentifier = get16
 
 ----------------------------------------------------------------
 
@@ -384,11 +387,11 @@ defaultDNSFlags =
         , rcode = NoErr
         }
 
-putDNSFlags :: DNSFlags -> SPut ()
-putDNSFlags DNSFlags{..} = put16 word
+putDNSFlags :: DNSFlags -> Builder ()
+putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
   where
     set :: Word16 -> State Word16 ()
-    set byte = modify (.|. byte)
+    set byte = ST.modify (.|. byte)
 
     st :: State Word16 ()
     st =
@@ -404,11 +407,11 @@ putDNSFlags DNSFlags{..} = put16 word
             , when isResponse $ set (bit 15)
             ]
 
-    word = execState st 0
+    word = ST.execState st 0
 
-getDNSFlags :: SGet DNSFlags
-getDNSFlags = do
-    flgs <- get16
+getDNSFlags :: Parser DNSFlags
+getDNSFlags rbuf _ = do
+    flgs <- get16 rbuf
     let oc = getOpcode flgs
     return $
         DNSFlags
@@ -636,21 +639,21 @@ data Question = Question
     }
     deriving (Eq, Ord, Show)
 
-putQuestion :: CanonicalFlag -> Question -> SPut ()
-putQuestion cf Question{..} = do
-    putDomainRFC1035 cf qname
-    put16 (fromTYPE qtype)
-    putCLASS qclass
+putQuestion :: CanonicalFlag -> Question -> Builder ()
+putQuestion cf Question{..} wbuf ref = do
+    putDomainRFC1035 cf qname wbuf ref
+    put16 wbuf $ fromTYPE qtype
+    putCLASS qclass wbuf ref
 
-getQuestions :: Int -> SGet [Question]
-getQuestions n = replicateM n getQuestion
+getQuestions :: Int -> Parser [Question]
+getQuestions n rbuf ref = replicateM n $ getQuestion rbuf ref
 
-getQuestion :: SGet Question
-getQuestion =
+getQuestion :: Parser Question
+getQuestion rbuf ref =
     Question
-        <$> getDomainRFC1035
-        <*> getTYPE
-        <*> getCLASS
+        <$> getDomainRFC1035 rbuf ref
+        <*> getTYPE rbuf ref
+        <*> getCLASS rbuf ref
 
 ----------------------------------------------------------------
 
@@ -672,11 +675,11 @@ instance Show CLASS where
     show IN = "IN"
     show (CLASS n) = "CLASS " ++ show n
 
-putCLASS :: CLASS -> SPut ()
-putCLASS (CLASS x) = put16 x
+putCLASS :: CLASS -> Builder ()
+putCLASS (CLASS x) wbuf _ = put16 wbuf x
 
-getCLASS :: SGet CLASS
-getCLASS = CLASS <$> get16
+getCLASS :: Parser CLASS
+getCLASS rbuf _ = CLASS <$> get16 rbuf
 
 -- | Time to live in second.
 type TTL = Seconds
@@ -705,25 +708,33 @@ type AuthorityRecords = [ResourceRecord]
 -- | Type for resource records in the additional section.
 type AdditionalRecords = [ResourceRecord]
 
-putResourceRecord :: CanonicalFlag -> ResourceRecord -> SPut ()
-putResourceRecord cf ResourceRecord{..} = do
-    putDomainRFC1035 cf rrname
-    putTYPE rrtype
-    putCLASS rrclass
-    putSeconds rrttl
-    with16Length $ putRData cf rdata
+putResourceRecord :: CanonicalFlag -> ResourceRecord -> Builder ()
+putResourceRecord cf ResourceRecord{..} wbuf ref = do
+    putDomainRFC1035 cf rrname wbuf ref
+    putTYPE rrtype wbuf ref
+    putCLASS rrclass wbuf ref
+    putSeconds rrttl wbuf ref
+    with16Length (putRData cf rdata) wbuf ref
 
-getResourceRecords :: Int -> SGet [ResourceRecord]
-getResourceRecords n = replicateM n getResourceRecord
+getResourceRecords :: Int -> Parser [ResourceRecord]
+getResourceRecords n rbuf ref = go 0 id
+  where
+    go i b
+        | i == n = return $ b []
+        | otherwise = do
+            r <- getResourceRecord rbuf ref
+            if rrtype r == TYPE 0 && rrclass r == CLASS 0 -- skipping greasing RR
+                then go i b
+                else go (i + 1) (b . (r :))
 
-getResourceRecord :: SGet ResourceRecord
-getResourceRecord = do
-    dom <- getDomainRFC1035
-    typ <- getTYPE
-    cls <- getCLASS
-    ttl <- getSeconds
-    len <- getInt16
-    dat <- getRData typ len
+getResourceRecord :: Parser ResourceRecord
+getResourceRecord rbuf ref = do
+    dom <- getDomainRFC1035 rbuf ref
+    typ <- getTYPE rbuf ref
+    cls <- getCLASS rbuf ref
+    ttl <- getSeconds rbuf ref
+    len <- getInt16 rbuf
+    dat <- getRData typ len rbuf ref
     return $ ResourceRecord dom typ cls ttl dat
 
 ----------------------------------------------------------------
