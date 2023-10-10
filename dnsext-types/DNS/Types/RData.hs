@@ -9,7 +9,6 @@ import Data.Char (chr)
 import Data.IP (IPv4, IPv6, fromIPv4, fromIPv6b, toIPv4, toIPv6b)
 import Data.Word8
 
-import DNS.Wire
 import DNS.Types.Domain
 import DNS.Types.EDNS
 import DNS.Types.Imports
@@ -23,6 +22,7 @@ import DNS.Types.Opaque.Internal (
 import qualified DNS.Types.Opaque.Internal as Opaque
 import DNS.Types.Seconds
 import DNS.Types.Type
+import DNS.Wire
 
 ---------------------------------------------------------------
 

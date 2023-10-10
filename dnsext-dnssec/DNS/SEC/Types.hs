@@ -389,7 +389,7 @@ putNsecTypes types = putTypeList $ map fromTYPE types
             ]
 
     putWindow :: Int -> [Int] -> Builder ()
-    putWindow top8 bot8s wbuf ref= do
+    putWindow top8 bot8s wbuf ref = do
         let blks = maximum bot8s `shiftR` 3
         putInt8 wbuf top8
         put8 wbuf (1 + fromIntegral blks)
@@ -403,7 +403,8 @@ putNsecTypes types = putTypeList $ map fromTYPE types
               using
                 groupWith
             ]
-            wbuf ref
+            wbuf
+            ref
       where
         -- \| Combine type bits in network bit order, i.e. bit 0 first.
         mergeBits acc b = setBit acc (7 - b .&. 0x07)

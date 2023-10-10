@@ -9,7 +9,7 @@ import Data.String (fromString)
 import Data.UnixTime (UnixTime (..), getUnixTime)
 import Data.Word (Word16)
 import Foreign.C.Types (CTime (..))
-import System.Environment (getProgName, getArgs)
+import System.Environment (getArgs, getProgName)
 import Text.Read (readEither)
 
 -- dnsext-* package
@@ -201,12 +201,13 @@ eqSection1 s1 s2 =
 usage :: IO ()
 usage = do
     prog <- getProgName
-    putStr $ unlines
-        [ "Usage: " ++ prog ++ " host1[:port1] host2[:port2]"
-        , ""
-        , "       " ++ prog ++ " host1[:port1] host2[:port2] input_file"
-        , ""
-        ]
+    putStr $
+        unlines
+            [ "Usage: " ++ prog ++ " host1[:port1] host2[:port2]"
+            , ""
+            , "       " ++ prog ++ " host1[:port1] host2[:port2] input_file"
+            , ""
+            ]
 
 main :: IO ()
 main = do

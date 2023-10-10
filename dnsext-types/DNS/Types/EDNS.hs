@@ -45,10 +45,10 @@ import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read
 
-import DNS.Wire
 import DNS.Types.Imports
 import DNS.Types.Opaque.Internal (Opaque, getOpaque, putOpaque)
 import qualified DNS.Types.Opaque.Internal as Opaque
+import DNS.Wire
 
 ----------------------------------------------------------------
 -- EDNS (RFC 6891, EDNS(0))

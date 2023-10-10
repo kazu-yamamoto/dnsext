@@ -2,8 +2,8 @@
 
 module DNS.Types.Seconds where
 
-import DNS.Wire
 import DNS.Types.Imports
+import DNS.Wire
 
 newtype Seconds = Seconds Word32
     deriving (Eq, Ord, Enum, Num, Real, Integral, Bits)

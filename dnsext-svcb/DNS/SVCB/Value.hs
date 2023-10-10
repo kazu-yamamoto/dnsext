@@ -106,7 +106,7 @@ instance SPV SPV_IPv6Hint where
     fromSvcParamValue = fromSPV $ \len rbuf ref -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len ipv6hint rbuf ref
       where
-        ipv6hint rbuf _ =toIPv6b <$> getNBytes rbuf 16
+        ipv6hint rbuf _ = toIPv6b <$> getNBytes rbuf 16
 
 spv_ipv6hint :: [IPv6] -> SvcParamValue
 spv_ipv6hint is = toSvcParamValue $ SPV_IPv6Hint is

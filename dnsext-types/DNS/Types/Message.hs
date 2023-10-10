@@ -7,7 +7,6 @@ module DNS.Types.Message where
 import Control.Monad.State.Strict (State)
 import qualified Control.Monad.State.Strict as ST
 
-import DNS.Wire
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.EDNS
@@ -15,6 +14,7 @@ import DNS.Types.Imports
 import DNS.Types.RData
 import DNS.Types.Seconds
 import DNS.Types.Type
+import DNS.Wire
 
 ----------------------------------------------------------------
 
@@ -361,7 +361,7 @@ putHeader hdr wbuf ref = do
     putIdentifier = put16
 
 getHeader :: Parser DNSHeader
-getHeader  rbuf ref=
+getHeader rbuf ref =
     DNSHeader <$> getIdentifier rbuf <*> getDNSFlags rbuf ref
   where
     getIdentifier = get16

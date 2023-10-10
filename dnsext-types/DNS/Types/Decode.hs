@@ -33,7 +33,6 @@ module DNS.Types.Decode (
 
 import qualified Data.ByteString as BS
 
-import DNS.Wire
 import DNS.Types.Dict
 import DNS.Types.Domain
 import DNS.Types.Error
@@ -42,6 +41,7 @@ import DNS.Types.Message
 import DNS.Types.RData
 import DNS.Types.Time
 import DNS.Types.Type
+import DNS.Wire
 
 ----------------------------------------------------------------
 

@@ -33,8 +33,8 @@ import qualified Data.Map as M
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
-import DNS.Wire.Types
 import DNS.Types.Imports
+import DNS.Wire.Types
 
 ----------------------------------------------------------------
 
@@ -55,7 +55,8 @@ initialBState = BState M.empty
 
 runBuilder :: Builder () -> ByteString
 runBuilder builder = unsafeDupablePerformIO $ do
-    withWriteBuffer 2048 $ \wbuf -> do -- fixme
+    withWriteBuffer 2048 $ \wbuf -> do
+        -- fixme
         ref <- newIORef initialBState
         builder wbuf ref
 

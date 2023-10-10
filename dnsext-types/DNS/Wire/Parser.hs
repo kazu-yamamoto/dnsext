@@ -142,11 +142,11 @@ sGetMany elemname len parser = \rbuf ref -> do
     go lim build rbuf ref = do
         pos <- position rbuf
         case pos `compare` lim of
-          EQ -> return $ build []
-          LT -> do
-              x <- parser rbuf ref
-              go lim (build . (x :)) rbuf ref
-          GT -> error $ "internal error: in-place success for " ++ elemname
+            EQ -> return $ build []
+            LT -> do
+                x <- parser rbuf ref
+                go lim (build . (x :)) rbuf ref
+            GT -> error $ "internal error: in-place success for " ++ elemname
 
 ----------------------------------------------------------------
 
@@ -173,8 +173,8 @@ runParserAt t parser inp =
         when (left /= 0) $ failParser "excess input"
         return $ Right ret
     handler se@(E.SomeException e)
-      | Just (DecodeError msg) <- E.fromException se = return $ Left $ DecodeError msg
-      | otherwise  = return $ Left $ DecodeError $ "incomplete input: " ++ show e
+        | Just (DecodeError msg) <- E.fromException se = return $ Left $ DecodeError msg
+        | otherwise = return $ Left $ DecodeError $ "incomplete input: " ++ show e
 
 runParser :: Parser a -> ByteString -> Either DNSError a
 runParser = runParserAt dnsTimeMid

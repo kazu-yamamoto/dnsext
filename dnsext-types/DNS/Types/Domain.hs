@@ -27,10 +27,10 @@ import qualified Data.ByteString.Short as Short
 import Data.Functor (($>))
 import Data.Word8
 
-import DNS.Wire
 import DNS.Types.Error
 import DNS.Types.Imports
 import qualified DNS.Types.Parser as P
+import DNS.Wire
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -341,9 +341,10 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 -- | Getting a domain name.
 --   An error is thrown if name compression is used.
 getDomain :: Parser Domain
-getDomain rbuf ref = domainFromWireLabels <$> do
-    n <- position rbuf
-    getDomain' False n rbuf ref
+getDomain rbuf ref =
+    domainFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' False n rbuf ref
 
 -- | Getting a domain name.
 -- Pointers MUST point back into the packet per RFC1035 Section 4.1.4.  This
@@ -356,22 +357,25 @@ getDomain rbuf ref = domainFromWireLabels <$> do
 -- algorithm, each sequence of valid pointer values is necessarily strictly
 -- decreasing!
 getDomainRFC1035 :: Parser Domain
-getDomainRFC1035 rbuf ref = domainFromWireLabels <$> do
-    n <- position rbuf
-    getDomain' True n rbuf ref
+getDomainRFC1035 rbuf ref =
+    domainFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' True n rbuf ref
 
 -- | Getting a mailbox.
 --   An error is thrown if name compression is used.
 getMailbox :: Parser Mailbox
-getMailbox rbuf ref = mailboxFromWireLabels <$> do
-    n <- position rbuf
-    getDomain' False n rbuf ref
+getMailbox rbuf ref =
+    mailboxFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
 getMailboxRFC1035 :: Parser Mailbox
-getMailboxRFC1035 rbuf ref = mailboxFromWireLabels <$> do
-    n <- position rbuf
-    getDomain' True n rbuf ref
+getMailboxRFC1035 rbuf ref =
+    mailboxFromWireLabels <$> do
+        n <- position rbuf
+        getDomain' True n rbuf ref
 
 -- $
 --

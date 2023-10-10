@@ -12,11 +12,11 @@ module DNS.Types.Encode (
     encodeMailbox,
 ) where
 
-import DNS.Wire
 import DNS.Types.Domain
 import DNS.Types.Imports
 import DNS.Types.Message
 import DNS.Types.RData
+import DNS.Wire
 
 -- | Encode DNS message.
 encode :: DNSMessage -> ByteString

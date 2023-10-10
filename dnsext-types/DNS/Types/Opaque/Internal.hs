@@ -7,8 +7,8 @@ import qualified DNS.Types.Base32Hex as B32H
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Base64 as B64
 
-import DNS.Wire
 import DNS.Types.Imports
+import DNS.Wire
 
 ----------------------------------------------------------------
 

@@ -14,11 +14,11 @@ import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import qualified Data.IntMap as M
 import System.IO.Unsafe (unsafePerformIO)
 
-import DNS.Wire
 import DNS.Types.EDNS
 import DNS.Types.Opaque.Internal
 import DNS.Types.RData
 import DNS.Types.Type
+import DNS.Wire
 
 ----------------------------------------------------------------
 
