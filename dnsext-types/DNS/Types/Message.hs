@@ -717,7 +717,16 @@ putResourceRecord cf ResourceRecord{..} wbuf ref = do
     with16Length (putRData cf rdata) wbuf ref
 
 getResourceRecords :: Int -> Parser [ResourceRecord]
-getResourceRecords n rbuf ref = replicateM n $ getResourceRecord rbuf ref
+getResourceRecords n rbuf ref = go 0 id
+  where
+    go i b
+        | i == n = return $ b []
+        | otherwise = do
+            r <- getResourceRecord rbuf ref
+            if rrclass r == IN
+                then go (i + 1) (b . (r :))
+                else -- skipping greasing RR
+                    go i b
 
 getResourceRecord :: Parser ResourceRecord
 getResourceRecord rbuf ref = do
