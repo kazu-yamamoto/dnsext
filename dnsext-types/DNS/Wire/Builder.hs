@@ -53,10 +53,9 @@ initialBState = BState M.empty
 
 ----------------------------------------------------------------
 
-runBuilder :: Builder () -> ByteString
-runBuilder builder = unsafeDupablePerformIO $ do
-    withWriteBuffer 2048 $ \wbuf -> do
-        -- fixme
+runBuilder :: Int -> Builder () -> ByteString
+runBuilder len builder = unsafeDupablePerformIO $ do
+    withWriteBuffer len $ \wbuf -> do
         ref <- newIORef initialBState
         builder wbuf ref
 

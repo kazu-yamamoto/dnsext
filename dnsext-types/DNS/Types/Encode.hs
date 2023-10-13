@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module DNS.Types.Encode (
     -- * Main encoder
     encode,
@@ -13,6 +15,7 @@ module DNS.Types.Encode (
 ) where
 
 import DNS.Types.Domain
+import DNS.Types.EDNS
 import DNS.Types.Imports
 import DNS.Types.Message
 import DNS.Types.RData
@@ -20,32 +23,43 @@ import DNS.Wire
 
 -- | Encode DNS message.
 encode :: DNSMessage -> ByteString
-encode = runBuilder . putDNSMessage
+encode msg@DNSMessage{..} = runBuilder siz $ putDNSMessage msg
+  where
+    siz = 16
+        + mapEDNS ednsHeader ednsSize 0
+        + sum (map qsiz question)
+        + sum (map resourceRecordSize answer)
+        + sum (map resourceRecordSize authority)
+        + sum (map resourceRecordSize additional)
+    ednsSize eh = 11 + sum (map (\o -> 4 + odataSize o) $ ednsOptions eh)
 
 -- | Encode DNS header.
 encodeDNSHeader :: DNSHeader -> ByteString
-encodeDNSHeader = runBuilder . putHeader
+encodeDNSHeader hdr = runBuilder 12 $ putHeader hdr -- excluding xxcounts
 
 -- | Encode DNS flags.
 encodeDNSFlags :: DNSFlags -> ByteString
-encodeDNSFlags = runBuilder . putDNSFlags
+encodeDNSFlags flags = runBuilder 2 $ putDNSFlags flags
 
 -- | Encode a question.
 encodeQuestion :: Question -> ByteString
-encodeQuestion = runBuilder . putQuestion Original
+encodeQuestion q = runBuilder (qsiz q) $ putQuestion Original q
+
+qsiz :: Question -> Int
+qsiz Question{..} = domainSize qname + 4
 
 -- | Encode a resource record.
 encodeResourceRecord :: ResourceRecord -> ByteString
-encodeResourceRecord rr = runBuilder $ putResourceRecord Original rr
+encodeResourceRecord rr = runBuilder (resourceRecordSize rr)  $ putResourceRecord Original rr
 
 -- | Encode a resource data.
 encodeRData :: RData -> ByteString
-encodeRData = runBuilder . putRData Original
+encodeRData rd = runBuilder (rdataSize rd) $ putRData Original rd
 
 -- | Encode a domain with name compression.
 encodeDomain :: Domain -> ByteString
-encodeDomain = runBuilder . putDomainRFC1035 Original
+encodeDomain d = runBuilder (domainSize d) $ putDomainRFC1035 Original d
 
 -- | Encode a mailbox name with name compression.
 encodeMailbox :: Mailbox -> ByteString
-encodeMailbox = runBuilder . putMailboxRFC1035 Original
+encodeMailbox m = runBuilder (mailboxSize m) $ putMailboxRFC1035 Original m

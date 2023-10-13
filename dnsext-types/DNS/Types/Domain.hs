@@ -9,7 +9,9 @@ module DNS.Types.Domain (
     Domain,
     superDomains,
     isSubDomainOf,
+    domainSize,
     Mailbox,
+    mailboxSize,
     getDomain,
     getDomainRFC1035,
     putDomain,
@@ -165,6 +167,9 @@ addRoot o
     | Short.last o == _period = o
     | otherwise = o <> "."
 
+domainSize :: Domain -> Int
+domainSize d = Short.length (representation d) + 1
+
 ----------------------------------------------------------------
 
 validateDomain :: Domain -> Domain
@@ -266,6 +271,9 @@ instance IsRepresentation Mailbox String where
     toRepresentation = toRepresentation . fromMailbox
     fromWireLabels = toMailbox . domainFromWireLabels . map fromString
     toWireLabels = map shortToString . wireLabels . fromMailbox
+
+mailboxSize :: Mailbox -> Int
+mailboxSize m = domainSize $ fromMailbox m
 
 ----------------------------------------------------------------
 

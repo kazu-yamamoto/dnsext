@@ -28,6 +28,7 @@ import DNS.Wire
 
 class (Typeable a, Eq a, Show a) => ResourceData a where
     resourceDataType :: a -> TYPE
+    resourceDataSize :: a -> Int
     putResourceData :: CanonicalFlag -> a -> Builder ()
 
 ---------------------------------------------------------------
@@ -52,6 +53,9 @@ instance Eq RData where
 -- | Getting 'TYPE' of 'RData'.
 rdataType :: RData -> TYPE
 rdataType (RData x) = resourceDataType x
+
+rdataSize :: RData -> Int
+rdataSize (RData x) = resourceDataSize x
 
 putRData :: CanonicalFlag -> RData -> Builder ()
 putRData cf (RData x) = putResourceData cf x
@@ -92,6 +96,7 @@ newtype RD_A = RD_A
 
 instance ResourceData RD_A where
     resourceDataType _ = A
+    resourceDataSize _ = 4
     putResourceData _ (RD_A ipv4) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv4 ipv4
 
 get_a :: Int -> Parser RD_A
@@ -115,6 +120,7 @@ newtype RD_NS = RD_NS
 
 instance ResourceData RD_NS where
     resourceDataType _ = NS
+    resourceDataSize (RD_NS d) = domainSize d
     putResourceData cf (RD_NS d) = putDomainRFC1035 cf d
 
 get_ns :: Int -> Parser RD_NS
@@ -138,6 +144,7 @@ newtype RD_CNAME = RD_CNAME
 
 instance ResourceData RD_CNAME where
     resourceDataType _ = CNAME
+    resourceDataSize (RD_CNAME d) = domainSize d
     putResourceData cf (RD_CNAME d) = putDomainRFC1035 cf d
 
 get_cname :: Int -> Parser RD_CNAME
@@ -173,6 +180,7 @@ data RD_SOA = RD_SOA
 
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
+    resourceDataSize RD_SOA{..} = domainSize soa_mname + mailboxSize soa_rname + 20
     putResourceData cf RD_SOA{..} = \wbuf ref -> do
         putDomainRFC1035 cf soa_mname wbuf ref
         putMailboxRFC1035 cf soa_rname wbuf ref
@@ -209,6 +217,7 @@ newtype RD_NULL = RD_NULL
 
 instance ResourceData RD_NULL where
     resourceDataType _ = NULL
+    resourceDataSize (RD_NULL o) = Opaque.length o
     putResourceData _ (RD_NULL o) = putOpaque o
 
 get_null :: Int -> Parser RD_NULL
@@ -231,6 +240,7 @@ newtype RD_PTR = RD_PTR
 
 instance ResourceData RD_PTR where
     resourceDataType _ = PTR
+    resourceDataSize (RD_PTR d) = domainSize d
     putResourceData cf (RD_PTR d) = putDomainRFC1035 cf d
 
 get_ptr :: Int -> Parser RD_PTR
@@ -256,6 +266,7 @@ data RD_MX = RD_MX
 
 instance ResourceData RD_MX where
     resourceDataType _ = MX
+    resourceDataSize RD_MX{..} = 2 + domainSize mx_exchange
     putResourceData cf RD_MX{..} = \wbuf ref -> do
         put16 wbuf mx_preference
         putDomainRFC1035 cf mx_exchange wbuf ref
@@ -278,6 +289,11 @@ newtype RD_TXT = RD_TXT
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
+    resourceDataSize (RD_TXT o) = let l = Opaque.length o
+                                  in if l == 0
+                                     then 1
+                                     else let (d,r) = l `divMod` 255
+                                          in l + d + if r == 0 then 0 else 1
     putResourceData _ (RD_TXT o) = putTXT o
       where
         putTXT txt wbuf ref = do
@@ -324,6 +340,7 @@ data RD_RP = RD_RP
 
 instance ResourceData RD_RP where
     resourceDataType _ = RP
+    resourceDataSize (RD_RP mbox d) = mailboxSize mbox + domainSize d
     putResourceData cf (RD_RP mbox d) = do
         _ <- putMailbox cf mbox
         putDomain cf d
@@ -346,6 +363,7 @@ newtype RD_AAAA = RD_AAAA
 
 instance ResourceData RD_AAAA where
     resourceDataType _ = AAAA
+    resourceDataSize _ = 16
     putResourceData _ (RD_AAAA ipv6) = \wbuf _ -> mapM_ (putInt8 wbuf) $ fromIPv6b ipv6
 
 get_aaaa :: Int -> Parser RD_AAAA
@@ -371,6 +389,7 @@ data RD_SRV = RD_SRV
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
+    resourceDataSize RD_SRV{..} = 6 + domainSize srv_target
     putResourceData cf RD_SRV{..} = \wbuf ref -> do
         put16 wbuf srv_priority
         put16 wbuf srv_weight
@@ -399,6 +418,7 @@ newtype RD_DNAME = RD_DNAME
 
 instance ResourceData RD_DNAME where
     resourceDataType _ = DNAME
+    resourceDataSize (RD_DNAME d) = domainSize d
     putResourceData cf (RD_DNAME d) = putDomain cf d
 
 get_dname :: Int -> Parser RD_DNAME
@@ -421,6 +441,7 @@ newtype RD_OPT = RD_OPT
 
 instance ResourceData RD_OPT where
     resourceDataType _ = OPT
+    resourceDataSize _ = 0 -- fixme
     putResourceData _ (RD_OPT options) = \wbuf ref -> mapM_ (\o -> putOData o wbuf ref) options
 
 instance Show RD_OPT where
@@ -443,6 +464,7 @@ data RD_TLSA = RD_TLSA
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
+    resourceDataSize RD_TLSA{..} = 3 + Opaque.length tlsa_assoc_data
     putResourceData _ RD_TLSA{..} = \wbuf ref -> do
         put8 wbuf tlsa_usage
         put8 wbuf tlsa_selector
@@ -471,6 +493,7 @@ instance Show RD_Unknown where
 
 instance ResourceData RD_Unknown where
     resourceDataType (RD_Unknown typ _) = typ
+    resourceDataSize (RD_Unknown _ o) = Opaque.length o
     putResourceData _ (RD_Unknown _ o) = putOpaque o
 
 -- | Smart constructor.
