@@ -289,11 +289,13 @@ newtype RD_TXT = RD_TXT
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
-    resourceDataSize (RD_TXT o) = let l = Opaque.length o
-                                  in if l == 0
-                                     then 1
-                                     else let (d,r) = l `divMod` 255
-                                          in l + d + if r == 0 then 0 else 1
+    resourceDataSize (RD_TXT o) =
+        let l = Opaque.length o
+         in if l == 0
+                then 1
+                else
+                    let (d, r) = l `divMod` 255
+                     in l + d + if r == 0 then 0 else 1
     putResourceData _ (RD_TXT o) = putTXT o
       where
         putTXT txt wbuf ref = do

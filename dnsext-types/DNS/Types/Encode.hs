@@ -25,12 +25,13 @@ import DNS.Wire
 encode :: DNSMessage -> ByteString
 encode msg@DNSMessage{..} = runBuilder siz $ putDNSMessage msg
   where
-    siz = 16
-        + mapEDNS ednsHeader ednsSize 0
-        + sum (map qsiz question)
-        + sum (map resourceRecordSize answer)
-        + sum (map resourceRecordSize authority)
-        + sum (map resourceRecordSize additional)
+    siz =
+        16
+            + mapEDNS ednsHeader ednsSize 0
+            + sum (map qsiz question)
+            + sum (map resourceRecordSize answer)
+            + sum (map resourceRecordSize authority)
+            + sum (map resourceRecordSize additional)
     ednsSize eh = 11 + sum (map (\o -> 4 + odataSize o) $ ednsOptions eh)
 
 -- | Encode DNS header.
@@ -50,7 +51,7 @@ qsiz Question{..} = domainSize qname + 4
 
 -- | Encode a resource record.
 encodeResourceRecord :: ResourceRecord -> ByteString
-encodeResourceRecord rr = runBuilder (resourceRecordSize rr)  $ putResourceRecord Original rr
+encodeResourceRecord rr = runBuilder (resourceRecordSize rr) $ putResourceRecord Original rr
 
 -- | Encode a resource data.
 encodeRData :: RData -> ByteString
