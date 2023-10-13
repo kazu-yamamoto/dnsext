@@ -300,10 +300,8 @@ instance ResourceData RD_TXT where
       where
         putTXT txt wbuf ref = do
             let (h, t) = Opaque.splitAt 255 txt
-                next
-                    | Opaque.null t = return ()
-                    | otherwise = putTXT t wbuf ref
-            putLenOpaque h wbuf ref >> next
+            putLenOpaque h wbuf ref
+            unless (Opaque.null t) $ putTXT t wbuf ref
 
 get_txt :: Int -> Parser RD_TXT
 get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
