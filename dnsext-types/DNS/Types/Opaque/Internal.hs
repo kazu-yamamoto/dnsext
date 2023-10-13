@@ -57,7 +57,7 @@ toBase32Hex :: Opaque -> ByteString
 toBase32Hex (Opaque o) = B32H.encode $ Short.fromShort o
 
 fromBase32Hex :: ByteString -> Either String Opaque
-fromBase32Hex = (Opaque . Short.toShort <$>) . B32H.decode
+fromBase32Hex = (Opaque <$>) . B32H.decode
 
 toBase64 :: Opaque -> ByteString
 toBase64 (Opaque o) = B64.encode $ Short.fromShort o
