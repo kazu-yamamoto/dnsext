@@ -1,18 +1,33 @@
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
+{-# OPTIONS -Wno-name-shadowing #-}
+
 module DNS.Types.Base32Hex (
     encode,
     decode,
 ) where
 
+import GHC.Exts (
+    ByteArray#,
+    Int (I#),
+    MutableByteArray#,
+    newByteArray#,
+    unsafeFreezeByteArray#,
+    writeWord8Array#,
+ )
+import GHC.ST (ST (ST), runST)
+import GHC.Word (Word8 (W8#))
+
 import qualified Data.Array.IArray as A
 import qualified Data.Array.MArray as A
 import qualified Data.Array.ST as A
 import qualified Data.ByteString as BS
+import Data.ByteString.Short.Internal (ShortByteString(SBS))
 
 -- Don't import DNS.Types.Imports
 import Control.Monad
 import Data.Bits
 import Data.ByteString (ByteString)
-import qualified Data.List as L
 import Data.Word8 (_0, _9, _A, _V, _a, _v)
 
 -- | Encode ByteString using the
@@ -60,34 +75,28 @@ encode bs =
         go ws a $ n + 8
 {-# INLINE encode #-}
 
-decode :: ByteString -> Either String ByteString
+{- FOURMOLU_DISABLE -}
+decode :: ByteString -> Either String ShortByteString
 decode bs = do
     let ilen = BS.length bs
         len = (5 * ilen) `div` 8
         r = ilen `mod` 8
     when (r `notElem` [0, 2, 4, 5, 7]) $
-        Left $
-            "Base32Hex.decode: invalid length of base32hex: " ++ show ilen
-    cs <- fmap chunks8 . mapM fromHex32 $ BS.unpack bs
-    return $ BS.pack $ A.elems $ A.runSTUArray $ do
-        a <- A.newArray (0 :: Int, len - 1) 0
-        go cs a 0
+        Left $ "Base32Hex.decode: invalid length of base32hex: " ++ show ilen
+    runST $ do
+        mba <- newByteArray len
+        let finalize = do
+                BA# ba# <- unsafeFreezeByteArray mba
+                return $ Right $ SBS ba#
+        loop (return . Left) finalize mba
   where
-    fromHex32 w
-        | _0 <= w && w <= _9 = Right $ w - 48
-        | _A <= w && w <= _V = Right $ w - 55
-        | _a <= w && w <= _v = Right $ w - 87
-        | otherwise = Left "Base32Hex.decode: not base32hex format"
+    fromHex32 w left right
+        | _A <= w && w <= _V = right $ w - 55
+        | _a <= w && w <= _v = right $ w - 87
+        | _0 <= w && w <= _9 = right $ w - 48
+        | otherwise = left "Base32Hex.decode: not base32hex format"
 
-    chunks8 = L.unfoldr chunk
-      where
-        chunk s
-            | null hd = Nothing
-            | otherwise = Just (hd, tl)
-          where
-            (hd, tl) = splitAt 8 s
-
-    store8 a i v = A.writeArray a i v
+    store8 a i v = writeWord8Array a i v
 
     stores ss a n f0 f1 f2 f3 f4 f5 f6 f7 = do
         let w0 = f0 `unsafeShiftL` 3 .|. f1 `unsafeShiftR` 2
@@ -95,46 +104,79 @@ decode bs = do
             w2 = f3 `unsafeShiftL` 4 .|. f4 `unsafeShiftR` 1
             w3 = f4 `unsafeShiftL` 7 .|. f5 `unsafeShiftL` 2 .|. f6 `unsafeShiftR` 3
             w4 = f6 `unsafeShiftL` 5 .|. f7
-        sequence_ $
-            take
-                ss
-                [ store8 a n w0
-                , store8 a (n + 1) w1
-                , store8 a (n + 2) w2
-                , store8 a (n + 3) w3
-                , store8 a (n + 4) w4
-                ]
+            action
+                | ss == (5 :: Int)  =
+                               do { store8 a n w0 ; store8 a (n + 1) w1 ; store8 a (n + 2) w2 ; store8 a (n + 3) w3
+                                  ; store8 a (n + 4) w4 }
+                | ss ==  4   = do { store8 a n w0 ; store8 a (n + 1) w1 ; store8 a (n + 2) w2 ; store8 a (n + 3) w3 }
+                | ss ==  3   = do { store8 a n w0 ; store8 a (n + 1) w1 ; store8 a (n + 2) w2 }
+                | ss ==  2   = do { store8 a n w0 ; store8 a (n + 1) w1 }
+                | ss ==  1   =      store8 a n w0
+                | otherwise  = error "Base32Hex.decode: internal error. illegal chunk length"
+        action
 
-    go [] a _n = return a
-    go [[f0, f1]] a n = do
-        stores 1 a n f0 f1 0 0 0 0 0 0
-        -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-        return a
-    go [[f0, f1, f2, f3]] a n = do
-        stores 2 a n f0 f1 f2 f3 0 0 0 0
-        -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-        --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
-        return a
-    go [[f0, f1, f2, f3, f4]] a n = do
-        stores 3 a n f0 f1 f2 f3 f4 0 0 0
-        -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-        --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
-        --     w2 = f3 `shiftL` 4 .|. f4 `shiftR` 1
-        return a
-    go [[f0, f1, f2, f3, f4, f5, f6]] a n = do
-        stores 4 a n f0 f1 f2 f3 f4 f5 f6 0
-        -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-        --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
-        --     w2 = f3 `shiftL` 4 .|. f4 `shiftR` 1
-        --     w3 = f4 `shiftL` 7 .|. f5 `shiftL` 2 .|. f6 `shiftR` 3
-        return a
-    go ([f0, f1, f2, f3, f4, f5, f6, f7] : cs) a n = do
-        stores 5 a n f0 f1 f2 f3 f4 f5 f6 f7
-        -- let w0 = f0 `shiftL` 3 .|. f1 `shiftR` 2
-        --     w1 = f1 `shiftL` 6 .|. f2 `shiftL` 1 .|. f3 `shiftR` 4
-        --     w2 = f3 `shiftL` 4 .|. f4 `shiftR` 1
-        --     w3 = f4 `shiftL` 7 .|. f5 `shiftL` 2 .|. f6 `shiftR` 3
-        --     w4 = f6 `shiftL` 5 .|. f7
-        go cs a (n + 5)
-    go _ _ _ = error "Base32Hex.decode: internal error. invalid chunk"
+    bslen = BS.length bs
+    loop left right a = go 0 0
+      where
+        fromH32 w = fromHex32 w left
+        go n bsoff
+            | r >= 8     =
+                  fromH32 b0 $ \f0 -> fromH32 b1 $ \f1 -> fromH32 b2 $ \f2 -> fromH32 b3 $ \f3 ->
+                  fromH32 b4 $ \f4 -> fromH32 b5 $ \f5 -> fromH32 b6 $ \f6 -> fromH32 b7 $ \f7 ->
+                      do { stores 5 a n f0 f1 f2 f3 f4 f5 f6 f7 ; go (n + 5) (bsoff + 8) }
+            | r == 7     =
+                  fromH32 b0 $ \f0 -> fromH32 b1 $ \f1 -> fromH32 b2 $ \f2 -> fromH32 b3 $ \f3 ->
+                  fromH32 b4 $ \f4 -> fromH32 b5 $ \f5 -> fromH32 b6 $ \f6 ->
+                           stores 4 a n f0 f1 f2 f3 f4 f5 f6  0 *> right
+            | r == 5     =
+                  fromH32 b0 $ \f0 -> fromH32 b1 $ \f1 -> fromH32 b2 $ \f2 -> fromH32 b3 $ \f3 ->
+                  fromH32 b4 $ \f4 ->
+                           stores 3 a n f0 f1 f2 f3 f4  0  0  0 *> right
+            | r == 4     =
+                  fromH32 b0 $ \f0 -> fromH32 b1 $ \f1 -> fromH32 b2 $ \f2 -> fromH32 b3 $ \f3 ->
+                           stores 2 a n f0 f1 f2 f3  0  0  0  0 *> right
+            | r == 2     =
+                  fromH32 b0 $ \f0 -> fromH32 b1 $ \f1 ->
+                           stores 1 a n f0 f1  0  0  0  0  0  0 *> right
+            | r == 0     = right
+            | otherwise  = left $ "Base32Hex.decode: invalid input length: " ++ show bslen
+          where
+            r = bslen - bsoff
+            ~b0 = bs `BS.index`  bsoff
+            ~b1 = bs `BS.index` (bsoff + 1)
+            ~b2 = bs `BS.index` (bsoff + 2)
+            ~b3 = bs `BS.index` (bsoff + 3)
+            ~b4 = bs `BS.index` (bsoff + 4)
+            ~b5 = bs `BS.index` (bsoff + 5)
+            ~b6 = bs `BS.index` (bsoff + 6)
+            ~b7 = bs `BS.index` (bsoff + 7)
+
 {-# INLINE decode #-}
+{- FOURMOLU_ENABLE -}
+
+-----
+
+data BA = BA# ByteArray#
+data MBA s = MBA# (MutableByteArray# s)
+
+newByteArray :: Int -> ST s (MBA s)
+newByteArray (I# len#) =
+    ST $ \s -> case newByteArray# len# s of
+        (# s, mba# #) -> (# s, MBA# mba# #)
+
+unsafeFreezeByteArray :: MBA s -> ST s BA
+unsafeFreezeByteArray (MBA# mba#) =
+    ST $ \s -> case unsafeFreezeByteArray# mba# s of
+        (# s, ba# #) -> (# s, BA# ba# #)
+
+{-
+readWord8Array :: MBA s -> Int -> ST s Word8
+readWord8Array (MBA# mba#) (I# i#) =
+    ST $ \s -> case readWord8Array# mba# i# s of
+        (# s, w# #) -> (# s, W8# w# #)
+ -}
+
+writeWord8Array :: MBA s -> Int -> Word8 -> ST s ()
+writeWord8Array (MBA# mba#) (I# i#) (W8# w#) =
+    ST $ \s -> case writeWord8Array# mba# i# w# s of
+        s -> (# s, () #)
