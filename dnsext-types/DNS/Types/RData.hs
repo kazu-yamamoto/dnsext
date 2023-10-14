@@ -291,17 +291,17 @@ instance ResourceData RD_TXT where
     resourceDataType _ = TXT
     resourceDataSize (RD_TXT o) =
         let l = Opaque.length o
-         in if l == 0
-                then 1
-                else
-                    let (d, r) = l `divMod` 255
-                     in l + d + if r == 0 then 0 else 1
+            (d, r) = l `divMod` 255
+            s = if r == 0 then 0 else 1
+         in l + d + s
     putResourceData _ (RD_TXT o) = putTXT o
       where
-        putTXT txt wbuf ref = do
+        putTXT txt wbuf ref
+          | Opaque.null txt = return ()
+          | otherwise = do
             let (h, t) = Opaque.splitAt 255 txt
             putLenOpaque h wbuf ref
-            unless (Opaque.null t) $ putTXT t wbuf ref
+            putTXT t wbuf ref
 
 get_txt :: Int -> Parser RD_TXT
 get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
