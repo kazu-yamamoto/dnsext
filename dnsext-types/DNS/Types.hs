@@ -165,11 +165,13 @@ module DNS.Types (
 
     -- ** Domain
     Domain,
+    domainSize,
     superDomains,
     isSubDomainOf,
 
     -- ** Mailbox
     Mailbox,
+    mailboxSize,
 
     -- ** Opaque
     Opaque,

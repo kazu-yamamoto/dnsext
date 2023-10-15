@@ -35,7 +35,7 @@ import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
 
 keyTag :: RD_DNSKEY -> Word16
-keyTag = keyTagFromBS . runBuilder . putResourceData Canonical
+keyTag dnskey = keyTagFromBS $ runBuilder (resourceDataSize dnskey) $ putResourceData Canonical dnskey
 
 {- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
@@ -134,7 +134,7 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
         putRRS wbuf ref = do
             putRRSIGHeader rrsig wbuf ref
             mapM_ (\io -> putRRH wbuf ref >> io wbuf ref) sortedRDatas
-        str = runBuilder putRRS
+        str = runBuilder undefined putRRS
     {- `Data.List.sort` is linear for sorted case -}
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"
@@ -147,7 +147,7 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
 sortRDataCanonical :: [ResourceRecord] -> [(Builder (), ResourceRecord)]
 sortRDataCanonical rrs =
     {- sortOn "RDATA portion of the canonical form" without RDATA length -}
-    map snd $ sortOn fst [(runBuilder sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
+    map snd $ sortOn fst [(runBuilder undefined sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
   where
     putRData' = putRData Canonical . rdata
 
@@ -252,14 +252,14 @@ verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show ds_pubalg
-    let dnskeyBS = runBuilder $ putResourceData Canonical dnskey
+    let dnskeyBS = runBuilder (resourceDataSize dnskey) $ putResourceData Canonical dnskey
     unless (dnskey_pubalg == RSAMD5 || keyTagFromBS dnskeyBS == ds_key_tag) $ {- not implement keytag computation for RSAMD5 -}
         Left $
             "verifyRRSIGwith: Key Tag mismatch between DNSKEY and DS: "
                 ++ show (keyTagFromBS dnskeyBS)
                 ++ " =/= "
                 ++ show ds_key_tag
-    let digest = dsIGetDigest $ runBuilder (putDomain Canonical owner) <> dnskeyBS
+    let digest = dsIGetDigest (runBuilder (domainSize owner) (putDomain Canonical owner) <> dnskeyBS)
         ds_digest' = Opaque.toByteString ds_digest
     unless (dsIVerify digest ds_digest') $
         Left "verifyDSwith: rejected on verification"
@@ -287,7 +287,7 @@ hashNSEC3with' NSEC3Impl{..} iter osalt domain =
     Opaque.fromByteString $ recurse iter
   where
     recurse i
-        | i <= 0 = step $ runBuilder $ putDomain Canonical domain
+        | i <= 0 = step $ runBuilder (domainSize domain) $ putDomain Canonical domain
         | otherwise = step $ recurse $ i - 1
     step = nsec3IGetBytes . nsec3IGetHash . (<> salt)
     salt = Opaque.toByteString osalt
