@@ -31,6 +31,10 @@ data RD_SVCB = RD_SVCB
 
 instance ResourceData RD_SVCB where
     resourceDataType _ = SVCB
+    resourceDataSize RD_SVCB{..} = 2 + domainSize svcb_target + siz
+      where
+        SvcParams m = svcb_params
+        siz = foldr (\(SvcParamValue o) s -> s + 4 + Opaque.length o) 0 m
     putResourceData cf RD_SVCB{..} = \wbuf ref -> do
         put16 wbuf svcb_priority
         -- https://datatracker.ietf.org/doc/html/draft-ietf-dnsop-svcb-https-11#section-2.2
@@ -74,6 +78,7 @@ data RD_HTTPS = RD_HTTPS
 
 instance ResourceData RD_HTTPS where
     resourceDataType _ = HTTPS
+    resourceDataSize (RD_HTTPS x y z) = resourceDataSize $ RD_SVCB x y z
     putResourceData cf (RD_HTTPS x y z) = putResourceData cf $ RD_SVCB x y z
 
 get_https :: Int -> Parser RD_HTTPS
