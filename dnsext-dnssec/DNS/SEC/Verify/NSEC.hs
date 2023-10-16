@@ -11,18 +11,18 @@ import DNS.Types hiding (qname)
 -- this package
 import DNS.SEC.Imports
 import DNS.SEC.Types
-import DNS.SEC.Verify.Types
 import qualified DNS.SEC.Verify.NSECxRange as NRange
+import DNS.SEC.Verify.Types
 
 rangeImpl :: NRange.Impl NSEC_Range NSEC_Range
 rangeImpl =
     NRange.Impl
-    { nrangeTYPE = NSEC
-    , nrangeTake = takeRange
-    , nrangeRefine = refineRange
-    , nrangeLower = fst
-    , nrangeUpper = nsecNextDomain . snd
-    }
+        { nrangeTYPE = NSEC
+        , nrangeTake = takeRange
+        , nrangeRefine = refineRange
+        , nrangeLower = fst
+        , nrangeUpper = nsecNextDomain . snd
+        }
   where
     takeRange ResourceRecord{..} = (,) rrname <$> fromRData rdata
 
@@ -79,7 +79,7 @@ get_wildcardExpansion :: Logic NSEC_WildcardExpansion
 get_wildcardExpansion qnames _coverwild = Right . nsec_WildcardExpansion <$> propCover qnames
 
 get_wildcardNoData :: TYPE -> Logic NSEC_WildcardNoData
-get_wildcardNoData  qtype qnames _coverwild = do
+get_wildcardNoData qtype qnames _coverwild = do
     c <- propCover qnames
     let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
             | qtype `elem` nsecTypes = Left $ "NSEC.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
@@ -199,9 +199,8 @@ nsecRefineWithRanges ranges = do
               withRange
                 | rotated = refineWithRange nsecCoversR
                 | otherwise = refineWithRange nsecCovers
-              withWild qname = unconsLabels owner Nothing wildmatch
-                where
-                  wildmatch w wildsuper
-                      | w == fromString "*" && qname `isSubDomainOf` wildsuper = Just $ W $ Wilds (range, qname)
-                      | otherwise = Nothing
+              wildmatch qname w wildsuper
+                | w == fromString "*" && qname `isSubDomainOf` wildsuper = Just $ W $ Wilds (range, qname)
+                | otherwise = Nothing
+              withWild qname = unconsLabels owner Nothing $ wildmatch qname
         ]

@@ -14,8 +14,8 @@ import qualified DNS.Types.Opaque as Opaque
 import DNS.SEC.Flags (NSEC3_Flag (OptOut))
 import DNS.SEC.Imports
 import DNS.SEC.Types
-import DNS.SEC.Verify.Types
 import qualified DNS.SEC.Verify.NSECxRange as NRange
+import DNS.SEC.Verify.Types
 
 {- FOURMOLU_DISABLE -}
 -- | range type guaranteed to yield a lower boundary (hashed-owner) and upper boundary (next-hashed-owner)
@@ -258,7 +258,7 @@ n3RefineWithRanges
     -> [(NSEC3_Range, Hash)]
     -> Either String (Domain -> [RangeProp])
 n3RefineWithRanges zone ranges0 = do
-    ranges <- sequence [ (,) <$> refineRange zone range <*> pure hash | (range, hash) <- ranges0 ]
+    ranges <- sequence [(,) <$> refineRange zone range <*> pure hash | (range, hash) <- ranges0]
     uniqueSorted $ map fst ranges
     takeRefines ranges
   where
@@ -278,10 +278,9 @@ n3RefineWithRanges zone ranges0 = do
                   rotated = owner > next
                   refineWithRange cover qname
                     {- owner and next are decoded range, not base32hex -}
-                    | hqname == owner = Just $ M $ Matches (rangeData, qname)
-                    | cover owner next hqname = Just $ C $ Covers (rangeData, qname)
+                    | hash qname == owner = Just $ M $ Matches (rangeData, qname)
+                    | cover owner next (hash qname) = Just $ C $ Covers (rangeData, qname)
                     | otherwise = Nothing
-                    where hqname = hash qname
                   result
                     | rotated = refineWithRange n3CoversR
                     | otherwise = refineWithRange n3Covers
