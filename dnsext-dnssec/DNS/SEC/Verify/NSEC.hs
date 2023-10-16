@@ -21,7 +21,7 @@ rangeImpl =
         , nrangeTake = takeRange
         , nrangeRefine = refineRange
         , nrangeLower = fst
-        , nrangeUpper = nsecNextDomain . snd
+        , nrangeUpper = nsec_next_domain . snd
         }
   where
     takeRange ResourceRecord{..} = (,) rrname <$> fromRData rdata
@@ -64,15 +64,15 @@ get_noData :: TYPE -> Logic NSEC_NoData
 get_noData qtype qnames _coverwild = notElemBitmap <$> propMatch qnames
   where
     notElemBitmap m@(Matches ((_, RD_NSEC{..}), _))
-        | qtype `elem` nsecTypes = Left $ "NSEC.NoData: type bitmap has query type `" ++ show qtype ++ "`."
+        | qtype `elem` nsec_types = Left $ "NSEC.NoData: type bitmap has query type `" ++ show qtype ++ "`."
         | otherwise = Right $ nsec_NoData m
 
 get_unsignedDelegation :: Domain -> Logic NSEC_UnsignedDelegation
 get_unsignedDelegation zone qnames _coverwild = do
     c@(Covers ((owner, RD_NSEC{..}), qn)) <- propCover qnames
     guard $ owner /= zone {- owner MUST be sub-level, not zone-top -}
-    guard $ qn `isSubDomainOf` owner && NS `elem` nsecTypes {- super-domain is NS -}
-    guard $ DS `notElem` nsecTypes {- not signed -}
+    guard $ qn `isSubDomainOf` owner && NS `elem` nsec_types {- super-domain is NS -}
+    guard $ DS `notElem` nsec_types {- not signed -}
     pure $ Right $ nsec_UnsignedDelegation c
 
 get_wildcardExpansion :: Logic NSEC_WildcardExpansion
@@ -82,7 +82,7 @@ get_wildcardNoData :: TYPE -> Logic NSEC_WildcardNoData
 get_wildcardNoData qtype qnames _coverwild = do
     c <- propCover qnames
     let notElemBitmap w@(Wilds ((_, RD_NSEC{..}), _))
-            | qtype `elem` nsecTypes = Left $ "NSEC.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
+            | qtype `elem` nsec_types = Left $ "NSEC.WildcardNoData: type bitmap has query type `" ++ show qtype ++ "`."
             | otherwise = Right $ nsec_WildcardNoData c w
     notElemBitmap <$> propWild qnames
 
@@ -190,7 +190,7 @@ nsecRefineWithRanges ranges = do
     results =
         [ (rotated, [withRange, withWild])
         | range@(owner, RD_NSEC{..}) <- ranges
-        , let next = nsecNextDomain
+        , let next = nsec_next_domain
               rotated = owner > next
               refineWithRange cover qname
                 | qname == owner = Just $ M $ Matches (range, qname)

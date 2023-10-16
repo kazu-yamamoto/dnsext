@@ -177,16 +177,16 @@ rd_ds a b c d = toRData $ RD_DS a b c d
 
 -- | DNSSEC denial of existence NSEC record
 data RD_NSEC = RD_NSEC
-    { nsecNextDomain :: Domain
-    , nsecTypes :: [TYPE]
+    { nsec_next_domain :: Domain
+    , nsec_types :: [TYPE]
     }
     deriving (Eq, Ord, Show)
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
     putResourceData cf RD_NSEC{..} = \wbuf ref -> do
-        _ <- putDomain cf nsecNextDomain wbuf ref
-        putNsecTypes nsecTypes wbuf ref
+        _ <- putDomain cf nsec_next_domain wbuf ref
+        putNsecTypes nsec_types wbuf ref
 
 get_nsec :: Int -> Parser RD_NSEC
 get_nsec len rbuf ref = do
