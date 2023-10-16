@@ -13,7 +13,9 @@ import DNS.SEC.PubKey
 import DNS.SEC.Time
 import DNS.Types
 import DNS.Types.Internal
-import GHC.Exts (groupWith, the)
+
+import Data.Array
+import Data.Array.ST
 
 pattern DS :: TYPE
 pattern DS = TYPE 43 -- RFC 4034
@@ -371,50 +373,56 @@ rdataEnd lim rbuf _ = (+) lim <$> position rbuf
 
 ----------------------------------------------------------------
 
+bitmapSize :: Int -> Int
+bitmapSize x = (x `unsafeShiftR` 3) + 1
+
+-- | Getting [(Window Block #, Bitmap Length, [Bit])]
+--
+-- >>> groupType [NS,DS,RRSIG,NSEC]
+-- [(0,6,[2,43,46,47])]
+-- >>> > groupType [A,AAAA,TYPE 1000,TYPE 1001]
+-- [(0,4,[1,28]),(3,30,[232,233])]
+groupType :: [TYPE] -> [(Word8, Int, [Int])]
+groupType ts = go id ts
+  where
+    divide :: TYPE -> (Word8, Int)
+    divide t =
+        let t' = fromTYPE t
+            window = fromIntegral (t' `unsafeShiftR` 8)
+            bot8 = fromIntegral (t' .&. 0xff)
+         in (window, bot8)
+    go obd [] = obd []
+    go obd (x : xs) = spn obd w b id xs
+      where
+        (w, b) = divide x
+    spn obd w0 b0 ibd [] = (obd . ((w0, bitmapSize b0, ibd [b0]) :)) []
+    spn obd w0 b0 ibd (x : xs)
+        | w0 == w = spn obd w0 b (ibd . (b0 :)) xs
+        | otherwise = spn (obd . ((w0, bitmapSize b0, ibd [b0]) :)) w b id xs
+      where
+        (w, b) = divide x
+
+makeBitmap :: Int -> [Int] -> Array Int Word8
+makeBitmap len bs = runSTArray $ do
+    arr <- newArray (0, len - 1) 0
+    mapM_ (setBitmap arr) bs
+    return arr
+  where
+    setBitmap arr n = do
+        let i = n `unsafeShiftR` 3
+            pos = 7 - (n .&. 0x7)
+        x <- readArray arr i
+        let x' = x `setBit` pos
+        writeArray arr i x'
+
 -- | Encode DNSSEC NSEC type bits
 putNsecTypes :: [TYPE] -> Builder ()
-putNsecTypes types = putTypeList $ map fromTYPE types
+putNsecTypes ts wbuf _ = mapM_ putTypeBitMap $ groupType ts
   where
-    putTypeList :: [Word16] -> Builder ()
-    putTypeList ts wbuf ref =
-        sequence_
-            [ putWindow (the top8) bot8 wbuf ref
-            | t <- ts
-            , let top8 = fromIntegral t `shiftR` 8
-            , let bot8 = fromIntegral t .&. 0xff
-            , then group by
-                top8
-              using
-                groupWith
-            ]
-
-    putWindow :: Int -> [Int] -> Builder ()
-    putWindow top8 bot8s wbuf ref = do
-        let blks = maximum bot8s `shiftR` 3
-        putInt8 wbuf top8
-        put8 wbuf (1 + fromIntegral blks)
-        putBits
-            0
-            [ (the block, foldl' mergeBits 0 bot8)
-            | bot8 <- bot8s
-            , let block = bot8 `shiftR` 3
-            , then group by
-                block
-              using
-                groupWith
-            ]
-            wbuf
-            ref
-      where
-        -- \| Combine type bits in network bit order, i.e. bit 0 first.
-        mergeBits acc b = setBit acc (7 - b .&. 0x07)
-
-    putBits :: Int -> [(Int, Word8)] -> Builder ()
-    putBits _ [] _ _ = return ()
-    putBits n ((block, octet) : rest) wbuf ref = do
-        replicateM_ (block - n) (put8 wbuf 0)
-        put8 wbuf octet
-        putBits (block + 1) rest wbuf ref
+    putTypeBitMap (window, len, bs) = do
+        put8 wbuf window
+        putInt8 wbuf len
+        mapM_ (put8 wbuf) (makeBitmap len bs)
 
 -- <https://tools.ietf.org/html/rfc4034#section-4.1>
 -- Parse a list of NSEC type bitmaps
