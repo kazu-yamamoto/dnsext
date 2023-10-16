@@ -3,9 +3,13 @@
 module DNS.SEC.Verify.Verify where
 
 -- GHC packages
-import qualified Data.ByteString as BS
+import qualified Data.ByteString.Internal as BS
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Foreign.ForeignPtr (withForeignPtr)
+import Foreign.Ptr (Ptr, plusPtr)
+import Foreign.Storable (peek)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- dnsext-types
 import DNS.Types
@@ -36,19 +40,18 @@ keyTag = keyTagFromBS . runBuilder . putResourceData Canonical
 {- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
 keyTagFromBS :: ByteString -> Word16
-keyTagFromBS bs = fromIntegral $ (sumK + sumK `shiftR` 16 .&. 0xFFFF) .&. 0xFFFF
+keyTagFromBS (BS.BS ftpr len) =
+    unsafeDupablePerformIO $ withForeignPtr ftpr $ go 0 0
   where
-    addHigh z w8 = z + (fromIntegral w8 `shiftL` 8)
-    addLow z w8 = z + fromIntegral w8
-    len = BS.length bs
-    foldlBS2' :: (a -> Word8 -> a) -> (a -> Word8 -> a) -> a -> Int -> a
-    foldlBS2' cons1 cons2 nil off
-        | off >= len  = nil
-        | otherwise   = z `seq` foldlBS2' cons2 cons1 z (off + 1)
-        where
-          ~z = cons1 nil (bs `BS.index` off)
-    sumK :: Int
-    sumK = foldlBS2' addHigh addLow 0 0
+    go :: Int -> Int -> Ptr Word8 -> IO Word16
+    go i ac _ | i == len = return $ fromIntegral $ (ac + ac `unsafeShiftR` 16 .&. 0xFFFF) .&. 0xFFFF
+    go i ac ptr = do
+        keyi <- peek ptr
+        let ac' | odd i = ac + fromIntegral keyi
+                | otherwise = ac + (fromIntegral keyi `unsafeShiftL` 8)
+            i' = i + 1
+            ptr' = ptr `plusPtr` 1
+        go i' ac' ptr'
 {- FOURMOLU_ENABLE -}
 
 ---
