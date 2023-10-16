@@ -6,6 +6,10 @@ module DNS.SEC.Verify.Verify where
 import qualified Data.ByteString.Internal as BS
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Foreign.ForeignPtr (withForeignPtr)
+import Foreign.Ptr (Ptr, plusPtr)
+import Foreign.Storable (peek)
+import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- dnsext-types
 import DNS.Types
@@ -29,11 +33,6 @@ import qualified DNS.SEC.Verify.NSECxRange as NRange
 import DNS.SEC.Verify.RSA (rsaSHA1, rsaSHA256, rsaSHA512)
 import qualified DNS.SEC.Verify.SHA as DS
 import DNS.SEC.Verify.Types
-
-import Foreign.Ptr
-import Foreign.ForeignPtr
-import Foreign.Storable
-import System.IO.Unsafe
 
 keyTag :: RD_DNSKEY -> Word16
 keyTag = keyTagFromBS . runBuilder . putResourceData Canonical
