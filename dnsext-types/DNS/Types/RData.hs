@@ -289,6 +289,7 @@ newtype RD_TXT = RD_TXT
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
+    -- https://datatracker.ietf.org/doc/html/rfc6763#section-6.1
     resourceDataSize (RD_TXT o) =
         let l = Opaque.length o
             (d, r) = l `divMod` 255
