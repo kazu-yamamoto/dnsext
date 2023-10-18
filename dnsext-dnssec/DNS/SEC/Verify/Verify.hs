@@ -1,4 +1,7 @@
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE UnboxedTuples #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module DNS.SEC.Verify.Verify where
 
@@ -7,8 +10,8 @@ import qualified Data.ByteString.Internal as BS
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Foreign.ForeignPtr (withForeignPtr)
-import Foreign.Ptr (Ptr, plusPtr)
-import Foreign.Storable (peek)
+import GHC.Exts hiding (TYPE)
+import GHC.ST (ST (..), runST)
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- dnsext-types
@@ -40,18 +43,28 @@ keyTag dnskey = keyTagFromBS $ runBuilder (resourceDataSize dnskey) $ putResourc
 {- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
 keyTagFromBS :: ByteString -> Word16
-keyTagFromBS (BS.BS ftpr len) =
-    unsafeDupablePerformIO $ withForeignPtr ftpr $ go 0 0
+keyTagFromBS (BS.BS ftpr (I# len#)) =
+    fromIntegral $ unsafeDupablePerformIO $ withForeignPtr ftpr $ return . go 0 0
   where
-    go :: Int -> Int -> Ptr Word8 -> IO Word16
-    go i ac _ | i == len = return $ fromIntegral $ (ac + ac `unsafeShiftR` 16 .&. 0xFFFF) .&. 0xFFFF
-    go i ac ptr = do
-        keyi <- peek ptr
-        let ac' | odd i = ac + fromIntegral keyi
-                | otherwise = ac + (fromIntegral keyi `unsafeShiftL` 8)
-            i' = i + 1
-            ptr' = ptr `plusPtr` 1
-        go i' ac' ptr'
+    go :: Int -> Word -> Ptr Word8 -> Word
+    go (I# i0) (W# ac0) (Ptr ptr0#) = runST $ ST $ loop i0 ac0
+      where
+        loop :: Int# -> Word# -> State# d -> (# State# d, Word #)  {- unboxed-word calculation -}
+        loop i0# ac0# s = case len# -# i0# of
+            0# -> (# s, final ac0# #)
+            1# -> case readWord8OffAddr# ptr0# i0# s of
+                      (# s, key0# #) ->
+                          let ac1# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
+                          in  (# s, final ac1# #)
+            _  -> case readWord8OffAddr# ptr0# i0# s of
+                      (# s, key0# #) -> case readWord8OffAddr# ptr0# (i0# +# 1#) s of
+                          (# s, key1# #) ->
+                              let ac2# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
+                                              `plusWord#` word8ToWord# key1#
+                                  i2# = i0# +# 2#
+                              in  loop i2# ac2# s
+    final :: Word# -> Word
+    final ac# = W# ((ac# `plusWord#` ((ac# `uncheckedShiftRL#` 16#) `and#` 0xFFFF##)) `and#` 0xFFFF##)
 {- FOURMOLU_ENABLE -}
 
 ---
