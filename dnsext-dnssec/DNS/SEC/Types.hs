@@ -415,7 +415,7 @@ bitmapSize x = (x `unsafeShiftR` 3) + 1
 --
 -- >>> groupType [NS,DS,RRSIG,NSEC]
 -- [(0,6,[2,43,46,47])]
--- >>> > groupType [A,AAAA,TYPE 1000,TYPE 1001]
+-- >>> groupType [A,AAAA,TYPE 1000,TYPE 1001]
 -- [(0,4,[1,28]),(3,30,[232,233])]
 groupType :: [TYPE] -> [(Word8, Int, [Int])]
 groupType ts = go id ts
