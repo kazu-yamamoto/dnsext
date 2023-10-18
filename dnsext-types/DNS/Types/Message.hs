@@ -699,6 +699,9 @@ data ResourceRecord = ResourceRecord
     }
     deriving (Eq, Show)
 
+resourceRecordSize :: ResourceRecord -> Int
+resourceRecordSize ResourceRecord{..} = domainSize rrname + 10 + rdataSize rdata
+
 -- | Type alias for resource records in the answer section.
 type Answers = [ResourceRecord]
 

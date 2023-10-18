@@ -44,6 +44,7 @@ module DNS.Types (
     toRData,
     rdataType,
     rdataField,
+    rdataSize,
     prettyShowRData,
 
     -- ** Class
@@ -165,11 +166,13 @@ module DNS.Types (
 
     -- ** Domain
     Domain,
+    domainSize,
     superDomains,
     isSubDomainOf,
 
     -- ** Mailbox
     Mailbox,
+    mailboxSize,
 
     -- ** Opaque
     Opaque,

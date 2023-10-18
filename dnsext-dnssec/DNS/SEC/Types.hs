@@ -13,6 +13,7 @@ import DNS.SEC.PubKey
 import DNS.SEC.Time
 import DNS.Types
 import DNS.Types.Internal
+import qualified DNS.Types.Opaque as Opaque
 
 import Data.Array
 import Data.Array.ST
@@ -96,6 +97,16 @@ data RD_RRSIG = RD_RRSIG
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
+    resourceDataSize RD_RRSIG{..} =
+        2 -- TYPE
+      + 1 -- pubalg
+      + 1 -- num labes
+      + 4 -- seconds
+      + 4 -- dns time
+      + 4 -- dns time
+      + 2 -- key_tag
+      + domainSize rrsig_zone
+      + Opaque.length rrsig_signature
     putResourceData cf RD_RRSIG{..} = \wbuf ref -> do
         putTYPE rrsig_type wbuf ref
         putPubAlg rrsig_pubalg wbuf ref
@@ -155,6 +166,10 @@ data RD_DS = RD_DS
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
+    resourceDataSize RD_DS{..} =
+        2 +
+        1 +
+        1 + Opaque.length ds_digest
     putResourceData _ RD_DS{..} = \wbuf ref -> do
         put16 wbuf ds_key_tag
         putPubAlg ds_pubalg wbuf ref
@@ -184,6 +199,9 @@ data RD_NSEC = RD_NSEC
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
+    resourceDataSize RD_NSEC{..} =
+        domainSize nsec_next_domain +
+        sum (map (\(_,l,_) -> l + 2) $ groupType nsec_types)
     putResourceData cf RD_NSEC{..} = \wbuf ref -> do
         _ <- putDomain cf nsec_next_domain wbuf ref
         putNsecTypes nsec_types wbuf ref
@@ -212,6 +230,8 @@ data RD_DNSKEY = RD_DNSKEY
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
+    resourceDataSize RD_DNSKEY{..} =
+        2 + 1 + 1 + Opaque.length (fromPubKey dnskey_public_key)
     putResourceData _ RD_DNSKEY{..} = \wbuf ref -> do
         putDNSKEYflags dnskey_flags wbuf ref
         put8 wbuf dnskey_protocol
@@ -245,6 +265,13 @@ data RD_NSEC3 = RD_NSEC3
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
+    resourceDataSize RD_NSEC3{..} =
+        1 + -- hash alg
+        1 + -- flags
+        2 +
+        1 + Opaque.length nsec3_salt +
+        1 + Opaque.length nsec3_next_hashed_owner_name +
+        sum (map (\(_,l,_) -> l + 2) $ groupType nsec3_types)
     putResourceData _ RD_NSEC3{..} = \wbuf ref -> do
         putHashAlg nsec3_hashalg wbuf ref
         putNSEC3flags nsec3_flags wbuf ref
@@ -282,6 +309,8 @@ data RD_NSEC3PARAM = RD_NSEC3PARAM
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
+    resourceDataSize RD_NSEC3PARAM{..} =
+        1 + 1 + 2 + (1 + Opaque.length nsec3param_salt)
     putResourceData _ RD_NSEC3PARAM{..} = \wbuf ref -> do
         putHashAlg nsec3param_hashalg wbuf ref
         put8 wbuf nsec3param_flags
@@ -313,6 +342,10 @@ data RD_CDS = RD_CDS
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
+    resourceDataSize RD_CDS{..} =
+        2 +
+        1 +
+        1 + Opaque.length cds_digest
     putResourceData _ RD_CDS{..} = \wbuf ref -> do
         put16 wbuf cds_key_tag
         putPubAlg cds_pubalg wbuf ref
@@ -344,6 +377,8 @@ data RD_CDNSKEY = RD_CDNSKEY
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
+    resourceDataSize RD_CDNSKEY{..} =
+        2 + 1 + 1 + Opaque.length (fromPubKey cdnskey_public_key)
     putResourceData _ RD_CDNSKEY{..} = \wbuf ref -> do
         putDNSKEYflags cdnskey_flags wbuf ref
         put8 wbuf cdnskey_protocol
@@ -380,7 +415,7 @@ bitmapSize x = (x `unsafeShiftR` 3) + 1
 --
 -- >>> groupType [NS,DS,RRSIG,NSEC]
 -- [(0,6,[2,43,46,47])]
--- >>> > groupType [A,AAAA,TYPE 1000,TYPE 1001]
+-- >>> groupType [A,AAAA,TYPE 1000,TYPE 1001]
 -- [(0,4,[1,28]),(3,30,[232,233])]
 groupType :: [TYPE] -> [(Word8, Int, [Int])]
 groupType ts = go id ts

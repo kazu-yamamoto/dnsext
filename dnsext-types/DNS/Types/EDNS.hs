@@ -16,6 +16,7 @@ module DNS.Types.EDNS (
     OptData (..),
     fromOData,
     toOData,
+    odataSize,
     putOData,
     OData (..),
     OD_NSID (..),
@@ -193,6 +194,7 @@ addOpt code name = do
 
 class (Typeable a, Eq a, Show a) => OptData a where
     optDataCode :: a -> OptCode
+    optDataSize :: a -> Int
     putOptData :: a -> Builder ()
 
 ---------------------------------------------------------------
@@ -207,6 +209,9 @@ fromOData (OData x) = cast x
 -- | Wrapping the original type with 'OData'.
 toOData :: (Typeable a, OptData a) => a -> OData
 toOData = OData
+
+odataSize :: OData -> Int
+odataSize (OData o) = optDataSize o
 
 instance Show OData where
     show (OData x) = show x
@@ -233,6 +238,7 @@ instance Show OD_NSID where
 
 instance OptData OD_NSID where
     optDataCode _ = NSID
+    optDataSize (OD_NSID nsid) = Opaque.length nsid
     putOptData (OD_NSID nsid) = putODBytes (fromOptCode NSID) nsid
 
 get_nsid :: Int -> Parser OD_NSID
@@ -262,6 +268,9 @@ instance Show OD_ClientSubnet where
 
 instance OptData OD_ClientSubnet where
     optDataCode _ = ClientSubnet
+    optDataSize (OD_ClientSubnet _ _ (IPv4 _)) = 6
+    optDataSize (OD_ClientSubnet _ _ (IPv6 _)) = 18
+    optDataSize (OD_ECSgeneric _ _ _ o) = 4 + Opaque.length o
     putOptData = put_clientSubnet
 
 put_clientSubnet :: OD_ClientSubnet -> Builder ()
@@ -366,6 +375,7 @@ instance Show OD_Padding where
 
 instance OptData OD_Padding where
     optDataCode _ = Padding
+    optDataSize (OD_Padding o) = Opaque.length o
     putOptData (OD_Padding o) = putODBytes (fromOptCode Padding) o
 
 get_padding :: Int -> Parser OD_Padding
@@ -386,6 +396,7 @@ instance Show OD_Unknown where
 
 instance OptData OD_Unknown where
     optDataCode (OD_Unknown n _) = toOptCode n
+    optDataSize (OD_Unknown _ o) = Opaque.length o
     putOptData (OD_Unknown code bs) = putODBytes code bs
 
 od_unknown :: Word16 -> Opaque -> OData

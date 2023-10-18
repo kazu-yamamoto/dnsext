@@ -45,6 +45,7 @@ instance Show OD_DAU where
 
 instance OptData OD_DAU where
     optDataCode _ = DAU
+    optDataSize (OD_DAU as) = 4 + length as
     putOptData (OD_DAU as) = putODWords (fromOptCode DAU) $ map fromPubAlg as
 
 get_dau :: Int -> Parser OD_DAU
@@ -64,6 +65,7 @@ instance Show OD_DHU where
 
 instance OptData OD_DHU where
     optDataCode _ = DHU
+    optDataSize (OD_DHU hs) = 4 + length hs
     putOptData (OD_DHU hs) = putODWords (fromOptCode DHU) $ map fromHashAlg hs
 
 get_dhu :: Int -> Parser OD_DHU
@@ -83,6 +85,7 @@ instance Show OD_N3U where
 
 instance OptData OD_N3U where
     optDataCode _ = N3U
+    optDataSize (OD_N3U hs) = 4 + length hs
     putOptData (OD_N3U hs) = putODWords (fromOptCode N3U) $ map fromHashAlg hs
 
 get_n3u :: Int -> Parser OD_N3U
