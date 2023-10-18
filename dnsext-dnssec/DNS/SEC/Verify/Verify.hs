@@ -43,27 +43,27 @@ keyTag dnskey = keyTagFromBS $ runBuilder (resourceDataSize dnskey) $ putResourc
 {- FOURMOLU_DISABLE -}
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
 keyTagFromBS :: ByteString -> Word16
-keyTagFromBS (BS.BS ftpr len) =
-    fromIntegral $ unsafeDupablePerformIO $ withForeignPtr ftpr $ go (fromIntegral len) 0
+keyTagFromBS (BS.BS ftpr (I# len#)) =
+    fromIntegral $ unsafeDupablePerformIO $ withForeignPtr ftpr $ go 0 0
   where
-    go :: Word -> Word -> Ptr Word8 -> IO Word
-    go (W# len0) (W# ac0) ptr0 = loop len0 ac0 ptr0
-    loop :: Word# -> Word# -> Ptr Word8 -> IO Word
-    loop len0# ac0# ptr0
-      | isTrue# (len0# `eqWord#` 0##) = return $ final ac0#
-      | isTrue# (len0# `eqWord#` 1##) = do
+    go :: Int -> Word -> Ptr Word8 -> IO Word
+    go (I# i0) (W# ac0) ptr0 = loop i0 ac0 ptr0
+    loop :: Int# -> Word# -> Ptr Word8 -> IO Word
+    loop i0# ac0# ptr0 = case len# -# i0# of
+        0# -> return $ final ac0#
+        1# -> do
             W8# key0# <- peek ptr0
             let ac1# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
             return $ final ac1#
-      | otherwise = do
+        _ -> do
             W8# key0# <- peek ptr0
             let ptr1 = ptr0 `plusPtr` 1
             W8# key1# <- peek ptr1
             let ac2# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
                             `plusWord#` word8ToWord# key1#
                 ptr2 = ptr1 `plusPtr` 1
-                len2# = len0# `minusWord#` 2##
-            loop len2# ac2# ptr2
+                i2# = i0# +# 2#
+            loop i2# ac2# ptr2
     final :: Word# -> Word
     final ac# = W# ((ac# `plusWord#` ((ac# `uncheckedShiftRL#` 16#) `and#` 0xFFFF##)) `and#` 0xFFFF##)
 {- FOURMOLU_ENABLE -}
