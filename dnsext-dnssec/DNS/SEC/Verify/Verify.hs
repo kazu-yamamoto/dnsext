@@ -147,9 +147,14 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
 sortRDataCanonical :: [ResourceRecord] -> [(Builder (), ResourceRecord)]
 sortRDataCanonical rrs =
     {- sortOn "RDATA portion of the canonical form" without RDATA length -}
-    map snd $ sortOn fst [(runBuilder undefined sput, (with16Length sput, rr)) | rr <- rrs, let sput = putRData' rr]
+    map snd $ sortOn fst withWires
   where
-    putRData' = putRData Canonical . rdata
+    withWires =
+        [ (runBuilder sz sput, (with16Length sput, rr))
+        | rr <- rrs
+        , let sput = putRData Canonical $ rdata rr
+              sz = rdataSize $ rdata rr
+        ]
 
 {- FOURMOLU_DISABLE -}
 {- assume sorted input. generalized RRset with CPS -}

@@ -44,6 +44,7 @@ module DNS.Types (
     toRData,
     rdataType,
     rdataField,
+    rdataSize,
     prettyShowRData,
 
     -- ** Class
