@@ -1,3 +1,4 @@
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.SEC.Verify.Verify where
@@ -7,8 +8,10 @@ import qualified Data.ByteString.Internal as BS
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Foreign.ForeignPtr (withForeignPtr)
-import Foreign.Ptr (Ptr, plusPtr)
+import Foreign.Ptr (plusPtr)
 import Foreign.Storable (peek)
+import GHC.Exts hiding (TYPE)
+import GHC.Word (Word8 (W8#))
 import System.IO.Unsafe (unsafeDupablePerformIO)
 
 -- dnsext-types
@@ -41,17 +44,28 @@ keyTag dnskey = keyTagFromBS $ runBuilder (resourceDataSize dnskey) $ putResourc
 -- KeyTag algorithm from https://datatracker.ietf.org/doc/html/rfc4034#appendix-B
 keyTagFromBS :: ByteString -> Word16
 keyTagFromBS (BS.BS ftpr len) =
-    unsafeDupablePerformIO $ withForeignPtr ftpr $ go 0 0
+    fromIntegral $ unsafeDupablePerformIO $ withForeignPtr ftpr $ go (fromIntegral len) 0
   where
-    go :: Int -> Int -> Ptr Word8 -> IO Word16
-    go i ac _ | i == len = return $ fromIntegral $ (ac + ac `unsafeShiftR` 16 .&. 0xFFFF) .&. 0xFFFF
-    go i ac ptr = do
-        keyi <- peek ptr
-        let ac' | odd i = ac + fromIntegral keyi
-                | otherwise = ac + (fromIntegral keyi `unsafeShiftL` 8)
-            i' = i + 1
-            ptr' = ptr `plusPtr` 1
-        go i' ac' ptr'
+    go :: Word -> Word -> Ptr Word8 -> IO Word
+    go (W# len0) (W# ac0) ptr0 = loop len0 ac0 ptr0
+    loop :: Word# -> Word# -> Ptr Word8 -> IO Word
+    loop len0# ac0# ptr0
+      | isTrue# (len0# `eqWord#` 0##) = return $ final ac0#
+      | isTrue# (len0# `eqWord#` 1##) = do
+            W8# key0# <- peek ptr0
+            let ac1# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
+            return $ final ac1#
+      | otherwise = do
+            W8# key0# <- peek ptr0
+            let ptr1 = ptr0 `plusPtr` 1
+            W8# key1# <- peek ptr1
+            let ac2# = ac0# `plusWord#` (word8ToWord# key0# `uncheckedShiftL#` 8#)
+                            `plusWord#` word8ToWord# key1#
+                ptr2 = ptr1 `plusPtr` 1
+                len2# = len0# `minusWord#` 2##
+            loop len2# ac2# ptr2
+    final :: Word# -> Word
+    final ac# = W# ((ac# `plusWord#` ((ac# `uncheckedShiftRL#` 16#) `and#` 0xFFFF##)) `and#` 0xFFFF##)
 {- FOURMOLU_ENABLE -}
 
 ---
