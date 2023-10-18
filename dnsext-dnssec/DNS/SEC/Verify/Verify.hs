@@ -67,6 +67,17 @@ putRRSIGHeader RD_RRSIG{..} wbuf ref = do
     put16 wbuf rrsig_key_tag
     putDomain Canonical rrsig_zone wbuf ref
 
+sizeRRSIGHeader :: RD_RRSIG -> Int
+sizeRRSIGHeader RD_RRSIG{..} =
+    2 {- TYPE -}
+  + 1 {- PubAlg -}
+  + 1 {- num_labels -}
+  + 4 {- Seconds -}
+  + 4 {- DNSTime -}
+  + 4 {- DNSTime -}
+  + 2 {- KeyTag -}
+  + domainSize rrsig_zone
+
 verifyRRSIGwith
     :: RRSIGImpl
     -> DNSTime
@@ -75,9 +86,9 @@ verifyRRSIGwith
     -> Domain
     -> TYPE
     -> CLASS
-    -> [Builder ()]
+    -> [(Int, Builder ())]
     -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas = do
+verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas' = do
     unless (ZONE `elem` dnskey_flags) $
         {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
            "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -126,7 +137,8 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
     {- "Reconstructing the Signed Data"
        https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
        RR(i) = name | type | class | OrigTTL | RDATA length | RDATA -}
-    let putRRH wbuf ref = do
+    let (rlengths, sortedRDatas) = unzip sortedRDatas'
+        putRRH wbuf ref = do
             putDomainRFC1035 Canonical rrset_name wbuf ref
             putTYPE rrset_type wbuf ref
             putCLASS rrset_class wbuf ref
@@ -134,7 +146,14 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
         putRRS wbuf ref = do
             putRRSIGHeader rrsig wbuf ref
             mapM_ (\io -> putRRH wbuf ref >> io wbuf ref) sortedRDatas
-        str = runBuilder undefined putRRS
+        sizeRR rlen =
+            domainSize rrset_name
+          + 2 {- TYPE -}
+          + 2 {- CLASS -}
+          + 4 {- seconds -}
+          + rlen
+        sizeStr = sum $ sizeRRSIGHeader rrsig : map sizeRR rlengths
+        str = runBuilder sizeStr putRRS
     {- `Data.List.sort` is linear for sorted case -}
     good <- rrsigIVerify pubkey sig str
     unless good $ Left "verifyRRSIGwith: rejected on verification"
@@ -144,13 +163,13 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
    "RRs with the same owner name,
     class, and type are sorted by treating the RDATA portion of the
     canonical form of each RR as a left-justified unsigned octet sequence" -}
-sortRDataCanonical :: [ResourceRecord] -> [(Builder (), ResourceRecord)]
+sortRDataCanonical :: [ResourceRecord] -> [((Int, Builder ()), ResourceRecord)]
 sortRDataCanonical rrs =
     {- sortOn "RDATA portion of the canonical form" without RDATA length -}
     map snd $ sortOn fst withWires
   where
     withWires =
-        [ (runBuilder sz sput, (with16Length sput, rr))
+        [ (runBuilder sz sput, ((2 {- len size -} + sz, with16Length sput), rr))
         | rr <- rrs
         , let sput = putRData Canonical $ rdata rr
               sz = rdataSize $ rdata rr
@@ -206,7 +225,7 @@ verifyRRSIGsorted
     -> Domain
     -> TYPE
     -> CLASS
-    -> [Builder ()]
+    -> [(Int, Builder ())]
     -> Either String ()
 verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     maybe (Left $ "verifyRRSIGsorted: unsupported algorithm: " ++ show alg) verify $
