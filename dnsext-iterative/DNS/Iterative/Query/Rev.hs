@@ -101,7 +101,7 @@ v6EmbeddedResult =
 -- Right [4,3,2,1]
 parseV4RevDomain :: Domain -> Either String [Int]
 parseV4RevDomain dom = do
-    rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV4 (reverse $ DNS.toWireLabels dom)
+    rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV4 (DNS.revLabels dom)
     let plen = length rparts
     maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right $ guard (1 <= plen && plen <= 4)
     mapM getByte rparts
@@ -122,7 +122,7 @@ parseV4RevDomain dom = do
 -- Right [2,0,0,1,0,13,11,8,0,15,0,0,0,0,0,0,0,0,1,2,3,4,15,15,15,14,5,6,7,8,9,10]
 parseV6RevDomain :: Domain -> Either String [Int]
 parseV6RevDomain dom = do
-    rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV6 (reverse $ DNS.toWireLabels dom)
+    rparts <- maybe (throw "suffix does not match") Right $ L.stripPrefix sufV6 (DNS.revLabels dom)
     let plen = length rparts
     maybe (throw $ "invalid number of parts split by dot: " ++ show rparts) Right $ guard (1 <= plen && plen <= 32)
     mapM getHexDigit rparts

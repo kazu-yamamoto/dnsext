@@ -45,7 +45,7 @@ type Builder a = WriteBuffer -> IORef BState -> IO a
 
 -- | Builder state
 newtype BState = BState
-    { bstDomain :: Map [RawDomain] Int
+    { bstDomain :: Map WireLabels Int
     }
 
 initialBState :: BState
@@ -61,13 +61,13 @@ runBuilder len builder = unsafeDupablePerformIO $ do
 
 ----------------------------------------------------------------
 
-pushPointer :: [RawDomain] -> Int -> IORef BState -> IO ()
+pushPointer :: WireLabels -> Int -> IORef BState -> IO ()
 pushPointer dom pos ref = do
     BState m <- readIORef ref
     let m' = M.insert dom pos m
     writeIORef ref $ BState m'
 
-popPointer :: [RawDomain] -> IORef BState -> IO (Maybe Int)
+popPointer :: WireLabels -> IORef BState -> IO (Maybe Int)
 popPointer dom ref = M.lookup dom . bstDomain <$> readIORef ref
 
 ----------------------------------------------------------------

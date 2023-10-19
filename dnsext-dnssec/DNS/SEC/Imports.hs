@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DNS.SEC.Imports (
     ByteString,
     ShortByteString,
@@ -33,13 +35,10 @@ import Data.Typeable
 import Data.Word
 import Numeric
 
-import DNS.Types (Domain, IsRepresentation (..))
+import DNS.Types (Domain, unconsDomain)
 import DNS.Types.Time (EpochTime)
 
 unconsLabels :: Domain -> a -> (ShortByteString -> Domain -> a) -> a
-unconsLabels = unconsLabels_
-
-unconsLabels_ :: IsRepresentation a b => a -> c -> (b -> a -> c) -> c
-unconsLabels_ rep nothing just = case toWireLabels rep of
-    [] -> nothing
-    x : xs -> just x $ fromWireLabels xs
+unconsLabels d nothing just = case unconsDomain d of
+    Nothing -> nothing
+    Just (x, xs) -> just x $ xs

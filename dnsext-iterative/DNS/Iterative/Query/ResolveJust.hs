@@ -81,7 +81,7 @@ resolveExactDC dc n typ
         throwDnsError DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
-        nss@Delegation{..} <- iterative_ dc root $ reverse $ DNS.superDomains n
+        nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
         sas <- delegationIPs dc nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
@@ -259,7 +259,7 @@ _noLogging = const $ pure ()
 -- >>> runDNSQuery (testIterative "arpa.") env mempty $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
 iterative :: Delegation -> Domain -> DNSQuery Delegation
-iterative sa n = iterative_ 0 sa $ reverse $ DNS.superDomains n
+iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _ nss0 [] = return nss0
