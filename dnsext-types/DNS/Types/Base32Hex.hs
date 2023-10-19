@@ -1,5 +1,6 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
+
 {-# OPTIONS -Wno-name-shadowing #-}
 
 module DNS.Types.Base32Hex (
@@ -22,7 +23,7 @@ import qualified Data.Array.IArray as A
 import qualified Data.Array.MArray as A
 import qualified Data.Array.ST as A
 import qualified Data.ByteString as BS
-import Data.ByteString.Short.Internal (ShortByteString(SBS))
+import Data.ByteString.Short.Internal (ShortByteString (SBS))
 
 -- Don't import DNS.Types.Imports
 import Control.Monad

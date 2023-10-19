@@ -99,14 +99,14 @@ instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
     resourceDataSize RD_RRSIG{..} =
         2 -- TYPE
-      + 1 -- pubalg
-      + 1 -- num labes
-      + 4 -- seconds
-      + 4 -- dns time
-      + 4 -- dns time
-      + 2 -- key_tag
-      + domainSize rrsig_zone
-      + Opaque.length rrsig_signature
+            + 1 -- pubalg
+            + 1 -- num labes
+            + 4 -- seconds
+            + 4 -- dns time
+            + 4 -- dns time
+            + 2 -- key_tag
+            + domainSize rrsig_zone
+            + Opaque.length rrsig_signature
     putResourceData cf RD_RRSIG{..} = \wbuf ref -> do
         putTYPE rrsig_type wbuf ref
         putPubAlg rrsig_pubalg wbuf ref
@@ -167,9 +167,10 @@ data RD_DS = RD_DS
 instance ResourceData RD_DS where
     resourceDataType _ = DS
     resourceDataSize RD_DS{..} =
-        2 +
-        1 +
-        1 + Opaque.length ds_digest
+        2
+            + 1
+            + 1
+            + Opaque.length ds_digest
     putResourceData _ RD_DS{..} = \wbuf ref -> do
         put16 wbuf ds_key_tag
         putPubAlg ds_pubalg wbuf ref
@@ -200,8 +201,8 @@ data RD_NSEC = RD_NSEC
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
     resourceDataSize RD_NSEC{..} =
-        domainSize nsec_next_domain +
-        sum (map (\(_,l,_) -> l + 2) $ groupType nsec_types)
+        domainSize nsec_next_domain
+            + sum (map (\(_, l, _) -> l + 2) $ groupType nsec_types)
     putResourceData cf RD_NSEC{..} = \wbuf ref -> do
         _ <- putDomain cf nsec_next_domain wbuf ref
         putNsecTypes nsec_types wbuf ref
@@ -266,12 +267,14 @@ data RD_NSEC3 = RD_NSEC3
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
     resourceDataSize RD_NSEC3{..} =
-        1 + -- hash alg
-        1 + -- flags
-        2 +
-        1 + Opaque.length nsec3_salt +
-        1 + Opaque.length nsec3_next_hashed_owner_name +
-        sum (map (\(_,l,_) -> l + 2) $ groupType nsec3_types)
+        1
+            + 1 -- hash alg
+            + 2 -- flags
+            + 1
+            + Opaque.length nsec3_salt
+            + 1
+            + Opaque.length nsec3_next_hashed_owner_name
+            + sum (map (\(_, l, _) -> l + 2) $ groupType nsec3_types)
     putResourceData _ RD_NSEC3{..} = \wbuf ref -> do
         putHashAlg nsec3_hashalg wbuf ref
         putNSEC3flags nsec3_flags wbuf ref
@@ -343,9 +346,10 @@ data RD_CDS = RD_CDS
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
     resourceDataSize RD_CDS{..} =
-        2 +
-        1 +
-        1 + Opaque.length cds_digest
+        2
+            + 1
+            + 1
+            + Opaque.length cds_digest
     putResourceData _ RD_CDS{..} = \wbuf ref -> do
         put16 wbuf cds_key_tag
         putPubAlg cds_pubalg wbuf ref

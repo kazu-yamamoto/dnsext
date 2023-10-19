@@ -289,6 +289,7 @@ newtype RD_TXT = RD_TXT
 
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
+
     -- https://datatracker.ietf.org/doc/html/rfc6763#section-6.1
     resourceDataSize (RD_TXT o) =
         let l = Opaque.length o
@@ -298,11 +299,11 @@ instance ResourceData RD_TXT where
     putResourceData _ (RD_TXT o) = putTXT o
       where
         putTXT txt wbuf ref
-          | Opaque.null txt = return ()
-          | otherwise = do
-            let (h, t) = Opaque.splitAt 255 txt
-            putLenOpaque h wbuf ref
-            putTXT t wbuf ref
+            | Opaque.null txt = return ()
+            | otherwise = do
+                let (h, t) = Opaque.splitAt 255 txt
+                putLenOpaque h wbuf ref
+                putTXT t wbuf ref
 
 get_txt :: Int -> Parser RD_TXT
 get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref

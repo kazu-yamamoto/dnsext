@@ -83,13 +83,13 @@ putRRSIGHeader RD_RRSIG{..} wbuf ref = do
 sizeRRSIGHeader :: RD_RRSIG -> Int
 sizeRRSIGHeader RD_RRSIG{..} =
     2 {- TYPE -}
-  + 1 {- PubAlg -}
-  + 1 {- num_labels -}
-  + 4 {- Seconds -}
-  + 4 {- DNSTime -}
-  + 4 {- DNSTime -}
-  + 2 {- KeyTag -}
-  + domainSize rrsig_zone
+        + 1 {- PubAlg -}
+        + 1 {- num_labels -}
+        + 4 {- Seconds -}
+        + 4 {- DNSTime -}
+        + 4 {- DNSTime -}
+        + 2 {- KeyTag -}
+        + domainSize rrsig_zone
 
 verifyRRSIGwith
     :: RRSIGImpl
@@ -161,10 +161,10 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
             mapM_ (\io -> putRRH wbuf ref >> io wbuf ref) sortedRDatas
         sizeRR rlen =
             domainSize rrset_name
-          + 2 {- TYPE -}
-          + 2 {- CLASS -}
-          + 4 {- seconds -}
-          + rlen
+                + 2 {- TYPE -}
+                + 2 {- CLASS -}
+                + 4 {- seconds -}
+                + rlen
         sizeStr = sum $ sizeRRSIGHeader rrsig : map sizeRR rlengths
         str = runBuilder sizeStr putRRS
     {- `Data.List.sort` is linear for sorted case -}

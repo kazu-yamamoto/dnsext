@@ -46,8 +46,8 @@ instance Show SPV_Mandatory where
 instance SPV SPV_Mandatory where
     toSvcParamValue (SPV_Mandatory ks) =
         toSPV siz $ \wbuf _ -> mapM_ (put16 wbuf . fromSvcParamKey) ks
-          where
-            siz = length ks * 2
+      where
+        siz = length ks * 2
     fromSvcParamValue = fromSPV $ \len rbuf ref -> do
         SPV_Mandatory <$> sGetMany "Mandatory" len (\_ _ -> toSvcParamKey <$> get16 rbuf) rbuf ref
 
@@ -84,8 +84,8 @@ instance Show SPV_IPv4Hint where
 instance SPV SPV_IPv4Hint where
     toSvcParamValue (SPV_IPv4Hint is) = toSPV siz $ \wbuf _ -> do
         mapM_ (mapM_ (putInt8 wbuf) . fromIPv4) is
-          where
-            siz = length is * 4
+      where
+        siz = length is * 4
     fromSvcParamValue = fromSPV $ \len rbuf ref -> do
         SPV_IPv4Hint <$> sGetMany "IPv4Hint" len ipv4hint rbuf ref
       where
@@ -107,8 +107,8 @@ instance Show SPV_IPv6Hint where
 instance SPV SPV_IPv6Hint where
     toSvcParamValue (SPV_IPv6Hint is) = toSPV siz $ \wbuf _ -> do
         mapM_ (mapM_ (putInt8 wbuf) . fromIPv6b) is
-          where
-            siz = length is * 16
+      where
+        siz = length is * 16
     fromSvcParamValue = fromSPV $ \len rbuf ref -> do
         SPV_IPv6Hint <$> sGetMany "IPv6Hint" len ipv6hint rbuf ref
       where
