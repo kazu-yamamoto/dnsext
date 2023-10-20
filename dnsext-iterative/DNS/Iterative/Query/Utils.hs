@@ -58,13 +58,7 @@ logQueryErrors prefix q = do
 {- FOURMOLU_ENABLE -}
 
 printResult :: Either QueryError DNSMessage -> IO ()
-printResult = either print (putStr . unlines . concat . result)
-  where
-    result msg =
-        [ "answer:" : map show (DNS.answer msg) ++ [""]
-        , "authority:" : map show (DNS.authority msg) ++ [""]
-        , "additional:" : map show (DNS.additional msg) ++ [""]
-        ]
+printResult = either print (putStr . pprMessage "result")
 
 {- FOURMOLU_DISABLE -}
 pprMessage :: String -> DNSMessage -> String
