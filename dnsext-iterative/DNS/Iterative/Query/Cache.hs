@@ -128,7 +128,7 @@ cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
   where
     rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
-    rrsList = groupBy ((==) `on` rrsKey) . sortOn rrsKey
+    rrsList = groupBy ((==) `on` rrsKey) . sortOn rrsKey {- handled null case, no group -}
 
 -- | The `cacheSectionNegative zone dom typ getRanked msg` caches two pieces of information from `msg`.
 --   One is that the data for `dom` and `typ` are empty, and the other is the SOA record for the zone of
