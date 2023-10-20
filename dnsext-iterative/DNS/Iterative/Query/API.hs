@@ -31,6 +31,7 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Resolve
 import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Utils (logQueryErrors)
 
 -----
 
@@ -108,7 +109,8 @@ getResponseIterative' env reqM q@(DNS.Question bn typ _) qs = do
   where
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
-    getResult = do
+    prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ ": "
+    getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
         getResultIterative bn typ
 
@@ -140,7 +142,8 @@ getResponseCached' env reqM q@(DNS.Question bn typ _) qs = do
   where
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
-    getResult = do
+    prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ ": "
+    getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
         getResultCached bn typ
     mkResponse ers = replyMessage ers (DNS.identifier reqM) qs
