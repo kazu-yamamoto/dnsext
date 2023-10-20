@@ -67,6 +67,9 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
         (handleResponseError Left Right . DNS.replyDNSMessage . DNS.resultReply)
         <$> E.try (DNS.resolve renv q qctl)
 
+-- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
+-- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
+
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
     | not (DNS.isResponse flags) = e $ NotResponse (DNS.isResponse flags) msg
