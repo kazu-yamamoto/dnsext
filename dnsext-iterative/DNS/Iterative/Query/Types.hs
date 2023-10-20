@@ -113,8 +113,7 @@ data QueryError
 type ContextT m = ReaderT Env (ReaderT QueryControls m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-runDNSQuery
-    :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
+runDNSQuery :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
