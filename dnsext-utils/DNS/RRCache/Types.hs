@@ -320,6 +320,7 @@ insertRRs now rrs rank = updateAll
 --    insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 -- @
 insert :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insert _ _ _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
     maybe sized withOldRank lookupRank
   where
@@ -345,6 +346,7 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
 
 -- insert interface for stub resolver
 stubInsert :: Question -> EpochTime -> CRSet -> Cache -> Maybe Cache
+stubInsert _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 stubInsert k eol crs (Cache c xsz) =
     sized
   where
