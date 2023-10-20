@@ -118,9 +118,9 @@ delegationIPs dc Delegation{..} = do
                 throwDnsError DNS.ServerFailure
             | otherwise = do
                 orig <- showOrig <$> lift (lift $ asks origQuestion_)
-                plogLn Log.DEMO $ "illegal-domain: delegation is empty. zone: " ++ show zone ++ ", " ++ orig ++
+                plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig ++
                     ", without glue sub-domains: " ++ show subNames
-                throwDnsError DNS.IllegalDomain
+                throwDnsError DNS.ServerFailure
           where
             allIPs = takeDEntryIPs False delegationNS
             showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
@@ -177,9 +177,9 @@ resolveNS zone disableV6NS dc ns = do
                             orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
-                        lift . logLn Log.WARN $ "resolveNS: illegal-domain, empty A|AAAA: " ++
+                        lift . logLn Log.WARN $ "resolveNS: serv-fail, empty A|AAAA: " ++
                             orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
-                        throwDnsError DNS.IllegalDomain
+                        throwDnsError DNS.ServerFailure
             maybe failEmptyAx pure
                 =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
                 =<< maybe query1Ax (pure . axPairs . fst)
