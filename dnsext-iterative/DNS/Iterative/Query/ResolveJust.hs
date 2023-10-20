@@ -123,7 +123,7 @@ delegationIPs dc Delegation{..} = do
             plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
 
         takeSubNames (DEonlyNS name) xs
-            | name `DNS.isSubDomainOf` delegationZone =
+            | name `DNS.isSubDomainOf` zone =
                 name : xs {- sub-domain name without glue -}
         takeSubNames _ xs = xs
         subNames = foldr takeSubNames [] delegationNS
@@ -145,16 +145,14 @@ resolveNS disableV6NS dc ns = do
             lx +? ly = maybe ly (return . Just) =<< lx
 
         query1Ax
-            | disableV6NS = q4
+            | disableV6NS = querySection A
             | otherwise = join $ randomizedSelectN (q46 :| [q64])
           where
-            q46 = q4 +!? q6
-            q64 = q6 +!? q4
-            q4 = querySection A
-            q6 = querySection AAAA
-            qx +!? qy = do
-                xs <- qx
-                if null xs then qy else pure xs
+            q46 = A +!? AAAA
+            q64 = AAAA +!? A
+            tx +!? ty = do
+                xs <- querySection tx
+                if null xs then querySection ty else pure xs
             querySection typ = do
                 lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
