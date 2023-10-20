@@ -185,18 +185,27 @@ replyMessage eas ident rqs =
   where
     dnsError de = fmap message $ (,,) <$> rcodeDNSError de <*> pure [] <*> pure []
     rcodeDNSError e = case e of
+        DNS.SequenceNumberMismatch -> Right DNS.FormatErr
+        DNS.QuestionMismatch -> Right DNS.FormatErr
         DNS.RetryLimitExceeded -> Right DNS.ServFail
+        DNS.TimeoutExpired -> Right DNS.ServFail
+        DNS.UnexpectedRDATA -> Right DNS.FormatErr
+        DNS.IllegalDomain -> Right DNS.ServFail
         DNS.FormatError -> Right DNS.FormatErr
         DNS.ServerFailure -> Right DNS.ServFail
         DNS.NotImplemented -> Right DNS.NotImpl
         DNS.OperationRefused -> Right DNS.ServFail {- like bind9 behavior -}
         DNS.BadOptRecord -> Right DNS.BadVers
+        DNS.BadConfiguration -> Right DNS.ServFail
+        DNS.NetworkFailure {} -> Right DNS.ServFail
+        DNS.DecodeError {} -> Right DNS.FormatErr
+        DNS.UnknownDNSError {} -> Right DNS.ServFail
         _ -> Left $ "DNSError: " ++ show e
 
     queryError qe = case qe of
         DnsError e -> dnsError e
-        NotResponse{} -> Left "qORr is not response"
-        InvalidEDNS{} -> Left "Invalid EDNS"
+        NotResponse{} -> Right $ message (DNS.ServFail, [], [])
+        InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
         HasError rc _m -> Right $ message (rrc, [], [])
           where
             rrc = case rc of
