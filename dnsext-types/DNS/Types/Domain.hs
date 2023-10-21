@@ -375,7 +375,7 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 --   An error is thrown if name compression is used.
 getDomain :: Parser Domain
 getDomain rbuf ref =
-    domainFromWireLabels <$> do
+    domainFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' False n rbuf ref
 
@@ -391,7 +391,7 @@ getDomain rbuf ref =
 -- decreasing!
 getDomainRFC1035 :: Parser Domain
 getDomainRFC1035 rbuf ref =
-    domainFromWireLabels <$> do
+    domainFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' True n rbuf ref
 
@@ -399,14 +399,14 @@ getDomainRFC1035 rbuf ref =
 --   An error is thrown if name compression is used.
 getMailbox :: Parser Mailbox
 getMailbox rbuf ref =
-    mailboxFromWireLabels <$> do
+    mailboxFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
 getMailboxRFC1035 :: Parser Mailbox
 getMailboxRFC1035 rbuf ref =
-    mailboxFromWireLabels <$> do
+    mailboxFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' True n rbuf ref
 
@@ -426,7 +426,7 @@ getMailboxRFC1035 rbuf ref =
 -- that precedes the start of the current domain name.  The starting
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
-getDomain' :: Bool -> Int -> Parser (Vector ShortByteString)
+getDomain' :: Bool -> Int -> Parser Labels
 getDomain' allowCompression ptrLimit = \rbuf ref -> do
     pos <- position rbuf
     c <- getInt8 rbuf
@@ -435,11 +435,11 @@ getDomain' allowCompression ptrLimit = \rbuf ref -> do
   where
     getdomain pos c n rbuf ref
         | c == 0 = do
-            pushDomain pos V.empty ref
-            return V.empty
+            pushDomain pos [] ref
+            return []
         -- As for now, extended labels have no use.
         -- This may change some time in the future.
-        | isExtLabel c = return V.empty
+        | isExtLabel c = return []
         | isPointer c && not allowCompression =
             failParser "name compression is not allowed"
         | isPointer c = do
@@ -458,7 +458,7 @@ getDomain' allowCompression ptrLimit = \rbuf ref -> do
             l <- Short.map toLower <$> getNShortByteString rbuf n
             -- Registering super domains
             ls <- getDomain' allowCompression ptrLimit rbuf ref
-            let lls = V.cons l ls
+            let lls = l : ls
             pushDomain pos lls ref
             return lls
     -- The length label is limited to 63.
