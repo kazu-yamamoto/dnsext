@@ -107,7 +107,7 @@ domain o =
             { wireLabels = ls
             }
   where
-    ls = V.unfoldr step $ Short.map toLower o
+    ls = V.unfoldr step $ lowercase o
     step x = case parseLabel _period x of
         Nothing -> Nothing
         just@(Just (p, _))
@@ -259,7 +259,7 @@ mailbox o
     | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
 mailbox o = validateMailbox $ Mailbox $ Domain{wireLabels = V.fromList ls}
   where
-    l = Short.map toLower o
+    l = lowercase o
     ls = unfoldr step (l, 0 :: Int)
     step (x, n) = case parseLabel sep x of
         Nothing -> Nothing
@@ -272,11 +272,9 @@ mailbox o = validateMailbox $ Mailbox $ Domain{wireLabels = V.fromList ls}
             | otherwise = _period
 
 mailboxFromWireLabels :: WireLabels -> Mailbox
-mailboxFromWireLabels lls0
-    | lls0 == V.empty = E.throw $ DecodeError "Broken mailbox"
+mailboxFromWireLabels lls
+    | lls == V.empty = E.throw $ DecodeError "Broken mailbox"
     | otherwise = validateMailbox $ Mailbox $ Domain{wireLabels = lls}
-  where
-    lls = Short.map toLower <$> lls0
 
 instance IsRepresentation Mailbox ShortByteString where
     fromRepresentation = mailbox
@@ -455,7 +453,7 @@ getDomain' allowCompression ptrLimit = \rbuf ref -> do
                     pushDomain pos lls ref
                     return lls
         | otherwise = do
-            l <- Short.map toLower <$> getNShortByteString rbuf n
+            l <- lowercase <$> getNShortByteString rbuf n
             -- Registering super domains
             ls <- getDomain' allowCompression ptrLimit rbuf ref
             let lls = l : ls
@@ -663,3 +661,10 @@ Domain dx `isSubDomainOf` Domain dy =
         || let lx = V.length dx
                ly = V.length dy
             in lx > ly && G.basicUnsafeSlice (lx - ly) ly dx == dy
+
+----------------------------------------------------------------
+
+lowercase :: ShortByteString -> ShortByteString
+lowercase s
+  | Short.any isUpper s = Short.map toLower s
+  | otherwise = s
