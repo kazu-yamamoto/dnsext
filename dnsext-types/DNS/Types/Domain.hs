@@ -126,10 +126,11 @@ eqF v0 v1 = l0 == l1 && go 0
     l0 = V.length v0
     l1 = V.length v1
     go i
-      | i == l0 = True
-      | otherwise = if v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
-                    then go (i + 1)
-                    else False
+        | i == l0 = True
+        | otherwise =
+            if v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
+                then go (i + 1)
+                else False
 
 -- | Ordering according to the DNSSEC definition.
 --
@@ -148,22 +149,23 @@ cmpR v0 v1 = go (l0 - 1) (l1 - 1)
     l0 = V.length v0
     l1 = V.length v1
     go (-1) (-1) = EQ
-    go (-1) _    = LT
-    go _ (-1)    = GT
-    go i j = let e0 = v0 `V.unsafeIndex` i
-                 e1 = v1 `V.unsafeIndex` j
-             in case e0 `compare` e1 of
-                  EQ -> go (i - 1) (j - 1)
-                  LT -> LT
-                  GT -> GT
+    go (-1) _ = LT
+    go _ (-1) = GT
+    go i j =
+        let e0 = v0 `V.unsafeIndex` i
+            e1 = v1 `V.unsafeIndex` j
+         in case e0 `compare` e1 of
+                EQ -> go (i - 1) (j - 1)
+                LT -> LT
+                GT -> GT
 
 instance Show Domain where
     show d = "\"" ++ shortToString (toDomainRep d) ++ "\""
 
 toDomainRep :: Domain -> Label
 toDomainRep (Domain d)
-  | d == V.empty = "."
-  | otherwise = V.foldr (\l r -> escapeLabel _period l <> "." <> r) "" d
+    | d == V.empty = "."
+    | otherwise = V.foldr (\l r -> escapeLabel _period l <> "." <> r) "" d
 
 instance IsString Domain where
     fromString = fromRepresentation
@@ -216,8 +218,8 @@ domainSize (Domain d) = V.foldr (\l a -> Short.length l + 1 + a) 0 d + 1
 -- Just ("example","jp.")
 unconsDomain :: Domain -> Maybe (Label, Domain)
 unconsDomain (Domain d) = case V.uncons d of
-  Nothing -> Nothing
-  Just (l,d') -> Just (l, Domain d')
+    Nothing -> Nothing
+    Just (l, d') -> Just (l, Domain d')
 
 -- | Generating a reverse list of domain labels.
 --
@@ -692,5 +694,5 @@ Domain dx `isSubDomainOf` Domain dy =
 
 lowercase :: ShortByteString -> ShortByteString
 lowercase s
-  | Short.any isUpper s = Short.map toLower s
-  | otherwise = s
+    | Short.any isUpper s = Short.map toLower s
+    | otherwise = s
