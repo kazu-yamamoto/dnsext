@@ -118,7 +118,18 @@ domainFromWireLabels :: WireLabels -> Domain
 domainFromWireLabels = Domain
 
 instance Eq Domain where
-    Domain d0 == Domain d1 = d0 == d1
+    Domain d0 == Domain d1 = d0 `eqF` d1
+
+eqF :: WireLabels -> WireLabels -> Bool
+eqF v0 v1 = l0 == l1 && go 0
+  where
+    l0 = V.length v0
+    l1 = V.length v1
+    go i
+      | i == l0 = True
+      | otherwise = if v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
+                    then go (i + 1)
+                    else False
 
 -- | Ordering according to the DNSSEC definition.
 --
@@ -129,7 +140,22 @@ instance Eq Domain where
 -- >>> ("example.jp" :: Domain) >= "example.com"
 -- True
 instance Ord Domain where
-    compare (Domain xs) (Domain ys) = Bundle.cmp (G.streamR xs) (G.streamR ys)
+    Domain d0 `compare` Domain d1 = d0 `cmpR` d1
+
+cmpR :: WireLabels -> WireLabels -> Ordering
+cmpR v0 v1 = go (l0 - 1) (l1 - 1)
+  where
+    l0 = V.length v0
+    l1 = V.length v1
+    go (-1) (-1) = EQ
+    go (-1) _    = LT
+    go _ (-1)    = GT
+    go i j = let e0 = v0 `V.unsafeIndex` i
+                 e1 = v1 `V.unsafeIndex` j
+             in case e0 `compare` e1 of
+                  EQ -> go (i - 1) (j - 1)
+                  LT -> LT
+                  GT -> GT
 
 instance Show Domain where
     show d = "\"" ++ shortToString (toDomainRep d) ++ "\""
