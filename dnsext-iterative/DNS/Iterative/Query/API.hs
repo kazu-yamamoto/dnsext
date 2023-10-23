@@ -86,9 +86,6 @@ additional セクションにその名前に対するアドレス (A および A
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
 
--- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
--- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
-
 -- | Getting a response corresponding to a query.
 --   The cache is maybe updated.
 getResponseIterative
