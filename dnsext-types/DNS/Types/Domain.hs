@@ -10,6 +10,9 @@ module DNS.Types.Domain (
     superDomains,
     isSubDomainOf,
     domainSize,
+    unconsDomain,
+    wireLabels,
+    revLabels,
     Mailbox,
     mailboxSize,
     getDomain,
@@ -27,6 +30,10 @@ import qualified Control.Exception as E
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.Functor (($>))
+import Data.Vector (Vector)
+import qualified Data.Vector as V
+import qualified Data.Vector.Fusion.Bundle as Bundle
+import qualified Data.Vector.Generic as G
 import Data.Word8
 
 import DNS.Types.Error
@@ -40,11 +47,10 @@ import DNS.Wire
 class IsRepresentation a b where
     fromRepresentation :: b -> a
     toRepresentation :: a -> b
-    fromWireLabels :: [b] -> a
-    toWireLabels :: a -> [b]
+    fromWireLabels :: Vector b -> a
+    toWireLabels :: a -> Vector b
 
--- | The type for domain names. This holds both the
--- /presentation format/ and the /wire format/ internally.
+-- | The type for domain names. This holds the /wire format/ internally.
 --
 -- The representation format is fully-qualified DNS domain names encoded
 -- as ASCII A-labels, with \'.\' separators between labels.
@@ -63,59 +69,67 @@ class IsRepresentation a b where
 -- A 'IllegalDomain' may be thrown when creating from the representation
 -- format or decoding the wire format.
 --
--- @
--- www.example.org.            -- Ordinary DNS name.
--- \_25.\_tcp.mx1.example.net. -- TLSA RR initial labels have \_ prefixes.
--- \\001.exotic.example.       -- First label is Ctrl-A!
--- just\\.one\\.label.example. -- First label is \"just.one.label\"
--- @
-data Domain = Domain
-    { -- The representation format. Case-sensitive, escaped.
-      representation :: ShortByteString
-    , -- Labels in wire format. Case-sensitive, not escaped.
-      wireLabels :: [ShortByteString]
-    , canonicalLabels :: ~[ShortByteString]
-    -- ^ Eq and Ord key for Canonical DNS Name Order.
-    --   Lower cases, not escaped.
+-- >>> "" :: Domain
+-- "."
+-- >>> "." :: Domain
+-- "."
+-- >>> wireLabels "."
+-- []
+-- >>> "www.example.org" :: Domain
+-- "www.example.org."
+-- >>> "www.example.org." :: Domain
+-- "www.example.org."
+-- >>> "_25._tcp.mx1.example.net." :: Domain
+-- "_25._tcp.mx1.example.net."
+-- >>> wireLabels "_25._tcp.mx1.example.net."
+-- ["_25","_tcp","mx1","example","net"]
+-- >>> "\\001.exotic.example." :: Domain -- fixme
+-- "\001.exotic.example."
+-- >>> wireLabels "\\001.exotic.example."
+-- ["\SOH","exotic","example"]
+-- >>> wireLabels "just\\.one\\.label.example."
+-- ["just.one.label","example"]
+newtype Domain = Domain
+    { wireLabels :: WireLabels
+    -- ^ Labels in wire format. Lower cases, not escaped.
     --   https://datatracker.ietf.org/doc/html/rfc4034#section-6.1
     }
 
+rootDomain :: Domain
+rootDomain = Domain V.empty
+
 domain :: ShortByteString -> Domain
+domain "" = rootDomain
+domain "." = rootDomain
 domain o =
     validateDomain $
         Domain
-            { representation = addRoot o
-            , wireLabels = ls
-            , canonicalLabels = reverse ls
+            { wireLabels = ls
             }
   where
-    ~l = Short.map toLower o
-    ~ls = unfoldr step l
+    ls = V.unfoldr step $ lowercase o
     step x = case parseLabel _period x of
         Nothing -> Nothing
         just@(Just (p, _))
             | p == "" -> Nothing
             | otherwise -> just
 
-domainFromWireLabels :: [ShortByteString] -> Domain
-domainFromWireLabels [] =
-    Domain
-        { representation = "."
-        , wireLabels = []
-        , canonicalLabels = []
-        }
-domainFromWireLabels ls =
-    validateDomain $
-        Domain
-            { representation = rep
-            , wireLabels = ls
-            , canonicalLabels = map (Short.map toLower) $ reverse ls
-            }
-  where
-    rep = foldr (\l r -> escapeLabel _period l <> "." <> r) "" ls
+domainFromWireLabels :: WireLabels -> Domain
+domainFromWireLabels = Domain
 
 instance Eq Domain where
-    d0 == d1 = canonicalLabels d0 == canonicalLabels d1
+    Domain d0 == Domain d1 = d0 `eqF` d1
+
+eqF :: WireLabels -> WireLabels -> Bool
+eqF v0 v1 = l0 == l1 && go 0
+  where
+    l0 = V.length v0
+    l1 = V.length v1
+    go i
+      | i == l0 = True
+      | otherwise = if v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
+                    then go (i + 1)
+                    else False
 
 -- | Ordering according to the DNSSEC definition.
 --
@@ -126,10 +140,30 @@ instance Eq Domain where
 -- >>> ("example.jp" :: Domain) >= "example.com"
 -- True
 instance Ord Domain where
-    d0 <= d1 = canonicalLabels d0 <= canonicalLabels d1
+    Domain d0 `compare` Domain d1 = d0 `cmpR` d1
+
+cmpR :: WireLabels -> WireLabels -> Ordering
+cmpR v0 v1 = go (l0 - 1) (l1 - 1)
+  where
+    l0 = V.length v0
+    l1 = V.length v1
+    go (-1) (-1) = EQ
+    go (-1) _    = LT
+    go _ (-1)    = GT
+    go i j = let e0 = v0 `V.unsafeIndex` i
+                 e1 = v1 `V.unsafeIndex` j
+             in case e0 `compare` e1 of
+                  EQ -> go (i - 1) (j - 1)
+                  LT -> LT
+                  GT -> GT
 
 instance Show Domain where
-    show d = "\"" ++ toRepresentation d ++ "\""
+    show d = "\"" ++ shortToString (toDomainRep d) ++ "\""
+
+toDomainRep :: Domain -> Label
+toDomainRep (Domain d)
+  | d == V.empty = "."
+  | otherwise = V.foldr (\l r -> escapeLabel _period l <> "." <> r) "" d
 
 instance IsString Domain where
     fromString = fromRepresentation
@@ -145,30 +179,54 @@ instance Semigroup Domain where
 
 instance IsRepresentation Domain ShortByteString where
     fromRepresentation = domain
-    toRepresentation = representation
+    toRepresentation = toDomainRep
     fromWireLabels = domainFromWireLabels
     toWireLabels = wireLabels
 
 instance IsRepresentation Domain ByteString where
     fromRepresentation = domain . Short.toShort
-    toRepresentation = Short.fromShort . representation
-    fromWireLabels = domainFromWireLabels . map Short.toShort
-    toWireLabels = map Short.fromShort . wireLabels
+    toRepresentation = Short.fromShort . toDomainRep
+    fromWireLabels = domainFromWireLabels . (Short.toShort <$>)
+    toWireLabels = (Short.fromShort <$>) . wireLabels
 
 instance IsRepresentation Domain String where
     fromRepresentation = domain . fromString
-    toRepresentation = shortToString . representation
-    fromWireLabels = domainFromWireLabels . map fromString
-    toWireLabels = map shortToString . wireLabels
+    toRepresentation = shortToString . toDomainRep
+    fromWireLabels = domainFromWireLabels . (fromString <$>)
+    toWireLabels = (shortToString <$>) . wireLabels
 
-addRoot :: RawDomain -> RawDomain
-addRoot o
-    | Short.null o = "."
-    | Short.last o == _period = o
-    | otherwise = o <> "."
-
+-- | Wire size of domain.
+--
+-- >>> domainSize "."
+-- 1
+-- >>> domainSize "jp"
+-- 4
+-- >>> domainSize "example.jp"
+-- 12
 domainSize :: Domain -> Int
-domainSize d = Short.length (representation d) + 1
+domainSize (Domain d) = V.foldr (\l a -> Short.length l + 1 + a) 0 d + 1
+
+-- | Uncos a domain
+--
+-- >>> unconsDomain "."
+-- Nothing
+-- >>> unconsDomain "jp"
+-- Just ("jp",".")
+-- >>> unconsDomain "example.jp."
+-- Just ("example","jp.")
+unconsDomain :: Domain -> Maybe (Label, Domain)
+unconsDomain (Domain d) = case V.uncons d of
+  Nothing -> Nothing
+  Just (l,d') -> Just (l, Domain d')
+
+-- | Generating a reverse list of domain labels.
+--
+-- >>> revLabels "www.example.jp"
+-- ["jp","example","www"]
+-- >>> revLabels "."
+-- []
+revLabels :: Domain -> [Label]
+revLabels (Domain d) = Bundle.toList $ G.streamR d
 
 ----------------------------------------------------------------
 
@@ -182,10 +240,10 @@ validateMailbox m@(Mailbox d)
     | isIllegal (wireLabels d) = E.throw IllegalDomain
     | otherwise = m
 
-isIllegal :: [ShortByteString] -> Bool
+isIllegal :: WireLabels -> Bool
 isIllegal ls = sum is > 255 || any (> 63) is
   where
-    is = map Short.length ls
+    is = V.map Short.length ls
 
 ----------------------------------------------------------------
 
@@ -209,7 +267,12 @@ instance Ord Mailbox where
     Mailbox d0 <= Mailbox d1 = d0 <= d1
 
 instance Show Mailbox where
-    show (Mailbox d) = show d
+    show mbox = "\"" ++ shortToString (toMailboxRep mbox) ++ "\""
+
+toMailboxRep :: Mailbox -> Label
+toMailboxRep (Mailbox (Domain d)) = case V.uncons d of
+    Nothing -> E.throw IllegalDomain
+    Just (name, d') -> name <> "@" <> V.foldr (\x y -> escapeLabel _period x <> "." <> y) "" d'
 
 instance IsString Mailbox where
     fromString = fromRepresentation
@@ -220,17 +283,10 @@ instance Semigroup Mailbox where
 mailbox :: ShortByteString -> Mailbox
 mailbox o
     | Short.length o > 255 = E.throw $ DecodeError "The mailbox length is over 255"
-mailbox o =
-    validateMailbox $
-        Mailbox $
-            Domain
-                { representation = addRoot o
-                , wireLabels = ls
-                , canonicalLabels = reverse ls
-                }
+mailbox o = validateMailbox $ Mailbox $ Domain{wireLabels = V.fromList ls}
   where
-    ~l = Short.map toLower o
-    ~ls = unfoldr step (l, 0 :: Int)
+    l = lowercase o
+    ls = unfoldr step (l, 0 :: Int)
     step (x, n) = case parseLabel sep x of
         Nothing -> Nothing
         Just (p', x')
@@ -241,39 +297,31 @@ mailbox o =
             | n == 0 = _at
             | otherwise = _period
 
-mailboxFromWireLabels :: [ShortByteString] -> Mailbox
-mailboxFromWireLabels [] = E.throw $ DecodeError "Broken mailbox"
-mailboxFromWireLabels lls@(l : ls) =
-    validateMailbox $
-        Mailbox $
-            Domain
-                { representation = rep
-                , wireLabels = lls
-                , canonicalLabels = map (Short.map toLower) $ reverse lls
-                }
-  where
-    rep = l <> "@" <> foldr (\x y -> escapeLabel _period x <> "." <> y) "" ls
+mailboxFromWireLabels :: WireLabels -> Mailbox
+mailboxFromWireLabels lls
+    | lls == V.empty = E.throw $ DecodeError "Broken mailbox"
+    | otherwise = validateMailbox $ Mailbox $ Domain{wireLabels = lls}
 
 instance IsRepresentation Mailbox ShortByteString where
     fromRepresentation = mailbox
-    toRepresentation = toRepresentation . fromMailbox
+    toRepresentation = toMailboxRep
     fromWireLabels = toMailbox . domainFromWireLabels
     toWireLabels = wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox ByteString where
     fromRepresentation = mailbox . Short.toShort
-    toRepresentation = toRepresentation . fromMailbox
-    fromWireLabels = toMailbox . domainFromWireLabels . map Short.toShort
-    toWireLabels = map Short.fromShort . wireLabels . fromMailbox
+    toRepresentation = Short.fromShort . toMailboxRep
+    fromWireLabels = toMailbox . domainFromWireLabels . (Short.toShort <$>)
+    toWireLabels = (Short.fromShort <$>) . wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox String where
     fromRepresentation = mailbox . fromString
-    toRepresentation = toRepresentation . fromMailbox
-    fromWireLabels = toMailbox . domainFromWireLabels . map fromString
-    toWireLabels = map shortToString . wireLabels . fromMailbox
+    toRepresentation = shortToString . toMailboxRep
+    fromWireLabels = toMailbox . domainFromWireLabels . (fromString <$>)
+    toWireLabels = (shortToString <$>) . wireLabels . fromMailbox
 
 mailboxSize :: Mailbox -> Int
-mailboxSize m = domainSize $ fromMailbox m
+mailboxSize = domainSize . fromMailbox
 
 ----------------------------------------------------------------
 
@@ -297,10 +345,10 @@ putDomain Original Domain{..} wbuf _ = do
     mapM_ (putPartialDomain wbuf) wireLabels
     put8 wbuf 0
 putDomain Canonical Domain{..} wbuf _ = do
-    mapM_ (putPartialDomain wbuf) $ reverse canonicalLabels
+    mapM_ (putPartialDomain wbuf) wireLabels -- fixme
     put8 wbuf 0
 
-putPartialDomain :: WriteBuffer -> RawDomain -> IO ()
+putPartialDomain :: WriteBuffer -> Label -> IO ()
 putPartialDomain wbuf dom = putLenShortByteString wbuf dom
 
 ----------------------------------------------------------------
@@ -308,18 +356,19 @@ putPartialDomain wbuf dom = putLenShortByteString wbuf dom
 putCompressedDomain :: Domain -> Builder ()
 putCompressedDomain Domain{..} = putCompress wireLabels
 
-putCompress :: [RawDomain] -> Builder ()
-putCompress [] wbuf _ = put8 wbuf 0
-putCompress dom@(d : ds) wbuf ref = do
-    mpos <- popPointer dom ref
-    cur <- position wbuf
-    case mpos of
-        Just pos -> putPointer wbuf pos
-        _ -> do
-            -- Pointers are limited to 14-bits!
-            when (cur <= 0x3fff) $ pushPointer dom cur ref
-            putPartialDomain wbuf d
-            putCompress ds wbuf ref
+putCompress :: WireLabels -> Builder ()
+putCompress dom wbuf ref = case V.uncons dom of
+    Nothing -> put8 wbuf 0
+    Just (d, ds) -> do
+        mpos <- popPointer dom ref
+        cur <- position wbuf
+        case mpos of
+            Just pos -> putPointer wbuf pos
+            _ -> do
+                -- Pointers are limited to 14-bits!
+                when (cur <= 0x3fff) $ pushPointer dom cur ref
+                putPartialDomain wbuf d
+                putCompress ds wbuf ref
 
 putPointer :: WriteBuffer -> Int -> IO ()
 putPointer wbuf pos = putInt16 wbuf (pos .|. 0xc000)
@@ -350,7 +399,7 @@ putMailboxRFC1035 cf (Mailbox d) = putDomainRFC1035 cf d
 --   An error is thrown if name compression is used.
 getDomain :: Parser Domain
 getDomain rbuf ref =
-    domainFromWireLabels <$> do
+    domainFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' False n rbuf ref
 
@@ -366,7 +415,7 @@ getDomain rbuf ref =
 -- decreasing!
 getDomainRFC1035 :: Parser Domain
 getDomainRFC1035 rbuf ref =
-    domainFromWireLabels <$> do
+    domainFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' True n rbuf ref
 
@@ -374,14 +423,14 @@ getDomainRFC1035 rbuf ref =
 --   An error is thrown if name compression is used.
 getMailbox :: Parser Mailbox
 getMailbox rbuf ref =
-    mailboxFromWireLabels <$> do
+    mailboxFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' False n rbuf ref
 
 -- | Getting a mailbox.
 getMailboxRFC1035 :: Parser Mailbox
 getMailboxRFC1035 rbuf ref =
-    mailboxFromWireLabels <$> do
+    mailboxFromWireLabels . V.fromList <$> do
         n <- position rbuf
         getDomain' True n rbuf ref
 
@@ -401,7 +450,7 @@ getMailboxRFC1035 rbuf ref =
 -- that precedes the start of the current domain name.  The starting
 -- offsets form a strictly decreasing sequence, which prevents pointer
 -- loops.
-getDomain' :: Bool -> Int -> Parser [ShortByteString]
+getDomain' :: Bool -> Int -> Parser Labels
 getDomain' allowCompression ptrLimit = \rbuf ref -> do
     pos <- position rbuf
     c <- getInt8 rbuf
@@ -430,7 +479,7 @@ getDomain' allowCompression ptrLimit = \rbuf ref -> do
                     pushDomain pos lls ref
                     return lls
         | otherwise = do
-            l <- getNShortByteString rbuf n
+            l <- lowercase <$> getNShortByteString rbuf n
             -- Registering super domains
             ls <- getDomain' allowCompression ptrLimit rbuf ref
             let lls = l : ls
@@ -468,7 +517,7 @@ getDomain' allowCompression ptrLimit = \rbuf ref -> do
 -- >>> parseLabel _period "\\513.xyz"
 -- Nothing
 parseLabel
-    :: Word8 -> ShortByteString -> Maybe (ShortByteString, ShortByteString)
+    :: Word8 -> Label -> Maybe (Label, Label)
 parseLabel sep dom
     | hasBackslash dom = case P.parse (labelParser sep mempty) dom of
         (Just hd, tl) -> check (hd, tl)
@@ -528,7 +577,7 @@ labelParser sep bld =
 -- "\\010oo"
 -- >>> escapeLabel _period "f\x7fo"
 -- "f\\127o"
-escapeLabel :: Word8 -> ShortByteString -> ShortByteString
+escapeLabel :: Word8 -> Label -> Label
 escapeLabel sep label
     | isAllPlain label = label
     | otherwise = toResult $ P.parse (labelEscaper sep mempty) label
@@ -603,18 +652,21 @@ shortToString = C8.unpack . Short.fromShort
 -- | Creating super domains.
 --
 -- >>> superDomains "www.example.com"
--- ["www.example.com.","example.com.","com."]
+-- ["com.","example.com.","www.example.com."]
 -- >>> superDomains "www.example.com."
--- ["www.example.com.","example.com.","com."]
+-- ["com.","example.com.","www.example.com."]
 -- >>> superDomains "com."
 -- ["com."]
 -- >>> superDomains "."
 -- []
 superDomains :: Domain -> [Domain]
-superDomains d = case wireLabels d of
-    [] -> []
-    [_] -> [d]
-    _ : ls -> d : map domainFromWireLabels (init $ tails ls)
+superDomains d0@(Domain wl0) = go wl0 [d0]
+  where
+    go wl ss = case V.uncons wl of
+        Nothing -> [] -- only the case of rootDomain
+        Just (_, wl')
+            | wl' == V.empty -> ss
+            | otherwise -> go wl' (Domain wl' : ss)
 
 -- | Sub-domain or not.
 --
@@ -630,4 +682,15 @@ superDomains d = case wireLabels d of
 -- False
 isSubDomainOf :: Domain -> Domain -> Bool
 _ `isSubDomainOf` "." = True
-x `isSubDomainOf` y = y `elem` superDomains x
+Domain dx `isSubDomainOf` Domain dy =
+    dx == dy
+        || let lx = V.length dx
+               ly = V.length dy
+            in lx > ly && G.basicUnsafeSlice (lx - ly) ly dx == dy
+
+----------------------------------------------------------------
+
+lowercase :: ShortByteString -> ShortByteString
+lowercase s
+  | Short.any isUpper s = Short.map toLower s
+  | otherwise = s

@@ -54,7 +54,7 @@ type Parser a = ReadBuffer -> IORef PState -> IO a
 
 -- | Parser state
 data PState = PState
-    { pstDomain :: IntMap [RawDomain]
+    { pstDomain :: IntMap Labels
     , pstAtTime :: EpochTime
     }
     deriving (Eq, Show)
@@ -64,12 +64,12 @@ initialState t = PState IM.empty t
 
 ----------------------------------------------------------------
 
-pushDomain :: IM.Key -> [RawDomain] -> IORef PState -> IO ()
+pushDomain :: IM.Key -> Labels -> IORef PState -> IO ()
 pushDomain n d ref = do
     PState dom t <- readIORef ref
     writeIORef ref $ PState (IM.insert n d dom) t
 
-popDomain :: IM.Key -> IORef PState -> IO (Maybe [RawDomain])
+popDomain :: IM.Key -> IORef PState -> IO (Maybe Labels)
 popDomain n ref = IM.lookup n . pstDomain <$> readIORef ref
 
 getAtTime :: IORef PState -> IO EpochTime

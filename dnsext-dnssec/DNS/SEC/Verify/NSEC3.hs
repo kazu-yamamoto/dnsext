@@ -299,5 +299,5 @@ n3RefineWithRanges zone ranges0 = do
 -- []
 zoneSubDomains :: Domain -> Domain -> [Domain]
 zoneSubDomains domain zone
-    | domain `isSubDomainOf` zone = takeWhile (/= zone) (superDomains domain ++ [fromString "."]) ++ [zone]
+    | domain `isSubDomainOf` zone = takeWhile (/= zone) (reverse (superDomains domain) ++ [fromString "."]) ++ [zone]
     | otherwise = []
