@@ -8,8 +8,10 @@ module DNSTAP (
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Monad (when)
 import qualified DNS.TAP.FastStream as FSTRM
 import DNS.TAP.Schema
+import Data.IORef
 import Network.Socket
 import qualified UnliftIO.Exception as E
 
@@ -38,24 +40,33 @@ readDnsTapQ (DnstapQ q) = atomically $ readTQueue q
 newDnstapWriter :: Config -> IO (IO (), Message -> IO ())
 newDnstapWriter conf = do
     q <- newDnstapQ
-    let logger = control conf $ exec conf q
-        put = writeDnstapQ q
+    ref <- newIORef False
+    let logger = control conf $ exec conf q ref
+        put ~x = do
+            ready <- readIORef ref
+            when ready $ writeDnstapQ q x
     return (logger, put)
 
-exec :: Config -> DnstapQ -> IO ()
-exec Config{..} q = E.bracket setup close $ \sock -> do
+exec :: Config -> DnstapQ -> IORef Bool -> IO ()
+exec Config{..} q ref = E.bracket setup teardown $ \sock -> do
     let fconf = FSTRM.Config True False
     FSTRM.writer sock fconf $ do
         msg <- readDnsTapQ q
         let d = defaultDNSTAP{dnstapMessage = Just msg}
         return $ encodeDnstap d
   where
-    setup = E.bracketOnError open close conn
+    setup = do
+        s <- E.bracketOnError open close conn
+        writeIORef ref True
+        return s
       where
         open = socket AF_UNIX Stream defaultProtocol
         conn sock = do
             connect sock $ SockAddrUnix cnf_dnstap_socket_path
             return sock
+    teardown s = do
+        writeIORef ref False
+        close s
 
 control :: Config -> IO () -> IO ()
 control Config{..} body = loop
