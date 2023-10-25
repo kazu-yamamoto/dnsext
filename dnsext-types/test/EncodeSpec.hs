@@ -57,7 +57,8 @@ testResponseA :: DNSMessage
 testResponseA =
     DNSMessage
         { identifier = 61046
-        , flags = DNSFlags
+        , flags =
+            DNSFlags
                 { isResponse = True
                 , opcode = OP_STD
                 , authAnswer = False
