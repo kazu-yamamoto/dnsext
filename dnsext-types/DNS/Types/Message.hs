@@ -91,8 +91,10 @@ mapEDNS _ _ a = a
 
 -- | DNS message format for queries and replies.
 data DNSMessage = DNSMessage
-    { header :: DNSHeader
-    -- ^ Header with extended 'RCODE'
+    { identifier :: Identifier
+    -- ^ Query or response identifier.
+    , flags :: DNSFlags
+    -- ^ Flags, OPCODE, and RCODE
     , ednsHeader :: EDNSheader
     -- ^ EDNS pseudo-header
     , question :: [Question]
@@ -112,13 +114,15 @@ type Identifier = Word16
 
 putDNSMessage :: DNSMessage -> Builder ()
 putDNSMessage DNSMessage{..} wbuf ref = do
-    putHeader hd wbuf ref
+    putIdentifier wbuf identifier
+    putDNSFlags flags' wbuf ref
     putNums
     mapM_ putQ question
     mapM_ putRR answer
     mapM_ putRR authority
     mapM_ putRR ad
   where
+    putIdentifier = put16
     putNums =
         mapM_
             (putInt16 wbuf)
@@ -129,9 +133,8 @@ putDNSMessage DNSMessage{..} wbuf ref = do
             ]
     putQ q = putQuestion Original q wbuf ref
     putRR rr = putResourceRecord Original rr wbuf ref
-    fl = flags header
-    hd = ifEDNS ednsHeader header $ header{flags = fl{rcode = rc}}
-    rc = ifEDNS ednsHeader <$> id <*> nonEDNSrcode $ rcode fl
+    flags' = ifEDNS ednsHeader flags $ flags{rcode = rc}
+    rc = ifEDNS ednsHeader <$> id <*> nonEDNSrcode $ rcode flags
       where
         nonEDNSrcode code
             | fromRCODE code < 16 = code
@@ -155,7 +158,8 @@ putDNSMessage DNSMessage{..} wbuf ref = do
 
 getDNSMessage :: Parser DNSMessage
 getDNSMessage rbuf ref = do
-    hm <- getHeader rbuf ref
+    idt <- getIdentifier rbuf
+    flgs <- getDNSFlags rbuf ref
     qdCount <- getInt16 rbuf
     anCount <- getInt16 rbuf
     nsCount <- getInt16 rbuf
@@ -165,12 +169,12 @@ getDNSMessage rbuf ref = do
     authrrs <- getResourceRecords nsCount rbuf ref
     addnrrs <- getResourceRecords arCount rbuf ref
     let (opts, rest) = partition ((==) OPT . rrtype) addnrrs
-        flgs = flags hm
         rc = fromRCODE $ rcode flgs
         (eh, erc) = getEDNS rc opts
-        hd = hm{flags = flgs{rcode = erc}}
-    pure $ DNSMessage hd eh queries answers authrrs $ ifEDNS eh rest addnrrs
+        flags' = flgs{rcode = erc}
+    pure $ DNSMessage idt flags' eh queries answers authrrs $ ifEDNS eh rest addnrrs
   where
+    getIdentifier = get16
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
     getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
     getEDNS rc rrs = case rrs of
@@ -222,11 +226,8 @@ minUdpSize = 512
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 0
-                , flags = defaultDNSFlags
-                }
+        { identifier = 0
+        , flags = defaultDNSFlags
         , ednsHeader = EDNSheader defaultEDNS
         , question = []
         , answer = []
@@ -244,7 +245,7 @@ makeQuery
     -> DNSMessage
 makeQuery idt q =
     defaultQuery
-        { header = (header defaultQuery){identifier = idt}
+        { identifier = idt
         , question = [q]
         }
 
@@ -266,16 +267,13 @@ makeQuery idt q =
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 0
-                , flags =
-                    defaultDNSFlags
-                        { isResponse = True
-                        , authAnswer = True
-                        , recAvailable = True
-                        , authenData = False
-                        }
+        { identifier = 0
+        , flags =
+            defaultDNSFlags
+                { isResponse = True
+                , authAnswer = True
+                , recAvailable = True
+                , authenData = False
                 }
         , ednsHeader = NoEDNS
         , question = []
@@ -292,23 +290,12 @@ makeResponse
     -> DNSMessage
 makeResponse idt q as =
     defaultResponse
-        { header = header'{identifier = idt}
+        { identifier = idt
         , question = [q]
         , answer = as
         }
-  where
-    header' = header defaultResponse
 
 ----------------------------------------------------------------
-
--- | Raw data format for the header of DNS Query and Response.
-data DNSHeader = DNSHeader
-    { identifier :: Identifier
-    -- ^ Query or response identifier.
-    , flags :: DNSFlags
-    -- ^ Flags, OPCODE, and RCODE
-    }
-    deriving (Eq, Show)
 
 -- | Raw data format for the flags of DNS Query and Response.
 data DNSFlags = DNSFlags
@@ -347,19 +334,6 @@ data DNSFlags = DNSFlags
     -- ^ CD (Checking Disabled) bit - (RFC4035, Section 3.2.2).
     }
     deriving (Eq, Show)
-
-putHeader :: DNSHeader -> Builder ()
-putHeader hdr wbuf ref = do
-    putIdentifier wbuf $ identifier hdr
-    putDNSFlags (flags hdr) wbuf ref
-  where
-    putIdentifier = put16
-
-getHeader :: Parser DNSHeader
-getHeader rbuf ref =
-    DNSHeader <$> getIdentifier rbuf <*> getDNSFlags rbuf ref
-  where
-    getIdentifier = get16
 
 ----------------------------------------------------------------
 

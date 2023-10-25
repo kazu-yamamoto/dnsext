@@ -21,7 +21,6 @@ module DNS.Types.Decode (
     decodeChunks,
 
     -- * Decoders for parts
-    decodeDNSHeader,
     decodeDNSFlags,
     decodeQuestion,
     decodeResourceRecordAt,
@@ -81,10 +80,6 @@ decodeChunks
 decodeChunks t bss = decodeAt t $ BS.concat bss
 
 ----------------------------------------------------------------
-
--- | Decode DNS header.
-decodeDNSHeader :: ByteString -> Either DNSError DNSHeader
-decodeDNSHeader bs = runParser getHeader bs
 
 -- | Decode DNS flags.
 decodeDNSFlags :: ByteString -> Either DNSError DNSFlags

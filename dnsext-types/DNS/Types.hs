@@ -10,7 +10,6 @@ module DNS.Types (
     Section (..),
 
     -- ** Header
-    DNSHeader (..),
     Identifier,
     DNSFlags (..),
     defaultDNSFlags,
@@ -286,4 +285,4 @@ fromDNSMessage ans conv = case errcode ans of
     BadRCODE -> Left $ DecodeError "Malformed EDNS message"
     _ -> Left UnknownDNSError
   where
-    errcode = rcode . flags . header
+    errcode = rcode . flags

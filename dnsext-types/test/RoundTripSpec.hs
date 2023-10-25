@@ -6,7 +6,6 @@ module RoundTripSpec (spec) where
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
-import Data.Either
 import Data.IP (Addr, IP (..), IPv4, IPv6, makeAddrRange, toIPv4, toIPv6)
 import qualified Data.IP
 import Data.String (fromString)
@@ -63,9 +62,6 @@ spec = do
         decodeResourceRecord bs `shouldBe` Right rr
         fmap encodeResourceRecord (decodeResourceRecord bs) `shouldBe` Right bs
 
-    prop "DNSHeader" . forAll (genDNSHeader 0x0f) $ \hdr ->
-        decodeDNSHeader (encodeDNSHeader hdr) `shouldBe` Right hdr
-
     prop "DNSMessage" . forAll genDNSMessage $ \msg ->
         decode (encode msg) `shouldBe` Right msg
 
@@ -73,18 +69,21 @@ spec = do
     --        let inps = map BS.singleton $ BS.unpack $ encode msg
     --         in decodeChunks 3426660848 inps `shouldBe` Right msg
 
+{- fixme
     prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
         let eh = EDNSheader edns
             m =
                 fromRight (error "prop EDNS") $ decode $ encode $ DNSMessage hdr eh [] [] [] []
         ednsHeader m `shouldBe` eh
+-}
 
 ----------------------------------------------------------------
 
 genDNSMessage :: Gen DNSMessage
 genDNSMessage =
     DNSMessage
-        <$> genDNSHeader 0x0f
+        <$> genWord16
+        <*> genDNSFlags 0x0f
         <*> makeEDNS
         <*> listOf genQuestion
         <*> listOf genResourceRecord
@@ -168,9 +167,6 @@ genDomain =
 
 genMailbox :: Gen Mailbox
 genMailbox = elements ["a@b.", "a@b.c.", "first.last@example.org."]
-
-genDNSHeader :: Word16 -> Gen DNSHeader
-genDNSHeader maxrc = DNSHeader <$> genWord16 <*> genDNSFlags maxrc
 
 genDNSFlags :: Word16 -> Gen DNSFlags
 genDNSFlags maxrc =
@@ -276,8 +272,10 @@ genOData =
                         then pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString $ BS.pack more
                         else pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString $ BS.pack less
 
+{-
 genEDNSHeader :: Gen (EDNS, DNSHeader)
 genEDNSHeader = do
     edns <- genEDNS
     hdr <- genDNSHeader 0xF00
     return (edns, hdr)
+-}

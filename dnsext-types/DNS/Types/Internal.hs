@@ -20,8 +20,6 @@ module DNS.Types.Internal (
     -- * High level
     putDNSMessage,
     getDNSMessage,
-    putHeader,
-    getHeader,
     putDNSFlags,
     getDNSFlags,
     putQuestion,
