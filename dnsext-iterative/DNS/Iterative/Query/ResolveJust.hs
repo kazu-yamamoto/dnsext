@@ -310,13 +310,12 @@ maxNotSublevelDelegation = 16
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
 servsChildZone dc nss dom msg =
-    handleSOA (pure noDelegation)
+    handleSOA (handleASIG $ pure noDelegation)
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs _rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
         case soaRRs of
             [] -> fallback
-            {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
             [_] -> getWorkaround >>= verifySOA
             _ : _ : _ -> multipleSOA soaRRs
       where
@@ -335,6 +334,16 @@ servsChildZone dc nss dom msg =
             result _ soaRRset _cacheSOA
                 | rrsetValid soaRRset = pure $ hasDelegation wd
                 | otherwise = verificationError
+    handleASIG fallback = withSection rankedAnswer msg $ \srrs _rank -> do
+        let arrsigRRs = rrListWith RRSIG (signedA <=< DNS.fromRData) dom (\_ rr -> rr) srrs
+        case arrsigRRs of
+          [] -> fallback
+          _ : _ -> hasDelegation <$> getWorkaround
+      where
+        {- Case when apex of cohabited child-zone has A record,
+           * with DNSSEC, signed with child-zone apex.
+           * without DNSSEC, indistinguishable from the A definition without sub-domain cohabitation -}
+        signedA rd@RD_RRSIG{..} = guard (rrsig_type == A && rrsig_zone == dom) $> rd
     verificationError = do
         lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": verification error. invalid SOA:"
         lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
