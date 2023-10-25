@@ -115,7 +115,7 @@ cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY]
 cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = do
     msg <- norec True aservers dom DNSKEY
-    let rcode = DNS.rcode $ DNS.flags msg
+    let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
             either (pure . Left) (verifyDNSKEY msg) $ verifySEP dss dom srrs

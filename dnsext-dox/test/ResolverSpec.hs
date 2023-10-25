@@ -22,7 +22,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- tlsResolver 32768 ri0 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
         let ri1 =
                 defaultResolvInfo
@@ -32,7 +32,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- tlsResolver 32768 ri1 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
         let ri2 =
                 defaultResolvInfo
@@ -42,7 +42,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- tlsResolver 32768 ri2 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
     it "resolves well with QUIC" $ do
         let ri2 =
@@ -53,7 +53,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- quicResolver 32768 ri2 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
     it "resolves well with HTTP/2" $ do
         let ri0 =
@@ -64,7 +64,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri0 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
         let ri1 =
                 defaultResolvInfo
@@ -74,7 +74,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri1 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
         let ri2 =
                 defaultResolvInfo
@@ -84,7 +84,7 @@ spec = describe "solvers" $ do
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri2 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr
 
     it "resolves well with HTTP/3" $ do
         let ri2 =
@@ -95,4 +95,4 @@ spec = describe "solvers" $ do
 
         Result{..} <- http3Resolver "/dns-query" 32768 ri2 q mempty
         let Reply{..} = resultReply
-        rcode (flags replyDNSMessage) `shouldBe` NoErr
+        rcode replyDNSMessage `shouldBe` NoErr

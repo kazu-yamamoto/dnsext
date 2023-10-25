@@ -204,7 +204,8 @@ replyMessage eas ident rqs =
     message (rcode, rrs, auth) =
         res
             { DNS.identifier = ident
-            , DNS.flags = f{DNS.authAnswer = False, DNS.rcode = rcode}
+            , DNS.rcode = rcode
+            , DNS.flags = f{DNS.authAnswer = False}
             , DNS.answer = rrs
             , DNS.authority = auth
             , DNS.question = rqs
@@ -219,7 +220,7 @@ getResultIterative n typ = do
     ((cnrrs, _rn), etm) <- resolve n typ
     reqDO <- lift . lift $ asks requestDO
     let fromRRsets = concatMap $ rrListFromRRset reqDO
-        fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags msg, fromRRsets vans, fromRRsets vauth)
+        fromMessage (msg, (vans, vauth)) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
 resultFromRRS :: RequestDO -> ResultRRS -> Result

@@ -43,7 +43,7 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
         DNS.DNSFlags{..} = DNS.flags reqMsg
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
-    let rc = DNS.rcode $ DNS.flags rspMsg
+    let rc = DNS.rcode rspMsg
     incStatsM st fromRcode rc Nothing
     when (rc == DNS.NoErr) $
         if DNS.answer rspMsg == []

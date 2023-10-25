@@ -38,7 +38,7 @@ checkResp q seqno = isNothing . checkRespM q seqno
 checkRespM :: Question -> Identifier -> DNSMessage -> Maybe DNSError
 checkRespM q seqno resp
     | identifier resp /= seqno = Just SequenceNumberMismatch
-    | FormatErr <- rcode $ flags resp
+    | FormatErr <- rcode resp
     , [] <- question resp =
         Nothing
     | [q] /= question resp = Just QuestionMismatch
@@ -99,7 +99,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
                 let ans = replyDNSMessage rply
                     fl = flags ans
                     tc = trunCation fl
-                    rc = rcode fl
+                    rc = rcode ans
                     eh = ednsHeader ans
                     qctl = ednsEnabled FlagClear <> qctl0
                 when tc $ E.throwIO TCPFallback
@@ -173,8 +173,7 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
     go qctl0 = do
         rply <- perform $ solve qctl0
         let ans = replyDNSMessage rply
-            fl = flags ans
-            rc = rcode fl
+            rc = rcode ans
             eh = ednsHeader ans
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
