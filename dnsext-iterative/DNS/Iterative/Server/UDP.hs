@@ -19,7 +19,7 @@ import UnliftIO (SomeException, handle)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Queue (
+import DNS.Iterative.Server.Queue (
     QueueSize,
     ReadQueue,
     WriteQueue,
@@ -28,7 +28,7 @@ import DNS.Iterative.Queue (
     readQueue,
     writeQueue,
  )
-import qualified DNS.Iterative.Queue as Queue
+import qualified DNS.Iterative.Server.Queue as Queue
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 import DNS.TAP.Schema (SocketProtocol (..))

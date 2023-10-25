@@ -17,7 +17,7 @@ import Network.Socket
 import qualified Network.UDP as UDP
 
 -- this package
-import DNS.Iterative.Queue (
+import DNS.Iterative.Server.Queue (
     newQueue,
     readQueue,
     writeQueue,

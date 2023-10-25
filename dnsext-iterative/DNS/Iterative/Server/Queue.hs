@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module DNS.Iterative.Queue (
+module DNS.Iterative.Server.Queue (
     ReadQueue (..),
     WriteQueue (..),
     QueueSize (..),
