@@ -6,8 +6,9 @@ module RoundTripSpec (spec) where
 import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
-import Data.IP (Addr, IP (..), IPv4, IPv6, makeAddrRange, toIPv4, toIPv6)
+import Data.Either (fromRight)
 import qualified Data.IP
+import Data.IP (Addr, IP (..), IPv4, IPv6, makeAddrRange, toIPv4, toIPv6)
 import Data.String (fromString)
 import Data.Word
 import Test.Hspec
@@ -52,12 +53,10 @@ spec = do
         decodeMailbox bs `shouldBe` Right dom
         fmap encodeMailbox (decodeMailbox bs) `shouldBe` Right bs
 
-{-
-    prop "DNSFlags" . forAll (genDNSFlags 0x0f) $ \x -> do
+    prop "DNSFlags" . forAll (genDNSFlagsStuff 0x0f) $ \x -> do
         let bs = encodeDNSFlags x
         decodeDNSFlags bs `shouldBe` Right x
         encodeDNSFlags <$> decodeDNSFlags bs `shouldBe` Right bs
--}
 
     prop "ResourceRecord" . forAll genResourceRecord $ \rr -> do
         let bs = encodeResourceRecord rr
@@ -71,13 +70,11 @@ spec = do
     --        let inps = map BS.singleton $ BS.unpack $ encode msg
     --         in decodeChunks 3426660848 inps `shouldBe` Right msg
 
-{- fixme
-    prop "EDNS" . forAll genEDNSHeader $ \(edns, hdr) -> do
+    prop "EDNS" . forAll genEDNSHeader $ \(edns, (fl, op, rc)) -> do
         let eh = EDNSheader edns
             m =
-                fromRight (error "prop EDNS") $ decode $ encode $ DNSMessage hdr eh [] [] [] []
+                fromRight (error "prop EDNS") $ decode $ encode $ DNSMessage 1 op rc fl eh [] [] [] []
         ednsHeader m `shouldBe` eh
--}
 
 ----------------------------------------------------------------
 
@@ -171,6 +168,13 @@ genDomain =
 
 genMailbox :: Gen Mailbox
 genMailbox = elements ["a@b.", "a@b.c.", "first.last@example.org."]
+
+genDNSFlagsStuff :: Word16 -> Gen (DNSFlags, OPCODE, RCODE)
+genDNSFlagsStuff maxrc = do
+    fl <- genDNSFlags
+    op <- genOPCODE
+    rc <- genRCODE maxrc
+    return (fl, op, rc)
 
 genDNSFlags :: Gen DNSFlags
 genDNSFlags =
@@ -274,10 +278,8 @@ genOData =
                         then pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString $ BS.pack more
                         else pure $ od_ecsGeneric fam srcBits scpBits $ Opaque.fromByteString $ BS.pack less
 
-{-
-genEDNSHeader :: Gen (EDNS, DNSHeader)
+genEDNSHeader :: Gen (EDNS, (DNSFlags, OPCODE, RCODE))
 genEDNSHeader = do
     edns <- genEDNS
-    hdr <- genDNSHeader 0xF00
+    hdr <- genDNSFlagsStuff 0xF00
     return (edns, hdr)
--}
