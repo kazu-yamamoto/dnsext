@@ -284,4 +284,3 @@ fromDNSMessage ans conv = case rcode ans of
     BadVers -> Left BadOptRecord
     BadRCODE -> Left $ DecodeError "Malformed EDNS message"
     _ -> Left UnknownDNSError
-

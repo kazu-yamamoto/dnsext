@@ -382,14 +382,15 @@ getDNSFlags rbuf _ = do
     flgs <- get16 rbuf
     let op = getOpcode flgs
         rc = getRcode flgs
-        flg = DNSFlags
-            (getIsResponse flgs)
-            (getAuthAnswer flgs)
-            (getTrunCation flgs)
-            (getRecDesired flgs)
-            (getRecAvailable flgs)
-            (getAuthenData flgs)
-            (getChkDisable flgs)
+        flg =
+            DNSFlags
+                (getIsResponse flgs)
+                (getAuthAnswer flgs)
+                (getTrunCation flgs)
+                (getRecDesired flgs)
+                (getRecAvailable flgs)
+                (getAuthenData flgs)
+                (getChkDisable flgs)
     return (flg, op, rc)
   where
     getIsResponse w = testBit w 15

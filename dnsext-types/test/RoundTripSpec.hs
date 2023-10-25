@@ -7,8 +7,8 @@ import Control.Monad (replicateM)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
 import Data.Either (fromRight)
-import qualified Data.IP
 import Data.IP (Addr, IP (..), IPv4, IPv6, makeAddrRange, toIPv4, toIPv6)
+import qualified Data.IP
 import Data.String (fromString)
 import Data.Word
 import Test.Hspec
