@@ -111,39 +111,34 @@ data DNSMessage = DNSMessage
 type Identifier = Word16
 
 putDNSMessage :: DNSMessage -> Builder ()
-putDNSMessage msg wbuf ref = do
+putDNSMessage DNSMessage{..} wbuf ref = do
     putHeader hd wbuf ref
     putNums
-    mapM_ putQ qs
-    mapM_ putRR an
-    mapM_ putRR au
+    mapM_ putQ question
+    mapM_ putRR answer
+    mapM_ putRR authority
     mapM_ putRR ad
   where
     putNums =
         mapM_
             (putInt16 wbuf)
-            [ length qs
-            , length an
-            , length au
+            [ length question
+            , length answer
+            , length authority
             , length ad
             ]
     putQ q = putQuestion Original q wbuf ref
     putRR rr = putResourceRecord Original rr wbuf ref
-    hm = header msg
-    fl = flags hm
-    eh = ednsHeader msg
-    qs = question msg
-    an = answer msg
-    au = authority msg
-    hd = ifEDNS eh hm $ hm{flags = fl{rcode = rc}}
-    rc = ifEDNS eh <$> id <*> nonEDNSrcode $ rcode fl
+    fl = flags header
+    hd = ifEDNS ednsHeader header $ header{flags = fl{rcode = rc}}
+    rc = ifEDNS ednsHeader <$> id <*> nonEDNSrcode $ rcode fl
       where
         nonEDNSrcode code
             | fromRCODE code < 16 = code
             | otherwise = FormatErr
-    ad = prependOpt $ additional msg
+    ad = prependOpt additional
       where
-        prependOpt ads = mapEDNS eh (fromEDNS ads $ fromRCODE rc) ads
+        prependOpt ads = mapEDNS ednsHeader (fromEDNS ads $ fromRCODE rc) ads
           where
             fromEDNS :: AdditionalRecords -> Word16 -> EDNS -> AdditionalRecords
             fromEDNS rrs rc' edns = ResourceRecord name' type' class' ttl' rdata' : rrs
