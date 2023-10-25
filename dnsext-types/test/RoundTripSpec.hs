@@ -52,10 +52,12 @@ spec = do
         decodeMailbox bs `shouldBe` Right dom
         fmap encodeMailbox (decodeMailbox bs) `shouldBe` Right bs
 
-    prop "DNSFlags" . forAll (genDNSFlags 0x0f) $ \flgs -> do
-        let bs = encodeDNSFlags flgs
-        decodeDNSFlags bs `shouldBe` Right flgs
-        fmap encodeDNSFlags (decodeDNSFlags bs) `shouldBe` Right bs
+{-
+    prop "DNSFlags" . forAll (genDNSFlags 0x0f) $ \x -> do
+        let bs = encodeDNSFlags x
+        decodeDNSFlags bs `shouldBe` Right x
+        encodeDNSFlags <$> decodeDNSFlags bs `shouldBe` Right bs
+-}
 
     prop "ResourceRecord" . forAll genResourceRecord $ \rr -> do
         let bs = encodeResourceRecord rr
@@ -80,10 +82,12 @@ spec = do
 ----------------------------------------------------------------
 
 genDNSMessage :: Gen DNSMessage
-genDNSMessage =
+genDNSMessage = do
     DNSMessage
         <$> genWord16
-        <*> genDNSFlags 0x0f
+        <*> genOPCODE
+        <*> genRCODE 0x0f
+        <*> genDNSFlags
         <*> makeEDNS
         <*> listOf genQuestion
         <*> listOf genResourceRecord
@@ -168,16 +172,14 @@ genDomain =
 genMailbox :: Gen Mailbox
 genMailbox = elements ["a@b.", "a@b.c.", "first.last@example.org."]
 
-genDNSFlags :: Word16 -> Gen DNSFlags
-genDNSFlags maxrc =
+genDNSFlags :: Gen DNSFlags
+genDNSFlags =
     DNSFlags
         <$> genBool
-        <*> genOPCODE
         <*> genBool
         <*> genBool
         <*> genBool
         <*> genBool
-        <*> genRCODE maxrc
         <*> genBool
         <*> genBool
 

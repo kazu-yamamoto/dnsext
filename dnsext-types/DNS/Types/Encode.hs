@@ -34,8 +34,8 @@ encode msg@DNSMessage{..} = runBuilder siz $ putDNSMessage msg
     ednsSize eh = 11 + sum (map (\o -> 4 + odataSize o) $ ednsOptions eh)
 
 -- | Encode DNS flags.
-encodeDNSFlags :: DNSFlags -> ByteString
-encodeDNSFlags flags = runBuilder 2 $ putDNSFlags flags
+encodeDNSFlags :: (DNSFlags, OPCODE, RCODE) -> ByteString
+encodeDNSFlags = runBuilder 2 . putDNSFlags
 
 -- | Encode a question.
 encodeQuestion :: Question -> ByteString

@@ -57,15 +57,15 @@ testResponseA :: DNSMessage
 testResponseA =
     DNSMessage
         { identifier = 61046
+        , opcode = OP_STD
+        , rcode = NoErr
         , flags =
             DNSFlags
                 { isResponse = True
-                , opcode = OP_STD
                 , authAnswer = False
                 , trunCation = False
                 , recDesired = True
                 , recAvailable = True
-                , rcode = NoErr
                 , authenData = False
                 , chkDisable = False
                 }
@@ -163,15 +163,15 @@ testResponseTXT :: DNSMessage
 testResponseTXT =
     DNSMessage
         { identifier = 48724
+        , opcode = OP_STD
+        , rcode = NoErr
         , flags =
             DNSFlags
                 { isResponse = True
-                , opcode = OP_STD
                 , authAnswer = False
                 , trunCation = False
                 , recDesired = True
                 , recAvailable = True
-                , rcode = NoErr
                 , authenData = False
                 , chkDisable = False
                 }

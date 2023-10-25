@@ -274,7 +274,7 @@ import DNS.Types.Type
 -- content of 'NameError' (NXDomain) messages will need to implement their
 -- own RCODE handling.
 fromDNSMessage :: DNSMessage -> (DNSMessage -> a) -> Either DNSError a
-fromDNSMessage ans conv = case errcode ans of
+fromDNSMessage ans conv = case rcode ans of
     NoErr -> Right $ conv ans
     FormatErr -> Left FormatError
     ServFail -> Left ServerFailure
@@ -284,5 +284,4 @@ fromDNSMessage ans conv = case errcode ans of
     BadVers -> Left BadOptRecord
     BadRCODE -> Left $ DecodeError "Malformed EDNS message"
     _ -> Left UnknownDNSError
-  where
-    errcode = rcode . flags
+
