@@ -229,7 +229,7 @@ minUdpSize = 512
 -- the message 'DNSHeader' and 'EDNSheader'.
 --
 -- >>> defaultQuery
--- DNSMessage {identifier = 0, flags = DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, opcode = OP_STD, rcode = NoError, flags = DNSFlags {isResponse = False, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, authenData = False, chkDisable = False}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
@@ -272,7 +272,7 @@ makeQuery idt q =
 -- EDNS OPT record).  See 'EDNSheader' for more details.
 --
 -- >>> defaultResponse
--- DNSMessage {identifier = 0, flags = DNSFlags {isResponse = True, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, opcode = OP_STD, rcode = NoError, flags = DNSFlags {isResponse = True, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, authenData = False, chkDisable = False}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
@@ -342,7 +342,7 @@ data DNSFlags = DNSFlags
 -- the RD bit is set, and the AD and CD bits are cleared.
 --
 -- >>> defaultDNSFlags
--- DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}
+-- DNSFlags {isResponse = False, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, authenData = False, chkDisable = False}
 defaultDNSFlags :: DNSFlags
 defaultDNSFlags =
     DNSFlags
