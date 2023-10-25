@@ -38,7 +38,7 @@ getFlags = ask
 
 result :: Printer DNSMessage
 result DNSMessage{..} = do
-    putHeader header
+    putHeader (identifier, flags)
     nl
     putEDNSHeader ednsHeader
     putQS question
@@ -48,18 +48,16 @@ result DNSMessage{..} = do
 
 ----------------------------------------------------------------
 
-putHeader :: Printer DNSHeader
-putHeader DNSHeader{..} = do
+putHeader :: Printer (Identifier, DNSFlags)
+putHeader (idnt, flags@DNSFlags{..}) = do
     dsemi *> sp *> string "HEADER SECTION:"
     nl
     semi *> string (opcd opcode) *> string ", "
     string (show rcode) *> string ", "
-    string "id: " *> string (show identifier)
+    string "id: " *> string (show idnt)
     nl
     semi *> string "Flags:" *> sp *> putFlags flags
     nl
-  where
-    DNSFlags{..} = flags
 
 putFlags :: Printer DNSFlags
 putFlags DNSFlags{..} = sepBy string (string ", ") $ catMaybes xs
