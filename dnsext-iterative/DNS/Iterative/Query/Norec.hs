@@ -80,7 +80,7 @@ handleResponseError e f msg
         e $ HasError (DNS.rcode flags) msg
     | otherwise = f msg
   where
-    flags = DNS.flags $ DNS.header msg
+    flags = DNS.flags msg
 
 dnsQueryT
     :: (Env -> QueryControls -> IO (Either QueryError a)) -> DNSQuery a

@@ -181,9 +181,7 @@ rankedSection
     -> ([ResourceRecord], Ranking)
 rankedSection authRank noauthRank section msg =
     (,) (section msg) $
-        if DNS.authAnswer flags then authRank else noauthRank
-  where
-    flags = DNS.flags $ DNS.header msg
+        if DNS.authAnswer (DNS.flags msg) then authRank else noauthRank
 
 rankedAnswer :: DNSMessage -> ([ResourceRecord], Ranking)
 rankedAnswer =

@@ -71,4 +71,4 @@ checkNoErr :: Result -> Expectation
 checkNoErr Result{..} = takeRcode replyDNSMessage `shouldBe` NoErr
   where
     Reply{..} = resultReply
-    takeRcode = rcode . flags . header
+    takeRcode = rcode . flags
