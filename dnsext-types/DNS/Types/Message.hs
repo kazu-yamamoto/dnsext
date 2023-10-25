@@ -222,7 +222,7 @@ minUdpSize = 512
 -- the message 'DNSHeader' and 'EDNSheader'.
 --
 -- >>> defaultQuery
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, flags = DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
@@ -263,7 +263,7 @@ makeQuery idt q =
 -- EDNS OPT record).  See 'EDNSheader' for more details.
 --
 -- >>> defaultResponse
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = True, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, flags = DNSFlags {isResponse = True, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
