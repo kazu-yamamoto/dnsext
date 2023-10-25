@@ -309,34 +309,37 @@ maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
-servsChildZone dc nss dom msg = withSection rankedAuthority msg $ \srrs _rank -> do
-    let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
-    case soaRRs of
-        [] -> pure noDelegation {- not workaround fallbacks -}
-        {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
-        [_] -> getWorkaround >>= verifySOA
-        _ : _ : _ -> multipleSOA soaRRs
+servsChildZone dc nss dom msg =
+    handleSOA (pure noDelegation)
   where
-    soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
+    handleSOA fallback = withSection rankedAuthority msg $ \srrs _rank -> do
+        let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
+        case soaRRs of
+            [] -> fallback
+            {- When `A` records are found, indistinguishable from the A definition without sub-domain cohabitation -}
+            [_] -> getWorkaround >>= verifySOA
+            _ : _ : _ -> multipleSOA soaRRs
+      where
+        soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
+        multipleSOA soaRRs = do
+            lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
+            lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
+            throwDnsError DNS.ServerFailure
+        verifySOA wd
+            | null dnskeys = pure $ hasDelegation wd
+            | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+          where
+            dnskeys = delegationDNSKEY wd
+            nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
+            ncSOA = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
+            result _ soaRRset _cacheSOA
+                | rrsetValid soaRRset = pure $ hasDelegation wd
+                | otherwise = verificationError
     verificationError = do
         lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": verification error. invalid SOA:"
         lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
         throwDnsError DNS.ServerFailure
-    multipleSOA soaRRs = do
-        lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
-        lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-        throwDnsError DNS.ServerFailure
     getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
-    verifySOA wd
-        | null dnskeys = pure $ hasDelegation wd
-        | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
-      where
-        dnskeys = delegationDNSKEY wd
-        nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
-        ncSOA = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
-        result _ soaRRset _cacheSOA
-            | rrsetValid soaRRset = pure $ hasDelegation wd
-            | otherwise = verificationError
 
 fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC dc nss d = do
