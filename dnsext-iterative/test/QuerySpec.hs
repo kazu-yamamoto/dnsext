@@ -112,6 +112,10 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
         (_, cs) <- getResolveCache "1.1.1.1.in-addr.arpa." PTR
         check cs "arpa." NS `shouldSatisfy` isNothing
 
+    it "shared child zone - child apex a" $ do
+        (_, cs) <- getResolveCache "www.cloudflare.com." MX
+        check cs "www.cloudflare.com." MX `shouldSatisfy` isJust
+
 querySpec :: Bool -> Log.PutLines -> Spec
 querySpec disableV6NS putLines = describe "query" $ do
     tcache@TimeCache{..} <- runIO newTimeCache
