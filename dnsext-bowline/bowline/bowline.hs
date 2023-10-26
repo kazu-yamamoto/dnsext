@@ -76,14 +76,15 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let tmout = timeout cnf_resolve_timeout
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
-    servers <- mapM (getServers env cnf_dns_addrs) $ trans creds
+    (pipes, toCacher) <- Server.mkPipeline env 20 8
+    servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
     mng <- getControl env mng0
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
     tidL <- runLogger
     tidA <- API.new conf mng
-    race_ (conc $ concat servers) (conc monitor)
+    race_ (conc $ pipes ++ concat servers) (conc monitor)
         -- Teardown
         `finally` do
             mapM_ maybeKill [tidA, tidL, tidW]
@@ -103,12 +104,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         ]
     conc = foldr concurrently_ $ return ()
     udpconf =
-        UdpServerConfig
-            { udp_pipelines_per_socket = cnf_udp_pipelines_per_socket
-            , udp_workers_per_pipeline = cnf_udp_workers_per_pipeline
-            , udp_queue_size_per_pipeline = cnf_udp_queue_size_per_pipeline
-            , udp_pipeline_share_queue = cnf_udp_pipeline_share_queue
-            }
+        UdpServerConfig{}
     vcconf =
         VcServerConfig
             { vc_query_max_size = cnf_vc_query_max_size
@@ -132,11 +128,12 @@ main = do
 getServers
     :: Env
     -> [HostName]
+    -> Server.ToCacher
     -> (Bool, Server, Int)
     -> IO [IO ()]
-getServers _ _ (False, _, _) = return []
-getServers env hosts (True, server, port') =
-    concat <$> mapM (server env port) hosts
+getServers _ _ _ (False, _, _) = return []
+getServers env hosts toCacher (True, server, port') =
+    concat <$> mapM (server env toCacher port) hosts
   where
     port = fromIntegral port'
 

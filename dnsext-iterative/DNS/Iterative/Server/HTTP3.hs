@@ -22,10 +22,10 @@ import DNS.Iterative.Server.Types
 
 ----------------------------------------------------------------
 http3Server :: Credentials -> VcServerConfig -> Server
-http3Server creds VcServerConfig{..} env port host = do
+http3Server creds VcServerConfig{..} env toCacher port host = do
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             QUIC.run sconf $ \conn ->
-                H3.run conn (conf mgr) $ doHTTP env
+                H3.run conn (conf mgr) $ doHTTP env toCacher
     return [http3server]
   where
     sconf = getServerConfig creds host port "h3"

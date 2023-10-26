@@ -70,21 +70,23 @@ makeAddrInfo nh p = do
 recvVC :: VCLimit -> RecvN -> RecvMany
 recvVC lim recvN = do
     (l2, b2) <- recvManyNN recvN 2
-    when (l2 /= 2) $ E.throwIO $ DecodeError "length is broken"
-    let len = decodeVCLength $ BS.concat b2
-    when (fromIntegral len > lim) $
-        E.throwIO $
-            DecodeError $
-                "length is over the limit: should be len <= lim, but (len: "
-                    ++ show len
-                    ++ ") > (lim: "
-                    ++ show lim
-                    ++ ") "
-    (len', bss) <- recvManyNN recvN len
-    case compare len' len of
-        LT -> E.throwIO $ DecodeError "message length is not enough"
-        EQ -> return (len, bss)
-        GT -> E.throwIO $ DecodeError "message length is too large"
+    if l2 /= 2
+        then return (0,[])
+        else do
+            let len = decodeVCLength $ BS.concat b2
+            when (fromIntegral len > lim) $
+                E.throwIO $
+                    DecodeError $
+                        "length is over the limit: should be len <= lim, but (len: "
+                            ++ show len
+                            ++ ") > (lim: "
+                            ++ show lim
+                            ++ ") "
+            (len', bss) <- recvManyNN recvN len
+            case compare len' len of
+                LT -> E.throwIO $ DecodeError "message length is not enough"
+                EQ -> return (len, bss)
+                GT -> E.throwIO $ DecodeError "message length is too large"
 
 -- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int
