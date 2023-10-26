@@ -157,7 +157,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
         maxNCacheTTL = 21600
-    nullSOA = ncWarn "no SOA records found" $> []
+    nullSOA = ncWarn ("no SOA records found with zone=" ++ show zone) $> []
 
     single xs = case xs of
         [] -> Left "no SOA records found"
@@ -166,12 +166,15 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     ncWarn s
         | not $ null answer = do
             plogLines Log.DEBUG $ map ("\t" ++) ("because of non empty answers:" : map show answer)
+        | null soas = do
+            plogLines Log.WARN $ ["\tno SOA records in authority section"]
         | otherwise = do
-            plogLines Log.WARN $ map ("\t" ++) (("authority section:" :) . map show $ DNS.authority msg)
+            plogLines Log.WARN $ map ("\t" ++) (("SOA records in authority section:" :) $ map show soas)
       where
-        withDom = ["from-domain=" ++ show zone ++ ",", "domain=" ++ show dom ++ ":", s]
+        withDom = [s ++ ",", "domain=" ++ show dom ++ " under zone=" ++ show zone ++ ":"]
         plogLines lv xs = logLines lv $ ("cacheSectionNegative: " ++ unwords withDom) : xs
         answer = DNS.answer msg
+        soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
 cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
