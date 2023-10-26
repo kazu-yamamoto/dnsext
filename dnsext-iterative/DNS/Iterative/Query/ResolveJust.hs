@@ -337,8 +337,8 @@ servsChildZone dc nss dom msg =
     handleASIG fallback = withSection rankedAnswer msg $ \srrs _rank -> do
         let arrsigRRs = rrListWith RRSIG (signedA <=< DNS.fromRData) dom (\_ rr -> rr) srrs
         case arrsigRRs of
-          [] -> fallback
-          _ : _ -> hasDelegation <$> getWorkaround
+            [] -> fallback
+            _ : _ -> hasDelegation <$> getWorkaround
       where
         {- Case when apex of cohabited child-zone has A record,
            * with DNSSEC, signed with child-zone apex.
