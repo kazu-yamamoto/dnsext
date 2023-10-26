@@ -103,13 +103,13 @@ getResponseIterative'
     -> [DNS.Question]
     -> IO (Either String DNSMessage)
 getResponseIterative' env reqM (DNS.Question bn typ _) qs = do
-    ers <- runDNSQuery getResult env $ ctrlFromRequestHeader reqH reqEH
-    return $ replyMessage ers (DNS.identifier reqH) qs
+    ers <- runDNSQuery getResult env $ ctrlFromRequestHeader reqF reqEH
+    return $ replyMessage ers (DNS.identifier reqM) qs
   where
-    reqH = DNS.header reqM
+    reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
     getResult = do
-        guardRequestHeader reqH reqEH
+        guardRequestHeader reqF reqEH
         getResultIterative bn typ
 
 data CacheResult
@@ -133,45 +133,44 @@ getResponseCached env reqM = case DNS.question reqM of
 getResponseCached'
     :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
 getResponseCached' env reqM (DNS.Question bn typ _) qs = do
-    ex <- runDNSQuery getResult env (ctrlFromRequestHeader reqH reqEH)
+    ex <- runDNSQuery getResult env (ctrlFromRequestHeader reqF reqEH)
     case ex of
         Right Nothing -> return None
         Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
         Left l -> return $ toCacheResult $ mkResponse $ Left l
   where
-    reqH = DNS.header reqM
+    reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
     getResult = do
-        guardRequestHeader reqH reqEH
+        guardRequestHeader reqF reqEH
         getResultCached bn typ
-    mkResponse ers = replyMessage ers (DNS.identifier reqH) qs
+    mkResponse ers = replyMessage ers (DNS.identifier reqM) qs
 
-ctrlFromRequestHeader :: DNSHeader -> EDNSheader -> QueryControls
-ctrlFromRequestHeader reqH reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
+ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
+ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
   where
     doOp
         | dnssecOK = FlagSet
         | otherwise = FlagClear
     cdOp
-        | dnssecOK, DNS.chkDisable flags = FlagSet {- only check when DNSSEC OK -}
+        | dnssecOK, DNS.chkDisable reqF = FlagSet {- only check when DNSSEC OK -}
         | otherwise = FlagClear
     adOp
-        | dnssecOK, DNS.authenData flags = FlagSet {- only check when DNSSEC OK -}
+        | dnssecOK, DNS.authenData reqF = FlagSet {- only check when DNSSEC OK -}
         | otherwise = FlagClear
 
-    flags = DNS.flags reqH
     dnssecOK = case reqEH of
         DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> True
         _ -> False
 
-guardRequestHeader :: DNSHeader -> EDNSheader -> DNSQuery ()
-guardRequestHeader reqH reqEH
+guardRequestHeader :: DNSFlags -> EDNSheader -> DNSQuery ()
+guardRequestHeader reqF reqEH
     | reqEH == DNS.InvalidEDNS =
         throwE $ InvalidEDNS DNS.InvalidEDNS DNS.defaultResponse
     | not rd = throwE $ HasError DNS.Refused DNS.defaultResponse
     | otherwise = pure ()
   where
-    rd = DNS.recDesired $ DNS.flags reqH
+    rd = DNS.recDesired reqF
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
 replyMessage
@@ -204,18 +203,15 @@ replyMessage eas ident rqs =
 
     message (rcode, rrs, auth) =
         res
-            { DNS.header =
-                h
-                    { DNS.identifier = ident
-                    , DNS.flags = f{DNS.authAnswer = False, DNS.rcode = rcode}
-                    }
+            { DNS.identifier = ident
+            , DNS.rcode = rcode
+            , DNS.flags = f{DNS.authAnswer = False}
             , DNS.answer = rrs
             , DNS.authority = auth
             , DNS.question = rqs
             }
     res = DNS.defaultResponse
-    h = DNS.header res
-    f = DNS.flags h
+    f = DNS.flags res
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE'.
 --   The cache is maybe updated.
@@ -224,7 +220,7 @@ getResultIterative n typ = do
     ((cnrrs, _rn), etm) <- resolve n typ
     reqDO <- lift . lift $ asks requestDO
     let fromRRsets = concatMap $ rrListFromRRset reqDO
-        fromMessage (msg, (vans, vauth)) = (DNS.rcode $ DNS.flags $ DNS.header msg, fromRRsets vans, fromRRsets vauth)
+        fromMessage (msg, (vans, vauth)) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
 resultFromRRS :: RequestDO -> ResultRRS -> Result

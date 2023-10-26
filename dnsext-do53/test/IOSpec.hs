@@ -68,7 +68,6 @@ dnsException :: Selector DNSError
 dnsException = const True
 
 checkNoErr :: Result -> Expectation
-checkNoErr Result{..} = takeRcode replyDNSMessage `shouldBe` NoErr
+checkNoErr Result{..} = rcode replyDNSMessage `shouldBe` NoErr
   where
     Reply{..} = resultReply
-    takeRcode = rcode . flags . header

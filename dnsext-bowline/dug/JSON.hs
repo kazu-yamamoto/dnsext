@@ -14,7 +14,6 @@ import Prettyprinter.Render.String
 showJSON :: DNSMessage -> String
 showJSON DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
   where
-    DNSHeader{..} = header
     DNSFlags{..} = flags
     hd =
         [ ("ID", pretty identifier)

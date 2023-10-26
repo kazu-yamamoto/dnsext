@@ -371,13 +371,12 @@ modifyQuery
     -> DNSMessage
 modifyQuery ctls query =
     query
-        { header = header'
+        { flags = queryDNSFlags hctls
         , ednsHeader = queryEdns ehctls
         }
   where
     hctls = qctlHeader ctls
     ehctls = qctlEdns ctls
-    header' = (header query){flags = queryDNSFlags hctls}
 
     -- \| Apply the given 'FlagOp' to a default boolean value to produce the final
     -- setting.
@@ -422,4 +421,4 @@ modifyQuery ctls query =
             , chkDisable = applyFlag cd $ chkDisable d
             }
       where
-        d = flags $ header query
+        d = flags query

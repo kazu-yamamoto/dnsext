@@ -134,7 +134,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         printQueryError = either (putStrLn . ("    QueryError: " ++) . show) (const $ pure ())
         _pprResult (msg, (ans, auth)) =
             unlines $
-                ("rcode: " ++ show (DNS.rcode $ DNS.flags $ DNS.header msg))
+                ("rcode: " ++ show (DNS.rcode msg))
                     : "answer:"
                     : map (("  " ++) . show) ans
                     ++ "authority:"
@@ -144,7 +144,7 @@ querySpec disableV6NS putLines = describe "query" $ do
             | null (DNS.answer msg) = Empty rcode
             | otherwise = NotEmpty rcode
           where
-            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+            rcode = DNS.rcode msg
         verified rrsets
             | all rrsetValid rrsets = Verified
             | otherwise = NotVerified
@@ -152,7 +152,7 @@ querySpec disableV6NS putLines = describe "query" $ do
             | null vans = VEmpty rcode
             | otherwise = VNotEmpty rcode (verified vans)
           where
-            rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+            rcode = DNS.rcode msg
         checkResult = either (const Failed) (checkAnswer . fst)
 
     it "root-priming" $ do

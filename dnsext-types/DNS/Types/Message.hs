@@ -91,8 +91,20 @@ mapEDNS _ _ a = a
 
 -- | DNS message format for queries and replies.
 data DNSMessage = DNSMessage
-    { header :: DNSHeader
-    -- ^ Header with extended 'RCODE'
+    { identifier :: Identifier
+    -- ^ Query or response identifier.
+    , opcode :: OPCODE
+    -- ^ Kind of query.
+    , rcode :: RCODE
+    -- ^ The full 12-bit extended RCODE when EDNS is in use.
+    -- Should always be zero in well-formed requests.
+    -- When decoding replies, the high eight bits from
+    -- any EDNS response are combined with the 4-bit
+    -- RCODE from the DNS header.  When encoding
+    -- replies, if no EDNS OPT record is provided, RCODE
+    -- values > 15 are mapped to 'FormatErr'.
+    , flags :: DNSFlags
+    -- ^ Flags
     , ednsHeader :: EDNSheader
     -- ^ EDNS pseudo-header
     , question :: [Question]
@@ -111,39 +123,34 @@ data DNSMessage = DNSMessage
 type Identifier = Word16
 
 putDNSMessage :: DNSMessage -> Builder ()
-putDNSMessage msg wbuf ref = do
-    putHeader hd wbuf ref
+putDNSMessage DNSMessage{..} wbuf ref = do
+    putIdentifier wbuf identifier
+    putDNSFlags (flags, opcode, rcode') wbuf ref
     putNums
-    mapM_ putQ qs
-    mapM_ putRR an
-    mapM_ putRR au
+    mapM_ putQ question
+    mapM_ putRR answer
+    mapM_ putRR authority
     mapM_ putRR ad
   where
+    putIdentifier = put16
     putNums =
         mapM_
             (putInt16 wbuf)
-            [ length qs
-            , length an
-            , length au
+            [ length question
+            , length answer
+            , length authority
             , length ad
             ]
     putQ q = putQuestion Original q wbuf ref
     putRR rr = putResourceRecord Original rr wbuf ref
-    hm = header msg
-    fl = flags hm
-    eh = ednsHeader msg
-    qs = question msg
-    an = answer msg
-    au = authority msg
-    hd = ifEDNS eh hm $ hm{flags = fl{rcode = rc}}
-    rc = ifEDNS eh <$> id <*> nonEDNSrcode $ rcode fl
+    rcode' = (ifEDNS ednsHeader <$> id <*> nonEDNSrcode) rcode
       where
         nonEDNSrcode code
             | fromRCODE code < 16 = code
             | otherwise = FormatErr
-    ad = prependOpt $ additional msg
+    ad = prependOpt additional
       where
-        prependOpt ads = mapEDNS eh (fromEDNS ads $ fromRCODE rc) ads
+        prependOpt ads = mapEDNS ednsHeader (fromEDNS ads $ fromRCODE rcode') ads
           where
             fromEDNS :: AdditionalRecords -> Word16 -> EDNS -> AdditionalRecords
             fromEDNS rrs rc' edns = ResourceRecord name' type' class' ttl' rdata' : rrs
@@ -160,7 +167,8 @@ putDNSMessage msg wbuf ref = do
 
 getDNSMessage :: Parser DNSMessage
 getDNSMessage rbuf ref = do
-    hm <- getHeader rbuf ref
+    idt <- getIdentifier rbuf
+    (flgs, op, rc0) <- getDNSFlags rbuf ref
     qdCount <- getInt16 rbuf
     anCount <- getInt16 rbuf
     nsCount <- getInt16 rbuf
@@ -170,12 +178,10 @@ getDNSMessage rbuf ref = do
     authrrs <- getResourceRecords nsCount rbuf ref
     addnrrs <- getResourceRecords arCount rbuf ref
     let (opts, rest) = partition ((==) OPT . rrtype) addnrrs
-        flgs = flags hm
-        rc = fromRCODE $ rcode flgs
-        (eh, erc) = getEDNS rc opts
-        hd = hm{flags = flgs{rcode = erc}}
-    pure $ DNSMessage hd eh queries answers authrrs $ ifEDNS eh rest addnrrs
+        (eh, rc) = getEDNS (fromRCODE rc0) opts
+    pure $ DNSMessage idt op rc flgs eh queries answers authrrs $ ifEDNS eh rest addnrrs
   where
+    getIdentifier = get16
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
     getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
     getEDNS rc rrs = case rrs of
@@ -223,15 +229,14 @@ minUdpSize = 512
 -- the message 'DNSHeader' and 'EDNSheader'.
 --
 -- >>> defaultQuery
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, opcode = OP_STD, rcode = NoError, flags = DNSFlags {isResponse = False, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, authenData = False, chkDisable = False}, ednsHeader = EDNSheader (EDNS {ednsVersion = 0, ednsUdpSize = 1232, ednsDnssecOk = False, ednsOptions = []}), question = [], answer = [], authority = [], additional = []}
 defaultQuery :: DNSMessage
 defaultQuery =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 0
-                , flags = defaultDNSFlags
-                }
+        { identifier = 0
+        , opcode = OP_STD
+        , rcode = NoErr
+        , flags = defaultDNSFlags
         , ednsHeader = EDNSheader defaultEDNS
         , question = []
         , answer = []
@@ -249,7 +254,7 @@ makeQuery
     -> DNSMessage
 makeQuery idt q =
     defaultQuery
-        { header = (header defaultQuery){identifier = idt}
+        { identifier = idt
         , question = [q]
         }
 
@@ -267,20 +272,19 @@ makeQuery idt q =
 -- EDNS OPT record).  See 'EDNSheader' for more details.
 --
 -- >>> defaultResponse
--- DNSMessage {header = DNSHeader {identifier = 0, flags = DNSFlags {isResponse = True, opcode = OP_STD, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, rcode = NoError, authenData = False, chkDisable = False}}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
+-- DNSMessage {identifier = 0, opcode = OP_STD, rcode = NoError, flags = DNSFlags {isResponse = True, authAnswer = True, trunCation = False, recDesired = True, recAvailable = True, authenData = False, chkDisable = False}, ednsHeader = NoEDNS, question = [], answer = [], authority = [], additional = []}
 defaultResponse :: DNSMessage
 defaultResponse =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 0
-                , flags =
-                    defaultDNSFlags
-                        { isResponse = True
-                        , authAnswer = True
-                        , recAvailable = True
-                        , authenData = False
-                        }
+        { identifier = 0
+        , opcode = OP_STD
+        , rcode = NoErr
+        , flags =
+            defaultDNSFlags
+                { isResponse = True
+                , authAnswer = True
+                , recAvailable = True
+                , authenData = False
                 }
         , ednsHeader = NoEDNS
         , question = []
@@ -297,30 +301,17 @@ makeResponse
     -> DNSMessage
 makeResponse idt q as =
     defaultResponse
-        { header = header'{identifier = idt}
+        { identifier = idt
         , question = [q]
         , answer = as
         }
-  where
-    header' = header defaultResponse
 
 ----------------------------------------------------------------
-
--- | Raw data format for the header of DNS Query and Response.
-data DNSHeader = DNSHeader
-    { identifier :: Identifier
-    -- ^ Query or response identifier.
-    , flags :: DNSFlags
-    -- ^ Flags, OPCODE, and RCODE
-    }
-    deriving (Eq, Show)
 
 -- | Raw data format for the flags of DNS Query and Response.
 data DNSFlags = DNSFlags
     { isResponse :: Bool
     -- ^ QR (Queary or Response) bit - this bit is set if the message is response.
-    , opcode :: OPCODE
-    -- ^ Kind of query.
     , authAnswer :: Bool
     -- ^ AA (Authoritative Answer) bit - this bit is valid in responses,
     -- and specifies that the responding name server is an
@@ -338,14 +329,6 @@ data DNSFlags = DNSFlags
     -- ^ RA (Recursion Available) bit - this be is set or cleared in a
     -- response, and denotes whether recursive query support is
     -- available in the name server.
-    , rcode :: RCODE
-    -- ^ The full 12-bit extended RCODE when EDNS is in use.
-    -- Should always be zero in well-formed requests.
-    -- When decoding replies, the high eight bits from
-    -- any EDNS response are combined with the 4-bit
-    -- RCODE from the DNS header.  When encoding
-    -- replies, if no EDNS OPT record is provided, RCODE
-    -- values > 15 are mapped to 'FormatErr'.
     , authenData :: Bool
     -- ^ AD (Authenticated Data) bit - (RFC4035, Section 3.2.3).
     , chkDisable :: Bool
@@ -353,42 +336,27 @@ data DNSFlags = DNSFlags
     }
     deriving (Eq, Show)
 
-putHeader :: DNSHeader -> Builder ()
-putHeader hdr wbuf ref = do
-    putIdentifier wbuf $ identifier hdr
-    putDNSFlags (flags hdr) wbuf ref
-  where
-    putIdentifier = put16
-
-getHeader :: Parser DNSHeader
-getHeader rbuf ref =
-    DNSHeader <$> getIdentifier rbuf <*> getDNSFlags rbuf ref
-  where
-    getIdentifier = get16
-
 ----------------------------------------------------------------
 
 -- | Default 'DNSFlags' record suitable for making recursive queries.  By default
 -- the RD bit is set, and the AD and CD bits are cleared.
 --
 -- >>> defaultDNSFlags
--- DNSFlags {isResponse = False, opcode = OP_STD, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, rcode = NoError, authenData = False, chkDisable = False}
+-- DNSFlags {isResponse = False, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, authenData = False, chkDisable = False}
 defaultDNSFlags :: DNSFlags
 defaultDNSFlags =
     DNSFlags
         { isResponse = False
-        , opcode = OP_STD
         , authAnswer = False
         , trunCation = False
         , recDesired = True
         , recAvailable = False
         , authenData = False
         , chkDisable = False
-        , rcode = NoErr
         }
 
-putDNSFlags :: DNSFlags -> Builder ()
-putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
+putDNSFlags :: (DNSFlags, OPCODE, RCODE) -> Builder ()
+putDNSFlags (DNSFlags{..}, op, rc) wbuf _ = put16 wbuf word
   where
     set :: Word16 -> State Word16 ()
     set byte = ST.modify (.|. byte)
@@ -396,34 +364,34 @@ putDNSFlags DNSFlags{..} wbuf _ = put16 wbuf word
     st :: State Word16 ()
     st =
         sequence_
-            [ set (fromRCODE rcode .&. 0x0f)
+            [ set (fromRCODE rc .&. 0x0f)
             , when chkDisable $ set (bit 4)
             , when authenData $ set (bit 5)
             , when recAvailable $ set (bit 7)
             , when recDesired $ set (bit 8)
             , when trunCation $ set (bit 9)
             , when authAnswer $ set (bit 10)
-            , set (fromOPCODE opcode `shiftL` 11)
+            , set (fromOPCODE op `shiftL` 11)
             , when isResponse $ set (bit 15)
             ]
 
     word = ST.execState st 0
 
-getDNSFlags :: Parser DNSFlags
+getDNSFlags :: Parser (DNSFlags, OPCODE, RCODE)
 getDNSFlags rbuf _ = do
     flgs <- get16 rbuf
-    let oc = getOpcode flgs
-    return $
-        DNSFlags
-            (getIsResponse flgs)
-            oc
-            (getAuthAnswer flgs)
-            (getTrunCation flgs)
-            (getRecDesired flgs)
-            (getRecAvailable flgs)
-            (getRcode flgs)
-            (getAuthenData flgs)
-            (getChkDisable flgs)
+    let op = getOpcode flgs
+        rc = getRcode flgs
+        flg =
+            DNSFlags
+                (getIsResponse flgs)
+                (getAuthAnswer flgs)
+                (getTrunCation flgs)
+                (getRecDesired flgs)
+                (getRecAvailable flgs)
+                (getAuthenData flgs)
+                (getChkDisable flgs)
+    return (flg, op, rc)
   where
     getIsResponse w = testBit w 15
     getOpcode w = toOPCODE (shiftR w 11 .&. 0x0f)

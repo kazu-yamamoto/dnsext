@@ -221,8 +221,7 @@ benchQueries =
     | rootA <- cycle rootAs
     ]
   where
-    setId mid qm = qm{DNS.header = dh{DNS.identifier = mid}}
-    dh = DNS.header DNS.defaultQuery
+    setId mid qm = qm{DNS.identifier = mid}
     rootAs =
         [ DNS.defaultQuery
             { DNS.question = [DNS.Question (fromString name) DNS.A DNS.IN]

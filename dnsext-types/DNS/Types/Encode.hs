@@ -5,7 +5,6 @@ module DNS.Types.Encode (
     encode,
 
     -- * Encoders for parts
-    encodeDNSHeader,
     encodeDNSFlags,
     encodeQuestion,
     encodeResourceRecord,
@@ -34,13 +33,9 @@ encode msg@DNSMessage{..} = runBuilder siz $ putDNSMessage msg
             + sum (map resourceRecordSize additional)
     ednsSize eh = 11 + sum (map (\o -> 4 + odataSize o) $ ednsOptions eh)
 
--- | Encode DNS header.
-encodeDNSHeader :: DNSHeader -> ByteString
-encodeDNSHeader hdr = runBuilder 12 $ putHeader hdr -- excluding xxcounts
-
 -- | Encode DNS flags.
-encodeDNSFlags :: DNSFlags -> ByteString
-encodeDNSFlags flags = runBuilder 2 $ putDNSFlags flags
+encodeDNSFlags :: (DNSFlags, OPCODE, RCODE) -> ByteString
+encodeDNSFlags = runBuilder 2 . putDNSFlags
 
 -- | Encode a question.
 encodeQuestion :: Question -> ByteString

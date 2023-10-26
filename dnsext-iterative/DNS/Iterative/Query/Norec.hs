@@ -75,12 +75,12 @@ handleResponseError e f msg
     | not (DNS.isResponse flags) = e $ NotResponse (DNS.isResponse flags) msg
     | DNS.ednsHeader msg == DNS.InvalidEDNS =
         e $ InvalidEDNS (DNS.ednsHeader msg) msg
-    | DNS.rcode flags
+    | DNS.rcode msg
         `notElem` [DNS.NoErr, DNS.NameErr] =
-        e $ HasError (DNS.rcode flags) msg
+        e $ HasError (DNS.rcode msg) msg
     | otherwise = f msg
   where
-    flags = DNS.flags $ DNS.header msg
+    flags = DNS.flags msg
 
 dnsQueryT
     :: (Env -> QueryControls -> IO (Either QueryError a)) -> DNSQuery a

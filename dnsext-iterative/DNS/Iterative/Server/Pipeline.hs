@@ -40,10 +40,10 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
     logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns rspWire
     let st = stats_ env
         DNS.Question{..} = head $ DNS.question reqMsg
-        DNS.DNSFlags{..} = DNS.flags $ DNS.header reqMsg
+        DNS.DNSFlags{..} = DNS.flags reqMsg
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
-    let rc = DNS.rcode $ DNS.flags $ DNS.header rspMsg
+    let rc = DNS.rcode rspMsg
     incStatsM st fromRcode rc Nothing
     when (rc == DNS.NoErr) $
         if DNS.answer rspMsg == []

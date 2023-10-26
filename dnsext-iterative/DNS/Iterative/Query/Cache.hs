@@ -212,7 +212,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
 
     ncX = pure (([], []), pure ())
 
-    rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    rcode = DNS.rcode msg
     zone = delegationZone
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
@@ -236,7 +236,7 @@ cacheNoDelegation d zone dnskeys dom msg
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
     cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
-    rcode = DNS.rcode $ DNS.flags $ DNS.header msg
+    rcode = DNS.rcode msg
 
 {- FOURMOLU_DISABLE -}
 wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> ExceptT QueryError (ContextT IO) [RRset]

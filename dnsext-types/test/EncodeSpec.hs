@@ -39,47 +39,35 @@ check2 inp = bs' `shouldBe` bs
     out = fromRight (error "check2") $ decode bs
     bs' = encode out
 
-defaultHeader :: DNSHeader
-defaultHeader = header defaultQuery
-
 testQueryA :: DNSMessage
 testQueryA =
     defaultQuery
-        { header =
-            defaultHeader
-                { identifier = 1000
-                }
+        { identifier = 1000
         , question = [Question "www.mew.org." A IN]
         }
 
 testQueryAAAA :: DNSMessage
 testQueryAAAA =
     defaultQuery
-        { header =
-            defaultHeader
-                { identifier = 1001
-                }
+        { identifier = 1001
         , question = [Question "www.mew.org." AAAA IN]
         }
 
 testResponseA :: DNSMessage
 testResponseA =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 61046
-                , flags =
-                    DNSFlags
-                        { isResponse = True
-                        , opcode = OP_STD
-                        , authAnswer = False
-                        , trunCation = False
-                        , recDesired = True
-                        , recAvailable = True
-                        , rcode = NoErr
-                        , authenData = False
-                        , chkDisable = False
-                        }
+        { identifier = 61046
+        , opcode = OP_STD
+        , rcode = NoErr
+        , flags =
+            DNSFlags
+                { isResponse = True
+                , authAnswer = False
+                , trunCation = False
+                , recDesired = True
+                , recAvailable = True
+                , authenData = False
+                , chkDisable = False
                 }
         , ednsHeader = NoEDNS
         , question =
@@ -174,21 +162,18 @@ testResponseA =
 testResponseTXT :: DNSMessage
 testResponseTXT =
     DNSMessage
-        { header =
-            DNSHeader
-                { identifier = 48724
-                , flags =
-                    DNSFlags
-                        { isResponse = True
-                        , opcode = OP_STD
-                        , authAnswer = False
-                        , trunCation = False
-                        , recDesired = True
-                        , recAvailable = True
-                        , rcode = NoErr
-                        , authenData = False
-                        , chkDisable = False
-                        }
+        { identifier = 48724
+        , opcode = OP_STD
+        , rcode = NoErr
+        , flags =
+            DNSFlags
+                { isResponse = True
+                , authAnswer = False
+                , trunCation = False
+                , recDesired = True
+                , recAvailable = True
+                , authenData = False
+                , chkDisable = False
                 }
         , ednsHeader = EDNSheader defaultEDNS
         , question =
