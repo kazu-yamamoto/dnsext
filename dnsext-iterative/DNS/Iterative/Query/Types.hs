@@ -2,6 +2,8 @@ module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
     Env (..),
+    QueryContext (..),
+    queryContextIN,
     RRset (..),
     DEntry (..),
     ContextT,
@@ -61,6 +63,15 @@ data Env = Env
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
 
+data QueryContext =
+    QueryContext
+    { qcontrol_ :: QueryControls
+    , origQuestion_ :: Question
+    }
+
+queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
+queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
+
 data QueryError
     = DnsError DNSError
     | NotResponse Bool DNSMessage
@@ -68,10 +79,10 @@ data QueryError
     | HasError DNS.RCODE DNSMessage
     deriving (Show)
 
-type ContextT m = ReaderT Env (ReaderT QueryControls m)
+type ContextT m = ReaderT Env (ReaderT QueryContext m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-runDNSQuery :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
+runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
