@@ -58,18 +58,18 @@ data RequestAD
   * AD (Authenticated Data)
     * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7
       "setting the AD bit in a query as a signal indicating that the requester understands and is interested in the value of the AD bit in the response" -}
-requestDO :: QueryControls -> RequestDO
-requestDO ic = case extDO $ qctlEdns ic of
+requestDO :: QueryContext -> RequestDO
+requestDO QueryContext{..} = case extDO $ qctlEdns qcontrol_ of
     FlagSet -> DnssecOK
     _ -> NoDnssecOK
 
-_requestCD :: QueryControls -> RequestCD
-_requestCD ic = case cdBit $ qctlHeader ic of
+_requestCD :: QueryContext -> RequestCD
+_requestCD QueryContext{..} = case cdBit $ qctlHeader qcontrol_ of
     FlagSet -> CheckDisabled
     _ -> NoCheckDisabled
 
-_requestAD :: QueryControls -> RequestAD
-_requestAD ic = case adBit $ qctlHeader ic of
+_requestAD :: QueryContext -> RequestAD
+_requestAD QueryContext{..} = case adBit $ qctlHeader qcontrol_ of
     FlagSet -> AuthenticatedData
     _ -> NoAuthenticatedData
 
@@ -102,8 +102,8 @@ getResponseIterative'
     -> DNS.Question
     -> [DNS.Question]
     -> IO (Either String DNSMessage)
-getResponseIterative' env reqM (DNS.Question bn typ _) qs = do
-    ers <- runDNSQuery getResult env $ ctrlFromRequestHeader reqF reqEH
+getResponseIterative' env reqM q@(DNS.Question bn typ _) qs = do
+    ers <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
     return $ replyMessage ers (DNS.identifier reqM) qs
   where
     reqF = DNS.flags reqM
@@ -130,10 +130,9 @@ getResponseCached env reqM = case DNS.question reqM of
     [] -> return $ Negative "empty question"
     qs@(q : _) -> getResponseCached' env reqM q qs
 
-getResponseCached'
-    :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
-getResponseCached' env reqM (DNS.Question bn typ _) qs = do
-    ex <- runDNSQuery getResult env (ctrlFromRequestHeader reqF reqEH)
+getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
+getResponseCached' env reqM q@(DNS.Question bn typ _) qs = do
+    ex <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
     case ex of
         Right Nothing -> return None
         Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
