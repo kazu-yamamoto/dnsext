@@ -10,7 +10,9 @@ import Data.ByteString (ByteString)
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import qualified DNS.Types as DNS
+import DNS.Types (DNSError (..), DNSFlags (..), DNSMessage (..), Question (..), RCODE (..))
+
+-- import qualified DNS.Types as DNS
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
@@ -28,8 +30,8 @@ import DNS.Iterative.Stats
 
 record
     :: Env
-    -> DNS.DNSMessage
-    -> DNS.DNSMessage
+    -> DNSMessage
+    -> DNSMessage
     -> ByteString
     -> SocketProtocol
     -> SockAddr
@@ -39,14 +41,14 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
     (s, ns) <- getCurrentTimeNsec
     logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns rspWire
     let st = stats_ env
-        DNS.Question{..} = head $ DNS.question reqMsg
-        DNS.DNSFlags{..} = DNS.flags reqMsg
+        Question{..} = head $ question reqMsg
+        DNSFlags{..} = flags reqMsg
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
-    let rc = DNS.rcode rspMsg
+    let rc = rcode rspMsg
     incStatsM st fromRcode rc Nothing
-    when (rc == DNS.NoErr) $
-        if DNS.answer rspMsg == []
+    when (rc == NoErr) $
+        if answer rspMsg == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
     when authAnswer $ incStats st FlagAA
@@ -62,8 +64,8 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
 cacherLogic
     :: Env
     -> (ByteString -> IO ())
-    -> (EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
-    -> (DNS.DNSMessage -> IO ())
+    -> (EpochTime -> a -> Either DNSError DNSMessage)
+    -> (DNSMessage -> IO ())
     -> SocketProtocol
     -> SockAddr
     -> SockAddr
@@ -96,7 +98,7 @@ workerLogic
     -> SocketProtocol
     -> SockAddr
     -> SockAddr
-    -> DNS.DNSMessage
+    -> DNSMessage
     -> IO ()
 workerLogic env send proto mysa peersa reqMsg = do
     ex <- getResponseIterative env reqMsg
@@ -116,12 +118,12 @@ cacheFailed
     -> SocketProtocol
     -> SockAddr
     -> SockAddr
-    -> DNS.DNSMessage
+    -> DNSMessage
     -> String
     -> IO ()
 cacheFailed env send proto mysa peersa reqMsg emsg = do
     incStats (stats_ env) CacheFailed
-    let rspMsg = reqMsg{DNS.flags = (DNS.flags reqMsg){DNS.isResponse = True}, DNS.rcode = DNS.FormatErr}
+    let rspMsg = reqMsg{flags = (flags reqMsg){isResponse = True}, rcode = FormatErr}
         bs = DNS.encode rspMsg
     send bs
     record env reqMsg rspMsg bs proto mysa peersa
@@ -129,7 +131,7 @@ cacheFailed env send proto mysa peersa reqMsg emsg = do
         "cached: response cannot be generated: "
             ++ emsg
             ++ ": "
-            ++ show (DNS.question reqMsg)
+            ++ show (question reqMsg)
 
 ----------------------------------------------------------------
 
