@@ -72,7 +72,7 @@ cacherLogic
 cacherLogic env send decode toResolver proto mysa peersa req = do
     now <- currentSeconds_ env
     case decode now req of
-        Left e -> logLn Log.WARN $ "decode-error: " ++ show e
+        Left e -> logLn env Log.WARN $ "decode-error: " ++ show e
         Right reqMsg -> do
             mx <- getResponseCached env reqMsg
             case mx of
@@ -82,15 +82,11 @@ cacherLogic env send decode toResolver proto mysa peersa req = do
                     let bs = DNS.encode rspMsg
                     send bs
                     record env reqMsg rspMsg bs proto mysa peersa
-                Negative replyErr -> do
-                    incStats (stats_ env) CacheFailed
-                    logLn Log.WARN $
-                        "cached: response cannot be generated: "
-                            ++ replyErr
-                            ++ ": "
-                            ++ show (DNS.question reqMsg)
-  where
-    logLn level = logLines_ env level Nothing . (: [])
+                Negative replyErr ->
+                    cacheFailed env send proto mysa peersa reqMsg replyErr
+
+logLn :: Env -> Log.Level -> String -> IO ()
+logLn env level = logLines_ env level Nothing . (: [])
 
 ----------------------------------------------------------------
 
@@ -110,15 +106,30 @@ workerLogic env send proto mysa peersa reqMsg = do
             let bs = DNS.encode rspMsg
             send bs
             record env reqMsg rspMsg bs proto mysa peersa
-        Left e -> do
-            incStats (stats_ env) CacheFailed
-            logLn Log.WARN $
-                "resolv: response cannot be generated: "
-                    ++ e
-                    ++ ": "
-                    ++ show (DNS.question reqMsg)
-  where
-    logLn level = logLines_ env level Nothing . (: [])
+        Left e -> cacheFailed env send proto mysa peersa reqMsg e
+
+----------------------------------------------------------------
+
+cacheFailed
+    :: Env
+    -> (ByteString -> IO ())
+    -> SocketProtocol
+    -> SockAddr
+    -> SockAddr
+    -> DNS.DNSMessage
+    -> String
+    -> IO ()
+cacheFailed env send proto mysa peersa reqMsg emsg = do
+    incStats (stats_ env) CacheFailed
+    let rspMsg = reqMsg{DNS.flags = (DNS.flags reqMsg){DNS.isResponse = True}, DNS.rcode = DNS.FormatErr}
+        bs = DNS.encode rspMsg
+    send bs
+    record env reqMsg rspMsg bs proto mysa peersa
+    logLn env Log.WARN $
+        "cached: response cannot be generated: "
+            ++ emsg
+            ++ ": "
+            ++ show (DNS.question reqMsg)
 
 ----------------------------------------------------------------
 
