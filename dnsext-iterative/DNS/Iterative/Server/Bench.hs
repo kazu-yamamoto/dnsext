@@ -3,7 +3,6 @@
 
 module DNS.Iterative.Server.Bench (
     benchServer,
-    UdpServerConfig (..),
     Request,
 ) where
 
@@ -22,7 +21,6 @@ import qualified Network.UDP as UDP
 -- this package
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.Pipeline
-import DNS.Iterative.Server.UDP
 
 ----------------------------------------------------------------
 ----------------------------------------------------------------
@@ -32,22 +30,22 @@ type Request a = (ByteString, a)
 type Response a = (ByteString, a)
 
 benchServer
-    :: UdpServerConfig
+    :: Int
     -> Env
     -> Bool
     -> IO ([IO ()], Request () -> IO (), IO (Response ()))
-benchServer _ _ True = do
+benchServer bench_pipelines _ True = do
     reqQ <- newTQueueIO
     resQ <- newTQueueIO
-    let pipelines_per_socket = 2 {- FIXME -}
+    let pipelines_per_socket = bench_pipelines
     let pipelines = replicate pipelines_per_socket [forever $ atomically $ writeTQueue resQ =<< readTQueue reqQ]
     return (concat pipelines, atomically . writeTQueue reqQ, atomically (readTQueue resQ))
-benchServer _ env _ = do
+benchServer bench_pipelines env _ = do
     myDummy <- getSockAddr "127.1.1.1" "53"
     clntDummy <- UDP.ClientSockAddr <$> getSockAddr "127.2.1.1" "53" <*> pure []
 
-    let pipelines_per_socket = 2 {- FIXME -}
-        workers_per_pipeline = 8 {- FIXME -}
+    let pipelines_per_socket = bench_pipelines
+        workers_per_pipeline = 8 {- only used initial setup, benchmark runs on cached state -}
     (workers, toCacher) <- mkPipeline env pipelines_per_socket workers_per_pipeline
 
     resQ <- newTQueueIO
