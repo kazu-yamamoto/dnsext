@@ -93,17 +93,17 @@ descs =
     , -- , Option [] ["no-shared-queue"]
       --   (NoArg $ \opts -> return opts { workerSharedQueue = False })
       --   "not share request queue and response queue in worker threads"
+      -- , Option
+      --   []
+      --   ["per-worker"]
+      --   ( ReqArg
+      --       ( \s opts ->
+      --           readIntWith (>= 0) "per-worker. negative not allowed" s >>= \x -> return opts{qsizePerWorker = x}
+      --       )
+      --       "POSITIVE_INTEGER"
+      --   )
+      --   "queue size per worker. default is 16. positive integer or 0. 0 means not limited size queue"
       Option
-        []
-        ["per-worker"]
-        ( ReqArg
-            ( \s opts ->
-                readIntWith (>= 0) "per-worker. negative not allowed" s >>= \x -> return opts{qsizePerWorker = x}
-            )
-            "POSITIVE_INTEGER"
-        )
-        "queue size per worker. default is 16. positive integer or 0. 0 means not limited size queue"
-    , Option
         ['r']
         ["requests"]
         ( ReqArg
@@ -141,16 +141,13 @@ parseOptions args
     helpOnLeft e = putStrLn e *> help *> return Nothing
 
 run :: Config -> IO ()
-run conf@Config{..} = runBenchmark conf udpconf noopMode gplotMode requests
-  where
-    udpconf = UdpServerConfig {}
+run conf@Config{..} = runBenchmark conf noopMode gplotMode requests
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
 
 runBenchmark
     :: Config
-    -> UdpServerConfig
     -> Bool
     -- ^ No operation or not
     -> Bool
@@ -158,12 +155,12 @@ runBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-runBenchmark conf@Config{..} udpconf@UdpServerConfig{} noop gplot size = do
+runBenchmark conf@Config{..} noop gplot size = do
     (logger, putLines, flush) <- Log.new logOutput logLevel
     tid <- forkIO logger
     env <- getEnv conf putLines
 
-    (workers, enqueueReq, dequeueResp) <- benchServer udpconf env noop
+    (workers, enqueueReq, dequeueResp) <- benchServer pipelines env noop
     _ <- forkIO $ foldr concurrently_ (return ()) $ workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
@@ -179,14 +176,14 @@ runBenchmark conf@Config{..} udpconf@UdpServerConfig{} noop gplot size = do
         toDouble = fromRational :: Rational -> Double
         rate = fromIntegral size / elapsed
 
-        udp_pipelines_per_socket = 2 :: Int {- FIXME -}
+        pipelines_per_socket = pipelines
 
     if gplot
         then do
-            putStrLn $ unwords [show udp_pipelines_per_socket, show rate]
+            putStrLn $ unwords [show pipelines_per_socket, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
-            putStrLn $ "pipelines: " ++ show udp_pipelines_per_socket
+            putStrLn $ "pipelines: " ++ show pipelines_per_socket
             -- putStrLn $ "qsizePerPipeline: " ++ show udp_queue_size_per_pipeline
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
