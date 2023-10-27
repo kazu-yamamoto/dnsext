@@ -8,48 +8,55 @@ module DNS.Iterative.Server.Bench (
 ) where
 
 -- GHC packages
+import Control.Concurrent.STM
 import Control.Monad (forever)
+import Data.ByteString (ByteString)
 
 -- dnsext-* packages
+import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 import Network.Socket
 import qualified Network.UDP as UDP
 
 -- this package
-import DNS.Iterative.Server.Queue (
-    newQueue,
-    readQueue,
-    writeQueue,
- )
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.UDP
 
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 -- Benchmark
 
+type Request a = (ByteString, a)
+type Response a = (ByteString, a)
+
 benchServer
     :: UdpServerConfig
     -> Env
     -> Bool
-    -> IO ([[IO ()]], Request () -> IO (), IO (Request ()))
-benchServer UdpServerConfig{..} _ True = do
-    let qsize = udp_queue_size_per_pipeline * udp_pipelines_per_socket
-    reqQ <- newQueue qsize
-    resQ <- newQueue qsize
-    let pipelines = replicate udp_pipelines_per_socket [forever $ writeQueue resQ =<< readQueue reqQ]
-    return (pipelines, writeQueue reqQ, readQueue resQ)
-benchServer udpconf env _ = do
+    -> IO ([IO ()], Request () -> IO (), IO (Response ()))
+benchServer _ _ True = do
+    reqQ <- newTQueueIO
+    resQ <- newTQueueIO
+    let pipelines_per_socket = 2 {- FIXME -}
+    let pipelines = replicate pipelines_per_socket [forever $ atomically $ writeTQueue resQ =<< readTQueue reqQ]
+    return (concat pipelines, atomically . writeTQueue reqQ, atomically (readTQueue resQ))
+benchServer _ env _ = do
     myDummy <- getSockAddr "127.1.1.1" "53"
     clntDummy <- UDP.ClientSockAddr <$> getSockAddr "127.2.1.1" "53" <*> pure []
 
-    (workerPipelines, enqueueReq, dequeueRes) <- getPipelines udpconf env myDummy
-    workers <- sequence workerPipelines
+    let pipelines_per_socket = 2 {- FIXME -}
+        workers_per_pipeline = 8 {- FIXME -}
+    (workers, toCacher) <- mkPipeline env pipelines_per_socket workers_per_pipeline
 
-    let enqueueReq' (bs, ()) = enqueueReq (bs, clntDummy)
-        dequeueRes' = (\(bs, _) -> (bs, ())) <$> dequeueRes
-    return (workers, enqueueReq', dequeueRes')
+    resQ <- newTQueueIO
+
+    let toSender = atomically . writeTQueue resQ
+
+        enqueueReq (bs, ()) = toCacher (Input bs myDummy (PeerInfoUDP clntDummy) UDP toSender)
+        dequeueRes = (\(Output bs _) ->(bs, ())) <$> atomically (readTQueue resQ)
+    return (workers, enqueueReq, dequeueRes)
   where
     getSockAddr host port = do
         as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram}) (Just host) (Just port)
