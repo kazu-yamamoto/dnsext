@@ -157,7 +157,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
         maxNCacheTTL = 21600
-    nullSOA = ncWarn ("no SOA records found with zone=" ++ show zone) $> []
+    nullSOA = ncWarn "no SOA records found" $> []
 
     single xs = case xs of
         [] -> Left "no SOA records found"
@@ -171,8 +171,15 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         | otherwise = do
             plogLines Log.WARN $ map ("\t" ++) (("SOA records in authority section:" :) $ map show soas)
       where
-        withDom = [s ++ ",", "domain=" ++ show dom ++ " under zone=" ++ show zone ++ ":"]
-        plogLines lv xs = logLines lv $ ("cacheSectionNegative: " ++ unwords withDom) : xs
+        withCtx ws = [s ++ ","] ++ ws ++ ["zone " ++ show zone ++ ":"]
+        showQ' qmark name ty = qmark ++ " " ++ show name ++ " " ++ show ty ++ ","
+        showQ _qmark [] = []
+        showQ qmark ((Question name ty _):_) = [showQ' qmark name ty]
+        plogLines lv xs = do
+            let key = [showQ' "key" dom typ]
+                query = showQ "query" (question msg)
+            orig <- (\q -> showQ "orig-query" [q]) <$> lift (asks origQuestion_)
+            logLines lv $ ("cacheSectionNegative: " ++ unwords (withCtx $ key ++ query ++ orig)) : xs
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
