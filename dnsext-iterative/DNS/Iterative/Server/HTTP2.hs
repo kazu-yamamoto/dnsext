@@ -11,9 +11,6 @@ import Data.ByteString.Builder (byteString)
 import DNS.Do53.Internal
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
-import DNS.Types (defaultResponse)
-import qualified DNS.Types.Decode as DNS
-import qualified DNS.Types.Encode as DNS
 
 -- other packages
 import qualified Network.HTTP.Types as HT
@@ -65,17 +62,13 @@ doHTTP env toCacher req aux sendResponse = do
     einp <- getInput req
     case einp of
       Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
-      Right inp -> case DNS.decode inp of
-        Right queryMsg -> do
-            let fuel = Fuel queryMsg defaultResponse mysa peerInfo DOH toSender
-            toCacher fuel
-            rep <- fromX
-            let bs = DNS.encode $ fuelReply rep
-            let response = H2.responseBuilder HT.ok200 header $ byteString bs
+      Right bs -> do
+            let inp = Input bs mysa peerInfo DOH toSender
+            toCacher inp
+            Output bs' _ <- fromX
+            let response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sendResponse response []
             -- fixme record
-        Left e -> do
-            logLn env Log.WARN $ "decode-error: " ++ show e
   where
     header = [(HT.hContentType, "application/dns-message")]
 

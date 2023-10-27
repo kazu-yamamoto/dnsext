@@ -13,7 +13,7 @@ import Data.ByteString (ByteString)
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types (DNSFlags (..), DNSMessage (..), Question (..), RCODE (..), defaultResponse)
+import DNS.Types (DNSFlags (..), DNSMessage (..), Question (..), RCODE (..))
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
@@ -44,7 +44,7 @@ import DNS.Iterative.Stats
 --                               |                          ^
 --                               +--------------------------+
 --                                        Cache hit
---
+--                 Input BS       Input Msg        Output
 
 ----------------------------------------------------------------
 
@@ -65,61 +65,73 @@ mkPipeline env n workers = do
 
 ----------------------------------------------------------------
 
-cacherLogic :: Env -> IO Fuel -> (Fuel -> IO ()) -> IO ()
+cacherLogic :: Env -> FromReciver -> ToWorker -> IO ()
 cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
-    fuel@Fuel{..} <- fromReceiver
-    mx <- getResponseCached env fuelQuery
-    case mx of
-        None -> toWorker fuel
-        Positive replyMsg -> do
-            incStats (stats_ env) CacheHit
-            fuelToSender fuel{fuelReply = replyMsg}
-        Negative _replyErr -> cacheFailed env fuel
+    inpBS@Input{..} <- fromReceiver
+    case DNS.decode inputQuery of
+        Left e -> logLn env Log.WARN $ "decode-error: " ++ show e
+        Right queryMsg -> do
+            -- Input ByteString -> Input DNSMessage
+            let inp = inpBS { inputQuery = queryMsg }
+            mx <- getResponseCached env queryMsg
+            case mx of
+                None -> toWorker inp
+                Positive replyMsg -> do
+                    incStats (stats_ env) CacheHit
+                    let bs = DNS.encode replyMsg
+                    record env inp replyMsg bs
+                    inputToSender $ Output bs inputPeerInfo
+                Negative _replyErr -> cacheFailed env inp
 
 ----------------------------------------------------------------
 
-workerLogic :: Env -> IO Fuel -> IO ()
+workerLogic :: Env -> FromCacher -> IO ()
 workerLogic env fromCacher = handledLoop env "worker" $ do
-    fuel@Fuel{..} <- fromCacher
-    ex <- getResponseIterative env fuelQuery
+    inp@Input{..} <- fromCacher
+    ex <- getResponseIterative env inputQuery
     case ex of
         Right replyMsg -> do
             incStats (stats_ env) CacheMiss
-            fuelToSender fuel{fuelReply = replyMsg}
-        Left _e -> cacheFailed env fuel
+            let bs = DNS.encode replyMsg
+            record env inp replyMsg bs
+            inputToSender $ Output bs inputPeerInfo
+        Left _e -> cacheFailed env inp
 
 ----------------------------------------------------------------
 
-cacheFailed :: Env -> Fuel -> IO ()
-cacheFailed env fuel@Fuel{..} = do
+cacheFailed :: Env -> Input DNSMessage -> IO ()
+cacheFailed env inp@Input{..} = do
     let replyMsg =
-            fuelQuery
-                { flags = (flags fuelQuery){isResponse = True}
+            inputQuery
+                { flags = (flags inputQuery){isResponse = True}
                 , rcode = FormatErr
                 }
     incStats (stats_ env) CacheFailed
-    fuelToSender fuel{fuelReply = replyMsg}
+    let bs = DNS.encode replyMsg
+    record env inp replyMsg bs
+    inputToSender $ Output bs inputPeerInfo
 
 ----------------------------------------------------------------
 
 record
     :: Env
-    -> Fuel
+    -> Input DNSMessage
+    -> DNSMessage
     -> ByteString
     -> IO ()
-record env Fuel{..} rspWire = do
+record env Input{..} reply rspWire = do
     (s, ns) <- getCurrentTimeNsec
-    let peersa = peerSockAddr fuelPeerInfo
-    logDNSTAP_ env $ DNSTAP.composeMessage fuelProto fuelMysa peersa s ns rspWire
+    let peersa = peerSockAddr inputPeerInfo
+    logDNSTAP_ env $ DNSTAP.composeMessage inputProto inputMysa peersa s ns rspWire
     let st = stats_ env
-        Question{..} = head $ question fuelQuery
-        DNSFlags{..} = flags fuelReply
+        Question{..} = head $ question inputQuery
+        DNSFlags{..} = flags reply
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
-    let rc = rcode fuelReply
+    let rc = rcode reply
     incStatsM st fromRcode rc Nothing
     when (rc == NoErr) $
-        if answer fuelReply == []
+        if answer reply == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
     when authAnswer $ incStats st FlagAA
@@ -136,48 +148,40 @@ type Recv = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
 receiverLogic
-    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO ()
+    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
 receiverLogic env mysa recv toCacher toSender proto =
-    handledLoop env "receiverUDP" $ void $ receiverLogic' env mysa recv toCacher toSender proto
+    handledLoop env "receiverUDP" $ void $ receiverLogic' mysa recv toCacher toSender proto
 
 receiverLogicVC
-    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO ()
-receiverLogicVC env mysa recv toCacher toSender proto = go
+    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
+receiverLogicVC _env mysa recv toCacher toSender proto = go
   where
     go = do
-        -- fixme: error logging
-        cont <- receiverLogic' env mysa recv toCacher toSender proto
+        cont <- receiverLogic' mysa recv toCacher toSender proto
         when cont go
 
 receiverLogic'
-    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO Bool
-receiverLogic' env mysa recv toCacher toSender proto = do
+    :: SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO Bool
+receiverLogic' mysa recv toCacher toSender proto = do
     (bs, peerInfo) <- recv
     if bs == ""
         then return False
         else do
-            case DNS.decode bs of
-                Right queryMsg -> do
-                    let fuel = Fuel queryMsg defaultResponse mysa peerInfo proto toSender
-                    toCacher fuel
-                Left e -> do
-                    logLn env Log.WARN $ "decode-error: " ++ show e
+            toCacher $ Input bs mysa peerInfo proto toSender
             return True
 
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
-    handledLoop env "senderUDP" $ senderLogic' env send fromX
+    handledLoop env "senderUDP" $ senderLogic' send fromX
 
 senderLogicVC :: Env -> Send -> FromX -> IO ()
 senderLogicVC env send fromX =
-    breakableLoop env "senderVC" $ senderLogic' env send fromX
+    breakableLoop env "senderVC" $ senderLogic' send fromX
 
-senderLogic' :: Env -> Send -> IO Fuel -> IO ()
-senderLogic' env send fromX = do
-    fuel <- fromX
-    let bs = DNS.encode $ fuelReply fuel
-    send bs $ fuelPeerInfo fuel
-    record env fuel bs
+senderLogic' :: Send -> FromX -> IO ()
+senderLogic' send fromX = do
+    Output bs peerInfo <- fromX
+    send bs peerInfo
 
 ----------------------------------------------------------------
 
@@ -200,7 +204,7 @@ breakableLoop env tag body = forever body `catch` onError
 
 ----------------------------------------------------------------
 
-mkConnector :: IO (Fuel -> IO (), FromX)
+mkConnector :: IO (ToSender, FromX)
 mkConnector = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs

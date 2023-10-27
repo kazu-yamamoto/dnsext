@@ -4,9 +4,14 @@ module DNS.Iterative.Server.Types (
     HostName,
     PortNumber,
     VcServerConfig (..),
-    Fuel (..),
     ToCacher,
+    FromReciver,
+    ToWorker,
+    FromCacher,
+    ToSender,
     FromX,
+    Input(..),
+    Output(..),
     PeerInfo(..),
     peerSockAddr,
 ) where
@@ -14,6 +19,7 @@ module DNS.Iterative.Server.Types (
 import DNS.Iterative.Query (Env)
 import DNS.TAP.Schema (SocketProtocol)
 import DNS.Types (DNSMessage)
+import Data.ByteString (ByteString)
 import qualified Network.QUIC as QUIC
 import Network.Socket
 import qualified Network.UDP as UDP
@@ -27,17 +33,25 @@ peerSockAddr (PeerInfoUDP (UDP.ClientSockAddr sa _)) = sa
 peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
 
-data Fuel = Fuel
-    { fuelQuery :: DNSMessage
-    , fuelReply :: DNSMessage
-    , fuelMysa :: SockAddr
-    , fuelPeerInfo :: PeerInfo
-    , fuelProto :: SocketProtocol
-    , fuelToSender :: Fuel -> IO () -- very tricky
+data Input a = Input
+    { inputQuery :: a
+    , inputMysa :: SockAddr
+    , inputPeerInfo :: PeerInfo
+    , inputProto :: SocketProtocol
+    , inputToSender :: ToSender
     }
 
-type ToCacher = Fuel -> IO ()
-type FromX = IO Fuel
+data Output = Output
+    { outputReplyBS :: ByteString
+    , outputPeerInfo :: PeerInfo
+    }
+
+type ToCacher = Input ByteString -> IO ()
+type FromReciver = IO (Input ByteString)
+type ToWorker = Input DNSMessage -> IO ()
+type FromCacher = IO (Input DNSMessage)
+type ToSender = Output -> IO ()
+type FromX = IO Output
 
 type Server = Env -> ToCacher -> PortNumber -> HostName -> IO ([IO ()])
 
