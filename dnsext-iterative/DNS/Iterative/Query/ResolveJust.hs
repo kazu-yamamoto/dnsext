@@ -111,15 +111,19 @@ delegationIPs dc Delegation{..} = do
             | Just names1 <- nonEmpty names = do
                 {- case for not (null names) -}
                 name <- randomizedSelectN names1
-                (: []) . fst <$> resolveNS disableV6NS dc name
+                (: []) . fst <$> resolveNS zone disableV6NS dc name
             | disableV6NS && not (null allIPs) = do
-                plogLn Log.DEMO $ "delegationIPs: server-fail: domain: " ++ show zone ++ ", delegation is empty."
+                orig <- showOrig <$> lift (lift $ asks origQuestion_)
+                plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
                 throwDnsError DNS.ServerFailure
             | otherwise = do
-                plogLn Log.DEMO $ "illegal-domain: " ++ show zone ++ ", delegation is empty. without glue sub-domains: " ++ show subNames
+                orig <- showOrig <$> lift (lift $ asks origQuestion_)
+                plogLn Log.DEMO $ "illegal-domain: delegation is empty. zone: " ++ show zone ++ ", " ++ orig ++
+                    ", without glue sub-domains: " ++ show subNames
                 throwDnsError DNS.IllegalDomain
           where
             allIPs = takeDEntryIPs False delegationNS
+            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
             plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
 
         takeSubNames (DEonlyNS name) xs
@@ -130,8 +134,8 @@ delegationIPs dc Delegation{..} = do
 
     result
 
-resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
-resolveNS disableV6NS dc ns = do
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
+resolveNS zone disableV6NS dc ns = do
     let axPairs = axList disableV6NS (== ns) (,)
 
         lookupAx
@@ -165,12 +169,16 @@ resolveNS disableV6NS dc ns = do
 
         resolveAXofNS :: DNSQuery (IP, ResourceRecord)
         resolveAXofNS = do
+            let showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
             let failEmptyAx
                     | disableV6NS = do
-                        lift . logLn Log.WARN $ "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: serv-fail, empty A: disable-v6ns: " ++
+                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
-                        lift . logLn Log.WARN $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: illegal-domain, empty A|AAAA: " ++
+                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
                         throwDnsError DNS.IllegalDomain
             maybe failEmptyAx pure
                 =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
