@@ -12,6 +12,10 @@ module DNS.Iterative.Server (
     TimeCache (..),
     newTimeCache,
 
+    -- * Pipeline
+    mkPipeline,
+    ToCacher,
+
     -- * UDP
     UdpServerConfig (..),
     udpServer,
@@ -32,6 +36,7 @@ module DNS.Iterative.Server (
 import DNS.Iterative.Query.Env
 import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.HTTP3
+import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.TCP
 import DNS.Iterative.Server.TLS

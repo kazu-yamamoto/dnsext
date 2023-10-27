@@ -1,52 +1,125 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
+
+import Control.Concurrent.STM
+import Control.Monad (forever, void)
 import Data.ByteString (ByteString)
 
 -- dnsext-* packages
-
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import qualified DNS.Types as DNS
+import DNS.Types (DNSFlags (..), DNSMessage (..), Question (..), RCODE (..), defaultResponse)
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
 
 -- other packages
-import Control.Monad (when)
+import Control.Monad (replicateM, when)
 import Network.Socket (SockAddr)
+import UnliftIO (SomeException (..), catch, handle, throwIO)
 
 -- this package
+
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats
+
+----------------------------------------------------------------
+
+--                          <------ Pipeline ----->
+--
+--                                       Iterative IO
+--                                         Req Resp
+--                            cache         ^   |
+--                              |           |   v
+--        +--------+ shared +--------+    +--------+    +--------+
+-- Req -> | recver | -----> | cacher | -> | worker | -> | sender | -> Resp
+--        +--------+ or any +--------|    +--------+    +--------+
+--                               |                          ^
+--                               +--------------------------+
+--                                        Cache hit
+--
+
+----------------------------------------------------------------
+
+mkPipeline :: Env -> Int -> Int -> IO ([IO ()], ToCacher)
+mkPipeline env n workers = do
+    qr <- newTQueueIO
+    let toCacher = atomically . writeTQueue qr
+        fromReceiver = atomically $ readTQueue qr
+    let onePipeline = do
+            qw <- newTQueueIO
+            let toWorker = atomically . writeTQueue qw
+                fromCacher = atomically $ readTQueue qw
+            let mkCacher = cacherLogic env fromReceiver toWorker
+                mkWorker = workerLogic env fromCacher
+            return $ mkCacher : replicate workers mkWorker
+    mks <- concat <$> replicateM n onePipeline
+    return (mks, toCacher)
+
+----------------------------------------------------------------
+
+cacherLogic :: Env -> IO Fuel -> (Fuel -> IO ()) -> IO ()
+cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
+    fuel@Fuel{..} <- fromReceiver
+    mx <- getResponseCached env fuelQuery
+    case mx of
+        None -> toWorker fuel
+        Positive replyMsg -> do
+            incStats (stats_ env) CacheHit
+            fuelToSender fuel{fuelReply = replyMsg}
+        Negative _replyErr -> cacheFailed env fuel
+
+----------------------------------------------------------------
+
+workerLogic :: Env -> IO Fuel -> IO ()
+workerLogic env fromCacher = handledLoop env "worker" $ do
+    fuel@Fuel{..} <- fromCacher
+    ex <- getResponseIterative env fuelQuery
+    case ex of
+        Right replyMsg -> do
+            incStats (stats_ env) CacheMiss
+            fuelToSender fuel{fuelReply = replyMsg}
+        Left _e -> cacheFailed env fuel
+
+----------------------------------------------------------------
+
+cacheFailed :: Env -> Fuel -> IO ()
+cacheFailed env fuel@Fuel{..} = do
+    let replyMsg =
+            fuelQuery
+                { flags = (flags fuelQuery){isResponse = True}
+                , rcode = FormatErr
+                }
+    incStats (stats_ env) CacheFailed
+    fuelToSender fuel{fuelReply = replyMsg}
 
 ----------------------------------------------------------------
 
 record
     :: Env
-    -> DNS.DNSMessage
-    -> DNS.DNSMessage
+    -> Fuel
     -> ByteString
-    -> SocketProtocol
-    -> SockAddr
-    -> SockAddr
     -> IO ()
-record env reqMsg rspMsg rspWire proto mysa peersa = do
+record env Fuel{..} rspWire = do
     (s, ns) <- getCurrentTimeNsec
-    logDNSTAP_ env $ DNSTAP.composeMessage proto mysa peersa s ns rspWire
+    let peersa = peerSockAddr fuelPeerInfo
+    logDNSTAP_ env $ DNSTAP.composeMessage fuelProto fuelMysa peersa s ns rspWire
     let st = stats_ env
-        DNS.Question{..} = head $ DNS.question reqMsg
-        DNS.DNSFlags{..} = DNS.flags reqMsg
+        Question{..} = head $ question fuelQuery
+        DNSFlags{..} = flags fuelReply
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
-    let rc = DNS.rcode rspMsg
+    let rc = rcode fuelReply
     incStatsM st fromRcode rc Nothing
-    when (rc == DNS.NoErr) $
-        if DNS.answer rspMsg == []
+    when (rc == NoErr) $
+        if answer fuelReply == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
     when authAnswer $ incStats st FlagAA
@@ -59,77 +132,77 @@ record env reqMsg rspMsg rspWire proto mysa peersa = do
 
 ----------------------------------------------------------------
 
-cacherLogic
-    :: Env
-    -> (ByteString -> IO ())
-    -> (EpochTime -> a -> Either DNS.DNSError DNS.DNSMessage)
-    -> (DNS.DNSMessage -> IO ())
-    -> SocketProtocol
-    -> SockAddr
-    -> SockAddr
-    -> a
-    -> IO ()
-cacherLogic env send decode toResolver proto mysa peersa req = do
-    now <- currentSeconds_ env
-    case decode now req of
-        Left e -> logLn Log.WARN $ "decode-error: " ++ show e
-        Right reqMsg -> do
-            mx <- getResponseCached env reqMsg
-            case mx of
-                None -> toResolver reqMsg
-                Positive rspMsg -> do
-                    incStats (stats_ env) CacheHit
-                    let bs = DNS.encode rspMsg
-                    send bs
-                    record env reqMsg rspMsg bs proto mysa peersa
-                Negative replyErr -> do
-                    incStats (stats_ env) CacheFailed
-                    logLn Log.WARN $
-                        "cached: response cannot be generated: "
-                            ++ replyErr
-                            ++ ": "
-                            ++ show (DNS.question reqMsg)
+type Recv = IO (ByteString, PeerInfo)
+type Send = ByteString -> PeerInfo -> IO ()
+
+receiverLogic
+    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO ()
+receiverLogic env mysa recv toCacher toSender proto =
+    handledLoop env "receiverUDP" $ void $ receiverLogic' env mysa recv toCacher toSender proto
+
+receiverLogicVC
+    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO ()
+receiverLogicVC env mysa recv toCacher toSender proto = go
   where
-    logLn level = logLines_ env level Nothing . (: [])
+    go = do
+        -- fixme: error logging
+        cont <- receiverLogic' env mysa recv toCacher toSender proto
+        when cont go
+
+receiverLogic'
+    :: Env -> SockAddr -> Recv -> ToCacher -> (Fuel -> IO ()) -> SocketProtocol -> IO Bool
+receiverLogic' env mysa recv toCacher toSender proto = do
+    (bs, peerInfo) <- recv
+    if bs == ""
+        then return False
+        else do
+            case DNS.decode bs of
+                Right queryMsg -> do
+                    let fuel = Fuel queryMsg defaultResponse mysa peerInfo proto toSender
+                    toCacher fuel
+                Left e -> do
+                    logLn env Log.WARN $ "decode-error: " ++ show e
+            return True
+
+senderLogic :: Env -> Send -> FromX -> IO ()
+senderLogic env send fromX =
+    handledLoop env "senderUDP" $ senderLogic' env send fromX
+
+senderLogicVC :: Env -> Send -> FromX -> IO ()
+senderLogicVC env send fromX =
+    breakableLoop env "senderVC" $ senderLogic' env send fromX
+
+senderLogic' :: Env -> Send -> IO Fuel -> IO ()
+senderLogic' env send fromX = do
+    fuel <- fromX
+    let bs = DNS.encode $ fuelReply fuel
+    send bs $ fuelPeerInfo fuel
+    record env fuel bs
 
 ----------------------------------------------------------------
 
-workerLogic
-    :: Env
-    -> (ByteString -> IO ())
-    -> SocketProtocol
-    -> SockAddr
-    -> SockAddr
-    -> DNS.DNSMessage
-    -> IO ()
-workerLogic env send proto mysa peersa reqMsg = do
-    ex <- getResponseIterative env reqMsg
-    case ex of
-        Right rspMsg -> do
-            incStats (stats_ env) CacheMiss
-            let bs = DNS.encode rspMsg
-            send bs
-            record env reqMsg rspMsg bs proto mysa peersa
-        Left e -> do
-            incStats (stats_ env) CacheFailed
-            logLn Log.WARN $
-                "resolv: response cannot be generated: "
-                    ++ e
-                    ++ ": "
-                    ++ show (DNS.question reqMsg)
-  where
-    logLn level = logLines_ env level Nothing . (: [])
+logLn :: Env -> Log.Level -> String -> IO ()
+logLn env level = logLines_ env level Nothing . (: [])
 
 ----------------------------------------------------------------
 
-cacheWorkerLogic
-    :: Env
-    -> (ByteString -> IO ())
-    -> SocketProtocol
-    -> SockAddr
-    -> SockAddr
-    -> [ByteString]
-    -> IO ()
-cacheWorkerLogic env send proto mysa peersa req = do
-    let worker = workerLogic env send proto mysa peersa
-    cacherLogic env send DNS.decodeChunks worker proto mysa peersa req
+handledLoop :: Env -> String -> IO () -> IO ()
+handledLoop env tag body = forever $ handle onError body
+  where
+    onError (SomeException e) = logLn env Log.WARN (tag ++ ": " ++ show e)
+
+breakableLoop :: Env -> String -> IO () -> IO ()
+breakableLoop env tag body = forever body `catch` onError
+  where
+    onError (SomeException e) = do
+        logLn env Log.WARN (tag ++ ": " ++ show e)
+        throwIO e
+
+----------------------------------------------------------------
+
+mkConnector :: IO (Fuel -> IO (), FromX)
+mkConnector = do
+    qs <- newTQueueIO
+    let toSender = atomically . writeTQueue qs
+        fromX = atomically $ readTQueue qs
+    return (toSender, fromX)
