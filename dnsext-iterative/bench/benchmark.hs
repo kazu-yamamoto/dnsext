@@ -143,12 +143,7 @@ parseOptions args
 run :: Config -> IO ()
 run conf@Config{..} = runBenchmark conf udpconf noopMode gplotMode requests
   where
-    udpconf =
-        UdpServerConfig
-            pipelines
-            8
-            qsizePerWorker
-            True
+    udpconf = UdpServerConfig {}
 
 main :: IO ()
 main = maybe (return ()) run =<< parseOptions =<< getArgs
@@ -163,13 +158,13 @@ runBenchmark
     -> Int
     -- ^ Request size
     -> IO ()
-runBenchmark conf@Config{..} udpconf@UdpServerConfig{..} noop gplot size = do
+runBenchmark conf@Config{..} udpconf@UdpServerConfig{} noop gplot size = do
     (logger, putLines, flush) <- Log.new logOutput logLevel
     tid <- forkIO logger
     env <- getEnv conf putLines
 
     (workers, enqueueReq, dequeueResp) <- benchServer udpconf env noop
-    _ <- forkIO $ foldr concurrently_ (return ()) $ concat workers
+    _ <- forkIO $ foldr concurrently_ (return ()) $ workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
     ds `deepseq` return ()
@@ -184,13 +179,15 @@ runBenchmark conf@Config{..} udpconf@UdpServerConfig{..} noop gplot size = do
         toDouble = fromRational :: Rational -> Double
         rate = fromIntegral size / elapsed
 
+        udp_pipelines_per_socket = 2 :: Int {- FIXME -}
+
     if gplot
         then do
             putStrLn $ unwords [show udp_pipelines_per_socket, show rate]
         else do
             putStrLn . ("capabilities: " ++) . show =<< getNumCapabilities
             putStrLn $ "pipelines: " ++ show udp_pipelines_per_socket
-            putStrLn $ "qsizePerPipeline: " ++ show udp_queue_size_per_pipeline
+            -- putStrLn $ "qsizePerPipeline: " ++ show udp_queue_size_per_pipeline
             putStrLn . ("cache size: " ++) . show . Cache.size =<< getCache_ env
             putStrLn $ "requests: " ++ show size
             putStrLn $ "elapsed: " ++ show (toDouble elapsed) ++ " (sec)"
