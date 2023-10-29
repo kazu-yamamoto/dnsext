@@ -64,7 +64,7 @@ runResolveExact
     -> TYPE
     -> QueryControls
     -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt cd
+runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt $ queryContextIN n typ cd
 
 {-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
 resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
@@ -111,15 +111,19 @@ delegationIPs dc Delegation{..} = do
             | Just names1 <- nonEmpty names = do
                 {- case for not (null names) -}
                 name <- randomizedSelectN names1
-                (: []) . fst <$> resolveNS disableV6NS dc name
+                (: []) . fst <$> resolveNS zone disableV6NS dc name
             | disableV6NS && not (null allIPs) = do
-                plogLn Log.DEMO $ "delegationIPs: server-fail: domain: " ++ show zone ++ ", delegation is empty."
+                orig <- showOrig <$> lift (lift $ asks origQuestion_)
+                plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
                 throwDnsError DNS.ServerFailure
             | otherwise = do
-                plogLn Log.DEMO $ "illegal-domain: " ++ show zone ++ ", delegation is empty. without glue sub-domains: " ++ show subNames
+                orig <- showOrig <$> lift (lift $ asks origQuestion_)
+                plogLn Log.DEMO $ "illegal-domain: delegation is empty. zone: " ++ show zone ++ ", " ++ orig ++
+                    ", without glue sub-domains: " ++ show subNames
                 throwDnsError DNS.IllegalDomain
           where
             allIPs = takeDEntryIPs False delegationNS
+            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
             plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
 
         takeSubNames (DEonlyNS name) xs
@@ -130,8 +134,8 @@ delegationIPs dc Delegation{..} = do
 
     result
 
-resolveNS :: Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
-resolveNS disableV6NS dc ns = do
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
+resolveNS zone disableV6NS dc ns = do
     let axPairs = axList disableV6NS (== ns) (,)
 
         lookupAx
@@ -165,12 +169,16 @@ resolveNS disableV6NS dc ns = do
 
         resolveAXofNS :: DNSQuery (IP, ResourceRecord)
         resolveAXofNS = do
+            let showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
             let failEmptyAx
                     | disableV6NS = do
-                        lift . logLn Log.WARN $ "resolveNS: server-fail: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: serv-fail, empty A: disable-v6ns: " ++
+                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
-                        lift . logLn Log.WARN $ "resolveNS: illegal-domain: NS: " ++ show ns ++ ", address is empty."
+                        lift . logLn Log.WARN $ "resolveNS: illegal-domain, empty A|AAAA: " ++
+                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
                         throwDnsError DNS.IllegalDomain
             maybe failEmptyAx pure
                 =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
@@ -205,7 +213,7 @@ runIterative
     -> Domain
     -> QueryControls
     -> IO (Either QueryError Delegation)
-runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt cd
+runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A cd
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -252,9 +260,9 @@ _noLogging = const $ pure ()
 --
 -- >>> testIterative dom = do { root <- refreshRoot; iterative root dom }
 -- >>> env <- _newTestEnv _findConsumed
--- >>> runDNSQuery (testIterative "mew.org.") env mempty $> ()  {- fill-action is not called -}
+-- >>> runDNSQuery (testIterative "mew.org.") env (queryContextIN "mew.org." A mempty) $> ()  {- fill-action is not called -}
 --
--- >>> runDNSQuery (testIterative "arpa.") env mempty $> ()  {- fill-action is called for `ServsChildZone` -}
+-- >>> runDNSQuery (testIterative "arpa.") env (queryContextIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
 iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
@@ -371,7 +379,7 @@ fillsDNSSEC dc nss d = do
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
 -- >>> isFilled d = case (delegationDS d) of { NotFilledDS _ -> False; FilledDS _ -> True }
 -- >>> env <- _newTestEnv _noLogging
--- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env mempty
+-- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env (queryContextIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS ServsChildZone)

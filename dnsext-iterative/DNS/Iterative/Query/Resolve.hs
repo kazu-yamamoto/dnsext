@@ -42,7 +42,7 @@ runResolve
             QueryError
             (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
         )
-runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt cd
+runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt $ queryContextIN n typ cd
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.

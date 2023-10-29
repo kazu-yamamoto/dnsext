@@ -22,7 +22,7 @@ import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
 import qualified Data.ByteString as BS
-import Network.Socket (HostName, close)
+import Network.Socket (close)
 import qualified Network.UDP as UDP
 import System.IO.Error (annotateIOError)
 
@@ -57,10 +57,10 @@ udpTcpResolver retry lim ri q qctl =
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: HostName -> String -> IOError -> IO Result
-ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
+ioErrorToDNSError :: Question -> ResolvInfo -> String -> IOError -> IO a
+ioErrorToDNSError q ResolvInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
   where
-    loc = protoName ++ "@" ++ h
+    loc = show q ++ ": " ++ protoName ++ show rinfoPortNumber ++ "@" ++ rinfoHostName
     aioe = annotateIOError ioe loc Nothing Nothing
 
 ----------------------------------------------------------------
@@ -70,7 +70,7 @@ ioErrorToDNSError h protoName ioe = throwIO $ NetworkFailure aioe
 udpResolver :: UDPRetry -> Resolver
 udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError rinfoHostName "UDP") $ go _qctl
+    E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
   where
     ~tag =
         "    query "
@@ -115,7 +115,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
             getAnswer ident recv tx
 
     getAnswer ident recv tx = do
-        ans <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        ans <- recv `E.catch` ioErrorToDNSError q ri "UDP"
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
             Left e -> do
@@ -157,7 +157,7 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
 vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError rinfoHostName proto) $ go _qctl
+    E.handle (ioErrorToDNSError q ri proto) $ go _qctl
   where
     ~tag =
         "    query "
@@ -195,7 +195,7 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
             Just res -> return res
 
     getAnswer ident recv tx = do
-        (rx, bss) <- recv `E.catch` \e -> E.throwIO $ NetworkFailure e
+        (rx, bss) <- recv `E.catch` ioErrorToDNSError q ri proto
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left e -> E.throwIO e

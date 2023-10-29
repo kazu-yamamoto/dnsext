@@ -2,6 +2,8 @@ module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
     Env (..),
+    QueryContext (..),
+    queryContextIN,
     RRset (..),
     DEntry (..),
     ContextT,
@@ -43,6 +45,9 @@ import qualified DNS.Types as DNS
 import DNS.Iterative.Imports
 import DNS.Iterative.Stats
 
+----------
+-- Monad and context
+
 data Env = Env
     { logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
@@ -57,6 +62,34 @@ data Env = Env
     , stats_ :: Stats
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
+
+data QueryContext =
+    QueryContext
+    { qcontrol_ :: QueryControls
+    , origQuestion_ :: Question
+    }
+
+queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
+queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
+
+data QueryError
+    = DnsError DNSError
+    | NotResponse Bool DNSMessage
+    | InvalidEDNS DNS.EDNSheader DNSMessage
+    | HasError DNS.RCODE DNSMessage
+    deriving (Show)
+
+type ContextT m = ReaderT Env (ReaderT QueryContext m)
+type DNSQuery = ExceptT QueryError (ContextT IO)
+
+runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
+runDNSQuery q = runReaderT . runReaderT (runExceptT q)
+
+throwDnsError :: DNSError -> DNSQuery a
+throwDnsError = throwE . DnsError
+
+----------
+-- Delegation
 
 {- FOURMOLU_DISABLE -}
 -- | The cases that generate `NotFilled`
@@ -103,21 +136,8 @@ data DEntry
     | DEonlyNS !Domain
     deriving (Show)
 
-data QueryError
-    = DnsError DNSError
-    | NotResponse Bool DNSMessage
-    | InvalidEDNS DNS.EDNSheader DNSMessage
-    | HasError DNS.RCODE DNSMessage
-    deriving (Show)
-
-type ContextT m = ReaderT Env (ReaderT QueryControls m)
-type DNSQuery = ExceptT QueryError (ContextT IO)
-
-runDNSQuery :: DNSQuery a -> Env -> QueryControls -> IO (Either QueryError a)
-runDNSQuery q = runReaderT . runReaderT (runExceptT q)
-
-throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwE . DnsError
+----------
+-- DNSSEC Verification state and RRset
 
 {- FOURMOLU_DISABLE -}
 data MayVerifiedRRS
@@ -145,6 +165,9 @@ data RRset = RRset
     , rrsMayVerified :: MayVerifiedRRS
     }
     deriving (Show)
+
+----------
+-- results
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])

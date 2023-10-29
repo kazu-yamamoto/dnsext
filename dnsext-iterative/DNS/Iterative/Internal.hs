@@ -1,7 +1,6 @@
 module DNS.Iterative.Internal (
     -- * types
     module DNS.Iterative.Query.Types,
-    Env (..),
     newEnv,
     getResponseIterative,
     CacheResult (..),
