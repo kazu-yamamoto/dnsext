@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Utils where
 
@@ -10,7 +11,7 @@ import System.Console.ANSI.Types
 
 -- dnsext packages
 import qualified DNS.Log as Log
-import DNS.Types (DNSMessage)
+import DNS.Types (DNSMessage (..))
 import qualified DNS.Types as DNS
 
 -- this package
@@ -30,14 +31,63 @@ clogLn level color s = do
     putLines <- asks logLines_
     liftIO $ putLines level color [s]
 
+{- FOURMOLU_DISABLE -}
+logQueryErrors :: String -> DNSQuery a -> DNSQuery a
+logQueryErrors prefix q = do
+      handleDnsError left return q
+    where
+      left qe = do
+          lift $ logQueryError qe
+          throwE qe
+      logQueryError qe = case qe of
+          DnsError de           -> logDnsError de
+          NotResponse resp msg  -> logNotResponse resp msg
+          InvalidEDNS eh msg    -> logInvalidEDNS eh msg
+          HasError rcode msg    -> logHasError rcode msg
+      logDnsError de = case de of
+          DNS.NetworkFailure {}   -> putLog $ show de
+          DNS.DecodeError {}      -> putLog $ show de
+          DNS.UnknownDNSError {}  -> putLog $ show de
+          _                       -> pure ()
+      logNotResponse False  msg  = putLog $ pprMessage "not response:" msg
+      logNotResponse True  _msg  = pure ()
+      logInvalidEDNS DNS.InvalidEDNS  msg = putLog $ pprMessage "invalid EDNS:" msg
+      logInvalidEDNS _               _msg = pure ()
+      logHasError _rcode _msg = pure ()
+      putLog = logLn Log.WARN . (prefix ++)
+{- FOURMOLU_ENABLE -}
+
 printResult :: Either QueryError DNSMessage -> IO ()
-printResult = either print (putStr . unlines . concat . result)
-  where
-    result msg =
-        [ "answer:" : map show (DNS.answer msg) ++ [""]
-        , "authority:" : map show (DNS.authority msg) ++ [""]
-        , "additional:" : map show (DNS.additional msg) ++ [""]
-        ]
+printResult = either print (putStr . pprMessage "result")
+
+{- FOURMOLU_DISABLE -}
+pprMessage :: String -> DNSMessage -> String
+pprMessage title DNSMessage{..} =
+    unlines $ (title ++ ":") : map ("  " ++)
+    ( [ "identifier: " ++ show identifier
+      , "opcode: " ++ show opcode
+      , "rcode: " ++ show rcode
+      , "flags: " ++ show flags
+      , "edns-header: " ++ show ednsHeader
+      ]
+      ++
+      [ "question:" ]
+      ++
+      map (("  " ++) . show) question
+      ++
+      [ "answer:" ]
+      ++
+      map (("  " ++) . show) answer
+      ++
+      [ "authority:" ]
+      ++
+      map (("  " ++) . show) authority
+      ++
+      [ "additional:" ]
+      ++
+      map (("  " ++) . show) additional
+    )
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 data PPMode
