@@ -49,19 +49,16 @@ import DNS.Iterative.Stats
 ----------------------------------------------------------------
 
 mkPipeline :: Env -> Int -> Int -> IO ([IO ()], ToCacher)
-mkPipeline env n workers = do
+mkPipeline env cachersN workersN = do
     qr <- newTQueueIO
     let toCacher = atomically . writeTQueue qr
         fromReceiver = atomically $ readTQueue qr
-    let onePipeline = do
-            qw <- newTQueueIO
-            let toWorker = atomically . writeTQueue qw
-                fromCacher = atomically $ readTQueue qw
-            let mkCacher = cacherLogic env fromReceiver toWorker
-                mkWorker = workerLogic env fromCacher
-            return $ mkCacher : replicate workers mkWorker
-    mks <- concat <$> replicateM n onePipeline
-    return (mks, toCacher)
+    qw <- newTQueueIO
+    let toWorker = atomically . writeTQueue qw
+        fromCacher = atomically $ readTQueue qw
+    let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
+    let workers = replicate workersN $ workerLogic env fromCacher
+    return (cachers ++ workers, toCacher)
 
 ----------------------------------------------------------------
 

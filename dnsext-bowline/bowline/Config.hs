@@ -29,8 +29,8 @@ data Config = Config
     , cnf_disable_v6_ns :: Bool
     , cnf_dns_addrs :: [String]
     , cnf_resolve_timeout :: Int
-    , cnf_pipelines :: Int
-    , cnf_workers_per_pipeline :: Int
+    , cnf_cachers :: Int
+    , cnf_workers :: Int
     , cnf_udp :: Bool
     , cnf_udp_port :: Int
     , cnf_vc_query_max_size :: Int
@@ -72,8 +72,8 @@ defaultConfig =
         , cnf_disable_v6_ns = False
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_resolve_timeout = 10000000
-        , cnf_pipelines = 2
-        , cnf_workers_per_pipeline = 8
+        , cnf_cachers = 4
+        , cnf_workers = 128
         , cnf_udp = True
         , cnf_udp_port = 53
         , cnf_vc_query_max_size = 2048
@@ -135,8 +135,8 @@ showConfig2 conf =
     , field' "log level" cnf_log_level
     , field' "max cache size" cnf_cache_size
     , field' "disable queries to IPv6 NS" cnf_disable_v6_ns
-    , field' "pipelines" cnf_pipelines
-    , field' "workers per pipeline" cnf_workers_per_pipeline
+    , field' "cachers" cnf_cachers
+    , field' "workers" cnf_workers
     ]
   where
     field' label' get = field'_ label' (show . get)
@@ -162,8 +162,8 @@ makeConfig def conf =
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_dns_addrs = get "cnf_dns_addrs" cnf_dns_addrs
         , cnf_resolve_timeout = get "resolve_timeout" cnf_resolve_timeout
-        , cnf_pipelines = get "pipelines" cnf_pipelines
-        , cnf_workers_per_pipeline = get "workers-per-pipeline" cnf_workers_per_pipeline
+        , cnf_cachers = get "cachers" cnf_cachers
+        , cnf_workers = get "workers" cnf_workers
         , cnf_udp = get "udp" cnf_udp
         , cnf_udp_port = get "udp-port" cnf_udp_port
         , cnf_vc_query_max_size = get "vc-query-max-size" cnf_vc_query_max_size
