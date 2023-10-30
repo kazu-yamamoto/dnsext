@@ -21,7 +21,7 @@ executable bowline
         WebAPI
 
     default-language: Haskell2010
-    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N4 -qn1 -T -A32m"
+    ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N4 -qn1 -T -A32m -kc2k"
     build-depends:
         base,
         bytestring,
