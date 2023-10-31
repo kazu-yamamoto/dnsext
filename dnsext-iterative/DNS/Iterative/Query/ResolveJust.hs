@@ -118,8 +118,13 @@ delegationIPs dc Delegation{..} = do
                 throwDnsError DNS.ServerFailure
             | otherwise = do
                 orig <- showOrig <$> lift (lift $ asks origQuestion_)
-                plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig ++
-                    ", without glue sub-domains: " ++ show subNames
+                plogLn Log.DEMO $
+                    "serv-fail: delegation is empty. zone: "
+                        ++ show zone
+                        ++ ", "
+                        ++ orig
+                        ++ ", without glue sub-domains: "
+                        ++ show subNames
                 throwDnsError DNS.ServerFailure
           where
             allIPs = takeDEntryIPs False delegationNS
@@ -173,12 +178,22 @@ resolveNS zone disableV6NS dc ns = do
             orig <- showOrig <$> lift (lift $ asks origQuestion_)
             let failEmptyAx
                     | disableV6NS = do
-                        lift . logLn Log.WARN $ "resolveNS: serv-fail, empty A: disable-v6ns: " ++
-                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
+                        lift . logLn Log.WARN $
+                            "resolveNS: serv-fail, empty A: disable-v6ns: "
+                                ++ orig
+                                ++ ", zone: "
+                                ++ show zone
+                                ++ " NS: "
+                                ++ show ns
                         throwDnsError DNS.ServerFailure
                     | otherwise = do
-                        lift . logLn Log.WARN $ "resolveNS: serv-fail, empty A|AAAA: " ++
-                            orig ++ ", zone: " ++ show zone ++ " NS: " ++ show ns
+                        lift . logLn Log.WARN $
+                            "resolveNS: serv-fail, empty A|AAAA: "
+                                ++ orig
+                                ++ ", zone: "
+                                ++ show zone
+                                ++ " NS: "
+                                ++ show ns
                         throwDnsError DNS.ServerFailure
             maybe failEmptyAx pure
                 =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}

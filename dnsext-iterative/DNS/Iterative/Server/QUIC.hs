@@ -13,13 +13,14 @@ import Data.ByteString.Char8 ()
 import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
+
+import Control.Concurrent.Async
 import qualified DNS.Do53.Internal as DNS
 import qualified Network.QUIC as QUIC
 import Network.QUIC.Server (ServerConfig (..))
 import qualified Network.QUIC.Server as QUIC
 import Network.TLS (Credentials (..))
 import qualified System.TimeManager as T
-import Control.Concurrent.Async
 
 -- this package
 import DNS.Iterative.Server.Pipeline
@@ -53,11 +54,11 @@ quicServer creds VcServerConfig{..} env toCacher port host = do
                         return (BS.concat bss, peerInfo)
             send bs peerInfo = do
                 case peerInfo of
-                  PeerInfoQUIC _ strm -> do
-                      DNS.sendVC (QUIC.sendStreamMany strm) bs
-                      QUIC.closeStream strm
-                      T.tickle th
-                  _ -> return ()
+                    PeerInfoQUIC _ strm -> do
+                        DNS.sendVC (QUIC.sendStreamMany strm) bs
+                        QUIC.closeStream strm
+                        T.tickle th
+                    _ -> return ()
             receiver = receiverLogicVC env mysa recv toCacher toSender DOQ
             sender = senderLogicVC env send fromX
         concurrently_ sender receiver

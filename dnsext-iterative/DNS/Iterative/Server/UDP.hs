@@ -34,8 +34,8 @@ udpServer _conf env toCacher port addr = do
             return (bs, PeerInfoUDP csa)
         send bs peerInfo = do
             case peerInfo of
-              PeerInfoUDP csa -> UDP.sendTo lsock bs csa
-              _ -> return ()
+                PeerInfoUDP csa -> UDP.sendTo lsock bs csa
+                _ -> return ()
         receiver = receiverLogic env mysa recv toCacher toSender UDP
         sender = senderLogic env send fromX
     return [receiver, sender]

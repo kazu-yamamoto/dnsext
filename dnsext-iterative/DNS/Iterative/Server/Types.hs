@@ -10,9 +10,9 @@ module DNS.Iterative.Server.Types (
     FromCacher,
     ToSender,
     FromX,
-    Input(..),
-    Output(..),
-    PeerInfo(..),
+    Input (..),
+    Output (..),
+    PeerInfo (..),
     peerSockAddr,
 ) where
 
@@ -24,9 +24,10 @@ import qualified Network.QUIC as QUIC
 import Network.Socket
 import qualified Network.UDP as UDP
 
-data PeerInfo = PeerInfoUDP UDP.ClientSockAddr
-              | PeerInfoQUIC SockAddr QUIC.Stream
-              | PeerInfoVC SockAddr
+data PeerInfo
+    = PeerInfoUDP UDP.ClientSockAddr
+    | PeerInfoQUIC SockAddr QUIC.Stream
+    | PeerInfoVC SockAddr
 
 peerSockAddr :: PeerInfo -> SockAddr
 peerSockAddr (PeerInfoUDP (UDP.ClientSockAddr sa _)) = sa

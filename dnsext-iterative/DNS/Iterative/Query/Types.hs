@@ -64,8 +64,7 @@ data Env = Env
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
 
-data QueryContext =
-    QueryContext
+data QueryContext = QueryContext
     { qcontrol_ :: QueryControls
     , origQuestion_ :: Question
     }
@@ -89,9 +88,11 @@ runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwE . DnsError
 
-handleDnsError :: (QueryError -> DNSQuery a)
-               -> (a -> DNSQuery a)
-               -> DNSQuery a -> DNSQuery a
+handleDnsError
+    :: (QueryError -> DNSQuery a)
+    -> (a -> DNSQuery a)
+    -> DNSQuery a
+    -> DNSQuery a
 handleDnsError left right q = either left right =<< lift (runExceptT q)
 
 ----------

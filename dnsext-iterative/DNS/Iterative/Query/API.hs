@@ -197,9 +197,9 @@ replyMessage eas ident rqs =
         DNS.OperationRefused -> Right DNS.ServFail {- like bind9 behavior -}
         DNS.BadOptRecord -> Right DNS.BadVers
         DNS.BadConfiguration -> Right DNS.ServFail
-        DNS.NetworkFailure {} -> Right DNS.ServFail
-        DNS.DecodeError {} -> Right DNS.FormatErr
-        DNS.UnknownDNSError {} -> Right DNS.ServFail
+        DNS.NetworkFailure{} -> Right DNS.ServFail
+        DNS.DecodeError{} -> Right DNS.FormatErr
+        DNS.UnknownDNSError{} -> Right DNS.ServFail
         _ -> Left $ "DNSError: " ++ show e
 
     queryError qe = case qe of

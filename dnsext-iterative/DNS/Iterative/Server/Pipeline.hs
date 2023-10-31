@@ -68,7 +68,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
         Left e -> logLn env Log.WARN $ "decode-error: " ++ show e
         Right queryMsg -> do
             -- Input ByteString -> Input DNSMessage
-            let inp = inpBS { inputQuery = queryMsg }
+            let inp = inpBS{inputQuery = queryMsg}
             mx <- getResponseCached env queryMsg
             case mx of
                 None -> toWorker inp

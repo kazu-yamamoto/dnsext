@@ -71,7 +71,7 @@ recvVC :: VCLimit -> RecvN -> RecvMany
 recvVC lim recvN = do
     (l2, b2) <- recvManyNN recvN 2
     if l2 /= 2
-        then return (0,[])
+        then return (0, [])
         else do
             let len = decodeVCLength $ BS.concat b2
             when (fromIntegral len > lim) $

@@ -13,11 +13,12 @@ import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
+
+import Data.ByteString.Base64.URL
 import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import qualified Network.HTTP2.TLS.Server as H2TLS
 import Network.TLS (Credentials (..))
-import Data.ByteString.Base64.URL
 
 -- this package
 import DNS.Iterative.Server.Pipeline
@@ -61,25 +62,26 @@ doHTTP env toCacher req aux sendResponse = do
     (toSender, fromX) <- mkConnector
     einp <- getInput req
     case einp of
-      Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
-      Right bs -> do
+        Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
+        Right bs -> do
             let inp = Input bs mysa peerInfo DOH toSender
             toCacher inp
             Output bs' _ <- fromX
             let response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sendResponse response []
-            -- fixme record
   where
+    -- fixme record
+
     header = [(HT.hContentType, "application/dns-message")]
 
 getInput :: H2.Request -> IO (Either String BS.ByteString)
 getInput req
-  | method == Just "GET" = case H2.requestPath req of
-      Just path | "/dns-query?dns=" `BS.isPrefixOf` path -> return $ Right $ decodeBase64Lenient$ BS.drop 15 path
-      _ -> return $ Left "illegal URL"
-  | method == Just "POST" = do
+    | method == Just "GET" = case H2.requestPath req of
+        Just path | "/dns-query?dns=" `BS.isPrefixOf` path -> return $ Right $ decodeBase64Lenient $ BS.drop 15 path
+        _ -> return $ Left "illegal URL"
+    | method == Just "POST" = do
         (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
         return $ Right $ BS.concat rqs
-  | otherwise = return $ Left "illegal method"
+    | otherwise = return $ Left "illegal method"
   where
     method = H2.requestMethod req

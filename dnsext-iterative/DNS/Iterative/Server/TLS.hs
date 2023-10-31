@@ -46,4 +46,3 @@ tlsServer creds VcServerConfig{..} env toCacher port host = do
             receiver = receiverLogicVC env mysa recv toCacher toSender DOT
             sender = senderLogicVC env send fromX
         concurrently_ sender receiver
-
