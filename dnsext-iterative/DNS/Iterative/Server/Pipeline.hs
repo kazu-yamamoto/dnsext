@@ -6,7 +6,7 @@ module DNS.Iterative.Server.Pipeline where
 -- GHC packages
 
 import Control.Concurrent.STM
-import Control.Monad (forever, void)
+import Control.Monad (forever, void, when)
 import Data.ByteString (ByteString)
 
 -- dnsext-* packages
@@ -19,7 +19,6 @@ import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
 
 -- other packages
-import Control.Monad (replicateM, when)
 import Network.Socket (SockAddr)
 import UnliftIO (SomeException (..), catch, handle, throwIO)
 
