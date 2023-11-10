@@ -216,7 +216,7 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = return d{delegationDNSKEY = dnskeys}
     nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> throwDnsError DNS.ServerFailure
+    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> return d
     query ips = do
         lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
         either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
