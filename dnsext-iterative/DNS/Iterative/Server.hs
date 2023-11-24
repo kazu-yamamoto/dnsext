@@ -23,7 +23,6 @@ module DNS.Iterative.Server (
     -- * Virtual circuit
     VcServerConfig (..),
     tcpServer,
-    http2cServer,
     http2Server,
     http3Server,
     tlsServer,

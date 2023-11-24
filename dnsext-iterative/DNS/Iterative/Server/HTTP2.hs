@@ -1,9 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Iterative.Server.HTTP2 where
+module DNS.Iterative.Server.HTTP2 (
+    http2Server,
+    VcServerConfig (..),
+    getInput,
+) where
 
 -- GHC packages
+import Control.Monad (forever)
 import qualified Data.ByteString as BS
 import Data.ByteString.Builder (byteString)
 
@@ -13,10 +18,11 @@ import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
-
+import Control.Concurrent.Async
 import Data.ByteString.Base64.URL
 import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
+import Network.HTTP2.TLS.Server (ServerIO (..))
 import qualified Network.HTTP2.TLS.Server as H2TLS
 import Network.TLS (Credentials (..))
 
@@ -27,22 +33,7 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 http2Server :: Credentials -> VcServerConfig -> Server
 http2Server creds VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.run settings creds host port $ doHTTP env toCacher
-    return [http2server]
-  where
-    settings =
-        H2TLS.defaultSettings
-            { H2TLS.settingsTimeout = vc_idle_timeout
-            , H2TLS.settingsSlowlorisSize = vc_slowloris_size
-            }
-
-newtype Http2cServerConfig = Http2cServerConfig
-    { http2c_idle_timeout :: Int
-    }
-
-http2cServer :: VcServerConfig -> Server
-http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.runH2C settings host port $ doHTTP env toCacher
+    let http2server = H2TLS.runIO settings creds host port $ doHTTP env toCacher
     return [http2server]
   where
     settings =
@@ -52,26 +43,24 @@ http2cServer VcServerConfig{..} env toCacher port host = do
             }
 
 doHTTP
-    :: Env
-    -> ToCacher
-    -> H2.Server
-doHTTP env toCacher req aux sendResponse = do
-    let mysa = H2.auxMySockAddr aux
-        peersa = H2.auxPeerSockAddr aux
-        peerInfo = PeerInfoVC peersa
+    :: Env -> ToCacher -> ServerIO -> IO (IO ())
+doHTTP env toCacher ServerIO{..} = do
     (toSender, fromX) <- mkConnector
-    einp <- getInput req
-    case einp of
-        Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
-        Right bs -> do
-            let inp = Input bs mysa peerInfo DOH toSender
-            toCacher inp
-            Output bs' _ <- fromX
+    let receiver = forever $ do
+            (_, strm, req) <- sioReadRequest
+            let peerInfo = PeerInfoH2 sioPeerSockAddr strm
+            einp <- getInput req
+            case einp of
+                Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
+                Right bs -> do
+                    let inp = Input bs sioMySockAddr peerInfo DOH toSender
+                    toCacher inp
+        sender = forever $ do
+            Output bs' (PeerInfoH2 _ strm) <- fromX
             let response = H2.responseBuilder HT.ok200 header $ byteString bs'
-            sendResponse response []
+            sioWriteResponse strm response
+    return $ concurrently_ receiver sender
   where
-    -- fixme record
-
     header = [(HT.hContentType, "application/dns-message")]
 
 getInput :: H2.Request -> IO (Either String BS.ByteString)
