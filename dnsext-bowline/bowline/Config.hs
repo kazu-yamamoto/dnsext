@@ -42,8 +42,6 @@ data Config = Config
     , cnf_tls_port :: Int
     , cnf_quic :: Bool
     , cnf_quic_port :: Int
-    , cnf_h2c :: Bool
-    , cnf_h2c_port :: Int
     , cnf_h2 :: Bool
     , cnf_h2_port :: Int
     , cnf_h3 :: Bool
@@ -85,8 +83,6 @@ defaultConfig =
         , cnf_tls_port = 853
         , cnf_quic = True
         , cnf_quic_port = 853
-        , cnf_h2c = True
-        , cnf_h2c_port = 80
         , cnf_h2 = True
         , cnf_h2_port = 443
         , cnf_h3 = True
@@ -115,7 +111,6 @@ showConfig1 Config{..} =
     , showAddrPort "TCP"     cnf_tcp  cnf_dns_addrs     cnf_tcp_port
     , showAddrPort "TLS"     cnf_tls  cnf_dns_addrs     cnf_tls_port
     , showAddrPort "QUIC"    cnf_quic cnf_dns_addrs     cnf_quic_port
-    , showAddrPort "H2C"     cnf_h2c  cnf_dns_addrs     cnf_h2c_port
     , showAddrPort "H2"      cnf_h2   cnf_dns_addrs     cnf_h2_port
     , showAddrPort "H3"      cnf_h3   cnf_dns_addrs     cnf_h3_port
     ]
@@ -175,8 +170,6 @@ makeConfig def conf =
         , cnf_tls_port = get "tls-port" cnf_tls_port
         , cnf_quic = get "quic" cnf_quic
         , cnf_quic_port = get "quic-port" cnf_quic_port
-        , cnf_h2c = get "h2c" cnf_h2c
-        , cnf_h2c_port = get "h2c-port" cnf_h2c_port
         , cnf_h2 = get "h2" cnf_h2
         , cnf_h2_port = get "h2-port" cnf_h2_port
         , cnf_h3 = get "h3" cnf_h3
