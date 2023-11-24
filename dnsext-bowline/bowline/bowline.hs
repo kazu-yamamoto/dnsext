@@ -96,7 +96,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     trans creds =
         [ (cnf_udp, udpServer udpconf, cnf_udp_port)
         , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
-        , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
         , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
         , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
         , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
