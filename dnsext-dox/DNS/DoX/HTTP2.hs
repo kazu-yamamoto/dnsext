@@ -52,7 +52,7 @@ http2cResolver path lim ri@ResolvInfo{..} q qctl = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
-        H2.runH2C rinfoHostName rinfoPortNumber $
+        H2.runH2C H2.defaultSettings rinfoHostName rinfoPortNumber $
             doHTTP proto ident path lim ri q qctl
 
 doHTTP
@@ -64,7 +64,7 @@ doHTTP
     -> Question
     -> QueryControls
     -> Client Reply
-doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest = do
+doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest _aux = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
