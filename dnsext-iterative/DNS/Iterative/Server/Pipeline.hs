@@ -6,7 +6,7 @@ module DNS.Iterative.Server.Pipeline where
 -- GHC packages
 
 import Control.Concurrent.STM
-import Control.Monad (forever, void, when)
+import Control.Monad (forever, replicateM, void, when)
 import Data.ByteString (ByteString)
 
 -- dnsext-* packages
@@ -27,6 +27,7 @@ import UnliftIO (SomeException (..), catch, handle, throwIO)
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
 
 ----------------------------------------------------------------
@@ -47,8 +48,11 @@ import DNS.Iterative.Stats
 
 ----------------------------------------------------------------
 
-mkPipeline :: Env -> Int -> Int -> IO ([IO ()], ToCacher)
-mkPipeline env cachersN workersN = do
+getWorkerStats :: Int -> IO [WorkerStatOP]
+getWorkerStats workersN = replicateM workersN getWorkerStatOP
+
+mkPipeline :: Env -> Int -> Int -> [WorkerStatOP] -> IO ([IO ()], ToCacher)
+mkPipeline env cachersN _workersN workerStats = do
     qr <- newTQueueIO
     let toCacher = atomically . writeTQueue qr
         fromReceiver = atomically $ readTQueue qr
@@ -56,7 +60,7 @@ mkPipeline env cachersN workersN = do
     let toWorker = atomically . writeTQueue qw
         fromCacher = atomically $ readTQueue qw
     let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
-    let workers = replicate workersN $ workerLogic env fromCacher
+    let workers = [ workerLogic env wstat fromCacher | wstat <- workerStats ]
     return (cachers ++ workers, toCacher)
 
 ----------------------------------------------------------------
@@ -81,10 +85,15 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
 
 ----------------------------------------------------------------
 
-workerLogic :: Env -> FromCacher -> IO ()
-workerLogic env fromCacher = handledLoop env "worker" $ do
+workerLogic :: Env -> WorkerStatOP -> FromCacher -> IO ()
+workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
+    setWorkerStat WWaitDequeue
     inp@Input{..} <- fromCacher
+    case question inputQuery of
+        q : _  -> setWorkerStat (WRun q)
+        []     -> pure ()
     ex <- getResponseIterative env inputQuery
+    setWorkerStat WWaitEnqueue
     case ex of
         Right replyMsg -> do
             incStats (stats_ env) CacheMiss
