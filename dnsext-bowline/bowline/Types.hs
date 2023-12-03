@@ -8,6 +8,7 @@ data Command = Quit | Reload | KeepCache
 
 data Control = Control
     { getStats :: IO Builder
+    , getWStats :: IO Builder
     , quitServer :: IO ()
     , waitQuit :: STM ()
     , getCommandAndClear :: IO Command
@@ -20,6 +21,7 @@ newControl = do
     return
         Control
             { getStats = return mempty
+            , getWStats = return mempty
             , quitServer = return ()
             , waitQuit = return ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))

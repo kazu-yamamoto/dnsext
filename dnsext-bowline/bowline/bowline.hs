@@ -15,6 +15,7 @@ import qualified DNS.SVCB as DNS
 import qualified DNS.Types as DNS
 import Data.ByteString.Builder
 import qualified Data.IORef as I
+import Data.String (fromString)
 import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
@@ -76,9 +77,10 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let tmout = timeout cnf_resolve_timeout
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
-    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers
+    workerStats <- Server.getWorkerStats cnf_workers
+    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
-    mng <- getControl env mng0
+    mng <- getControl env workerStats mng0
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
@@ -176,13 +178,14 @@ getCreds Config{..}
 
 ----------------------------------------------------------------
 
-getControl :: Env -> Control -> IO Control
-getControl env mng0 = do
+getControl :: Env -> [WorkerStatOP] -> Control -> IO Control
+getControl env wstats mng0 = do
     qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
             mng0
                 { getStats = getStats' env ucacheQSize
+                , getWStats = getWStats' wstats
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
@@ -199,3 +202,8 @@ getStats' env _ucacheQSize = do
             else return mempty
     st <- Server.getStats env "bowline_"
     return (gc <> st)
+
+----------------------------------------------------------------
+
+getWStats' :: [WorkerStatOP] -> IO Builder
+getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats

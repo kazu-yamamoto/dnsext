@@ -14,6 +14,7 @@ module DNS.Iterative.Server (
 
     -- * Pipeline
     mkPipeline,
+    getWorkerStats,
     ToCacher,
 
     -- * UDP
@@ -28,6 +29,12 @@ module DNS.Iterative.Server (
     tlsServer,
     quicServer,
 
+    -- * WorkerStat
+    WorkerStat (..),
+    WorkerStatOP (..),
+    pprWorkerStats,
+    pprWorkerStat,
+
     -- * Stats
     getStats,
 ) where
@@ -41,6 +48,7 @@ import DNS.Iterative.Server.TCP
 import DNS.Iterative.Server.TLS
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.UDP
+import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
 import DNS.RRCache (RRCacheOps (..), newRRCacheOps)
 import DNS.TimeCache (TimeCache (..), newTimeCache)
