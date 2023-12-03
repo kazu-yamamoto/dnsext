@@ -76,7 +76,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let tmout = timeout cnf_resolve_timeout
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
-    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers
+    workerStats <- Server.getWorkerStats cnf_workers
+    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
     mng <- getControl env mng0
     monitor <- Mon.monitor conf env mng
