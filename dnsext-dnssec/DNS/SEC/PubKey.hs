@@ -15,6 +15,7 @@ data PubKey
 toPubKey :: PubAlg -> Opaque -> PubKey
 toPubKey RSAMD5 = toPubKey_RSA
 toPubKey RSASHA1 = toPubKey_RSA
+toPubKey RSASHA1_NSEC3_SHA1 = toPubKey_RSA {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
 toPubKey RSASHA256 = toPubKey_RSA
 toPubKey RSASHA512 = toPubKey_RSA
 toPubKey ECDSAP256SHA256 = toPubKey_ECDSA 32
