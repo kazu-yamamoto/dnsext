@@ -257,7 +257,7 @@ rsaSHA256 =
             , rrttl = 3600
             , rrclass = IN
             , rrtype = A
-            , rdata = rd_a $ read "192.0.2.91"
+            , rdata = rd_a "192.0.2.91"
             }
         ]
     , ResourceRecord
@@ -304,7 +304,7 @@ rsaSHA256_RECONS =
             , rrttl = 1800 {- value different from original TTL -}
             , rrclass = IN
             , rrtype = A
-            , rdata = rd_a $ read "192.0.2.91"
+            , rdata = rd_a "192.0.2.91"
             }
         ]
     , ResourceRecord
@@ -402,7 +402,7 @@ rsaSHA512 =
             , rrttl = 3600
             , rrclass = IN
             , rrtype = A
-            , rdata = rd_a $ read "192.0.2.91"
+            , rdata = rd_a "192.0.2.91"
             }
         ]
     , ResourceRecord
@@ -450,7 +450,7 @@ ecdsaP256 =
             , rrttl = 3600
             , rrclass = IN
             , rrtype = A
-            , rdata = rd_a $ read "192.0.2.1"
+            , rdata = rd_a "192.0.2.1"
             }
         ]
     , ResourceRecord
@@ -493,7 +493,7 @@ ecdsaP384 =
             , rrttl = 3600
             , rrclass = IN
             , rrtype = A
-            , rdata = rd_a $ read "192.0.2.1"
+            , rdata = rd_a "192.0.2.1"
             }
         ]
     , ResourceRecord
