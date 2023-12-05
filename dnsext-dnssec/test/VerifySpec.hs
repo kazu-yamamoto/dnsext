@@ -279,7 +279,7 @@ rsaSHA256 =
         rd_rrsig'
             A 8 3
             3600
-            1893456000 946684800
+            "20300101000000" "20000101000000"
             9033
             "example.net."
             " kRCOH6u7l0QGy9qpC9 \
@@ -289,6 +289,7 @@ rsaSHA256 =
 {- "Reconstructing the Signed Data"
    https://datatracker.ietf.org/doc/html/rfc4035#section-5.3.2
    applying RRSIG original TTL on verification -}
+-- modified example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256_RECONS :: RRSIG_CASE
 rsaSHA256_RECONS =
     ( ResourceRecord
@@ -326,7 +327,7 @@ rsaSHA256_RECONS =
         rd_rrsig'
             A 8 3
             3600 {- original TTL -}
-            1893456000 946684800
+            "20300101000000" "20000101000000"
             9033
             "example.net."
             " kRCOH6u7l0QGy9qpC9 \
@@ -378,7 +379,7 @@ rsaSHA256_RRset =
         rd_rrsig'
             A 8 4
             600
-            1680189006 1677597006
+            "20230330151006" "20230228151006"
             2508
             "iij.ad.jp."
             " kgV2bxld5SLc3M7kVFl1QD3cKw60T71iaI7OAgcBsgAW84vvRUY/hp0v \
@@ -425,7 +426,7 @@ rsaSHA512 =
         rd_rrsig'
             A 10 3
             3600
-            1893456000 946684800
+            "20300101000000" "20000101000000"
             3740
             "example.net."
             " tsb4wnjRUDnB1BUi+t \
@@ -471,7 +472,7 @@ ecdsaP256 =
         rd_rrsig'
             A 13 3
             3600
-            1284026679 1281607479
+            "20100909100439" "20100812100439"
             55648
             "example.net."
             " qx6wLYqmh+l9oCKTN6qIc+bw6ya+KJ8oMz0YP107epXA \
@@ -515,7 +516,7 @@ ecdsaP384 =
         rd_rrsig'
             A 14 3
             3600
-            1284027625 1281608425
+            "20100909102025" "20100812102025"
             10771
             "example.net."
             " /L5hDKIvGDyI1fcARX3z65qrmPsVz73QD1Mr5CEqOiLP \
@@ -558,7 +559,7 @@ ed25519 =
         rd_rrsig'
             MX 15 3
             3600
-            1440021600 1438207200
+            1440021600 1438207200 {- RFC8080 has integer data! -}
             3613
             "example.com."
             " Edk+IB9KNNWg0HAjm7FazXyrd5m3Rk8zNZbvNpAcM+eysqcUOMIjWoevFkj \
@@ -601,7 +602,7 @@ ed448 =
         rd_rrsig'
             MX 16 3
             3600
-            1440021600 1438207200
+            1440021600 1438207200 {- RFC8080 has integer data! -}
             9713
             "example.com."
             " Nmc0rgGKpr3GKYXcB1JmqqS4NYwhmechvJTqVzt3jR+Qy/lSLFoIk1L+9e3 \
