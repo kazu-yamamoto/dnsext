@@ -223,6 +223,7 @@ rrsigDicts :: Map PubAlg RRSIGImpl
 rrsigDicts =
     Map.fromList
         [ (RSASHA1, rsaSHA1)
+        , (RSASHA1_NSEC3_SHA1, rsaSHA1) {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
         , (RSASHA256, rsaSHA256)
         , (RSASHA512, rsaSHA512)
         , (ECDSAP256SHA256, ecdsaP256SHA)

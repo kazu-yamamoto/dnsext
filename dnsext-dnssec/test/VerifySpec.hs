@@ -23,6 +23,7 @@ spec = do
         it "SHA256" $ caseDS dsSHA256
         it "SHA384" $ caseDS dsSHA384
     describe "verify RRSIG" $ do
+        it "RSA/SHA1 alias NSEC3_SHA1" $ caseRRSIG rsaSHA1NSEC3SHA1
         it "RSA/SHA256" $ caseRRSIG rsaSHA256
         it "RSA/SHA256 Reconstruction" $ caseRRSIG rsaSHA256_RECONS
         it "RSA/SHA256 RRset" $ caseRRSIG rsaSHA256_RRset
@@ -241,6 +242,46 @@ caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure
         rd = rdata rr
 
 {- FOURMOLU_DISABLE -}
+rsaSHA1NSEC3SHA1 :: RRSIG_CASE
+rsaSHA1NSEC3SHA1 =
+    ( ResourceRecord
+        { rrname = "nist.gov."
+        , rrttl = 302400
+        , rrclass = IN
+        , rrtype = DNSKEY
+        , rdata = key_rd
+        }
+    ,
+       [ ResourceRecord
+           { rrname = "nist.gov."
+           , rrttl = 1800
+           , rrclass = IN
+           , rrtype = A
+           , rdata = rd_a "129.6.13.49"
+           }
+       ]
+    , ResourceRecord
+        { rrname = "nist.gov."
+        , rrttl = 1800
+        , rrclass = IN
+        , rrtype = RRSIG
+        , rdata = sig_rd
+        }
+    )
+  where
+    key_rd =
+        rd_dnskey'
+            256 3 7
+            "AwEAAcXO18j9zWL7GHpu/2yL3X+Qo7S1XjqocD1I7fVDckTUIL5IQnzo H2l9PPYiH9fSqQfJNuTjW1za1M7AGgRdyvXEt8Fp2fEIjWrRx4yE1KXc mFLE2aYGCsmHzSAQPUYR2Ujw3MYQOFRbEskBvLn7fKDEAodMWJL3AXLc vRUn9tuZ"
+    sig_rd =
+        rd_rrsig'
+            A 7 2
+            1800
+            "20231212072832" "20231205065213"
+            37700
+            "nist.gov."
+            "CLkk28SVyM1Ouyv4BlCJ1XcWgtehBRyX40kQSCU8uODhSE46HRgRVJYY zZZbJD33WPtmsqWED2r0boZlpWt+T7SPQ0J0x2F3ecVWMwIiXb89vP4K OGaVUkcIIGnV1VOrEG2CiDtdXvEWDCX95fkuqwPgxRn/86GceDZypxZr Etk="
+
 -- example from https://datatracker.ietf.org/doc/html/rfc5702#section-6.1
 rsaSHA256 :: RRSIG_CASE
 rsaSHA256 =
