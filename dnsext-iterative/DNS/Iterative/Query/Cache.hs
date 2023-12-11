@@ -60,7 +60,7 @@ lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
     mkAlive ts = Cache.lookupAlive ts result
-    result ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
         notVerified = notVerifiedRRset dom typ DNS.IN ttl
@@ -81,15 +81,16 @@ lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler (Either (RRset, Ranking) RRset)
     mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
-    result now cache ttl crs rank = (,) <$> Cache.hitEither (fmap Left . negative) (Just . Right . positive) crs <*> pure rank
+    result now cache ttl crs rank = (,) <$> hit <*> pure rank
       where
+        hit = Cache.foldHit (fmap Left . negative) (const Nothing) (Just . Right . positive) crs
         {- EMPTY hit. empty ranking and SOA result. -}
         negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         positive = Cache.positiveHit notVerified valid
         notVerified rds = notVerifiedRRset dom typ DNS.IN ttl rds
         valid rds sigs = validRRset dom typ DNS.IN ttl rds sigs
 
-    soaResult ettl srcDom ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom ttl crs rank = (,) <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
         notVerified = notVerifiedRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
@@ -109,7 +110,7 @@ lookupCache dom typ = withLookupCache mkAlive "" dom typ
   where
     mkAlive :: CacheHandler [ResourceRecord]
     mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = Just (Cache.unCRSet (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
+    result ttl crs rank = Just (Cache.unCRSet (const []) (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
       where
         mapRR = map $ ResourceRecord dom typ DNS.IN ttl
 
