@@ -3,6 +3,7 @@
 
 module DNS.Iterative.Server.HTTP2 (
     http2Server,
+    http2cServer,
     VcServerConfig (..),
     getInput,
 ) where
@@ -34,6 +35,17 @@ import DNS.Iterative.Server.Types
 http2Server :: Credentials -> VcServerConfig -> Server
 http2Server creds VcServerConfig{..} env toCacher port host = do
     let http2server = H2TLS.runIO settings creds host port $ doHTTP env toCacher
+    return [http2server]
+  where
+    settings =
+        H2TLS.defaultSettings
+            { H2TLS.settingsTimeout = vc_idle_timeout
+            , H2TLS.settingsSlowlorisSize = vc_slowloris_size
+            }
+
+http2cServer :: VcServerConfig -> Server
+http2cServer VcServerConfig{..} env toCacher port host = do
+    let http2server = H2TLS.runIOH2C settings host port $ doHTTP env toCacher
     return [http2server]
   where
     settings =

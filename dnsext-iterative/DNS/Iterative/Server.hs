@@ -25,6 +25,7 @@ module DNS.Iterative.Server (
     VcServerConfig (..),
     tcpServer,
     http2Server,
+    http2cServer,
     http3Server,
     tlsServer,
     quicServer,
