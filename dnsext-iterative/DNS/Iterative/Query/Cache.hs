@@ -3,6 +3,8 @@
 
 module DNS.Iterative.Query.Cache (
     lookupValid,
+    LookupResult,
+    foldLookupResult,
     lookupRRsetEither,
     lookupCache,
     cacheAnswer,
@@ -74,6 +76,20 @@ guardValid m = do
 
 lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
 lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
+
+{- FOURMOLU_DISABLE -}
+data LookupResult
+    = LKNegative RRset Ranking
+    | LKNegativeNoSOA RCODE
+    | LKPositive RRset
+    deriving Show
+
+foldLookupResult :: (RRset -> Ranking -> a) -> (RCODE -> a) -> (RRset -> a) -> LookupResult -> a
+foldLookupResult negative nsoa positive lkre = case lkre of
+    LKNegative rrset rank  -> negative rrset rank
+    LKNegativeNoSOA rcode  -> nsoa rcode
+    LKPositive rrset       -> positive rrset
+{- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (Either (RRset, Ranking) RRset, Ranking))
