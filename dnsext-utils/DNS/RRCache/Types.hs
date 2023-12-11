@@ -40,6 +40,7 @@ module DNS.RRCache.Types (
     positiveRDatas,
     positiveRRSIGs,
     Hit (..),
+    foldHit,
     hitEither,
     CRSet,
     mkNotVerified,
@@ -77,6 +78,7 @@ import DNS.Types (
     DNSMessage,
     Domain,
     Question (..),
+    RCODE,
     RData,
     ResourceRecord (ResourceRecord),
     TTL,
@@ -108,13 +110,19 @@ positiveHit notVerified_ valid_ pos = case pos of
 
 data Hit
     = Negative Domain           {- Negative hit, NXDOMAIN or NODATA, hold zone-domain delegation from -}
+    | NegativeNoSOA RCODE       {- Negative hit with NO SOA -}
     | Positive Positive         {- Positive hit -}
     deriving (Eq, Show)
 
-hitEither :: (Domain -> a) -> (Positive -> a) -> Hit -> a
-hitEither negative positive hit = case hit of
-    Negative soa -> negative soa
-    Positive pos -> positive pos
+foldHit :: (Domain -> a) -> (RCODE -> a) -> (Positive -> a) -> Hit -> a
+foldHit negative nsoa positive hit = case hit of
+    Negative soa         -> negative soa
+    NegativeNoSOA rcode  -> nsoa rcode
+    Positive pos         -> positive pos
+
+{-# DEPRECATED hitEither "Use foldHit instead of this" #-}
+hitEither :: (Domain -> a) -> (RCODE -> a) -> (Positive -> a) -> Hit -> a
+hitEither = foldHit
 {- FOURMOLU_ENABLE -}
 
 type CRSet = Hit
@@ -135,8 +143,8 @@ valid rds sigs nothing just = cons1 rds nothing withRds
       where
         withSigs s ss = just $ mkValid d ds s ss
 
-unCRSet :: (Domain -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
-unCRSet negative notVerified_ valid_ = hitEither negative (positiveHit notVerified_ valid_)
+unCRSet :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
+unCRSet negative nsoa notVerified_ valid_ = foldHit negative nsoa (positiveHit notVerified_ valid_)
 
 positiveRDatas :: Positive -> [RData]
 positiveRDatas = positiveHit id const
@@ -412,7 +420,7 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 toRDatas :: CRSet -> ([RData], [RD_RRSIG])
-toRDatas = unCRSet (const ([], [])) (\rs -> (rs, [])) (,)
+toRDatas = unCRSet (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe CRSet
 fromRDatas rds = rds `listseq` notVerified rds Nothing Just
