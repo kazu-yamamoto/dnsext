@@ -92,21 +92,22 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 {- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (Either (RRset, Ranking) RRset, Ranking))
+lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
-    mkAlive :: CacheHandler (Either (RRset, Ranking) RRset)
+    mkAlive :: CacheHandler LookupResult
     mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
     result now cache ttl crs rank = (,) <$> hit <*> pure rank
       where
-        hit = Cache.foldHit (fmap Left . negative) (const Nothing) (Just . Right . positive) crs
+        hit = Cache.foldHit negative negativeNoSOA positive crs
         {- EMPTY hit. empty ranking and SOA result. -}
         negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
-        positive = Cache.positiveHit notVerified valid
+        negativeNoSOA = Just . LKNegativeNoSOA
+        positive = Just . LKPositive . Cache.positiveHit notVerified valid
         notVerified rds = notVerifiedRRset dom typ DNS.IN ttl rds
         valid rds sigs = validRRset dom typ DNS.IN ttl rds sigs
 
-    soaResult ettl srcDom ttl crs rank = (,) <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom ttl crs rank = LKNegative <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
         notVerified = notVerifiedRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
