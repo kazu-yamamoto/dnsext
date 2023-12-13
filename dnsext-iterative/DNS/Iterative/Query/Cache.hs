@@ -21,7 +21,7 @@ module DNS.Iterative.Query.Cache (
 import qualified DNS.Log as Log
 import DNS.RRCache (
     Ranking,
-    insertSetEmpty,
+    cpsInsertNegative,
     rankedAnswer,
     rankedAuthority,
  )
@@ -209,7 +209,7 @@ cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
-    liftIO $ insertSetEmpty zone dom typ ttl rank insertRRSet
+    liftIO $ cpsInsertNegative zone dom typ ttl rank insertRRSet
 
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
