@@ -76,22 +76,19 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
                 result <- cnameHandler bn
                 pure (([], bn), Right result)
 
-            withNXC (soa, _rank) = pure (([], bn), Left (DNS.NameErr, [], [soa]))
+            withNXC soa = pure (([], bn), Left (DNS.NameErr, [], soa))
 
-            cachedCNAME (rrs, soa) =
+            cachedCNAME (rc, rrs, soa) =
                 pure
                     ( ([], bn)
-                    , Left
-                        ( DNS.NoErr
-                        , rrs
-                        , soa {- target RR is not CNAME destination but CNAME, so NoErr -}
-                        )
+                    , Left ( rc, rrs, soa )
                     )
 
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
-            (cachedCNAME . either (\soa -> ([], [soa])) (\cname -> ([cname], [])))
-            =<< lift (lookupCNAME bn)
+            {- target RR is not CNAME destination, but CNAME result is NoErr -}
+            (cachedCNAME . foldLookupResult (\soa _rank -> (DNS.NoErr, [], [soa])) (\rc -> (rc, [], [])) (\cname -> (DNS.NoErr, [cname], [])))
+            =<< lift (lookupType bn CNAME)
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
     -- recCNAMEs :: Int -> Domain -> [RRset] -> DNSQuery (([RRset], Domain), Either Result a)
@@ -105,53 +102,44 @@ resolveLogic logMark cnameHandler typeHandler n0 typ =
                     (msg, cname, vsec) <- typeHandler bn typ
                     maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
 
-                withNXC (soa, _rank) = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], [soa]))
+                withNXC soa = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], soa))
 
                 noTypeCache =
                     maybe
                         (maybe noCache withNXC =<< lift (lookupNX bn))
                         recCNAMEs_ {- recurse with cname cache -}
-                        =<< lift ((withCN =<<) . joinE <$> lookupCNAME bn)
+                        =<< lift ((withCN =<<) . joinLKR <$> lookupType bn CNAME)
                   where
                     {- when CNAME has NODATA, do not loop with CNAME domain -}
-                    joinE = (either (const Nothing) Just =<<)
+                    joinLKR = (foldLookupResult (\_ _ -> Nothing) (\_ -> Nothing) Just =<<)
                     withCN cnRRset = do
                         (cn, _) <- uncons cns
                         Just (cn, cnRRset)
                       where
                         cns = [cn | rd <- rrsRDatas cnRRset, Just cn <- [DNS.rdataField rd DNS.cname_domain]]
 
-                cachedType (tyRRs, soa) = pure ((dcnRRsets [], bn), Left (DNS.NoErr, tyRRs, soa))
+                cachedType (rc, tyRRs, soa) = pure ((dcnRRsets [], bn), Left (rc, tyRRs, soa))
 
             maybe
                 noTypeCache
                 ( cachedType
-                    . either
-                        (\(soa, _rank) -> ([], [soa]))
-                        (\xrrs -> ([xrrs], [] {- return cached result with target typ -}))
+                    . foldLookupResult
+                        (\soa _rank -> (DNS.NoErr, [], [soa]))
+                        (\rc -> (rc, [], []))
+                        (\xrrs -> (DNS.NoErr, [xrrs], [] {- return cached result with target typ -}))
                 )
                 =<< lift (lookupType bn typ)
       where
         mcc = maxCNameChain
 
-    lookupNX :: Domain -> ContextT IO (Maybe (RRset, Ranking))
+    lookupNX :: Domain -> ContextT IO (Maybe [RRset])
     lookupNX bn =
-        maybe (return Nothing) (either (return . Just) inconsistent)
+        maybe (return Nothing) (foldLookupResult (\soa _rank -> pure $ Just [soa]) (\_rc -> pure $ Just []) inconsistent)
             =<< lookupType bn Cache.NX
       where
         inconsistent rrs = do
             logLn_ Log.WARN $ "inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
             return Nothing
-
-    -- Nothing のときはキャッシュに無し
-    -- Just Left のときはキャッシュに有るが CNAME レコード無し
-    lookupCNAME :: Domain -> ContextT IO (Maybe (Either RRset RRset))
-    lookupCNAME bn = do
-        maySOAorCNRRs <- lookupType bn CNAME
-        return $ do
-            let soa (rrs, _rank) = Left rrs
-                cname rrs = Right rrs
-            either soa cname <$> maySOAorCNRRs
 
     lookupType bn t = (replyRank =<<) <$> lookupRRsetEither logMark bn t
     replyRank (x, rank)
