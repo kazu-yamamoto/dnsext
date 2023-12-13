@@ -41,7 +41,6 @@ module DNS.RRCache.Types (
     positiveRRSIGs,
     Hit (..),
     foldHit,
-    hitEither,
     CRSet,
     mkNotVerified,
     notVerified,
@@ -119,10 +118,6 @@ foldHit negative nsoa positive hit = case hit of
     Negative soa         -> negative soa
     NegativeNoSOA rcode  -> nsoa rcode
     Positive pos         -> positive pos
-
-{-# DEPRECATED hitEither "Use foldHit instead of this" #-}
-hitEither :: (Domain -> a) -> (RCODE -> a) -> (Positive -> a) -> Hit -> a
-hitEither = foldHit
 {- FOURMOLU_ENABLE -}
 
 type CRSet = Hit
