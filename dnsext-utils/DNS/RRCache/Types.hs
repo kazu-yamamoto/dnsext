@@ -14,7 +14,9 @@ module DNS.RRCache.Types (
     rankedAnswer,
     rankedAuthority,
     rankedAdditional,
-    insertSetFromSection,
+    cpsInsertSection,
+    cpsInsertNegative,
+    cpsInsertNegativeNoSOA,
     insertSetEmpty,
     TYPE (NX),
 
@@ -297,7 +299,7 @@ insertRRs now rrs rank = updateAll
   where
     updateAll = foldr compU (const Nothing) [u | cps <- is, let u = update cps]
     update rrsetCPS c = rrsetCPS $ \key ttl cr srank -> insert now key ttl cr srank c
-    (_errs, is) = insertSetFromSection rrs rank
+    (_errs, is) = cpsInsertSection rrs rank
 
     compU :: (a -> Maybe a) -> (a -> Maybe a) -> (a -> Maybe a)
     compU u au c = maybe (u c) u $ au c
@@ -306,7 +308,7 @@ insertRRs now rrs rank = updateAll
 --   Insert RR-list example with error-handling
 --
 -- @
---    case insertSetFromSection rrList rank of
+--    case cpsInsertSection rrList rank of
 --      (errRRLists, rrsets) ->
 --        ...
 --        [ k (insert now) cache  -- insert Maybe action
@@ -318,7 +320,7 @@ insertRRs now rrs rank = updateAll
 --
 --   Insert empty-RRSet example for negative cache
 -- @
---    insertSetEmpty sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
+--    cpsInsertNegative sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 -- @
 insert :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
 insert _ _ _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
@@ -450,24 +452,38 @@ extractRRSet dom ty cls ttl crs =
     (rds, ss) = toRDatas crs
 {- FOURMOLU_ENABLE -}
 
-insertSetFromSection
+cpsInsertSection
     :: [ResourceRecord]
     -> Ranking
     -> ([[ResourceRecord]], [(Question -> TTL -> CRSet -> Ranking -> a) -> a])
-insertSetFromSection rs0 r0 = (errRS, iset rrss r0)
+cpsInsertSection rs0 r0 = (errRS, iset rrss r0)
   where
     key rr = (DNS.rrname rr, DNS.rrtype rr, DNS.rrclass rr)
     getRRSet rs = maybe (Left rs) Right $ takeRRSet rs
     (errRS, rrss) = partitionEithers . map getRRSet . groupBy ((==) `on` key) . sortOn key $ rs0
     iset ss rank = [\h -> rrset $ \k ttl cr -> h k ttl cr rank | rrset <- ss]
 
-insertSetEmpty
+{- FOURMOLU_DISABLE -}
+cpsInsertNegative
     :: Domain
-    -> Domain
-    -> TYPE
-    -> TTL
-    -> Ranking
+    -> Domain -> TYPE -> TTL -> Ranking
     -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
+cpsInsertNegative soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
   where
     key = Question dom typ DNS.IN
+
+{-# DEPRECATED insertSetEmpty "use cpsInsertNegative instead of this" #-}
+insertSetEmpty
+    :: Domain
+    -> Domain -> TYPE -> TTL -> Ranking
+    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
+insertSetEmpty = cpsInsertNegative
+
+cpsInsertNegativeNoSOA
+    :: RCODE
+    -> Domain -> TYPE -> TTL -> Ranking
+    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
+cpsInsertNegativeNoSOA rcode dom typ ttl rank h = rcode `seq` h key ttl (NegativeNoSOA rcode) rank
+  where
+    key = Question dom typ DNS.IN
+{- FOURMOLU_ENABLE -}
