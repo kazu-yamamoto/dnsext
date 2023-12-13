@@ -22,6 +22,7 @@ import qualified DNS.Log as Log
 import DNS.RRCache (
     Ranking,
     cpsInsertNegative,
+    cpsInsertNegativeNoSOA,
     rankedAnswer,
     rankedAuthority,
  )
@@ -179,7 +180,9 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
         maxNCacheTTL = 21600
-    nullSOA = ncWarn "no SOA records found" $> []
+    nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ defaultTTL rank $> []
+      where
+        defaultTTL = 1800
 
     single xs = case xs of
         [] -> Left "no SOA records found"
@@ -210,6 +213,12 @@ cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     liftIO $ cpsInsertNegative zone dom typ ttl rank insertRRSet
+
+cacheNegativeNoSOA :: RCODE -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegativeNoSOA rc dom typ ttl rank = do
+    logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
+    insertRRSet <- asks insert_
+    liftIO $ cpsInsertNegativeNoSOA rc dom typ ttl rank insertRRSet
 
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
