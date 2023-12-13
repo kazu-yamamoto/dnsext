@@ -244,10 +244,12 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr   -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
-        _ -> pure []
+        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg []
+          | otherwise  -> pure []
       where
+        crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
         nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
         (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
 
