@@ -166,12 +166,11 @@ resolveNS zone disableV6NS dc ns = do
             querySection typ = do
                 lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
-                lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
+                cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
 
-            cacheAnswerAx (msg, _) = withSection rankedAnswer msg $ \rrs rank -> do
-                let ps = axPairs rrs
-                cacheSection (map snd ps) rank
-                return ps
+            cacheAnswerAx typ (msg, d) = do
+                cacheAnswer d ns typ msg $> ()
+                pure $ withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs
 
         resolveAXofNS :: DNSQuery (IP, ResourceRecord)
         resolveAXofNS = do
