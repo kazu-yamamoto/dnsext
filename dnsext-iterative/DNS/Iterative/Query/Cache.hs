@@ -103,11 +103,15 @@ validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
 
-{- lookup RRs without sigs -}
+{- lookup RRs without sigs. empty RR list result for negative case. -}
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = fmap noSigs <$> lookupRRset "" dom typ
+lookupCache dom typ = withLookupCache mkAlive "" dom typ
   where
-    noSigs (RRset{..}, rank) = ([ResourceRecord rrsName rrsType rrsClass rrsTTL rd | rd <- rrsRDatas], rank)
+    mkAlive :: CacheHandler [ResourceRecord]
+    mkAlive now = Cache.lookupAlive now result
+    result ttl crs rank = Just (Cache.unCRSet (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
+      where
+        mapRR = map $ ResourceRecord dom typ DNS.IN ttl
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
