@@ -173,7 +173,7 @@ resolveNS zone disableV6NS dc ns = do
                 cacheAnswer d ns typ msg $> ()
                 pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
 
-        failEmptyAx = do
+        failEmptyAx rank = do
             let emptyInfo
                     | disableV6NS  = "empty A: disable-v6ns: "
                     | otherwise    = "empty A|AAAA: "
@@ -187,11 +187,11 @@ resolveNS zone disableV6NS dc ns = do
                 ++ show zone
                 ++ " NS: "
                 ++ show ns
-            throwDnsError DNS.ServerFailure
+            failWithCacheOrigQ rank DNS.ServerFailure
 
     mayAxs <- lift $ maybe lookupAx (\(_, rank) -> pure $ Just ([], rank)) =<< lookupCache ns Cache.NX
-    (axs, _rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
-    maybe failEmptyAx pure =<< randomizedSelect axs
+    (axs, rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
+    maybe (failEmptyAx rank) pure =<< randomizedSelect axs
 {- FOURMOLU_ENABLE -}
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
