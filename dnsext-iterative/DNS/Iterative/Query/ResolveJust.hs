@@ -189,7 +189,7 @@ resolveNS zone disableV6NS dc ns = do
                 ++ show ns
             throwDnsError DNS.ServerFailure
 
-    mayAxs <- lift lookupAx
+    mayAxs <- lift $ maybe lookupAx (\(_, rank) -> pure $ Just ([], rank)) =<< lookupCache ns Cache.NX
     (axs, _rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
     maybe failEmptyAx pure =<< randomizedSelect axs
 {- FOURMOLU_ENABLE -}
