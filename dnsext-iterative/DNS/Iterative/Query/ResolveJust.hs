@@ -162,8 +162,8 @@ resolveNS zone disableV6NS dc ns = do
             q46 = A +!? AAAA
             q64 = AAAA +!? A
             tx +!? ty = do
-                xs <- querySection tx
-                if null xs then querySection ty else pure xs
+                x@(xs, _rank) <- querySection tx
+                if null xs then querySection ty else pure x
             querySection typ = do
                 lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
@@ -171,7 +171,7 @@ resolveNS zone disableV6NS dc ns = do
 
             cacheAnswerAx typ (msg, d) = do
                 cacheAnswer d ns typ msg $> ()
-                pure $ withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs
+                pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
 
         failEmptyAx = do
             let emptyInfo
@@ -190,7 +190,7 @@ resolveNS zone disableV6NS dc ns = do
             throwDnsError DNS.ServerFailure
 
     mayAxs <- lift lookupAx
-    axs <- maybe query1Ax (pure . axPairs . fst) mayAxs
+    (axs, _rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
     maybe failEmptyAx pure =<< randomizedSelect axs
 {- FOURMOLU_ENABLE -}
 
