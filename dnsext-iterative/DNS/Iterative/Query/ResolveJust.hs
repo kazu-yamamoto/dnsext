@@ -149,8 +149,9 @@ resolveNS zone disableV6NS dc ns = do
           where
             lk46 = lk4 +? lk6
             lk64 = lk6 +? lk4
-            lk4 = lookupCache ns A
-            lk6 = lookupCache ns AAAA
+            lk4 = notNull <$> lookupCache ns A
+            lk6 = notNull <$> lookupCache ns AAAA
+            notNull = maybe Nothing $ \x@(xs, _) -> guard (not $ null xs) $> x
             lx +? ly = maybe ly (return . Just) =<< lx
 
         query1Ax
