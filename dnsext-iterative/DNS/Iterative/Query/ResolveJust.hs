@@ -139,6 +139,7 @@ delegationIPs dc Delegation{..} = do
 
     result
 
+{- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS zone disableV6NS dc ns = do
     let axPairs = axList disableV6NS (== ns) (,)
@@ -172,35 +173,26 @@ resolveNS zone disableV6NS dc ns = do
                 cacheAnswer d ns typ msg $> ()
                 pure $ withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs
 
-        resolveAXofNS :: DNSQuery (IP, ResourceRecord)
-        resolveAXofNS = do
-            let showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+        failEmptyAx = do
+            let emptyInfo
+                    | disableV6NS  = "empty A: disable-v6ns: "
+                    | otherwise    = "empty A|AAAA: "
+                showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
             orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            let failEmptyAx
-                    | disableV6NS = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: serv-fail, empty A: disable-v6ns: "
-                                ++ orig
-                                ++ ", zone: "
-                                ++ show zone
-                                ++ " NS: "
-                                ++ show ns
-                        throwDnsError DNS.ServerFailure
-                    | otherwise = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: serv-fail, empty A|AAAA: "
-                                ++ orig
-                                ++ ", zone: "
-                                ++ show zone
-                                ++ " NS: "
-                                ++ show ns
-                        throwDnsError DNS.ServerFailure
-            maybe failEmptyAx pure
-                =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
-                =<< maybe query1Ax (pure . axPairs . fst)
-                =<< lift lookupAx
+            lift . logLn Log.WARN $
+                "resolveNS: serv-fail, "
+                ++ emptyInfo
+                ++ orig
+                ++ ", zone: "
+                ++ show zone
+                ++ " NS: "
+                ++ show ns
+            throwDnsError DNS.ServerFailure
 
-    resolveAXofNS
+    mayAxs <- lift lookupAx
+    axs <- maybe query1Ax (pure . axPairs . fst) mayAxs
+    maybe failEmptyAx pure =<< randomizedSelect axs
+{- FOURMOLU_ENABLE -}
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFilledDS o} = do
