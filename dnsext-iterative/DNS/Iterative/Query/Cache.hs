@@ -3,6 +3,8 @@
 
 module DNS.Iterative.Query.Cache (
     lookupValid,
+    LookupResult,
+    foldLookupResult,
     lookupRRsetEither,
     lookupCache,
     cacheAnswer,
@@ -19,7 +21,8 @@ module DNS.Iterative.Query.Cache (
 import qualified DNS.Log as Log
 import DNS.RRCache (
     Ranking,
-    insertSetEmpty,
+    cpsInsertNegative,
+    cpsInsertNegativeNoSOA,
     rankedAnswer,
     rankedAuthority,
  )
@@ -60,7 +63,7 @@ lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
     mkAlive ts = Cache.lookupAlive ts result
-    result ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
         notVerified = notVerifiedRRset dom typ DNS.IN ttl
@@ -75,21 +78,37 @@ guardValid m = do
 lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
 lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
 
+{- FOURMOLU_DISABLE -}
+data LookupResult
+    = LKNegative RRset Ranking
+    | LKNegativeNoSOA RCODE
+    | LKPositive RRset
+    deriving Show
+
+foldLookupResult :: (RRset -> Ranking -> a) -> (RCODE -> a) -> (RRset -> a) -> LookupResult -> a
+foldLookupResult negative nsoa positive lkre = case lkre of
+    LKNegative rrset rank  -> negative rrset rank
+    LKNegativeNoSOA rcode  -> nsoa rcode
+    LKPositive rrset       -> positive rrset
+{- FOURMOLU_ENABLE -}
+
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (Either (RRset, Ranking) RRset, Ranking))
+lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
-    mkAlive :: CacheHandler (Either (RRset, Ranking) RRset)
+    mkAlive :: CacheHandler LookupResult
     mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
-    result now cache ttl crs rank = (,) <$> Cache.hitEither (fmap Left . negative) (Just . Right . positive) crs <*> pure rank
+    result now cache ttl crs rank = (,) <$> hit <*> pure rank
       where
+        hit = Cache.foldHit negative negativeNoSOA positive crs
         {- EMPTY hit. empty ranking and SOA result. -}
         negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
-        positive = Cache.positiveHit notVerified valid
+        negativeNoSOA = Just . LKNegativeNoSOA
+        positive = Just . LKPositive . Cache.positiveHit notVerified valid
         notVerified rds = notVerifiedRRset dom typ DNS.IN ttl rds
         valid rds sigs = validRRset dom typ DNS.IN ttl rds sigs
 
-    soaResult ettl srcDom ttl crs rank = (,) <$> Cache.hitEither (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom ttl crs rank = LKNegative <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
         notVerified = notVerifiedRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
@@ -109,7 +128,7 @@ lookupCache dom typ = withLookupCache mkAlive "" dom typ
   where
     mkAlive :: CacheHandler [ResourceRecord]
     mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = Just (Cache.unCRSet (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
+    result ttl crs rank = Just (Cache.unCRSet (const []) (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
       where
         mapRR = map $ ResourceRecord dom typ DNS.IN ttl
 
@@ -161,7 +180,9 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
         maxNCacheTTL = 21600
-    nullSOA = ncWarn "no SOA records found" $> []
+    nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ defaultTTL rank $> []
+      where
+        defaultTTL = 1800
 
     single xs = case xs of
         [] -> Left "no SOA records found"
@@ -191,7 +212,13 @@ cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
-    liftIO $ insertSetEmpty zone dom typ ttl rank insertRRSet
+    liftIO $ cpsInsertNegative zone dom typ ttl rank insertRRSet
+
+cacheNegativeNoSOA :: RCODE -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegativeNoSOA rc dom typ ttl rank = do
+    logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
+    insertRRSet <- asks insert_
+    liftIO $ cpsInsertNegativeNoSOA rc dom typ ttl rank insertRRSet
 
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
@@ -217,10 +244,12 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr   -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
-        _ -> pure []
+        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg []
+          | otherwise  -> pure []
       where
+        crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
         nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
         (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
 

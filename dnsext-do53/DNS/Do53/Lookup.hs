@@ -105,12 +105,14 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     nx <- lookupRRCache (keyForNX q) c
     case nx of
         Just (_, Negative{}) -> return $ Left NameError
+        Just (_, NegativeNoSOA{}) -> return $ Left NameError
         Just (_, _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
         Nothing -> do
             mx <- lookupRRCache q c
             case mx of
                 Nothing -> notCached
                 Just (_, Negative{}) -> return $ Right [] {- NoData -}
+                Just (_, NegativeNoSOA{}) -> return $ Right [] {- NoData -}
                 Just (_, Positive pos) -> return $ Right $ positiveRDatas pos
   where
     notCached = do
