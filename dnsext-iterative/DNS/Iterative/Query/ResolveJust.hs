@@ -327,18 +327,18 @@ servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDeleg
 servsChildZone dc nss dom msg =
     handleSOA (handleASIG $ pure noDelegation)
   where
-    handleSOA fallback = withSection rankedAuthority msg $ \srrs _rank -> do
+    handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
         case soaRRs of
             [] -> fallback
             [_] -> getWorkaround >>= verifySOA
-            _ : _ : _ -> multipleSOA soaRRs
+            _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
-        multipleSOA soaRRs = do
+        multipleSOA rank soaRRs = do
             lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-            throwDnsError DNS.ServerFailure
+            failWithCacheOrigQ rank DNS.ServerFailure
         verifySOA wd
             | null dnskeys = pure $ hasDelegation wd
             | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
