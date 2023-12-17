@@ -78,7 +78,7 @@ resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
         lift . logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
-        throwDnsError DNS.ServerFailure
+        failWithCacheOrigQ Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
