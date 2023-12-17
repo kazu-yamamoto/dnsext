@@ -78,7 +78,7 @@ resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
         lift . logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
-        throwDnsError DNS.ServerFailure
+        failWithCacheOrigQ Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
@@ -139,6 +139,7 @@ delegationIPs dc Delegation{..} = do
 
     result
 
+{- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS zone disableV6NS dc ns = do
     let axPairs = axList disableV6NS (== ns) (,)
@@ -161,47 +162,37 @@ resolveNS zone disableV6NS dc ns = do
             q46 = A +!? AAAA
             q64 = AAAA +!? A
             tx +!? ty = do
-                xs <- querySection tx
-                if null xs then querySection ty else pure xs
+                x@(xs, _rank) <- querySection tx
+                if null xs then querySection ty else pure x
             querySection typ = do
                 lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
                 {- resolve for not sub-level delegation. increase dc (delegation count) -}
-                lift . cacheAnswerAx =<< resolveExactDC (succ dc) ns typ
+                cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
 
-            cacheAnswerAx (msg, _) = withSection rankedAnswer msg $ \rrs rank -> do
-                let ps = axPairs rrs
-                cacheSection (map snd ps) rank
-                return ps
+            cacheAnswerAx typ (msg, d) = do
+                cacheAnswer d ns typ msg $> ()
+                pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
 
-        resolveAXofNS :: DNSQuery (IP, ResourceRecord)
-        resolveAXofNS = do
-            let showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+        failEmptyAx rank = do
+            let emptyInfo
+                    | disableV6NS  = "empty A: disable-v6ns: "
+                    | otherwise    = "empty A|AAAA: "
+                showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
             orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            let failEmptyAx
-                    | disableV6NS = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: serv-fail, empty A: disable-v6ns: "
-                                ++ orig
-                                ++ ", zone: "
-                                ++ show zone
-                                ++ " NS: "
-                                ++ show ns
-                        throwDnsError DNS.ServerFailure
-                    | otherwise = do
-                        lift . logLn Log.WARN $
-                            "resolveNS: serv-fail, empty A|AAAA: "
-                                ++ orig
-                                ++ ", zone: "
-                                ++ show zone
-                                ++ " NS: "
-                                ++ show ns
-                        throwDnsError DNS.ServerFailure
-            maybe failEmptyAx pure
-                =<< randomizedSelect {- 失敗時: NS に対応する A の返答が空 -}
-                =<< maybe query1Ax (pure . axPairs . fst)
-                =<< lift lookupAx
+            lift . logLn Log.WARN $
+                "resolveNS: serv-fail, "
+                ++ emptyInfo
+                ++ orig
+                ++ ", zone: "
+                ++ show zone
+                ++ " NS: "
+                ++ show ns
+            failWithCacheOrigQ rank DNS.ServerFailure
 
-    resolveAXofNS
+    mayAxs <- lift $ maybe lookupAx (\(_, rank) -> pure $ Just ([], rank)) =<< lookupCache ns Cache.NX
+    (axs, rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
+    maybe (failEmptyAx rank) pure =<< randomizedSelect axs
+{- FOURMOLU_ENABLE -}
 
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFilledDS o} = do
@@ -336,18 +327,18 @@ servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDeleg
 servsChildZone dc nss dom msg =
     handleSOA (handleASIG $ pure noDelegation)
   where
-    handleSOA fallback = withSection rankedAuthority msg $ \srrs _rank -> do
+    handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
         case soaRRs of
             [] -> fallback
             [_] -> getWorkaround >>= verifySOA
-            _ : _ : _ -> multipleSOA soaRRs
+            _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
-        multipleSOA soaRRs = do
+        multipleSOA rank soaRRs = do
             lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-            throwDnsError DNS.ServerFailure
+            failWithCacheOrigQ rank DNS.ServerFailure
         verifySOA wd
             | null dnskeys = pure $ hasDelegation wd
             | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
