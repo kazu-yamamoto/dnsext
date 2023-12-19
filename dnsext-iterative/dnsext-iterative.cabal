@@ -27,6 +27,7 @@ library
         DNS.Iterative.Query.ResolveJust
         DNS.Iterative.Query.Rev
         DNS.Iterative.Query.Root
+        DNS.Iterative.Query.TestEnv
         DNS.Iterative.Query.Types
         DNS.Iterative.Query.Utils
         DNS.Iterative.Query.Verify
