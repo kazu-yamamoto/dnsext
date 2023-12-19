@@ -8,11 +8,11 @@ module DNS.RRCache.Managed (
 
     -- * High level operations
     RRCacheOps (..),
+    noCacheOps,
     newRRCacheOps,
 
     -- * Resource record cache
     RRCache,
-    noCacheOps,
     newRRCache,
 
     -- * Operations
