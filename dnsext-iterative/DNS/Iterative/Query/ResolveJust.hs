@@ -13,9 +13,7 @@ module DNS.Iterative.Query.ResolveJust (
 ) where
 
 -- GHC packages
-import Data.IORef (newIORef)
 import Data.List.NonEmpty (nonEmpty)
-import System.Timeout (timeout)
 
 -- other packages
 import Data.IP (IP)
@@ -23,7 +21,6 @@ import System.Console.ANSI.Types
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
-import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Log as Log
 import DNS.RRCache (
     rankedAnswer,
@@ -31,7 +28,6 @@ import DNS.RRCache (
  )
 import qualified DNS.RRCache as Cache
 import DNS.SEC
-import DNS.TimeCache (TimeCache (..), noneTimeCache)
 import DNS.Types
 import qualified DNS.Types as DNS
 
@@ -46,7 +42,9 @@ import DNS.Iterative.Query.Root
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
-import DNS.Iterative.Stats
+
+---- import for doctest
+import DNS.Iterative.Query.TestEnv
 
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
@@ -233,26 +231,7 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A
 
 -- test env use from doctest
 _newTestEnv :: ([String] -> IO ()) -> IO Env
-_newTestEnv putLines =
-    env <$> newIORef Nothing <*> newConcurrentGenId <*> newStats
-  where
-    (ins, getCache, expire) = (\_ _ _ _ -> pure (), pure $ Cache.empty 0, const $ pure ())
-    TimeCache{..} = noneTimeCache
-    env rootRef genId stats =
-        Env
-            { logLines_ = \_ ~_ -> putLines
-            , logDNSTAP_ = \ ~_ -> return ()
-            , disableV6NS_ = True
-            , insert_ = ins
-            , getCache_ = getCache
-            , expireCache_ = expire
-            , currentRoot_ = rootRef
-            , currentSeconds_ = getTime
-            , timeString_ = getTimeStr
-            , idGen_ = genId
-            , stats_ = stats
-            , timeout_ = timeout 3000000
-            }
+_newTestEnv putLines = newTestEnvNoCache putLines True
 
 _findConsumed :: [String] -> IO ()
 _findConsumed ss
