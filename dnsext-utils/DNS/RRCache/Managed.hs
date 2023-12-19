@@ -59,13 +59,13 @@ newRRCache conf@RRCacheConf{..} = do
         mkReaper
             defaultReaperSettings
                 { reaperAction = Cache.expires <$> rrCacheGetTime
-                , reaperCallback = maybe (return ()) expiredLog
+                , reaperCallback = maybe (pure ()) expiredLog
                 , reaperDelay = expiresDelay * 1000 * 1000
                 , reaperNull = Cache.null
                 , reaperEmpty = Cache.empty maxCacheSize
                 }
 
-    return (RRCache conf reaper)
+    pure (RRCache conf reaper)
 
 {- for full-resolver. lookup variants in Cache module
    - with alive checks which requires current EpochTime
@@ -115,7 +115,7 @@ newRRCacheOps cacheConf = do
         read_ = readRRCache rrCache
         expire_ now = expiresRRCache now rrCache
         stop_ = stopRRCache rrCache
-    return $ RRCacheOps insert_ read_ expire_ stop_
+    pure $ RRCacheOps insert_ read_ expire_ stop_
 
 stopRRCache :: RRCache -> IO ()
 stopRRCache (RRCache _ reaper) = reaperKill reaper
