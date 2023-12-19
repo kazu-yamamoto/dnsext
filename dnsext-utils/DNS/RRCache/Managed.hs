@@ -12,6 +12,7 @@ module DNS.RRCache.Managed (
 
     -- * Resource record cache
     RRCache,
+    noCacheOps,
     newRRCache,
 
     -- * Operations
@@ -108,7 +109,11 @@ data RRCacheOps = RRCacheOps
     , stopCache :: IO ()
     }
 
+noCacheOps :: RRCacheOps
+noCacheOps = RRCacheOps (\_ _ _ _ -> pure ()) (pure $ Cache.empty 0) (\_ -> pure ()) (pure ())
+
 newRRCacheOps :: RRCacheConf -> IO RRCacheOps
+newRRCacheOps RRCacheConf{..} | maxCacheSize <= 0 = pure noCacheOps
 newRRCacheOps cacheConf = do
     rrCache <- newRRCache cacheConf
     let insert_ k ttl crset rank = insertWithExpiresRRCache k ttl crset rank rrCache
