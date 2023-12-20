@@ -7,6 +7,7 @@ module DNS.RRCache.Types (
     lookupAlive,
     insert,
     expires,
+    insertWithExpires,
     size,
     stubLookup,
     stubInsert,
@@ -369,6 +370,12 @@ expires now (Cache c xsz) =
             | eol <= now -> Just $ Cache (snd $ PSQ.atMostView now c) xsz
             | otherwise -> Nothing
         Nothing -> Nothing
+
+insertWithExpires :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insertWithExpires now k ttl crs rank = withExpire
+  where
+    ins = insert now k ttl crs rank
+    withExpire cache = maybe (ins cache) ins $ expires now cache {- expires before insert -}
 
 alive :: EpochTime -> EpochTime -> Maybe TTL
 alive now eol = do

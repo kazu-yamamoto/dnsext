@@ -83,8 +83,7 @@ expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
 insertWithExpiresRRCache :: Question -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
 insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     t <- rrCacheGetTime
-    let ins = Cache.insert t k ttl crs rank
-        withExpire cache = maybe (ins cache) ins $ Cache.expires t cache {- expires before insert -}
+    let withExpire = Cache.insertWithExpires t k ttl crs rank
     reaperUpdate reaper $ \cache -> maybe cache id $ withExpire cache
 
 ---

@@ -42,6 +42,9 @@ import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
 
+---- import for doctest
+import DNS.Iterative.Query.TestEnv
+
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
 withLookupCache :: CacheHandler a -> String -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
@@ -124,7 +127,32 @@ validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
 
-{- lookup RRs without sigs. empty RR list result for negative case. -}
+-- $setup
+-- >>> :set -XOverloadedStrings
+
+_newTestEnv :: IO Env
+_newTestEnv = newTestEnv (const $ pure ()) False 2048
+
+-- | lookup RRs without sigs. empty RR list result for negative case.
+--
+-- >>> env <- _newTestEnv
+-- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
+-- >>> maybe True (null . fst) <$> runCxt pos1
+-- False
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
+-- >>> isJust <$> runCxt nodata1
+-- True
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
+-- >>> isJust <$> runCxt nodata2
+-- True
+-- >>> nx1 = cacheNegative "example.com." "nx1.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx1.example.com." Cache.NX
+-- >>> isJust <$> runCxt nx1
+-- True
+-- >>> nx2 = cacheNegativeNoSOA NoErr "nx2.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx2.example.com." Cache.NX
+-- >>> isJust <$> runCxt nx2
+-- True
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = withLookupCache mkAlive "" dom typ
   where
