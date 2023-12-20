@@ -5,6 +5,8 @@ module DNS.Iterative.Query.Verify (
     with,
     withCanonical,
     withCanonical',
+    cases,
+    cases',
     --
     NResultK,
     GetNE,
@@ -106,6 +108,54 @@ withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
     sigs = rrsigList rrn rrty srrs
     rightK rrs sortedRRs = do
         now <- liftIO =<< asks currentSeconds_
+        withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
+            rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
+
+{- FOURMOLU_DISABLE -}
+cases
+    :: MonadIO m
+    => IO EpochTime
+    -> [RD_DNSKEY]
+    -> (dm -> ([ResourceRecord], Ranking)) -> dm
+    -> Domain  -> TYPE
+    -> (ResourceRecord -> Maybe a)
+    -> m b -> (ContextT IO () -> m b)
+    -> ([a] -> RRset -> ContextT IO () -> m b)
+    -> m b
+cases getSec dnskeys getRanked msg rrn rrty h nullK ncK rightK =
+    withSection getRanked msg $ \srrs rank -> cases' getSec dnskeys rrn rrty h srrs rank nullK withNcLog withRRS
+  where
+    withNcLog rrs s = ncK $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
+    withRRS x rrset cache = rightK x rrset (logInv *> cache)
+      where logInv = mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
+    logInvalids es = do
+        (x, xs) <- pure $ case lines es of
+            [] -> ("", [])
+            x : xs -> (": " ++ x, xs)
+        clogLn Log.DEMO (Just Cyan) $ "cases: InvalidRRS" ++ x
+        logLines Log.DEMO xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+cases'
+    :: MonadIO m
+    => IO EpochTime
+    -> [RD_DNSKEY]
+    -> Domain -> TYPE
+    -> (ResourceRecord -> Maybe a)
+    -> [ResourceRecord] -> Ranking
+    -> m b -> ([ResourceRecord] -> String -> m b)
+    -> ([a] -> RRset -> ContextT IO () -> m b)
+    -> m b
+{- FOURMOLU_ENABLE -}
+cases' getSec dnskeys rrn rrty h srrs rank nullK ncK rightK0
+    | null xRRs = nullK
+    | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
+  where
+    (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
+    sigs = rrsigList rrn rrty srrs
+    rightK rrs sortedRRs = do
+        now <- liftIO getSec
         withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
             rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
 
