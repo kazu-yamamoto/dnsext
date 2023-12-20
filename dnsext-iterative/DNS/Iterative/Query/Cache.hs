@@ -49,12 +49,9 @@ type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> May
 
 withLookupCache :: CacheHandler a -> String -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
 withLookupCache h logMark dom typ = do
-    getCache <- asks getCache_
-    getSec <- asks currentSeconds_
-    result <- liftIO $ do
-        cache <- getCache
-        ts <- getSec
-        return $ h ts dom typ DNS.IN cache
+    cache <- liftIO =<< asks getCache_
+    ts <- liftIO =<< asks currentSeconds_
+    let result = h ts dom typ DNS.IN cache
     logLn Log.DEBUG $
         let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
             mark ws
