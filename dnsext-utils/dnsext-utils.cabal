@@ -46,8 +46,11 @@ library
         psqueues,
         recv,
         stm,
+        transformers,
         unix-time,
-        unliftio
+        unliftio,
+        vector,
+        word8
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
