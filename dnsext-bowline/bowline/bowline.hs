@@ -48,9 +48,7 @@ run readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
-    -- Read config only to get cache size, sigh
-    cache <- readConfig >>= getCache tcache
-    newControl >>= go tcache (Just cache)
+    newControl >>= go tcache Nothing
   where
     go tcache mcache mng = do
         cache <- readConfig >>= runConfig tcache mcache mng
