@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Concurrent (forkIO, getNumCapabilities, killThread)
+import Control.Concurrent.Async (concurrently_)
 import Control.DeepSeq (deepseq)
 import Control.Monad (replicateM, unless, (>=>))
 import qualified DNS.Types as DNS
@@ -21,7 +22,6 @@ import System.Console.GetOpt (
 import System.Environment (getArgs)
 import System.Timeout (timeout)
 import Text.Read (readEither)
-import UnliftIO (concurrently_)
 
 import DNS.Iterative.Internal (Env (..))
 import qualified DNS.Iterative.Query as Iterative
