@@ -2,11 +2,11 @@
 
 module FastStreamSpec where
 
+import Control.Concurrent
 import Data.ByteString ()
 import Data.IORef
 import Network.Run.TCP
 import Test.Hspec
-import UnliftIO.Concurrent
 import qualified UnliftIO.Exception as E
 
 import DNS.TAP.FastStream
