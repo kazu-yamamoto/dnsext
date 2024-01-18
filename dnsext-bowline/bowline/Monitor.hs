@@ -8,6 +8,7 @@ module Monitor (
 
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
+import Control.Concurrent.Async (waitSTM, withAsync)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
 import Data.ByteString.Builder
@@ -45,10 +46,9 @@ import Network.Socket (
     Socket,
     SocketType (Stream),
  )
-import UnliftIO (tryAny, waitSTM, withAsync)
+import UnliftIO.Exception (tryAny)
 
 -- this package
-
 import Config
 import SocketUtil (addrInfo)
 import Types (Control (..))
