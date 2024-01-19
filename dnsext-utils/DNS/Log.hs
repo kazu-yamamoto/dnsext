@@ -28,6 +28,7 @@ data Level
     = DEBUG
     | DEMO
     | WARN
+    | SYSTEM
     deriving (Eq, Ord, Show, Read)
 
 data Output
