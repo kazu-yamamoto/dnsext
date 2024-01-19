@@ -5,7 +5,7 @@
 module Main where
 
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
-import Control.Concurrent.Async (concurrently_, race_)
+import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
 import DNS.Iterative.Server as Server
@@ -90,10 +90,11 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
             conc
-            [ TStat.concurrentlyList_ (withNum "cacher" cachers)
-            , TStat.concurrentlyList_ (withNum "worker" workers)
-            , TStat.concurrentlyList_ (concat servers)
-            ]
+            ( [ TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper ] ++
+              [ TStat.concurrentlyList_ (withNum "cacher" cachers)
+              , TStat.concurrentlyList_ (withNum "worker" workers)
+              , TStat.concurrentlyList_ (concat servers)
+              ] )
     race_ concServer (conc monitor)
         -- Teardown
         `finally` do
