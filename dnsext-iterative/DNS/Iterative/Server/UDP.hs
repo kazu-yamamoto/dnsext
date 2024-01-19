@@ -8,6 +8,7 @@ import Control.Concurrent.STM
 
 -- dnsext-* packages
 import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import qualified Network.UDP as UDP
@@ -38,4 +39,4 @@ udpServer _conf env toCacher port addr = do
                 _ -> return ()
         receiver = receiverLogic env mysa recv toCacher toSender UDP
         sender = senderLogic env send fromX
-    return [receiver, sender]
+    return [TStat.concurrently_ "udp-send" sender "udp-recv" receiver]

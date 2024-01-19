@@ -17,9 +17,9 @@ import Data.ByteString.Builder (byteString)
 import DNS.Do53.Internal
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.ThreadStats as TStat
 
 -- other packages
-import Control.Concurrent.Async
 import Data.ByteString.Base64.URL
 import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
@@ -34,7 +34,7 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 http2Server :: Credentials -> VcServerConfig -> Server
 http2Server creds VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.runIO settings creds host port $ doHTTP env toCacher
+    let http2server = H2TLS.runIO settings creds host port $ doHTTP "h2" env toCacher
     return [http2server]
   where
     settings =
@@ -45,7 +45,7 @@ http2Server creds VcServerConfig{..} env toCacher port host = do
 
 http2cServer :: VcServerConfig -> Server
 http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.runIOH2C settings host port $ doHTTP env toCacher
+    let http2server = H2TLS.runIOH2C settings host port $ doHTTP "h2c" env toCacher
     return [http2server]
   where
     settings =
@@ -55,8 +55,8 @@ http2cServer VcServerConfig{..} env toCacher port host = do
             }
 
 doHTTP
-    :: Env -> ToCacher -> ServerIO -> IO (IO ())
-doHTTP env toCacher ServerIO{..} = do
+    :: String -> Env -> ToCacher -> ServerIO -> IO (IO ())
+doHTTP name env toCacher ServerIO{..} = do
     (toSender, fromX) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
@@ -71,7 +71,7 @@ doHTTP env toCacher ServerIO{..} = do
             Output bs' (PeerInfoH2 _ strm) <- fromX
             let response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sioWriteResponse strm response
-    return $ concurrently_ receiver sender
+    return $ TStat.concurrently_ (name ++ "-send") sender (name ++ "-recv") receiver
   where
     header = [(HT.hContentType, "application/dns-message")]
 

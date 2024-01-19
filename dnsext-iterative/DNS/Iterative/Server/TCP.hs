@@ -9,9 +9,9 @@ import qualified Data.ByteString as BS
 
 -- dnsext-* packages
 import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.ThreadStats as TStat
 
 -- other packages
-import Control.Concurrent.Async
 import qualified DNS.Do53.Internal as DNS
 import Network.Run.TCP
 import Network.Socket (getPeerName, getSocketName)
@@ -48,4 +48,4 @@ tcpServer VcServerConfig{..} env toCacher port host = do
                 T.tickle th
             receiver = receiverLogicVC env mysa recv toCacher toSender TCP
             sender = senderLogicVC env send fromX
-        concurrently_ sender receiver
+        TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver

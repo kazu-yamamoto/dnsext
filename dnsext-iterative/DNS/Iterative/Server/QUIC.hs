@@ -10,12 +10,11 @@ import qualified Data.ByteString as BS
 import Data.ByteString.Char8 ()
 
 -- dnsext-* packages
+import qualified DNS.Do53.Internal as DNS
 import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.ThreadStats as TStat
 
 -- other packages
-
-import Control.Concurrent.Async
-import qualified DNS.Do53.Internal as DNS
 import qualified Network.QUIC as QUIC
 import Network.QUIC.Server (ServerConfig (..))
 import qualified Network.QUIC.Server as QUIC
@@ -61,7 +60,7 @@ quicServer creds VcServerConfig{..} env toCacher port host = do
                     _ -> return ()
             receiver = receiverLogicVC env mysa recv toCacher toSender DOQ
             sender = senderLogicVC env send fromX
-        concurrently_ sender receiver
+        TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
 getServerConfig :: Credentials -> String -> PortNumber -> ByteString -> ServerConfig
 getServerConfig creds host port alpn =
