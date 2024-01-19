@@ -8,7 +8,7 @@ module Monitor (
 
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
-import Control.Concurrent.Async (waitSTM, withAsync)
+import Control.Concurrent.Async (waitSTM)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
 import Data.ByteString.Builder
@@ -35,6 +35,7 @@ import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server (HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
+import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
@@ -212,7 +213,7 @@ console conf env Control{..} inH outH ainfo = do
 
 withWait :: STM a -> IO b -> IO (Either a b)
 withWait qstm blockAct =
-    withAsync blockAct $ \a ->
+    TStat.withAsync "monitor" blockAct $ \a ->
         atomically $
             (Left <$> qstm)
                 <|> (Right <$> waitSTM a)
