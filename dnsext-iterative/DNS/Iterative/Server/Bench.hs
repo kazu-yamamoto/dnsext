@@ -48,7 +48,7 @@ benchServer bench_pipelines env _ = do
     let pipelines_per_socket = bench_pipelines
         workers_per_pipeline = 8 {- only used initial setup, benchmark runs on cached state -}
     workerStats <- getWorkerStats workers_per_pipeline
-    (workers, toCacher) <- mkPipeline env pipelines_per_socket workers_per_pipeline workerStats
+    (cachers, workers, toCacher) <- mkPipeline env pipelines_per_socket workers_per_pipeline workerStats
 
     resQ <- newTQueueIO
 
@@ -56,7 +56,7 @@ benchServer bench_pipelines env _ = do
 
         enqueueReq (bs, ()) = toCacher (Input bs myDummy (PeerInfoUDP clntDummy) UDP toSender)
         dequeueRes = (\(Output bs _) -> (bs, ())) <$> atomically (readTQueue resQ)
-    return (workers, enqueueReq, dequeueRes)
+    return (cachers ++ workers, enqueueReq, dequeueRes)
   where
     getSockAddr host port = do
         as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram}) (Just host) (Just port)

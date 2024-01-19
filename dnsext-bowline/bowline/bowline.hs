@@ -77,7 +77,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
-    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
+    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
+    let pipes = cachers ++ workers
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
     mng <- getControl env workerStats mng0
     monitor <- Mon.monitor conf env mng
