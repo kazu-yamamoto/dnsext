@@ -7,7 +7,7 @@ module DNS.Do53.Resolve (
 )
 where
 
-import Control.Concurrent.Async (Async, cancel, waitCatchSTM, waitSTM)
+import Control.Concurrent.Async (Async, waitCatchSTM, waitSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Do53.Query
@@ -84,11 +84,10 @@ resolveConcurrent ris@(ResolvInfo{rinfoActions = riAct} : _) resolver q@Question
 ----------------------------------------------------------------
 
 raceAny :: [(String, IO a)] -> IO a
-raceAny ios = mapM (uncurry TStat.async) ios >>= waitAnyRightCancel
+raceAny ios = TStat.withAsyncs ios waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
-waitAnyRightCancel asyncs =
-    atomically (waitAnyRightSTM asyncs) `finally` mapM_ cancel asyncs
+waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 
 -- The first value is returned and others are canceled at that time.
 -- The last exception is returned when all throws an exception.
