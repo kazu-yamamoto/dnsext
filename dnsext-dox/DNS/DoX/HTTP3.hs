@@ -6,7 +6,6 @@ module DNS.DoX.HTTP3 where
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.Types
-import qualified Data.ByteString.Char8 as C8
 import Network.HTTP3.Client
 import Network.QUIC
 import qualified Network.QUIC.Client as QUIC
@@ -35,5 +34,5 @@ h3resolver conn conf ident path lim ri@ResolvInfo{..} q qctl = do
     cliconf =
         ClientConfig
             { scheme = "https"
-            , authority = C8.pack rinfoHostName
+            , authority = rinfoHostName
             }
