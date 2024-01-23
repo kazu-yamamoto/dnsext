@@ -9,9 +9,9 @@ import qualified Data.ByteString as BS
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
 import DNS.TAP.Schema (SocketProtocol (..))
+import qualified DNS.ThreadStats as TStat
 
 -- other packages
-import Control.Concurrent.Async
 import qualified Network.HTTP2.TLS.Server as H2
 import Network.Socket.BufferPool (makeRecvN)
 import Network.TLS (Credentials (..))
@@ -45,4 +45,4 @@ tlsServer creds VcServerConfig{..} env toCacher port host = do
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
             receiver = receiverLogicVC env mysa recv toCacher toSender DOT
             sender = senderLogicVC env send fromX
-        concurrently_ sender receiver
+        TStat.concurrently_ "tls-send" sender "tls-recv" receiver

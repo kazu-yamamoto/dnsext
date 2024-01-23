@@ -51,7 +51,7 @@ import DNS.Iterative.Stats
 getWorkerStats :: Int -> IO [WorkerStatOP]
 getWorkerStats workersN = replicateM workersN getWorkerStatOP
 
-mkPipeline :: Env -> Int -> Int -> [WorkerStatOP] -> IO ([IO ()], ToCacher)
+mkPipeline :: Env -> Int -> Int -> [WorkerStatOP] -> IO ([IO ()], [IO ()], ToCacher)
 mkPipeline env cachersN _workersN workerStats = do
     qr <- newTQueueIO
     let toCacher = atomically . writeTQueue qr
@@ -61,7 +61,7 @@ mkPipeline env cachersN _workersN workerStats = do
         fromCacher = atomically $ readTQueue qw
     let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
     let workers = [ workerLogic env wstat fromCacher | wstat <- workerStats ]
-    return (cachers ++ workers, toCacher)
+    return (cachers, workers, toCacher)
 
 ----------------------------------------------------------------
 

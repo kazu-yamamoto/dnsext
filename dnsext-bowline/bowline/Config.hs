@@ -51,6 +51,7 @@ data Config = Config
     , cnf_monitor_port :: Int
     , cnf_monitor_addrs :: [String]
     , cnf_monitor_stdio :: Bool
+    , cnf_threads_dumper :: Bool
     , cnf_dnstap :: Bool
     , cnf_dnstap_socket_path :: FilePath
     , cnf_dnstap_reconnect_interval :: Int
@@ -94,6 +95,7 @@ defaultConfig =
         , cnf_monitor_port = 10023
         , cnf_monitor_addrs = []
         , cnf_monitor_stdio = False
+        , cnf_threads_dumper = False
         , cnf_dnstap = True
         , cnf_dnstap_socket_path = "/tmp/bowline.sock"
         , cnf_dnstap_reconnect_interval = 10
@@ -184,6 +186,7 @@ makeConfig def conf =
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_monitor_addrs = get "monitor-addrs" cnf_monitor_addrs
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
+        , cnf_threads_dumper = get "threads-dumper" cnf_threads_dumper
         , cnf_dnstap = get "dnstap" cnf_dnstap
         , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
         , cnf_dnstap_reconnect_interval = get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval

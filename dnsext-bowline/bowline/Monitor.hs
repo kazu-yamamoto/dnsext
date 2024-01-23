@@ -8,7 +8,7 @@ module Monitor (
 
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
-import Control.Concurrent.Async (waitSTM, withAsync)
+import Control.Concurrent.Async (waitSTM)
 import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (unless, void, when, (<=<))
 import Data.ByteString.Builder
@@ -35,6 +35,7 @@ import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server (HostName, PortNumber)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
+import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
@@ -67,6 +68,7 @@ data Command
     | Lookup DNS.Domain DNS.TYPE
     | Stats
     | WStats
+    | TStats
     | Expire EpochTime
     | Noop
     | Exit
@@ -154,6 +156,8 @@ console conf env Control{..} inH outH ainfo = do
         "find" : s : _ -> Just $ Find s
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
         "stats" : _ -> Just Stats
+        "t" : _ -> Just TStats
+        "tstats" : _ -> Just TStats
         "w" : _ -> Just WStats
         "wstats" : _ -> Just WStats
         "expire" : args -> case args of
@@ -183,6 +187,7 @@ console conf env Control{..} inH outH ainfo = do
                 return $ Cache.lookup ts dom typ DNS.IN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
+        dispatch TStats = unlines <$> TStat.dumpThreads >>= hPutStrLn outH
         dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
@@ -212,7 +217,7 @@ console conf env Control{..} inH outH ainfo = do
 
 withWait :: STM a -> IO b -> IO (Either a b)
 withWait qstm blockAct =
-    withAsync blockAct $ \a ->
+    TStat.withAsync "monitor" blockAct $ \a ->
         atomically $
             (Left <$> qstm)
                 <|> (Right <$> waitSTM a)

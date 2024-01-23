@@ -7,12 +7,13 @@ module DNS.Do53.Resolve (
 )
 where
 
-import Control.Concurrent.Async (Async, async, cancel, waitCatchSTM, waitSTM)
+import Control.Concurrent.Async (Async, waitCatchSTM, waitSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Do53.Query
 import DNS.Do53.Types
 import qualified DNS.Log as Log
+import qualified DNS.ThreadStats as TStat
 import DNS.Types
 
 ----------------------------------------------------------------
@@ -63,8 +64,9 @@ resolveSequential ris0 resolver q qctl = loop ris0
 resolveConcurrent
     :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
-resolveConcurrent ris@(ResolvInfo{..} : _) resolver q@Question{..} qctl = do
-    r@Result{..} <- raceAny $ map (\ri -> resolver ri q qctl) ris
+resolveConcurrent ris@(ResolvInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
+    caller <- TStat.getThreadLabel
+    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ rinfoHostName ri, resolver ri q qctl)) ris
     let ~tag =
             "    query "
                 ++ show qname
@@ -76,17 +78,16 @@ resolveConcurrent ris@(ResolvInfo{..} : _) resolver q@Question{..} qctl = do
                 ++ show resultPortNumber
                 ++ "/"
                 ++ resultTag
-    ractionLog rinfoActions Log.DEMO Nothing [tag ++ ": win"]
+    ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]
     return r
 
 ----------------------------------------------------------------
 
-raceAny :: [IO a] -> IO a
-raceAny ios = mapM async ios >>= waitAnyRightCancel
+raceAny :: [(String, IO a)] -> IO a
+raceAny ios = TStat.withAsyncs ios waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
-waitAnyRightCancel asyncs =
-    atomically (waitAnyRightSTM asyncs) `finally` mapM_ cancel asyncs
+waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 
 -- The first value is returned and others are canceled at that time.
 -- The last exception is returned when all throws an exception.

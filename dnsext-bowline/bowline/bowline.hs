@@ -5,7 +5,7 @@
 module Main where
 
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
-import Control.Concurrent.Async (concurrently_, race_)
+import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
 import DNS.Iterative.Server as Server
@@ -13,6 +13,7 @@ import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
 import qualified DNS.SVCB as DNS
+import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import Data.ByteString.Builder
 import qualified Data.IORef as I
@@ -21,6 +22,7 @@ import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import System.Timeout (timeout)
+import Text.Printf (printf)
 import UnliftIO.Exception (finally)
 
 import Config
@@ -77,7 +79,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
-    (pipes, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
+    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
     mng <- getControl env workerStats mng0
     monitor <- Mon.monitor conf env mng
@@ -85,7 +87,15 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     tidW <- runWriter
     tidL <- runLogger
     tidA <- API.new conf mng
-    race_ (conc $ pipes ++ concat servers) (conc monitor)
+    let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
+    let concServer =
+            conc
+            ( [ TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper ] ++
+              [ TStat.concurrentlyList_ (withNum "cacher" cachers)
+              , TStat.concurrentlyList_ (withNum "worker" workers)
+              , TStat.concurrentlyList_ (concat servers)
+              ] )
+    race_ concServer (conc monitor)
         -- Teardown
         `finally` do
             mapM_ maybeKill [tidA, tidL, tidW]
@@ -95,13 +105,13 @@ runConfig tcache mcache mng0 conf@Config{..} = do
   where
     maybeKill = maybe (return ()) killThread
     trans creds =
-        [ (cnf_udp, udpServer udpconf, cnf_udp_port)
-        , (cnf_tcp, tcpServer vcconf, cnf_tcp_port)
-        , (cnf_h2c, http2cServer vcconf, cnf_h2c_port)
-        , (cnf_h2, http2Server creds vcconf, cnf_h2_port)
-        , (cnf_h3, http3Server creds vcconf, cnf_h3_port)
-        , (cnf_tls, tlsServer creds vcconf, cnf_tls_port)
-        , (cnf_quic, quicServer creds vcconf, cnf_quic_port)
+        [ (cnf_udp, "udp-srv", udpServer udpconf, cnf_udp_port)
+        , (cnf_tcp, "tcp-srv", tcpServer vcconf, cnf_tcp_port)
+        , (cnf_h2c, "h2c-srv", http2cServer vcconf, cnf_h2c_port)
+        , (cnf_h2, "h2-srv", http2Server creds vcconf, cnf_h2_port)
+        , (cnf_h3, "h3-srv", http3Server creds vcconf, cnf_h3_port)
+        , (cnf_tls, "tls-srv", tlsServer creds vcconf, cnf_tls_port)
+        , (cnf_quic, "quic-srv", quicServer creds vcconf, cnf_quic_port)
         ]
     conc = foldr concurrently_ $ return ()
     udpconf =
@@ -130,11 +140,12 @@ getServers
     :: Env
     -> [HostName]
     -> Server.ToCacher
-    -> (Bool, Server, Int)
-    -> IO [IO ()]
-getServers _ _ _ (False, _, _) = return []
-getServers env hosts toCacher (True, server, port') =
-    concat <$> mapM (server env toCacher port) hosts
+    -> (Bool, String, Server, Int)
+    -> IO [(String, IO ())]
+getServers _ _ _ (False, _, _, _) = return []
+getServers env hosts toCacher (True, name, server, port') = do
+    servs <- mapM (server env toCacher port) hosts
+    pure [ (name, s) | ss <- servs, s <- ss]
   where
     port = fromIntegral port'
 
