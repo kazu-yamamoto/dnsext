@@ -68,6 +68,7 @@ data Command
     | Lookup DNS.Domain DNS.TYPE
     | Stats
     | WStats
+    | TStats
     | Expire EpochTime
     | Noop
     | Exit
@@ -155,6 +156,8 @@ console conf env Control{..} inH outH ainfo = do
         "find" : s : _ -> Just $ Find s
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
         "stats" : _ -> Just Stats
+        "t" : _ -> Just TStats
+        "tstats" : _ -> Just TStats
         "w" : _ -> Just WStats
         "wstats" : _ -> Just WStats
         "expire" : args -> case args of
@@ -184,6 +187,7 @@ console conf env Control{..} inH outH ainfo = do
                 return $ Cache.lookup ts dom typ DNS.IN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
+        dispatch TStats = unlines <$> TStat.dumpThreads >>= hPutStrLn outH
         dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Help w) = printHelp w
