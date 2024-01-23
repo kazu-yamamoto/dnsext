@@ -20,7 +20,7 @@ import DNS.Types.Time
 
 -- other packages
 import Network.Socket (SockAddr)
-import UnliftIO (SomeException (..), catch, handle, throwIO)
+import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
 
 -- this package
 

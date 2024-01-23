@@ -89,6 +89,7 @@ executable workers-benchmark
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
         base,
+        async,
         bytestring,
         deepseq,
         dnsext-do53,

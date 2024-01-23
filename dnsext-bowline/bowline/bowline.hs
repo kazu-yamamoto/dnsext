@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
+import Control.Concurrent.Async (concurrently_, race_)
 import Control.Concurrent.STM
 import Control.Monad (guard)
 import DNS.Iterative.Server as Server
@@ -20,7 +21,7 @@ import GHC.Stats
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import System.Timeout (timeout)
-import UnliftIO (concurrently_, finally, race_)
+import UnliftIO.Exception (finally)
 
 import Config
 import qualified DNSTAP as TAP

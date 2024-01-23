@@ -25,6 +25,7 @@ executable bowline
     build-depends:
         base,
         bytestring,
+        async,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-iterative,

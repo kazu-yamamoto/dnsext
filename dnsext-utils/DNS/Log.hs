@@ -6,6 +6,7 @@ module DNS.Log (
 ) where
 
 -- GHC packages
+import Control.Concurrent.STM
 import Control.Monad (forever, void, when)
 import System.IO (
     BufferMode (LineBuffering),
@@ -20,7 +21,6 @@ import System.IO (
 import System.Console.ANSI (hSetSGR, hSupportsANSIColor)
 import System.Console.ANSI.Types
 import qualified UnliftIO.Exception as E
-import UnliftIO.STM
 
 -- this package
 
