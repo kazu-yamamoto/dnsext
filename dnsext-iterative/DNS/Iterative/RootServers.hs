@@ -28,8 +28,8 @@ rootServers =
     ,
         [ mkRR "a.root-servers.net." A 3600000 (rd_a "198.41.0.4")
         , mkRR "a.root-servers.net." AAAA 3600000 (rd_aaaa "2001:503:ba3e::2:30")
-        , mkRR "b.root-servers.net." A 3600000 (rd_a "199.9.14.201")
-        , mkRR "b.root-servers.net." AAAA 3600000 (rd_aaaa "2001:500:200::b")
+        , mkRR "b.root-servers.net." A 3600000 (rd_a "170.247.170.2")
+        , mkRR "b.root-servers.net." AAAA 3600000 (rd_aaaa "2801:1b8:10::b")
         , mkRR "c.root-servers.net." A 3600000 (rd_a "192.33.4.12")
         , mkRR "c.root-servers.net." AAAA 3600000 (rd_aaaa "2001:500:2::c")
         , mkRR "d.root-servers.net." A 3600000 (rd_a "199.7.91.13")
