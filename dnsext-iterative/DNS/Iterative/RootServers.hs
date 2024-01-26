@@ -2,11 +2,14 @@
 
 module DNS.Iterative.RootServers (
     rootServers,
+    getRootServers,
 ) where
 
--- dns packages
+-- dnsext-* packages
 import DNS.Types
 import qualified DNS.Types as DNS
+import DNS.ZoneFile (Record (R_RR))
+import qualified DNS.ZoneFile as Zone
 
 rootServers :: ([ResourceRecord], [ResourceRecord])
 rootServers =
@@ -63,3 +66,11 @@ rootServers =
             , DNS.rrttl = tt
             , rdata = rd
             }
+
+getRootServers :: FilePath -> IO ([ResourceRecord], [ResourceRecord])
+getRootServers hintPath = do
+    rs <- Zone.parseFile hintPath
+    let rrs = [ rr | R_RR rr <- rs ]
+        ns = [ rr | rr@ResourceRecord{ rrname = ".", rrtype = NS } <- rrs ]
+        ax = [ rr | rr <- rrs, rrtype rr == A || rrtype rr == AAAA ]
+    pure (ns, ax)
