@@ -57,7 +57,7 @@ refreshRoot = do
         let fallback s = lift $ do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                return rootHint
+                asks rootHint_
         either fallback return =<< rootPriming
 
 {-
@@ -69,6 +69,7 @@ steps of root priming
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
+    Delegation{delegationNS = hintDes} <- lift $ asks rootHint_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
     lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     body ips
@@ -99,8 +100,6 @@ rootPriming = do
         dnskeys <- either (throwE . ("rootPriming: " ++)) pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
         msgNS <- lift $ norec True ips "." NS
         ExceptT $ lift $ verify dnskeys msgNS
-
-    Delegation{delegationNS = hintDes} = rootHint
 
 {-
 steps to get verified and cached DNSKEY RRset
