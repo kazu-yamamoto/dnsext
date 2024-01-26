@@ -6,7 +6,6 @@ module DNS.Iterative.Query.Root (
     rootPriming,
     cachedDNSKEY,
     takeDEntryIPs,
-    rootHint,
 ) where
 
 -- GHC packages
@@ -37,7 +36,6 @@ import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
-import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
 
 refreshRoot :: DNSQuery Delegation
@@ -145,13 +143,6 @@ verifySEP dss dom rrs = do
             ]
     when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
     pure seps
-
--- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
-rootHint :: Delegation
-rootHint =
-    maybe (error "rootHint: bad configuration.") ($ []) $ findDelegation (nsList "." (,) ns) as
-  where
-    (ns, as) = rootServers
 
 takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
 takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des

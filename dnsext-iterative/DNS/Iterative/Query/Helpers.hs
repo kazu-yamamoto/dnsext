@@ -14,6 +14,7 @@ import Data.IP (IP (IPv4, IPv6))
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.RootServers (getRootServers, rootServers)
 import DNS.Iterative.Query.Types
 
 -- $setup
@@ -85,6 +86,19 @@ axList disableV6NS pdom h = foldr takeAx []
         , Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 =
             h (IPv6 v6) rr : xs
     takeAx _ xs = xs
+
+-- |
+-- >>> delegationNS <$> getRootHint (Just "root.hints.test")
+-- DEwithAx "M.ROOT-SERVERS.NET." 202.12.27.33 :| [DEwithAx "M.ROOT-SERVERS.NET." 2001:dc3::35]
+getRootHint :: Maybe FilePath -> IO Delegation
+getRootHint mpath = uncurry mkRootHint <$> maybe (pure rootServers) getRootServers mpath
+
+rootHint :: Delegation
+rootHint = uncurry mkRootHint rootServers
+
+-- {-# ANN mkRootHint ("HLint: ignore Use tuple-section") #-}
+mkRootHint :: [ResourceRecord] -> [ResourceRecord] -> Delegation
+mkRootHint ns as = maybe (error "rootHint: bad configuration.") ($ []) $ findDelegation (nsList (fromString ".") (,) ns) as
 
 {- The existence or non-existence of a Delegation is independent of the existence of [DS_RD]. -}
 findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
