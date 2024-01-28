@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Config (
@@ -10,12 +9,18 @@ module Config (
 ) where
 
 import Control.Monad (void)
+import Control.Monad.Trans.State (StateT (..), evalStateT)
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
 import Data.List
 import Data.List.Split (splitOn)
+import Data.String (fromString)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
+
+import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
+import DNS.ZoneFile (Context (cx_zone, cx_name), defaultContext, parseLineRR)
+import DNS.Iterative.Internal (LocalZoneType (..))
 
 import Parser
 
@@ -28,6 +33,7 @@ data Config = Config
     , cnf_root_hints :: Maybe FilePath
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
+    , cnf_local_zones :: [(Domain, LocalZoneType, [ResourceRecord])]
     , cnf_dns_addrs :: [String]
     , cnf_resolve_timeout :: Int
     , cnf_cachers :: Int
@@ -73,6 +79,7 @@ defaultConfig =
         , cnf_root_hints = Nothing
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
+        , cnf_local_zones = []
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_resolve_timeout = 10000000
         , cnf_cachers = 4
@@ -165,6 +172,7 @@ makeConfig def conf =
         , cnf_root_hints = get "root-hints" cnf_root_hints
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
+        , cnf_local_zones = localZones
         , cnf_dns_addrs = get "dns-addrs" cnf_dns_addrs
         , cnf_resolve_timeout = get "resolve-timeout" cnf_resolve_timeout
         , cnf_cachers = get "cachers" cnf_cachers
@@ -199,6 +207,55 @@ makeConfig def conf =
         }
   where
     get k func = maybe (func def) fromConf $ lookup k conf
+    --
+    localZones = case mapM parseLocalZone $ unfoldr getLocalZone conf of
+        Right zones -> zones
+        Left es -> error $ "parse error during local-data: " ++ es
+    parseLocalZone (d, zt, xs) = evalStateT ((,,) d zt . subdoms d <$> mapM getRR xs) defaultContext{cx_zone = d, cx_name = d}
+    subdoms d rrs = [ rr | rr <- rrs, rrname rr `isSubDomainOf` d ]
+    getRR s = StateT $ parseLineRR $ fromString s
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> getLocalZone [("foo",CV_Int 4),("local-zone",CV_Strings ["example.", "static"]),("local-data",CV_String "a.example. A 203.0.113.5"),("bar",CV_Bool True)]
+-- Just (("example.",LZ_Static,["a.example. A 203.0.113.5"]),[("bar",CV_Bool True)])
+getLocalZone :: [Conf] -> Maybe ((Domain, LocalZoneType, [String]), [Conf])
+getLocalZone [] = Nothing
+getLocalZone ((k, v):xs)
+    | k == "local-zone" =
+        let cstrs = fromConf v
+            ~err = error $ "unknown local-zone pattern: " ++ show cstrs
+            (zone, zt) = maybe err id $ getLocalZone' cstrs
+            (ds, ys) = getLocalData id xs
+        in  Just ((zone, zt, ds), ys)
+    | otherwise = getLocalZone xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> getLocalZone' ["example.", "static"]
+-- Just ("example.",LZ_Static)
+-- >>> getLocalZone' ["example.", "redirect"]
+-- Just ("example.",LZ_Redirect)
+getLocalZone' :: [String] -> Maybe (Domain, LocalZoneType)
+getLocalZone' [s1,s2] = (,) (fromString s1) <$> zoneType s2
+  where
+    zoneType s = case s of
+        "deny"      -> Just LZ_Deny
+        "refuse"    -> Just LZ_Refuse
+        "static"    -> Just LZ_Static
+        "redirect"  -> Just LZ_Redirect
+        _           -> Nothing
+getLocalZone' _       = Nothing
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getLocalData :: ([String] -> [String]) -> [Conf] -> ([String], [Conf])
+getLocalData a []        = (a [], [])
+getLocalData a xxs@((k, v):xs)
+    | k == "local-data"  = getLocalData (a . (fromConf v :)) xs
+    | otherwise          = (a [], xxs)
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
