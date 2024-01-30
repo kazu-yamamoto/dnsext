@@ -78,10 +78,13 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
             withNXC soa                 = pure (([], bn), Left (DNS.NameErr, [], soa))
             cachedCNAME (rc, rrs, soa)  = pure (([], bn), Left (rc, rrs, soa))
 
+            negative soa _rank  = (DNS.NoErr, [], [soa])
+            noSOA rc            = (rc, [], [])
+
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
             {- target RR is not CNAME destination, but CNAME result is NoErr -}
-            (cachedCNAME . foldLookupResult (\soa _rank -> (DNS.NoErr, [], [soa])) (\rc -> (rc, [], [])) (\cname -> (DNS.NoErr, [cname], [])))
+            (cachedCNAME . foldLookupResult negative noSOA (\cname -> (DNS.NoErr, [cname], [])))
             =<< lift (lookupType bn CNAME)
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
