@@ -52,6 +52,7 @@ resolve
     -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
+{- FOURMOLU_DISABLE -}
 resolveLogic
     :: String
     -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
@@ -59,14 +60,14 @@ resolveLogic
     -> Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (a, ([RRset], [RRset])))
 resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
-    maybe notSpecial special $ takeSpecialRevDomainResult n0
+    maybe (called *> notSpecial) special $ takeSpecialRevDomainResult n0
   where
     special result = return (([], n0), Left result)
     notSpecial
-        | cls /= IN = called *> return (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
-        | typ == Cache.NX = called *> return (([], n0), Left (DNS.NoErr, [], []))
-        | typ == CNAME = called *> justCNAME n0
-        | otherwise = called *> recCNAMEs 0 n0 id
+        | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
+        | typ == Cache.NX  = pure (([], n0), Left (DNS.NoErr, [], []))
+        | typ == CNAME     = justCNAME n0
+        | otherwise        = recCNAMEs 0 n0 id
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
     called = lift $ logLn_ Log.DEBUG $ show (n0, typ, cls)
     justCNAME bn = do
@@ -145,6 +146,7 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
         -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
         | rank <= RankAdditional = Nothing
         | otherwise = Just x
+{- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
