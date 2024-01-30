@@ -75,13 +75,8 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
                 result <- cnameHandler bn
                 pure (([], bn), Right result)
 
-            withNXC soa = pure (([], bn), Left (DNS.NameErr, [], soa))
-
-            cachedCNAME (rc, rrs, soa) =
-                pure
-                    ( ([], bn)
-                    , Left ( rc, rrs, soa )
-                    )
+            withNXC soa                 = pure (([], bn), Left (DNS.NameErr, [], soa))
+            cachedCNAME (rc, rrs, soa)  = pure (([], bn), Left (rc, rrs, soa))
 
         maybe
             (maybe noCache withNXC =<< lift (lookupNX bn))
