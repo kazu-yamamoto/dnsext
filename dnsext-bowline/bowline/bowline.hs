@@ -78,7 +78,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
     rootHint <- getRootHint cnf_root_hints
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns rootHint gcacheRRCacheOps tcache tmout
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats

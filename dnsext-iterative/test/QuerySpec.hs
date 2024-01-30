@@ -86,7 +86,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
     let getResolveCache n ty = do
-            cxt <- newEnv putLines (\_ -> return ()) disableV6NS rootHint cacheOps tcache tmout
+            cxt <- newEnv putLines (\_ -> return ()) disableV6NS rootHint [] cacheOps tcache tmout
             eresult <- fmap snd <$> runResolve cxt (Question (fromString n) ty DNS.IN) mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
@@ -123,9 +123,9 @@ querySpec disableV6NS putLines = describe "query" $ do
     tcache@TimeCache{..} <- runIO newTimeCache
     let cacheConf = Cache.getDefaultStubConf (2 * 1024 * 1024) 600 getTime
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
-    let getCXT = newEnv putLines (\_ -> return ()) disableV6NS rootHint cacheOps tcache tmout
+    let getCXT = newEnv putLines (\_ -> return ()) disableV6NS rootHint [] cacheOps tcache tmout
     cxt <- runIO getCXT
-    cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True rootHint cacheOps tcache tmout
+    cxt4 <- runIO $ newEnv putLines (\_ -> return ()) True rootHint [] cacheOps tcache tmout
     let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
         runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
@@ -169,7 +169,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
     root <- runIO $ do
-        icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS rootHint cacheOps tcache tmout
+        icxt <- newEnv (\_ _ _ -> pure ()) (\_ -> return ()) disableV6NS rootHint [] cacheOps tcache tmout
         failLeft "refresh-root error" =<< runDNSQuery refreshRoot icxt (queryContextIN (fromString ".") NS mempty)
 
     it "iterative" $ do

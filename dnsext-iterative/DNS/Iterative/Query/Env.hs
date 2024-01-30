@@ -20,10 +20,12 @@ import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
+import DNS.Types (Domain, ResourceRecord, RCODE (..))
 
 -- this package
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Helpers
+import qualified DNS.Iterative.Query.LocalZone as Local
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
@@ -33,11 +35,14 @@ newEnv
     -> (DNSTAP.Message -> IO ())
     -> Bool        -- ^ disabling IPv6
     -> Delegation  -- ^ root-hint
+    -> [(Domain, LocalZoneType, [ResourceRecord])]
     -> RRCacheOps
     -> TimeCache
     -> (IO Reply -> IO (Maybe Reply))
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS hint RRCacheOps{..} TimeCache{..} tmout = do
+newEnv putLines putDNSTAP disableV6NS hint lzones RRCacheOps{..} TimeCache{..} tmout = do
+    let localName = Local.nameMap lzones
+        localApex = Local.apexMap localName lzones
     env0 <- newEmptyEnv
     pure $
         env0
@@ -45,6 +50,8 @@ newEnv putLines putDNSTAP disableV6NS hint RRCacheOps{..} TimeCache{..} tmout = 
         , logDNSTAP_ = putDNSTAP
         , disableV6NS_ = disableV6NS
         , rootHint_ = hint
+        , lookupLocalApex_ = Local.lookupApex localApex
+        , lookupLocalDomain_ = Local.lookupName localName
         , insert_ = insertCache
         , getCache_ = readCache
         , expireCache_ = expireCache
@@ -68,6 +75,8 @@ newEmptyEnv = do
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
         , rootHint_ = rootHint
+        , lookupLocalApex_ = \_ -> Nothing
+        , lookupLocalDomain_ = \_ _ -> Just (NoErr, [], [])
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
         , expireCache_ = \_ -> pure ()

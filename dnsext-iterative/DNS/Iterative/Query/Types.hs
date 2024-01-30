@@ -69,6 +69,8 @@ data Env = Env
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , rootHint_ :: Delegation
+    , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
+    , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()
