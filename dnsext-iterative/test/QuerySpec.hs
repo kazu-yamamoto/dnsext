@@ -8,7 +8,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (void)
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
-import DNS.Types (TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA))
+import DNS.Types (TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA), Question (..))
 import qualified DNS.Types as DNS
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
@@ -21,6 +21,7 @@ import qualified DNS.Log as Log
 import DNS.Iterative.Internal (
     Delegation (..),
     Env (..),
+    QueryContext (..),
     getResultIterative,
     newEnv,
     queryContextIN,
@@ -86,7 +87,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     cacheOps <- runIO $ Cache.newRRCacheOps cacheConf
     let getResolveCache n ty = do
             cxt <- newEnv putLines (\_ -> return ()) disableV6NS cacheOps tcache tmout
-            eresult <- fmap snd <$> runResolve cxt (fromString n) ty mempty
+            eresult <- fmap snd <$> runResolve cxt (Question (fromString n) ty DNS.IN) mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -128,11 +129,12 @@ querySpec disableV6NS putLines = describe "query" $ do
     let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
         runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
-        runResolveCXT cxt_ n ty = fmap snd <$> runResolve cxt_ (fromString n) ty mempty
+        runResolveCXT cxt_ n ty = fmap snd <$> runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
         runResolve_ = runResolveCXT cxt
         getReply n0 ty ident = do
             let n = fromString n0
-            e <- runDNSQuery (getResultIterative n ty) cxt $ queryContextIN n ty mempty
+                q = Question n ty DNS.IN
+            e <- runDNSQuery (getResultIterative q) cxt $ QueryContext mempty q
             return $ replyMessage e ident [DNS.Question n ty DNS.IN]
 
     let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure

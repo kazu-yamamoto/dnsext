@@ -18,7 +18,7 @@ import DNS.Iterative.Query.Env
 import DNS.Iterative.Query.Types
 import DNS.Types
 
-resolveResponseIterative :: Env -> Domain -> TYPE -> QueryControls -> IO (Either String DNSMessage)
-resolveResponseIterative env domain typ ictl = do
-    ers <- runDNSQuery (getResultIterative domain typ) env $ queryContextIN domain typ ictl
-    return $ replyMessage ers 0 {- dummy id -} [Question domain typ IN]
+resolveResponseIterative :: Env -> Question -> QueryControls -> IO (Either String DNSMessage)
+resolveResponseIterative env q ictl = do
+    ers <- runDNSQuery (getResultIterative q) env $ QueryContext ictl q
+    return $ replyMessage ers 0 {- dummy id -} [q]

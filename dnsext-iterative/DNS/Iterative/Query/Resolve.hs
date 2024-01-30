@@ -34,23 +34,21 @@ import qualified DNS.Iterative.Query.Verify as Verify
 -- 最終的な解決結果を得る
 runResolve
     :: Env
-    -> Domain
-    -> TYPE
+    -> Question
     -> QueryControls
     -> IO
         ( Either
             QueryError
             (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
         )
-runResolve cxt n typ cd = runDNSQuery (resolve n typ) cxt $ queryContextIN n typ cd
+runResolve cxt q cd = runDNSQuery (resolve q) cxt $ QueryContext cd q
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードをキャッシュする. -}
 resolve
-    :: Domain
-    -> TYPE
+    :: Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
@@ -58,19 +56,19 @@ resolveLogic
     :: String
     -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
     -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
-    -> Domain
-    -> TYPE
+    -> Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (a, ([RRset], [RRset])))
-resolveLogic logMark cnameHandler typeHandler n0 typ =
+resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
     maybe notSpecial special $ takeSpecialRevDomainResult n0
   where
     special result = return (([], n0), Left result)
     notSpecial
+        | cls /= IN = called *> return (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
         | typ == Cache.NX = called *> return (([], n0), Left (DNS.NoErr, [], []))
         | typ == CNAME = called *> justCNAME n0
         | otherwise = called *> recCNAMEs 0 n0 id
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
-    called = lift $ logLn_ Log.DEBUG $ show (n0, typ)
+    called = lift $ logLn_ Log.DEBUG $ show (n0, typ, cls)
     justCNAME bn = do
         let noCache = do
                 result <- cnameHandler bn
