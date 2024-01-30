@@ -29,7 +29,7 @@ import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import Control.Monad.Trans.Reader (ReaderT (..), asks)
+import Control.Monad.Trans.Reader (ReaderT (..), ask, asks)
 import Data.Bits
 import Data.ByteString (ByteString)
 import Data.Function
