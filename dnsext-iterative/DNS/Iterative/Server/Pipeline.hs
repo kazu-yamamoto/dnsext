@@ -75,13 +75,13 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
             let inp = inpBS{inputQuery = queryMsg}
             mx <- getResponseCached env queryMsg
             case mx of
-                None -> toWorker inp
-                Positive replyMsg -> do
+                CResultMissHit -> toWorker inp
+                CResultHit replyMsg -> do
                     incStats (stats_ env) CacheHit
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
                     inputToSender $ Output bs inputPeerInfo
-                Negative _replyErr -> cacheFailed env inp
+                CResultDenied _replyErr -> logicDenied env inp
 
 ----------------------------------------------------------------
 
@@ -100,18 +100,18 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
             inputToSender $ Output bs inputPeerInfo
-        Left _e -> cacheFailed env inp
+        Left _e -> logicDenied env inp
 
 ----------------------------------------------------------------
 
-cacheFailed :: Env -> Input DNSMessage -> IO ()
-cacheFailed env inp@Input{..} = do
+logicDenied :: Env -> Input DNSMessage -> IO ()
+logicDenied env inp@Input{..} = do
     let replyMsg =
             inputQuery
                 { flags = (flags inputQuery){isResponse = True}
                 , rcode = FormatErr
                 }
-    incStats (stats_ env) CacheFailed
+    incStats (stats_ env) ResolveDenied
     let bs = DNS.encode replyMsg
     record env inp replyMsg bs
     inputToSender $ Output bs inputPeerInfo

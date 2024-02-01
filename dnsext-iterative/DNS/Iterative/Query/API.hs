@@ -115,13 +115,13 @@ getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
         getResultIterative q
 
 data CacheResult
-    = None
-    | Positive DNSMessage
-    | Negative String
+    = CResultMissHit
+    | CResultHit DNSMessage
+    | CResultDenied String
 
 toCacheResult :: Either String DNSMessage -> CacheResult
-toCacheResult (Left x) = Negative x
-toCacheResult (Right x) = Positive x
+toCacheResult (Left x) = CResultDenied x
+toCacheResult (Right x) = CResultHit x
 
 -- | Getting a response corresponding to a query from the cache.
 getResponseCached
@@ -129,14 +129,14 @@ getResponseCached
     -> DNSMessage
     -> IO CacheResult
 getResponseCached env reqM = case DNS.question reqM of
-    [] -> return $ Negative "empty question"
+    [] -> return $ CResultDenied "empty question"
     qs@(q : _) -> getResponseCached' env reqM q qs
 
 getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
 getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
     ex <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
     case ex of
-        Right Nothing -> return None
+        Right Nothing -> return CResultMissHit
         Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
         Left l -> return $ toCacheResult $ mkResponse $ Left l
   where
