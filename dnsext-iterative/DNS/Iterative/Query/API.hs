@@ -208,6 +208,7 @@ replyMessage eas ident rqs =
         NotResponse{} -> Right $ message (DNS.ServFail, [], [])
         InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
         HasError rc _m -> Right $ message (rc, [], [])
+        QueryDenied -> Left "QueryDenied"
 
     message (rcode, rrs, auth) =
         res

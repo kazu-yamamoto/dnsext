@@ -95,6 +95,7 @@ data QueryError
     | NotResponse Bool DNSMessage
     | InvalidEDNS DNS.EDNSheader DNSMessage
     | HasError DNS.RCODE DNSMessage
+    | QueryDenied
     deriving (Show)
 
 type ContextT m = ReaderT Env (ReaderT QueryContext m)
