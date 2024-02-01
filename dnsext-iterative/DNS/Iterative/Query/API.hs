@@ -194,7 +194,7 @@ replyMessage eas ident rqs =
         DNS.FormatError -> Right DNS.FormatErr
         DNS.ServerFailure -> Right DNS.ServFail
         DNS.NotImplemented -> Right DNS.NotImpl
-        DNS.OperationRefused -> Right DNS.ServFail {- like bind9 behavior -}
+        DNS.OperationRefused -> Right DNS.Refused
         DNS.BadOptRecord -> Right DNS.BadVers
         DNS.BadConfiguration -> Right DNS.ServFail
         DNS.NetworkFailure{} -> Right DNS.ServFail
@@ -206,11 +206,7 @@ replyMessage eas ident rqs =
         DnsError e -> dnsError e
         NotResponse{} -> Right $ message (DNS.ServFail, [], [])
         InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
-        HasError rc _m -> Right $ message (rrc, [], [])
-          where
-            rrc = case rc of
-                DNS.Refused -> DNS.ServFail
-                _ -> rc
+        HasError rc _m -> Right $ message (rc, [], [])
 
     message (rcode, rrs, auth) =
         res
