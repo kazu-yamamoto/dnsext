@@ -75,13 +75,13 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
             let inp = inpBS{inputQuery = queryMsg}
             mx <- getResponseCached env queryMsg
             case mx of
-                None -> toWorker inp
-                Positive replyMsg -> do
+                CResultMissHit -> toWorker inp
+                CResultHit replyMsg -> do
                     incStats (stats_ env) CacheHit
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
                     inputToSender $ Output bs inputPeerInfo
-                Negative _replyErr -> cacheFailed env inp
+                CResultDenied _replyErr -> cacheFailed env inp
 
 ----------------------------------------------------------------
 
