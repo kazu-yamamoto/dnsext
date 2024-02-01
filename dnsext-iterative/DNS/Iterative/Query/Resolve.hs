@@ -53,6 +53,11 @@ resolve
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
+{- |
+   result value of resolveLogic:
+   * Left ResultRRS                 - cached result
+   * Right (a, ([RRset], [RRset]))  - queried result like (DNSMessage, ([RRset], [RRset]))
+   * QueryError                     - other errors   -}
 resolveLogic
     :: String
     -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
