@@ -28,8 +28,9 @@ pattern CacheHit        :: StatsIx
 pattern CacheHit         = StatsIx 0
 pattern CacheMiss       :: StatsIx
 pattern CacheMiss        = StatsIx 1
-pattern CacheFailed     :: StatsIx
-pattern CacheFailed      = StatsIx 2
+
+pattern ResolveDenied   :: StatsIx
+pattern ResolveDenied    = StatsIx 2
 
 pattern QueryTypeRes    :: StatsIx
 pattern QueryTypeRes     = StatsIx 3
@@ -132,7 +133,7 @@ labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
     (CacheHit,         "cache_hit")
   , (CacheMiss,        "cache_miss")
-  , (CacheFailed,      "cache_failed")
+  , (ResolveDenied,    "resolve_denied")
   , (QueryTypeRes,     "query_types_total{type=\"Reserved\"}")
   , (QueryTypeA,       "query_types_total{type=\"A\"}")
   , (QueryTypeA6,      "query_types_total{type=\"A6\"}")
