@@ -34,6 +34,6 @@ setup disableV6NS putLines = do
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
-resolve env ictl n ty = resolveResponseIterative env domain ty ictl
+resolve env ictl n ty = resolveResponseIterative env (Question domain ty IN) ictl
   where
     domain = fromString n

@@ -103,16 +103,16 @@ getResponseIterative'
     -> DNS.Question
     -> [DNS.Question]
     -> IO (Either String DNSMessage)
-getResponseIterative' env reqM q@(DNS.Question bn typ _) qs = do
+getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
     ers <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
     return $ replyMessage ers (DNS.identifier reqM) qs
   where
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
-    prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ ": "
+    prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
-        getResultIterative bn typ
+        getResultIterative q
 
 data CacheResult
     = None
@@ -133,7 +133,7 @@ getResponseCached env reqM = case DNS.question reqM of
     qs@(q : _) -> getResponseCached' env reqM q qs
 
 getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
-getResponseCached' env reqM q@(DNS.Question bn typ _) qs = do
+getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
     ex <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
     case ex of
         Right Nothing -> return None
@@ -142,10 +142,10 @@ getResponseCached' env reqM q@(DNS.Question bn typ _) qs = do
   where
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
-    prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ ": "
+    prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
-        getResultCached bn typ
+        getResultCached q
     mkResponse ers = replyMessage ers (DNS.identifier reqM) qs
 
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
@@ -226,9 +226,9 @@ replyMessage eas ident rqs =
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE'.
 --   The cache is maybe updated.
-getResultIterative :: Domain -> TYPE -> DNSQuery Result
-getResultIterative n typ = do
-    ((cnrrs, _rn), etm) <- resolve n typ
+getResultIterative :: Question -> DNSQuery Result
+getResultIterative q = do
+    ((cnrrs, _rn), etm) <- resolve q
     reqDO <- lift . lift $ asks requestDO
     let fromRRsets = concatMap $ rrListFromRRset reqDO
         fromMessage (msg, (vans, vauth)) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
@@ -240,9 +240,9 @@ resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets c
     fromRRsets = concatMap $ rrListFromRRset reqDO
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
-getResultCached :: Domain -> TYPE -> DNSQuery (Maybe Result)
-getResultCached n typ = do
-    ((cnrrs, _rn), e) <- resolveByCache n typ
+getResultCached :: Question -> DNSQuery (Maybe Result)
+getResultCached q = do
+    ((cnrrs, _rn), e) <- resolveByCache q
     reqDO <- lift . lift $ asks requestDO
     return $ either (Just . makeResult reqDO cnrrs . resultFromRRS reqDO) (const Nothing) e
 
@@ -274,8 +274,7 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
 
 resolveByCache
-    :: Domain
-    -> TYPE
+    :: Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
 resolveByCache =
     resolveLogic
