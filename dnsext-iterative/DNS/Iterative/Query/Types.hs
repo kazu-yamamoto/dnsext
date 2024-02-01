@@ -1,6 +1,7 @@
 module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
+    LocalZoneType (..),
     Env (..),
     QueryContext (..),
     queryContextIN,
@@ -45,6 +46,20 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Stats
+
+----------
+-- Local Zone
+
+{- FOURMOLU_DISABLE -}
+data LocalZoneType
+    = LZ_Deny
+    | LZ_Refuse
+    | LZ_Static
+    {- LZ_Transparent -}
+    {- LZ_TypeTransparent -}
+    | LZ_Redirect
+    deriving Show
+{- FOURMOLU_ENABLE -}
 
 ----------
 -- Monad and context
