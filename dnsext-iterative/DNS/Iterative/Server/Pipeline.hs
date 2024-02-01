@@ -105,16 +105,18 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
 ----------------------------------------------------------------
 
 logicDenied :: Env -> Input DNSMessage -> IO ()
-logicDenied env inp@Input{..} = do
+logicDenied env _inp@Input{} = do
+    incStats (stats_ env) ResolveDenied
+    {- {- not reply for deny case. -}
     let replyMsg =
             inputQuery
                 { flags = (flags inputQuery){isResponse = True}
                 , rcode = FormatErr
                 }
-    incStats (stats_ env) ResolveDenied
     let bs = DNS.encode replyMsg
     record env inp replyMsg bs
     inputToSender $ Output bs inputPeerInfo
+     -}
 
 ----------------------------------------------------------------
 
