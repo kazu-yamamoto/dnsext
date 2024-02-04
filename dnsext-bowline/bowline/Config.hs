@@ -201,7 +201,7 @@ makeConfig def conf =
 
 type Conf = (String, ConfValue)
 
-data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String deriving (Eq, Show)
+data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String | CV_Strings [String] deriving (Eq, Show)
 
 class FromConf a where
     fromConf :: ConfValue -> a
@@ -225,6 +225,7 @@ instance FromConf (Maybe String) where
 
 instance FromConf [String] where
     fromConf (CV_String s) = filter (/= "") $ splitOn "," s
+    fromConf (CV_Strings ss) = ss
     fromConf _ = error "fromConf string"
 
 instance FromConf Log.Level where
@@ -266,7 +267,7 @@ dquote :: Parser ()
 dquote = void $ char '"'
 
 value :: Parser ConfValue
-value = choice [try cv_int, try cv_bool, cv_string]
+value = choice [try cv_int, try cv_bool, cv_strings]
 
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
@@ -278,8 +279,18 @@ cv_bool =
         <|> CV_Bool False <$ string "no" <* trailing
 
 {- FOURMOLU_DISABLE -}
-cv_string :: Parser ConfValue
-cv_string = CV_String <$>
-    ( dquote *> (many (noneOf "\"\n")) <* dquote  <|>
-      many (noneOf " \t\n") ) <* trailing
+cv_string' :: Parser String
+cv_string' =
+    dquote *> (many (noneOf "\"\n")) <* dquote  <|>
+    many (noneOf " \t\n")
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+cv_strings :: Parser ConfValue
+cv_strings = do
+    v1 <- cv_string'
+    vs <- many (spcs1 *> cv_string') <* trailing
+    pure $ if null vs
+           then CV_String v1
+           else CV_Strings $ v1:vs
 {- FOURMOLU_ENABLE -}
