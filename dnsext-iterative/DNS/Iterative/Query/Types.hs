@@ -1,6 +1,7 @@
 module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
+    LocalZoneType (..),
     Env (..),
     QueryContext (..),
     queryContextIN,
@@ -47,6 +48,20 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Stats
 
 ----------
+-- Local Zone
+
+{- FOURMOLU_DISABLE -}
+data LocalZoneType
+    = LZ_Deny
+    | LZ_Refuse
+    | LZ_Static
+    {- LZ_Transparent -}
+    {- LZ_TypeTransparent -}
+    | LZ_Redirect
+    deriving Show
+{- FOURMOLU_ENABLE -}
+
+----------
 -- Monad and context
 
 data Env = Env
@@ -54,6 +69,8 @@ data Env = Env
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , rootHint_ :: Delegation
+    , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
+    , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()
@@ -78,6 +95,7 @@ data QueryError
     | NotResponse Bool DNSMessage
     | InvalidEDNS DNS.EDNSheader DNSMessage
     | HasError DNS.RCODE DNSMessage
+    | QueryDenied
     deriving (Show)
 
 type ContextT m = ReaderT Env (ReaderT QueryContext m)

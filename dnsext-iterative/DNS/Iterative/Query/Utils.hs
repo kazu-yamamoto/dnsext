@@ -44,6 +44,7 @@ logQueryErrors prefix q = do
           NotResponse resp msg  -> logNotResponse resp msg
           InvalidEDNS eh msg    -> logInvalidEDNS eh msg
           HasError rcode msg    -> logHasError rcode msg
+          QueryDenied           -> logQueryDenied
       logDnsError de = case de of
           DNS.NetworkFailure {}   -> putLog $ show de
           DNS.DecodeError {}      -> putLog $ show de
@@ -54,6 +55,7 @@ logQueryErrors prefix q = do
       logInvalidEDNS DNS.InvalidEDNS  msg = putLog $ pprMessage "invalid EDNS:" msg
       logInvalidEDNS _               _msg = pure ()
       logHasError _rcode _msg = pure ()
+      logQueryDenied = pure ()
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
 

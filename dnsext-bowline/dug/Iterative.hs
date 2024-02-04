@@ -31,7 +31,7 @@ setup disableV6NS putLines = do
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
     let tmout = timeout 3000000
-    newEnv putLines (\_ -> return ()) disableV6NS rootHint cacheOps tcache tmout
+    newEnv putLines (\_ -> return ()) disableV6NS rootHint [] cacheOps tcache tmout
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)

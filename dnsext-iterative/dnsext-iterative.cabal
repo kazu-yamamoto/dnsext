@@ -23,6 +23,8 @@ library
         DNS.Iterative.Query.Delegation
         DNS.Iterative.Query.Env
         DNS.Iterative.Query.Helpers
+        DNS.Iterative.Query.Local
+        DNS.Iterative.Query.LocalZone
         DNS.Iterative.Query.Norec
         DNS.Iterative.Query.Random
         DNS.Iterative.Query.Resolve
