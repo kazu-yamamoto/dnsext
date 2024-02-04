@@ -201,7 +201,7 @@ makeConfig def conf =
 
 type Conf = (String, ConfValue)
 
-data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String deriving (Eq, Show)
+data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String | CV_Strings [String] deriving (Eq, Show)
 
 class FromConf a where
     fromConf :: ConfValue -> a
@@ -225,6 +225,7 @@ instance FromConf (Maybe String) where
 
 instance FromConf [String] where
     fromConf (CV_String s) = filter (/= "") $ splitOn "," s
+    fromConf (CV_Strings ss) = ss
     fromConf _ = error "fromConf string"
 
 instance FromConf Log.Level where
@@ -243,8 +244,38 @@ logLevel s = case lvs of
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
+getInclude :: [Conf] -> Maybe (FilePath, [Conf])
+getInclude []         = Nothing
+getInclude ((k, v):xs)
+    | k == "include"  = Just (fromConf v, xs)
+    | otherwise       = getInclude xs
+{- FOURMOLU_ENABLE -}
+
+includesConfs :: [Conf] -> IO [Conf]
+includesConfs cs = concat <$> mapM loadInclude (getIncludes cs)
+  where
+    getIncludes = unfoldr getInclude
+    loadInclude path = do
+        putStrLn $ "loading included conf: " ++ path
+        parseFile config path
+
+{- FOURMOLU_DISABLE -}
+nestedLimit :: Int
+nestedLimit = 5
+
+nestedConfs :: Int -> [Conf] -> IO [Conf]
+nestedConfs n cs0 =  do
+    cs1 <- includesConfs cs0
+    let result
+            | null cs1   = pure cs0
+            | n <= 0     = error $ "nestedConfs: nested-limit is " ++ show nestedLimit ++ ", limit exceeded."
+            | otherwise  = (cs0 ++) <$> nestedConfs (n-1) cs1
+    result
+{- FOURMOLU_ENABLE -}
+
 readConfig :: FilePath -> IO [Conf]
-readConfig = parseFile config
+readConfig path = parseFile config path >>= nestedConfs nestedLimit
 
 ----------------------------------------------------------------
 
@@ -262,8 +293,11 @@ key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* sp
 sep :: Parser ()
 sep = void $ char ':' *> spcs
 
+dquote :: Parser ()
+dquote = void $ char '"'
+
 value :: Parser ConfValue
-value = choice [try cv_int, try cv_bool, cv_string]
+value = choice [try cv_int, try cv_bool, cv_strings]
 
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
@@ -274,5 +308,19 @@ cv_bool =
     CV_Bool True <$ string "yes" <* trailing
         <|> CV_Bool False <$ string "no" <* trailing
 
-cv_string :: Parser ConfValue
-cv_string = CV_String <$> many (noneOf " \t\n") <* trailing
+{- FOURMOLU_DISABLE -}
+cv_string' :: Parser String
+cv_string' =
+    dquote *> (many (noneOf "\"\n")) <* dquote  <|>
+    many (noneOf " \t\n")
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+cv_strings :: Parser ConfValue
+cv_strings = do
+    v1 <- cv_string'
+    vs <- many (spcs1 *> cv_string') <* trailing
+    pure $ if null vs
+           then CV_String v1
+           else CV_Strings $ v1:vs
+{- FOURMOLU_ENABLE -}
