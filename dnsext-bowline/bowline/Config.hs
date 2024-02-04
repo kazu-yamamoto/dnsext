@@ -262,6 +262,9 @@ key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* sp
 sep :: Parser ()
 sep = void $ char ':' *> spcs
 
+dquote :: Parser ()
+dquote = void $ char '"'
+
 value :: Parser ConfValue
 value = choice [try cv_int, try cv_bool, cv_string]
 
@@ -274,5 +277,9 @@ cv_bool =
     CV_Bool True <$ string "yes" <* trailing
         <|> CV_Bool False <$ string "no" <* trailing
 
+{- FOURMOLU_DISABLE -}
 cv_string :: Parser ConfValue
-cv_string = CV_String <$> many (noneOf " \t\n") <* trailing
+cv_string = CV_String <$>
+    ( dquote *> (many (noneOf "\"\n")) <* dquote  <|>
+      many (noneOf " \t\n") ) <* trailing
+{- FOURMOLU_ENABLE -}
