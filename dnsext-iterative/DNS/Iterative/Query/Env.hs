@@ -23,6 +23,7 @@ import DNS.TimeCache (TimeCache (..), noneTimeCache)
 
 -- this package
 import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
@@ -30,19 +31,20 @@ import DNS.Iterative.Stats
 newEnv
     :: Log.PutLines
     -> (DNSTAP.Message -> IO ())
-    -> Bool
-    -- ^ disabling IPv6
+    -> Bool        -- ^ disabling IPv6
+    -> Delegation  -- ^ root-hint
     -> RRCacheOps
     -> TimeCache
     -> (IO Reply -> IO (Maybe Reply))
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS RRCacheOps{..} TimeCache{..} tmout = do
+newEnv putLines putDNSTAP disableV6NS hint RRCacheOps{..} TimeCache{..} tmout = do
     env0 <- newEmptyEnv
     pure $
         env0
         { logLines_ = putLines
         , logDNSTAP_ = putDNSTAP
         , disableV6NS_ = disableV6NS
+        , rootHint_ = hint
         , insert_ = insertCache
         , getCache_ = readCache
         , expireCache_ = expireCache
@@ -65,6 +67,7 @@ newEmptyEnv = do
         { logLines_ = \_ _ ~_ -> pure ()
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
+        , rootHint_ = rootHint
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
         , expireCache_ = \_ -> pure ()

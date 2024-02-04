@@ -23,7 +23,7 @@ import System.Environment (getArgs)
 import System.Timeout (timeout)
 import Text.Read (readEither)
 
-import DNS.Iterative.Internal (Env (..))
+import DNS.Iterative.Internal (Env (..), rootHint)
 import qualified DNS.Iterative.Query as Iterative
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
@@ -199,7 +199,7 @@ getEnv Config{..} putLines = do
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn getTime
         tmout = timeout 3000000
     cacheOps <- Cache.newRRCacheOps cacheConf
-    Iterative.newEnv putLines (\_ -> return ()) False cacheOps tcache tmout
+    Iterative.newEnv putLines (\_ -> return ()) False rootHint cacheOps tcache tmout
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

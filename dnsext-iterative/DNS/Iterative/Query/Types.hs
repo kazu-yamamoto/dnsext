@@ -53,6 +53,7 @@ data Env = Env
     { logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
+    , rootHint_ :: Delegation
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()

@@ -5,7 +5,9 @@ license-file:       LICENSE
 maintainer:         ex8k.hibino@gmail.com
 author:             Kei Hibino
 build-type:         Simple
-extra-source-files: CHANGELOG.md
+extra-source-files:
+        CHANGELOG.md
+        root.hints.test
 
 library
     exposed-modules:

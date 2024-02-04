@@ -13,6 +13,7 @@ module DNS.Iterative.Internal (
     runResolve,
     runResolveExact,
     runResolveJust,
+    getRootHint,
     rootHint,
     runIterative,
     printResult,

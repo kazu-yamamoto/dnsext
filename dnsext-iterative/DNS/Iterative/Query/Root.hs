@@ -6,7 +6,6 @@ module DNS.Iterative.Query.Root (
     rootPriming,
     cachedDNSKEY,
     takeDEntryIPs,
-    rootHint,
 ) where
 
 -- GHC packages
@@ -37,7 +36,6 @@ import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
-import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
 
 refreshRoot :: DNSQuery Delegation
@@ -59,7 +57,7 @@ refreshRoot = do
         let fallback s = lift $ do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                return rootHint
+                asks rootHint_
         either fallback return =<< rootPriming
 
 {-
@@ -71,6 +69,7 @@ steps of root priming
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
+    Delegation{delegationNS = hintDes} <- lift $ asks rootHint_
     ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
     lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     body ips
@@ -101,8 +100,6 @@ rootPriming = do
         dnskeys <- either (throwE . ("rootPriming: " ++)) pure =<< lift (cachedDNSKEY [rootSepDS] ips ".")
         msgNS <- lift $ norec True ips "." NS
         ExceptT $ lift $ verify dnskeys msgNS
-
-    Delegation{delegationNS = hintDes} = rootHint
 
 {-
 steps to get verified and cached DNSKEY RRset
@@ -145,13 +142,6 @@ verifySEP dss dom rrs = do
             ]
     when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
     pure seps
-
--- {-# ANN rootHint ("HLint: ignore Use tuple-section") #-}
-rootHint :: Delegation
-rootHint =
-    maybe (error "rootHint: bad configuration.") ($ []) $ findDelegation (nsList "." (,) ns) as
-  where
-    (ns, as) = rootServers
 
 takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
 takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
