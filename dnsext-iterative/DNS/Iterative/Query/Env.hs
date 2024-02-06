@@ -21,6 +21,7 @@ import qualified DNS.RRCache as Cache
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
 import DNS.Types (Domain, ResourceRecord, RCODE (..))
+import DNS.SEC (RD_DNSKEY, RD_DS)
 
 -- this package
 import DNS.Iterative.Imports
@@ -35,13 +36,14 @@ newEnv
     :: Log.PutLines
     -> (DNSTAP.Message -> IO ())
     -> Bool              -- ^ disabling IPv6
+    -> Maybe ([RD_DNSKEY], [RD_DS])
     -> Maybe Delegation  -- ^ root-hint
     -> [(Domain, LocalZoneType, [ResourceRecord])]
     -> RRCacheOps
     -> TimeCache
     -> (IO Reply -> IO (Maybe Reply))
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS hint lzones RRCacheOps{..} TimeCache{..} tmout = do
+newEnv putLines putDNSTAP disableV6NS rdnskey hint lzones RRCacheOps{..} TimeCache{..} tmout = do
     let localName = Local.nameMap lzones
         localApex = Local.apexMap localName lzones
     env0 <- newEmptyEnv
@@ -50,6 +52,7 @@ newEnv putLines putDNSTAP disableV6NS hint lzones RRCacheOps{..} TimeCache{..} t
         { logLines_ = putLines
         , logDNSTAP_ = putDNSTAP
         , disableV6NS_ = disableV6NS
+        , rootAnchor_ = rdnskey
         , rootHint_ = fromMaybe rootHint hint
         , lookupLocalApex_ = Local.lookupApex localApex
         , lookupLocalDomain_ = Local.lookupName localName
@@ -75,6 +78,7 @@ newEmptyEnv = do
         { logLines_ = \_ _ ~_ -> pure ()
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
+        , rootAnchor_ = Nothing
         , rootHint_ = rootHint
         , lookupLocalApex_ = \_ -> Nothing
         , lookupLocalDomain_ = \_ _ -> Just (NoErr, [], [])

@@ -68,6 +68,7 @@ data Env = Env
     { logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
+    , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
     , rootHint_ :: Delegation
     , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
     , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
