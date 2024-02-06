@@ -8,6 +8,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
+import qualified Data.ByteString.Short as Short
 import Data.Functor
 
 -- dnsext-* packages
@@ -76,12 +77,18 @@ blank :: Parser Token
 blank = lift $ this Blank
 
 {- FOURMOLU_DISABLE -}
-cstring :: Parser CString
-cstring = lift $ do
+lstring :: Parser CString
+lstring = lift $ do
     t <- poly_token
     case t of
         CS cs -> pure cs
-        _     -> raise $ "Parser.cstring: not CString: " ++ show t
+        _     -> raise $ "Parser.lstring: not CString: " ++ show t
+
+cstring :: Parser CString
+cstring = do
+    cs <- lstring
+    guard (Short.length cs < 256) <|> lift (raise $ "Parser.cstring: too long: " ++ show cs)
+    pure cs
 
 readable :: Read a => String -> Parser a
 readable str =
@@ -169,7 +176,6 @@ type_ ty = do
     pure t
 
 ---
-
 
 -- |
 -- >>> runParser ipv4 cx [CS "203",Dot,CS "0",Dot,CS "113",Dot,CS "3"]
