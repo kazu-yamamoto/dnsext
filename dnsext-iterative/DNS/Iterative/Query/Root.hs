@@ -110,33 +110,39 @@ steps to get verified and cached DNSKEY RRset
  -}
 cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
-cachedDNSKEY dss aservers dom = do
+cachedDNSKEY dss aservers dom = cachedDNSKEY' ((map fst <$>) . verifySEP dss dom . dnskeyList dom) aservers dom
+
+cachedDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY' getSEPs aservers dom = do
     msg <- norec True aservers dom DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
-            either (pure . Left) (verifyDNSKEY msg) $ verifySEP dss dom srrs
+            either (pure . Left) (verifyDNSKEY msg) $ getSEPs srrs
         _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
     cachedResult krds dnskeyRRset cacheDNSKEY
         | rrsetValid dnskeyRRset = lift cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
-    verifyDNSKEY msg sepps = do
+    verifyDNSKEY _   []   = pure $ Left "cachedDSNKEY: no SEP key"
+    verifyDNSKEY msg seps = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
-            nullDNSKEY = pure $ Left "cachedDNSKEY: null" {- guarded by verifySEP, null case, SEP is null too -}
+            nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
             ncDNSKEY = pure $ Left "cachedDNSKEY: not canonical"
-        Verify.with (map fst sepps) rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+        Verify.with seps rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+
+dnskeyList :: Domain -> [ResourceRecord] -> [RD_DNSKEY]
+dnskeyList dom rrs = rrListWith DNSKEY DNS.fromRData dom const rrs
 
 verifySEP
     :: [RD_DS]
     -> Domain
-    -> [ResourceRecord]
+    -> [RD_DNSKEY]
     -> Either String [(RD_DNSKEY, RD_DS)]
-verifySEP dss dom rrs = do
-    let dnskeys = rrListWith DNSKEY DNS.fromRData dom (,) rrs
-        seps =
+verifySEP dss dom dnskeys = do
+    let seps =
             [ (key, ds)
-            | (key, _) <- dnskeys
+            | key <- dnskeys
             , ds <- dss
             , Right () <- [SEC.verifyDS dom key ds]
             ]
