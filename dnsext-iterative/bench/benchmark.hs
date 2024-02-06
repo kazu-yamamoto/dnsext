@@ -23,8 +23,7 @@ import System.Environment (getArgs)
 import System.Timeout (timeout)
 import Text.Read (readEither)
 
-import DNS.Iterative.Internal (Env (..), rootHint)
-import qualified DNS.Iterative.Query as Iterative
+import DNS.Iterative.Internal (Env (..), newEmptyEnv)
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -194,12 +193,13 @@ runBenchmark conf@Config{..} noop gplot size = do
 
 getEnv :: Config -> Log.PutLines -> IO Env
 getEnv Config{..} putLines = do
-    tcache@TimeCache{..} <- newTimeCache
+    TimeCache{..} <- newTimeCache
     let memoLogLn = putLines Log.WARN Nothing . (: [])
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn getTime
-        tmout = timeout 3000000
-    cacheOps <- Cache.newRRCacheOps cacheConf
-    Iterative.newEnv putLines (\_ -> return ()) False rootHint [] cacheOps tcache tmout
+    Cache.RRCacheOps{..} <- Cache.newRRCacheOps cacheConf
+    env <- newEmptyEnv
+    pure env{ disableV6NS_ = False, logLines_ = putLines, currentSeconds_ = getTime
+            , insert_ = insertCache, getCache_ = readCache, expireCache_ = expireCache, timeout_ = timeout 3000000}
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do
