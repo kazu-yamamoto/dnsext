@@ -129,6 +129,7 @@ data CasesNotFilledDS
 data MayFilledDS
     = NotFilledDS CasesNotFilledDS
     | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
+    | FilledRoot
     deriving (Show)
 
 data DFreshState
@@ -157,6 +158,7 @@ delegationHasDS d = case delegationDS d of
     NotFilledDS _ -> False
     (FilledDS []) -> False
     (FilledDS (_ : _)) -> True
+    FilledRoot -> True
 
 data DEntry
     = DEwithAx !Domain !IP

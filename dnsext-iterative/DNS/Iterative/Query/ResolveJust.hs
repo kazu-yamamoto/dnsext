@@ -197,6 +197,7 @@ fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFil
     {- DS(Delegation Signer) is not filled -}
     lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     return d
+fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
 fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
@@ -380,6 +381,7 @@ fillDelegationDS dc src dest
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
+        FilledRoot -> pure dest {- specified root-dnskey case, filled root -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
