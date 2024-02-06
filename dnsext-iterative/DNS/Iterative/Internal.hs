@@ -10,6 +10,8 @@ module DNS.Iterative.Internal (
     replyMessage,
 
     -- * testing
+    newEmptyEnv,
+    newTestCache,
     runResolve,
     runResolveExact,
     runResolveJust,
@@ -28,5 +30,6 @@ import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Resolve
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Root
+import DNS.Iterative.Query.TestEnv
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
