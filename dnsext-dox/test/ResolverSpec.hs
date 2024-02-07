@@ -44,6 +44,16 @@ spec = describe "solvers" $ do
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
+        let ri3 =
+                defaultResolvInfo
+                    { rinfoHostName = "103.2.57.5"
+                    , rinfoPortNumber = 853
+                    }
+
+        Result{..} <- tlsResolver 32768 ri3 q mempty
+        let Reply{..} = resultReply
+        rcode replyDNSMessage `shouldBe` NoErr
+
     it "resolves well with QUIC" $ do
         let ri2 =
                 defaultResolvInfo
@@ -83,6 +93,16 @@ spec = describe "solvers" $ do
                     }
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri2 q mempty
+        let Reply{..} = resultReply
+        rcode replyDNSMessage `shouldBe` NoErr
+
+        let ri3 =
+                defaultResolvInfo
+                    { rinfoHostName = "103.2.57.5"
+                    , rinfoPortNumber = 443
+                    }
+
+        Result{..} <- http2Resolver "/dns-query" 32768 ri3 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
