@@ -106,8 +106,8 @@ findDelegation = findDelegation' (\dom ents dss -> Delegation dom ents (FilledDS
 
 findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, ResourceRecord)] -> [ResourceRecord] ->  Maybe a
 findDelegation' k nsps adds = do
-    (p@(_, rr), ps) <- uncons nsps
-    let nss = map fst (p : ps)
+    ((_, rr), _) <- uncons nsps
+    let nss = map fst nsps
     ents <- nonEmpty $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
     {- only data from delegation source zone. get DNSKEY from destination zone -}
     Just $ k (rrname rr) ents
