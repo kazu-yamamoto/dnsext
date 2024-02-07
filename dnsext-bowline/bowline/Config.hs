@@ -18,9 +18,9 @@ import Data.String (fromString)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
-import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
-import DNS.ZoneFile (Context (cx_zone, cx_name), defaultContext, parseLineRR)
 import DNS.Iterative.Internal (LocalZoneType (..))
+import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
+import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 
 import Parser
 
@@ -48,6 +48,7 @@ data Config = Config
     , cnf_tcp_port :: Int
     , cnf_tls :: Bool
     , cnf_tls_port :: Int
+    , cnf_tls_session_ticket_lifetime :: Int
     , cnf_quic :: Bool
     , cnf_quic_port :: Int
     , cnf_h2c :: Bool
@@ -95,6 +96,7 @@ defaultConfig =
         , cnf_tcp_port = 53
         , cnf_tls = True
         , cnf_tls_port = 853
+        , cnf_tls_session_ticket_lifetime = 7200
         , cnf_quic = True
         , cnf_quic_port = 853
         , cnf_h2c = True
@@ -189,6 +191,7 @@ makeConfig def conf =
         , cnf_tcp_port = get "tcp-port" cnf_tcp_port
         , cnf_tls = get "tls" cnf_tls
         , cnf_tls_port = get "tls-port" cnf_tls_port
+        , cnf_tls_session_ticket_lifetime = get "tls-session-ticket-lifetime" cnf_tls_session_ticket_lifetime
         , cnf_quic = get "quic" cnf_quic
         , cnf_quic_port = get "quic-port" cnf_quic_port
         , cnf_h2c = get "h2c" cnf_h2c
@@ -215,7 +218,7 @@ makeConfig def conf =
         Right zones -> zones
         Left es -> error $ "parse error during local-data: " ++ es
     parseLocalZone (d, zt, xs) = evalStateT ((,,) d zt . subdoms d <$> mapM getRR xs) defaultContext{cx_zone = d, cx_name = d}
-    subdoms d rrs = [ rr | rr <- rrs, rrname rr `isSubDomainOf` d ]
+    subdoms d rrs = [rr | rr <- rrs, rrname rr `isSubDomainOf` d]
     getRR s = StateT $ parseLineRR $ fromString s
 
 {- FOURMOLU_DISABLE -}

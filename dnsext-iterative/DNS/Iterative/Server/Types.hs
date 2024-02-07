@@ -24,7 +24,7 @@ import Data.ByteString (ByteString)
 import qualified Network.HTTP2.Server.Internal as H2I
 import qualified Network.QUIC as QUIC
 import Network.Socket
-import Network.TLS (Credentials (..))
+import Network.TLS (Credentials (..), SessionManager)
 import qualified Network.UDP as UDP
 import System.IO.Error (tryIOError, ioeSetLocation)
 
@@ -67,6 +67,7 @@ data VcServerConfig = VcServerConfig
     , vc_idle_timeout :: Int
     , vc_slowloris_size :: Int
     , vc_credentials :: Credentials
+    , vc_session_manager :: SessionManager
     }
 
 withLocationIOE :: String -> IO a -> IO a

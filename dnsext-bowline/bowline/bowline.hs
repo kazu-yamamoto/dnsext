@@ -23,6 +23,7 @@ import Data.String (fromString)
 import GHC.Stats
 import Network.Socket (SocketType (..))
 import Network.TLS (Credentials (..), credentialLoadX509)
+import qualified Network.TLS.SessionTicket as ST
 import System.Environment (getArgs)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -96,9 +97,10 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     rootHint <- mapM getRootHint' cnf_root_hints
     env <- newEnv putLines putDNSTAP disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
+    sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
-    servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds
+    servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
     mng <- getControl env workerStats mng0
     monitor <- Mon.monitor conf env mng
     -- Run
@@ -123,7 +125,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     return gcache
   where
     maybeKill = maybe (return ()) killThread
-    trans creds =
+    trans creds sm =
         [ (cnf_udp, "udp-srv", udpServer udpconf, Datagram, cnf_udp_port)
         , (cnf_tcp, "tcp-srv", tcpServer vcconf, Stream, cnf_tcp_port)
         , (cnf_h2c, "h2c-srv", http2cServer vcconf, Stream, cnf_h2c_port)
@@ -139,6 +141,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_idle_timeout = cnf_vc_idle_timeout
                 , vc_slowloris_size = cnf_vc_slowloris_size
                 , vc_credentials = creds
+                , vc_session_manager = sm
                 }
     conc = foldr concurrently_ $ return ()
     udpconf = UdpServerConfig{}
