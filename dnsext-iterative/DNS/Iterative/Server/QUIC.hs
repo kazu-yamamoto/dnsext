@@ -27,14 +27,14 @@ import DNS.Iterative.Server.Types
 
 ----------------------------------------------------------------
 
-quicServer :: Credentials -> VcServerConfig -> Server
-quicServer creds VcServerConfig{..} env toCacher port host = do
+quicServer :: VcServerConfig -> Server
+quicServer VcServerConfig{..} env toCacher port host = do
     let quicserver = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             withLoc $ QUIC.run sconf $ go mgr
     return [quicserver]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/quic")
-    sconf = getServerConfig creds host port "doq"
+    sconf = getServerConfig vc_credentials host port "doq"
     maxSize = fromIntegral vc_query_max_size
     go mgr conn = do
         info <- QUIC.getConnectionInfo conn

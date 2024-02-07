@@ -83,8 +83,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         check_for_v6_ns
             | cnf_disable_v6_ns = pure True
             | otherwise = do
-                  let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
-                  foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
+                let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
+                foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
         getRootSep' path = do
             putStrLn $ "loading trust-anchor-file: " ++ path
             getRootSep path
@@ -108,11 +108,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
             conc
-            ( [ TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper ] ++
-              [ TStat.concurrentlyList_ (withNum "cacher" cachers)
-              , TStat.concurrentlyList_ (withNum "worker" workers)
-              , TStat.concurrentlyList_ (concat servers)
-              ] )
+                ( [TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper]
+                    ++ [ TStat.concurrentlyList_ (withNum "cacher" cachers)
+                       , TStat.concurrentlyList_ (withNum "worker" workers)
+                       , TStat.concurrentlyList_ (concat servers)
+                       ]
+                )
     race_ concServer (conc monitor)
         -- Teardown
         `finally` do
@@ -126,20 +127,21 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         [ (cnf_udp, "udp-srv", udpServer udpconf, Datagram, cnf_udp_port)
         , (cnf_tcp, "tcp-srv", tcpServer vcconf, Stream, cnf_tcp_port)
         , (cnf_h2c, "h2c-srv", http2cServer vcconf, Stream, cnf_h2c_port)
-        , (cnf_h2, "h2-srv", http2Server creds vcconf, Stream, cnf_h2_port)
-        , (cnf_h3, "h3-srv", http3Server creds vcconf, Datagram, cnf_h3_port)
-        , (cnf_tls, "tls-srv", tlsServer creds vcconf, Stream, cnf_tls_port)
-        , (cnf_quic, "quic-srv", quicServer creds vcconf, Datagram, cnf_quic_port)
+        , (cnf_h2, "h2-srv", http2Server vcconf, Stream, cnf_h2_port)
+        , (cnf_h3, "h3-srv", http3Server vcconf, Datagram, cnf_h3_port)
+        , (cnf_tls, "tls-srv", tlsServer vcconf, Stream, cnf_tls_port)
+        , (cnf_quic, "quic-srv", quicServer vcconf, Datagram, cnf_quic_port)
         ]
+      where
+        vcconf =
+            VcServerConfig
+                { vc_query_max_size = cnf_vc_query_max_size
+                , vc_idle_timeout = cnf_vc_idle_timeout
+                , vc_slowloris_size = cnf_vc_slowloris_size
+                , vc_credentials = creds
+                }
     conc = foldr concurrently_ $ return ()
-    udpconf =
-        UdpServerConfig{}
-    vcconf =
-        VcServerConfig
-            { vc_query_max_size = cnf_vc_query_max_size
-            , vc_idle_timeout = cnf_vc_idle_timeout
-            , vc_slowloris_size = cnf_vc_slowloris_size
-            }
+    udpconf = UdpServerConfig{}
 
 main :: IO ()
 main = do
@@ -163,9 +165,9 @@ getServers
 getServers _ _ _ (False, _, _, _, _) = return []
 getServers env hosts toCacher (True, name, server, socktype, port') = do
     as <- ainfosSkipError putStrLn socktype port hosts
-    let hosts' = [ host | (_ai, host, _serv) <- as]
+    let hosts' = [host | (_ai, host, _serv) <- as]
     servs <- mapM (server env toCacher port) hosts'
-    pure [ (name, s) | ss <- servs, s <- ss]
+    pure [(name, s) | ss <- servs, s <- ss]
   where
     port = fromIntegral port'
 

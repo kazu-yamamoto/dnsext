@@ -25,16 +25,14 @@ import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import Network.HTTP2.TLS.Server (ServerIO (..))
 import qualified Network.HTTP2.TLS.Server as H2TLS
-import Network.TLS (Credentials (..))
 
 -- this package
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 
-----------------------------------------------------------------
-http2Server :: Credentials -> VcServerConfig -> Server
-http2Server creds VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIO settings creds host port $ doHTTP "h2" env toCacher
+http2Server :: VcServerConfig -> Server
+http2Server VcServerConfig{..} env toCacher port host = do
+    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" env toCacher
     return [http2server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2")

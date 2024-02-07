@@ -14,15 +14,14 @@ import qualified DNS.ThreadStats as TStat
 -- other packages
 import qualified Network.HTTP2.TLS.Server as H2
 import Network.Socket.BufferPool (makeRecvN)
-import Network.TLS (Credentials (..))
 
 -- this package
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 
-tlsServer :: Credentials -> VcServerConfig -> Server
-tlsServer creds VcServerConfig{..} env toCacher port host = do
-    let tlsserver = withLoc $ H2.runTLS settings creds host port "dot" $ go
+tlsServer :: VcServerConfig -> Server
+tlsServer VcServerConfig{..} env toCacher port host = do
+    let tlsserver = withLoc $ H2.runTLS settings vc_credentials host port "dot" $ go
     return [tlsserver]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/dot")
