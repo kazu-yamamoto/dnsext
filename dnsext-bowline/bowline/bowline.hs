@@ -77,7 +77,10 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
-    rootHint <- getRootHint cnf_root_hints
+        getRootHint' path = do
+            putStrLn $ "loading root-hints: " ++ path
+            getRootHint path
+    rootHint <- mapM getRootHint' cnf_root_hints
     env <- newEnv putLines putDNSTAP cnf_disable_v6_ns rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
