@@ -3,7 +3,6 @@
 module Iterative (iterativeQuery) where
 
 import DNS.Do53.Client (QueryControls)
-import DNS.Iterative.Internal (rootHint)
 import DNS.Iterative.Query (Env, newEnv, resolveResponseIterative)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -31,7 +30,7 @@ setup disableV6NS putLines = do
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
     let tmout = timeout 3000000
-    newEnv putLines (\_ -> return ()) disableV6NS rootHint [] cacheOps tcache tmout
+    newEnv putLines (\_ -> return ()) disableV6NS Nothing [] cacheOps tcache tmout
 
 resolve
     :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
