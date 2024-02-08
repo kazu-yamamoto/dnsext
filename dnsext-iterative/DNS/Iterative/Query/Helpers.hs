@@ -88,10 +88,10 @@ axList disableV6NS pdom h = foldr takeAx []
     takeAx _ xs = xs
 
 -- |
--- >>> delegationNS <$> getRootHint (Just "root.hints.test")
+-- >>> delegationNS <$> getRootHint "root.hints.test"
 -- DEwithAx "M.ROOT-SERVERS.NET." 202.12.27.33 :| [DEwithAx "M.ROOT-SERVERS.NET." 2001:dc3::35]
-getRootHint :: Maybe FilePath -> IO Delegation
-getRootHint mpath = uncurry mkRootHint <$> maybe (pure rootServers) getRootServers mpath
+getRootHint :: FilePath -> IO Delegation
+getRootHint path = uncurry mkRootHint <$> getRootServers path
 
 rootHint :: Delegation
 rootHint = uncurry mkRootHint rootServers
