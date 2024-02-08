@@ -173,13 +173,9 @@ directive = D_Origin <$ string "$ORIGIN" <|> D_TTL <$ string "$TTL"
 -- Right ("y.z","")
 lex_cstring :: Parser CString
 lex_cstring =
-    finalize =<<
+    cstringW8 <$>
     ( some cstringByte                  <|>
       quote *> many quotedByte <* quote )
- where
-   finalize s
-       | length s < 256 = pure $ cstringW8 s
-       | otherwise      = raise $ "too log character-string: " ++ take 8 (map (chr . fromIntegral) s) ++ "..."
 {- FOURMOLU_ENABLE -}
 
 comment :: Parser ()

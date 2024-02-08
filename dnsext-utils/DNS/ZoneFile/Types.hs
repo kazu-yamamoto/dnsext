@@ -90,7 +90,7 @@ data Directive
     | D_TTL
     deriving (Eq, Show)
 
--- character-string
+-- character-string or longer opaque-string
 type CString = Short.ShortByteString
 
 cstringW8 :: [Word8] -> CString

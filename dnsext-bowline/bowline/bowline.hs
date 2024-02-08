@@ -8,7 +8,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (getRootHint)
+import DNS.Iterative.Internal (getRootHint, getRootSep)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -77,11 +77,15 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
+        getRootSep' path = do
+            putStrLn $ "loading trust-anchor-file: " ++ path
+            getRootSep path
         getRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
             getRootHint path
+    trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootHint' cnf_root_hints
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
+    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats

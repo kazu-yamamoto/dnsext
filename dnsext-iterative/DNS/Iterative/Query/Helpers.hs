@@ -102,12 +102,15 @@ mkRootHint ns as = maybe (error "rootHint: bad configuration.") ($ []) $ findDel
 
 {- The existence or non-existence of a Delegation is independent of the existence of [DS_RD]. -}
 findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
-findDelegation nsps adds = do
-    (p@(_, rr), ps) <- uncons nsps
-    let nss = map fst (p : ps)
+findDelegation = findDelegation' (\dom ents dss -> Delegation dom ents (FilledDS dss) [] FreshD)
+
+findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, ResourceRecord)] -> [ResourceRecord] ->  Maybe a
+findDelegation' k nsps adds = do
+    ((_, rr), _) <- uncons nsps
+    let nss = map fst nsps
     ents <- nonEmpty $ concatMap (uncurry dentries) $ rrnamePairs (sort nss) addgroups
     {- only data from delegation source zone. get DNSKEY from destination zone -}
-    pure $ \dss -> Delegation (rrname rr) ents (FilledDS dss) [] FreshD
+    Just $ k (rrname rr) ents
   where
     addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentries d [] = [DEonlyNS d]

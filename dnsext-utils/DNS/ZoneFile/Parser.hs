@@ -8,13 +8,18 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State
+import qualified Data.ByteString as BS
+import Data.ByteString.Short (fromShort)
+import qualified Data.ByteString.Short as Short
 import Data.Functor
+import Data.Word
 
 -- dnsext-* packages
 import Data.IP (IPv4, IPv6)
 import qualified Data.Vector as V
 import DNS.Types hiding (rrname, rrclass, rrttl, rrtype)
 import qualified DNS.Types.Opaque as Opaque
+import DNS.SEC
 
 -- this package
 import DNS.ZoneFile.Types hiding (Parser, runParser)
@@ -76,12 +81,18 @@ blank :: Parser Token
 blank = lift $ this Blank
 
 {- FOURMOLU_DISABLE -}
-cstring :: Parser CString
-cstring = lift $ do
+lstring :: Parser CString
+lstring = lift $ do
     t <- poly_token
     case t of
         CS cs -> pure cs
-        _     -> raise $ "Parser.cstring: not CString: " ++ show t
+        _     -> raise $ "Parser.lstring: not CString: " ++ show t
+
+cstring :: Parser CString
+cstring = do
+    cs <- lstring
+    guard (Short.length cs < 256) <|> lift (raise $ "Parser.cstring: too long: " ++ show cs)
+    pure cs
 
 readable :: Read a => String -> Parser a
 readable str =
@@ -170,7 +181,6 @@ type_ ty = do
 
 ---
 
-
 -- |
 -- >>> runParser ipv4 cx [CS "203",Dot,CS "0",Dot,CS "113",Dot,CS "3"]
 -- Right ((203.0.113.3,Context "." "." 3600 IN),[])
@@ -218,6 +228,48 @@ rdataSOA =
     rd_soa
     <$> domain <*> (blank *> mailbox) <*> (blank *> readCString)
     <*> (blank *> seconds) <*> (blank *> seconds) <*> (blank *> seconds) <*> (blank *> seconds)
+{- FOURMOLU_ENABLE -}
+
+---
+
+keytag :: Parser Word16
+keytag = readCString
+
+pubalg :: Parser PubAlg
+pubalg = toPubAlg <$> readCString
+
+digestalg :: Parser DigestAlg
+digestalg = toDigestAlg <$> readCString
+
+digest :: Parser Opaque
+digest = handleB16 . Opaque.fromBase16 . fromShort =<< cstring
+  where
+    handleB16 = either (lift . raise . ("Parser.digest: fromBase16: " ++)) pure
+
+---
+
+{- FOURMOLU_DISABLE -}
+rdataDS :: Parser RData
+rdataDS =
+    rd_ds
+    <$> keytag <*> (blank *> pubalg) <*> (blank *> digestalg)
+    <*> (blank *> digest)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+rdataDNSKEY :: Parser RData
+rdataDNSKEY = do
+    mkRD  <- rd_dnskey <$> keyflags <*> (blank *> proto)
+    alg   <- blank *> pubalg
+    pkey  <- blank *> (toPubKey alg <$> keyB64)
+    pure $ mkRD alg pkey
+  where
+    keyflags = toDNSKEYflags <$> readCString
+    proto = readCString
+    handleB64 = either (lift . raise . ("Parser.rdataDNSKEY: fromBase64: " ++)) pure
+    part = fromShort <$> lstring
+    parts = (BS.concat <$>) $ (:) <$> part <*> many (blank *> part)
+    keyB64 = handleB64 . Opaque.fromBase64 =<< parts
 {- FOURMOLU_ENABLE -}
 
 ---
@@ -270,7 +322,9 @@ rrTyRData mk =
       pair NS     rdataNS     <|>
       pair MX     rdataMX     <|>
       pair CNAME  rdataCNAME  <|>
-      pair SOA    rdataSOA    )
+      pair SOA    rdataSOA    <|>
+      pair DS     rdataDS     <|>
+      pair DNSKEY rdataDNSKEY )
   where
     pair ty rd = mk <$> type_ ty <*> (blank *> rd)
 {- FOURMOLU_ENABLE -}

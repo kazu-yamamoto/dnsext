@@ -68,6 +68,7 @@ data Env = Env
     { logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
+    , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
     , rootHint_ :: Delegation
     , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
     , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
@@ -128,6 +129,7 @@ data CasesNotFilledDS
 data MayFilledDS
     = NotFilledDS CasesNotFilledDS
     | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
+    | FilledRoot
     deriving (Show)
 
 data DFreshState
@@ -156,6 +158,7 @@ delegationHasDS d = case delegationDS d of
     NotFilledDS _ -> False
     (FilledDS []) -> False
     (FilledDS (_ : _)) -> True
+    FilledRoot -> True
 
 data DEntry
     = DEwithAx !Domain !IP
