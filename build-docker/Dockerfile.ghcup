@@ -66,6 +66,8 @@ EOF
 RUN <<EOF
 set -e -x
 sed \
+    -e '1i trust-anchor-file: etc/root.key' \
+    -e '1i root-hints: etc/root.hints' \
     -e '\@^include: .*$@d' \
     -e '1i include: etc/default-local.conf' \
     -e 's@^disable-v6-ns: .*$@disable-v6-ns: yes@' \
