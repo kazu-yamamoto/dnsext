@@ -16,7 +16,7 @@ ARG GHC_OPTIMIZE
 ARG GHC_PARALLEL
 ARG CABAL_PARALLEL
 
-## Install tools, libs
+## Install tools
 RUN <<EOF
 set -e -x
 apt-get update
