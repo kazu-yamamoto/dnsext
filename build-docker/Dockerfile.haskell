@@ -67,6 +67,8 @@ mkdir -p -m 755 /opt/bowline/etc
 install -m 444 \
     bowline.conf \
     dnsext/dnsext-bowline/default-local.conf \
+    dnsext/root-data/root.key \
+    dnsext/root-data/root.hints \
     /opt/bowline/etc/
 install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
