@@ -86,7 +86,7 @@ case "$1" in
 
     '')       ## build with ghcup, default params
         set -x
-        ghc_version=9.6.3
+        ghc_version=9.6.4
         GHC_VERSION=$ghc_version
         CABAL_VERSION=3.10.1.0
         DEBIAN_TAG=bookworm-slim
