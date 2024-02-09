@@ -53,7 +53,7 @@ build_with_ghcup() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
-           --build-arg DNSEXT_REV=main \
+           --build-arg DNSEXT_REV=dist-docker \
            -f Dockerfile.ghcup \
            .
 }
@@ -71,7 +71,7 @@ build_with_haskell() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
-           --build-arg DNSEXT_REV=main \
+           --build-arg DNSEXT_REV=dist-docker \
            -f Dockerfile.haskell \
            .
 }
