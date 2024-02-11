@@ -76,6 +76,7 @@ data Command
     | Help (Maybe String)
     deriving (Show)
 
+{- FOURMOLU_DISABLE -}
 monitor
     :: Config
     -> Env
@@ -85,7 +86,10 @@ monitor conf env mng@Control{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
+        v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
+        v6only _sock  _                  = pure ()
         servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
+            v6only sock a
             S.setSocketOption sock S.ReuseAddr 1
             S.bind sock a
             S.listen sock 5
@@ -111,6 +115,7 @@ monitor conf env mng@Control{..} = do
                         waitQuit
                         (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
         loop
+{- FOURMOLU_ENABLE -}
 
 console
     :: Config
