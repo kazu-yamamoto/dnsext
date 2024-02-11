@@ -17,9 +17,11 @@ import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import Data.ByteString.Builder
+import Data.Functor
 import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
+import Network.Socket (SocketType (..))
 import Network.TLS (Credentials (..), credentialLoadX509)
 import System.Environment (getArgs)
 import System.Timeout (timeout)
@@ -30,6 +32,7 @@ import Config
 import qualified DNSTAP as TAP
 import qualified Monitor as Mon
 import Prometheus
+import SocketUtil
 import Types
 import qualified WebAPI as API
 
@@ -77,15 +80,21 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
+        check_for_v6_ns
+            | cnf_disable_v6_ns = pure True
+            | otherwise = do
+                  let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
+                  foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
         getRootSep' path = do
             putStrLn $ "loading trust-anchor-file: " ++ path
             getRootSep path
         getRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
             getRootHint path
+    disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootHint' cnf_root_hints
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
+    env <- newEnv putLines putDNSTAP disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
@@ -114,13 +123,13 @@ runConfig tcache mcache mng0 conf@Config{..} = do
   where
     maybeKill = maybe (return ()) killThread
     trans creds =
-        [ (cnf_udp, "udp-srv", udpServer udpconf, cnf_udp_port)
-        , (cnf_tcp, "tcp-srv", tcpServer vcconf, cnf_tcp_port)
-        , (cnf_h2c, "h2c-srv", http2cServer vcconf, cnf_h2c_port)
-        , (cnf_h2, "h2-srv", http2Server creds vcconf, cnf_h2_port)
-        , (cnf_h3, "h3-srv", http3Server creds vcconf, cnf_h3_port)
-        , (cnf_tls, "tls-srv", tlsServer creds vcconf, cnf_tls_port)
-        , (cnf_quic, "quic-srv", quicServer creds vcconf, cnf_quic_port)
+        [ (cnf_udp, "udp-srv", udpServer udpconf, Datagram, cnf_udp_port)
+        , (cnf_tcp, "tcp-srv", tcpServer vcconf, Stream, cnf_tcp_port)
+        , (cnf_h2c, "h2c-srv", http2cServer vcconf, Stream, cnf_h2c_port)
+        , (cnf_h2, "h2-srv", http2Server creds vcconf, Stream, cnf_h2_port)
+        , (cnf_h3, "h3-srv", http3Server creds vcconf, Datagram, cnf_h3_port)
+        , (cnf_tls, "tls-srv", tlsServer creds vcconf, Stream, cnf_tls_port)
+        , (cnf_quic, "quic-srv", quicServer creds vcconf, Datagram, cnf_quic_port)
         ]
     conc = foldr concurrently_ $ return ()
     udpconf =
@@ -149,11 +158,13 @@ getServers
     :: Env
     -> [HostName]
     -> Server.ToCacher
-    -> (Bool, String, Server, Int)
+    -> (Bool, String, Server, SocketType, Int)
     -> IO [(String, IO ())]
-getServers _ _ _ (False, _, _, _) = return []
-getServers env hosts toCacher (True, name, server, port') = do
-    servs <- mapM (server env toCacher port) hosts
+getServers _ _ _ (False, _, _, _, _) = return []
+getServers env hosts toCacher (True, name, server, socktype, port') = do
+    as <- ainfosSkipError putStrLn socktype port hosts
+    let hosts' = [ host | (_ai, host, _serv) <- as]
+    servs <- mapM (server env toCacher port) hosts'
     pure [ (name, s) | ss <- servs, s <- ss]
   where
     port = fromIntegral port'
