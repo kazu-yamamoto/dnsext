@@ -364,7 +364,7 @@ fillsDNSSEC dc nss d = do
 -- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithAx h1 a1 :| [DEwithAx h2 a2]) ds [dummyDNSKEY] FreshD
 -- >>> parent = withNS2 "org." "a0.org.afilias-nst.info." "199.19.56.1" "a2.org.afilias-nst.info." "199.249.112.1" (FilledDS [dummyDS])
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
--- >>> isFilled d = case (delegationDS d) of { NotFilledDS _ -> False; FilledDS _ -> True }
+-- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; FilledRoot -> True }
 -- >>> env <- _newTestEnv _noLogging
 -- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env (queryContextIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
