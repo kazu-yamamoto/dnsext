@@ -46,9 +46,6 @@ jobs:
     - name: Build
       run: cabal build --enable-tests --disable-benchmarks all
 
-    - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming all
-
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
       run: |
@@ -57,3 +54,6 @@ jobs:
         do
           env DISABLE_V6_NS=1 cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
         done
+
+    - name: Run tests
+      run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming all
