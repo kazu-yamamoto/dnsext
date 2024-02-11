@@ -34,9 +34,10 @@ import DNS.Iterative.Server.Types
 ----------------------------------------------------------------
 http2Server :: Credentials -> VcServerConfig -> Server
 http2Server creds VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.runIO settings creds host port $ doHTTP "h2" env toCacher
+    let http2server = withLoc $ H2TLS.runIO settings creds host port $ doHTTP "h2" env toCacher
     return [http2server]
   where
+    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2")
     settings =
         H2TLS.defaultSettings
             { H2TLS.settingsTimeout = vc_idle_timeout
@@ -45,9 +46,10 @@ http2Server creds VcServerConfig{..} env toCacher port host = do
 
 http2cServer :: VcServerConfig -> Server
 http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = H2TLS.runIOH2C settings host port $ doHTTP "h2c" env toCacher
+    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" env toCacher
     return [http2server]
   where
+    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2c")
     settings =
         H2TLS.defaultSettings
             { H2TLS.settingsTimeout = vc_idle_timeout

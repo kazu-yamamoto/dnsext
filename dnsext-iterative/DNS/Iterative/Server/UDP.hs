@@ -25,7 +25,7 @@ data UdpServerConfig = UdpServerConfig {}
 
 udpServer :: UdpServerConfig -> Server
 udpServer _conf env toCacher port addr = do
-    lsock <- UDP.serverSocket (read addr, port)
+    lsock <- withLocationIOE (show addr ++ ":" ++ show port ++ "/udp") $ UDP.serverSocket (read addr, port)
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
