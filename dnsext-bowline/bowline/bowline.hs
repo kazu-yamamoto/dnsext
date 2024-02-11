@@ -17,6 +17,7 @@ import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import Data.ByteString.Builder
+import Data.Functor
 import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
@@ -79,15 +80,21 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (runLogger, putLines, flush) <- getLogger conf
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
+        check_for_v6_ns
+            | cnf_disable_v6_ns = pure True
+            | otherwise = do
+                  let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
+                  foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
         getRootSep' path = do
             putStrLn $ "loading trust-anchor-file: " ++ path
             getRootSep path
         getRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
             getRootHint path
+    disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootHint' cnf_root_hints
-    env <- newEnv putLines putDNSTAP cnf_disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
+    env <- newEnv putLines putDNSTAP disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
