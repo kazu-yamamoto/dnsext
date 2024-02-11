@@ -48,20 +48,18 @@ EOF
 ## Configs
 RUN <<EOF
 set -e -x
-sed \
-  -e 's@^disable-v6-ns: .*$@disable-v6-ns: yes@' \
-  -e 's@^cnf_dns_addrs: .*$@cnf_dns_addrs: 0.0.0.0@' \
-  -e 's@^monitor-addrs: .*$@monitor-addrs: 0.0.0.0@' \
-  -e 's@^webapi-addr: .*$@webapi-addr: 0.0.0.0@' \
-  -e 's@^cert-file: .*$@cert-file: etc/fullchain.pem@' \
-  -e 's@^key-file: .*$@key-file: etc/privkey.pem@' \
-  < dnsext/dnsext-bowline/bowline/bowline.conf > bowline.conf
+cp dnsext/dnsext-bowline/bowline/bowline.conf bowline.conf.dist
 
 openssl genpkey -algorithm ${PRIVKEY_ALG} -pkeyopt "${PRIVKEY_ALGOPT}" -out privkey.pem && \
 openssl req -x509 -key privkey.pem -subj /CN=${CHAIN_SUBJ_CN} -out fullchain.pem && \
 
 mkdir -p -m 755 /opt/bowline/etc
-install -m 444 bowline.conf /opt/bowline/etc/bowline.conf
+install -m 444 \
+    bowline.conf.dist \
+    dnsext/dnsext-bowline/default-local.conf \
+    dnsext/root-data/root.key \
+    dnsext/root-data/root.hints \
+    /opt/bowline/etc/
 install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
 
@@ -87,6 +85,25 @@ COPY --from=builder /opt/bowline /opt/bowline
 COPY scripts /
 
 WORKDIR /opt/bowline/
+
+## Custom Conf
+RUN <<EOF
+set -e -x
+sed \
+    -e '1i trust-anchor-file: etc/root.key' \
+    -e '1i root-hints: etc/root.hints' \
+    -e '\@^include: .*$@d' \
+    -e '1i include: etc/default-local.conf' \
+    -e 's@^disable-v6-ns: .*$@disable-v6-ns: no@' \
+    -e 's@^dns-addrs: .*$@dns-addrs: 0.0.0.0,::@' \
+    -e 's@^cnf_dns_addrs: .*$@cnf_dns_addrs: 0.0.0.0@' \
+    -e 's@^monitor-addrs: .*$@monitor-addrs: 0.0.0.0,::@' \
+    -e 's@^webapi-addr: .*$@webapi-addr: 0.0.0.0@' \
+    -e 's@^cert-file: .*$@cert-file: etc/fullchain.pem@' \
+    -e 's@^key-file: .*$@key-file: etc/privkey.pem@' \
+    < etc/bowline.conf.dist > etc/bowline.conf
+chmod 444 etc/bowline.conf
+EOF
 
 ENV PATH /opt/bowline/bin:"$PATH"
 
