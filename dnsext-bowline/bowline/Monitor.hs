@@ -32,7 +32,7 @@ import Text.Read (readMaybe)
 
 -- dnsext-* packages
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Server (HostName, PortNumber)
+import DNS.Iterative.Server (HostName, PortNumber, withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
@@ -85,9 +85,11 @@ monitor conf env mng@Control{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
-    sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
-    mapM_ (uncurry S.bind) ps
-    sequence_ [S.listen sock 5 | sock <- ss]
+        servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
+            S.setSocketOption sock S.ReuseAddr 1
+            S.bind sock a
+            S.listen sock 5
+    mapM_ servSock ps
     when (cnf_monitor_stdio conf) runStdConsole
     return $ map monitorServer ss
   where

@@ -11,6 +11,8 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 import qualified UnliftIO.Exception as E
 
+import DNS.Iterative.Server (withLocationIOE)
+
 import Config
 import Types
 
@@ -67,6 +69,7 @@ runAPI addr port mng = withSocketsDo $ do
     open ai = E.bracketOnError (openSocket ai) close $ \sock -> do
         setSocketOption sock ReuseAddr 1
         withFdSocket sock setCloseOnExecIfNeeded
-        bind sock $ addrAddress ai
-        listen sock 32
+        withLocationIOE (show ai ++ "/webapi") $ do
+            bind sock $ addrAddress ai
+            listen sock 32
         return sock
