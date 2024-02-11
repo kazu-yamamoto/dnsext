@@ -30,6 +30,9 @@ module DNS.Iterative.Server (
     tlsServer,
     quicServer,
 
+    -- * Errors
+    withLocationIOE,
+
     -- * WorkerStat
     WorkerStat (..),
     WorkerStatOP (..),

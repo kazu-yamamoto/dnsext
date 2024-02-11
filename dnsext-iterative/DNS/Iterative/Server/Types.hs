@@ -14,6 +14,7 @@ module DNS.Iterative.Server.Types (
     Output (..),
     PeerInfo (..),
     peerSockAddr,
+    withLocationIOE,
 ) where
 
 import DNS.Iterative.Query (Env)
@@ -24,6 +25,7 @@ import qualified Network.HTTP2.Server.Internal as H2I
 import qualified Network.QUIC as QUIC
 import Network.Socket
 import qualified Network.UDP as UDP
+import System.IO.Error (tryIOError, ioeSetLocation)
 
 data PeerInfo
     = PeerInfoUDP UDP.ClientSockAddr
@@ -64,3 +66,9 @@ data VcServerConfig = VcServerConfig
     , vc_idle_timeout :: Int
     , vc_slowloris_size :: Int
     }
+
+withLocationIOE :: String -> IO a -> IO a
+withLocationIOE loc action = do
+    either left pure =<< tryIOError action
+  where
+    left ioe = ioError $ ioeSetLocation ioe loc

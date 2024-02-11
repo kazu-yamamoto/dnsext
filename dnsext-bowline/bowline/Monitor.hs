@@ -32,7 +32,7 @@ import Text.Read (readMaybe)
 
 -- dnsext-* packages
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Server (HostName, PortNumber)
+import DNS.Iterative.Server (HostName, PortNumber, withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
@@ -76,6 +76,7 @@ data Command
     | Help (Maybe String)
     deriving (Show)
 
+{- FOURMOLU_DISABLE -}
 monitor
     :: Config
     -> Env
@@ -85,9 +86,14 @@ monitor conf env mng@Control{..} = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
-    sequence_ [S.setSocketOption sock S.ReuseAddr 1 | sock <- ss]
-    mapM_ (uncurry S.bind) ps
-    sequence_ [S.listen sock 5 | sock <- ss]
+        v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
+        v6only _sock  _                  = pure ()
+        servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
+            v6only sock a
+            S.setSocketOption sock S.ReuseAddr 1
+            S.bind sock a
+            S.listen sock 5
+    mapM_ servSock ps
     when (cnf_monitor_stdio conf) runStdConsole
     return $ map monitorServer ss
   where
@@ -109,6 +115,7 @@ monitor conf env mng@Control{..} = do
                         waitQuit
                         (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
         loop
+{- FOURMOLU_ENABLE -}
 
 console
     :: Config
