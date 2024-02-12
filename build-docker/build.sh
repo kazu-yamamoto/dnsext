@@ -128,15 +128,15 @@ EOF
 
         case "$image_tag" in
             ''|9.4*-slim)
-                HAKELL_TAG=9.4.7-slim-buster
+                HAKELL_TAG=9.4.8-slim-buster
                 DEBIAN_TAG=buster-slim
-                ghc_version=9.4.7
+                ghc_version=9.4.8
                 result_tag=buster
 
                 build_with_haskell
                 ;;
             # 9.6*-slim)
-            #    HAKELL_TAG=9.6.2-slim-buster ## error, mismatch GHC 9.6.2 with cabal 3.8.1.0
+            #    HAKELL_TAG=9.6.4-slim-buster ## error, mismatch GHC 9.6.4 with cabal 3.8.1.0
             #    DEBIAN_TAG=buster-slim
             #    result_tag=buster
             #     ;;
@@ -152,12 +152,12 @@ EOF
 
     examples)
         cat <<EOF
-$0 ghcup bookworm 9.6.3
+$0 ghcup bookworm 9.6.4
 $0 haskell 9.4-slim
-$0 ghcup bookworm 9.4.7
-$0 ghcup bullseye 9.6.3
-$0 ghcup bullseye 9.4.7
-$0 ghcup buster 9.4.7
+$0 ghcup bookworm 9.4.8
+$0 ghcup bullseye 9.6.4
+$0 ghcup bullseye 9.4.8
+$0 ghcup buster 9.4.8
 
 # bookworm : Debian 12 - stable release
 # bullseye : Debian 11 - old stable
