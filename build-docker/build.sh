@@ -135,11 +135,12 @@ EOF
 
                 build_with_haskell
                 ;;
-            # 9.6*-slim)
-            #    HAKELL_TAG=9.6.4-slim-buster ## error, mismatch GHC 9.6.4 with cabal 3.8.1.0
-            #    DEBIAN_TAG=buster-slim
-            #    result_tag=buster
-            #     ;;
+            9.6*-slim)
+                HAKELL_TAG=9.6.4-slim-buster
+                DEBIAN_TAG=buster-slim
+                ghc_version=9.6.4
+                result_tag=buster
+               ;;
             *)
                 cat <<EOF
 Unsupported haskell image tag: $image_tag
