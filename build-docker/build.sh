@@ -40,9 +40,9 @@ CHAIN_SUBJ_CN=bowline.example.com
 
 
 build_with_ghcup() {
+    tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
     docker buildx build \
-           -t bowline:${result_tag} \
-           -t bowline:${ghc_version}-${result_tag}-ghcup \
+           -t ${tag_ghcup} \
            --build-arg GHC_OPTIMIZE=${GHC_OPTIMIZE} \
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
@@ -56,12 +56,18 @@ build_with_ghcup() {
            --build-arg DNSEXT_REV=dist-docker \
            -f Dockerfile.ghcup \
            .
+
+    if [ "${ghc_version}" = 9.6.4 ]; then
+        docker image tag "${tag_ghcup}" bowline:${result_tag_debian}
+        if [ "${result_tag_debian}" = bookworm ]; then
+            docker image tag bowline:${result_tag_debian} bowline:latest
+        fi
+    fi
 }
 
 build_with_haskell() {
     docker buildx build \
-           -t bowline:${result_tag} \
-           -t bowline:${ghc_version}-${result_tag}-haskell \
+           -t bowline:${ghc_version}-${result_tag_debian}-haskell \
            --build-arg GHC_OPTIMIZE=${GHC_OPTIMIZE} \
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
@@ -90,7 +96,7 @@ case "$1" in
         GHC_VERSION=$ghc_version
         CABAL_VERSION=3.10.1.0
         DEBIAN_TAG=bookworm-slim
-        result_tag=bookworm
+        result_tag_debian=bookworm
 
         build_with_ghcup
         ;;
@@ -117,7 +123,7 @@ EOF
 
         GHC_VERSION=${ghc_version}
         DEBIAN_TAG=${debian_rev}-slim
-        result_tag=${debian_rev}
+        result_tag_debian=${debian_rev}
 
         build_with_ghcup
         ;;
@@ -131,7 +137,7 @@ EOF
                 HAKELL_TAG=9.4.8-slim-buster
                 DEBIAN_TAG=buster-slim
                 ghc_version=9.4.8
-                result_tag=buster
+                result_tag_debian=buster
 
                 build_with_haskell
                 ;;
@@ -139,8 +145,8 @@ EOF
                 HAKELL_TAG=9.6.4-slim-buster
                 DEBIAN_TAG=buster-slim
                 ghc_version=9.6.4
-                result_tag=buster
-               ;;
+                result_tag_debian=buster
+                ;;
             *)
                 cat <<EOF
 Unsupported haskell image tag: $image_tag
