@@ -20,7 +20,6 @@ import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import qualified Network.HTTP3.Server as H3
 import qualified Network.QUIC.Server as QUIC
-import Network.TLS (Credentials (..))
 import qualified System.TimeManager as T
 
 -- this package
@@ -31,15 +30,15 @@ import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.Types
 
 ----------------------------------------------------------------
-http3Server :: Credentials -> VcServerConfig -> Server
-http3Server creds VcServerConfig{..} env toCacher port host = do
+http3Server :: VcServerConfig -> Server
+http3Server VcServerConfig{..} env toCacher port host = do
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             withLoc $ QUIC.run sconf $ \conn ->
                 withLoc $ H3.run conn (conf mgr) $ doHTTP env toCacher
     return [http3server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h3")
-    sconf = getServerConfig creds host port "h3"
+    sconf = getServerConfig vc_credentials host port "h3"
     conf mgr =
         H3.Config
             { confHooks = H3.defaultHooks
