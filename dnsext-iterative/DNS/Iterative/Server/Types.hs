@@ -5,7 +5,7 @@ module DNS.Iterative.Server.Types (
     PortNumber,
     VcServerConfig (..),
     ToCacher,
-    FromReciver,
+    FromReceiver,
     ToWorker,
     FromCacher,
     ToSender,
@@ -54,7 +54,7 @@ data Output = Output
     }
 
 type ToCacher = Input ByteString -> IO ()
-type FromReciver = IO (Input ByteString)
+type FromReceiver = IO (Input ByteString)
 type ToWorker = Input DNSMessage -> IO ()
 type FromCacher = IO (Input DNSMessage)
 type ToSender = Output -> IO ()

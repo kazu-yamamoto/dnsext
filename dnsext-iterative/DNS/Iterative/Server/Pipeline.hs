@@ -65,7 +65,7 @@ mkPipeline env cachersN _workersN workerStats = do
 
 ----------------------------------------------------------------
 
-cacherLogic :: Env -> FromReciver -> ToWorker -> IO ()
+cacherLogic :: Env -> FromReceiver -> ToWorker -> IO ()
 cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
     inpBS@Input{..} <- fromReceiver
     case DNS.decode inputQuery of
