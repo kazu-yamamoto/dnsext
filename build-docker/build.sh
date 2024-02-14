@@ -31,12 +31,14 @@ if [ x"$NO_OPTIMIZE" != x ]; then
     GHC_OPTIMIZE='-O0'
 fi
 
-[ "$GHC_PARALLEL" != x ] || GHC_PARALLEL=3
-[ "$CABAL_PARALLEL" != x ] || CABAL_PARALLEL=3
+[ x"$GHC_PARALLEL" != x ] || GHC_PARALLEL=3
+[ x"$CABAL_PARALLEL" != x ] || CABAL_PARALLEL=3
 
 PRIVKEY_ALG=EC
 PRIVKEY_ALGOPT=ec_paramgen_curve:P-256
 CHAIN_SUBJ_CN=bowline.example.com
+
+[ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-docker
 
 
 build_with_ghcup() {
@@ -53,7 +55,7 @@ build_with_ghcup() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
-           --build-arg DNSEXT_REV=dist-docker \
+           --build-arg DNSEXT_REV=${DNSEXT_REV} \
            -f Dockerfile.ghcup \
            .
 
@@ -77,7 +79,7 @@ build_with_haskell() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
-           --build-arg DNSEXT_REV=dist-docker \
+           --build-arg DNSEXT_REV=${DNSEXT_REV} \
            -f Dockerfile.haskell \
            .
 }
