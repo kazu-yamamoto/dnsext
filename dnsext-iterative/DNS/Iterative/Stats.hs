@@ -124,8 +124,28 @@ pattern RcodeServFail    = StatsIx 45
 pattern RcodeNoData     :: StatsIx
 pattern RcodeNoData      = StatsIx 46
 
+pattern QueryIPv6       :: StatsIx
+pattern QueryIPv6        = StatsIx 47
+
+pattern QueryDO         :: StatsIx
+pattern QueryDO          = StatsIx 48
+
+pattern QueryTCP        :: StatsIx
+pattern QueryTCP         = StatsIx 49
+pattern QueryTLS        :: StatsIx
+pattern QueryTLS         = StatsIx 50
+pattern QueryHTTPS      :: StatsIx
+pattern QueryHTTPS       = StatsIx 51
+pattern QueryQUIC       :: StatsIx
+pattern QueryQUIC        = StatsIx 52
+pattern QueryHTTP3      :: StatsIx
+pattern QueryHTTP3       = StatsIx 53
+
+pattern QueriesAll      :: StatsIx
+pattern QueriesAll       = StatsIx 54
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 46
+pattern StatsIxMax       = StatsIx 54
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -178,6 +198,14 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (RcodeRefused,     "answer_rcodes_total{type=\"REFUSED\"}")
   , (RcodeServFail,    "answer_rcodes_total{type=\"SERVFAIL\"}")
   , (RcodeNoData,      "answer_rcodes_total{type=\"nodata\"}")
+  , (QueryIPv6,        "query_ipv6_total")
+  , (QueryDO,          "query_edns_DO_total")
+  , (QueryTCP,         "query_tcp_total")
+  , (QueryTLS,         "query_tls_total")
+  , (QueryHTTPS,       "query_https_total")
+  , (QueryQUIC,        "query_quic_total")
+  , (QueryHTTP3,       "query_http3_total")
+  , (QueriesAll,       "queries_total")
   ]
 {- FOURMOLU_ENABLE -}
 
