@@ -14,6 +14,7 @@ module DNS.Iterative.Server.Types (
     Output (..),
     PeerInfo (..),
     peerSockAddr,
+    sockAddrInet6,
     withLocationIOE,
 ) where
 
@@ -39,6 +40,13 @@ peerSockAddr (PeerInfoUDP (UDP.ClientSockAddr sa _)) = sa
 peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoH2 sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
+
+{- FORMOLU_DISABLE -}
+sockAddrInet6 :: SockAddr -> Bool
+sockAddrInet6 SockAddrInet {}   = False
+sockAddrInet6 SockAddrInet6 {}  = True
+sockAddrInet6 SockAddrUnix {}   = False
+{- FORMOLU_ENABLE -}
 
 data Input a = Input
     { inputQuery :: a
