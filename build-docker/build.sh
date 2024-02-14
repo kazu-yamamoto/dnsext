@@ -31,8 +31,8 @@ if [ x"$NO_OPTIMIZE" != x ]; then
     GHC_OPTIMIZE='-O0'
 fi
 
-[ "$GHC_PARALLEL" != x ] || GHC_PARALLEL=3
-[ "$CABAL_PARALLEL" != x ] || CABAL_PARALLEL=3
+[ x"$GHC_PARALLEL" != x ] || GHC_PARALLEL=3
+[ x"$CABAL_PARALLEL" != x ] || CABAL_PARALLEL=3
 
 PRIVKEY_ALG=EC
 PRIVKEY_ALGOPT=ec_paramgen_curve:P-256
