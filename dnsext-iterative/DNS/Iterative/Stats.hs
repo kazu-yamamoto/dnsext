@@ -131,9 +131,9 @@ pattern StatsIxMax       = StatsIx 46
 {- FOURMOLU_DISABLE -}
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
-    (CacheHit,         "cache_hit")
-  , (CacheMiss,        "cache_miss")
-  , (ResolveDenied,    "resolve_denied")
+    (CacheHit,         "cache_hits_total")
+  , (CacheMiss,        "cache_misses_total")
+  , (ResolveDenied,    "unwanted_queries_total")
   , (QueryTypeRes,     "query_types_total{type=\"Reserved\"}")
   , (QueryTypeA,       "query_types_total{type=\"A\"}")
   , (QueryTypeA6,      "query_types_total{type=\"A6\"}")
