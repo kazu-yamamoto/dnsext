@@ -13,7 +13,7 @@ import Data.ByteString (ByteString)
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types (DNSFlags (..), DNSMessage (..), Question (..), RCODE (..))
+import DNS.Types (DNSFlags (..), DNSMessage (..), EDNSheader (..), EDNS (..), Question (..), RCODE (..))
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
@@ -133,6 +133,10 @@ record env Input{..} reply rspWire = do
     let st = stats_ env
         Question{..} = head $ question inputQuery
         DNSFlags{..} = flags reply
+    case ednsHeader inputQuery of
+        EDNSheader (EDNS {..})
+            | ednsDnssecOk  -> incStats st QueryDO
+        _                   -> pure ()
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
     let rc = rcode reply
