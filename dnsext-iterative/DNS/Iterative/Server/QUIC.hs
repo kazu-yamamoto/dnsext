@@ -22,8 +22,10 @@ import Network.TLS (Credentials (..))
 import qualified System.TimeManager as T
 
 -- this package
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Stats (incStatsDoQ)
 
 ----------------------------------------------------------------
 
@@ -47,6 +49,7 @@ quicServer VcServerConfig{..} env toCacher port host = do
                 let peerInfo = PeerInfoQUIC peersa strm
                 -- Without a designated thread, recvStream would block.
                 (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
+                incStatsDoQ (sockAddrInet6 peersa) (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
                     else do

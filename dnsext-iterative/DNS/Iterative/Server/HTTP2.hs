@@ -27,15 +27,18 @@ import Network.HTTP2.TLS.Server (ServerIO (..))
 import qualified Network.HTTP2.TLS.Server as H2TLS
 
 -- this package
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Stats (incStatsDoH2, incStatsDoH2C)
 
 http2Server :: VcServerConfig -> Server
 http2Server VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" env toCacher
+    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" incQuery env toCacher
     return [http2server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2")
+    incQuery inet6 = incStatsDoH2 inet6 (stats_ env)
     settings =
         H2TLS.defaultSettings
             { H2TLS.settingsTimeout = vc_idle_timeout
@@ -45,10 +48,11 @@ http2Server VcServerConfig{..} env toCacher port host = do
 
 http2cServer :: VcServerConfig -> Server
 http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" env toCacher
+    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" incQuery env toCacher
     return [http2server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2c")
+    incQuery inet6 = incStatsDoH2C inet6 (stats_ env)
     settings =
         H2TLS.defaultSettings
             { H2TLS.settingsTimeout = vc_idle_timeout
@@ -57,13 +61,14 @@ http2cServer VcServerConfig{..} env toCacher port host = do
             }
 
 doHTTP
-    :: String -> Env -> ToCacher -> ServerIO -> IO (IO ())
-doHTTP name env toCacher ServerIO{..} = do
+    :: String -> (Bool -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
+doHTTP name incQuery env toCacher ServerIO{..} = do
     (toSender, fromX) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm
             einp <- getInput req
+            incQuery (sockAddrInet6 sioPeerSockAddr)
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
                 Right bs -> do

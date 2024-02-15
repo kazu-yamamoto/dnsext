@@ -16,8 +16,10 @@ import qualified Network.HTTP2.TLS.Server as H2
 import Network.Socket.BufferPool (makeRecvN)
 
 -- this package
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Stats (incStatsDoT)
 
 tlsServer :: VcServerConfig -> Server
 tlsServer VcServerConfig{..} env toCacher port host = do
@@ -40,6 +42,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
         (toSender, fromX) <- mkConnector
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
+                incStatsDoT (sockAddrInet6 peersa) (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
                     else return (BS.concat bss, peerInfo)

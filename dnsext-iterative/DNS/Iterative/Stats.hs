@@ -124,16 +124,36 @@ pattern RcodeServFail    = StatsIx 45
 pattern RcodeNoData     :: StatsIx
 pattern RcodeNoData      = StatsIx 46
 
+pattern QueryIPv6       :: StatsIx
+pattern QueryIPv6        = StatsIx 47
+
+pattern QueryDO         :: StatsIx
+pattern QueryDO          = StatsIx 48
+
+pattern QueryTCP        :: StatsIx
+pattern QueryTCP         = StatsIx 49
+pattern QueryTLS        :: StatsIx
+pattern QueryTLS         = StatsIx 50
+pattern QueryHTTPS      :: StatsIx
+pattern QueryHTTPS       = StatsIx 51
+pattern QueryQUIC       :: StatsIx
+pattern QueryQUIC        = StatsIx 52
+pattern QueryHTTP3      :: StatsIx
+pattern QueryHTTP3       = StatsIx 53
+
+pattern QueriesAll      :: StatsIx
+pattern QueriesAll       = StatsIx 54
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 46
+pattern StatsIxMax       = StatsIx 54
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 labels :: Array StatsIx Builder
 labels = array (StatsIxMin, StatsIxMax) [
-    (CacheHit,         "cache_hit")
-  , (CacheMiss,        "cache_miss")
-  , (ResolveDenied,    "resolve_denied")
+    (CacheHit,         "cache_hits_total")
+  , (CacheMiss,        "cache_misses_total")
+  , (ResolveDenied,    "unwanted_queries_total")
   , (QueryTypeRes,     "query_types_total{type=\"Reserved\"}")
   , (QueryTypeA,       "query_types_total{type=\"A\"}")
   , (QueryTypeA6,      "query_types_total{type=\"A6\"}")
@@ -178,6 +198,14 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (RcodeRefused,     "answer_rcodes_total{type=\"REFUSED\"}")
   , (RcodeServFail,    "answer_rcodes_total{type=\"SERVFAIL\"}")
   , (RcodeNoData,      "answer_rcodes_total{type=\"nodata\"}")
+  , (QueryIPv6,        "query_ipv6_total")
+  , (QueryDO,          "query_edns_DO_total")
+  , (QueryTCP,         "query_tcp_total")
+  , (QueryTLS,         "query_tls_total")
+  , (QueryHTTPS,       "query_https_total")
+  , (QueryQUIC,        "query_quic_total")
+  , (QueryHTTP3,       "query_http3_total")
+  , (QueriesAll,       "queries_total")
   ]
 {- FOURMOLU_ENABLE -}
 
@@ -274,3 +302,45 @@ readStats (Stats stats) prefix = do
             v <- readArray (stats ! i) ix
             sumup (i + 1) n ix (acc + v)
         | otherwise = return acc
+
+---
+
+{- FOURMOLU_DISABLE -}
+incOnIPv6 :: Bool -> Stats -> IO a -> IO a
+incOnIPv6 inet6 stats act
+    | inet6      = incStats stats QueryIPv6 *> act
+    | otherwise  = act
+{- FOURMOLU_ENABLE -}
+
+incStatsUDP :: Bool -> Stats -> IO ()
+incStatsUDP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueriesAll
+
+incStatsTCP :: Bool -> Stats -> IO ()
+incStatsTCP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+
+{- FOURMOLU_DISABLE -}
+incStatsDoT :: Bool -> Stats -> IO ()
+incStatsDoT inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+incStatsDoH2 :: Bool -> Stats -> IO ()
+incStatsDoH2 inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryHTTPS *> incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
+
+incStatsDoH2C :: Bool -> Stats -> IO ()
+incStatsDoH2C inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+
+incStatsDoQ :: Bool -> Stats -> IO ()
+incStatsDoQ inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryQUIC *> incStats stats QueriesAll
+
+{- FOURMOLU_DISABLE -}
+incStatsDoH3 :: Bool -> Stats -> IO ()
+incStatsDoH3 inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryHTTP3 *> incStats stats QueryQUIC *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
