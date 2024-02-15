@@ -302,3 +302,45 @@ readStats (Stats stats) prefix = do
             v <- readArray (stats ! i) ix
             sumup (i + 1) n ix (acc + v)
         | otherwise = return acc
+
+---
+
+{- FOURMOLU_DISABLE -}
+incOnIPv6 :: Bool -> Stats -> IO a -> IO a
+incOnIPv6 inet6 stats act
+    | inet6      = incStats stats QueryIPv6 *> act
+    | otherwise  = act
+{- FOURMOLU_ENABLE -}
+
+incStatsUDP :: Bool -> Stats -> IO ()
+incStatsUDP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueriesAll
+
+incStatsTCP :: Bool -> Stats -> IO ()
+incStatsTCP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+
+{- FOURMOLU_DISABLE -}
+incStatsDoT :: Bool -> Stats -> IO ()
+incStatsDoT inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+incStatsDoH2 :: Bool -> Stats -> IO ()
+incStatsDoH2 inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryHTTPS *> incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
+
+incStatsDoH2C :: Bool -> Stats -> IO ()
+incStatsDoH2C inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+
+incStatsDoQ :: Bool -> Stats -> IO ()
+incStatsDoQ inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryQUIC *> incStats stats QueriesAll
+
+{- FOURMOLU_DISABLE -}
+incStatsDoH3 :: Bool -> Stats -> IO ()
+incStatsDoH3 inet6 stats =
+    incOnIPv6 inet6 stats $
+    incStats stats QueryHTTP3 *> incStats stats QueryQUIC *> incStats stats QueriesAll
+{- FOURMOLU_ENABLE -}
