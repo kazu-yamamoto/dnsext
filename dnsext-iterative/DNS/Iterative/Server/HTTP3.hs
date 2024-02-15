@@ -23,11 +23,12 @@ import qualified Network.QUIC.Server as QUIC
 import qualified System.TimeManager as T
 
 -- this package
-
+import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Stats (incStatsDoH3)
 
 ----------------------------------------------------------------
 http3Server :: VcServerConfig -> Server
@@ -56,6 +57,7 @@ doHTTP env toCacher req aux sendResponse = do
         peerInfo = PeerInfoVC peersa
     (toSender, fromX) <- mkConnector
     einp <- getInput req
+    incStatsDoH3 (sockAddrInet6 peersa) (stats_ env)
     case einp of
         Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
         Right bs -> do
@@ -66,5 +68,4 @@ doHTTP env toCacher req aux sendResponse = do
             sendResponse response []
   where
     -- fixme record
-
     header = [(HT.hContentType, "application/dns-message")]
