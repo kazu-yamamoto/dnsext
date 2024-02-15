@@ -55,9 +55,13 @@ import DNS.Iterative.Server.UDP
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
 import DNS.RRCache (RRCacheOps (..), newRRCacheOps)
+import qualified DNS.RRCache as RRCache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 
+import Data.String (fromString)
 import Data.ByteString.Builder
 
 getStats :: Env -> Builder -> IO Builder
-getStats Env{..} = readStats stats_
+getStats Env{..} prefix = do
+    let cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
+    (<>) <$> readStats stats_ prefix <*> (cacheCount <$> getCache_)
