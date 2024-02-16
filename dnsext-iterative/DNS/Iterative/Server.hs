@@ -58,10 +58,14 @@ import DNS.RRCache (RRCacheOps (..), newRRCacheOps)
 import qualified DNS.RRCache as RRCache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 
+import Control.Concurrent (getNumCapabilities)
 import Data.String (fromString)
 import Data.ByteString.Builder
 
 getStats :: Env -> Builder -> IO Builder
-getStats Env{..} prefix = do
-    let cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
-    (<>) <$> readStats stats_ prefix <*> (cacheCount <$> getCache_)
+getStats Env{..} prefix =
+    (<>) <$> readStats stats_ prefix <*> getGlobalStats
+  where
+    getGlobalStats = (<>) <$> (cacheCount <$> getCache_) <*> (info <$> getNumCapabilities)
+    cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
+    info cap = prefix <> fromString ("info{threads=\"" ++ show cap ++ "\", version=\"0.0.20240216\"} 1\n")
