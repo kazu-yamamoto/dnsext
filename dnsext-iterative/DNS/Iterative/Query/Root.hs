@@ -81,9 +81,9 @@ rootPriming = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
         putDelegation PPFull delegationNS (logLn Log.DEMO) (logLn Log.DEBUG . ("zone: \".\":\n" ++))
     nullNS = left "no NS RRs"
-    ncNS = left "not canonical NS RRs"
+    ncNS _ncLog = left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
-    verify dnskeys msgNS dsState = Verify.withCanonical dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+    verify getSec dnskeys msgNS dsState = Verify.cases getSec dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
         \nsps nsRRset cacheNS -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
@@ -103,11 +103,13 @@ rootPriming = do
     verifyConf (ks, [])  = (FilledRoot   , \_ -> Right ks)
     verifyConf (ks, dss) = (FilledDS dss , \_ -> map fst <$> verifySEP dss "." ks)
 
-    body seps ips = runExceptT $ do
+    body seps ips = do
         let (dsState, getSEPs) = maybe verifyRoot verifyConf seps
-        dnskeys <- either (throwE . ("rootPriming: " ++)) pure =<< lift (cachedDNSKEY' getSEPs ips ".")
-        msgNS <- lift $ norec True ips "." NS
-        ExceptT $ lift $ verify dnskeys msgNS dsState
+            getVerified dnskeys = do
+                getSec <- lift $ asks currentSeconds_
+                msgNS <- norec True ips "." NS
+                lift $ verify getSec dnskeys msgNS dsState
+        either (pure . Left . ("rootPriming: " ++)) getVerified =<< cachedDNSKEY' getSEPs ips "."
 {- FOURMOLU_ENABLE -}
 
 {-
@@ -137,8 +139,9 @@ cachedDNSKEY' getSEPs aservers dom = do
     verifyDNSKEY msg seps = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
-            ncDNSKEY = pure $ Left "cachedDNSKEY: not canonical"
-        Verify.with seps rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+            ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
+        getSec <- lift $ asks currentSeconds_
+        Verify.cases getSec seps rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 dnskeyList :: Domain -> [ResourceRecord] -> [RD_DNSKEY]
 dnskeyList dom rrs = rrListWith DNSKEY DNS.fromRData dom const rrs

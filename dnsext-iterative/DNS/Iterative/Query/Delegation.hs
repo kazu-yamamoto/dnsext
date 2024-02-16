@@ -106,16 +106,17 @@ nsDomain (DEonlyNS dom) = dom
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
-    maybe (notFound $> noDelegation) (fmap hasDelegation . found) $ findDelegation nsps adds
+    getSec <- lift $ asks currentSeconds_
+    maybe (notFound $> noDelegation) (fmap hasDelegation . found getSec) $ findDelegation nsps adds
   where
-    found k = Verify.with dnskeys rankedAuthority msg dom DS fromDS (nullDS k) (ncDS k) (withDS k)
+    found getSec k = Verify.cases getSec dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
     nullDS k = do
         unsignedDelegationOrNoData $> ()
         lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
         lift $ caches $> k []
-    ncDS _ = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
+    ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
         | rrsetValid dsRRset = lift $ do
             let x = k dsrds

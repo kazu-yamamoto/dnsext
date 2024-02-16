@@ -193,7 +193,8 @@ cacheSectionNegative
     -> ContextT IO [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
-    Verify.withCanonical dnskeys rankedAuthority msg zone SOA fromSOA nullSOA (pure []) $ \ps soaRRset cacheSOA -> do
+    getSec <- asks currentSeconds_
+    Verify.cases getSec dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
@@ -270,12 +271,13 @@ failWithCacheOrigQ rank e = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    (result, cacheX) <- verify
+    getSec <- lift $ asks currentSeconds_
+    (result, cacheX) <- verify getSec
     lift cacheX
     return result
   where
     qinfo = show dom ++ " " ++ show typ
-    verify = Verify.with dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+    verify getSec = Verify.cases getSec dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
@@ -300,7 +302,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
         nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
         (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
 
-    ncX = pure (([], []), pure ())
+    ncX _ncLog = pure (([], []), pure ())
 
     rcode = DNS.rcode msg
     zone = delegationZone
@@ -313,14 +315,15 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = Verify.with dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+    nameErrors = lift (asks currentSeconds_) >>=
+        \getSec -> Verify.cases getSec dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> lift cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
     nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg =<< witnessNameErr
-    ncCNAME = cacheNoDataNS
+    ncCNAME _ncLog = cacheNoDataNS
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
