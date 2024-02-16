@@ -4,14 +4,14 @@
 module DNS.Iterative.Query.Utils where
 
 -- GHC packages
+import Data.List.NonEmpty (toList)
 
 -- other packages
-import Data.List.NonEmpty (toList)
 import System.Console.ANSI.Types
 
 -- dnsext packages
 import qualified DNS.Log as Log
-import DNS.Types (DNSMessage (..))
+import DNS.Types (DNSError (..), DNSMessage (..))
 import qualified DNS.Types as DNS
 
 -- this package
@@ -46,10 +46,10 @@ logQueryErrors prefix q = do
           HasError rcode msg    -> logHasError rcode msg
           QueryDenied           -> logQueryDenied
       logDnsError de = case de of
-          DNS.NetworkFailure {}   -> putLog $ show de
-          DNS.DecodeError {}      -> putLog $ show de
-          DNS.UnknownDNSError {}  -> putLog $ show de
-          _                       -> pure ()
+          NetworkFailure {}   -> putLog $ show de
+          DecodeError {}      -> putLog $ show de
+          UnknownDNSError {}  -> putLog $ show de
+          _                   -> pure ()
       logNotResponse False  msg  = putLog $ pprMessage "not response:" msg
       logNotResponse True  _msg  = pure ()
       logInvalidEDNS DNS.InvalidEDNS  msg = putLog $ pprMessage "invalid EDNS:" msg
