@@ -35,6 +35,7 @@ app mng req sendResp = getResp >>= sendResp
   where
     getResp
         | requestMethod req == HTTP.methodGet = case rawPathInfo req of
+            "/metrics" -> doStats mng
             "/stats" -> doStats mng
             "/reload" -> doReload mng Reload
             "/keep-cache" -> doReload mng KeepCache
