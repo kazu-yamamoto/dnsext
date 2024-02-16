@@ -309,9 +309,10 @@ servsChildZone dc nss dom msg =
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
+        getSec <- lift $ asks currentSeconds_
         case soaRRs of
             [] -> fallback
-            [_] -> getWorkaround >>= verifySOA
+            [_] -> getWorkaround >>= verifySOA getSec
             _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
@@ -319,13 +320,13 @@ servsChildZone dc nss dom msg =
             lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             failWithCacheOrigQ rank DNS.ServerFailure
-        verifySOA wd
+        verifySOA getSec wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.with dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases getSec dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
           where
             dnskeys = delegationDNSKEY wd
             nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
-            ncSOA = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
+            ncSOA _ncLog = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
             result _ soaRRset _cacheSOA
                 | rrsetValid soaRRset = pure $ hasDelegation wd
                 | otherwise = verificationError
@@ -407,10 +408,11 @@ queryDS
     -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS dnskeys ips dom = do
     msg <- norec True ips dom DS
-    Verify.with dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    getSec <- lift $ asks currentSeconds_
+    Verify.cases getSec dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
-    ncDS = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
+    ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
     verifyResult dsrds dsRRset cacheDS
         | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
