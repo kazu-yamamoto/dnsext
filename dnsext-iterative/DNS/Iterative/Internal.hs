@@ -8,6 +8,8 @@ module DNS.Iterative.Internal (
     getResultIterative,
     getResultCached,
     replyMessage,
+    getRootSep,
+    getRootServers,
 
     -- * testing
     newEmptyEnv,
@@ -15,9 +17,6 @@ module DNS.Iterative.Internal (
     runResolve,
     runResolveExact,
     runResolveJust,
-    getRootSep,
-    getRootHint,
-    rootHint,
     runIterative,
     printResult,
     refreshRoot,
@@ -34,4 +33,5 @@ import DNS.Iterative.Query.Root
 import DNS.Iterative.Query.TestEnv
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
+import DNS.Iterative.RootServers
 import DNS.Iterative.RootTrustAnchors

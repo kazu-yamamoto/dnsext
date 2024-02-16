@@ -8,7 +8,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (getRootHint, getRootSep)
+import DNS.Iterative.Internal (getRootServers, getRootSep)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -89,12 +89,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         getRootSep' path = do
             putStrLn $ "loading trust-anchor-file: " ++ path
             getRootSep path
-        getRootHint' path = do
+        getRootServers' path = do
             putStrLn $ "loading root-hints: " ++ path
-            getRootHint path
+            getRootServers path
     disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
-    rootHint <- mapM getRootHint' cnf_root_hints
+    rootHint <- mapM getRootServers' cnf_root_hints
     env <- newEnv putLines putDNSTAP disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
