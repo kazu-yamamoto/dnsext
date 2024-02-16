@@ -2,9 +2,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Verify (
-    with,
-    withCanonical,
-    withCanonical',
     cases,
     cases',
     --
@@ -49,69 +46,11 @@ import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 
+{- FOURMOLU_DISABLE -}
 -- |
 -- null case is no RR for specified type.
--- left case is not canonical RRset.
--- righ case is after verified, with valid or invalid RRset.
-{- FOURMOLU_DISABLE -}
-with
-    :: [RD_DNSKEY]
-    -> (m -> ([ResourceRecord], Ranking)) -> m
-    -> Domain -> TYPE
-    -> (ResourceRecord -> Maybe a)
-    -> DNSQuery b -> DNSQuery b -> ([a] -> RRset -> ContextT IO () -> DNSQuery b)
-    -> DNSQuery b
-{- FOURMOLU_ENABLE -}
-with dnskeys getRanked msg rrn rrty h nullK leftK rightK = do
-    let rightK' xs rrset cache = pure $ rightK xs rrset cache
-    action <- lift $ withCanonical dnskeys getRanked msg rrn rrty h (pure nullK) (pure leftK) rightK'
-    action
-
-{- FOURMOLU_DISABLE -}
-withCanonical
-    :: [RD_DNSKEY]
-    -> (m -> ([ResourceRecord], Ranking)) -> m
-    -> Domain  -> TYPE
-    -> (ResourceRecord -> Maybe a)
-    -> ContextT IO b -> ContextT IO b -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
-    -> ContextT IO b
-{- FOURMOLU_ENABLE -}
-withCanonical dnskeys getRanked msg rrn rrty h nullK leftK rightK =
-    withSection getRanked msg $ \srrs rank -> withCanonical' dnskeys rrn rrty h srrs rank nullK ncK withRRS
-  where
-    ncK rrs s = logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs) *> leftK
-    withRRS x rrset cache = do
-        mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
-        rightK x rrset cache
-    logInvalids es = do
-        (x, xs) <- pure $ case lines es of
-            [] -> ("", [])
-            x : xs -> (": " ++ x, xs)
-        clogLn Log.DEMO (Just Cyan) $ "withCanonical: InvalidRRS" ++ x
-        logLines Log.DEMO xs
-
-{- FOURMOLU_DISABLE -}
-withCanonical'
-    :: [RD_DNSKEY]
-    -> Domain -> TYPE
-    -> (ResourceRecord -> Maybe a)
-    -> [ResourceRecord] -> Ranking
-    -> ContextT IO b -> ([ResourceRecord] -> String -> ContextT IO b)
-    -> ([a] -> RRset -> ContextT IO () -> ContextT IO b)
-    -> ContextT IO b
-{- FOURMOLU_ENABLE -}
-withCanonical' dnskeys rrn rrty h srrs rank nullK leftK rightK0
-    | null xRRs = nullK
-    | otherwise = canonicalRRset xRRs (leftK xRRs) rightK
-  where
-    (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
-    sigs = rrsigList rrn rrty srrs
-    rightK rrs sortedRRs = do
-        now <- liftIO =<< asks currentSeconds_
-        withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
-            rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
-
-{- FOURMOLU_DISABLE -}
+-- nc case is not canonical RRset.
+-- right case is after verified, with valid or invalid RRset.
 cases
     :: MonadIO m
     => IO EpochTime
