@@ -26,8 +26,9 @@ import DNS.SEC (RD_DNSKEY, RD_DS)
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
-import DNS.Iterative.Query.Helpers
+import DNS.Iterative.Query.Helpers (findDelegation, nsList)
 import qualified DNS.Iterative.Query.LocalZone as Local
+import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
@@ -37,23 +38,24 @@ newEnv
     -> (DNSTAP.Message -> IO ())
     -> Bool              -- ^ disabling IPv6
     -> Maybe ([RD_DNSKEY], [RD_DS])
-    -> Maybe Delegation  -- ^ root-hint
+    -> Maybe ([ResourceRecord], [ResourceRecord])  -- ^ root-servers
     -> [(Domain, LocalZoneType, [ResourceRecord])]
     -> RRCacheOps
     -> TimeCache
     -> (IO Reply -> IO (Maybe Reply))
     -> IO Env
-newEnv putLines putDNSTAP disableV6NS rdnskey hint lzones RRCacheOps{..} TimeCache{..} tmout = do
+newEnv putLines putDNSTAP disableV6NS rdnskey root lzones RRCacheOps{..} TimeCache{..} tmout = do
     let localName = Local.nameMap lzones
         localApex = Local.apexMap localName lzones
     env0 <- newEmptyEnv
+    rootHint <- getRootHint $ fromMaybe rootServers root
     pure $
         env0
         { logLines_ = putLines
         , logDNSTAP_ = putDNSTAP
         , disableV6NS_ = disableV6NS
         , rootAnchor_ = rdnskey
-        , rootHint_ = fromMaybe rootHint hint
+        , rootHint_ = rootHint
         , lookupLocalApex_ = Local.lookupApex localApex
         , lookupLocalDomain_ = Local.lookupName localName
         , insert_ = insertCache
@@ -73,6 +75,7 @@ newEmptyEnv = do
     rootRef  <- newIORef Nothing
     stats <- newStats
     let TimeCache {..} = noneTimeCache
+    rootHint <- getRootHint rootServers
     pure $
         Env
         { logLines_ = \_ _ ~_ -> pure ()
@@ -93,3 +96,7 @@ newEmptyEnv = do
         , timeout_ = timeout 5000000
         }
 {- FOURMOLU_ENABLE -}
+
+-- {-# ANN getRootHint ("HLint: ignore Use tuple-section") #-}
+getRootHint :: ([ResourceRecord], [ResourceRecord]) -> IO Delegation
+getRootHint (ns, as) = maybe (fail "getRootHint: bad configuration.") (pure . ($ [])) $ findDelegation (nsList (fromString ".") (,) ns) as
