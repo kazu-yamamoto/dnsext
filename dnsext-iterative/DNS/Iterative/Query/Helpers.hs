@@ -245,25 +245,6 @@ dentryIPnull disableV6NS des = all ipNull des
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-{-# DEPRECATED takeDEntryIPs "use chooseIPfromDE and deIPnull, instead of this" #-}
-takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
-takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
-  where
-    unique = Set.toList . Set.fromList
-    takeDEntryIP (DEonlyNS{}) xs      = xs
-    takeDEntryIP (DEwithA4 _ ip4) xs  = ip4List ip4 ++ xs
-    takeDEntryIP (DEwithA6 _ ip6) xs
-        | disableV6NS                 = xs
-        | otherwise                   = ip6List ip6 ++ xs
-    takeDEntryIP (DEwithAx _ ip4 ip6) xs
-        | disableV6NS                 = ip4List ip4 ++ xs
-        | otherwise                   = ip4List ip4 ++ ip6List ip6 ++ xs
-    ip4List = foldr (takeIP IPv4) []
-    ip6List = foldr (takeIP IPv6) []
-    takeIP f ipx xs = f ipx : xs
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 list1 :: b -> ([a] -> b) ->  [a] -> b
 list1 nil _        []   =  nil
 list1 _   cons xs@(_:_) =  cons xs
