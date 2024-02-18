@@ -1,6 +1,7 @@
 module DNS.Iterative.Query.Helpers where
 
 -- GHC packages
+import qualified Data.Set as Set
 
 -- other packages
 
@@ -139,6 +140,16 @@ rrnamePairs dds@(d : ds) ggs@(g : gs)
   where
     an = rrname a
     a = head g
+
+takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
+takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
+  where
+    unique = Set.toList . Set.fromList
+    takeDEntryIP (DEonlyNS{}) xs = xs
+    takeDEntryIP (DEwithAx _ ip@(IPv4{})) xs = ip : xs
+    takeDEntryIP (DEwithAx _ ip@(IPv6{})) xs
+        | disableV6NS = xs
+        | otherwise = ip : xs
 
 {- FOURMOLU_DISABLE -}
 list1 :: b -> ([a] -> b) ->  [a] -> b

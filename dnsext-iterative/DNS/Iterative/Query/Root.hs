@@ -5,7 +5,6 @@ module DNS.Iterative.Query.Root (
     refreshRoot,
     rootPriming,
     cachedDNSKEY,
-    takeDEntryIPs,
 ) where
 
 -- GHC packages
@@ -24,7 +23,7 @@ import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP (IPv4, IPv6))
+import Data.IP (IP)
 import System.Console.ANSI.Types
 
 -- this package
@@ -160,13 +159,3 @@ verifySEP dss dom dnskeys = do
             ]
     when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
     pure seps
-
-takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
-takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
-  where
-    unique = Set.toList . Set.fromList
-    takeDEntryIP (DEonlyNS{}) xs = xs
-    takeDEntryIP (DEwithAx _ ip@(IPv4{})) xs = ip : xs
-    takeDEntryIP (DEwithAx _ ip@(IPv6{})) xs
-        | disableV6NS = xs
-        | otherwise = ip : xs
