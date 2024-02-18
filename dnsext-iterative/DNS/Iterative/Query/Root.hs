@@ -9,6 +9,7 @@ module DNS.Iterative.Query.Root (
 
 -- GHC packages
 import Data.IORef (atomicWriteIORef, readIORef)
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
 -- other packages
@@ -31,7 +32,6 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Norec
-import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -70,7 +70,7 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     Delegation{delegationNS = hintDes} <- lift $ asks rootHint_
-    ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
+    ips <- dentryToRandomIP 2 2 disableV6NS $ NE.toList hintDes
     lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     seps <- lift $ asks rootAnchor_
     body seps ips
