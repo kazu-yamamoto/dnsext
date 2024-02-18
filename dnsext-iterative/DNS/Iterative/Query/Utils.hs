@@ -12,6 +12,7 @@ import Data.List.NonEmpty (toList)
 import qualified DNS.Log as Log
 import DNS.Types (DNSError (..), DNSMessage (..))
 import qualified DNS.Types as DNS
+import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types
 
 -- this package
@@ -117,8 +118,10 @@ ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
     map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT $ toList des
   where
-    toT (DEwithAx d i) = (d, show i)
-    toT (DEonlyNS d) = (d, "")
-    bundle xss@(x : _) = (fst x, filter (/= "") $ map snd xss)
+    toT (DEwithAx d i4s i6s) = (d, map IPv4 (toList i4s) ++ map IPv6 (toList i6s))
+    toT (DEwithA4 d i4s) = (d, map IPv4 $ toList i4s)
+    toT (DEwithA6 d i6s) = (d, map IPv6 $ toList i6s)
+    toT (DEonlyNS d) = (d, [])
+    bundle xss@(x : _) = (fst x, concatMap snd xss)
     bundle [] = ("", []) -- never reach
     pp (d, is) = (show d ++ " " ++ show is, length is)
