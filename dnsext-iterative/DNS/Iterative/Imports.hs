@@ -8,6 +8,7 @@ module DNS.Iterative.Imports (
     module Control.Monad.Trans.Except,
     module Control.Monad.Trans.Reader,
     module Data.Bits,
+    module Data.Bool,
     module Data.Function,
     module Data.Functor,
     module Data.List,
@@ -32,6 +33,7 @@ import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Reader (ReaderT (..), ask, asks)
 import Data.Bits
+import Data.Bool (bool)
 import Data.ByteString (ByteString)
 import Data.Function
 import Data.Functor
