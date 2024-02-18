@@ -3,7 +3,6 @@ module DNS.Iterative.Query.Helpers where
 -- GHC packages
 
 -- other packages
-import Data.List.NonEmpty (nonEmpty)
 
 -- dnsext packages
 import DNS.RRCache (Ranking)

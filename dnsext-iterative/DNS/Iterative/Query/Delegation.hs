@@ -13,7 +13,6 @@ module DNS.Iterative.Query.Delegation (
 import qualified Data.Set as Set
 
 -- other packages
-import Data.List.NonEmpty (nonEmpty)
 
 -- dnsext packages
 import qualified DNS.Log as Log

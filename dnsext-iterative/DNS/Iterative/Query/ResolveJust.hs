@@ -13,11 +13,8 @@ module DNS.Iterative.Query.ResolveJust (
 ) where
 
 -- GHC packages
-import Data.List.NonEmpty (nonEmpty)
 
 -- other packages
-import Data.IP (IP)
-import System.Console.ANSI.Types
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
@@ -30,6 +27,8 @@ import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
+import Data.IP (IP)
+import System.Console.ANSI.Types
 
 -- this package
 import DNS.Iterative.Imports
