@@ -1,6 +1,7 @@
 module DNS.Iterative.Query.Random (
     randomizedSelect,
     randomizedSelectN,
+    randomizedChoice,
     selectIPs,
 ) where
 
@@ -45,6 +46,11 @@ randomizedSelect
     d xs@(_ : _ : _) = do
         ix <- randomizedIndex (0, length xs - 1)
         return $ Just $ xs !! ix
+
+randomizedChoice :: MonadIO m => a -> a -> m a
+randomizedChoice x y
+    | randomSelect = bool x y <$> getStdRandom (randomR (False, True))
+    | otherwise    = pure x
 
 selectIPs :: MonadIO m => Int -> [IP] -> m [IP]
 selectIPs num ips
