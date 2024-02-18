@@ -86,8 +86,7 @@ axList disableV6NS pdom h = foldr takeAx []
             h (IPv6 v6) rr : xs
     takeAx _ xs = xs
 
-{- The existence or non-existence of a Delegation is independent of the existence of [DS_RD]. -}
--- |
+-- | The existence or non-existence of a Delegation is independent of the existence of [DS_RD].
 -- >>> mkRR n ty rd = ResourceRecord n ty IN 3600000 rd
 -- >>> ns = [mkRR "." NS $ rd_ns "m.root-servers.net."]
 -- >>> as =[mkRR "m.root-servers.net." A $ rd_a "202.12.27.33", mkRR "m.root-servers.net." AAAA $ rd_aaaa "2001:dc3::35"]
@@ -96,7 +95,7 @@ axList disableV6NS pdom h = foldr takeAx []
 findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
 findDelegation = findDelegation' (\dom ents dss -> Delegation dom ents (FilledDS dss) [] FreshD)
 
-findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, ResourceRecord)] -> [ResourceRecord] ->  Maybe a
+findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe a
 findDelegation' k nsps adds = do
     ((_, rr), _) <- uncons nsps
     let nss = map fst nsps
