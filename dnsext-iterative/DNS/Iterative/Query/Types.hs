@@ -20,7 +20,6 @@ module DNS.Iterative.Query.Types (
     runDNSQuery,
     throwDnsError,
     handleDnsError,
-    NonEmpty (..),
 ) where
 
 -- GHC packages
