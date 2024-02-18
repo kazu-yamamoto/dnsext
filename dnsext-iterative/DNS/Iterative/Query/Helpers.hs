@@ -1,6 +1,7 @@
 module DNS.Iterative.Query.Helpers where
 
 -- GHC packages
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
 -- other packages
@@ -14,6 +15,7 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6)
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 
 -- $setup
@@ -167,6 +169,83 @@ foldIPList n v4 v6 both ips = foldIPList' n v4 v6 both v4list v6list
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [IP]
+dentryToRandomIP entries addrs disableV6NS des = do
+    acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
+    es    <- map NE.toList <$> sequence acts               {- run randomly choice actions, ipv4 or ipv6  -}
+    as    <- concat <$> mapM (randomizedSelects addrs) es  {- randomly select addresses from each DEntries -}
+    pure $ unique as
+  where
+    actions = dentryIPsetChoices disableV6NS des
+    unique = Set.toList . Set.fromList
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> v4 i = case i of { IPv4{} -> True  ; IPv6{} -> False }
+-- >>> v6 i = case i of { IPv4{} -> False ; IPv6{} -> True  }
+-- >>> expect1 p as = do { [a] <- pure as; is <- a; pure $ p $ NE.toList is }
+--
+-- >>> de4 = DEwithA4 "example." ("192.0.2.33" :| ["192.0.2.34"])
+-- >>> expect1 (all v4) (dentryIPsetChoices False [de4])
+-- True
+-- >>> expect1 (all v4) (dentryIPsetChoices True  [de4])
+-- True
+--
+-- >>> de6 = DEwithA6 "example." ("2001:db8::21" :| ["2001:db8::22"])
+-- >>> expect1 (all v6) (dentryIPsetChoices False [de6])
+-- True
+-- >>> null             (dentryIPsetChoices True  [de6] :: [IO (NonEmpty IP)])
+-- True
+--
+-- >>> de46 = DEwithAx "example." ("192.0.2.35" :| ["192.0.2.36"]) ("2001:db8::23" :| ["2001:db8::24"])
+-- >>> expect1 ((||) <$> all v4 <*> all v6) (dentryIPsetChoices False [de46])
+-- True
+-- >>> expect1 (all v4)                     (dentryIPsetChoices True  [de46])
+-- True
+dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty IP)]
+dentryIPsetChoices disableV6NS des = mapMaybe choose des
+  where
+    choose  DEonlyNS{}           = Nothing
+    choose (DEwithA4 _ i4s)      = Just $ pure $ NE.map IPv4 i4s
+    choose (DEwithA6 _ i6s)
+        | disableV6NS            = Nothing
+        | otherwise              = Just $ pure $ NE.map IPv6 i6s
+    choose (DEwithAx _ i4s i6s)
+        | disableV6NS            = Just $ pure $ NE.map IPv4 i4s
+        | otherwise              = Just $ randomizedChoice (NE.map IPv4 i4s) (NE.map IPv6 i6s)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> de4 = DEwithA4 "example." ("192.0.2.37" :| ["192.0.2.38"])
+-- >>> dentryIPnull False [de4]
+-- False
+-- >>> dentryIPnull True  [de4]
+-- False
+--
+-- >>> de6 = DEwithA6 "example." ("2001:db8::25" :| ["2001:db8::26"])
+-- >>> dentryIPnull False [de6]
+-- False
+-- >>> dentryIPnull True  [de6]
+-- True
+--
+-- >>> de46 = DEwithAx "example." ("192.0.2.39" :| ["192.0.2.40"]) ("2001:db8::27" :| ["2001:db8::28"])
+-- >>> dentryIPnull False [de46]
+-- False
+-- >>> dentryIPnull True  [de46]
+-- False
+dentryIPnull :: Bool -> [DEntry] -> Bool
+dentryIPnull disableV6NS des = all ipNull des
+  where
+    ipNull  DEonlyNS{}            = True
+    ipNull (DEwithA4 _ (_:|_))    = False  {- not null - with NonEmpty IPv4 -}
+    ipNull  DEwithA6{}            = disableV6NS
+    ipNull (DEwithAx _ (_:|_) _)  = False  {- not null - with NonEmpty IPv4 -}
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+{-# DEPRECATED takeDEntryIPs "use chooseIPfromDE and deIPnull, instead of this" #-}
 takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
 takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
   where
