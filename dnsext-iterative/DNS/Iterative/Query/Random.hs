@@ -10,9 +10,7 @@ module DNS.Iterative.Query.Random (
 import System.Random (getStdRandom, randomR)
 
 -- dnsext packages
-
 import Data.IP (IP)
-import Data.List.NonEmpty (NonEmpty (..))
 
 -- this package
 import DNS.Iterative.Imports

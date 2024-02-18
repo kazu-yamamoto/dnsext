@@ -7,12 +7,12 @@ module DNS.Iterative.Query.Utils where
 import Data.List.NonEmpty (toList)
 
 -- other packages
-import System.Console.ANSI.Types
 
 -- dnsext packages
 import qualified DNS.Log as Log
 import DNS.Types (DNSError (..), DNSMessage (..))
 import qualified DNS.Types as DNS
+import System.Console.ANSI.Types
 
 -- this package
 import DNS.Iterative.Imports

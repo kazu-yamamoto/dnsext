@@ -11,6 +11,7 @@ module DNS.Iterative.Imports (
     module Data.Function,
     module Data.Functor,
     module Data.List,
+    module Data.List.NonEmpty,
     module Data.Maybe,
     module Data.Monoid,
     module Data.Ord,
@@ -35,6 +36,7 @@ import Data.ByteString (ByteString)
 import Data.Function
 import Data.Functor
 import Data.List
+import Data.List.NonEmpty (NonEmpty (..), nonEmpty)
 import Data.Maybe
 import Data.Monoid
 import Data.Ord

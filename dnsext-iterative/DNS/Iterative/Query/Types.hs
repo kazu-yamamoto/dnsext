@@ -27,8 +27,6 @@ module DNS.Iterative.Query.Types (
 import Data.IORef (IORef)
 
 -- other packages
-import Data.IP (IP)
-import Data.List.NonEmpty (NonEmpty (..))
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..), Reply)
@@ -42,6 +40,7 @@ import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types
 import qualified DNS.Types as DNS
+import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
