@@ -39,7 +39,7 @@ import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
+import Data.IP (IPv4, IPv6)
 
 -- this package
 import DNS.Iterative.Imports
@@ -159,7 +159,9 @@ delegationHasDS d = case delegationDS d of
     FilledRoot -> True
 
 data DEntry
-    = DEwithAx !Domain !IP
+    = DEwithAx !Domain !(NonEmpty IPv4) !(NonEmpty IPv6)
+    | DEwithA4 !Domain !(NonEmpty IPv4)
+    | DEwithA6 !Domain !(NonEmpty IPv6)
     | DEonlyNS !Domain
     deriving (Show)
 
