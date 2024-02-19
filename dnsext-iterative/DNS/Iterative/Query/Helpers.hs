@@ -26,10 +26,19 @@ rrListWith
     -> (rd -> ResourceRecord -> a)
     -> [ResourceRecord]
     -> [a]
-rrListWith typ fromRD dom h = foldr takeRR []
+rrListWith typ fromRD dom = rrListWith' typ fromRD (== dom)
+
+rrListWith'
+    :: TYPE
+    -> (DNS.RData -> Maybe rd)
+    -> (Domain -> Bool)
+    -> (rd -> ResourceRecord -> a)
+    -> [ResourceRecord]
+    -> [a]
+rrListWith' typ fromRD dpred h = foldr takeRR []
   where
     takeRR rr@ResourceRecord{rdata = rd} xs
-        | rrname rr == dom, rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
+        | dpred (rrname rr), rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
     takeRR _ xs = xs
 
 rrsigList :: Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]

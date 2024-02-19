@@ -141,7 +141,7 @@ resolveNS zone disableV6NS dc ns = do
 
         lookupAx
             | disableV6NS = lk4
-            | otherwise = join $ randomizedSelectN (lk46 :| [lk64])
+            | otherwise = join $ randomizedChoice lk46 lk64
           where
             lk46 = lk4 +? lk6
             lk64 = lk6 +? lk4
@@ -152,7 +152,7 @@ resolveNS zone disableV6NS dc ns = do
 
         query1Ax
             | disableV6NS = querySection A
-            | otherwise = join $ randomizedSelectN (q46 :| [q64])
+            | otherwise = join $ randomizedChoice q46 q64
           where
             q46 = A +!? AAAA
             q64 = AAAA +!? A
