@@ -13,6 +13,7 @@ module DNS.Iterative.Query.ResolveJust (
 ) where
 
 -- GHC packages
+import qualified Data.List.NonEmpty as NE
 
 -- other packages
 
@@ -93,12 +94,12 @@ delegationIPs :: Int -> Delegation -> DNSQuery [IP]
 delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
   where
     run disableV6NS
-        | not (null ips) = selectIPs ipnum ips
+        | not (dentryIPnull disableV6NS dentry) = dentryToRandomIP entryNum addrNum disableV6NS dentry
         | Just names1 <- nonEmpty names = do
             {- case for not (null names) -}
             name <- randomizedSelectN names1
             (: []) . fst <$> resolveNS zone disableV6NS dc name
-        | disableV6NS && not (null allIPs) = do
+        | disableV6NS && not (dentryIPnull False dentry) = do
             orig <- showOrig <$> lift (lift $ asks origQuestion_)
             plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
             throwDnsError DNS.ServerFailure
@@ -112,11 +113,10 @@ delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
                     ++ ", without glue sub-domains: "
                     ++ show subNames
             throwDnsError DNS.ServerFailure
-      where
-        ips = takeDEntryIPs disableV6NS delegationNS
-        allIPs = takeDEntryIPs False delegationNS
 
-    ipnum = 4
+    dentry = NE.toList delegationNS
+    entryNum = 2
+    addrNum = 2
     zone = delegationZone
 
     showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
