@@ -5,11 +5,11 @@ module DNS.Iterative.Query.Root (
     refreshRoot,
     rootPriming,
     cachedDNSKEY,
-    takeDEntryIPs,
 ) where
 
 -- GHC packages
 import Data.IORef (atomicWriteIORef, readIORef)
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
 -- other packages
@@ -24,7 +24,7 @@ import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP (IPv4, IPv6))
+import Data.IP (IP)
 import System.Console.ANSI.Types
 
 -- this package
@@ -32,7 +32,6 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Norec
-import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -71,7 +70,7 @@ rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
     Delegation{delegationNS = hintDes} <- lift $ asks rootHint_
-    ips <- selectIPs 4 $ takeDEntryIPs disableV6NS hintDes
+    ips <- dentryToRandomIP 2 2 disableV6NS $ NE.toList hintDes
     lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     seps <- lift $ asks rootAnchor_
     body seps ips
@@ -160,13 +159,3 @@ verifySEP dss dom dnskeys = do
             ]
     when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
     pure seps
-
-takeDEntryIPs :: Bool -> NonEmpty DEntry -> [IP]
-takeDEntryIPs disableV6NS des = unique $ foldr takeDEntryIP [] des
-  where
-    unique = Set.toList . Set.fromList
-    takeDEntryIP (DEonlyNS{}) xs = xs
-    takeDEntryIP (DEwithAx _ ip@(IPv4{})) xs = ip : xs
-    takeDEntryIP (DEwithAx _ ip@(IPv6{})) xs
-        | disableV6NS = xs
-        | otherwise = ip : xs
