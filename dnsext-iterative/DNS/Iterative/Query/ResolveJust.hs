@@ -86,55 +86,53 @@ resolveExactDC dc n typ
   where
     mdc = maxNotSublevelDelegation
 
+{- FOURMOLU_DISABLE -}
 -- Filter authoritative server addresses from the delegation information.
--- If the resolution result is NODATA, IllegalDomain is returned.
+-- If the resolution result is NODATA, ServerFailure is returned.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc Delegation{..} = do
-    disableV6NS <- lift $ asks disableV6NS_
-
-    let ipnum = 4
+delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
+  where
+    run disableV6NS
+        | not (null ips) = selectIPs ipnum ips
+        | Just names1 <- nonEmpty names = do
+            {- case for not (null names) -}
+            name <- randomizedSelectN names1
+            (: []) . fst <$> resolveNS zone disableV6NS dc name
+        | disableV6NS && not (null allIPs) = do
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
+            plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
+            throwDnsError DNS.ServerFailure
+        | otherwise = do
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
+            plogLn Log.DEMO $
+                "serv-fail: delegation is empty. zone: "
+                    ++ show zone
+                    ++ ", "
+                    ++ orig
+                    ++ ", without glue sub-domains: "
+                    ++ show subNames
+            throwDnsError DNS.ServerFailure
+      where
         ips = takeDEntryIPs disableV6NS delegationNS
-        zone = delegationZone
+        allIPs = takeDEntryIPs False delegationNS
 
-        takeNames (DEonlyNS name) xs
-            | not (name `DNS.isSubDomainOf` zone) = name : xs
-        --    {- skip sub-domain without glue to avoid loop -}
-        takeNames _ xs = xs
+    ipnum = 4
+    zone = delegationZone
 
-        names = foldr takeNames [] delegationNS
+    showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+    plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
 
-        result
-            | not (null ips) = selectIPs ipnum ips
-            | Just names1 <- nonEmpty names = do
-                {- case for not (null names) -}
-                name <- randomizedSelectN names1
-                (: []) . fst <$> resolveNS zone disableV6NS dc name
-            | disableV6NS && not (null allIPs) = do
-                orig <- showOrig <$> lift (lift $ asks origQuestion_)
-                plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
-                throwDnsError DNS.ServerFailure
-            | otherwise = do
-                orig <- showOrig <$> lift (lift $ asks origQuestion_)
-                plogLn Log.DEMO $
-                    "serv-fail: delegation is empty. zone: "
-                        ++ show zone
-                        ++ ", "
-                        ++ orig
-                        ++ ", without glue sub-domains: "
-                        ++ show subNames
-                throwDnsError DNS.ServerFailure
-          where
-            allIPs = takeDEntryIPs False delegationNS
-            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-            plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
+    takeNames (DEonlyNS name) xs
+        | not (name `DNS.isSubDomainOf` zone)  = name : xs
+    --    {- skip sub-domain without glue to avoid loop -}
+    takeNames _ xs                             =        xs
+    names = foldr takeNames [] delegationNS
 
-        takeSubNames (DEonlyNS name) xs
-            | name `DNS.isSubDomainOf` zone =
-                name : xs {- sub-domain name without glue -}
-        takeSubNames _ xs = xs
-        subNames = foldr takeSubNames [] delegationNS
-
-    result
+    takeSubNames (DEonlyNS name) xs
+        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
+    takeSubNames _ xs                    =        xs
+    subNames = foldr takeSubNames [] delegationNS
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
