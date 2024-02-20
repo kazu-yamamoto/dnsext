@@ -381,7 +381,7 @@ cv_bool =
 cv_string' :: Parser String
 cv_string' =
     dquote *> (many (noneOf "\"\n")) <* dquote  <|>
-    many (noneOf " \t\n")
+    many1 (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -397,7 +397,7 @@ cv_string' =
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (spcs1 *> cv_string') <* trailing
+    vs <- many (try (spcs1 *> cv_string')) <* trailing
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
