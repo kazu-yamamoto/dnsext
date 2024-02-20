@@ -75,12 +75,14 @@ commentLines = void $ many commentLine
 
 -- | 'Parser' to consume a trailing comment
 --
+-- >>> parse trailing "" " \n"
+-- Right ()
 -- >>> parse trailing "" "# comments\n"
 -- Right ()
 -- >>> isLeft $ parse trailing "" "X# comments\n"
 -- True
 trailing :: Parser ()
-trailing = void (spcs *> comment *> newline <|> spcs *> newline)
+trailing = void (spcs *> optional comment *> newline)
 
 -- | 'Parser' to consume a trailing comment
 --

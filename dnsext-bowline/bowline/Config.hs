@@ -221,6 +221,9 @@ makeConfig def conf =
     subdoms d rrs = [rr | rr <- rrs, rrname rr `isSubDomainOf` d]
     getRR s = StateT $ parseLineRR $ fromString s
 
+-- $setup
+-- >>> :seti -XOverloadedStrings
+
 {- FOURMOLU_DISABLE -}
 -- |
 -- >>> getLocalZone [("foo",CV_Int 4),("local-zone",CV_Strings ["example.", "static"]),("local-data",CV_String "a.example. A 203.0.113.5"),("bar",CV_Bool True)]
@@ -287,12 +290,12 @@ instance FromConf String where
 instance FromConf (Maybe String) where
     fromConf (CV_String "") = Nothing
     fromConf (CV_String s) = Just s
-    fromConf _ = error "fromConf string"
+    fromConf _ = error "fromConf maybe string"
 
 instance FromConf [String] where
     fromConf (CV_String s) = filter (/= "") $ splitOn "," s
     fromConf (CV_Strings ss) = ss
-    fromConf _ = error "fromConf string"
+    fromConf _ = error "fromConf string list"
 
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
@@ -378,14 +381,23 @@ cv_bool =
 cv_string' :: Parser String
 cv_string' =
     dquote *> (many (noneOf "\"\n")) <* dquote  <|>
-    many (noneOf " \t\n")
+    many1 (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+-- |
+-- >>> parse cv_strings "" "\"conf.txt\"\n"
+-- Right (CV_String "conf.txt")
+-- >>> parse cv_strings "" "\"conf.txt\" # foo\n"
+-- Right (CV_String "conf.txt")
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static\n"
+-- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static # foo\n"
+-- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (spcs1 *> cv_string') <* trailing
+    vs <- many (try (spcs1 *> cv_string')) <* trailing
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
