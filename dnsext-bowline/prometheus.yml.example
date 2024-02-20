@@ -1,0 +1,5 @@
+scrape_configs:
+  # put it under scrape_configs alongside other job_names
+  - job_name: bowline
+    static_configs:
+      - targets: ['localhost:8080']
