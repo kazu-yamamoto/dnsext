@@ -287,12 +287,12 @@ instance FromConf String where
 instance FromConf (Maybe String) where
     fromConf (CV_String "") = Nothing
     fromConf (CV_String s) = Just s
-    fromConf _ = error "fromConf string"
+    fromConf _ = error "fromConf maybe string"
 
 instance FromConf [String] where
     fromConf (CV_String s) = filter (/= "") $ splitOn "," s
     fromConf (CV_Strings ss) = ss
-    fromConf _ = error "fromConf string"
+    fromConf _ = error "fromConf string list"
 
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
