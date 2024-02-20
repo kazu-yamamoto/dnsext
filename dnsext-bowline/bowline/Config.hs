@@ -221,6 +221,9 @@ makeConfig def conf =
     subdoms d rrs = [rr | rr <- rrs, rrname rr `isSubDomainOf` d]
     getRR s = StateT $ parseLineRR $ fromString s
 
+-- $setup
+-- >>> :seti -XOverloadedStrings
+
 {- FOURMOLU_DISABLE -}
 -- |
 -- >>> getLocalZone [("foo",CV_Int 4),("local-zone",CV_Strings ["example.", "static"]),("local-data",CV_String "a.example. A 203.0.113.5"),("bar",CV_Bool True)]
@@ -382,6 +385,15 @@ cv_string' =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+-- |
+-- >>> parse cv_strings "" "\"conf.txt\"\n"
+-- Right (CV_String "conf.txt")
+-- >>> parse cv_strings "" "\"conf.txt\" # foo\n"
+-- Right (CV_String "conf.txt")
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static\n"
+-- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static # foo\n"
+-- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
