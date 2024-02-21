@@ -68,4 +68,4 @@ getStats Env{..} prefix =
   where
     getGlobalStats = (<>) <$> (cacheCount <$> getCache_) <*> (info <$> getNumCapabilities)
     cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
-    info cap = prefix <> fromString ("info{threads=\"" ++ show cap ++ "\", version=\"0.0.20240216\"} 1\n")
+    info cap = prefix <> fromString ("info{threads=\"" ++ show cap ++ "\", version=\"0.0.20240221\"} 1\n")
