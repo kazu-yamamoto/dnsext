@@ -74,8 +74,6 @@ mkdir -p -m 755 /opt/bowline/etc
 install -m 444 \
     bowline.conf.dist \
     dnsext/dnsext-bowline/bowline/default-local.conf \
-    dnsext/root-data/root.key \
-    dnsext/root-data/root.hints \
     /opt/bowline/etc/
 install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
@@ -108,8 +106,6 @@ WORKDIR /opt/bowline/
 RUN <<EOF
 set -e -x
 sed \
-    -e '1i trust-anchor-file: etc/root.key' \
-    -e '1i root-hints: etc/root.hints' \
     -e '\@^include: .*$@d' \
     -e '1i include: etc/default-local.conf' \
     -e 's@^disable-v6-ns: .*$@disable-v6-ns: no@' \
