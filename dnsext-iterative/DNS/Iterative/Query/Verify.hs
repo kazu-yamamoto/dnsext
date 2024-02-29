@@ -94,7 +94,7 @@ cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK rightK0
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
-    sigs = rrsigList rrn rrty srrs
+    sigs = rrsigList zone rrn rrty srrs
     rightK rrs sortedRRs = do
         now <- liftIO getSec
         withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->

@@ -44,8 +44,8 @@ rrListWith' typ fromRD dpred h = foldr takeRR []
         | dpred (rrname rr), rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
     takeRR _ xs = xs
 
-rrsigList :: Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
-rrsigList dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom pair rrs
+rrsigList :: Domain -> Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
+rrsigList zone dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom pair rrs
   where
     pair rd rr = (rd, rrttl rr)
 
