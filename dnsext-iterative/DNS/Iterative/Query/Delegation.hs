@@ -85,54 +85,6 @@ lookupDelegation dom = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
--- | result value cases of dentryFromCache :
---     []             : miss-hit, skip this NS name, to avoid iterative loop
---     [DEonlyNS {}]  : miss-hit
---     [DEwithA...]   : hit
---
--- >>> :seti -XOverloadedStrings
--- >>> dentryFromCache "example." "ns.example." Nothing Nothing
--- []
--- >>> dentryFromCache "example." "ns.example." Nothing (Just [])
--- []
--- >>> dentryFromCache "example." "ns.example." (Just []) Nothing
--- []
--- >>> dentryFromCache "example." "ns.example." (Just []) (Just [])
--- []
--- >>> dentryFromCache "a.example." "ns.example." Nothing Nothing
--- [DEonlyNS "ns.example."]
--- >>> dentryFromCache "a.example." "ns.example." Nothing (Just [])
--- [DEonlyNS "ns.example."]
--- >>> dentryFromCache "a.example." "ns.example." (Just []) Nothing
--- [DEonlyNS "ns.example."]
--- >>> dentryFromCache "a.example." "ns.example." (Just []) (Just [])
--- []
--- >>> dentryFromCache "a.example." "ns.example." (Just ["192.0.2.1"]) (Just [])
--- [DEwithA4 "ns.example." (192.0.2.1 :| [])]
--- >>> dentryFromCache "a.example." "ns.example." (Just []) (Just ["2001:db8::1"])
--- [DEwithA6 "ns.example." (2001:db8::1 :| [])]
--- >>> dentryFromCache "a.example." "ns.example." (Just ["192.0.2.1"]) (Just ["2001:db8::1"])
--- [DEwithAx "ns.example." (192.0.2.1 :| []) (2001:db8::1 :| [])]
-dentryFromCache :: Domain -> Domain -> Maybe [IPv4] -> Maybe [IPv6] -> [DEntry]
-dentryFromCache dom ns = dispatch
-  where
-    missHit
-        | ns `DNS.isSubDomainOf` dom  = []  {- miss-hit with sub-domain case cause iterative loop. null result to skip this NS -}
-        | otherwise                   = [DEonlyNS ns]
-    dispatch Nothing       Nothing          = missHit  {- A: miss-hit     AAAA: miss-hit                       -}
-    dispatch Nothing       (Just [])        = missHit  {- A: miss-hit     AAAA: hit NoData  , assumes miss-hit -}
-    dispatch (Just [])     Nothing          = missHit  {- A: hit NoData   AAAA: miss-hit    , assumes miss-hit -}
-    dispatch Nothing       (Just (i:is))    = [DEwithA6 ns (i :| is)]
-    dispatch (Just (i:is)) Nothing          = [DEwithA4 ns (i :| is)]
-    dispatch (Just i4s)   (Just i6s)        = foldIPList'
-                                              []       {- A: hit NoData   AAAA: hit NoData  , maybe wrong cache, skip this NS -}
-                                              (\v4    -> [DEwithA4 ns v4])
-                                              (\v6    -> [DEwithA6 ns v6])
-                                              (\v4 v6 -> [DEwithAx ns v4 v6])
-                                              i4s i6s
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 noV4DEntry :: DEntry -> Bool
 noV4DEntry (DEonlyNS {})          = True
 noV4DEntry (DEwithA4 _ (_:|_))    = False
@@ -178,6 +130,54 @@ delegationWithCache zone dnskeys dom msg = do
         nsSet = Set.fromList $ map fst nsps
 
     unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
+
+{- FOURMOLU_DISABLE -}
+-- | result value cases of dentryFromCache :
+--     []             : miss-hit, skip this NS name, to avoid iterative loop
+--     [DEonlyNS {}]  : miss-hit
+--     [DEwithA...]   : hit
+--
+-- >>> :seti -XOverloadedStrings
+-- >>> dentryFromCache "example." "ns.example." Nothing Nothing
+-- []
+-- >>> dentryFromCache "example." "ns.example." Nothing (Just [])
+-- []
+-- >>> dentryFromCache "example." "ns.example." (Just []) Nothing
+-- []
+-- >>> dentryFromCache "example." "ns.example." (Just []) (Just [])
+-- []
+-- >>> dentryFromCache "a.example." "ns.example." Nothing Nothing
+-- [DEonlyNS "ns.example."]
+-- >>> dentryFromCache "a.example." "ns.example." Nothing (Just [])
+-- [DEonlyNS "ns.example."]
+-- >>> dentryFromCache "a.example." "ns.example." (Just []) Nothing
+-- [DEonlyNS "ns.example."]
+-- >>> dentryFromCache "a.example." "ns.example." (Just []) (Just [])
+-- []
+-- >>> dentryFromCache "a.example." "ns.example." (Just ["192.0.2.1"]) (Just [])
+-- [DEwithA4 "ns.example." (192.0.2.1 :| [])]
+-- >>> dentryFromCache "a.example." "ns.example." (Just []) (Just ["2001:db8::1"])
+-- [DEwithA6 "ns.example." (2001:db8::1 :| [])]
+-- >>> dentryFromCache "a.example." "ns.example." (Just ["192.0.2.1"]) (Just ["2001:db8::1"])
+-- [DEwithAx "ns.example." (192.0.2.1 :| []) (2001:db8::1 :| [])]
+dentryFromCache :: Domain -> Domain -> Maybe [IPv4] -> Maybe [IPv6] -> [DEntry]
+dentryFromCache zone ns = dispatch
+  where
+    missHit
+        | ns `DNS.isSubDomainOf` zone  = []  {- miss-hit with sub-domain case cause iterative loop. null result to skip this NS -}
+        | otherwise                    = [DEonlyNS ns]
+    dispatch Nothing       Nothing          = missHit  {- A: miss-hit     AAAA: miss-hit                       -}
+    dispatch Nothing       (Just [])        = missHit  {- A: miss-hit     AAAA: hit NoData  , assumes miss-hit -}
+    dispatch (Just [])     Nothing          = missHit  {- A: hit NoData   AAAA: miss-hit    , assumes miss-hit -}
+    dispatch Nothing       (Just (i:is))    = [DEwithA6 ns (i :| is)]
+    dispatch (Just (i:is)) Nothing          = [DEwithA4 ns (i :| is)]
+    dispatch (Just i4s)   (Just i6s)        = foldIPList'
+                                              []       {- A: hit NoData   AAAA: hit NoData  , maybe wrong cache, skip this NS -}
+                                              (\v4    -> [DEwithA4 ns v4])
+                                              (\v6    -> [DEwithA6 ns v6])
+                                              (\v4 v6 -> [DEwithAx ns v4 v6])
+                                              i4s i6s
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 unsignedDelegationOrNoDataAction
