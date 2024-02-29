@@ -72,16 +72,9 @@ lookupDelegation zone = do
             let nss = sort $ nsList zone const rrs
             case nss of
                 []     -> return $ Just noDelegation {- hit null NS list, so no delegation -}
-                _ : _  -> fromDEs . concat <$> mapM lookupDEs nss
+                _ : _  -> fromDEs . concat <$> mapM (lookupDEntry zone) nss
 
     maybe (return Nothing) getDelegation =<< lookupCache zone NS
-  where
-    lookupDEs ns = do
-        let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
-            takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
-        lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
-        lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
-        pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -130,6 +123,16 @@ delegationWithCache zone dnskeys dom msg = do
         nsSet = Set.fromList $ map fst nsps
 
     unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
+
+{- FOURMOLU_DISABLE -}
+lookupDEntry :: Domain -> Domain -> ReaderT Env (ReaderT QueryContext IO) [DEntry]
+lookupDEntry zone ns = do
+    let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
+        takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
+    lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
+    lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
+    pure $ dentryFromCache zone ns lk4 lk6
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 -- | result value cases of dentryFromCache :
