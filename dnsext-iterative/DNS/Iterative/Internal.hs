@@ -22,9 +22,11 @@ module DNS.Iterative.Internal (
     refreshRoot,
     rootPriming,
     rrsetValid,
+    cacheAnswer,
 ) where
 
 import DNS.Iterative.Query.API
+import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Env
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Resolve
