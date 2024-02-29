@@ -54,7 +54,7 @@ mayDelegation n h (MayDelegation m) = maybe n h m
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
 lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
-lookupDelegation dom = do
+lookupDelegation zone = do
     disableV6NS <- asks disableV6NS_
     let noCachedV4NS es = disableV6NS && all noV4DEntry es
 
@@ -64,24 +64,24 @@ lookupDelegation dom = do
             --
             {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
             | otherwise = list Nothing ((Just .) . hasDelegation') es
-          where hasDelegation' de des = hasDelegation $ Delegation dom (de :| des) (NotFilledDS CachedDelegation) [] CachedD
+          where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
-            let nss = sort $ nsList dom const rrs
+            let nss = sort $ nsList zone const rrs
             case nss of
                 []     -> return $ Just noDelegation {- hit null NS list, so no delegation -}
                 _ : _  -> fromDEs . concat <$> mapM lookupDEs nss
 
-    maybe (return Nothing) getDelegation =<< lookupCache dom NS
+    maybe (return Nothing) getDelegation =<< lookupCache zone NS
   where
     lookupDEs ns = do
         let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
             takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
         lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
         lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
-        pure $ dentryFromCache dom ns lk4 lk6
+        pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
