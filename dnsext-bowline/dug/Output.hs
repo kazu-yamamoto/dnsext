@@ -88,10 +88,12 @@ opcd x = show x
 putEDNSHeader :: Printer EDNSheader
 putEDNSHeader (EDNSheader EDNS{..}) = do
     nl
-    dsemi *> sp *> string "OPTIONAL PSEUDO SECTION:" *> nl
-    semi *> string "UDP: " *> string (show ednsUdpSize) *> string ", "
+    dsemi *> sp *> string "OPTIONAL PSEUDO EDNS SECTION:" *> nl
+    semi
+    string "Version: " *> string (show ednsVersion) *> string ", "
+    string "UDP: " *> string (show ednsUdpSize) *> string ", "
+    string "DNSSEC OK: " *> string (show ednsDnssecOk) *> string ", " {- DNSFlags have other flags -}
     string "Data:" *> string (show ednsOptions) *> nl
--- fixme: ednsDnssecOk
 putEDNSHeader _ = pure ()
 
 ----------------------------------------------------------------
