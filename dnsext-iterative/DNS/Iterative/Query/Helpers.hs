@@ -44,9 +44,10 @@ rrListWith' typ fromRD dpred h = foldr takeRR []
         | dpred (rrname rr), rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
     takeRR _ xs = xs
 
-rrsigList :: Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
-rrsigList dom typ rrs = rrListWith RRSIG (sigrdWith typ <=< DNS.fromRData) dom pair rrs
+rrsigList :: Domain -> Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
+rrsigList zone dom typ rrs = rrListWith RRSIG getSIGRD dom pair rrs
   where
+    getSIGRD = sigrdZoneWith zone <=< sigrdTypeWith typ <=< DNS.fromRData
     pair rd rr = (rd, rrttl rr)
 
 rrsetGoodSigs :: RRset -> [RD_RRSIG]
@@ -55,8 +56,11 @@ rrsetGoodSigs = mayVerifiedRRS [] (const []) id . rrsMayVerified
 rrsetValid :: RRset -> Bool
 rrsetValid = mayVerifiedRRS False (const False) (const True) . rrsMayVerified
 
-sigrdWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
-sigrdWith sigType sigrd = guard (rrsig_type sigrd == sigType) *> return sigrd
+sigrdTypeWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
+sigrdTypeWith sigType sigrd = guard (rrsig_type sigrd == sigType) $> sigrd
+
+sigrdZoneWith :: Domain -> RD_RRSIG -> Maybe RD_RRSIG
+sigrdZoneWith zone sigrd = guard (rrsig_zone sigrd == zone) $> sigrd
 
 withSection
     :: (m -> ([ResourceRecord], Ranking))

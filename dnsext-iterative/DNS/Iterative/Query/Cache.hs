@@ -194,7 +194,7 @@ cacheSectionNegative
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     getSec <- asks currentSeconds_
-    Verify.cases getSec dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
+    Verify.cases getSec zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
@@ -277,7 +277,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     return result
   where
     qinfo = show dom ++ " " ++ show typ
-    verify getSec = Verify.cases getSec dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+    verify getSec = Verify.cases getSec zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
@@ -316,7 +316,7 @@ cacheNoDelegation d zone dnskeys dom msg
     | otherwise = pure ()
   where
     nameErrors = lift (asks currentSeconds_) >>=
-        \getSec -> Verify.cases getSec dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+        \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> lift cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
