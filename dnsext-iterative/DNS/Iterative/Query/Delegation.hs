@@ -54,7 +54,7 @@ mayDelegation n h (MayDelegation m) = maybe n h m
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
 lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
-lookupDelegation dom = do
+lookupDelegation zone = do
     disableV6NS <- asks disableV6NS_
     let noCachedV4NS es = disableV6NS && all noV4DEntry es
 
@@ -64,24 +64,84 @@ lookupDelegation dom = do
             --
             {- Nothing case, all NS records are skipped, so handle as miss-hit NS case -}
             | otherwise = list Nothing ((Just .) . hasDelegation') es
-          where hasDelegation' de des = hasDelegation $ Delegation dom (de :| des) (NotFilledDS CachedDelegation) [] CachedD
+          where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
-            let nss = sort $ nsList dom const rrs
+            let nss = sort $ nsList zone const rrs
             case nss of
                 []     -> return $ Just noDelegation {- hit null NS list, so no delegation -}
-                _ : _  -> fromDEs . concat <$> mapM lookupDEs nss
+                _ : _  -> fromDEs . concat <$> mapM (lookupDEntry zone) nss
 
-    maybe (return Nothing) getDelegation =<< lookupCache dom NS
+    maybe (return Nothing) getDelegation =<< lookupCache zone NS
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+noV4DEntry :: DEntry -> Bool
+noV4DEntry (DEonlyNS {})          = True
+noV4DEntry (DEwithA4 _ (_:|_))    = False
+noV4DEntry (DEwithA6 _ _)         = True
+noV4DEntry (DEwithAx _ (_:|_) _)  = False
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- Caching while retrieving delegation information from the authoritative server's reply
+delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
+delegationWithCache zone dnskeys dom msg = do
+    {- There is delegation information only when there is a selectable NS -}
+    getSec <- lift $ asks currentSeconds_
+    maybe (notFound $> noDelegation) (fillDEntries <=< found getSec) $ findDelegation nsps adds
   where
-    lookupDEs ns = do
-        let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
-            takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
-        lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
-        lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
-        pure $ dentryFromCache dom ns lk4 lk6
+    fillDEntries d = list noAvail result =<< lift (concat <$> mapM fill des)
+      where
+        des = delegationNS d
+        fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
+        fill  e            = pure [e]
+        noAvail = lift (logLines Log.DEMO ("delegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
+        pprNS (e:|es) = map (("  " ++) . show) $ e : es
+        result e es = pure $ hasDelegation d{delegationNS = e :| es}
+    found getSec k = Verify.cases getSec dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
+    fromDS = DNS.fromRData . rdata
+    {- TODO: NoData DS negative cache -}
+    nullDS k = do
+        unsignedDelegationOrNoData $> ()
+        lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        lift $ caches $> k []
+    ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
+    withDS k dsrds dsRRset cacheDS
+        | rrsetValid dsRRset = lift $ do
+            let x = k dsrds
+            vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
+            caches *> cacheDS $> x
+        | otherwise =
+            lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
+    caches = cacheNS *> cacheAdds
+
+    notFound = lift $ vrfyLog Nothing "no delegation"
+    vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
+    domTraceMsg = show zone ++ " -> " ++ show dom
+
+    (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
+        let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
+
+    (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
+        let axs = filter match rrs in (axs, cacheSection axs rank)
+      where
+        match rr = rrtype rr `elem` [A, AAAA] && rrname rr `isSubDomainOf` zone && rrname rr `Set.member` nsSet
+        nsSet = Set.fromList $ map fst nsps
+
+    unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+lookupDEntry :: Domain -> Domain -> ReaderT Env (ReaderT QueryContext IO) [DEntry]
+lookupDEntry zone ns = do
+    let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
+        takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
+    lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
+    lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
+    pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -114,11 +174,11 @@ lookupDelegation dom = do
 -- >>> dentryFromCache "a.example." "ns.example." (Just ["192.0.2.1"]) (Just ["2001:db8::1"])
 -- [DEwithAx "ns.example." (192.0.2.1 :| []) (2001:db8::1 :| [])]
 dentryFromCache :: Domain -> Domain -> Maybe [IPv4] -> Maybe [IPv6] -> [DEntry]
-dentryFromCache dom ns = dispatch
+dentryFromCache zone ns = dispatch
   where
     missHit
-        | ns `DNS.isSubDomainOf` dom  = []  {- miss-hit with sub-domain case cause iterative loop. null result to skip this NS -}
-        | otherwise                   = [DEonlyNS ns]
+        | ns `DNS.isSubDomainOf` zone  = []  {- miss-hit with sub-domain case cause iterative loop. null result to skip this NS -}
+        | otherwise                    = [DEonlyNS ns]
     dispatch Nothing       Nothing          = missHit  {- A: miss-hit     AAAA: miss-hit                       -}
     dispatch Nothing       (Just [])        = missHit  {- A: miss-hit     AAAA: hit NoData  , assumes miss-hit -}
     dispatch (Just [])     Nothing          = missHit  {- A: hit NoData   AAAA: miss-hit    , assumes miss-hit -}
@@ -131,53 +191,6 @@ dentryFromCache dom ns = dispatch
                                               (\v4 v6 -> [DEwithAx ns v4 v6])
                                               i4s i6s
 {- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-noV4DEntry :: DEntry -> Bool
-noV4DEntry (DEonlyNS {})          = True
-noV4DEntry (DEwithA4 _ (_:|_))    = False
-noV4DEntry (DEwithA6 _ _)         = True
-noV4DEntry (DEwithAx _ (_:|_) _)  = False
-{- FOURMOLU_ENABLE -}
-
--- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
-delegationWithCache zone dnskeys dom msg = do
-    {- There is delegation information only when there is a selectable NS -}
-    getSec <- lift $ asks currentSeconds_
-    maybe (notFound $> noDelegation) (fmap hasDelegation . found getSec) $ findDelegation nsps adds
-  where
-    found getSec k = Verify.cases getSec dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
-    fromDS = DNS.fromRData . rdata
-    {- TODO: NoData DS negative cache -}
-    nullDS k = do
-        unsignedDelegationOrNoData $> ()
-        lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
-        lift $ caches $> k []
-    ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
-    withDS k dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = lift $ do
-            let x = k dsrds
-            vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
-            caches *> cacheDS $> x
-        | otherwise =
-            lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
-    caches = cacheNS *> cacheAdds
-
-    notFound = lift $ vrfyLog Nothing "no delegation"
-    vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
-    domTraceMsg = show zone ++ " -> " ++ show dom
-
-    (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
-        let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
-
-    (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
-        let axs = filter match rrs in (axs, cacheSection axs rank)
-      where
-        match rr = rrtype rr `elem` [A, AAAA] && rrname rr `isSubDomainOf` zone && rrname rr `Set.member` nsSet
-        nsSet = Set.fromList $ map fst nsps
-
-    unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
 
 {- FOURMOLU_DISABLE -}
 unsignedDelegationOrNoDataAction
