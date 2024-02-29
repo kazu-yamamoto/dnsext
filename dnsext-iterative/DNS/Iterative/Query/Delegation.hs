@@ -85,13 +85,22 @@ noV4DEntry (DEwithA6 _ _)         = True
 noV4DEntry (DEwithAx _ (_:|_) _)  = False
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
     getSec <- lift $ asks currentSeconds_
-    maybe (notFound $> noDelegation) (fmap hasDelegation . found getSec) $ findDelegation nsps adds
+    maybe (notFound $> noDelegation) (fillDEntries <=< found getSec) $ findDelegation nsps adds
   where
+    fillDEntries d = list noAvail result =<< lift (concat <$> mapM fill des)
+      where
+        des = delegationNS d
+        fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
+        fill  e            = pure [e]
+        noAvail = lift (logLines Log.DEMO ("delegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
+        pprNS (e:|es) = map (("  " ++) . show) $ e : es
+        result e es = pure $ hasDelegation d{delegationNS = e :| es}
     found getSec k = Verify.cases getSec dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
@@ -123,6 +132,7 @@ delegationWithCache zone dnskeys dom msg = do
         nsSet = Set.fromList $ map fst nsps
 
     unsignedDelegationOrNoData = unsignedDelegationOrNoDataAction zone dnskeys dom A msg
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 lookupDEntry :: Domain -> Domain -> ReaderT Env (ReaderT QueryContext IO) [DEntry]
