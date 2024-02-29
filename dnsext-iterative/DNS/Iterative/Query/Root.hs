@@ -82,7 +82,7 @@ rootPriming = do
     nullNS = left "no NS RRs"
     ncNS _ncLog = left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
-    verify getSec dnskeys msgNS dsState = Verify.cases getSec dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+    verify getSec dnskeys msgNS dsState = Verify.cases getSec "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
         \nsps nsRRset cacheNS -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
@@ -123,8 +123,8 @@ cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
 cachedDNSKEY dss aservers dom = cachedDNSKEY' ((map fst <$>) . verifySEP dss dom . dnskeyList dom) aservers dom
 
 cachedDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY' getSEPs aservers dom = do
-    msg <- norec True aservers dom DNSKEY
+cachedDNSKEY' getSEPs aservers zone = do
+    msg <- norec True aservers zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
@@ -140,7 +140,7 @@ cachedDNSKEY' getSEPs aservers dom = do
             nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         getSec <- lift $ asks currentSeconds_
-        Verify.cases getSec seps rankedAnswer msg dom DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+        Verify.cases getSec zone seps rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 dnskeyList :: Domain -> [ResourceRecord] -> [RD_DNSKEY]
 dnskeyList dom rrs = rrListWith DNSKEY DNS.fromRData dom const rrs

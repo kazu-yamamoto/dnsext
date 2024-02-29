@@ -174,7 +174,7 @@ resolveTYPE bn typ = do
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
             lift cacheCNAME $> (msg, cninfo, ([], []))
     getSec <- lift $ asks currentSeconds_
-    Verify.cases getSec delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
+    Verify.cases getSec delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
 maxCNameChain :: Int
 maxCNameChain = 16

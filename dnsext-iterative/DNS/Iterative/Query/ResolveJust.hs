@@ -318,8 +318,9 @@ servsChildZone dc nss dom msg =
             failWithCacheOrigQ rank DNS.ServerFailure
         verifySOA getSec wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases getSec dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases getSec zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
           where
+            zone = delegationZone wd
             dnskeys = delegationDNSKEY wd
             nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
             ncSOA _ncLog = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
@@ -395,17 +396,18 @@ fillDelegationDS dc src dest
                 lift . clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
         lift $ logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
-        result =<< queryDS (delegationDNSKEY src) ips zone
+        result =<< queryDS (delegationZone src) (delegationDNSKEY src) ips zone
 
 queryDS
-    :: [RD_DNSKEY]
+    :: Domain
+    -> [RD_DNSKEY]
     -> [IP]
     -> Domain
     -> DNSQuery (Either String [RD_DS], Color, String)
-queryDS dnskeys ips dom = do
+queryDS zone dnskeys ips dom = do
     msg <- norec True ips dom DS
     getSec <- lift $ asks currentSeconds_
-    Verify.cases getSec dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.cases getSec zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
     ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")

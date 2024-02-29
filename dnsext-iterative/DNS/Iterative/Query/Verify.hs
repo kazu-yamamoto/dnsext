@@ -54,6 +54,7 @@ import DNS.Iterative.Query.Utils
 cases
     :: MonadIO m
     => IO EpochTime
+    -> Domain
     -> [RD_DNSKEY]
     -> (dm -> ([ResourceRecord], Ranking)) -> dm
     -> Domain  -> TYPE
@@ -61,8 +62,8 @@ cases
     -> m b -> (ContextT IO () -> m b)
     -> ([a] -> RRset -> ContextT IO () -> m b)
     -> m b
-cases getSec dnskeys getRanked msg rrn rrty h nullK ncK rightK =
-    withSection getRanked msg $ \srrs rank -> cases' getSec dnskeys srrs rank rrn rrty h nullK withNcLog withRRS
+cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
+    withSection getRanked msg $ \srrs rank -> cases' getSec zone dnskeys srrs rank rrn rrty h nullK withNcLog withRRS
   where
     withNcLog rrs s = ncK $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
     withRRS x rrset cache = rightK x rrset (logInv *> cache)
@@ -79,6 +80,7 @@ cases getSec dnskeys getRanked msg rrn rrty h nullK ncK rightK =
 cases'
     :: MonadIO m
     => IO EpochTime
+    -> Domain
     -> [RD_DNSKEY]
     -> [ResourceRecord] -> Ranking
     -> Domain -> TYPE
@@ -87,7 +89,7 @@ cases'
     -> ([a] -> RRset -> ContextT IO () -> m b)
     -> m b
 {- FOURMOLU_ENABLE -}
-cases' getSec dnskeys srrs rank rrn rrty h nullK ncK rightK0
+cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK rightK0
     | null xRRs = nullK
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where

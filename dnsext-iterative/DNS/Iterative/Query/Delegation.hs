@@ -101,7 +101,7 @@ delegationWithCache zone dnskeys dom msg = do
         noAvail = lift (logLines Log.DEMO ("delegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
         pprNS (e:|es) = map (("  " ++) . show) $ e : es
         result e es = pure $ hasDelegation d{delegationNS = e :| es}
-    found getSec k = Verify.cases getSec dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
+    found getSec k = Verify.cases getSec zone dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
     nullDS k = do
