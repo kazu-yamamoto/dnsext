@@ -62,7 +62,7 @@ cases
     -> ([a] -> RRset -> ContextT IO () -> m b)
     -> m b
 cases getSec dnskeys getRanked msg rrn rrty h nullK ncK rightK =
-    withSection getRanked msg $ \srrs rank -> cases' getSec dnskeys rrn rrty h srrs rank nullK withNcLog withRRS
+    withSection getRanked msg $ \srrs rank -> cases' getSec dnskeys srrs rank rrn rrty h nullK withNcLog withRRS
   where
     withNcLog rrs s = ncK $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
     withRRS x rrset cache = rightK x rrset (logInv *> cache)
@@ -80,14 +80,14 @@ cases'
     :: MonadIO m
     => IO EpochTime
     -> [RD_DNSKEY]
+    -> [ResourceRecord] -> Ranking
     -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
-    -> [ResourceRecord] -> Ranking
     -> m b -> ([ResourceRecord] -> String -> m b)
     -> ([a] -> RRset -> ContextT IO () -> m b)
     -> m b
 {- FOURMOLU_ENABLE -}
-cases' getSec dnskeys rrn rrty h srrs rank nullK ncK rightK0
+cases' getSec dnskeys srrs rank rrn rrty h nullK ncK rightK0
     | null xRRs = nullK
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
