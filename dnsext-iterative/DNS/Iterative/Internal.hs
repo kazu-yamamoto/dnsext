@@ -23,6 +23,7 @@ module DNS.Iterative.Internal (
     rootPriming,
     rrsetValid,
     cacheAnswer,
+    verifySEP,
 ) where
 
 import DNS.Iterative.Query.API

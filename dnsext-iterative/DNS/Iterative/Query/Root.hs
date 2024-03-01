@@ -5,6 +5,7 @@ module DNS.Iterative.Query.Root (
     refreshRoot,
     rootPriming,
     cachedDNSKEY,
+    verifySEP,
 ) where
 
 -- GHC packages
