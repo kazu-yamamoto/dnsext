@@ -20,7 +20,6 @@ import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
 
 -- this package
-
 import DNS.SEC.Flags (DNSKEY_Flag (REVOKE, ZONE))
 import DNS.SEC.HashAlg
 import DNS.SEC.Imports
@@ -122,7 +121,9 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show rrsig_pubalg
-    unless (dnskey_pubalg == RSAMD5 || keyTag dnskey == rrsig_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    when (dnskey_pubalg == RSAMD5) $
+        Left "verifyRRSIGwith: not implemented key-tag computation for RSAMD5"
+    unless (keyTag dnskey == rrsig_key_tag) $
         Left $
             "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: "
                 ++ show (keyTag dnskey)
@@ -291,9 +292,11 @@ verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
                 ++ " =/= "
                 ++ show ds_pubalg
     let dnskeyBS = runBuilder (resourceDataSize dnskey) $ putResourceData Canonical dnskey
-    unless (dnskey_pubalg == RSAMD5 || keyTagFromBS dnskeyBS == ds_key_tag) $ {- not implement keytag computation for RSAMD5 -}
+    when (dnskey_pubalg == RSAMD5) $
+        Left "verifyDSwith: not implemented key-tag computation for RSAMD5"
+    unless (keyTagFromBS dnskeyBS == ds_key_tag) $
         Left $
-            "verifyRRSIGwith: Key Tag mismatch between DNSKEY and DS: "
+            "verifyDSwith: Key Tag mismatch between DNSKEY and DS: "
                 ++ show (keyTagFromBS dnskeyBS)
                 ++ " =/= "
                 ++ show ds_key_tag
