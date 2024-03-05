@@ -20,6 +20,7 @@ import DNS.RRCache (
     rankedAdditional,
     rankedAuthority,
  )
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types
@@ -93,14 +94,6 @@ delegationWithCache zone dnskeys dom msg = do
     getSec <- lift $ asks currentSeconds_
     maybe (notFound $> noDelegation) (fillDEntries <=< found getSec) $ findDelegation nsps adds
   where
-    fillDEntries d = list noAvail result =<< lift (concat <$> mapM fill des)
-      where
-        des = delegationNS d
-        fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
-        fill  e            = pure [e]
-        noAvail = lift (logLines Log.DEMO ("delegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
-        pprNS (e:|es) = map (("  " ++) . show) $ e : es
-        result e es = pure $ hasDelegation d{delegationNS = e :| es}
     found getSec k = Verify.cases getSec zone dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     {- TODO: NoData DS negative cache -}
@@ -135,13 +128,29 @@ delegationWithCache zone dnskeys dom msg = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-lookupDEntry :: Domain -> Domain -> ReaderT Env (ReaderT QueryContext IO) [DEntry]
+fillDEntries :: Delegation -> DNSQuery MayDelegation
+fillDEntries d = list noAvail result =<< lift (concat <$> mapM fill des)
+  where
+    des = delegationNS d
+    fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
+    fill  e            = pure [e]
+    noAvail = lift (logLines Log.DEMO ("fillDEntries - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
+    pprNS (e:|es) = map (("  " ++) . show) $ e : es
+    result e es = pure $ hasDelegation d{delegationNS = e :| es}
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+lookupDEntry :: Domain -> Domain -> ContextT IO [DEntry]
 lookupDEntry zone ns = do
-    let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
-        takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
-    lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
-    lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
-    pure $ dentryFromCache zone ns lk4 lk6
+    withNX =<< lookupCache ns Cache.NX
+  where
+    withNX Just{}   = pure []
+    withNX Nothing  = do
+        let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
+            takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
+        lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
+        lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
+        pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

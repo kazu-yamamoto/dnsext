@@ -137,22 +137,10 @@ delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
 {- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
 resolveNS zone disableV6NS dc ns = do
-    mayAxs <- lift $ maybe lookupAx (\(_, rank) -> pure $ Just ([], rank)) =<< lookupCache ns Cache.NX
-    (axs, rank) <- maybe query1Ax (\(axs, rank) -> pure (axPairs axs, rank)) mayAxs
+    (axs, rank) <- query1Ax
     maybe (failEmptyAx rank) pure =<< randomizedSelect axs
   where
     axPairs = axList disableV6NS (== ns) (,)
-
-    lookupAx
-        | disableV6NS = lk4
-        | otherwise = join $ randomizedChoice lk46 lk64
-      where
-        lk46 = lk4 +? lk6
-        lk64 = lk6 +? lk4
-        lk4 = notNull <$> lookupCache ns A
-        lk6 = notNull <$> lookupCache ns AAAA
-        notNull = maybe Nothing $ \x@(xs, _) -> guard (not $ null xs) $> x
-        lx +? ly = maybe ly (return . Just) =<< lx
 
     query1Ax
         | disableV6NS = querySection A
