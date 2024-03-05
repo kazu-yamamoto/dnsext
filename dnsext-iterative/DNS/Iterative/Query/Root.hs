@@ -43,7 +43,7 @@ refreshRoot = do
     curRef <- lift $ asks currentRoot_
     let refresh = do
             n <- getRoot
-            liftIO $ atomicWriteIORef curRef $ Just n
+            liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
             return n
         keep = do
             current <- liftIO $ readIORef curRef
