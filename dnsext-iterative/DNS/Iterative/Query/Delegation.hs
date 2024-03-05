@@ -3,6 +3,7 @@
 module DNS.Iterative.Query.Delegation (
     lookupDelegation,
     delegationWithCache,
+    fillCachedDelegation,
     MayDelegation,
     noDelegation,
     hasDelegation,
@@ -92,7 +93,7 @@ delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
     getSec <- lift $ asks currentSeconds_
-    maybe (notFound $> noDelegation) (fmap hasDelegation . fillCachedDelegation <=< found getSec) $ findDelegation nsps adds
+    maybe (notFound $> noDelegation) (found getSec >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where
     found getSec k = Verify.cases getSec zone dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata

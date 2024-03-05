@@ -165,6 +165,7 @@ iterative_ dc nss0 (x : xs) =
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
+            >>= mapM fillCachedDelegation
             >>= mayDelegation (pure noDelegation) logFound
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
