@@ -323,50 +323,17 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
--- Filter authoritative server addresses from the delegation information.
--- If the resolution result is NODATA, ServerFailure is returned.
+-- Get authoritative server addresses from the delegation information.
 delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
+delegationIPs _dc Delegation{..} = do
+    disableV6NS <- lift (asks disableV6NS_)
+    ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
+    when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
+    pure ips
   where
-    run disableV6NS
-        | not (dentryIPnull disableV6NS dentry) = dentryToRandomIP entryNum addrNum disableV6NS dentry
-        | Just names1 <- nonEmpty names = do
-            {- case for not (null names) -}
-            name <- randomizedSelectN names1
-            (: []) . fst <$> resolveNS zone disableV6NS dc name
-        | disableV6NS && not (dentryIPnull False dentry) = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
-            throwDnsError DNS.ServerFailure
-        | otherwise = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $
-                "serv-fail: delegation is empty. zone: "
-                    ++ show zone
-                    ++ ", "
-                    ++ orig
-                    ++ ", without glue sub-domains: "
-                    ++ show subNames
-            throwDnsError DNS.ServerFailure
-
     dentry = NE.toList delegationNS
     entryNum = 2
     addrNum = 2
-    zone = delegationZone
-
-    showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-    plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
-
-    takeNames (DEonlyNS name) xs
-        | not (name `DNS.isSubDomainOf` zone)  = name : xs
-    --    {- skip sub-domain without glue to avoid loop -}
-    takeNames _ xs                             =        xs
-    names = foldr takeNames [] delegationNS
-
-    takeSubNames (DEonlyNS name) xs
-        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
-    takeSubNames _ xs                    =        xs
-    subNames = foldr takeSubNames [] delegationNS
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
