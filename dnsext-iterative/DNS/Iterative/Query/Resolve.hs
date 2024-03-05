@@ -100,7 +100,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             failWithCacheOrigQ Cache.RankAnswer DNS.ServerFailure
         | otherwise = do
-            let recCNAMEs_ (cn, cnRRset) = recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            let recCNAMEs_ (cn, cnRRset) = lift (logLn_ Log.DEMO $ show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do
                     (msg, cname, vsec) <- typeHandler bn typ
                     maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
