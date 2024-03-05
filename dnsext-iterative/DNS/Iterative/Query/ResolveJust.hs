@@ -161,12 +161,12 @@ iterative_ dc nss0 (x : xs) =
         let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
             sharedHandler = servsChildZone dc nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg $> noDelegation
-            logFound d = lift (logDelegation d) $> hasDelegation d
+            logFound d = lift (logDelegation d) $> d
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
             >>= mapM fillCachedDelegation
-            >>= mayDelegation (pure noDelegation) logFound
+            >>= mapM logFound
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
