@@ -99,7 +99,7 @@ resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
         lift . logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
-        failWithCacheOrigQ Cache.RankAnswer DNS.ServerFailure
+        failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
@@ -203,7 +203,7 @@ servsChildZone nss dom msg =
         multipleSOA rank soaRRs = do
             lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             lift . logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
-            failWithCacheOrigQ rank DNS.ServerFailure
+            failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
         verifySOA getSec wd
             | null dnskeys = pure $ hasDelegation wd
             | otherwise = Verify.cases getSec zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
@@ -432,5 +432,5 @@ resolveNS zone disableV6NS dc ns = do
             ++ show zone
             ++ " NS: "
             ++ show ns
-        failWithCacheOrigQ rank DNS.ServerFailure
+        failWithCache zone Cache.ERR IN rank DNS.ServerFailure
 {- FOURMOLU_ENABLE -}
