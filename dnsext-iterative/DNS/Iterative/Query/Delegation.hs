@@ -20,6 +20,7 @@ import DNS.RRCache (
     rankedAdditional,
     rankedAuthority,
  )
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.SEC.Verify as SEC
 import DNS.Types
@@ -141,11 +142,15 @@ fillDEntries d = list noAvail result =<< lift (concat <$> mapM fill des)
 {- FOURMOLU_DISABLE -}
 lookupDEntry :: Domain -> Domain -> ContextT IO [DEntry]
 lookupDEntry zone ns = do
-    let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
-        takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
-    lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
-    lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
-    pure $ dentryFromCache zone ns lk4 lk6
+    withNX =<< lookupCache ns Cache.NX
+  where
+    withNX Just{}   = pure []
+    withNX Nothing  = do
+        let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
+            takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
+        lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
+        lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
+        pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
