@@ -28,7 +28,7 @@ import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
+import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types
 
 -- this package
@@ -103,7 +103,7 @@ resolveExactDC dc n typ
     | otherwise = do
         root <- refreshRoot
         nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
-        sas <- delegationIPs dc nss
+        sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
         (,) <$> norec dnssecOK sas n typ <*> pure nss
@@ -134,6 +134,7 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A
 iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
+{- FOURMOLU_DISABLE -}
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _ nss0 [] = return nss0
 iterative_ dc nss0 (x : xs) =
@@ -151,7 +152,7 @@ iterative_ dc nss0 (x : xs) =
         let zone = delegationZone
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        sas <- delegationIPs dc nss
+        sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -159,13 +160,13 @@ iterative_ dc nss0 (x : xs) =
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         msg <- norec dnssecOK sas name A
         let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
-            sharedHandler = servsChildZone dc nss name msg
+            sharedHandler = servsChildZone nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg $> noDelegation
             logFound d = lift (logDelegation d) $> d
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
-            >>= mapM fillCachedDelegation
+            >>= mapM fillCachedDelegation {- fill from cache for fresh NS list -}
             >>= mapM logFound
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
@@ -178,11 +179,13 @@ iterative_ dc nss0 (x : xs) =
                 | otherwise = stepQuery nss
             getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
             getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
-        getDelegation delegationFresh >>= mapM (fillsDNSSEC dc nss)
+        getDelegation delegationFresh >>= mapM (fillDelegation dc) >>= mapM (fillsDNSSEC nss)
+        --                                {- fill for no address cases -}
+{- FOURMOLU_ENABLE -}
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
-servsChildZone dc nss dom msg =
+servsChildZone :: Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+servsChildZone nss dom msg =
     handleSOA (handleASIG $ pure noDelegation)
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
@@ -223,11 +226,11 @@ servsChildZone dc nss dom msg =
         lift . logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": verification error. invalid SOA:"
         lift . clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
         throwDnsError DNS.ServerFailure
-    getWorkaround = fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
+    getWorkaround = fillsDNSSEC nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
 
-fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
-fillsDNSSEC dc nss d = do
-    filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
+fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC nss d = do
+    filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
     when (delegationHasDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
         lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is not null, and DNSKEY is null"
@@ -246,15 +249,15 @@ fillsDNSSEC dc nss d = do
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
 -- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; FilledRoot -> True }
 -- >>> env <- _newTestEnv _noLogging
--- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env (queryContextIN "ns1.mew.org." A mempty)
+-- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryContextIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS ServsChildZone)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ FilledDS [])
 -- Right True
-fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
-fillDelegationDS dc src dest
+fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
+fillDelegationDS src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
     | NotFilledDS o <- delegationDS src = do
         lift $ logLn Log.WARN $ "fillDelegationDS: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
@@ -265,7 +268,7 @@ fillDelegationDS dc src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (list1 nullIPs query =<< delegationIPs dc src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
+            maybe (list1 nullIPs query =<< delegationIPs src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
   where
     toDSs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dss = return dest{delegationDS = FilledDS dss}
@@ -298,16 +301,16 @@ queryDS zone dnskeys ips dom = do
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY _  d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
+fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
     lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     return d
-fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
-fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
-fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
-    maybe (list1 nullIPs query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
+fillDelegationDNSKEY d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
+fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
+fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
+    maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
   where
     zone = delegationZone
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
@@ -320,50 +323,71 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
--- Filter authoritative server addresses from the delegation information.
--- If the resolution result is NODATA, ServerFailure is returned.
-delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
+-- Get authoritative server addresses from the delegation information.
+delegationIPs :: Delegation -> DNSQuery [IP]
+delegationIPs Delegation{..} = do
+    disableV6NS <- lift (asks disableV6NS_)
+    ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
+    when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
+    pure ips
   where
-    run disableV6NS
-        | not (dentryIPnull disableV6NS dentry) = dentryToRandomIP entryNum addrNum disableV6NS dentry
-        | Just names1 <- nonEmpty names = do
-            {- case for not (null names) -}
-            name <- randomizedSelectN names1
-            (: []) . fst <$> resolveNS zone disableV6NS dc name
-        | disableV6NS && not (dentryIPnull False dentry) = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
-            throwDnsError DNS.ServerFailure
-        | otherwise = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $
-                "serv-fail: delegation is empty. zone: "
-                    ++ show zone
-                    ++ ", "
-                    ++ orig
-                    ++ ", without glue sub-domains: "
-                    ++ show subNames
-            throwDnsError DNS.ServerFailure
-
     dentry = NE.toList delegationNS
     entryNum = 2
     addrNum = 2
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+fillDelegation :: Int -> Delegation -> DNSQuery Delegation
+fillDelegation dc d0 = do
+    disableV6NS <- lift (asks disableV6NS_)
+    fillCachedDelegation =<< fillDelegationOnNull dc disableV6NS d0
+    {- lookup again for updated cache with resolveNS -}
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- Fill delegation with resolved IPs
+-- If no available NS is found, ServerFailure is returned.
+fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
+fillDelegationOnNull dc disableV6NS d0@Delegation{..}
+    | dentryIPnull disableV6NS dentry  = case nonEmpty names of
+        Nothing      -> do
+            Question qn qty _ <- lift (lift $ asks origQuestion_)
+            lift $ logLines Log.DEMO
+                [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
+                , "  zone: " ++ show zone
+                , "  orig-query: " ++ show qn ++ " " ++ show qty
+                , "  disable-v6-ns: " ++ show disableV6NS
+                , "  without-glue sub-domains:" ++ show subNames
+                ]
+            throwDnsError DNS.ServerFailure
+        Just names1  -> do
+            name <- randomizedSelectN names1
+            (ip, _) <- resolveNS zone disableV6NS dc name
+            let filled = case ip of
+                    IPv4 v4 -> DEwithA4 name (v4 :| [])
+                    IPv6 v6 -> DEwithA6 name (v6 :| [])
+            pure $ d0{delegationNS = replaceTo name filled delegationNS}
+    | otherwise       = pure d0
+  where
     zone = delegationZone
+    dentry = NE.toList delegationNS
 
-    showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-    plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
-
+    names = foldr takeNames [] delegationNS
     takeNames (DEonlyNS name) xs
         | not (name `DNS.isSubDomainOf` zone)  = name : xs
     --    {- skip sub-domain without glue to avoid loop -}
-    takeNames _ xs                             =        xs
-    names = foldr takeNames [] delegationNS
+    takeNames  _              xs               =        xs
 
+    replaceTo n alt des = NE.map replace des
+      where
+        replace (DEonlyNS name)
+            | name == n     = alt
+        replace  de         = de
+
+    subNames = foldr takeSubNames [] delegationNS
     takeSubNames (DEonlyNS name) xs
         | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
     takeSubNames _ xs                    =        xs
-    subNames = foldr takeSubNames [] delegationNS
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
