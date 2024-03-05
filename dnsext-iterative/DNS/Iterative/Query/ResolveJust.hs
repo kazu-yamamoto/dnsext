@@ -28,7 +28,7 @@ import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
+import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types
 
 -- this package
@@ -134,6 +134,7 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A
 iterative :: Delegation -> Domain -> DNSQuery Delegation
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
+{- FOURMOLU_DISABLE -}
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
 iterative_ _ nss0 [] = return nss0
 iterative_ dc nss0 (x : xs) =
@@ -165,7 +166,7 @@ iterative_ dc nss0 (x : xs) =
         delegationWithCache zone dnskeys name msg
             >>= withNoDelegation sharedHandler
             >>= withNoDelegation cacheHandler
-            >>= mapM fillCachedDelegation
+            >>= mapM fillCachedDelegation {- fill from cache for fresh NS list -}
             >>= mapM logFound
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
@@ -178,7 +179,9 @@ iterative_ dc nss0 (x : xs) =
                 | otherwise = stepQuery nss
             getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
             getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
-        getDelegation delegationFresh >>= mapM (fillsDNSSEC dc nss)
+        getDelegation delegationFresh >>= mapM (fillDelegation dc) >>= mapM (fillsDNSSEC dc nss)
+        --                                {- fill for no address cases -}
+{- FOURMOLU_ENABLE -}
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
@@ -364,6 +367,60 @@ delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
         | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
     takeSubNames _ xs                    =        xs
     subNames = foldr takeSubNames [] delegationNS
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+fillDelegation :: Int -> Delegation -> DNSQuery Delegation
+fillDelegation dc d0 = do
+    disableV6NS <- lift (asks disableV6NS_)
+    fillCachedDelegation =<< fillDelegationOnNull dc disableV6NS d0
+    {- lookup again for updated cache with resolveNS -}
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- Fill delegation with resolved IPs
+-- If no available NS is found, ServerFailure is returned.
+fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
+fillDelegationOnNull dc disableV6NS d0@Delegation{..}
+    | dentryIPnull disableV6NS dentry  = case nonEmpty names of
+        Nothing      -> do
+            Question qn qty _ <- lift (lift $ asks origQuestion_)
+            lift $ logLines Log.DEMO
+                [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
+                , "  zone: " ++ show zone
+                , "  orig-query: " ++ show qn ++ " " ++ show qty
+                , "  disable-v6-ns: " ++ show disableV6NS
+                , "  without-glue sub-domains:" ++ show subNames
+                ]
+            throwDnsError DNS.ServerFailure
+        Just names1  -> do
+            name <- randomizedSelectN names1
+            (ip, _) <- resolveNS zone disableV6NS dc name
+            let filled = case ip of
+                    IPv4 v4 -> DEwithA4 name (v4 :| [])
+                    IPv6 v6 -> DEwithA6 name (v6 :| [])
+            pure $ d0{delegationNS = replaceTo name filled delegationNS}
+    | otherwise       = pure d0
+  where
+    zone = delegationZone
+    dentry = NE.toList delegationNS
+
+    names = foldr takeNames [] delegationNS
+    takeNames (DEonlyNS name) xs
+        | not (name `DNS.isSubDomainOf` zone)  = name : xs
+    --    {- skip sub-domain without glue to avoid loop -}
+    takeNames  _              xs               =        xs
+
+    replaceTo n alt des = NE.map replace des
+      where
+        replace (DEonlyNS name)
+            | name == n     = alt
+        replace  de         = de
+
+    subNames = foldr takeSubNames [] delegationNS
+    takeSubNames (DEonlyNS name) xs
+        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
+    takeSubNames _ xs                    =        xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
