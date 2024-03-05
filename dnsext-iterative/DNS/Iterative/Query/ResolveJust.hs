@@ -46,6 +46,29 @@ import qualified DNS.Iterative.Query.Verify as Verify
 ---- import for doctest
 import DNS.Iterative.Query.TestEnv
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> :set -Wno-incomplete-uni-patterns
+-- >>> import System.IO
+-- >>> import qualified DNS.Types.Opaque as Opaque
+-- >>> import DNS.SEC
+-- >>> DNS.runInitIO addResourceDataForDNSSEC
+-- >>> hSetBuffering stdout LineBuffering
+
+-- test env use from doctest
+_newTestEnv :: ([String] -> IO ()) -> IO Env
+_newTestEnv putLines = newTestEnvNoCache putLines True
+
+_findConsumed :: [String] -> IO ()
+_findConsumed ss
+    | any ("consumes not-filled DS:" `isInfixOf`) ss = putStrLn "consume message found"
+    | otherwise = pure ()
+
+_noLogging :: [String] -> IO ()
+_noLogging = const $ pure ()
+
+---
+
 {-# DEPRECATED runResolveJust "use resolveExact instead of this" #-}
 runResolveJust
     :: Env
@@ -87,114 +110,8 @@ resolveExactDC dc n typ
   where
     mdc = maxNotSublevelDelegation
 
-{- FOURMOLU_DISABLE -}
--- Filter authoritative server addresses from the delegation information.
--- If the resolution result is NODATA, ServerFailure is returned.
-delegationIPs :: Int -> Delegation -> DNSQuery [IP]
-delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
-  where
-    run disableV6NS
-        | not (dentryIPnull disableV6NS dentry) = dentryToRandomIP entryNum addrNum disableV6NS dentry
-        | Just names1 <- nonEmpty names = do
-            {- case for not (null names) -}
-            name <- randomizedSelectN names1
-            (: []) . fst <$> resolveNS zone disableV6NS dc name
-        | disableV6NS && not (dentryIPnull False dentry) = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
-            throwDnsError DNS.ServerFailure
-        | otherwise = do
-            orig <- showOrig <$> lift (lift $ asks origQuestion_)
-            plogLn Log.DEMO $
-                "serv-fail: delegation is empty. zone: "
-                    ++ show zone
-                    ++ ", "
-                    ++ orig
-                    ++ ", without glue sub-domains: "
-                    ++ show subNames
-            throwDnsError DNS.ServerFailure
-
-    dentry = NE.toList delegationNS
-    entryNum = 2
-    addrNum = 2
-    zone = delegationZone
-
-    showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-    plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
-
-    takeNames (DEonlyNS name) xs
-        | not (name `DNS.isSubDomainOf` zone)  = name : xs
-    --    {- skip sub-domain without glue to avoid loop -}
-    takeNames _ xs                             =        xs
-    names = foldr takeNames [] delegationNS
-
-    takeSubNames (DEonlyNS name) xs
-        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
-    takeSubNames _ xs                    =        xs
-    subNames = foldr takeSubNames [] delegationNS
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
-resolveNS zone disableV6NS dc ns = do
-    (axs, rank) <- query1Ax
-    maybe (failEmptyAx rank) pure =<< randomizedSelect axs
-  where
-    axPairs = axList disableV6NS (== ns) (,)
-
-    query1Ax
-        | disableV6NS = querySection A
-        | otherwise = join $ randomizedChoice q46 q64
-      where
-        q46 = A +!? AAAA
-        q64 = AAAA +!? A
-        tx +!? ty = do
-            x@(xs, _rank) <- querySection tx
-            if null xs then querySection ty else pure x
-        querySection typ = do
-            lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
-            {- resolve for not sub-level delegation. increase dc (delegation count) -}
-            cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
-        cacheAnswerAx typ (msg, d) = do
-            cacheAnswer d ns typ msg $> ()
-            pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
-
-    failEmptyAx rank = do
-        let emptyInfo
-                | disableV6NS  = "empty A: disable-v6ns: "
-                | otherwise    = "empty A|AAAA: "
-            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-        orig <- showOrig <$> lift (lift $ asks origQuestion_)
-        lift . logLn Log.WARN $
-            "resolveNS: serv-fail, "
-            ++ emptyInfo
-            ++ orig
-            ++ ", zone: "
-            ++ show zone
-            ++ " NS: "
-            ++ show ns
-        failWithCacheOrigQ rank DNS.ServerFailure
-{- FOURMOLU_ENABLE -}
-
-fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFilledDS o} = do
-    {- DS(Delegation Signer) is not filled -}
-    lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
-    return d
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
-fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
-    maybe (list1 nullIPs query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
-  where
-    zone = delegationZone
-    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
-    fill dnskeys = return d{delegationDNSKEY = dnskeys}
-    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> return d
-    query ips = do
-        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
+maxNotSublevelDelegation :: Int
+maxNotSublevelDelegation = 16
 
 -- 反復後の委任情報を得る
 runIterative
@@ -204,27 +121,6 @@ runIterative
     -> QueryControls
     -> IO (Either QueryError Delegation)
 runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A cd
-
--- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -Wno-incomplete-uni-patterns
--- >>> import System.IO
--- >>> import qualified DNS.Types.Opaque as Opaque
--- >>> import DNS.SEC
--- >>> DNS.runInitIO addResourceDataForDNSSEC
--- >>> hSetBuffering stdout LineBuffering
-
--- test env use from doctest
-_newTestEnv :: ([String] -> IO ()) -> IO Env
-_newTestEnv putLines = newTestEnvNoCache putLines True
-
-_findConsumed :: [String] -> IO ()
-_findConsumed ss
-    | any ("consumes not-filled DS:" `isInfixOf`) ss = putStrLn "consume message found"
-    | otherwise = pure ()
-
-_noLogging :: [String] -> IO ()
-_noLogging = const $ pure ()
 
 -- | 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
@@ -282,9 +178,6 @@ iterative_ dc nss0 (x : xs) =
             getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
             getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
         getDelegation delegationFresh >>= mapM (fillsDNSSEC dc nss)
-
-maxNotSublevelDelegation :: Int
-maxNotSublevelDelegation = 16
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
@@ -402,3 +295,112 @@ queryDS zone dnskeys ips dom = do
     verifyResult dsrds dsRRset cacheDS
         | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
+
+fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFilledDS o} = do
+    {- DS(Delegation Signer) is not filled -}
+    lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
+    return d
+fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
+fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
+fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
+    maybe (list1 nullIPs query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
+  where
+    zone = delegationZone
+    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
+    fill dnskeys = return d{delegationDNSKEY = dnskeys}
+    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
+    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> return d
+    query ips = do
+        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
+        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
+
+{- FOURMOLU_DISABLE -}
+-- Filter authoritative server addresses from the delegation information.
+-- If the resolution result is NODATA, ServerFailure is returned.
+delegationIPs :: Int -> Delegation -> DNSQuery [IP]
+delegationIPs dc Delegation{..} = run =<< lift (asks disableV6NS_)
+  where
+    run disableV6NS
+        | not (dentryIPnull disableV6NS dentry) = dentryToRandomIP entryNum addrNum disableV6NS dentry
+        | Just names1 <- nonEmpty names = do
+            {- case for not (null names) -}
+            name <- randomizedSelectN names1
+            (: []) . fst <$> resolveNS zone disableV6NS dc name
+        | disableV6NS && not (dentryIPnull False dentry) = do
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
+            plogLn Log.DEMO $ "serv-fail: delegation is empty. zone: " ++ show zone ++ ", " ++ orig
+            throwDnsError DNS.ServerFailure
+        | otherwise = do
+            orig <- showOrig <$> lift (lift $ asks origQuestion_)
+            plogLn Log.DEMO $
+                "serv-fail: delegation is empty. zone: "
+                    ++ show zone
+                    ++ ", "
+                    ++ orig
+                    ++ ", without glue sub-domains: "
+                    ++ show subNames
+            throwDnsError DNS.ServerFailure
+
+    dentry = NE.toList delegationNS
+    entryNum = 2
+    addrNum = 2
+    zone = delegationZone
+
+    showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+    plogLn lv = lift . logLn lv . ("delegationIPs: " ++)
+
+    takeNames (DEonlyNS name) xs
+        | not (name `DNS.isSubDomainOf` zone)  = name : xs
+    --    {- skip sub-domain without glue to avoid loop -}
+    takeNames _ xs                             =        xs
+    names = foldr takeNames [] delegationNS
+
+    takeSubNames (DEonlyNS name) xs
+        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
+    takeSubNames _ xs                    =        xs
+    subNames = foldr takeSubNames [] delegationNS
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
+resolveNS zone disableV6NS dc ns = do
+    (axs, rank) <- query1Ax
+    maybe (failEmptyAx rank) pure =<< randomizedSelect axs
+  where
+    axPairs = axList disableV6NS (== ns) (,)
+
+    query1Ax
+        | disableV6NS = querySection A
+        | otherwise = join $ randomizedChoice q46 q64
+      where
+        q46 = A +!? AAAA
+        q64 = AAAA +!? A
+        tx +!? ty = do
+            x@(xs, _rank) <- querySection tx
+            if null xs then querySection ty else pure x
+        querySection typ = do
+            lift . logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
+            {- resolve for not sub-level delegation. increase dc (delegation count) -}
+            cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
+        cacheAnswerAx typ (msg, d) = do
+            cacheAnswer d ns typ msg $> ()
+            pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
+
+    failEmptyAx rank = do
+        let emptyInfo
+                | disableV6NS  = "empty A: disable-v6ns: "
+                | otherwise    = "empty A|AAAA: "
+            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
+        orig <- showOrig <$> lift (lift $ asks origQuestion_)
+        lift . logLn Log.WARN $
+            "resolveNS: serv-fail, "
+            ++ emptyInfo
+            ++ orig
+            ++ ", zone: "
+            ++ show zone
+            ++ " NS: "
+            ++ show ns
+        failWithCacheOrigQ rank DNS.ServerFailure
+{- FOURMOLU_ENABLE -}
