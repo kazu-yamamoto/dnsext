@@ -296,14 +296,15 @@ queryDS zone dnskeys ips dom = do
         | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
 
+{- FOURMOLU_DISABLE -}
 fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY _ d@Delegation{delegationZone = zone, delegationDS = NotFilledDS o} = do
+fillDelegationDNSKEY _  d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
     lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     return d
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY _ d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
+fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
+fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY _  d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
 fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
     maybe (list1 nullIPs query =<< delegationIPs dc d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
   where
@@ -315,6 +316,7 @@ fillDelegationDNSKEY dc d@Delegation{delegationDS = FilledDS dss@(_ : _), delega
     query ips = do
         lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
         either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 -- Filter authoritative server addresses from the delegation information.
