@@ -99,10 +99,11 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
                 let ans = replyDNSMessage rply
                     fl = flags ans
                     tc = trunCation fl
-                    rc = rcode ans
+                when tc $ E.throwIO TCPFallback
+                let rc = rcode ans
                     eh = ednsHeader ans
                     qctl = ednsEnabled FlagClear <> qctl0
-                when tc $ E.throwIO TCPFallback
+                -- loop with the same cnt if qctl /= qctl0
                 if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
                     then loop cnt ident qctl send recv
                     else return $ toResult ri "UDP" rply
