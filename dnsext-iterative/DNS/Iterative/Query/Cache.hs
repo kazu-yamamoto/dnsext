@@ -9,6 +9,8 @@ module DNS.Iterative.Query.Cache (
     lookupCache,
     lookupErrorRCODE,
     cacheRcodeWithOrigQ,
+    failWithCache,
+    failWithCacheOrigName,
     failWithCacheOrigQ,
     cacheAnswer,
     cacheSection,
@@ -249,6 +251,25 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
             logLines lv $ ("cacheSectionNegative: " ++ unwords (withCtx $ key ++ query ++ orig)) : xs
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
+
+failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
+failWithCacheOrigName rank e = do
+    Question dom _typ cls <- lift $ lift $ asks origQuestion_
+    failWithCache dom Cache.ERR cls rank e
+
+{- FOURMOLU_DISABLE -}
+failWithCache :: Domain -> TYPE -> CLASS -> Ranking -> DNSError -> DNSQuery a
+failWithCache dom typ cls rank e = do
+    when (cls == IN) $ lift $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
+    throwDnsError e
+  where
+    cacheRCODE_ = cacheRCODE dom typ
+{- FOURMOLU_ENABLE -}
+
+cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
+cacheRCODE dom typ rcode rank = do
+    let defaultTTL = 1800
+    cacheNegativeNoSOA rcode dom typ defaultTTL rank
 
 cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
