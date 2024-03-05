@@ -57,8 +57,8 @@ udpTcpResolver retry lim ri q qctl =
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: Question -> ResolvInfo -> String -> IOError -> IO a
-ioErrorToDNSError q ResolvInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
+ioErrorToDNSError :: Question -> ResolveInfo -> String -> IOError -> IO a
+ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
   where
     loc = show q ++ ": " ++ protoName ++ show rinfoPortNumber ++ "@" ++ rinfoHostName
     aioe = annotateIOError ioe loc Nothing Nothing
@@ -68,7 +68,7 @@ ioErrorToDNSError q ResolvInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: UDPRetry -> Resolver
-udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
+udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
   where
@@ -142,7 +142,7 @@ udpResolver retry ri@ResolvInfo{..} q@Question{..} _qctl = do
 
 -- | A resolver using TCP.
 tcpResolver :: VCLimit -> Resolver
-tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
+tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = bracket open close $ \sock -> do
@@ -155,7 +155,7 @@ tcpResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
-vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
+vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError q ri proto) $ go _qctl
   where
@@ -203,8 +203,8 @@ vcResolver proto perform ri@ResolvInfo{..} q@Question{..} _qctl = do
                 Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
-toResult :: ResolvInfo -> String -> Reply -> Result
-toResult ResolvInfo{..} tag rply =
+toResult :: ResolveInfo -> String -> Reply -> Result
+toResult ResolveInfo{..} tag rply =
     Result
         { resultHostName = rinfoHostName
         , resultPortNumber = rinfoPortNumber

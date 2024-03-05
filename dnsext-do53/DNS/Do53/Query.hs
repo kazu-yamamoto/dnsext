@@ -408,7 +408,7 @@ modifyQuery ctls query =
     --
     -- Default overrides can be specified in the resolver configuration by setting
     -- the 'DNS.Do53.resolvQueryControls' field of the
-    -- 'DNS.Do53.ResolvConf'.
+    -- 'DNS.Do53.ResolveConf'.
     -- These then apply to lookups via
     -- resolvers based on the resulting configuration, with the exception of
     -- 'DNS.Do53.lookupRawCtl' which takes an additional

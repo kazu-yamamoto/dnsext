@@ -9,7 +9,7 @@ import System.Timeout (timeout)
 -- dnsext packages
 import DNS.Do53.Client (
     FlagOp (..),
-    defaultResolvActions,
+    defaultResolveActions,
     ractionGenId,
     ractionGetTime,
     ractionLog,
@@ -17,9 +17,9 @@ import DNS.Do53.Client (
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
-    ResolvEnv (..),
-    ResolvInfo (..),
-    defaultResolvInfo,
+    ResolveEnv (..),
+    ResolveInfo (..),
+    defaultResolveInfo,
     udpTcpResolver,
  )
 import qualified DNS.Do53.Internal as DNS
@@ -38,10 +38,10 @@ import DNS.Iterative.Query.Types
 norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     let ris =
-            [ defaultResolvInfo
+            [ defaultResolveInfo
                 { rinfoHostName = show aserver
                 , rinfoActions =
-                    defaultResolvActions
+                    defaultResolveActions
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
@@ -51,10 +51,10 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
             | aserver <- aservers
             ]
         renv =
-            ResolvEnv
+            ResolveEnv
                 { renvResolver = udpTcpResolver 3 (32 * 1024) -- 3 is retry
                 , renvConcurrent = True -- should set True if multiple RIs are provided
-                , renvResolvInfos = ris
+                , renvResolveInfos = ris
                 }
         q = Question name typ IN
         doFlagSet

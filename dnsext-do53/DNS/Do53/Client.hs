@@ -50,14 +50,14 @@ module DNS.Do53.Client (
     pruningDelay,
 
     -- ** Actions
-    ResolvActions,
-    defaultResolvActions,
+    ResolveActions,
+    defaultResolveActions,
     ractionTimeout,
     ractionGenId,
     ractionGetTime,
     ractionLog,
     ractionFlags,
-    ResolvActionsFlag (RAFlagMultiLine),
+    ResolveActionsFlag (RAFlagMultiLine),
     Reply,
 
     -- ** Query control

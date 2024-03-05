@@ -11,30 +11,30 @@ import Test.Hspec
 q :: Question
 q = Question "www.mew.org" A IN
 
-google :: ResolvInfo
+google :: ResolveInfo
 google =
-    defaultResolvInfo
+    defaultResolveInfo
         { rinfoHostName = "8.8.8.8"
         }
 
-cloudflare :: ResolvInfo
+cloudflare :: ResolveInfo
 cloudflare =
-    defaultResolvInfo
+    defaultResolveInfo
         { rinfoHostName = "1.1.1.1"
         }
 
-bad0 :: ResolvInfo
+bad0 :: ResolveInfo
 bad0 =
-    defaultResolvInfo
+    defaultResolveInfo
         { rinfoHostName = "192.0.2.1"
-        , rinfoActions = defaultResolvActions{ractionTimeout = timeout 100000}
+        , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
         }
 
-bad1 :: ResolvInfo
+bad1 :: ResolveInfo
 bad1 =
-    defaultResolvInfo
+    defaultResolveInfo
         { rinfoHostName = "192.0.2.2"
-        , rinfoActions = defaultResolvActions{ractionTimeout = timeout 100000}
+        , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
         }
 
 spec :: Spec
@@ -49,19 +49,19 @@ spec = describe "solvers" $ do
 
     it "resolves well concurrently (0)" $ do
         let resolver = udpResolver 2
-            renv = ResolvEnv resolver True [google, cloudflare]
+            renv = ResolveEnv resolver True [google, cloudflare]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (1)" $ do
         let resolver = udpResolver 2
-            renv = ResolvEnv resolver True [cloudflare, bad0]
+            renv = ResolveEnv resolver True [cloudflare, bad0]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (2)" $ do
         let resolver = udpResolver 1
-            renv = ResolvEnv resolver True [bad0, bad1]
+            renv = ResolveEnv resolver True [bad0, bad1]
         resolve renv q mempty `shouldThrow` dnsException
 
 dnsException :: Selector DNSError

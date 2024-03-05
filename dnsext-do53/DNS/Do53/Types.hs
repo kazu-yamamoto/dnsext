@@ -20,12 +20,12 @@ module DNS.Do53.Types (
     defaultCacheConf,
 
     -- * Type and function for resolver
-    ResolvEnv (..),
-    ResolvInfo (..),
-    defaultResolvInfo,
-    ResolvActions (..),
-    defaultResolvActions,
-    ResolvActionsFlag (RAFlagMultiLine),
+    ResolveEnv (..),
+    ResolveInfo (..),
+    defaultResolveInfo,
+    ResolveActions (..),
+    defaultResolveActions,
+    ResolveActionsFlag (RAFlagMultiLine),
     Result (..),
     Reply (..),
     Resolver,
@@ -150,7 +150,7 @@ data LookupConf = LookupConf
     , lconfQueryControls :: QueryControls
     -- ^ Overrides for the default flags used for queries via resolvers that use
     -- this configuration.
-    , lconfActions :: ResolvActions
+    , lconfActions :: ResolveActions
     -- ^ Actions for resolvers.
     }
 
@@ -170,7 +170,7 @@ defaultLookupConf =
         , lconfConcurrent = False
         , lconfCacheConf = Nothing
         , lconfQueryControls = mempty
-        , lconfActions = defaultResolvActions
+        , lconfActions = defaultResolveActions
         }
 
 ----------------------------------------------------------------
@@ -182,31 +182,31 @@ data LookupEnv = LookupEnv
     { lenvCache :: Maybe (RRCache, CacheConf)
     , lenvQueryControls :: QueryControls
     , lenvConcurrent :: Bool
-    , lenvResolvEnv :: ResolvEnv
-    , lenvActions :: ResolvActions -- for cache lookup
+    , lenvResolveEnv :: ResolveEnv
+    , lenvActions :: ResolveActions -- for cache lookup
     }
 
-data ResolvEnv = ResolvEnv
+data ResolveEnv = ResolveEnv
     { renvResolver :: Resolver
     , renvConcurrent :: Bool
-    , renvResolvInfos :: [ResolvInfo]
+    , renvResolveInfos :: [ResolveInfo]
     }
 
 ----------------------------------------------------------------
 
 -- | Information for resolvers.
-data ResolvInfo = ResolvInfo
+data ResolveInfo = ResolveInfo
     { rinfoHostName :: HostName
     , rinfoPortNumber :: PortNumber
-    , rinfoActions :: ResolvActions
+    , rinfoActions :: ResolveActions
     }
 
-defaultResolvInfo :: ResolvInfo
-defaultResolvInfo =
-    ResolvInfo
+defaultResolveInfo :: ResolveInfo
+defaultResolveInfo =
+    ResolveInfo
         { rinfoHostName = "127.0.0.1"
         , rinfoPortNumber = 53
-        , rinfoActions = defaultResolvActions
+        , rinfoActions = defaultResolveActions
         }
 
 data Result = Result
@@ -225,27 +225,27 @@ data Reply = Reply
     deriving (Eq, Show)
 
 -- | The type of resolvers (DNS over X).
-type Resolver = ResolvInfo -> Question -> QueryControls -> IO Result
+type Resolver = ResolveInfo -> Question -> QueryControls -> IO Result
 
 ----------------------------------------------------------------
 
-newtype ResolvActionsFlag = ResolvActionsFlag Int deriving (Eq)
+newtype ResolveActionsFlag = ResolveActionsFlag Int deriving (Eq)
 
-pattern RAFlagMultiLine :: ResolvActionsFlag
-pattern RAFlagMultiLine = ResolvActionsFlag 1
+pattern RAFlagMultiLine :: ResolveActionsFlag
+pattern RAFlagMultiLine = ResolveActionsFlag 1
 
-data ResolvActions = ResolvActions
+data ResolveActions = ResolveActions
     { ractionTimeout :: IO Reply -> IO (Maybe Reply)
     , ractionGenId :: IO Identifier
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
     , ractionLog :: PutLines
-    , ractionFlags :: [ResolvActionsFlag]
+    , ractionFlags :: [ResolveActionsFlag]
     }
 
-defaultResolvActions :: ResolvActions
-defaultResolvActions =
-    ResolvActions
+defaultResolveActions :: ResolveActions
+defaultResolveActions =
+    ResolveActions
         { ractionTimeout = timeout 3000000
         , ractionGenId = singleGenId
         , ractionGetTime = getEpochTime

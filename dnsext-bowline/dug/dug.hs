@@ -8,7 +8,7 @@ import Control.Monad (when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
-    ResolvActionsFlag (..),
+    ResolveActionsFlag (..),
     adFlag,
     cdFlag,
     doFlag,
@@ -143,7 +143,7 @@ main = do
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
-                    raflags = mapMaybe toResolvActionsFlag plus
+                    raflags = mapMaybe toResolveActionsFlag plus
                 ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
                 case ex of
                     Left e -> fail (show e)
@@ -258,10 +258,10 @@ toOutputFlag "+multi"   = Just Multiline
 toOutputFlag "+nomulti" = Nothing
 toOutputFlag  _         = Nothing
 
-toResolvActionsFlag :: String -> Maybe ResolvActionsFlag
-toResolvActionsFlag "+multi"   = Just RAFlagMultiLine
-toResolvActionsFlag "+nomulti" = Nothing
-toResolvActionsFlag  _         = Nothing
+toResolveActionsFlag :: String -> Maybe ResolveActionsFlag
+toResolveActionsFlag "+multi"   = Just RAFlagMultiLine
+toResolveActionsFlag "+nomulti" = Nothing
+toResolveActionsFlag  _         = Nothing
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------

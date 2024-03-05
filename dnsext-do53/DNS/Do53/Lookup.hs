@@ -252,7 +252,7 @@ lookupRaw
     -- ^ LookupEnv obtained via 'withLookupConf'
     -> Question
     -> IO (Either DNSError Result)
-lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolvEnv q lenvQueryControls
+lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolveEnv q lenvQueryControls
 
 ----------------------------------------------------------------
 
@@ -291,16 +291,16 @@ withLookupConfAndResolver LookupConf{..} resolver f = do
     f lenv
 
 resolvEnv
-    :: Resolver -> Bool -> ResolvActions -> [(HostName, PortNumber)] -> ResolvEnv
-resolvEnv resolver conc actions hps = ResolvEnv resolver conc ris
+    :: Resolver -> Bool -> ResolveActions -> [(HostName, PortNumber)] -> ResolveEnv
+resolvEnv resolver conc actions hps = ResolveEnv resolver conc ris
   where
     ris = resolvInfos actions hps
 
-resolvInfos :: ResolvActions -> [(HostName, PortNumber)] -> [ResolvInfo]
+resolvInfos :: ResolveActions -> [(HostName, PortNumber)] -> [ResolveInfo]
 resolvInfos actions hps = map mk hps
   where
     mk (h, p) =
-        defaultResolvInfo
+        defaultResolveInfo
             { rinfoHostName = h
             , rinfoPortNumber = p
             , rinfoActions = actions
@@ -310,7 +310,7 @@ modifyLookupEnv
     :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
 modifyLookupEnv resolver hps lenv@LookupEnv{..} =
     lenv
-        { lenvResolvEnv = renv
+        { lenvResolveEnv = renv
         }
   where
     renv = resolvEnv resolver lenvConcurrent lenvActions hps

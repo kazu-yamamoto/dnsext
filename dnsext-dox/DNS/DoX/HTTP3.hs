@@ -16,7 +16,7 @@ import DNS.DoX.Imports
 import DNS.DoX.QUIC
 
 http3Resolver :: ShortByteString -> VCLimit -> Resolver
-http3Resolver path lim ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
+http3Resolver path lim ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
         ident <- ractionGenId rinfoActions
         h3resolver conn conf ident path lim ri q qctl
@@ -25,7 +25,7 @@ http3Resolver path lim ri@ResolvInfo{..} q qctl = QUIC.run cc $ \conn ->
 
 h3resolver
     :: Connection -> Config -> Identifier -> ShortByteString -> VCLimit -> Resolver
-h3resolver conn conf ident path lim ri@ResolvInfo{..} q qctl = do
+h3resolver conn conf ident path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H3"
     withTimeout ri proto $
         run conn cliconf conf $

@@ -12,7 +12,7 @@ import Network.Socket
 import DNS.DoX.Imports
 
 quicResolver :: VCLimit -> Resolver
-quicResolver lim ri@ResolvInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
+quicResolver lim ri@ResolveInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
   where
     cc = getQUICParams rinfoHostName rinfoPortNumber "doq"
     perform solve = run cc $ \conn -> do

@@ -36,10 +36,10 @@ import DNS.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: ResolvEnv -> Question -> QueryControls -> IO Result
+resolve :: ResolveEnv -> Question -> QueryControls -> IO Result
 resolve _ Question{..} _
     | qtype == AXFR = E.throwIO InvalidAXFRLookup
-resolve ResolvEnv{..} q qctl = case renvResolvInfos of
+resolve ResolveEnv{..} q qctl = case renvResolveInfos of
     [] -> error "resolve"
     [ri] -> resolver ri q qctl
     ris
@@ -50,7 +50,7 @@ resolve ResolvEnv{..} q qctl = case renvResolvInfos of
     resolver = renvResolver
 
 resolveSequential
-    :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
+    :: [ResolveInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveSequential ris0 resolver q qctl = loop ris0
   where
     loop [] = error "resolveSequential:loop"
@@ -62,9 +62,9 @@ resolveSequential ris0 resolver q qctl = loop ris0
             Right res -> return res
 
 resolveConcurrent
-    :: [ResolvInfo] -> Resolver -> Question -> QueryControls -> IO Result
+    :: [ResolveInfo] -> Resolver -> Question -> QueryControls -> IO Result
 resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
-resolveConcurrent ris@(ResolvInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
+resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
     caller <- TStat.getThreadLabel
     r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ rinfoHostName ri, resolver ri q qctl)) ris
     let ~tag =

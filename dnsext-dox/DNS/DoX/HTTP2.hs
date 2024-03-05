@@ -27,15 +27,15 @@ import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified UnliftIO.Exception as E
 
-withTimeout :: ResolvInfo -> String -> IO Reply -> IO Result
-withTimeout ri@ResolvInfo{..} proto action = do
+withTimeout :: ResolveInfo -> String -> IO Reply -> IO Result
+withTimeout ri@ResolveInfo{..} proto action = do
     mres <- ractionTimeout rinfoActions action
     case mres of
         Nothing -> E.throwIO TimeoutExpired
         Just res -> return $ toResult ri proto res
 
 http2Resolver :: ShortByteString -> VCLimit -> Resolver
-http2Resolver path lim ri@ResolvInfo{..} q qctl = do
+http2Resolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
@@ -48,7 +48,7 @@ http2Resolver path lim ri@ResolvInfo{..} q qctl = do
             }
 
 http2cResolver :: ShortByteString -> VCLimit -> Resolver
-http2cResolver path lim ri@ResolvInfo{..} q qctl = do
+http2cResolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
@@ -60,11 +60,11 @@ doHTTP
     -> Identifier
     -> ShortByteString
     -> VCLimit
-    -> ResolvInfo
+    -> ResolveInfo
     -> Question
     -> QueryControls
     -> Client Reply
-doHTTP proto ident path lim ResolvInfo{..} q@Question{..} qctl sendRequest _aux = do
+doHTTP proto ident path lim ResolveInfo{..} q@Question{..} qctl sendRequest _aux = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp

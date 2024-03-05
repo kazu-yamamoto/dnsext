@@ -76,7 +76,7 @@ auto
     :: HostName
     -> TYPE
     -> Int
-    -> ResolvActions
+    -> ResolveActions
     -> HostName
     -> [RD_SVCB]
     -> IO (Either DNSError Result)
@@ -114,11 +114,11 @@ auto domain typ lim actions ip0 ss0 = loop ss0
         rinfos =
             map
                 ( \(x, y) ->
-                    defaultResolvInfo
+                    defaultResolveInfo
                         { rinfoHostName = x
                         , rinfoPortNumber = y
                         , rinfoActions = actions
                         }
                 )
                 ips
-        renv = ResolvEnv resolver True rinfos
+        renv = ResolveEnv resolver True rinfos

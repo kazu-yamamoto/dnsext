@@ -6,7 +6,7 @@ module Recursive (recursiveQeury) where
 import DNS.Do53.Client (
     LookupConf (..),
     QueryControls,
-    ResolvActions (..),
+    ResolveActions (..),
     Seeds (..),
  )
 import qualified DNS.Do53.Client as DNS
@@ -31,7 +31,7 @@ recursiveQeury
     -> PortNumber
     -> ShortByteString
     -> Log.PutLines
-    -> [DNS.ResolvActionsFlag]
+    -> [DNS.ResolveActionsFlag]
     -> QueryControls
     -> HostName
     -> TYPE
@@ -56,7 +56,7 @@ getCustomConf
     -> PortNumber
     -> QueryControls
     -> Log.PutLines
-    -> [DNS.ResolvActionsFlag]
+    -> [DNS.ResolveActionsFlag]
     -> IO LookupConf
 getCustomConf mserver port ctl putLines raflags = case mserver of
     [] -> return conf
@@ -71,7 +71,7 @@ getCustomConf mserver port ctl putLines raflags = case mserver of
             , lconfQueryControls = ctl
             , lconfConcurrent = True
             , lconfActions =
-                DNS.defaultResolvActions
+                DNS.defaultResolveActions
                     { ractionLog = putLines
                     , ractionFlags = raflags
                     }

@@ -24,13 +24,13 @@ module DNS.Do53.Internal (
 
     -- * Resolve
     resolve,
-    ResolvEnv (..),
+    ResolveEnv (..),
 
     -- * Resolver information
-    ResolvInfo (..),
-    defaultResolvInfo,
-    ResolvActions (..),
-    defaultResolvActions,
+    ResolveInfo (..),
+    defaultResolveInfo,
+    ResolveActions (..),
+    defaultResolveActions,
 
     -- * Resolver: DNS over X
     Result (..),

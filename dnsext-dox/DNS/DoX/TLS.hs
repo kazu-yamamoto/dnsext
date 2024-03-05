@@ -10,7 +10,7 @@ import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
 
 tlsResolver :: VCLimit -> Resolver
-tlsResolver lim ri@ResolvInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
+tlsResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TLS" perform ri q qctl
   where
     -- Using a fresh connection
     perform solve = H2.runTLS settings rinfoHostName rinfoPortNumber "dot" solve'
