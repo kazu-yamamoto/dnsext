@@ -22,7 +22,7 @@ module DNS.Do53.Internal (
     recvManyN,
     recvManyNN,
 
-    -- * Resolv
+    -- * Resolve
     resolve,
     ResolvEnv (..),
 
