@@ -315,8 +315,8 @@ lookupRDNS rlv ip = lookupPTR rlv dom
 --
 --   Examples:
 --
---   >>> withLookupConf defaultLookupConf $ \env -> lookupSRV env "_xmpp-server._tcp.jabber.ietf.org"
---   Right [RD_SRV {srv_priority = 5, srv_weight = 0, srv_port = 5269, srv_target = "_dc-srv.6661af51975d._xmpp-server._tcp.jabber.ietf.org."}]
+--   >>> withLookupConf defaultLookupConf $ \env -> lookupSRV env "_xmpp-server._tcp.xmpp.org"
+--   Right [RD_SRV {srv_priority = 1, srv_weight = 1, srv_port = 9269, srv_target = "xmpp.xmpp.org."}]
 
 -- Though the "jabber.ietf.orgs" SRV record may prove reasonably stable, as
 -- with anything else published in DNS it is subject to change.  Also, this
