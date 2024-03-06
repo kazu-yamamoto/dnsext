@@ -75,7 +75,7 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Questio
                 ++ " to "
                 ++ show resultIP
                 ++ "#"
-                ++ show resultPortNumber
+                ++ show resultPort
                 ++ "/"
                 ++ resultTag
     ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]

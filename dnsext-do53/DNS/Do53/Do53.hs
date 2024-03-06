@@ -60,7 +60,7 @@ udpTcpResolver retry lim ri q qctl =
 ioErrorToDNSError :: Question -> ResolveInfo -> String -> IOError -> IO a
 ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
   where
-    loc = show q ++ ": " ++ protoName ++ show rinfoPortNumber ++ "@" ++ show rinfoIP
+    loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
 
 ----------------------------------------------------------------
@@ -80,7 +80,7 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ " to "
             ++ show rinfoIP
             ++ "#"
-            ++ show rinfoPortNumber
+            ++ show rinfoPort
             ++ "/UDP"
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
@@ -137,7 +137,7 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
                         ["udpResolver.getAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
                     getAnswer ident recv tx
 
-    open = UDP.clientSocket (show rinfoIP) (show rinfoPortNumber) True -- connected
+    open = UDP.clientSocket (show rinfoIP) (show rinfoPort) True -- connected
 
 ----------------------------------------------------------------
 
@@ -152,7 +152,7 @@ tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
             recv = recvVC lim $ recvTCP sock
         solve send recv
 
-    open = openTCP rinfoIP rinfoPortNumber
+    open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
@@ -168,7 +168,7 @@ vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ " to "
             ++ show rinfoIP
             ++ "#"
-            ++ show rinfoPortNumber
+            ++ show rinfoPort
             ++ "/"
             ++ proto
     go qctl0 = do
@@ -208,7 +208,7 @@ toResult :: ResolveInfo -> String -> Reply -> Result
 toResult ResolveInfo{..} tag rply =
     Result
         { resultIP = rinfoIP
-        , resultPortNumber = rinfoPortNumber
+        , resultPort = rinfoPort
         , resultTag = tag
         , resultReply = rply
         }

@@ -18,7 +18,7 @@ spec = describe "solvers" $ do
         let ri0 =
                 defaultResolveInfo
                     { rinfoIP = "1.1.1.1"
-                    , rinfoPortNumber = 853
+                    , rinfoPort = 853
                     }
 
         Result{..} <- tlsResolver 32768 ri0 q mempty
@@ -28,7 +28,7 @@ spec = describe "solvers" $ do
         let ri1 =
                 defaultResolveInfo
                     { rinfoIP = "8.8.8.8"
-                    , rinfoPortNumber = 853
+                    , rinfoPort = 853
                     }
 
         Result{..} <- tlsResolver 32768 ri1 q mempty
@@ -38,7 +38,7 @@ spec = describe "solvers" $ do
         let ri2 =
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
-                    , rinfoPortNumber = 853
+                    , rinfoPort = 853
                     }
 
         Result{..} <- tlsResolver 32768 ri2 q mempty
@@ -48,7 +48,7 @@ spec = describe "solvers" $ do
         let ri3 =
                 defaultResolveInfo
                     { rinfoIP = "103.2.57.5"
-                    , rinfoPortNumber = 853
+                    , rinfoPort = 853
                     }
 
         Result{..} <- tlsResolver 32768 ri3 q mempty
@@ -60,7 +60,7 @@ spec = describe "solvers" $ do
         let ri2 =
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
-                    , rinfoPortNumber = 853
+                    , rinfoPort = 853
                     }
 
         Result{..} <- quicResolver 32768 ri2 q mempty
@@ -71,7 +71,7 @@ spec = describe "solvers" $ do
         let ri0 =
                 defaultResolveInfo
                     { rinfoIP = "1.1.1.1"
-                    , rinfoPortNumber = 443
+                    , rinfoPort = 443
                     }
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri0 q mempty
@@ -81,7 +81,7 @@ spec = describe "solvers" $ do
         let ri1 =
                 defaultResolveInfo
                     { rinfoIP = "8.8.8.8"
-                    , rinfoPortNumber = 443
+                    , rinfoPort = 443
                     }
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri1 q mempty
@@ -91,7 +91,7 @@ spec = describe "solvers" $ do
         let ri2 =
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
-                    , rinfoPortNumber = 443
+                    , rinfoPort = 443
                     }
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri2 q mempty
@@ -101,7 +101,7 @@ spec = describe "solvers" $ do
         let ri3 =
                 defaultResolveInfo
                     { rinfoIP = "103.2.57.5"
-                    , rinfoPortNumber = 443
+                    , rinfoPort = 443
                     }
 
         Result{..} <- http2Resolver "/dns-query" 32768 ri3 q mempty
@@ -112,7 +112,7 @@ spec = describe "solvers" $ do
         let ri2 =
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
-                    , rinfoPortNumber = 443
+                    , rinfoPort = 443
                     }
 
         Result{..} <- http3Resolver "/dns-query" 32768 ri2 q mempty

@@ -153,7 +153,7 @@ main = do
                                 ";; "
                                     ++ show resultIP
                                     ++ "#"
-                                    ++ show resultPortNumber
+                                    ++ show resultPort
                                     ++ "/"
                                     ++ resultTag
                                     ++ ", Tx:"

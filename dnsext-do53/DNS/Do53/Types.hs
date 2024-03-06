@@ -199,7 +199,7 @@ data ResolveEnv = ResolveEnv
 -- | Information for resolvers.
 data ResolveInfo = ResolveInfo
     { rinfoIP :: IP
-    , rinfoPortNumber :: PortNumber
+    , rinfoPort :: PortNumber
     , rinfoActions :: ResolveActions
     }
 
@@ -207,13 +207,13 @@ defaultResolveInfo :: ResolveInfo
 defaultResolveInfo =
     ResolveInfo
         { rinfoIP = "127.0.0.1"
-        , rinfoPortNumber = 53
+        , rinfoPort = 53
         , rinfoActions = defaultResolveActions
         }
 
 data Result = Result
     { resultIP :: IP
-    , resultPortNumber :: PortNumber
+    , resultPort :: PortNumber
     , resultTag :: String
     , resultReply :: Reply
     }

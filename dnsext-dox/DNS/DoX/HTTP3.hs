@@ -21,7 +21,7 @@ http3Resolver path lim ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
         ident <- ractionGenId rinfoActions
         h3resolver conn conf ident path lim ri q qctl
   where
-    cc = getQUICParams rinfoIP rinfoPortNumber "h3"
+    cc = getQUICParams rinfoIP rinfoPort "h3"
 
 h3resolver
     :: Connection -> Config -> Identifier -> ShortByteString -> VCLimit -> Resolver

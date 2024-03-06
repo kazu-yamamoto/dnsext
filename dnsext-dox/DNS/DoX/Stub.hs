@@ -116,7 +116,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
                 ( \(x, y) ->
                     defaultResolveInfo
                         { rinfoIP = x
-                        , rinfoPortNumber = y
+                        , rinfoPort = y
                         , rinfoActions = actions
                         }
                 )

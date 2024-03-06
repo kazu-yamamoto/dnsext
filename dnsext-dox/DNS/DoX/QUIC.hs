@@ -14,7 +14,7 @@ import DNS.DoX.Imports
 quicResolver :: VCLimit -> Resolver
 quicResolver lim ri@ResolveInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
   where
-    cc = getQUICParams rinfoIP rinfoPortNumber "doq"
+    cc = getQUICParams rinfoIP rinfoPort "doq"
     perform solve = run cc $ \conn -> do
         strm <- stream conn
         let sendDoQ bs = do

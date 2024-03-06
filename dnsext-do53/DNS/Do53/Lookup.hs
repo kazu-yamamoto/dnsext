@@ -306,7 +306,7 @@ resolvInfos actions hps = map mk hps
     mk (h, p) =
         defaultResolveInfo
             { rinfoIP = h
-            , rinfoPortNumber = p
+            , rinfoPort = p
             , rinfoActions = actions
             }
 
