@@ -102,10 +102,15 @@ lookupCacheSection
     -> Question
     -> IO (Either DNSError [RData])
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
-    nx <- lookupRRCache (keyForNX q) c
-    case nx of
+    err <- lookupRRCache (keyForERR q) c
+    case err of
         Just (_, Negative{}) -> return $ Left NameError
-        Just (_, NegativeNoSOA{}) -> return $ Left NameError
+        Just (_, NegativeNoSOA rc) -> pure $ Left $ case rc of
+            FormatErr -> FormatError
+            ServFail -> ServerFailure
+            NameErr -> NameError
+            Refused -> OperationRefused
+            _ -> UnknownDNSError
         Just (_, _) -> return $ Left UnknownDNSError {- cache is inconsistent -}
         Nothing -> do
             mx <- lookupRRCache q c
@@ -128,7 +133,7 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                     ex = fromDNSMessage ans toRR
                 case ex of
                     Left NameError -> do
-                        cacheNegative cconf c (keyForNX q) now ans
+                        cacheNegative cconf c (keyForERR q) now ans
                         return $ Left NameError
                     Left e -> return $ Left e
                     Right [] -> do
