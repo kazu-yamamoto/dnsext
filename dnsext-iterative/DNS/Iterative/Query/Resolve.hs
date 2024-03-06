@@ -98,7 +98,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     recCNAMEs cc bn dcnRRsets
         | cc > mcc = do
             lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
-            failWithCacheOrigQ Cache.RankAnswer DNS.ServerFailure
+            failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = lift (logLn_ Log.DEMO $ show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do

@@ -8,8 +8,8 @@ module DNS.Iterative.Query.Cache (
     lookupRRsetEither,
     lookupCache,
     lookupErrorRCODE,
-    cacheRcodeWithOrigQ,
-    failWithCacheOrigQ,
+    failWithCache,
+    failWithCacheOrigName,
     cacheAnswer,
     cacheSection,
     cacheNoRRSIG,
@@ -250,6 +250,25 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
+failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
+failWithCacheOrigName rank e = do
+    Question dom _typ cls <- lift $ lift $ asks origQuestion_
+    failWithCache dom Cache.ERR cls rank e
+
+{- FOURMOLU_DISABLE -}
+failWithCache :: Domain -> TYPE -> CLASS -> Ranking -> DNSError -> DNSQuery a
+failWithCache dom typ cls rank e = do
+    when (cls == IN) $ lift $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
+    throwDnsError e
+  where
+    cacheRCODE_ = cacheRCODE dom typ
+{- FOURMOLU_ENABLE -}
+
+cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
+cacheRCODE dom typ rcode rank = do
+    let defaultTTL = 1800
+    cacheNegativeNoSOA rcode dom typ defaultTTL rank
+
 cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
@@ -261,26 +280,6 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     liftIO $ cpsInsertNegativeNoSOA rc dom typ ttl rank insertRRSet
-
-cacheRcodeWithOrigQ :: RCODE -> Ranking -> ContextT IO ()
-cacheRcodeWithOrigQ rcode rank = do
-    let defaultTTL = 1800
-    Question dom typ _ <- lift $ asks origQuestion_
-    cacheNegativeNoSOA rcode dom typ defaultTTL rank
-
-{- FOURMOLU_DISABLE -}
-failWithCacheOrigQ :: Ranking -> DNSError -> DNSQuery a
-failWithCacheOrigQ rank e = do
-    lift $ runErrorRC (pure ()) (`cacheRcodeWithOrigQ` rank)
-    throwDnsError e
-  where
-    runErrorRC n j = case e of
-             FormatError       -> j DNS.FormatErr
-             ServerFailure     -> j DNS.ServFail
-             OperationRefused  -> j DNS.Refused
-             IllegalDomain     -> j DNS.ServFail
-             _                 -> n
-{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
