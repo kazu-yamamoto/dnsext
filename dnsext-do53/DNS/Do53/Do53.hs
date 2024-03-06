@@ -60,7 +60,7 @@ udpTcpResolver retry lim ri q qctl =
 ioErrorToDNSError :: Question -> ResolveInfo -> String -> IOError -> IO a
 ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
   where
-    loc = show q ++ ": " ++ protoName ++ show rinfoPortNumber ++ "@" ++ rinfoHostName
+    loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
 
 ----------------------------------------------------------------
@@ -78,9 +78,9 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ rinfoHostName
+            ++ show rinfoIP
             ++ "#"
-            ++ show rinfoPortNumber
+            ++ show rinfoPort
             ++ "/UDP"
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
@@ -125,7 +125,7 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
                             | w >= 16 = showHex w
                             | otherwise = ('0' :) . showHex w
                         dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
-                     in ["udpResolver.getAnswer: decodeAt Left: ", rinfoHostName ++ ", ", dumpBS ans]
+                     in ["udpResolver.getAnswer: decodeAt Left: ", show rinfoIP ++ ", ", dumpBS ans]
                 E.throwIO e
             Right msg
                 | checkResp q ident msg -> do
@@ -134,10 +134,10 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog rinfoActions Log.DEBUG Nothing $
-                        ["udpResolver.getAnswer: checkResp error: ", rinfoHostName, ", ", show msg]
+                        ["udpResolver.getAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
                     getAnswer ident recv tx
 
-    open = UDP.clientSocket rinfoHostName (show rinfoPortNumber) True -- connected
+    open = UDP.clientSocket (show rinfoIP) (show rinfoPort) True -- connected
 
 ----------------------------------------------------------------
 
@@ -152,7 +152,7 @@ tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
             recv = recvVC lim $ recvTCP sock
         solve send recv
 
-    open = openTCP rinfoHostName rinfoPortNumber
+    open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
@@ -166,9 +166,9 @@ vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ rinfoHostName
+            ++ show rinfoIP
             ++ "#"
-            ++ show rinfoPortNumber
+            ++ show rinfoPort
             ++ "/"
             ++ proto
     go qctl0 = do
@@ -207,8 +207,8 @@ vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
 toResult :: ResolveInfo -> String -> Reply -> Result
 toResult ResolveInfo{..} tag rply =
     Result
-        { resultHostName = rinfoHostName
-        , resultPortNumber = rinfoPortNumber
+        { resultIP = rinfoIP
+        , resultPort = rinfoPort
         , resultTag = tag
         , resultReply = rply
         }

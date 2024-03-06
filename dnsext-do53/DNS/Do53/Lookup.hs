@@ -20,6 +20,10 @@ module DNS.Do53.Lookup (
 where
 
 import Control.Exception as E
+import Data.String (fromString)
+import Network.Socket (PortNumber)
+import Prelude hiding (lookup)
+
 import DNS.Do53.Do53
 import DNS.Do53.Imports
 import DNS.Do53.Resolve
@@ -28,8 +32,6 @@ import DNS.Do53.Types
 import DNS.RRCache hiding (lookup)
 import DNS.Types hiding (Seconds)
 import DNS.Types.Internal (section)
-import Network.Socket (HostName, PortNumber)
-import Prelude hiding (lookup)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -191,7 +193,7 @@ isTypeOf t ResourceRecord{..} = rrtype == t
 --    local port is created. Then exactly one TCP query is retried.
 --
 --
--- If multiple DNS servers are specified 'LookupConf' ('SeedsHostNames ')
+-- If multiple DNS servers are specified 'LookupConf' ('SeedsAddrs ')
 -- or found ('SeedsFilePath'), either sequential lookup or
 -- concurrent lookup is carried out:
 --
@@ -260,12 +262,14 @@ lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolveEnv q lenvQueryControls
 dnsPort :: PortNumber
 dnsPort = 53
 
-findAddrPorts :: Seeds -> IO [(HostName, PortNumber)]
-findAddrPorts (SeedsHostName nh) = return [(nh, dnsPort)]
-findAddrPorts (SeedsHostPort nh p) = return [(nh, p)]
-findAddrPorts (SeedsHostNames nss) = return $ map (,dnsPort) nss
-findAddrPorts (SeedsHostPorts nhps) = return nhps
-findAddrPorts (SeedsFilePath file) = map (,dnsPort) <$> getDefaultDnsServers file
+{- FOURMOLU_DISABLE -}
+findAddrPorts :: Seeds -> IO [(IP, PortNumber)]
+findAddrPorts (SeedsAddr      nh)   = return [(nh, dnsPort)]
+findAddrPorts (SeedsAddrPort  nh p) = return [(nh, p)]
+findAddrPorts (SeedsAddrs     nss)  = return $ map (,dnsPort) nss
+findAddrPorts (SeedsAddrPorts nhps) = return nhps
+findAddrPorts (SeedsFilePath file)  = map (\h -> (fromString h, dnsPort)) <$> getDefaultDnsServers file
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -291,23 +295,23 @@ withLookupConfAndResolver LookupConf{..} resolver f = do
     f lenv
 
 resolvEnv
-    :: Resolver -> Bool -> ResolveActions -> [(HostName, PortNumber)] -> ResolveEnv
+    :: Resolver -> Bool -> ResolveActions -> [(IP, PortNumber)] -> ResolveEnv
 resolvEnv resolver conc actions hps = ResolveEnv resolver conc ris
   where
     ris = resolvInfos actions hps
 
-resolvInfos :: ResolveActions -> [(HostName, PortNumber)] -> [ResolveInfo]
+resolvInfos :: ResolveActions -> [(IP, PortNumber)] -> [ResolveInfo]
 resolvInfos actions hps = map mk hps
   where
     mk (h, p) =
         defaultResolveInfo
-            { rinfoHostName = h
-            , rinfoPortNumber = p
+            { rinfoIP = h
+            , rinfoPort = p
             , rinfoActions = actions
             }
 
 modifyLookupEnv
-    :: Resolver -> [(HostName, PortNumber)] -> LookupEnv -> LookupEnv
+    :: Resolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
 modifyLookupEnv resolver hps lenv@LookupEnv{..} =
     lenv
         { lenvResolveEnv = renv

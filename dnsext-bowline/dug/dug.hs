@@ -151,9 +151,9 @@ main = do
                         let Reply{..} = resultReply
                         let h =
                                 ";; "
-                                    ++ resultHostName
+                                    ++ show resultIP
                                     ++ "#"
-                                    ++ show resultPortNumber
+                                    ++ show resultPort
                                     ++ "/"
                                     ++ resultTag
                                     ++ ", Tx:"

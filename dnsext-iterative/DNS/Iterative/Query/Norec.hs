@@ -39,7 +39,7 @@ norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     let ris =
             [ defaultResolveInfo
-                { rinfoHostName = show aserver
+                { rinfoIP = aserver
                 , rinfoActions =
                     defaultResolveActions
                         { ractionGenId = idGen_ cxt

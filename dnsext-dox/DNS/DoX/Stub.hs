@@ -70,14 +70,14 @@ lookupDoX conf domain typ = do
                             then map (prettyShowRData . toRData) ss
                             else map show ss
                 ractionLog (lconfActions conf) Log.DEMO Nothing r
-                auto domain typ (unVCLimit lim) (lenvActions lenv) resultHostName ss
+                auto domain typ (unVCLimit lim) (lenvActions lenv) resultIP ss
 
 auto
     :: HostName
     -> TYPE
     -> Int
     -> ResolveActions
-    -> HostName
+    -> IP
     -> [RD_SVCB]
     -> IO (Either DNSError Result)
 auto _ _ _ _ _ [] = return $ Left UnknownDNSError
@@ -110,13 +110,13 @@ auto domain typ lim actions ip0 ss0 = loop ss0
             Just v6 -> show <$> hint_ipv6s v6
         ips = case v4s ++ v6s of
             [] -> [(ip0, port)]
-            xs -> map (,port) xs
+            xs -> map (\h -> (fromString h, port)) xs
         rinfos =
             map
                 ( \(x, y) ->
                     defaultResolveInfo
-                        { rinfoHostName = x
-                        , rinfoPortNumber = y
+                        { rinfoIP = x
+                        , rinfoPort = y
                         , rinfoActions = actions
                         }
                 )

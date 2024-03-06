@@ -39,7 +39,7 @@ http2Resolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
-        H2.run settings rinfoHostName rinfoPortNumber $
+        H2.run settings (show rinfoIP) rinfoPort $
             doHTTP proto ident path lim ri q qctl
   where
     settings =
@@ -52,7 +52,7 @@ http2cResolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
-        H2.runH2C H2.defaultSettings rinfoHostName rinfoPortNumber $
+        H2.runH2C H2.defaultSettings (show rinfoIP) rinfoPort $
             doHTTP proto ident path lim ri q qctl
 
 doHTTP
@@ -82,9 +82,9 @@ doHTTP proto ident path lim ResolveInfo{..} q@Question{..} qctl sendRequest _aux
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ rinfoHostName
+            ++ show rinfoIP
             ++ "#"
-            ++ show rinfoPortNumber
+            ++ show rinfoPort
             ++ "/"
             ++ proto
     getTime = ractionGetTime rinfoActions

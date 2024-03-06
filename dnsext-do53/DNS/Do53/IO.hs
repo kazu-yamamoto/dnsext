@@ -26,14 +26,12 @@ import DNS.Types hiding (Seconds)
 import qualified Data.ByteString as BS
 import Network.Socket (
     AddrInfo (..),
-    AddrInfoFlag (..),
-    HostName,
+    Family (..),
     PortNumber,
     Socket,
     SocketType (..),
     connect,
-    defaultHints,
-    getAddrInfo,
+    defaultProtocol,
     openSocket,
  )
 import Network.Socket.ByteString (recv)
@@ -42,22 +40,25 @@ import qualified Network.Socket.ByteString as NSB
 ----------------------------------------------------------------
 
 -- | Opening a TCP socket.
-openTCP :: HostName -> PortNumber -> IO Socket
-openTCP h p = do
-    ai <- makeAddrInfo h p
+openTCP :: IP -> PortNumber -> IO Socket
+openTCP a p = do
+    let ai = makeAddrInfo a p
     sock <- openSocket ai
     connect sock $ addrAddress ai
     return sock
 
-makeAddrInfo :: HostName -> PortNumber -> IO AddrInfo
-makeAddrInfo nh p = do
-    let hints =
-            defaultHints
-                { addrFlags = [AI_ADDRCONFIG, AI_NUMERICHOST, AI_NUMERICSERV]
-                , addrSocketType = Stream
-                }
-    let np = show p
-    head <$> getAddrInfo (Just hints) (Just nh) (Just np)
+makeAddrInfo :: IP -> PortNumber -> AddrInfo
+makeAddrInfo a p =
+    AddrInfo
+        { addrFlags = []
+        , addrFamily = case a of
+            IPv4 _ -> AF_INET
+            IPv6 _ -> AF_INET6
+        , addrSocketType = Stream
+        , addrProtocol = defaultProtocol
+        , addrAddress = toSockAddr (a, p)
+        , addrCanonName = Nothing
+        }
 
 ----------------------------------------------------------------
 

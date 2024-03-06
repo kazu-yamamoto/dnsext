@@ -66,16 +66,16 @@ resolveConcurrent
 resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
 resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
     caller <- TStat.getThreadLabel
-    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ rinfoHostName ri, resolver ri q qctl)) ris
+    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver ri q qctl)) ris
     let ~tag =
             "    query "
                 ++ show qname
                 ++ " "
                 ++ show qtype
                 ++ " to "
-                ++ resultHostName
+                ++ show resultIP
                 ++ "#"
-                ++ show resultPortNumber
+                ++ show resultPort
                 ++ "/"
                 ++ resultTag
     ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]

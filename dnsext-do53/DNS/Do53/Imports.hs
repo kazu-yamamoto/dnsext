@@ -5,6 +5,7 @@ module DNS.Do53.Imports (
     module Control.Monad,
     module Data.Bits,
     module Data.Function,
+    module Data.IP,
     module Data.List,
     module Data.Maybe,
     module Data.Monoid,
@@ -24,6 +25,7 @@ import Data.Bits
 import Data.ByteString (ByteString)
 import Data.ByteString.Short (ShortByteString)
 import Data.Function
+import Data.IP
 import Data.List hiding (lookup)
 import Data.Maybe
 import Data.Monoid
