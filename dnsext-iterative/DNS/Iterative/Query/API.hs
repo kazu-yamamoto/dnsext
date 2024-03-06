@@ -183,25 +183,8 @@ replyMessage
 replyMessage eas ident rqs =
     either queryError (Right . message) eas
   where
-    dnsError de = fmap message $ (,,) <$> rcodeDNSError de <*> pure [] <*> pure []
-    rcodeDNSError e = case e of
-        DNS.SequenceNumberMismatch -> Right DNS.FormatErr
-        DNS.QuestionMismatch -> Right DNS.FormatErr
-        DNS.RetryLimitExceeded -> Right DNS.ServFail
-        DNS.TimeoutExpired -> Right DNS.ServFail
-        DNS.UnexpectedRDATA -> Right DNS.FormatErr
-        DNS.IllegalDomain -> Right DNS.ServFail
-        DNS.FormatError -> Right DNS.FormatErr
-        DNS.ServerFailure -> Right DNS.ServFail
-        DNS.NameError -> Right DNS.NameErr
-        DNS.NotImplemented -> Right DNS.NotImpl
-        DNS.OperationRefused -> Right DNS.Refused
-        DNS.BadOptRecord -> Right DNS.BadVers
-        DNS.BadConfiguration -> Right DNS.ServFail
-        DNS.NetworkFailure{} -> Right DNS.ServFail
-        DNS.DecodeError{} -> Right DNS.FormatErr
-        DNS.UnknownDNSError{} -> Right DNS.ServFail
-        _ -> Left $ "DNSError: " ++ show e
+    dnsError de = fmap message $ (,,) <$> rcodeOfDNSError de <*> pure [] <*> pure []
+    rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
 
     queryError qe = case qe of
         DnsError e -> dnsError e
