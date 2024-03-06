@@ -296,9 +296,9 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
-        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg []
+        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
@@ -325,7 +325,7 @@ cacheNoDelegation d zone dnskeys dom msg
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg =<< witnessNameErr
+    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
     ncCNAME _ncLog = cacheNoDataNS
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
