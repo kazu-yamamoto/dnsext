@@ -20,8 +20,6 @@ module DNS.Do53.Lookup (
 where
 
 import Control.Exception as E
-import Data.String (fromString)
-import Network.Socket (PortNumber)
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53

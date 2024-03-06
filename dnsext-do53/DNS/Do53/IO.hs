@@ -27,8 +27,6 @@ import qualified Data.ByteString as BS
 import Network.Socket (
     AddrInfo (..),
     Family (..),
-    PortNumber,
-    Socket,
     SocketType (..),
     connect,
     defaultProtocol,

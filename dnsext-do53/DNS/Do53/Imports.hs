@@ -1,6 +1,4 @@
 module DNS.Do53.Imports (
-    ByteString,
-    ShortByteString,
     module Control.Applicative,
     module Control.Monad,
     module Data.Bits,
@@ -13,7 +11,12 @@ module DNS.Do53.Imports (
     module Data.Typeable,
     module Data.Word,
     module Numeric,
+    ByteString,
     EpochTime,
+    PortNumber,
+    ShortByteString,
+    Socket,
+    fromString,
     getEpochTime,
 )
 where
@@ -30,10 +33,12 @@ import Data.List hiding (lookup)
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
+import Data.String (fromString)
 import Data.Typeable
 import Data.UnixTime (UnixTime (..), getUnixTime)
 import Data.Word
 import Foreign.C.Types (CTime (..))
+import Network.Socket (PortNumber, Socket)
 import Numeric
 
 -- | Getting the current epoch time.
