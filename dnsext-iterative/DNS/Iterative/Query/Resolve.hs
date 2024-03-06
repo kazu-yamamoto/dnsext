@@ -71,7 +71,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     local result = return (([], n0), Left result)
     notLocal
         | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
-        | typ == Cache.NX  = pure (([], n0), Left (DNS.NoErr, [], []))
+        | typ == Cache.ERR = pure (([], n0), Left (DNS.NoErr, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
@@ -81,14 +81,14 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
                 result <- cnameHandler bn
                 pure (([], bn), Right result)
 
-            withNXC soa                 = pure (([], bn), Left (DNS.NameErr, [], soa))
+            withERRC (rc, soa)          = pure (([], bn), Left (rc, [], soa))
             cachedCNAME (rc, rrs, soa)  = pure (([], bn), Left (rc, rrs, soa))
 
             negative soa _rank  = (DNS.NoErr, [], [soa])
             noSOA rc            = (rc, [], [])
 
         maybe
-            (maybe noCache withNXC =<< lift (lookupNX bn))
+            (maybe noCache withERRC =<< lift (lookupERR bn))
             {- target RR is not CNAME destination, but CNAME result is NoErr -}
             (cachedCNAME . foldLookupResult negative noSOA (\cname -> (DNS.NoErr, [cname], [])))
             =<< lift (lookupType bn CNAME)
@@ -105,11 +105,11 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
                     (msg, cname, vsec) <- typeHandler bn typ
                     maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
 
-                withNXC soa = pure ((dcnRRsets [], bn), Left (DNS.NameErr, [], soa))
+                withERRC (rc, soa) = pure ((dcnRRsets [], bn), Left (rc, [], soa))
 
                 noTypeCache =
                     maybe
-                        (maybe noCache withNXC =<< lift (lookupNX bn))
+                        (maybe noCache withERRC =<< lift (lookupERR bn))
                         recCNAMEs_ {- recurse with cname cache -}
                         =<< lift ((withCN =<<) . joinLKR <$> lookupType bn CNAME)
                   where
@@ -135,13 +135,14 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
       where
         mcc = maxCNameChain
 
-    lookupNX :: Domain -> ContextT IO (Maybe [RRset])
-    lookupNX bn =
-        maybe (return Nothing) (foldLookupResult (\soa _rank -> pure $ Just [soa]) (\_rc -> pure $ Just []) inconsistent)
-            =<< lookupType bn Cache.NX
+    lookupERR :: Domain -> ContextT IO (Maybe (RCODE, [RRset]))
+    lookupERR name =
+        maybe (pure Nothing) (foldLookupResult soah (\rc -> pure $ Just (rc, [])) inconsistent)
+            =<< lookupType name Cache.ERR
       where
+        soah soa rank = pure $ Just (NameErr, [soa | rank > RankAdditional])
         inconsistent rrs = do
-            logLn_ Log.WARN $ "inconsistent NX cache found: dom=" ++ show bn ++ ", " ++ show rrs
+            logLn_ Log.WARN $ "inconsistent ERR cache found: dom=" ++ show name ++ ", " ++ show rrs
             return Nothing
 
     lookupType bn t = (replyRank =<<) <$> lookupRRsetEither logMark bn t

@@ -7,6 +7,7 @@ module DNS.Iterative.Query.Cache (
     foldLookupResult,
     lookupRRsetEither,
     lookupCache,
+    lookupErrorRCODE,
     cacheRcodeWithOrigQ,
     failWithCacheOrigQ,
     cacheAnswer,
@@ -136,28 +137,41 @@ _newTestEnv = newTestEnv (const $ pure ()) False 2048
 -- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
 -- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
--- >>> maybe True (null . fst) <$> runCxt pos1
--- False
+-- >>> fmap (map rdata . fst) <$> runCxt pos1
+-- Just [10.0.0.3]
 -- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
--- >>> isJust <$> runCxt nodata1
--- True
+-- >>> fmap fst <$> runCxt nodata1
+-- Just []
 -- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
--- >>> isJust <$> runCxt nodata2
--- True
--- >>> nx1 = cacheNegative "example.com." "nx1.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx1.example.com." Cache.NX
--- >>> isJust <$> runCxt nx1
--- True
--- >>> nx2 = cacheNegativeNoSOA NoErr "nx2.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx2.example.com." Cache.NX
--- >>> isJust <$> runCxt nx2
--- True
+-- >>> fmap fst <$> runCxt nodata2
+-- Just []
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err1
+-- Just []
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err2
+-- Just []
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err3
+-- Just []
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = withLookupCache mkAlive "" dom typ
+lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
   where
-    mkAlive :: CacheHandler [ResourceRecord]
+    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+
+lookupErrorRCODE :: Domain -> ContextT IO (Maybe (RCODE, Ranking))
+lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
+
+{- FOURMOLU_DISABLE -}
+lookupCache' :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+             -> (Seconds -> [RData] -> Maybe a)
+             -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
+             -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
+  where
     mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = Just (Cache.unCRSet (const []) (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
-      where
-        mapRR = map $ ResourceRecord dom typ DNS.IN ttl
+    result ttl crs rank = (,) <$> Cache.unCRSet soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
+{- FOURMOLU_ENABLE -}
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
@@ -293,9 +307,9 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAnswer msg =<< witnessNameErr
-        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ      rankedAnswer msg []
+        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
@@ -322,7 +336,7 @@ cacheNoDelegation d zone dnskeys dom msg
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.NX rankedAuthority msg =<< witnessNameErr
+    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
     ncCNAME _ncLog = cacheNoDataNS
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
