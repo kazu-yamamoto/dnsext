@@ -136,20 +136,23 @@ _newTestEnv = newTestEnv (const $ pure ()) False 2048
 -- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
 -- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
--- >>> maybe True (null . fst) <$> runCxt pos1
--- False
+-- >>> fmap (map rdata . fst) <$> runCxt pos1
+-- Just [10.0.0.3]
 -- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
--- >>> isJust <$> runCxt nodata1
--- True
+-- >>> fmap fst <$> runCxt nodata1
+-- Just []
 -- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
--- >>> isJust <$> runCxt nodata2
--- True
--- >>> nx1 = cacheNegative "example.com." "nx1.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx1.example.com." Cache.NX
--- >>> isJust <$> runCxt nx1
--- True
--- >>> nx2 = cacheNegativeNoSOA NoErr "nx2.example.com." Cache.NX 7200 Cache.RankAnswer *> lookupCache "nx2.example.com." Cache.NX
--- >>> isJust <$> runCxt nx2
--- True
+-- >>> fmap fst <$> runCxt nodata2
+-- Just []
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err1
+-- Just []
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err2
+-- Just []
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err3
+-- Just []
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = withLookupCache mkAlive "" dom typ
   where
