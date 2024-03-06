@@ -148,6 +148,28 @@ rrnamePairs dds@(d : ds) ggs@(g : gs)
     a = head g
 
 {- FOURMOLU_DISABLE -}
+foldDNSErrorToRCODE :: a -> (RCODE -> a) -> DNSError -> a
+foldDNSErrorToRCODE n j e = case e of
+    SequenceNumberMismatch  -> j FormatErr
+    QuestionMismatch        -> j FormatErr
+    RetryLimitExceeded      -> j ServFail
+    TimeoutExpired          -> j ServFail
+    UnexpectedRDATA         -> j FormatErr
+    IllegalDomain           -> j ServFail
+    FormatError             -> j FormatErr
+    ServerFailure           -> j ServFail
+    NameError               -> j NameErr
+    NotImplemented          -> j NotImpl
+    OperationRefused        -> j Refused
+    BadOptRecord            -> j BadVers
+    BadConfiguration        -> j ServFail
+    NetworkFailure{}        -> j ServFail
+    DecodeError{}           -> j FormatErr
+    UnknownDNSError         -> j ServFail
+    _                       -> n
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 foldIPList' :: a -> (NonEmpty IPv4 -> a) -> (NonEmpty IPv6 -> a)
             -> (NonEmpty IPv4 -> NonEmpty IPv6 -> a)
             -> [IPv4] -> [IPv6] -> a
