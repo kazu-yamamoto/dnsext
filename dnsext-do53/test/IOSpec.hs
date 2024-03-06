@@ -14,26 +14,26 @@ q = Question "www.mew.org" A IN
 google :: ResolveInfo
 google =
     defaultResolveInfo
-        { rinfoHostName = "8.8.8.8"
+        { rinfoIP = "8.8.8.8"
         }
 
 cloudflare :: ResolveInfo
 cloudflare =
     defaultResolveInfo
-        { rinfoHostName = "1.1.1.1"
+        { rinfoIP = "1.1.1.1"
         }
 
 bad0 :: ResolveInfo
 bad0 =
     defaultResolveInfo
-        { rinfoHostName = "192.0.2.1"
+        { rinfoIP = "192.0.2.1"
         , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
         }
 
 bad1 :: ResolveInfo
 bad1 =
     defaultResolveInfo
-        { rinfoHostName = "192.0.2.2"
+        { rinfoIP = "192.0.2.2"
         , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
         }
 

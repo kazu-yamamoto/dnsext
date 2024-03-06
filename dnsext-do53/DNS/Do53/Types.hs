@@ -40,18 +40,20 @@ module DNS.Do53.Types (
 )
 where
 
-import DNS.Types
-import Network.Socket (HostName, PortNumber, Socket)
+import Data.IP
+import Network.Socket (PortNumber, Socket)
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
+import System.Timeout (timeout)
+import Prelude
+
 import DNS.Do53.Id
 import DNS.Do53.Imports
 import DNS.Do53.Query
 import DNS.Log (PutLines)
 import DNS.RRCache
-import System.Timeout (timeout)
-import Prelude
+import DNS.Types
 
 ----------------------------------------------------------------
 
@@ -66,13 +68,13 @@ data Seeds
       -- on Windows regardless of
       -- the value of the file name.
       SeedsFilePath FilePath
-    | -- | A numeric IP address. /Warning/: host names are invalid.
-      SeedsHostName HostName
-    | -- | Numeric IP addresses. /Warning/: host names are invalid.
-      SeedsHostNames [HostName]
-    | -- | A numeric IP address and port number. /Warning/: host names are invalid.
-      SeedsHostPort HostName PortNumber
-    | SeedsHostPorts [(HostName, PortNumber)]
+    | -- | A numeric IP address.
+      SeedsAddr IP
+    | -- | Numeric IP addresses.
+      SeedsAddrs [IP]
+    | -- | A numeric IP address and port number.
+      SeedsAddrPort IP PortNumber
+    | SeedsAddrPorts [(IP, PortNumber)]
     deriving (Show)
 
 ----------------------------------------------------------------
@@ -106,11 +108,11 @@ newtype VCLimit = VCLimit {unVCLimit :: Int} deriving (Eq, Ord, Num, Show)
 --
 --  An example to use Google's public DNS cache instead of resolv.conf:
 --
---  > let conf = defaultLookupConf { lconfInfo = RCHostName "8.8.8.8" }
+--  > let conf = defaultLookupConf { lconfInfo = RCAddr "8.8.8.8" }
 --
 --  An example to use multiple Google's public DNS cache concurrently:
 --
---  > let conf = defaultLookupConf { lconfInfo = RCHostNames ["8.8.8.8","8.8.4.4"], lconfConcurrent = True }
+--  > let conf = defaultLookupConf { lconfInfo = RCAddrs ["8.8.8.8","8.8.4.4"], lconfConcurrent = True }
 --
 --  An example to disable EDNS:
 --
@@ -196,7 +198,7 @@ data ResolveEnv = ResolveEnv
 
 -- | Information for resolvers.
 data ResolveInfo = ResolveInfo
-    { rinfoHostName :: HostName
+    { rinfoIP :: IP
     , rinfoPortNumber :: PortNumber
     , rinfoActions :: ResolveActions
     }
@@ -204,13 +206,13 @@ data ResolveInfo = ResolveInfo
 defaultResolveInfo :: ResolveInfo
 defaultResolveInfo =
     ResolveInfo
-        { rinfoHostName = "127.0.0.1"
+        { rinfoIP = "127.0.0.1"
         , rinfoPortNumber = 53
         , rinfoActions = defaultResolveActions
         }
 
 data Result = Result
-    { resultHostName :: HostName
+    { resultIP :: IP
     , resultPortNumber :: PortNumber
     , resultTag :: String
     , resultReply :: Reply

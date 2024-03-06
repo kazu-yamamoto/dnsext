@@ -14,7 +14,7 @@ import DNS.DoX.Imports
 quicResolver :: VCLimit -> Resolver
 quicResolver lim ri@ResolveInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
   where
-    cc = getQUICParams rinfoHostName rinfoPortNumber "doq"
+    cc = getQUICParams rinfoIP rinfoPortNumber "doq"
     perform solve = run cc $ \conn -> do
         strm <- stream conn
         let sendDoQ bs = do
@@ -23,10 +23,10 @@ quicResolver lim ri@ResolveInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
             recvDoQ = recvVC lim $ recvStream strm
         solve sendDoQ recvDoQ
 
-getQUICParams :: HostName -> PortNumber -> ByteString -> ClientConfig
-getQUICParams hostname port alpn =
+getQUICParams :: IP -> PortNumber -> ByteString -> ClientConfig
+getQUICParams addr port alpn =
     defaultClientConfig
-        { ccServerName = hostname
+        { ccServerName = show addr
         , ccPortName = show port
         , ccALPN = \_ -> return $ Just [alpn]
         , ccDebugLog = False

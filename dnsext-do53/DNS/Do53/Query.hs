@@ -55,12 +55,12 @@ import qualified Data.Semigroup as Sem
 --
 -- >>> :set -XOverloadedStrings
 -- >>> let emptyNSID = ""
--- >>> let mask = 24
+-- >>> let msk = 24
 -- >>> let ipaddr = read "192.0.2.1"
 -- >>> :{
 -- mconcat [ ednsSetVersion (Just 1)
 --         , ednsSetOptions (ODataAdd [od_nsid emptyNSID])
---         , ednsSetOptions (ODataAdd [od_clientSubnet mask 0 ipaddr])
+--         , ednsSetOptions (ODataAdd [od_clientSubnet msk 0 ipaddr])
 --         ]
 -- :}
 -- edns.version:1,edns.options:[NSID,ClientSubnet]

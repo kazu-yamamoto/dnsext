@@ -17,7 +17,7 @@ spec = describe "solvers" $ do
     it "resolves well with TLS" $ do
         let ri0 =
                 defaultResolveInfo
-                    { rinfoHostName = "1.1.1.1"
+                    { rinfoIP = "1.1.1.1"
                     , rinfoPortNumber = 853
                     }
 
@@ -27,7 +27,7 @@ spec = describe "solvers" $ do
 
         let ri1 =
                 defaultResolveInfo
-                    { rinfoHostName = "8.8.8.8"
+                    { rinfoIP = "8.8.8.8"
                     , rinfoPortNumber = 853
                     }
 
@@ -37,7 +37,7 @@ spec = describe "solvers" $ do
 
         let ri2 =
                 defaultResolveInfo
-                    { rinfoHostName = "94.140.14.140"
+                    { rinfoIP = "94.140.14.140"
                     , rinfoPortNumber = 853
                     }
 
@@ -47,19 +47,19 @@ spec = describe "solvers" $ do
 
         let ri3 =
                 defaultResolveInfo
-                    { rinfoHostName = "103.2.57.5"
+                    { rinfoIP = "103.2.57.5"
                     , rinfoPortNumber = 853
                     }
 
         Result{..} <- tlsResolver 32768 ri3 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldSatisfy` (\rc -> rc == NoErr || rc == Refused) -- IIJ public DNS refuses GitHub?
-        when (rcode replyDNSMessage == Refused) $ putStrLn $ "    NOTICE: receive Refused from " ++ rinfoHostName ri3
+        when (rcode replyDNSMessage == Refused) $ putStrLn $ "    NOTICE: receive Refused from " ++ show (rinfoIP ri3)
 
     it "resolves well with QUIC" $ do
         let ri2 =
                 defaultResolveInfo
-                    { rinfoHostName = "94.140.14.140"
+                    { rinfoIP = "94.140.14.140"
                     , rinfoPortNumber = 853
                     }
 
@@ -70,7 +70,7 @@ spec = describe "solvers" $ do
     it "resolves well with HTTP/2" $ do
         let ri0 =
                 defaultResolveInfo
-                    { rinfoHostName = "1.1.1.1"
+                    { rinfoIP = "1.1.1.1"
                     , rinfoPortNumber = 443
                     }
 
@@ -80,7 +80,7 @@ spec = describe "solvers" $ do
 
         let ri1 =
                 defaultResolveInfo
-                    { rinfoHostName = "8.8.8.8"
+                    { rinfoIP = "8.8.8.8"
                     , rinfoPortNumber = 443
                     }
 
@@ -90,7 +90,7 @@ spec = describe "solvers" $ do
 
         let ri2 =
                 defaultResolveInfo
-                    { rinfoHostName = "94.140.14.140"
+                    { rinfoIP = "94.140.14.140"
                     , rinfoPortNumber = 443
                     }
 
@@ -100,7 +100,7 @@ spec = describe "solvers" $ do
 
         let ri3 =
                 defaultResolveInfo
-                    { rinfoHostName = "103.2.57.5"
+                    { rinfoIP = "103.2.57.5"
                     , rinfoPortNumber = 443
                     }
 
@@ -111,7 +111,7 @@ spec = describe "solvers" $ do
     it "resolves well with HTTP/3" $ do
         let ri2 =
                 defaultResolveInfo
-                    { rinfoHostName = "94.140.14.140"
+                    { rinfoIP = "94.140.14.140"
                     , rinfoPortNumber = 443
                     }
 

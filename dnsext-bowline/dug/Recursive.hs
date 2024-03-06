@@ -23,6 +23,7 @@ import qualified DNS.Types as DNS
 import Data.ByteString.Short (ShortByteString)
 import Data.Either
 import Data.IP (IPv4, IPv6)
+import Data.String
 import Network.Socket (HostName, PortNumber)
 import Text.Read (readMaybe)
 
@@ -62,8 +63,8 @@ getCustomConf mserver port ctl putLines raflags = case mserver of
     [] -> return conf
     hs -> do
         as <- concat <$> mapM toNumeric hs
-        let aps = map (,port) as
-        return $ conf{lconfSeeds = SeedsHostPorts aps}
+        let aps = map (\h -> (fromString h, port)) as
+        return $ conf{lconfSeeds = SeedsAddrPorts aps}
   where
     conf =
         DNS.defaultLookupConf
