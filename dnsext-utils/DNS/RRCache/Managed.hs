@@ -20,6 +20,7 @@ module DNS.RRCache.Managed (
     insertRRCache,
     lookupRRCache,
     expiresRRCache,
+    keyForERR,
     keyForNX,
 )
 where
@@ -97,9 +98,13 @@ insertRRCache k tim crs (RRCache _ reaper) = do
     let ins = Cache.stubInsert k tim crs
     reaperUpdate reaper $ \cache -> maybe cache id $ ins cache
 
-{- NameError is cached using private NX, instead of each type -}
+{- NameError and other errors RCODE are cached using private ERR, instead of each type -}
+keyForERR :: Question -> Question
+keyForERR k = k{qtype = Cache.ERR}
+
+{- Same as keyForERR, backword comapt -}
 keyForNX :: Question -> Question
-keyForNX k = k{qtype = Cache.NX}
+keyForNX = keyForERR
 
 data RRCacheOps = RRCacheOps
     { insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
