@@ -19,7 +19,7 @@ module DNS.RRCache.Types (
     cpsInsertNegative,
     cpsInsertNegativeNoSOA,
     insertSetEmpty,
-    TYPE (NX),
+    TYPE (ERR, NX),
 
     -- * handy interface
     insertRRs,
@@ -391,12 +391,18 @@ alive now eol = do
 size :: Cache -> Int
 size (Cache c _) = PSQ.size c
 
+-- | Key for error RCODE
+--   * Negative       - NameErr
+--   * NegativeNoSOA  - NameErr or other errors RCODE
+--
 -- code from Reserved for Private Use (section 3.1 of RFC6895)
 -- <https://datatracker.ietf.org/doc/html/rfc6895#section-3.1>
+pattern ERR :: TYPE
+pattern ERR = TYPE 0xff00
 
--- | Key for NameError
+-- | same as `ERR`, backword compat
 pattern NX :: TYPE
-pattern NX = TYPE 0xff00
+pattern NX = ERR
 
 ---
 {- debug interfaces -}
