@@ -7,6 +7,7 @@ module DNS.Iterative.Query.Cache (
     foldLookupResult,
     lookupRRsetEither,
     lookupCache,
+    lookupErrorRCODE,
     cacheRcodeWithOrigQ,
     failWithCacheOrigQ,
     cacheAnswer,
@@ -154,13 +155,23 @@ _newTestEnv = newTestEnv (const $ pure ()) False 2048
 -- >>> fmap fst <$> runCxt err3
 -- Just []
 lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = withLookupCache mkAlive "" dom typ
+lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
   where
-    mkAlive :: CacheHandler [ResourceRecord]
+    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+
+lookupErrorRCODE :: Domain -> ContextT IO (Maybe (RCODE, Ranking))
+lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
+
+{- FOURMOLU_DISABLE -}
+lookupCache' :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+             -> (Seconds -> [RData] -> Maybe a)
+             -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
+             -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
+  where
     mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = Just (Cache.unCRSet (const []) (const []) mapRR (\rds _sigs -> mapRR rds) crs, rank)
-      where
-        mapRR = map $ ResourceRecord dom typ DNS.IN ttl
+    result ttl crs rank = (,) <$> Cache.unCRSet soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
+{- FOURMOLU_ENABLE -}
 
 cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
 cacheNoRRSIG rrs0 rank = do
