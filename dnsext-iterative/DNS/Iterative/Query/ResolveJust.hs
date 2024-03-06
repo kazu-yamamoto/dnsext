@@ -144,9 +144,6 @@ iterative_ dc nss0 (x : xs) =
     recurse = iterative_ dc {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
-    lookupNX :: ContextT IO Bool
-    lookupNX = isJust <$> lookupCache name Cache.NX
-
     stepQuery :: Delegation -> DNSQuery MayDelegation
     stepQuery nss@Delegation{..} = do
         let zone = delegationZone
@@ -172,13 +169,19 @@ iterative_ dc nss0 (x : xs) =
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
+    lookupERR = fmap fst <$> (lift $ lookupErrorRCODE name)
+    withERRC rc = case rc of
+        NameErr    -> pure noDelegation
+        ServFail   -> throw' ServerFailure
+        FormatErr  -> throw' FormatError
+        Refused    -> throw' OperationRefused
+        _          -> throw' ServerFailure
+      where throw' e = lift (logLn Log.DEMO $ "iterative: " ++ show e ++ " with cached RCODE: " ++ show rc) *> throwDnsError e
+
     step :: Delegation -> DNSQuery MayDelegation
     step nss@Delegation{..} = do
-        let withNXC nxc
-                | nxc = pure noDelegation
-                | otherwise = stepQuery nss
-            getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
-            getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lift lookupNX >>= withNXC) pure
+        let getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
+            getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lookupERR >>= maybe (stepQuery nss) withERRC) pure
         getDelegation delegationFresh >>= mapM (fillDelegation dc) >>= mapM (fillsDNSSEC nss)
         --                                {- fill for no address cases -}
 {- FOURMOLU_ENABLE -}
