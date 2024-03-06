@@ -181,7 +181,7 @@ iterative_ dc nss0 (x : xs) =
     step :: Delegation -> DNSQuery MayDelegation
     step nss@Delegation{..} = do
         let getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
-            getDelegation CachedD = lift (lookupDelegation name) >>= maybe (lookupERR >>= maybe (stepQuery nss) withERRC) pure
+            getDelegation CachedD = lookupERR >>= maybe (lift (lookupDelegation name) >>= maybe (stepQuery nss) pure) withERRC
         getDelegation delegationFresh >>= mapM (fillDelegation dc) >>= mapM (fillsDNSSEC nss)
         --                                {- fill for no address cases -}
 {- FOURMOLU_ENABLE -}
