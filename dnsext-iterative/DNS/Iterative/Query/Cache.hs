@@ -8,10 +8,8 @@ module DNS.Iterative.Query.Cache (
     lookupRRsetEither,
     lookupCache,
     lookupErrorRCODE,
-    cacheRcodeWithOrigQ,
     failWithCache,
     failWithCacheOrigName,
-    failWithCacheOrigQ,
     cacheAnswer,
     cacheSection,
     cacheNoRRSIG,
@@ -282,26 +280,6 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     liftIO $ cpsInsertNegativeNoSOA rc dom typ ttl rank insertRRSet
-
-cacheRcodeWithOrigQ :: RCODE -> Ranking -> ContextT IO ()
-cacheRcodeWithOrigQ rcode rank = do
-    let defaultTTL = 1800
-    Question dom typ _ <- lift $ asks origQuestion_
-    cacheNegativeNoSOA rcode dom typ defaultTTL rank
-
-{- FOURMOLU_DISABLE -}
-failWithCacheOrigQ :: Ranking -> DNSError -> DNSQuery a
-failWithCacheOrigQ rank e = do
-    lift $ runErrorRC (pure ()) (`cacheRcodeWithOrigQ` rank)
-    throwDnsError e
-  where
-    runErrorRC n j = case e of
-             FormatError       -> j DNS.FormatErr
-             ServerFailure     -> j DNS.ServFail
-             OperationRefused  -> j DNS.Refused
-             IllegalDomain     -> j DNS.ServFail
-             _                 -> n
-{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
