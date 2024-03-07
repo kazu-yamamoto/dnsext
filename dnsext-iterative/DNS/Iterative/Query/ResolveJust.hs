@@ -156,15 +156,16 @@ iterative_ dc nss0 (x : xs) =
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         msg <- norec dnssecOK sas name A
-        let withNoDelegation handler = mayDelegation handler (return . hasDelegation)
+        let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
             sharedHandler = servsChildZone nss name msg
-            cacheHandler = cacheNoDelegation nss zone dnskeys name msg $> noDelegation
-            logFound d = lift (logDelegation d) $> d
-        delegationWithCache zone dnskeys name msg
-            >>= withNoDelegation sharedHandler
-            >>= withNoDelegation cacheHandler
-            >>= mapM fillCachedDelegation {- fill from cache for fresh NS list -}
-            >>= mapM logFound
+            cacheHandler = cacheNoDelegation nss zone dnskeys name msg
+            logDelegation' d = lift (logDelegation d) $> d
+            handlers md =
+                mapM logDelegation'                              =<<
+                mapM fillCachedDelegation                        =<< {- fill from cache for fresh NS list -}
+                withNoDelegation (cacheHandler $> noDelegation)  =<<
+                withNoDelegation sharedHandler md
+        handlers =<< delegationWithCache zone dnskeys name msg
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
@@ -182,8 +183,9 @@ iterative_ dc nss0 (x : xs) =
     step nss@Delegation{..} = do
         let getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
             getDelegation CachedD = lookupERR >>= maybe (lift (lookupDelegation name) >>= maybe (stepQuery nss) pure) withERRC
-        getDelegation delegationFresh >>= mapM (fillDelegation dc) >>= mapM (fillsDNSSEC nss)
-        --                                {- fill for no address cases -}
+            fills md = mapM (fillsDNSSEC nss) =<< mapM (fillDelegation dc) md
+            --                                    {- fill for no A / AAAA cases aginst NS -}
+        fills =<< getDelegation delegationFresh
 {- FOURMOLU_ENABLE -}
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
