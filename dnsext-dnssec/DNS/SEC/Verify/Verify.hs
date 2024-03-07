@@ -66,6 +66,18 @@ keyTagFromBS (BS.BS ftpr (I# len#)) =
     final ac# = W# ((ac# `plusWord#` ((ac# `uncheckedShiftRL#` 16#) `and#` 0xFFFF##)) `and#` 0xFFFF##)
 {- FOURMOLU_ENABLE -}
 
+checkKeyTag :: RD_DNSKEY -> Word16 -> Either String ()
+checkKeyTag dnskey@RD_DNSKEY{..} tag = do
+    let keyTag_ = keyTag dnskey
+    when (dnskey_pubalg == RSAMD5) $
+        Left "checkKeyTag: not implemented key-tag computation for RSAMD5"
+    unless (keyTag_ == tag) $
+        Left $
+            "checkKeyTag: Key Tag mismatch between DNSKEY and RRSIG: "
+                ++ show keyTag_
+                ++ " =/= "
+                ++ show tag
+
 ---
 
 putRRSIGHeader :: RD_RRSIG -> Builder ()
@@ -100,7 +112,7 @@ verifyRRSIGwith
     -> CLASS
     -> [(Int, Builder ())]
     -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas' = do
+verifyRRSIGwith RRSIGImpl{..} now RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas' = do
     unless (ZONE `elem` dnskey_flags) $
         {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
            "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -121,14 +133,6 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show rrsig_pubalg
-    when (dnskey_pubalg == RSAMD5) $
-        Left "verifyRRSIGwith: not implemented key-tag computation for RSAMD5"
-    unless (keyTag dnskey == rrsig_key_tag) $
-        Left $
-            "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: "
-                ++ show (keyTag dnskey)
-                ++ " =/= "
-                ++ show rrsig_key_tag
     {- TODO: check rrsig_num_labels -}
     unless (rrsig_inception <= now && now < rrsig_expiration) $
         Left $
@@ -292,15 +296,7 @@ verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
                 ++ " =/= "
                 ++ show ds_pubalg
     let dnskeyBS = runBuilder (resourceDataSize dnskey) $ putResourceData Canonical dnskey
-    when (dnskey_pubalg == RSAMD5) $
-        Left "verifyDSwith: not implemented key-tag computation for RSAMD5"
-    unless (keyTagFromBS dnskeyBS == ds_key_tag) $
-        Left $
-            "verifyDSwith: Key Tag mismatch between DNSKEY and DS: "
-                ++ show (keyTagFromBS dnskeyBS)
-                ++ " =/= "
-                ++ show ds_key_tag
-    let digest = dsIGetDigest (runBuilder (domainSize owner) (putDomain Canonical owner) <> dnskeyBS)
+        digest = dsIGetDigest (runBuilder (domainSize owner) (putDomain Canonical owner) <> dnskeyBS)
         ds_digest' = Opaque.toByteString ds_digest
     unless (dsIVerify digest ds_digest') $
         Left "verifyDSwith: rejected on verification"
