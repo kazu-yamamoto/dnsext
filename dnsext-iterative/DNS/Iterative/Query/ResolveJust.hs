@@ -95,6 +95,7 @@ resolveJust = resolveExact
 resolveExact :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExact = resolveExactDC 0
 
+{- FOURMOLU_DISABLE -}
 resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
@@ -102,13 +103,21 @@ resolveExactDC dc n typ
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
-        (_, nss@Delegation{..}) <- iterative_ dc root $ DNS.superDomains n
+        (mmsg, nss) <- iterative_ dc root $ DNS.superDomains n
+        let reuseMsg msg
+                | typ == requestDelegationTYPE  = do
+                      lift $ logLn Log.DEMO $ "resolve-exact: skip exact query " ++ show (n, typ) ++ " for last no-delegation"
+                      pure msg
+                | otherwise                     = request nss
+        (,) <$> maybe (request nss) reuseMsg mmsg <*> pure nss
+  where
+    mdc = maxNotSublevelDelegation
+    request nss@Delegation{..} = do
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
-        (,) <$> norec dnssecOK sas n typ <*> pure nss
-  where
-    mdc = maxNotSublevelDelegation
+        norec dnssecOK sas n typ
+{- FOURMOLU_ENABLE -}
 
 maxNotSublevelDelegation :: Int
 maxNotSublevelDelegation = 16
@@ -158,7 +167,7 @@ iterative_ dc nss0 (x : xs)  =
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-        msg <- norec dnssecOK sas name A
+        msg <- norec dnssecOK sas name requestDelegationTYPE
         let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
             sharedHandler = servsChildZone nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg
@@ -193,6 +202,9 @@ iterative_ dc nss0 (x : xs)  =
             --                                    {- fill for no A / AAAA cases aginst NS -}
         mapM fills =<< getDelegation delegationFresh
 {- FOURMOLU_ENABLE -}
+
+requestDelegationTYPE :: TYPE
+requestDelegationTYPE = A
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
 servsChildZone :: Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
