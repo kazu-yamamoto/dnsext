@@ -78,6 +78,28 @@ checkKeyTag dnskey@RD_DNSKEY{..} tag = do
                 ++ " =/= "
                 ++ show tag
 
+pubkeyDicts :: Map PubAlg RRSIGImpl
+pubkeyDicts =
+    Map.fromList
+        [ (RSASHA1, rsaSHA1)
+        , (RSASHA1_NSEC3_SHA1, rsaSHA1) {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
+        , (RSASHA256, rsaSHA256)
+        , (RSASHA512, rsaSHA512)
+        , (ECDSAP256SHA256, ecdsaP256SHA)
+        , (ECDSAP384SHA384, ecdsaP384SHA)
+        , (ED25519, ed25519)
+        , (ED448, ed448)
+        ]
+
+{- FOURMOLU_DISABLE -}
+supportedDNSKEY :: RD_DNSKEY -> Bool
+supportedDNSKEY RD_DNSKEY{..} =
+   ZONE `elem` dnskey_flags       &&  {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1 -}
+   REVOKE `notElem` dnskey_flags  &&  {- https://datatracker.ietf.org/doc/html/rfc5011#section-2.1 -}
+   dnskey_protocol == 3           &&  {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.2 -}
+   Map.member dnskey_pubalg pubkeyDicts
+{- FOURMOLU_ENABLE -}
+
 ---
 
 putRRSIGHeader :: RD_RRSIG -> Builder ()
@@ -224,19 +246,6 @@ canonicalRRset
 canonicalRRset rrs = canonicalRRsetSorted' [rr | (_, rr) <- sortRDataCanonical rrs]
 {- FOURMOLU_ENABLE -}
 
-rrsigDicts :: Map PubAlg RRSIGImpl
-rrsigDicts =
-    Map.fromList
-        [ (RSASHA1, rsaSHA1)
-        , (RSASHA1_NSEC3_SHA1, rsaSHA1) {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
-        , (RSASHA256, rsaSHA256)
-        , (RSASHA512, rsaSHA512)
-        , (ECDSAP256SHA256, ecdsaP256SHA)
-        , (ECDSAP384SHA384, ecdsaP384SHA)
-        , (ED25519, ed25519)
-        , (ED448, ed448)
-        ]
-
 verifyRRSIGsorted
     :: DNSTime
     -> RD_DNSKEY
@@ -248,7 +257,7 @@ verifyRRSIGsorted
     -> Either String ()
 verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     maybe (Left $ "verifyRRSIGsorted: unsupported algorithm: " ++ show alg) verify $
-        Map.lookup alg rrsigDicts
+        Map.lookup alg pubkeyDicts
   where
     alg = dnskey_pubalg dnskey
     verify impl = verifyRRSIGwith impl now dnskey rrsig name typ cls sortedRDatas
@@ -280,6 +289,9 @@ verifyRRSIG now zone dnskey owner rrsig@RD_RRSIG{..} rrs = do
                     ++ show owner
             verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
 {- FOURMOLU_ENABLE -}
+
+supportedRRSIG :: RD_RRSIG -> Bool
+supportedRRSIG RD_RRSIG{..} = Map.member rrsig_pubalg pubkeyDicts
 
 ---
 
@@ -316,6 +328,13 @@ verifyDS owner dnskey ds =
   where
     alg = ds_digestalg ds
     verify impl = verifyDSwith impl owner dnskey ds
+
+{- FOURMOLU_DISABLE -}
+supportedDS :: RD_DS -> Bool
+supportedDS RD_DS{..} =
+    Map.member ds_digestalg dsDicts  &&
+    Map.member ds_pubalg pubkeyDicts
+{- FOURMOLU_ENABLE -}
 
 ---
 
