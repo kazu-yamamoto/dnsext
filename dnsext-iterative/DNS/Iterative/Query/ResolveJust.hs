@@ -102,7 +102,7 @@ resolveExactDC dc n typ
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         root <- refreshRoot
-        nss@Delegation{..} <- iterative_ dc root $ DNS.superDomains n
+        (_, nss@Delegation{..}) <- iterative_ dc root $ DNS.superDomains n
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
         let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
@@ -120,7 +120,7 @@ runIterative
     -> Domain
     -> QueryControls
     -> IO (Either QueryError Delegation)
-runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A cd
+runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryContextIN n A cd
 
 -- | 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
@@ -131,20 +131,23 @@ runIterative cxt sa n cd = runDNSQuery (iterative sa n) cxt $ queryContextIN n A
 --
 -- >>> runDNSQuery (testIterative "arpa.") env (queryContextIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
-iterative :: Delegation -> Domain -> DNSQuery Delegation
+iterative :: Delegation -> Domain -> DNSQuery (Maybe DNSMessage, Delegation)
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
 {- FOURMOLU_DISABLE -}
-iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery Delegation
-iterative_ _ nss0 [] = return nss0
-iterative_ dc nss0 (x : xs) =
+-- fst: last response message for not delegated last domain
+-- snd: delegation for last domain
+iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery (Maybe DNSMessage, Delegation)
+iterative_ _  nss0  []       = pure (Nothing, nss0)
+iterative_ dc nss0 (x : xs)  =
     {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
-    step nss0 >>= mayDelegation (recurse nss0 xs) (`recurse` xs)
+    recurse . fmap (mayDelegation nss0 id) =<< step nss0
   where
-    recurse = iterative_ dc {- sub-level delegation. increase dc only not sub-level case. -}
+    recurse (m, nss) = list1 (pure (m, nss)) (iterative_ dc nss) xs
+    --                                       {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
-    stepQuery :: Delegation -> DNSQuery MayDelegation
+    stepQuery :: Delegation -> DNSQuery (DNSMessage, MayDelegation)
     stepQuery nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
@@ -165,27 +168,30 @@ iterative_ dc nss0 (x : xs) =
                 mapM fillCachedDelegation                        =<< {- fill from cache for fresh NS list -}
                 withNoDelegation (cacheHandler $> noDelegation)  =<<
                 withNoDelegation sharedHandler md
-        handlers =<< delegationWithCache zone dnskeys name msg
+        (,) msg <$> (handlers =<< delegationWithCache zone dnskeys name msg)
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
         putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
 
     lookupERR = fmap fst <$> (lift $ lookupErrorRCODE name)
+    withoutMsg md = pure (Nothing, md)
     withERRC rc = case rc of
-        NameErr    -> pure noDelegation
+        NameErr    -> withoutMsg noDelegation
         ServFail   -> throw' ServerFailure
         FormatErr  -> throw' FormatError
         Refused    -> throw' OperationRefused
         _          -> throw' ServerFailure
       where throw' e = lift (logLn Log.DEMO $ "iterative: " ++ show e ++ " with cached RCODE: " ++ show rc) *> throwDnsError e
 
-    step :: Delegation -> DNSQuery MayDelegation
+    step :: Delegation -> DNSQuery (Maybe DNSMessage, MayDelegation)
     step nss@Delegation{..} = do
-        let getDelegation FreshD = stepQuery nss {- refresh for fresh parent -}
-            getDelegation CachedD = lookupERR >>= maybe (lift (lookupDelegation name) >>= maybe (stepQuery nss) pure) withERRC
+        let notDelegatedMsg (msg, md) = mayDelegation (Just msg, noDelegation) ((,) Nothing . hasDelegation) md
+            stepQuery' = notDelegatedMsg <$> stepQuery nss
+            getDelegation FreshD  = stepQuery' {- refresh for fresh parent -}
+            getDelegation CachedD = lookupERR >>= maybe (lift (lookupDelegation name) >>= maybe stepQuery' withoutMsg) withERRC
             fills md = mapM (fillsDNSSEC nss) =<< mapM (fillDelegation dc) md
             --                                    {- fill for no A / AAAA cases aginst NS -}
-        fills =<< getDelegation delegationFresh
+        mapM fills =<< getDelegation delegationFresh
 {- FOURMOLU_ENABLE -}
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
