@@ -58,6 +58,7 @@ module DNS.Do53.Internal (
     LookupEnv (..),
     modifyLookupEnv,
     withLookupConfAndResolver,
+    withTCPResolver,
 )
 where
 
@@ -68,3 +69,4 @@ import DNS.Do53.Lookup
 import DNS.Do53.Query
 import DNS.Do53.Resolve
 import DNS.Do53.Types
+import DNS.Do53.VC

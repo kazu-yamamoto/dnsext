@@ -37,6 +37,7 @@ library
         DNS.Do53.Resolve
         DNS.Do53.System
         DNS.Do53.Types
+        DNS.Do53.VC
 
     default-language: Haskell2010
     ghc-options:      -Wall

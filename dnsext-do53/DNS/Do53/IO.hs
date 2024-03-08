@@ -16,6 +16,7 @@ module DNS.Do53.IO (
     -- * Making recv
     recvManyN,
     recvManyNN,
+    makeAddrInfo,
 )
 where
 

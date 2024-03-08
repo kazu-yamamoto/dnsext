@@ -14,6 +14,11 @@ module DNS.Do53.Do53 (
 where
 
 import Control.Exception as E
+import qualified Data.ByteString as BS
+import Network.Socket
+import qualified Network.UDP as UDP
+import System.IO.Error (annotateIOError)
+
 import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Query
@@ -21,10 +26,6 @@ import DNS.Do53.Types
 import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
-import qualified Data.ByteString as BS
-import Network.Socket (close)
-import qualified Network.UDP as UDP
-import System.IO.Error (annotateIOError)
 
 -- | Check response for a matching identifier and question.  If we ever do
 -- pipelined TCP, we'll need to handle out of order responses.  See:
