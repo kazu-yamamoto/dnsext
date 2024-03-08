@@ -191,15 +191,26 @@ rrWithRRSIG' now dnskeys0 name typ cls sortedRDatas sigs0 noverify left right = 
 sepDNSKEY
     :: [RD_DS] -> Domain -> [RD_DNSKEY]
     -> Either String [(RD_DNSKEY, RD_DS)]
-sepDNSKEY dss dom dnskeys = do
-    let seps =
-            [ (key, ds)
-            | key <- dnskeys
-            , ds <- dss
-            , Right () <- [SEC.verifyDS dom key ds]
-            ]
-    when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
+sepDNSKEY dss0 dom dnskeys0 = do
+    let seps = [ (key, ds) | (Right (), key, ds) <- verifies ]
+    when (null seps) $ Left "sepkeyDS: no DNSKEY matches with DS"
     pure seps
+  where
+    usedkeys = take rejectLimit [(k, SEC.keyTag k) | k <- dnskeys0, SEC.supportedDNSKEY k]
+    dnskeySortKey = (,) <$> dnskey_pubalg . fst <*> snd
+    keySets = limitSortedGroupBy collisionLimit dnskeySortKey usedkeys
+
+    usedDss = take rejectLimit [ds | ds <- dss0, SEC.supportedDS ds]
+    dsSortKey = (,) <$> ds_pubalg <*> ds_key_tag
+    dsSets = limitSortedGroupBy collisionLimit dsSortKey usedDss
+
+    keyDsSets = matchSortedGroup dnskeySortKey dsSortKey keySets dsSets
+    verifies = take rejectLimit $
+        [ (SEC.verifyDS dom key ds, key, ds)
+        | Match (dnskeys, dss) <- keyDsSets
+        , (key, _) <- dnskeys
+        , ds <- dss
+        ]
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
