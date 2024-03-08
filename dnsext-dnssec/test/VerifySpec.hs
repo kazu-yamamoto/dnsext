@@ -101,6 +101,7 @@ caseDS :: DS_CASE -> Expectation
 caseDS (dnskeyRR, dsRR) = either expectationFailure (const $ pure ()) $ do
     dnskey <- takeRData "DNSKEY" dnskeyRR
     ds <- takeRData "DS" dsRR
+    checkKeyTag dnskey (ds_key_tag ds)
     verifyDS (rrname dnskeyRR) dnskey ds
   where
     takeRData name rr = maybe (Left $ "not " ++ name ++ ": " ++ show rd) Right $ fromRData rd
@@ -229,6 +230,7 @@ caseRRSIG (dnskeyRR, targets, rrsigRR) = either expectationFailure (const $ pure
     let ts =
             (fromDNSTime (rrsig_inception rrsig) + fromDNSTime (rrsig_expiration rrsig))
                 `div` 2
+    checkKeyTag dnskey (rrsig_key_tag rrsig)
     verifyRRSIG
         (toDNSTime ts)
         (rrname dnskeyRR)

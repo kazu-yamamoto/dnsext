@@ -138,36 +138,52 @@ rrWithRRSIG'
     :: EpochTime -> [RD_DNSKEY]
     -> Domain -> TYPE -> CLASS -> [(Int, DNS.Builder ())] -> [(RD_RRSIG, a)]
     -> b -> (String -> b) -> ([(RD_RRSIG, a)] -> b) -> b
-rrWithRRSIG' now dnskeys name typ cls sortedRDatas sigs noverify left right = result
+rrWithRRSIG' now dnskeys0 name typ cls sortedRDatas sigs0 noverify left right = result
   where
+    (supKeys, unsupKeys) = partition (SEC.supportedDNSKEY . fst) [(k, SEC.keyTag k) | k <- dnskeys0]
+    (usedKeys, unusedKeys0) = splitAt rejectLimit supKeys
+    dnskeySortKey = (,) <$> dnskey_pubalg . fst <*> snd
+    keySets = limitSortedGroupBy collisionLimit dnskeySortKey usedKeys  {- limit keys which have collided keytag -}
+
+    (supSigs, unsupSigs) = partition (SEC.supportedRRSIG . fst) sigs0
+    (usedSigs, unusedSigs0) = splitAt rejectLimit supSigs
+    rrsigSortKey = (,) <$> rrsig_pubalg <*> rrsig_key_tag
+    sigSets = limitSortedGroupBy collisionLimit (rrsigSortKey . fst) usedSigs  {- limit sigs which have same keytag -}
+
+    keySigSets = matchSortedGroup dnskeySortKey (rrsigSortKey . fst) keySets sigSets
+    unusedKeys = unusedKeys0 ++ [k | MLeft  ks <- keySigSets, k <- ks] ++ unsupKeys
+    unusedSigs = unusedSigs0 ++ [s | MRight ss <- keySigSets, s <- ss] ++ unsupSigs
+
     verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd name typ cls sortedRDatas
-    goodSigs =
-        [ sig
-        | sig@(sigrd, _) <- sigs
-        , key <- dnskeys
-        , Right () <- [verify key sigrd]
+    verifies = take rejectLimit $  {- limit number of verifications -}
+        [ (verify keyrd sigrd, key, sig)
+        | Match (dnskeys, sigs) <- keySigSets
+        , sig@(sigrd, _) <- sigs
+        , key@(keyrd, _) <- dnskeys
         ]
+
+    goodSigs = [sig | (Right (), _, sig) <- verifies]
 
     showSig sigrd = "rrsig: " ++ show sigrd
     showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
-    showKeysSigs = [showKey key (SEC.keyTag key) | key <- dnskeys] ++ [showSig sigrd | (sigrd, _) <- sigs]
+    showUnusedKeysSigs =
+        [showKey key tag | (key, tag) <- take showLimit unusedKeys] ++ [".." | length unusedKeys > showLimit] ++
+        [showSig sigrd   | (sigrd, _) <- take showLimit unusedSigs] ++ [".." | length unusedSigs > showLimit]
+      where
+        showLimit = 5
     verifyErrors =
         [ s
-        | (sigrd, _) <- sigs
-        , key <- dnskeys
-        , let dnskeyTag = SEC.keyTag key
-        , dnskeyTag == rrsig_key_tag sigrd
-        , Left em <- [verify key sigrd]
+        | (Left em, (key, dnskeyTag), (sigrd, _)) <- verifies
         , s <- ["  error: " ++ em, "    " ++ show sigrd, "    " ++ showKey key dnskeyTag]
         ]
     noValids
-        | null verifyErrors = unlines $ "no match key-tags:" : map ("  " ++) showKeysSigs
-        | otherwise         = unlines $ "no good sigs:" : verifyErrors
+        | null keySigSets  = unlines $ "no-match key-tags or no-supported keys:" : map ("  " ++) showUnusedKeysSigs
+        | otherwise        = unlines $ "no good sigs:" : verifyErrors
 
     result
-        | null dnskeys   = noverify {- no way to verify  -}
-        | null sigs      = left "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
-        | null goodSigs  = left noValids {- no good signatures -}
+        | null usedKeys  = noverify {- no way to verify  -}
+        | null usedSigs  = left "supported DNSKEYs exist and supported RRSIGs is null" {- dnskeys is not null, but sigs is null -}
+        | null goodSigs  = left noValids
         | otherwise      = right goodSigs
 {- FOURMOLU_ENABLE -}
 
@@ -175,16 +191,64 @@ rrWithRRSIG' now dnskeys name typ cls sortedRDatas sigs noverify left right = re
 sepDNSKEY
     :: [RD_DS] -> Domain -> [RD_DNSKEY]
     -> Either String [(RD_DNSKEY, RD_DS)]
-sepDNSKEY dss dom dnskeys = do
-    let seps =
-            [ (key, ds)
-            | key <- dnskeys
-            , ds <- dss
-            , Right () <- [SEC.verifyDS dom key ds]
-            ]
-    when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
+sepDNSKEY dss0 dom dnskeys0 = do
+    let seps = [ (key, ds) | (Right (), key, ds) <- verifies ]
+    when (null seps) $ Left "sepkeyDS: no DNSKEY matches with DS"
     pure seps
+  where
+    usedkeys = take rejectLimit [(k, SEC.keyTag k) | k <- dnskeys0, SEC.supportedDNSKEY k]
+    dnskeySortKey = (,) <$> dnskey_pubalg . fst <*> snd
+    keySets = limitSortedGroupBy collisionLimit dnskeySortKey usedkeys
+
+    usedDss = take rejectLimit [ds | ds <- dss0, SEC.supportedDS ds]
+    dsSortKey = (,) <$> ds_pubalg <*> ds_key_tag
+    dsSets = limitSortedGroupBy collisionLimit dsSortKey usedDss
+
+    keyDsSets = matchSortedGroup dnskeySortKey dsSortKey keySets dsSets
+    verifies = take rejectLimit $
+        [ (SEC.verifyDS dom key ds, key, ds)
+        | Match (dnskeys, dss) <- keyDsSets
+        , (key, _) <- dnskeys
+        , ds <- dss
+        ]
 {- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+limitSortedGroupBy :: Ord b => Int -> (a -> b) -> [a] -> [[a]]
+limitSortedGroupBy colLimit sortKey = map (take colLimit) . groupBy ((==) `on` sortKey) . sortOn sortKey
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+data Match a b
+    = MLeft  a
+    | Match (a, b)
+    | MRight b
+    deriving Show
+
+-- |
+-- >>> matchSortedGroup id id [[1], [2], [4], [6], [7]] [[1], [3], [4], [5], [7]] :: [Match [Int] [Int]]
+-- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7])]
+-- >>> matchSortedGroup id id [[1], [2], [4], [6], [7], [9]] [[1], [3], [4], [5], [7]] :: [Match [Int] [Int]]
+-- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7]),MLeft [9]]
+-- >>> matchSortedGroup id id [[1], [2], [4], [6], [7]] [[1], [3], [4], [5], [7], [8]] :: [Match [Int] [Int]]
+-- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7]),MRight [8]]
+matchSortedGroup :: Ord a => (k -> a) -> (s -> a) -> [[k]] -> [[s]] -> [Match [k] [s]]
+matchSortedGroup kx ky = rec_
+  where
+    rec_       []            []       = []
+    rec_       []           (ys:yss1) = MRight ys : rec_ [] yss1
+    rec_      (xs:xss1)      []       = MLeft  xs : rec_ xss1 []
+    rec_  xss@(xs:xss1) yss@(ys:yss1) = case compare (kx $ head xs) (ky $ head ys) of
+        LT                           -> MLeft  xs : rec_ xss1 yss
+        EQ                           -> Match (xs, ys) : rec_ xss1 yss1
+        GT                           -> MRight ys : rec_ xss yss1
+{- FOURMOLU_ENABLE -}
+
+rejectLimit :: Int
+rejectLimit = 16
+
+collisionLimit :: Int
+collisionLimit = 4
 
 ---
 

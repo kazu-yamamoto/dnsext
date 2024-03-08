@@ -66,6 +66,40 @@ keyTagFromBS (BS.BS ftpr (I# len#)) =
     final ac# = W# ((ac# `plusWord#` ((ac# `uncheckedShiftRL#` 16#) `and#` 0xFFFF##)) `and#` 0xFFFF##)
 {- FOURMOLU_ENABLE -}
 
+checkKeyTag :: RD_DNSKEY -> Word16 -> Either String ()
+checkKeyTag dnskey@RD_DNSKEY{..} tag = do
+    let keyTag_ = keyTag dnskey
+    when (dnskey_pubalg == RSAMD5) $
+        Left "checkKeyTag: not implemented key-tag computation for RSAMD5"
+    unless (keyTag_ == tag) $
+        Left $
+            "checkKeyTag: Key Tag mismatch between DNSKEY and RRSIG: "
+                ++ show keyTag_
+                ++ " =/= "
+                ++ show tag
+
+pubkeyDicts :: Map PubAlg RRSIGImpl
+pubkeyDicts =
+    Map.fromList
+        [ (RSASHA1, rsaSHA1)
+        , (RSASHA1_NSEC3_SHA1, rsaSHA1) {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
+        , (RSASHA256, rsaSHA256)
+        , (RSASHA512, rsaSHA512)
+        , (ECDSAP256SHA256, ecdsaP256SHA)
+        , (ECDSAP384SHA384, ecdsaP384SHA)
+        , (ED25519, ed25519)
+        , (ED448, ed448)
+        ]
+
+{- FOURMOLU_DISABLE -}
+supportedDNSKEY :: RD_DNSKEY -> Bool
+supportedDNSKEY RD_DNSKEY{..} =
+   ZONE `elem` dnskey_flags       &&  {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1 -}
+   REVOKE `notElem` dnskey_flags  &&  {- https://datatracker.ietf.org/doc/html/rfc5011#section-2.1 -}
+   dnskey_protocol == 3           &&  {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.2 -}
+   Map.member dnskey_pubalg pubkeyDicts
+{- FOURMOLU_ENABLE -}
+
 ---
 
 putRRSIGHeader :: RD_RRSIG -> Builder ()
@@ -100,7 +134,7 @@ verifyRRSIGwith
     -> CLASS
     -> [(Int, Builder ())]
     -> Either String ()
-verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas' = do
+verifyRRSIGwith RRSIGImpl{..} now RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rrset_type rrset_class sortedRDatas' = do
     unless (ZONE `elem` dnskey_flags) $
         {- https://datatracker.ietf.org/doc/html/rfc4034#section-2.1.1
            "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
@@ -121,14 +155,6 @@ verifyRRSIGwith RRSIGImpl{..} now dnskey@RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show rrsig_pubalg
-    when (dnskey_pubalg == RSAMD5) $
-        Left "verifyRRSIGwith: not implemented key-tag computation for RSAMD5"
-    unless (keyTag dnskey == rrsig_key_tag) $
-        Left $
-            "verifyRRSIGwith: Key Tag mismatch between DNSKEY and RRSIG: "
-                ++ show (keyTag dnskey)
-                ++ " =/= "
-                ++ show rrsig_key_tag
     {- TODO: check rrsig_num_labels -}
     unless (rrsig_inception <= now && now < rrsig_expiration) $
         Left $
@@ -220,19 +246,6 @@ canonicalRRset
 canonicalRRset rrs = canonicalRRsetSorted' [rr | (_, rr) <- sortRDataCanonical rrs]
 {- FOURMOLU_ENABLE -}
 
-rrsigDicts :: Map PubAlg RRSIGImpl
-rrsigDicts =
-    Map.fromList
-        [ (RSASHA1, rsaSHA1)
-        , (RSASHA1_NSEC3_SHA1, rsaSHA1) {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
-        , (RSASHA256, rsaSHA256)
-        , (RSASHA512, rsaSHA512)
-        , (ECDSAP256SHA256, ecdsaP256SHA)
-        , (ECDSAP384SHA384, ecdsaP384SHA)
-        , (ED25519, ed25519)
-        , (ED448, ed448)
-        ]
-
 verifyRRSIGsorted
     :: DNSTime
     -> RD_DNSKEY
@@ -244,7 +257,7 @@ verifyRRSIGsorted
     -> Either String ()
 verifyRRSIGsorted now dnskey rrsig name typ cls sortedRDatas =
     maybe (Left $ "verifyRRSIGsorted: unsupported algorithm: " ++ show alg) verify $
-        Map.lookup alg rrsigDicts
+        Map.lookup alg pubkeyDicts
   where
     alg = dnskey_pubalg dnskey
     verify impl = verifyRRSIGwith impl now dnskey rrsig name typ cls sortedRDatas
@@ -277,6 +290,9 @@ verifyRRSIG now zone dnskey owner rrsig@RD_RRSIG{..} rrs = do
             verifyRRSIGsorted now dnskey rrsig rrset_dom typ cls sortedRDatas
 {- FOURMOLU_ENABLE -}
 
+supportedRRSIG :: RD_RRSIG -> Bool
+supportedRRSIG RD_RRSIG{..} = Map.member rrsig_pubalg pubkeyDicts
+
 ---
 
 verifyDSwith :: DSImpl -> Domain -> RD_DNSKEY -> RD_DS -> Either String ()
@@ -292,15 +308,7 @@ verifyDSwith DSImpl{..} owner dnskey@RD_DNSKEY{..} RD_DS{..} = do
                 ++ " =/= "
                 ++ show ds_pubalg
     let dnskeyBS = runBuilder (resourceDataSize dnskey) $ putResourceData Canonical dnskey
-    when (dnskey_pubalg == RSAMD5) $
-        Left "verifyDSwith: not implemented key-tag computation for RSAMD5"
-    unless (keyTagFromBS dnskeyBS == ds_key_tag) $
-        Left $
-            "verifyDSwith: Key Tag mismatch between DNSKEY and DS: "
-                ++ show (keyTagFromBS dnskeyBS)
-                ++ " =/= "
-                ++ show ds_key_tag
-    let digest = dsIGetDigest (runBuilder (domainSize owner) (putDomain Canonical owner) <> dnskeyBS)
+        digest = dsIGetDigest (runBuilder (domainSize owner) (putDomain Canonical owner) <> dnskeyBS)
         ds_digest' = Opaque.toByteString ds_digest
     unless (dsIVerify digest ds_digest') $
         Left "verifyDSwith: rejected on verification"
@@ -320,6 +328,13 @@ verifyDS owner dnskey ds =
   where
     alg = ds_digestalg ds
     verify impl = verifyDSwith impl owner dnskey ds
+
+{- FOURMOLU_DISABLE -}
+supportedDS :: RD_DS -> Bool
+supportedDS RD_DS{..} =
+    Map.member ds_digestalg dsDicts  &&
+    Map.member ds_pubalg pubkeyDicts
+{- FOURMOLU_ENABLE -}
 
 ---
 
