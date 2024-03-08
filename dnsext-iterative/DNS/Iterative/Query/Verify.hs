@@ -107,28 +107,45 @@ withVerifiedRRset
     -> RRset -> [(Int, DNS.Builder ())] -> [(RD_RRSIG, TTL)]
     -> (RRset -> a)
     -> a
-{- FOURMOLU_ENABLE -}
-withVerifiedRRset now dnskeys RRset{..} sortedRDatas sigs vk =
-    vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas goodSigRDs
+withVerifiedRRset now dnskeys0 RRset{..} sortedRDatas sigs0 vk =
+    vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas mayVerified
   where
-    expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
-    minTTL = minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs
-    verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd rrsName rrsType rrsClass sortedRDatas
+    noverify = (rrsTTL, NotVerifiedRRS)
+    invalid err = (rrsTTL, InvalidRRS err)
+    valid goodSigs = (minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs, ValidRRS sigrds)
+      where
+        (sigrds, sigTTLs) = unzip goodSigs
+        expireTTLs = [exttl | sig <- sigrds, let exttl = fromDNSTime (rrsig_expiration sig) - now, exttl > 0]
+
+    (minTTL, mayVerified) = rrWithRRSIG' now dnskeys0 rrsName rrsType rrsClass sortedRDatas sigs0 noverify invalid valid
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+rrWithRRSIG
+    :: EpochTime -> [RD_DNSKEY] ->  [ResourceRecord] -> [(RD_RRSIG, a)]
+    -> b -> (String -> b) -> ([(RD_RRSIG, a)] -> b) -> b
+rrWithRRSIG now dnskeys0 rrs sigs0 noverify left right = canonicalRRset rrs left cn
+  where
+    cn RRset{..} sortedRDatas = rrWithRRSIG' now dnskeys0 rrsName rrsType rrsClass sortedRDatas sigs0 noverify left right
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+rrWithRRSIG'
+    :: EpochTime -> [RD_DNSKEY]
+    -> Domain -> TYPE -> CLASS -> [(Int, DNS.Builder ())] -> [(RD_RRSIG, a)]
+    -> b -> (String -> b) -> ([(RD_RRSIG, a)] -> b) -> b
+rrWithRRSIG' now dnskeys name typ cls sortedRDatas sigs noverify left right = result
+  where
+    verify key sigrd = SEC.verifyRRSIGsorted (toDNSTime now) key sigrd name typ cls sortedRDatas
     goodSigs =
-        [ rrsig
-        | rrsig@(sigrd, _) <- sigs
+        [ sig
+        | sig@(sigrd, _) <- sigs
         , key <- dnskeys
         , Right () <- [verify key sigrd]
         ]
-    (sigrds, sigTTLs) = unzip goodSigs
-    goodSigRDs
-        | null dnskeys = NotVerifiedRRS {- no way to verify  -}
-        | null sigs = InvalidRRS "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
-        | null sigrds = InvalidRRS noValids {- no good signatures -}
-        | otherwise = ValidRRS sigrds
-    noValids
-        | null verifyErrors = unlines $ "no match key-tags:" : map ("  " ++) showKeysSigs
-        | otherwise = unlines $ "no good sigs:" : verifyErrors
+
+    showSig sigrd = "rrsig: " ++ show sigrd
+    showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
     showKeysSigs = [showKey key (SEC.keyTag key) | key <- dnskeys] ++ [showSig sigrd | (sigrd, _) <- sigs]
     verifyErrors =
         [ s
@@ -139,8 +156,16 @@ withVerifiedRRset now dnskeys RRset{..} sortedRDatas sigs vk =
         , Left em <- [verify key sigrd]
         , s <- ["  error: " ++ em, "    " ++ show sigrd, "    " ++ showKey key dnskeyTag]
         ]
-    showSig sigrd = "rrsig: " ++ show sigrd
-    showKey key keyTag = "dnskey: " ++ show key ++ " (key_tag: " ++ show keyTag ++ ")"
+    noValids
+        | null verifyErrors = unlines $ "no match key-tags:" : map ("  " ++) showKeysSigs
+        | otherwise         = unlines $ "no good sigs:" : verifyErrors
+
+    result
+        | null dnskeys   = noverify {- no way to verify  -}
+        | null sigs      = left "DNSKEYs exist and RRSIGs is null" {- dnskeys is not null, but sigs is null -}
+        | null goodSigs  = left noValids {- no good signatures -}
+        | otherwise      = right goodSigs
+{- FOURMOLU_ENABLE -}
 
 ---
 
