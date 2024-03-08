@@ -5,7 +5,6 @@ module DNS.Iterative.Query.Root (
     refreshRoot,
     rootPriming,
     cachedDNSKEY,
-    verifySEP,
 ) where
 
 -- GHC packages
@@ -22,7 +21,6 @@ import DNS.RRCache (
     rankedAnswer,
  )
 import DNS.SEC
-import qualified DNS.SEC.Verify as SEC
 import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP)
@@ -99,9 +97,9 @@ rootPriming = do
                     logResult delegationNS Green "verification success - RRSIG of NS: \".\""
                     pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys FreshD
 
-    verifyRoot = (FilledDS [rootSepDS], (map fst <$>) . verifySEP [rootSepDS] "." . dnskeyList ".")
+    verifyRoot = (FilledDS [rootSepDS], (map fst <$>) . Verify.sepDNSKEY [rootSepDS] "." . dnskeyList ".")
     verifyConf (ks, [])  = (FilledRoot   , \_ -> Right ks)
-    verifyConf (ks, dss) = (FilledDS dss , \_ -> map fst <$> verifySEP dss "." ks)
+    verifyConf (ks, dss) = (FilledDS dss , \_ -> map fst <$> Verify.sepDNSKEY dss "." ks)
 
     body seps ips = do
         let (dsState, getSEPs) = maybe verifyRoot verifyConf seps
@@ -121,7 +119,7 @@ steps to get verified and cached DNSKEY RRset
  -}
 cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
-cachedDNSKEY dss aservers dom = cachedDNSKEY' ((map fst <$>) . verifySEP dss dom . dnskeyList dom) aservers dom
+cachedDNSKEY dss aservers dom = cachedDNSKEY' ((map fst <$>) . Verify.sepDNSKEY dss dom . dnskeyList dom) aservers dom
 
 cachedDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY' getSEPs aservers zone = do
@@ -145,18 +143,3 @@ cachedDNSKEY' getSEPs aservers zone = do
 
 dnskeyList :: Domain -> [ResourceRecord] -> [RD_DNSKEY]
 dnskeyList dom rrs = rrListWith DNSKEY DNS.fromRData dom const rrs
-
-verifySEP
-    :: [RD_DS]
-    -> Domain
-    -> [RD_DNSKEY]
-    -> Either String [(RD_DNSKEY, RD_DS)]
-verifySEP dss dom dnskeys = do
-    let seps =
-            [ (key, ds)
-            | key <- dnskeys
-            , ds <- dss
-            , Right () <- [SEC.verifyDS dom key ds]
-            ]
-    when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
-    pure seps
