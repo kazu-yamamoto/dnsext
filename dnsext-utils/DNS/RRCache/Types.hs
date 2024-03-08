@@ -400,6 +400,7 @@ size (Cache c _) = PSQ.size c
 pattern ERR :: TYPE
 pattern ERR = TYPE 0xff00
 
+{-# DEPRECATED NX "use ERR instead of this" #-}
 -- | same as `ERR`, backword compat
 pattern NX :: TYPE
 pattern NX = ERR
