@@ -143,10 +143,10 @@ fillCachedDelegation d = list noAvail result =<< lift (concat <$> mapM fill des)
 {- FOURMOLU_DISABLE -}
 lookupDEntry :: Domain -> Domain -> ContextT IO [DEntry]
 lookupDEntry zone ns = do
-    withNX =<< lookupCache ns Cache.NX
+    withERR =<< lookupCache ns Cache.ERR
   where
-    withNX Just{}   = pure []
-    withNX Nothing  = do
+    withERR Just{}   = pure []  {- skip DEntry with error NS name -}
+    withERR Nothing  = do
         let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
             takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
         lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
