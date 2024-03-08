@@ -167,6 +167,21 @@ rrWithRRSIG' now dnskeys name typ cls sortedRDatas sigs noverify left right = re
         | otherwise      = right goodSigs
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
+sepDNSKEY
+    :: [RD_DS] -> Domain -> [RD_DNSKEY]
+    -> Either String [(RD_DNSKEY, RD_DS)]
+sepDNSKEY dss dom dnskeys = do
+    let seps =
+            [ (key, ds)
+            | key <- dnskeys
+            , ds <- dss
+            , Right () <- [SEC.verifyDS dom key ds]
+            ]
+    when (null seps) $ Left "verifySEP: no DNSKEY matches with DS"
+    pure seps
+{- FOURMOLU_ENABLE -}
+
 ---
 
 type NResultK r a = r -> [RRset] -> ContextT IO () -> a
