@@ -27,27 +27,28 @@ import DNS.Do53.Types
 import DNS.Types
 import DNS.Types.Decode
 
-type VCResolver = Question -> QueryControls -> IO (Either DNSError Reply)
+type VCResolver = Question -> QueryControls -> IO (Either DNSError Result)
 
 withTCPResolver
     :: VCLimit
     -> ResolveInfo
     -> (VCResolver -> IO ())
     -> IO ()
-withTCPResolver lim ResolveInfo{..} body = E.bracket open close $ \sock -> do
+withTCPResolver lim ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC lim $ recvTCP sock
-    withVCResolver send recv rinfoActions body
+    withVCResolver "TCP" send recv ri body
   where
     open = openTCP rinfoIP rinfoPort
 
 withVCResolver
-    :: Send
+    :: String
+    -> Send
     -> RecvMany
-    -> ResolveActions
+    -> ResolveInfo
     -> (VCResolver -> IO ())
     -> IO ()
-withVCResolver send recv ResolveActions{..} body = do
+withVCResolver tag send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
     race_
@@ -56,18 +57,18 @@ withVCResolver send recv ResolveActions{..} body = do
   where
     emp = IM.empty :: IntMap (MVar Reply)
     resolve inpQ ref q qctl = do
-        ident <- ractionGenId
+        ident <- ractionGenId rinfoActions
         var <- newEmptyMVar :: IO (MVar Reply)
         let key = fromIntegral ident
             qry = encodeQuery ident q qctl
             tx = BS.length qry
         atomicModifyIORef' ref (\m -> (IM.insert key var m, ()))
         atomically $ writeTQueue inpQ qry
-        mres <- ractionTimeout $ takeMVar var
+        mres <- ractionTimeout rinfoActions $ takeMVar var
         return $ case mres of
             Nothing -> Left TimeoutExpired
             Just (Reply msg _ rx) -> case checkRespM q ident msg of
-                Nothing -> Right $ Reply msg tx rx
+                Nothing -> Right $ toResult ri tag $ Reply msg tx rx
                 Just err -> Left err
 
     sender inpQ = forever (atomically (readTQueue inpQ) >>= send)
@@ -77,7 +78,7 @@ withVCResolver send recv ResolveActions{..} body = do
     recver ref = forever $ do
         -- fixme
         (rx, bss) <- recv -- `E.catch` ioErrorToDNSError q ri proto
-        now <- ractionGetTime
+        now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left _e -> return () -- fixme
             Right msg -> do
