@@ -15,7 +15,8 @@ main = do
     let ip = read $ drop 1 atip
         port = 53
         lim = 1024
-    withTCPResolver ip port lim defaultResolveActions $ \resolv -> do
+        ri = defaultResolveInfo{rinfoIP = ip, rinfoPort = port}
+    withTCPResolver lim ri $ \resolv -> do
         var <- newMVar ()
         foldr1 concurrently_ $ map (go resolv var) doms
   where
