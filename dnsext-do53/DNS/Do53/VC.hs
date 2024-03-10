@@ -26,7 +26,6 @@ import DNS.Do53.Query
 import DNS.Do53.Types
 import DNS.Types
 import DNS.Types.Decode
-import System.Timeout
 
 type VCResolver = Question -> QueryControls -> IO (Either DNSError Reply)
 
@@ -55,20 +54,19 @@ withVCResolver send recv ResolveActions{..} body = do
         (concurrently_ (sender inpQ) (recver ref))
         (body $ resolve inpQ ref)
   where
-    emp = IM.empty :: IntMap (MVar (DNSMessage, Int))
-
+    emp = IM.empty :: IntMap (MVar Reply)
     resolve inpQ ref q qctl = do
         ident <- ractionGenId
-        var <- newEmptyMVar :: IO (MVar (DNSMessage, Int))
+        var <- newEmptyMVar :: IO (MVar Reply)
         let key = fromIntegral ident
             qry = encodeQuery ident q qctl
             tx = BS.length qry
         atomicModifyIORef' ref (\m -> (IM.insert key var m, ()))
         atomically $ writeTQueue inpQ qry
-        mres <- timeout 3000000 $ takeMVar var -- fixme
+        mres <- ractionTimeout $ takeMVar var
         return $ case mres of
             Nothing -> Left TimeoutExpired
-            Just (msg, rx) -> case checkRespM q ident msg of
+            Just (Reply msg _ rx) -> case checkRespM q ident msg of
                 Nothing -> Right $ Reply msg tx rx
                 Just err -> Left err
 
@@ -85,4 +83,4 @@ withVCResolver send recv ResolveActions{..} body = do
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var (msg, rx)
+                putMVar var $ Reply msg 0 {- dummy -} rx
