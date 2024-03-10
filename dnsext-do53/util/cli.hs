@@ -4,24 +4,34 @@ module Main where
 
 import Control.Concurrent
 import Control.Concurrent.Async
+import Control.Monad
 import DNS.Do53.Internal
 import DNS.Types
+import Data.IORef
 import Data.IP ()
+import Data.List
 import System.Environment
 
 main :: IO ()
 main = do
-    atip : doms <- getArgs
-    let ip = read $ drop 1 atip
+    args <- getArgs
+    let (ats, doms') = partition ("@" `isPrefixOf`) args
+        ips = read . drop 1 <$> ats
+        doms = fromRepresentation <$> doms'
+        domsN = length doms
         port = 53
         lim = 1024
-        ri = defaultResolveInfo{rinfoIP = ip, rinfoPort = port}
-    withTCPResolver lim ri $ \resolv -> do
-        var <- newMVar ()
-        foldr1 concurrently_ $ map (go resolv var) doms
+        ris = (\ip -> defaultResolveInfo{rinfoIP = ip, rinfoPort = port}) <$> ips
+    refs <- replicateM domsN (newIORef False)
+    let targets = zip doms refs
+    stdoutLock <- newMVar ()
+    foldr1 race_ $ map (withServer stdoutLock lim targets) ris
   where
-    go resolv var dom = do
+    withServer stdoutLock lim targets ri = withTCPResolver lim ri $ \resolv -> do
+        foldr1 concurrently_ $ map (lookupAndPrint resolv stdoutLock) targets
+    lookupAndPrint resolv stdoutLock (dom, ref) = do
         r <- resolv q mempty
-        withMVar var $ \() -> print r
+        notyet <- atomicModifyIORef' ref $ \b -> (True, b)
+        unless notyet $ withMVar stdoutLock $ \() -> print r
       where
-        q = Question (fromRepresentation (dom :: String)) A IN
+        q = Question dom A IN
