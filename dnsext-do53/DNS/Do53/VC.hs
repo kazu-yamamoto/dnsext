@@ -31,18 +31,16 @@ import System.Timeout
 type VCResolver = Question -> QueryControls -> IO (Either DNSError Reply)
 
 withTCPResolver
-    :: IP
-    -> PortNumber
-    -> VCLimit
-    -> ResolveActions
+    :: VCLimit
+    -> ResolveInfo
     -> (VCResolver -> IO ())
     -> IO ()
-withTCPResolver ip port lim ra body = E.bracket open close $ \sock -> do
+withTCPResolver lim ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC lim $ recvTCP sock
-    withVCResolver send recv ra body
+    withVCResolver send recv rinfoActions body
   where
-    open = openTCP ip port
+    open = openTCP rinfoIP rinfoPort
 
 withVCResolver
     :: Send
