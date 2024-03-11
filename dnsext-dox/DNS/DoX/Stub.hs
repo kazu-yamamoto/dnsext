@@ -9,7 +9,6 @@ module DNS.DoX.Stub (
 )
 where
 
-import Control.Exception (try)
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Imports
@@ -38,7 +37,7 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe Resolver
+makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe OneshotResolver
 makeResolver alpn lim mpath = case alpn of
     "tcp" -> Just $ tcpResolver  lim
     "dot" -> Just $ tlsResolver  lim
@@ -94,12 +93,12 @@ auto domain typ lim actions ip0 ss0 = loop ss0
         go (alpn : alpns) = case makeResolver alpn (fromIntegral lim) Nothing of
             Nothing -> go alpns
             Just resolver -> do
-                mrply <- resolveDoX s alpn resolver
-                case mrply of
+                erply <- resolveDoX s alpn resolver
+                case erply of
                     Left _ -> go alpns
-                    _ -> return mrply
+                    r -> return r
     q = Question (fromRepresentation domain) typ IN
-    resolveDoX s alpn resolver = try $ resolve renv q mempty
+    resolveDoX s alpn resolver = resolve renv q mempty
       where
         port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
         v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of

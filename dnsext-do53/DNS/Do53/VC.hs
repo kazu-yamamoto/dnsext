@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Do53.VC (
-    withVCResolver,
+    withResolver,
     withTCPResolver,
 ) where
 
@@ -29,29 +29,28 @@ import DNS.Do53.Types
 import DNS.Types
 import DNS.Types.Decode
 
-type VCResolver = Question -> QueryControls -> IO (Either DNSError Result)
 type RVar = MVar (Either DNSError Reply)
 
 withTCPResolver
     :: VCLimit
     -> ResolveInfo
-    -> (VCResolver -> IO ())
+    -> (Resolver -> IO ())
     -> IO ()
 withTCPResolver lim ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC lim $ recvTCP sock
-    withVCResolver "TCP" send recv ri body
+    withResolver "TCP" send recv ri body
   where
     open = openTCP rinfoIP rinfoPort
 
-withVCResolver
+withResolver
     :: String
     -> Send
     -> RecvMany
     -> ResolveInfo
-    -> (VCResolver -> IO ())
+    -> (Resolver -> IO ())
     -> IO ()
-withVCResolver proto send recv ri@ResolveInfo{..} body = do
+withResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
     race_

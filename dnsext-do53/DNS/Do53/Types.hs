@@ -29,6 +29,7 @@ module DNS.Do53.Types (
     Result (..),
     Reply (..),
     Resolver,
+    OneshotResolver,
 
     -- * IO
     Recv,
@@ -187,7 +188,7 @@ data LookupEnv = LookupEnv
     }
 
 data ResolveEnv = ResolveEnv
-    { renvResolver :: Resolver
+    { renvResolver :: OneshotResolver
     , renvConcurrent :: Bool
     , renvResolveInfos :: [ResolveInfo]
     }
@@ -225,7 +226,9 @@ data Reply = Reply
     deriving (Eq, Show)
 
 -- | The type of resolvers (DNS over X).
-type Resolver = ResolveInfo -> Question -> QueryControls -> IO Result
+type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
+
+type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
 

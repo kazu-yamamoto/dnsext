@@ -9,7 +9,7 @@ import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
 
-tlsResolver :: VCLimit -> Resolver
+tlsResolver :: VCLimit -> OneshotResolver
 tlsResolver lim ri@ResolveInfo{..} q qctl =
     -- Using a fresh connection
     H2.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do

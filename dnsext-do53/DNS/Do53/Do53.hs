@@ -54,14 +54,14 @@ data TCPFallback = TCPFallback deriving (Show, Typeable)
 instance Exception TCPFallback
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: UDPRetry -> VCLimit -> Resolver
+udpTcpResolver :: UDPRetry -> VCLimit -> OneshotResolver
 udpTcpResolver retry lim ri q qctl =
     udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver lim ri q qctl
 
 ----------------------------------------------------------------
 
-throwFromIOError :: Question -> ResolveInfo -> String -> IOError -> IO a
-throwFromIOError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
+fromIOError :: Question -> ResolveInfo -> String -> IOError -> DNSError
+fromIOError q ResolveInfo{..} protoName ioe = NetworkFailure aioe
   where
     loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
@@ -97,10 +97,10 @@ analyzeReply rply qctl0
 
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: UDPRetry -> Resolver
+udpResolver :: UDPRetry -> OneshotResolver
 udpResolver retry ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (throwFromIOError q ri "UDP") $ go _qctl
+    E.handle (return . Left . fromIOError q ri "UDP") $ go _qctl
   where
     ~tag = lazyTag ri q "UDP"
     -- Using only one socket and the same identifier.
@@ -111,17 +111,18 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
         ident <- ractionGenId rinfoActions
         loop retry ident qctl send recv
 
-    loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
+    loop 0 _ _ _ _ = return $ Left RetryLimitExceeded
     loop cnt ident qctl0 send recv = do
         mrply <- sendQueryRecvAnswer ident qctl0 send recv
         case mrply of
             Nothing -> loop (cnt - 1) ident qctl0 send recv
             Just rply -> do
                 let (mqctl, tc) = analyzeReply rply qctl0
-                when tc $ E.throwIO TCPFallback
-                case mqctl of
-                    Nothing -> return $ toResult ri "UDP" rply
-                    Just qctl -> loop cnt ident qctl send recv
+                if tc
+                    then throwIO TCPFallback
+                    else case mqctl of
+                        Nothing -> return $ Right $ toResult ri "UDP" rply
+                        Just qctl -> loop cnt ident qctl send recv
 
     sendQueryRecvAnswer ident qctl send recv = do
         let qry = encodeQuery ident q qctl
@@ -131,7 +132,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
             recvAnswer ident recv tx
 
     recvAnswer ident recv tx = do
-        ans <- recv `E.catch` throwFromIOError q ri "UDP"
+        ans <- recv
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
             Left e -> do
@@ -157,7 +158,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
 ----------------------------------------------------------------
 
 -- | A resolver using TCP.
-tcpResolver :: VCLimit -> Resolver
+tcpResolver :: VCLimit -> OneshotResolver
 tcpResolver lim ri@ResolveInfo{..} q qctl =
     -- Using a fresh connection
     bracket open close $ \sock -> do
@@ -169,18 +170,25 @@ tcpResolver lim ri@ResolveInfo{..} q qctl =
     open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> Send -> RecvMany -> Resolver
+vcResolver :: String -> Send -> RecvMany -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (throwFromIOError q ri proto) $ go _qctl
+    E.handle (return . Left . fromIOError q ri proto) $ go _qctl
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do
-        rply <- sendQueryRecvAnswer qctl0
-        let (mqctl, _) = analyzeReply rply qctl0
-        case mqctl of
-            Nothing -> return $ toResult ri proto rply
-            Just qctl -> toResult ri proto <$> sendQueryRecvAnswer qctl
+        erply <- sendQueryRecvAnswer qctl0
+        case erply of
+            Left e -> return $ Left e
+            Right rply -> do
+                let (mqctl, _) = analyzeReply rply qctl0
+                case mqctl of
+                    Nothing -> return $ Right $ toResult ri proto rply
+                    Just qctl -> do
+                        erply' <- sendQueryRecvAnswer qctl
+                        case erply' of
+                            Left e' -> return $ Left e'
+                            Right rply' -> return $ Right $ toResult ri proto rply'
 
     sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
@@ -191,11 +199,11 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
             let tx = BS.length qry
             recvAnswer ident tx
         case mres of
-            Nothing -> E.throwIO TimeoutExpired
-            Just res -> return res
+            Nothing -> return $ Left TimeoutExpired
+            Just res -> return $ Right res
 
     recvAnswer ident tx = do
-        (rx, bss) <- recv `E.catch` throwFromIOError q ri proto
+        (rx, bss) <- recv
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left e -> E.throwIO e

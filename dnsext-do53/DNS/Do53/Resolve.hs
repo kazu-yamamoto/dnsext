@@ -10,7 +10,6 @@ where
 import Control.Concurrent.Async (Async, waitCatchSTM, waitSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
-import DNS.Do53.Query
 import DNS.Do53.Types
 import qualified DNS.Log as Log
 import qualified DNS.ThreadStats as TStat
@@ -36,9 +35,9 @@ import DNS.Types
 -- This function merges the query flag overrides from the resolver
 -- configuration with any additional overrides from the caller.
 --
-resolve :: ResolveEnv -> Question -> QueryControls -> IO Result
+resolve :: ResolveEnv -> Resolver
 resolve _ Question{..} _
-    | qtype == AXFR = E.throwIO InvalidAXFRLookup
+    | qtype == AXFR = return $ Left InvalidAXFRLookup
 resolve ResolveEnv{..} q qctl = case renvResolveInfos of
     [] -> error "resolve"
     [ri] -> resolver ri q qctl
@@ -50,23 +49,23 @@ resolve ResolveEnv{..} q qctl = case renvResolveInfos of
     resolver = renvResolver
 
 resolveSequential
-    :: [ResolveInfo] -> Resolver -> Question -> QueryControls -> IO Result
+    :: [ResolveInfo] -> OneshotResolver -> Resolver
 resolveSequential ris0 resolver q qctl = loop ris0
   where
     loop [] = error "resolveSequential:loop"
     loop [ri] = resolver ri q qctl
     loop (ri : ris) = do
-        eres <- E.try $ resolver ri q qctl
+        eres <- resolver ri q qctl
         case eres of
-            Left (_ :: DNSError) -> loop ris
-            Right res -> return res
+            Left _ -> loop ris
+            res@(Right _) -> return res
 
 resolveConcurrent
-    :: [ResolveInfo] -> Resolver -> Question -> QueryControls -> IO Result
+    :: [ResolveInfo] -> OneshotResolver -> Resolver
 resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
 resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
     caller <- TStat.getThreadLabel
-    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver ri q qctl)) ris
+    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver' ri)) ris
     let ~tag =
             "    query "
                 ++ show qname
@@ -79,7 +78,13 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Questio
                 ++ "/"
                 ++ resultTag
     ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]
-    return r
+    return $ Right r
+  where
+    resolver' ri = do
+        erply <- resolver ri q qctl
+        case erply of
+            Right rply -> return rply
+            Left e -> throwIO e
 
 ----------------------------------------------------------------
 

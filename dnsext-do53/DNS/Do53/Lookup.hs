@@ -19,7 +19,6 @@ module DNS.Do53.Lookup (
 )
 where
 
-import Control.Exception as E
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53
@@ -257,7 +256,7 @@ lookupRaw
     -- ^ LookupEnv obtained via 'withLookupConf'
     -> Question
     -> IO (Either DNSError Result)
-lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolveEnv q lenvQueryControls
+lookupRaw LookupEnv{..} q = resolve lenvResolveEnv q lenvQueryControls
 
 ----------------------------------------------------------------
 
@@ -284,7 +283,7 @@ withLookupConf lconf@LookupConf{..} f = do
     withLookupConfAndResolver lconf resolver f
 
 withLookupConfAndResolver
-    :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
+    :: LookupConf -> OneshotResolver -> (LookupEnv -> IO a) -> IO a
 withLookupConfAndResolver LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
         Just cacheconf -> do
@@ -298,7 +297,7 @@ withLookupConfAndResolver LookupConf{..} resolver f = do
     f lenv
 
 resolvEnv
-    :: Resolver -> Bool -> ResolveActions -> [(IP, PortNumber)] -> ResolveEnv
+    :: OneshotResolver -> Bool -> ResolveActions -> [(IP, PortNumber)] -> ResolveEnv
 resolvEnv resolver conc actions hps = ResolveEnv resolver conc ris
   where
     ris = resolvInfos actions hps
@@ -314,7 +313,7 @@ resolvInfos actions hps = map mk hps
             }
 
 modifyLookupEnv
-    :: Resolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
+    :: OneshotResolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
 modifyLookupEnv resolver hps lenv@LookupEnv{..} =
     lenv
         { lenvResolveEnv = renv

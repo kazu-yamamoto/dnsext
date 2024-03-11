@@ -11,7 +11,7 @@ import Network.Socket
 
 import DNS.DoX.Imports
 
-quicResolver :: VCLimit -> Resolver
+quicResolver :: VCLimit -> OneshotResolver
 quicResolver lim ri@ResolveInfo{..} q qctl = run cc $ \conn -> do
     strm <- stream conn
     let sendDoQ bs = do

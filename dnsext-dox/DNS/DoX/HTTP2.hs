@@ -28,14 +28,14 @@ import qualified Network.HTTP2.TLS.Client as H2
 import System.Timeout (timeout)
 import qualified UnliftIO.Exception as E
 
-withTimeout :: ResolveInfo -> String -> IO Reply -> IO Result
+withTimeout :: ResolveInfo -> String -> IO Reply -> IO (Either DNSError Result)
 withTimeout ri@ResolveInfo{..} proto action = do
     mres <- timeout (ractionTimeoutTime rinfoActions) action
     case mres of
-        Nothing -> E.throwIO TimeoutExpired
-        Just res -> return $ toResult ri proto res
+        Nothing -> return $ Left TimeoutExpired
+        Just res -> return $ Right $ toResult ri proto res
 
-http2Resolver :: ShortByteString -> VCLimit -> Resolver
+http2Resolver :: ShortByteString -> VCLimit -> OneshotResolver
 http2Resolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
@@ -48,7 +48,7 @@ http2Resolver path lim ri@ResolveInfo{..} q qctl = do
             { H2.settingsValidateCert = False
             }
 
-http2cResolver :: ShortByteString -> VCLimit -> Resolver
+http2cResolver :: ShortByteString -> VCLimit -> OneshotResolver
 http2cResolver path lim ri@ResolveInfo{..} q qctl = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions

@@ -36,7 +36,7 @@ module DNS.Do53.Internal (
     Result (..),
     toResult,
     Reply (..),
-    Resolver,
+    OneshotResolver,
     udpTcpResolver,
     udpResolver,
     tcpResolver,

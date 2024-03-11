@@ -1,7 +1,6 @@
 module DNS.Iterative.Query.Norec (norec) where
 
 -- GHC packages
-import qualified Control.Exception as E
 
 -- other packages
 
@@ -63,7 +62,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     either
         (Left . DnsError)
         (handleResponseError Left Right . DNS.replyDNSMessage . DNS.resultReply)
-        <$> E.try (DNS.resolve renv q qctl)
+        <$> DNS.resolve renv q qctl
 
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage

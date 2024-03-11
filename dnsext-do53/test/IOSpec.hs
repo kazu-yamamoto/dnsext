@@ -3,6 +3,7 @@
 
 module IOSpec where
 
+import Control.Exception
 import DNS.Do53.Internal
 import DNS.Types
 import Test.Hspec
@@ -66,7 +67,8 @@ spec = describe "solvers" $ do
 dnsException :: Selector DNSError
 dnsException = const True
 
-checkNoErr :: Result -> Expectation
-checkNoErr Result{..} = rcode replyDNSMessage `shouldBe` NoErr
+checkNoErr :: Either DNSError Result -> Expectation
+checkNoErr (Left e) = throwIO e
+checkNoErr (Right Result{..}) = rcode replyDNSMessage `shouldBe` NoErr
   where
     Reply{..} = resultReply
