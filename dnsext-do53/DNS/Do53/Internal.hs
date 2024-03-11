@@ -59,6 +59,7 @@ module DNS.Do53.Internal (
     modifyLookupEnv,
     withLookupConfAndResolver,
     withTCPResolver,
+    lazyTag,
 )
 where
 

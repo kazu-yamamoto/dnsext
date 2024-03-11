@@ -64,7 +64,7 @@ doHTTP
     -> Question
     -> QueryControls
     -> Client Reply
-doHTTP proto ident path lim ResolveInfo{..} q@Question{..} qctl sendRequest _aux = do
+doHTTP proto ident path lim ri@ResolveInfo{..} q qctl sendRequest _aux = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
@@ -76,17 +76,7 @@ doHTTP proto ident path lim ResolveInfo{..} q@Question{..} qctl sendRequest _aux
                 Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
   where
-    ~tag =
-        "    query "
-            ++ show qname
-            ++ " "
-            ++ show qtype
-            ++ " to "
-            ++ show rinfoIP
-            ++ "#"
-            ++ show rinfoPort
-            ++ "/"
-            ++ proto
+    ~tag = lazyTag ri q proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire

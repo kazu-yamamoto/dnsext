@@ -10,6 +10,7 @@ module DNS.Do53.Do53 (
     vcResolver,
     checkRespM,
     toResult,
+    lazyTag,
 )
 where
 
