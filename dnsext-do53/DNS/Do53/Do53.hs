@@ -180,8 +180,7 @@ vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-            then do
-                toResult ri proto <$> perform (solve qctl)
+            then toResult ri proto <$> perform (solve qctl)
             else return $ toResult ri proto rply
 
     solve qctl send recv = do

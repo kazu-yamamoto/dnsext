@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main where
 
@@ -31,7 +32,7 @@ main = do
         foldr1 concurrently_ $ map (lookupAndPrint resolv stdoutLock) targets
     lookupAndPrint resolv stdoutLock (dom, ref) = do
         r <- resolv q mempty
-        notyet <- atomicModifyIORef' ref $ \b -> (True, b)
+        notyet <- atomicModifyIORef' ref (True,)
         unless notyet $ withMVar stdoutLock $ \() -> print r
       where
         q = Question dom A IN
