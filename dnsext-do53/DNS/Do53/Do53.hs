@@ -150,48 +150,47 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
 
 -- | A resolver using TCP.
 tcpResolver :: VCLimit -> Resolver
-tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
-  where
+tcpResolver lim ri@ResolveInfo{..} q qctl =
     -- Using a fresh connection
-    perform solve = bracket open close $ \sock -> do
+    bracket open close $ \sock -> do
         ractionSetSockOpt rinfoActions sock
         let send = sendVC $ sendTCP sock
             recv = recvVC lim $ recvTCP sock
-        solve send recv
-
+        vcResolver "TCP" send recv ri q qctl
+  where
     open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
-vcResolver proto perform ri@ResolveInfo{..} q _qctl = do
+vcResolver :: String -> Send -> RecvMany -> Resolver
+vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError q ri proto) $ go _qctl
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do
-        rply <- perform $ solve qctl0
+        rply <- solve qctl0
         let ans = replyDNSMessage rply
             rc = rcode ans
             eh = ednsHeader ans
             qctl = ednsEnabled FlagClear <> qctl0
         -- If we first tried with EDNS, retry without on FormatErr.
         if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-            then toResult ri proto <$> perform (solve qctl)
+            then toResult ri proto <$> solve qctl
             else return $ toResult ri proto rply
 
-    solve qctl send recv = do
+    solve qctl = do
         -- Using a fresh identifier.
         ident <- ractionGenId rinfoActions
         let qry = encodeQuery ident q qctl
         mres <- ractionTimeout rinfoActions $ do
             _ <- send qry
             let tx = BS.length qry
-            getAnswer ident recv tx
+            getAnswer ident tx
         case mres of
             Nothing -> E.throwIO TimeoutExpired
             Just res -> return res
 
-    getAnswer ident recv tx = do
+    getAnswer ident tx = do
         (rx, bss) <- recv `E.catch` ioErrorToDNSError q ri proto
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
