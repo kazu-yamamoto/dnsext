@@ -45,12 +45,14 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                         , ractionLog = logLines_ cxt
                         , ractionTimeoutTime = 10000000
                         }
+                , rinfoUDPRetry = 3
+                , rinfoVCLimit = 8 * 1024
                 }
             | aserver <- aservers
             ]
         renv =
             ResolveEnv
-                { renvResolver = udpTcpResolver 3 (32 * 1024) -- 3 is retry
+                { renvResolver = udpTcpResolver
                 , renvConcurrent = True -- should set True if multiple RIs are provided
                 , renvResolveInfos = ris
                 }

@@ -29,6 +29,7 @@ module DNS.Do53.Types (
     Result (..),
     Reply (..),
     Resolver,
+    PipelineResolver,
     OneshotResolver,
 
     -- * IO
@@ -140,9 +141,9 @@ newtype VCLimit = VCLimit {unVCLimit :: Int} deriving (Eq, Ord, Num, Show)
 data LookupConf = LookupConf
     { lconfSeeds :: Seeds
     -- ^ Server information.
-    , lconfRetry :: UDPRetry
+    , lconfUDPRetry :: UDPRetry
     -- ^ The number of UDP retries including the first try.
-    , lconfLimit :: VCLimit
+    , lconfVCLimit :: VCLimit
     -- ^ How many bytes are allowed to be received on a virtual circuit.
     , lconfConcurrent :: Bool
     -- ^ Concurrent queries if multiple DNS servers are specified.
@@ -166,8 +167,8 @@ defaultLookupConf :: LookupConf
 defaultLookupConf =
     LookupConf
         { lconfSeeds = SeedsFilePath "/etc/resolv.conf"
-        , lconfRetry = 3
-        , lconfLimit = 32 * 1024
+        , lconfUDPRetry = 3
+        , lconfVCLimit = 8 * 1024
         , lconfConcurrent = False
         , lconfCacheConf = Nothing
         , lconfQueryControls = mempty
@@ -200,6 +201,8 @@ data ResolveInfo = ResolveInfo
     { rinfoIP :: IP
     , rinfoPort :: PortNumber
     , rinfoActions :: ResolveActions
+    , rinfoUDPRetry :: UDPRetry
+    , rinfoVCLimit :: VCLimit
     }
 
 defaultResolveInfo :: ResolveInfo
@@ -208,6 +211,8 @@ defaultResolveInfo =
         { rinfoIP = "127.0.0.1"
         , rinfoPort = 53
         , rinfoActions = defaultResolveActions
+        , rinfoUDPRetry = 3
+        , rinfoVCLimit = 2048
         }
 
 data Result = Result
@@ -228,6 +233,7 @@ data Reply = Reply
 -- | The type of resolvers (DNS over X).
 type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
 
+type PipelineResolver = ResolveInfo -> (Resolver -> IO ()) -> IO ()
 type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------

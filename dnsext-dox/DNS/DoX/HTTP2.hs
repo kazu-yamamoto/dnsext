@@ -35,41 +35,40 @@ withTimeout ri@ResolveInfo{..} proto action = do
         Nothing -> return $ Left TimeoutExpired
         Just res -> return $ Right $ toResult ri proto res
 
-http2Resolver :: ShortByteString -> VCLimit -> OneshotResolver
-http2Resolver path lim ri@ResolveInfo{..} q qctl = do
+http2Resolver :: ShortByteString -> OneshotResolver
+http2Resolver path ri@ResolveInfo{..} q qctl = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
         H2.run settings (show rinfoIP) rinfoPort $
-            doHTTP proto ident path lim ri q qctl
+            doHTTP proto ident path ri q qctl
   where
     settings =
         H2.defaultSettings
             { H2.settingsValidateCert = False
             }
 
-http2cResolver :: ShortByteString -> VCLimit -> OneshotResolver
-http2cResolver path lim ri@ResolveInfo{..} q qctl = do
+http2cResolver :: ShortByteString -> OneshotResolver
+http2cResolver path ri@ResolveInfo{..} q qctl = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri proto $
         H2.runH2C H2.defaultSettings (show rinfoIP) rinfoPort $
-            doHTTP proto ident path lim ri q qctl
+            doHTTP proto ident path ri q qctl
 
 doHTTP
     :: String
     -> Identifier
     -> ShortByteString
-    -> VCLimit
     -> ResolveInfo
     -> Question
     -> QueryControls
     -> Client Reply
-doHTTP proto ident path lim ri@ResolveInfo{..} q qctl sendRequest _aux = do
+doHTTP proto ident path ri@ResolveInfo{..} q qctl sendRequest _aux = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     sendRequest req $ \rsp -> do
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-        (rx, bss) <- recvHTTP $ unVCLimit lim
+        (rx, bss) <- recvHTTP $ unVCLimit rinfoVCLimit
         now <- getTime
         case decodeChunks now bss of
             Left e -> E.throwIO e

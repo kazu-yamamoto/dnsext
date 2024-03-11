@@ -42,12 +42,9 @@ recursiveQeury mserver port dox putLines raflags ctl domain typ | dox == "auto" 
     lookupDoX conf domain typ
 recursiveQeury mserver port dox putLines raflags ctl domain typ = do
     conf <- getCustomConf mserver port ctl putLines raflags
-    let lim = DNS.lconfLimit conf
-        resolver = case makeResolver dox lim Nothing of
+    let resolver = case makeResolver dox Nothing of
             Just r -> r
-            Nothing ->
-                let retry = DNS.lconfRetry conf
-                 in udpTcpResolver retry lim
+            Nothing -> udpTcpResolver
     withLookupConfAndResolver conf resolver $ \env -> do
         let q = Question (DNS.fromRepresentation domain) typ DNS.IN
         DNS.lookupRaw env q
@@ -68,7 +65,7 @@ getCustomConf mserver port ctl putLines raflags = case mserver of
   where
     conf =
         DNS.defaultLookupConf
-            { lconfRetry = 2
+            { lconfUDPRetry = 2
             , lconfQueryControls = ctl
             , lconfConcurrent = True
             , lconfActions =

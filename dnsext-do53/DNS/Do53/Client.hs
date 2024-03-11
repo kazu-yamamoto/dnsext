@@ -33,8 +33,8 @@ module DNS.Do53.Client (
 
     -- ** Accessors
     lconfSeeds,
-    lconfRetry,
-    lconfLimit,
+    lconfUDPRetry,
+    lconfVCLimit,
     lconfConcurrent,
     lconfCacheConf,
     lconfQueryControls,

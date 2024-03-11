@@ -3,7 +3,6 @@
 module DNS.Do53.VC (
     withVCResolver,
     withTCPResolver,
-    PipelineResolver,
 ) where
 
 import Control.Concurrent
@@ -31,23 +30,16 @@ import DNS.Types
 import DNS.Types.Decode
 
 type RVar = MVar (Either DNSError Reply)
-type PipelineResolver = VCLimit -> ResolveInfo -> (Resolver -> IO ()) -> IO ()
 
 withTCPResolver :: PipelineResolver
-withTCPResolver lim ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
+withTCPResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
-        recv = recvVC lim $ recvTCP sock
+        recv = recvVC rinfoVCLimit $ recvTCP sock
     withVCResolver "TCP" send recv ri body
   where
     open = openTCP rinfoIP rinfoPort
 
-withVCResolver
-    :: String
-    -> Send
-    -> RecvMany
-    -> ResolveInfo
-    -> (Resolver -> IO ())
-    -> IO ()
+withVCResolver :: String -> Send -> RecvMany -> PipelineResolver
 withVCResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp

@@ -39,12 +39,12 @@ module DNS.Do53.Internal (
     udpResolver,
     tcpResolver,
     vcResolver,
-    UDPRetry,
-    VCLimit (..),
 
     -- * Resolver information
     ResolveInfo (..),
     defaultResolveInfo,
+    UDPRetry,
+    VCLimit (..),
     ResolveActions (..),
     defaultResolveActions,
 
@@ -61,7 +61,6 @@ module DNS.Do53.Internal (
 
     -- * Misc
     LookupEnv (..),
-    modifyLookupEnv,
     checkRespM,
     withLookupConfAndResolver,
     lazyTag,

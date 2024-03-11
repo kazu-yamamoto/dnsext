@@ -15,12 +15,16 @@ google :: ResolveInfo
 google =
     defaultResolveInfo
         { rinfoIP = "8.8.8.8"
+        , rinfoUDPRetry = 1
+        , rinfoVCLimit = 8 * 1024
         }
 
 cloudflare :: ResolveInfo
 cloudflare =
     defaultResolveInfo
         { rinfoIP = "1.1.1.1"
+        , rinfoUDPRetry = 1
+        , rinfoVCLimit = 8 * 1024
         }
 
 bad0 :: ResolveInfo
@@ -28,6 +32,8 @@ bad0 =
     defaultResolveInfo
         { rinfoIP = "192.0.2.1"
         , rinfoActions = defaultResolveActions{ractionTimeoutTime = 100000}
+        , rinfoUDPRetry = 1
+        , rinfoVCLimit = 8 * 1024
         }
 
 bad1 :: ResolveInfo
@@ -35,32 +41,34 @@ bad1 =
     defaultResolveInfo
         { rinfoIP = "192.0.2.2"
         , rinfoActions = defaultResolveActions{ractionTimeoutTime = 100000}
+        , rinfoUDPRetry = 1
+        , rinfoVCLimit = 8 * 1024
         }
 
 spec :: Spec
 spec = describe "solvers" $ do
     it "resolves well with UDP" $ do
-        r <- udpResolver 1 google q mempty
+        r <- udpResolver google q mempty
         checkNoErr r
 
     it "resolves well with TCP" $ do
-        r <- tcpResolver (32 * 1024) google q mempty
+        r <- tcpResolver google q mempty
         checkNoErr r
 
     it "resolves well concurrently (0)" $ do
-        let resolver = udpResolver 2
+        let resolver = udpResolver
             renv = ResolveEnv resolver True [google, cloudflare]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (1)" $ do
-        let resolver = udpResolver 2
+        let resolver = udpResolver
             renv = ResolveEnv resolver True [cloudflare, bad0]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (2)" $ do
-        let resolver = udpResolver 1
+        let resolver = udpResolver
             renv = ResolveEnv resolver True [bad0, bad1]
         resolve renv q mempty `shouldThrow` dnsException
 

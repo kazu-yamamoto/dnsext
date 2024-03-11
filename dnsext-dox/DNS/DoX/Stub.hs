@@ -37,14 +37,14 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe OneshotResolver
-makeResolver alpn lim mpath = case alpn of
-    "tcp" -> Just $ tcpResolver  lim
-    "dot" -> Just $ tlsResolver  lim
-    "doq" -> Just $ quicResolver lim
-    "h2"  -> Just $ http2Resolver  (fromMaybe "/dns-query" mpath) lim
-    "h2c" -> Just $ http2cResolver (fromMaybe "/dns-query" mpath) lim
-    "h3"  -> Just $ http3Resolver  (fromMaybe "/dns-query" mpath) lim
+makeResolver :: ALPN -> Maybe ShortByteString -> Maybe OneshotResolver
+makeResolver alpn mpath = case alpn of
+    "tcp" -> Just tcpResolver
+    "dot" -> Just tlsResolver
+    "doq" -> Just quicResolver
+    "h2"  -> Just $ http2Resolver  (fromMaybe "/dns-query" mpath)
+    "h2c" -> Just $ http2cResolver (fromMaybe "/dns-query" mpath)
+    "h3"  -> Just $ http3Resolver  (fromMaybe "/dns-query" mpath)
     _     -> Nothing
 {- FOURMOLU_ENABLE -}
 
@@ -52,9 +52,7 @@ makeResolver alpn lim mpath = case alpn of
 --   according to the priority of the values of SVCB RR.
 lookupDoX :: LookupConf -> HostName -> TYPE -> IO (Either DNSError Result)
 lookupDoX conf domain typ = do
-    let lim = lconfLimit conf
-        retry = lconfRetry conf
-        resolver = udpTcpResolver retry lim
+    let resolver = udpTcpResolver
         q = Question "_dns.resolver.arpa" SVCB IN
     withLookupConfAndResolver conf resolver $ \lenv -> do
         er <- lookupRaw lenv q
@@ -69,12 +67,12 @@ lookupDoX conf domain typ = do
                             then map (prettyShowRData . toRData) ss
                             else map show ss
                 ractionLog (lconfActions conf) Log.DEMO Nothing r
-                auto domain typ (unVCLimit lim) (lenvActions lenv) resultIP ss
+                auto domain typ (lconfVCLimit conf) (lenvActions lenv) resultIP ss
 
 auto
     :: HostName
     -> TYPE
-    -> Int
+    -> VCLimit
     -> ResolveActions
     -> IP
     -> [RD_SVCB]
@@ -90,7 +88,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
             Just alpns -> go $ alpn_names alpns
       where
         go [] = loop ss
-        go (alpn : alpns) = case makeResolver alpn (fromIntegral lim) Nothing of
+        go (alpn : alpns) = case makeResolver alpn Nothing of
             Nothing -> go alpns
             Just resolver -> do
                 erply <- resolveDoX s alpn resolver
@@ -117,6 +115,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
                         { rinfoIP = x
                         , rinfoPort = y
                         , rinfoActions = actions
+                        , rinfoVCLimit = lim
                         }
                 )
                 ips

@@ -21,14 +21,13 @@ main = do
         doms = fromRepresentation <$> doms'
         domsN = length doms
         port = 53
-        lim = 1024
         ris = (\ip -> defaultResolveInfo{rinfoIP = ip, rinfoPort = port}) <$> ips
     refs <- replicateM domsN (newIORef False)
     let targets = zip doms refs
     stdoutLock <- newMVar ()
-    foldr1 race_ $ map (withServer stdoutLock lim targets) ris
+    foldr1 race_ $ map (withServer stdoutLock targets) ris
   where
-    withServer stdoutLock lim targets ri = withTCPResolver lim ri $ \resolv -> do
+    withServer stdoutLock targets ri = withTCPResolver ri $ \resolv -> do
         foldr1 concurrently_ $ map (lookupAndPrint resolv stdoutLock) targets
     lookupAndPrint resolv stdoutLock (dom, ref) = do
         r <- resolv q mempty

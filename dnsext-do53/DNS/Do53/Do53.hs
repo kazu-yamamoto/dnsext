@@ -49,14 +49,14 @@ checkRespM q seqno resp
 ----------------------------------------------------------------
 
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: UDPRetry -> VCLimit -> OneshotResolver
-udpTcpResolver retry lim ri q qctl = do
-    er <- udpResolver retry ri q qctl
+udpTcpResolver :: OneshotResolver
+udpTcpResolver ri q qctl = do
+    er <- udpResolver ri q qctl
     case er of
         r@(Right res) -> do
             let tc = trunCation $ flags $ replyDNSMessage $ resultReply res
             if tc
-                then tcpResolver lim ri q qctl
+                then tcpResolver ri q qctl
                 else return r
         e@(Left _) -> return e
 
@@ -97,8 +97,8 @@ analyzeReply rply qctl0
 
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: UDPRetry -> OneshotResolver
-udpResolver retry ri@ResolveInfo{..} q _qctl = do
+udpResolver :: OneshotResolver
+udpResolver ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (return . Left . fromIOError q ri "UDP") $ go _qctl
   where
@@ -109,7 +109,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
         let send = UDP.send sock
             recv = UDP.recv sock
         ident <- ractionGenId rinfoActions
-        loop retry ident qctl send recv
+        loop rinfoUDPRetry ident qctl send recv
 
     loop 0 _ _ _ _ = return $ Left RetryLimitExceeded
     loop cnt ident qctl0 send recv = do
@@ -156,13 +156,13 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
 ----------------------------------------------------------------
 
 -- | A resolver using TCP.
-tcpResolver :: VCLimit -> OneshotResolver
-tcpResolver lim ri@ResolveInfo{..} q qctl =
+tcpResolver :: OneshotResolver
+tcpResolver ri@ResolveInfo{..} q qctl =
     -- Using a fresh connection
     bracket open close $ \sock -> do
         ractionSetSockOpt rinfoActions sock
         let send = sendVC $ sendTCP sock
-            recv = recvVC lim $ recvTCP sock
+            recv = recvVC rinfoVCLimit $ recvTCP sock
         vcResolver "TCP" send recv ri q qctl
   where
     open = openTCP rinfoIP rinfoPort

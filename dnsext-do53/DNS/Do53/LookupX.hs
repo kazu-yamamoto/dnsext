@@ -42,7 +42,7 @@
 --   by creating and utilizing a 'LookupConf' which has a timeout of
 --   one millisecond and a very limited number of retries:
 --
---   >>> let badrc = defaultLookupConf { lconfRetry = 1, lconfActions = defaultResolveActions { ractionTimeoutTime = 0 } }
+--   >>> let badrc = defaultLookupConf { lconfUDPRetry = 1, lconfActions = defaultResolveActions { ractionTimeoutTime = 0 } }
 --   >>>
 --   >>> withLookupConf badrc $ \env -> lookupA env "www.example.com"
 --   Left RetryLimitExceeded

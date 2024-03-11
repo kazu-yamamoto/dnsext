@@ -15,7 +15,6 @@ module DNS.Do53.Lookup (
     -- * Misc
     withLookupConf,
     withLookupConfAndResolver,
-    modifyLookupEnv,
 )
 where
 
@@ -278,40 +277,41 @@ findAddrPorts (SeedsFilePath file)  = map (\h -> (fromString h, dnsPort)) <$> ge
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
-withLookupConf lconf@LookupConf{..} f = do
-    let resolver = udpTcpResolver lconfRetry lconfLimit
-    withLookupConfAndResolver lconf resolver f
+withLookupConf lconf f = withLookupConfAndResolver lconf udpTcpResolver f
 
 withLookupConfAndResolver
     :: LookupConf -> OneshotResolver -> (LookupEnv -> IO a) -> IO a
-withLookupConfAndResolver LookupConf{..} resolver f = do
+withLookupConfAndResolver lconf@LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
         Just cacheconf -> do
             let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
             cache <- newRRCache memoConf
             return $ Just (cache, cacheconf)
         Nothing -> return Nothing
-    ris <- findAddrPorts lconfSeeds
-    let renv = resolvEnv resolver lconfConcurrent lconfActions ris
+    ipports <- findAddrPorts lconfSeeds
+    let renv = resolvEnv resolver lconf ipports
         lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
 resolvEnv
-    :: OneshotResolver -> Bool -> ResolveActions -> [(IP, PortNumber)] -> ResolveEnv
-resolvEnv resolver conc actions hps = ResolveEnv resolver conc ris
+    :: OneshotResolver -> LookupConf -> [(IP, PortNumber)] -> ResolveEnv
+resolvEnv resolver lconf@LookupConf{..} hps = ResolveEnv resolver lconfConcurrent ris
   where
-    ris = resolvInfos actions hps
+    ris = resolvInfos lconf hps
 
-resolvInfos :: ResolveActions -> [(IP, PortNumber)] -> [ResolveInfo]
-resolvInfos actions hps = map mk hps
+resolvInfos :: LookupConf -> [(IP, PortNumber)] -> [ResolveInfo]
+resolvInfos LookupConf{..} hps = map mk hps
   where
     mk (h, p) =
         defaultResolveInfo
             { rinfoIP = h
             , rinfoPort = p
-            , rinfoActions = actions
+            , rinfoActions = lconfActions
+            , rinfoUDPRetry = lconfUDPRetry
+            , rinfoVCLimit = lconfVCLimit
             }
 
+{-
 modifyLookupEnv
     :: OneshotResolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
 modifyLookupEnv resolver hps lenv@LookupEnv{..} =
@@ -320,3 +320,4 @@ modifyLookupEnv resolver hps lenv@LookupEnv{..} =
         }
   where
     renv = resolvEnv resolver lenvConcurrent lenvActions hps
+-}
