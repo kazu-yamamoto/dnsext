@@ -52,7 +52,7 @@ module DNS.Do53.Client (
     -- ** Actions
     ResolveActions,
     defaultResolveActions,
-    ractionTimeout,
+    ractionTimeoutTime,
     ractionGenId,
     ractionGetTime,
     ractionLog,

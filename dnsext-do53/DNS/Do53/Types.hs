@@ -44,7 +44,6 @@ import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
-import System.Timeout (timeout)
 import Prelude
 
 import DNS.Do53.Id
@@ -236,7 +235,8 @@ pattern RAFlagMultiLine :: ResolveActionsFlag
 pattern RAFlagMultiLine = ResolveActionsFlag 1
 
 data ResolveActions = ResolveActions
-    { ractionTimeout :: IO Reply -> IO (Maybe Reply)
+    { ractionTimeoutTime :: Int
+    -- ^ Microseconds
     , ractionGenId :: IO Identifier
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
@@ -247,7 +247,7 @@ data ResolveActions = ResolveActions
 defaultResolveActions :: ResolveActions
 defaultResolveActions =
     ResolveActions
-        { ractionTimeout = timeout 3000000
+        { ractionTimeoutTime = 3000000
         , ractionGenId = singleGenId
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso

@@ -25,11 +25,12 @@ import Data.ByteString.Short (fromShort)
 import Network.HTTP.Types
 import Network.HTTP2.Client (Client, getResponseBodyChunk, requestBuilder)
 import qualified Network.HTTP2.TLS.Client as H2
+import System.Timeout (timeout)
 import qualified UnliftIO.Exception as E
 
 withTimeout :: ResolveInfo -> String -> IO Reply -> IO Result
 withTimeout ri@ResolveInfo{..} proto action = do
-    mres <- ractionTimeout rinfoActions action
+    mres <- timeout (ractionTimeoutTime rinfoActions) action
     case mres of
         Nothing -> E.throwIO TimeoutExpired
         Just res -> return $ toResult ri proto res

@@ -5,7 +5,6 @@ module IOSpec where
 
 import DNS.Do53.Internal
 import DNS.Types
-import System.Timeout
 import Test.Hspec
 
 q :: Question
@@ -27,14 +26,14 @@ bad0 :: ResolveInfo
 bad0 =
     defaultResolveInfo
         { rinfoIP = "192.0.2.1"
-        , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
+        , rinfoActions = defaultResolveActions{ractionTimeoutTime = 100000}
         }
 
 bad1 :: ResolveInfo
 bad1 =
     defaultResolveInfo
         { rinfoIP = "192.0.2.2"
-        , rinfoActions = defaultResolveActions{ractionTimeout = timeout 100000}
+        , rinfoActions = defaultResolveActions{ractionTimeoutTime = 100000}
         }
 
 spec :: Spec

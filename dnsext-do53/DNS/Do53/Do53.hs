@@ -19,6 +19,7 @@ import qualified Data.ByteString as BS
 import Network.Socket
 import qualified Network.UDP as UDP
 import System.IO.Error (annotateIOError)
+import System.Timeout (timeout)
 
 import DNS.Do53.IO
 import DNS.Do53.Imports
@@ -124,7 +125,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
 
     sendQueryRecvAnswer ident qctl send recv = do
         let qry = encodeQuery ident q qctl
-        ractionTimeout rinfoActions $ do
+        timeout (ractionTimeoutTime rinfoActions) $ do
             _ <- send qry
             let tx = BS.length qry
             recvAnswer ident recv tx
@@ -185,7 +186,7 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
         -- Using a fresh identifier.
         ident <- ractionGenId rinfoActions
         let qry = encodeQuery ident q qctl
-        mres <- ractionTimeout rinfoActions $ do
+        mres <- timeout (ractionTimeoutTime rinfoActions) $ do
             _ <- send qry
             let tx = BS.length qry
             recvAnswer ident tx

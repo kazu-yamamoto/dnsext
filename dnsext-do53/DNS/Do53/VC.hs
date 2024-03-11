@@ -15,6 +15,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Tuple (swap)
 import Network.Socket
+import System.Timeout (timeout)
 
 -- import System.IO.Error (annotateIOError)
 -- import qualified DNS.Log as Log
@@ -64,7 +65,7 @@ withVCResolver tag send recv ri@ResolveInfo{..} body = do
             tx = BS.length qry
         atomicModifyIORef' ref (\m -> (IM.insert key var m, ()))
         atomically $ writeTQueue inpQ qry
-        mres <- ractionTimeout rinfoActions $ takeMVar var
+        mres <- timeout (ractionTimeoutTime rinfoActions) $ takeMVar var
         return $ case mres of
             Nothing -> Left TimeoutExpired
             Just (Reply msg _ rx) -> case checkRespM q ident msg of
