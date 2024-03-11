@@ -112,7 +112,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
 
     loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
     loop cnt ident qctl0 send recv = do
-        mrply <- solve ident qctl0 send recv
+        mrply <- sendQueryRecvAnswer ident qctl0 send recv
         case mrply of
             Nothing -> loop (cnt - 1) ident qctl0 send recv
             Just rply -> do
@@ -122,14 +122,14 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
                     Nothing -> return $ toResult ri "UDP" rply
                     Just qctl -> loop cnt ident qctl send recv
 
-    solve ident qctl send recv = do
+    sendQueryRecvAnswer ident qctl send recv = do
         let qry = encodeQuery ident q qctl
         ractionTimeout rinfoActions $ do
             _ <- send qry
             let tx = BS.length qry
-            getAnswer ident recv tx
+            recvAnswer ident recv tx
 
-    getAnswer ident recv tx = do
+    recvAnswer ident recv tx = do
         ans <- recv `E.catch` ioErrorToDNSError q ri "UDP"
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
@@ -139,7 +139,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
                             | w >= 16 = showHex w
                             | otherwise = ('0' :) . showHex w
                         dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
-                     in ["udpResolver.getAnswer: decodeAt Left: ", show rinfoIP ++ ", ", dumpBS ans]
+                     in ["udpResolver.recvAnswer: decodeAt Left: ", show rinfoIP ++ ", ", dumpBS ans]
                 E.throwIO e
             Right msg
                 | checkResp q ident msg -> do
@@ -148,8 +148,8 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog rinfoActions Log.DEBUG Nothing $
-                        ["udpResolver.getAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
-                    getAnswer ident recv tx
+                        ["udpResolver.recvAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
+                    recvAnswer ident recv tx
 
     open = UDP.clientSocket (show rinfoIP) (show rinfoPort) True -- connected
 
@@ -175,25 +175,25 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do
-        rply <- solve qctl0
+        rply <- sendQueryRecvAnswer qctl0
         let (mqctl, _) = analyzeReply rply qctl0
         case mqctl of
             Nothing -> return $ toResult ri proto rply
-            Just qctl -> toResult ri proto <$> solve qctl
+            Just qctl -> toResult ri proto <$> sendQueryRecvAnswer qctl
 
-    solve qctl = do
+    sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
         ident <- ractionGenId rinfoActions
         let qry = encodeQuery ident q qctl
         mres <- ractionTimeout rinfoActions $ do
             _ <- send qry
             let tx = BS.length qry
-            getAnswer ident tx
+            recvAnswer ident tx
         case mres of
             Nothing -> E.throwIO TimeoutExpired
             Just res -> return res
 
-    getAnswer ident tx = do
+    recvAnswer ident tx = do
         (rx, bss) <- recv `E.catch` ioErrorToDNSError q ri proto
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
