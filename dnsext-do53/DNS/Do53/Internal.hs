@@ -22,9 +22,25 @@ module DNS.Do53.Internal (
     recvManyN,
     recvManyNN,
 
-    -- * Resolve
-    resolve,
-    ResolveEnv (..),
+    -- * Resolver
+    Resolver,
+    Result (..),
+    toResult,
+    Reply (..),
+
+    -- * Pipeline resolver
+    PipelineResolver,
+    withTCPResolver,
+    withVCResolver,
+
+    -- * One-shot resolver
+    OneshotResolver,
+    udpTcpResolver,
+    udpResolver,
+    tcpResolver,
+    vcResolver,
+    UDPRetry,
+    VCLimit (..),
 
     -- * Resolver information
     ResolveInfo (..),
@@ -32,17 +48,9 @@ module DNS.Do53.Internal (
     ResolveActions (..),
     defaultResolveActions,
 
-    -- * Resolver: DNS over X
-    Result (..),
-    toResult,
-    Reply (..),
-    OneshotResolver,
-    udpTcpResolver,
-    udpResolver,
-    tcpResolver,
-
-    -- * Resolver for virtual circuit
-    vcResolver,
+    -- * One shot resolve function
+    resolve,
+    ResolveEnv (..),
 
     -- * Query
     encodeQuery,
@@ -52,13 +60,10 @@ module DNS.Do53.Internal (
     newConcurrentGenId,
 
     -- * Misc
-    checkRespM,
-    UDPRetry,
-    VCLimit (..),
     LookupEnv (..),
     modifyLookupEnv,
+    checkRespM,
     withLookupConfAndResolver,
-    withTCPResolver,
     lazyTag,
 )
 where
