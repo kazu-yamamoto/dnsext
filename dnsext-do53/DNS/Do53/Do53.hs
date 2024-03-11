@@ -79,6 +79,18 @@ lazyTag ResolveInfo{..} Question{..} proto = tag
             ++ "/"
             ++ proto
 
+analyzeReply :: Reply -> QueryControls -> (Maybe QueryControls, Bool)
+analyzeReply rply qctl0
+    | rc == FormatErr && eh == NoEDNS && qctl /= qctl0 = (Just qctl, tc)
+    | otherwise = (Nothing, tc)
+  where
+    ans = replyDNSMessage rply
+    fl = flags ans
+    tc = trunCation fl
+    rc = rcode ans
+    eh = ednsHeader ans
+    qctl = ednsEnabled FlagClear <> qctl0
+
 ----------------------------------------------------------------
 
 -- | A resolver using UDP.
@@ -103,17 +115,11 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
         case mrply of
             Nothing -> loop (cnt - 1) ident qctl0 send recv
             Just rply -> do
-                let ans = replyDNSMessage rply
-                    fl = flags ans
-                    tc = trunCation fl
+                let (mqctl, tc) = analyzeReply rply qctl0
                 when tc $ E.throwIO TCPFallback
-                let rc = rcode ans
-                    eh = ednsHeader ans
-                    qctl = ednsEnabled FlagClear <> qctl0
-                -- loop with the same cnt if qctl /= qctl0
-                if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-                    then loop cnt ident qctl send recv
-                    else return $ toResult ri "UDP" rply
+                case mqctl of
+                    Nothing -> return $ toResult ri "UDP" rply
+                    Just qctl -> loop cnt ident qctl send recv
 
     solve ident qctl send recv = do
         let qry = encodeQuery ident q qctl
@@ -169,14 +175,10 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ~tag = lazyTag ri q proto
     go qctl0 = do
         rply <- solve qctl0
-        let ans = replyDNSMessage rply
-            rc = rcode ans
-            eh = ednsHeader ans
-            qctl = ednsEnabled FlagClear <> qctl0
-        -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-            then toResult ri proto <$> solve qctl
-            else return $ toResult ri proto rply
+        let (mqctl, _) = analyzeReply rply qctl0
+        case mqctl of
+            Nothing -> return $ toResult ri proto rply
+            Just qctl -> toResult ri proto <$> solve qctl
 
     solve qctl = do
         -- Using a fresh identifier.
