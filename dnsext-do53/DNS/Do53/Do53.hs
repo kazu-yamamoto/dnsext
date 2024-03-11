@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -49,14 +48,17 @@ checkRespM q seqno resp
 
 ----------------------------------------------------------------
 
-data TCPFallback = TCPFallback deriving (Show, Typeable)
-
-instance Exception TCPFallback
-
 -- | A resolver using UDP and TCP.
 udpTcpResolver :: UDPRetry -> VCLimit -> OneshotResolver
-udpTcpResolver retry lim ri q qctl =
-    udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver lim ri q qctl
+udpTcpResolver retry lim ri q qctl = do
+    er <- udpResolver retry ri q qctl
+    case er of
+        r@(Right res) -> do
+            let tc = trunCation $ flags $ replyDNSMessage $ resultReply res
+            if tc
+                then tcpResolver lim ri q qctl
+                else return r
+        e@(Left _) -> return e
 
 ----------------------------------------------------------------
 
@@ -81,14 +83,12 @@ lazyTag ResolveInfo{..} Question{..} proto = tag
             ++ "/"
             ++ proto
 
-analyzeReply :: Reply -> QueryControls -> (Maybe QueryControls, Bool)
+analyzeReply :: Reply -> QueryControls -> Maybe QueryControls
 analyzeReply rply qctl0
-    | rc == FormatErr && eh == NoEDNS && qctl /= qctl0 = (Just qctl, tc)
-    | otherwise = (Nothing, tc)
+    | rc == FormatErr && eh == NoEDNS && qctl /= qctl0 = Just qctl
+    | otherwise = Nothing
   where
     ans = replyDNSMessage rply
-    fl = flags ans
-    tc = trunCation fl
     rc = rcode ans
     eh = ednsHeader ans
     qctl = ednsEnabled FlagClear <> qctl0
@@ -117,12 +117,10 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
         case mrply of
             Nothing -> loop (cnt - 1) ident qctl0 send recv
             Just rply -> do
-                let (mqctl, tc) = analyzeReply rply qctl0
-                if tc
-                    then throwIO TCPFallback
-                    else case mqctl of
-                        Nothing -> return $ Right $ toResult ri "UDP" rply
-                        Just qctl -> loop cnt ident qctl send recv
+                let mqctl = analyzeReply rply qctl0
+                case mqctl of
+                    Nothing -> return $ Right $ toResult ri "UDP" rply
+                    Just qctl -> loop cnt ident qctl send recv
 
     sendQueryRecvAnswer ident qctl send recv = do
         let qry = encodeQuery ident q qctl
@@ -181,7 +179,7 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
         case erply of
             Left e -> return $ Left e
             Right rply -> do
-                let (mqctl, _) = analyzeReply rply qctl0
+                let mqctl = analyzeReply rply qctl0
                 case mqctl of
                     Nothing -> return $ Right $ toResult ri proto rply
                     Just qctl -> do
