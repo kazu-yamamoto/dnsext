@@ -15,6 +15,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Tuple (swap)
 import Network.Socket
+import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
 -- import System.IO.Error (annotateIOError)
@@ -29,6 +30,7 @@ import DNS.Types
 import DNS.Types.Decode
 
 type VCResolver = Question -> QueryControls -> IO (Either DNSError Result)
+type RVar = MVar (Either DNSError Reply)
 
 withTCPResolver
     :: VCLimit
@@ -49,17 +51,17 @@ withVCResolver
     -> ResolveInfo
     -> (VCResolver -> IO ())
     -> IO ()
-withVCResolver tag send recv ri@ResolveInfo{..} body = do
+withVCResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
     race_
         (concurrently_ (sender inpQ) (recver ref))
         (body $ resolve inpQ ref)
   where
-    emp = IM.empty :: IntMap (MVar Reply)
+    emp = IM.empty :: IntMap RVar
     resolve inpQ ref q qctl = do
         ident <- ractionGenId rinfoActions
-        var <- newEmptyMVar :: IO (MVar Reply)
+        var <- newEmptyMVar :: IO RVar
         let key = fromIntegral ident
             qry = encodeQuery ident q qctl
             tx = BS.length qry
@@ -68,8 +70,9 @@ withVCResolver tag send recv ri@ResolveInfo{..} body = do
         mres <- timeout (ractionTimeoutTime rinfoActions) $ takeMVar var
         return $ case mres of
             Nothing -> Left TimeoutExpired
-            Just (Reply msg _ rx) -> case checkRespM q ident msg of
-                Nothing -> Right $ toResult ri tag $ Reply msg tx rx
+            Just (Left e) -> Left e
+            Just (Right (Reply msg _ rx)) -> case checkRespM q ident msg of
+                Nothing -> Right $ toResult ri proto $ Reply msg tx rx
                 Just err -> Left err
 
     sender inpQ = forever (atomically (readTQueue inpQ) >>= send)
@@ -77,12 +80,27 @@ withVCResolver tag send recv ri@ResolveInfo{..} body = do
     del idnt m = swap $ IM.updateLookupWithKey (\_ _ -> Nothing) idnt m
 
     recver ref = forever $ do
-        -- fixme
-        (rx, bss) <- recv -- `E.catch` ioErrorToDNSError q ri proto
+        (rx, bss) <-
+            recv `E.catch` \ne -> do
+                let e = ioErrorToDNSError ri proto ne
+                cleanup ref e
+                E.throwIO e
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
-            Left _e -> return () -- fixme
+            Left e -> do
+                cleanup ref e
+                E.throwIO e
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var $ Reply msg 0 {- dummy -} rx
+                putMVar var $ Right $ Reply msg 0 {- dummy -} rx
+
+    cleanup ref e = do
+        vars <- IM.elems <$> readIORef ref
+        mapM_ (\var -> putMVar var (Left e)) vars
+
+ioErrorToDNSError :: ResolveInfo -> String -> IOError -> DNSError
+ioErrorToDNSError ResolveInfo{..} protoName ioe = NetworkFailure aioe
+  where
+    loc = protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
+    aioe = annotateIOError ioe loc Nothing Nothing
