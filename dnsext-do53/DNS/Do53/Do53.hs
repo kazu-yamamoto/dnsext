@@ -64,14 +64,8 @@ ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aio
     loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
 
-----------------------------------------------------------------
-
--- | A resolver using UDP.
---   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: UDPRetry -> Resolver
-udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
+lazyTag :: ResolveInfo -> Question -> String -> String
+lazyTag ResolveInfo{..} Question{..} proto = tag
   where
     ~tag =
         "    query "
@@ -82,7 +76,19 @@ udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ show rinfoIP
             ++ "#"
             ++ show rinfoPort
-            ++ "/UDP"
+            ++ "/"
+            ++ proto
+
+----------------------------------------------------------------
+
+-- | A resolver using UDP.
+--   UDP attempts must use the same ID and accept delayed answers.
+udpResolver :: UDPRetry -> Resolver
+udpResolver retry ri@ResolveInfo{..} q _qctl = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
+  where
+    ~tag = lazyTag ri q "UDP"
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
@@ -157,21 +163,11 @@ tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
-vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
+vcResolver proto perform ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
     E.handle (ioErrorToDNSError q ri proto) $ go _qctl
   where
-    ~tag =
-        "    query "
-            ++ show qname
-            ++ " "
-            ++ show qtype
-            ++ " to "
-            ++ show rinfoIP
-            ++ "#"
-            ++ show rinfoPort
-            ++ "/"
-            ++ proto
+    ~tag = lazyTag ri q proto
     go qctl0 = do
         rply <- perform $ solve qctl0
         let ans = replyDNSMessage rply
