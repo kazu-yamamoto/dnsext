@@ -59,8 +59,8 @@ udpTcpResolver retry lim ri q qctl =
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: Question -> ResolveInfo -> String -> IOError -> IO a
-ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
+throwFromIOError :: Question -> ResolveInfo -> String -> IOError -> IO a
+throwFromIOError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
   where
     loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
@@ -99,7 +99,7 @@ analyzeReply rply qctl0
 udpResolver :: UDPRetry -> Resolver
 udpResolver retry ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
+    E.handle (throwFromIOError q ri "UDP") $ go _qctl
   where
     ~tag = lazyTag ri q "UDP"
     -- Using only one socket and the same identifier.
@@ -130,7 +130,7 @@ udpResolver retry ri@ResolveInfo{..} q _qctl = do
             recvAnswer ident recv tx
 
     recvAnswer ident recv tx = do
-        ans <- recv `E.catch` ioErrorToDNSError q ri "UDP"
+        ans <- recv `E.catch` throwFromIOError q ri "UDP"
         now <- ractionGetTime rinfoActions
         case decodeAt now ans of
             Left e -> do
@@ -171,7 +171,7 @@ tcpResolver lim ri@ResolveInfo{..} q qctl =
 vcResolver :: String -> Send -> RecvMany -> Resolver
 vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError q ri proto) $ go _qctl
+    E.handle (throwFromIOError q ri proto) $ go _qctl
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do
@@ -194,7 +194,7 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
             Just res -> return res
 
     recvAnswer ident tx = do
-        (rx, bss) <- recv `E.catch` ioErrorToDNSError q ri proto
+        (rx, bss) <- recv `E.catch` throwFromIOError q ri proto
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left e -> E.throwIO e
