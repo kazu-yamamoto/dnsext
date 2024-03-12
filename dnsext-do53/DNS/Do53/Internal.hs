@@ -30,7 +30,7 @@ module DNS.Do53.Internal (
 
     -- * Pipeline resolver
     PipelineResolver,
-    withTCPResolver,
+    withTcpResolver,
     withVCResolver,
 
     -- * One-shot resolver

@@ -2,7 +2,7 @@
 
 module DNS.Do53.VC (
     withVCResolver,
-    withTCPResolver,
+    withTcpResolver,
 ) where
 
 import Control.Concurrent
@@ -31,8 +31,8 @@ import DNS.Types.Decode
 
 type RVar = MVar (Either DNSError Reply)
 
-withTCPResolver :: PipelineResolver
-withTCPResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
+withTcpResolver :: PipelineResolver
+withTcpResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC rinfoVCLimit $ recvTCP sock
     withVCResolver "TCP" send recv ri body

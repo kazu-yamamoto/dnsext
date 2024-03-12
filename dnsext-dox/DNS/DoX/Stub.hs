@@ -37,8 +37,18 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> Maybe ShortByteString -> Maybe OneshotResolver
+makeResolver :: ALPN -> Maybe ShortByteString -> Maybe PipelineResolver
 makeResolver alpn mpath = case alpn of
+    "tcp" -> Just withTcpResolver
+    "dot" -> Just withTlsResolver
+    "doq" -> Just withQuicResolver
+    "h2"  -> Just $ withHttp2Resolver  (fromMaybe "/dns-query" mpath)
+    "h2c" -> Just $ withHttp2cResolver (fromMaybe "/dns-query" mpath)
+    "h3"  -> Just $ withHttp3Resolver  (fromMaybe "/dns-query" mpath)
+    _     -> Nothing
+
+makeOneshotResolver :: ALPN -> Maybe ShortByteString -> Maybe OneshotResolver
+makeOneshotResolver alpn mpath = case alpn of
     "tcp" -> Just tcpResolver
     "dot" -> Just tlsResolver
     "doq" -> Just quicResolver
@@ -88,7 +98,7 @@ auto domain typ lim actions ip0 ss0 = loop ss0
             Just alpns -> go $ alpn_names alpns
       where
         go [] = loop ss
-        go (alpn : alpns) = case makeResolver alpn Nothing of
+        go (alpn : alpns) = case makeOneshotResolver alpn Nothing of
             Nothing -> go alpns
             Just resolver -> do
                 erply <- resolveDoX s alpn resolver
