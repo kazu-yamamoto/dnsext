@@ -11,6 +11,17 @@ import Network.Socket
 
 import DNS.DoX.Imports
 
+withQuicResolver :: PipelineResolver
+withQuicResolver ri@ResolveInfo{..} body = run cc $ \conn -> do
+    strm <- stream conn
+    let sendDoQ bs = do
+            sendVC (sendStreamMany strm) bs
+            shutdownStream strm
+        recvDoQ = recvVC rinfoVCLimit $ recvStream strm
+    withVCResolver "QUIC" sendDoQ recvDoQ ri body
+  where
+    cc = getQUICParams rinfoIP rinfoPort "doq"
+
 quicResolver :: OneshotResolver
 quicResolver ri@ResolveInfo{..} q qctl = run cc $ \conn -> do
     strm <- stream conn
