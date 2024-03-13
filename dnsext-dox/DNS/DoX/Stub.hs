@@ -72,8 +72,8 @@ lookupRawDoX lenv@LookupEnv{..} q = do
                 multi = RAFlagMultiLine `elem` ractionFlags lenvActions
                 r =
                     if multi
-                        then map (prettyShowRData . toRData) ss
-                        else map show ss
+                        then prettyShowRData . toRData <$> ss
+                        else show <$> ss
             ractionLog lenvActions Log.DEMO Nothing r
             auto ss lenv q
 
@@ -84,12 +84,12 @@ auto ss LookupEnv{..} q = resolve (head renvs) q lenvQueryControls
     renvs : _renvss = svcbResolvers ri ss
 
 svcbResolvers :: ResolveInfo -> [RD_SVCB] -> [[ResolveEnv]]
-svcbResolvers ri ss = map (onPriority ri) ss
+svcbResolvers ri ss = onPriority ri <$> ss
 
 onPriority :: ResolveInfo -> RD_SVCB -> [ResolveEnv]
 onPriority ri s = case extractSvcParam SPK_ALPN (svcb_params s) of
     Nothing -> []
-    Just alpns -> catMaybes $ map (onALPN ri s) $ alpn_names alpns
+    Just alpns -> catMaybes $ onALPN ri s <$> alpn_names alpns
 
 onALPN :: ResolveInfo -> RD_SVCB -> ShortByteString -> Maybe ResolveEnv
 onALPN ri s alpn = onALPN' ri s alpn $ makeOneshotResolver alpn Nothing
@@ -107,5 +107,6 @@ onALPN' ri s alpn (Just resolver) = Just $ ResolveEnv resolver True rinfos
         Just v6 -> show <$> hint_ipv6s v6
     ips = case v4s ++ v6s of
         [] -> []
-        xs -> map (\h -> (fromString h, port)) xs
-    rinfos = map (\(x, y) -> ri{rinfoIP = x, rinfoPort = y}) ips
+        xs -> (\h -> (fromString h, port)) <$> xs
+    rinfos = updateIPPort <$> ips
+    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y}
