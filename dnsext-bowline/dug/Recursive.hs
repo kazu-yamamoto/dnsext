@@ -39,15 +39,17 @@ recursiveQeury
     -> IO (Either DNSError Result)
 recursiveQeury mserver port dox putLines raflags ctl domain typ | dox == "auto" = do
     conf <- getCustomConf mserver port ctl putLines raflags
-    lookupDoX conf domain typ
+    withLookupConfAndResolver conf udpTcpResolver $ \lenv -> do
+        let q = Question (DNS.fromRepresentation domain) typ DNS.IN
+        lookupRawDoX lenv q
 recursiveQeury mserver port dox putLines raflags ctl domain typ = do
     conf <- getCustomConf mserver port ctl putLines raflags
-    let resolver = case makeResolver dox Nothing of
+    let resolver = case makeOneshotResolver dox Nothing of
             Just r -> r
             Nothing -> udpTcpResolver
-    withLookupConfAndResolver conf resolver $ \env -> do
+    withLookupConfAndResolver conf resolver $ \lenv -> do
         let q = Question (DNS.fromRepresentation domain) typ DNS.IN
-        DNS.lookupRaw env q
+        DNS.lookupRaw lenv q
 
 getCustomConf
     :: [HostName]

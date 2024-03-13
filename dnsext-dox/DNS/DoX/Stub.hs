@@ -5,7 +5,8 @@
 module DNS.DoX.Stub (
     doxPort,
     makeResolver,
-    lookupDoX,
+    makeOneshotResolver,
+    lookupRawDoX,
 )
 where
 
@@ -16,7 +17,7 @@ import DNS.DoX.Internal
 import qualified DNS.Log as Log
 import DNS.SVCB
 import DNS.Types
-import Network.Socket (HostName, PortNumber)
+import Network.Socket (PortNumber)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -60,73 +61,51 @@ makeOneshotResolver alpn mpath = case alpn of
 
 -- | Looking up SVCB RR first and lookup the target automatically
 --   according to the priority of the values of SVCB RR.
-lookupDoX :: LookupConf -> HostName -> TYPE -> IO (Either DNSError Result)
-lookupDoX conf domain typ = do
-    let resolver = udpTcpResolver
-        q = Question "_dns.resolver.arpa" SVCB IN
-    withLookupConfAndResolver conf resolver $ \lenv -> do
-        er <- lookupRaw lenv q
-        case er of
-            Left err -> return $ Left err
-            Right Result{..} -> do
-                let Reply{..} = resultReply
-                    ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
-                    multi = RAFlagMultiLine `elem` ractionFlags (lconfActions conf)
-                    r =
-                        if multi
-                            then map (prettyShowRData . toRData) ss
-                            else map show ss
-                ractionLog (lconfActions conf) Log.DEMO Nothing r
-                auto domain typ (lconfVCLimit conf) (lenvActions lenv) resultIP ss
+lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Result)
+lookupRawDoX lenv@LookupEnv{..} q = do
+    er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
+    case er of
+        Left err -> return $ Left err
+        Right Result{..} -> do
+            let Reply{..} = resultReply
+                ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
+                multi = RAFlagMultiLine `elem` ractionFlags lenvActions
+                r =
+                    if multi
+                        then map (prettyShowRData . toRData) ss
+                        else map show ss
+            ractionLog lenvActions Log.DEMO Nothing r
+            auto ss lenv q
 
-auto
-    :: HostName
-    -> TYPE
-    -> VCLimit
-    -> ResolveActions
-    -> IP
-    -> [RD_SVCB]
-    -> IO (Either DNSError Result)
-auto _ _ _ _ _ [] = return $ Left UnknownDNSError
-auto domain typ lim actions ip0 ss0 = loop ss0
+auto :: [RD_SVCB] -> LookupEnv -> Question -> IO (Either DNSError Result)
+auto ss LookupEnv{..} q = resolve (head renvs) q lenvQueryControls
   where
-    loop [] = return $ Left UnknownDNSError
-    loop (s : ss) = do
-        let malpns = extractSvcParam SPK_ALPN $ svcb_params s
-        case malpns of
-            Nothing -> loop ss
-            Just alpns -> go $ alpn_names alpns
-      where
-        go [] = loop ss
-        go (alpn : alpns) = case makeOneshotResolver alpn Nothing of
-            Nothing -> go alpns
-            Just resolver -> do
-                erply <- resolveDoX s alpn resolver
-                case erply of
-                    Left _ -> go alpns
-                    r -> return r
-    q = Question (fromRepresentation domain) typ IN
-    resolveDoX s alpn resolver = resolve renv q mempty
-      where
-        port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
-        v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
-            Nothing -> []
-            Just v4 -> show <$> hint_ipv4s v4
-        v6s = case extractSvcParam SPK_IPv6Hint $ svcb_params s of
-            Nothing -> []
-            Just v6 -> show <$> hint_ipv6s v6
-        ips = case v4s ++ v6s of
-            [] -> [(ip0, port)]
-            xs -> map (\h -> (fromString h, port)) xs
-        rinfos =
-            map
-                ( \(x, y) ->
-                    defaultResolveInfo
-                        { rinfoIP = x
-                        , rinfoPort = y
-                        , rinfoActions = actions
-                        , rinfoVCLimit = lim
-                        }
-                )
-                ips
-        renv = ResolveEnv resolver True rinfos
+    ri : _ = renvResolveInfos $ lenvResolveEnv
+    renvs : _renvss = svcbResolvers ri ss
+
+svcbResolvers :: ResolveInfo -> [RD_SVCB] -> [[ResolveEnv]]
+svcbResolvers ri ss = map (onPriority ri) ss
+
+onPriority :: ResolveInfo -> RD_SVCB -> [ResolveEnv]
+onPriority ri s = case extractSvcParam SPK_ALPN (svcb_params s) of
+    Nothing -> []
+    Just alpns -> catMaybes $ map (onALPN ri s) $ alpn_names alpns
+
+onALPN :: ResolveInfo -> RD_SVCB -> ShortByteString -> Maybe ResolveEnv
+onALPN ri s alpn = onALPN' ri s alpn $ makeOneshotResolver alpn Nothing
+
+onALPN' :: ResolveInfo -> RD_SVCB -> ShortByteString -> Maybe OneshotResolver -> Maybe ResolveEnv
+onALPN' _ _ _ Nothing = Nothing
+onALPN' ri s alpn (Just resolver) = Just $ ResolveEnv resolver True rinfos
+  where
+    port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
+    v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
+        Nothing -> []
+        Just v4 -> show <$> hint_ipv4s v4
+    v6s = case extractSvcParam SPK_IPv6Hint $ svcb_params s of
+        Nothing -> []
+        Just v6 -> show <$> hint_ipv6s v6
+    ips = case v4s ++ v6s of
+        [] -> []
+        xs -> map (\h -> (fromString h, port)) xs
+    rinfos = map (\(x, y) -> ri{rinfoIP = x, rinfoPort = y}) ips
