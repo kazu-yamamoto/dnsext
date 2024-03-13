@@ -17,6 +17,7 @@ import DNS.DoX.Internal
 import qualified DNS.Log as Log
 import DNS.SVCB
 import DNS.Types
+import qualified Data.List.NonEmpty as NE
 import Network.Socket (PortNumber)
 
 -- $setup
@@ -63,40 +64,51 @@ makeOneshotResolver alpn mpath = case alpn of
 --   according to the priority of the values of SVCB RR.
 lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Result)
 lookupRawDoX lenv@LookupEnv{..} q = do
-    er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
+    er <- lookup_DNS lenv
     case er of
         Left err -> return $ Left err
         Right Result{..} -> do
-            let Reply{..} = resultReply
-                ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
-                multi = RAFlagMultiLine `elem` ractionFlags lenvActions
-                r =
-                    if multi
-                        then prettyShowRData . toRData <$> ss
-                        else show <$> ss
-            ractionLog lenvActions Log.DEMO Nothing r
-            auto ss lenv q
+            let ss = extraceSVCB resultReply
+            logIt lenv ss
+            let ri = NE.head $ renvResolveInfos $ lenvResolveEnv
+            auto ri ss q lenvQueryControls
 
-auto :: [RD_SVCB] -> LookupEnv -> Question -> IO (Either DNSError Result)
-auto ss LookupEnv{..} q = resolve (head renvs) q lenvQueryControls
+lookup_DNS :: LookupEnv -> IO (Either DNSError Result)
+lookup_DNS lenv = lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
+
+extraceSVCB :: Reply -> [RD_SVCB]
+extraceSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
+
+logIt :: LookupEnv -> [RD_SVCB] -> IO ()
+logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
   where
-    ri : _ = renvResolveInfos $ lenvResolveEnv
-    renvs : _renvss = svcbResolvers ri ss
+    multi = RAFlagMultiLine `elem` ractionFlags lenvActions
+    r
+        | multi = prettyShowRData . toRData <$> ss
+        | otherwise = show <$> ss
 
-svcbResolvers :: ResolveInfo -> [RD_SVCB] -> [[ResolveEnv]]
+auto :: ResolveInfo -> [RD_SVCB] -> Resolver
+auto ri ss q qctl = resolve (head $ head renvs) q qctl
+  where
+    renvs = mapMaybe toResolveInfo <$> svcbResolvers ri ss
+    toResolveInfo (_, []) = Nothing
+    toResolveInfo (alpn, ris) = case makeOneshotResolver alpn Nothing of -- fixme mpath
+        Nothing -> Nothing
+        Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+
+svcbResolvers :: ResolveInfo -> [RD_SVCB] -> [[(ALPN, [ResolveInfo])]]
 svcbResolvers ri ss = onPriority ri <$> ss
 
-onPriority :: ResolveInfo -> RD_SVCB -> [ResolveEnv]
-onPriority ri s = case extractSvcParam SPK_ALPN (svcb_params s) of
+onPriority :: ResolveInfo -> RD_SVCB -> [(ALPN, [ResolveInfo])]
+onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
     Nothing -> []
-    Just alpns -> catMaybes $ onALPN ri s <$> alpn_names alpns
+    Just alpns -> onALPN ri s <$> alpn_names alpns
 
-onALPN :: ResolveInfo -> RD_SVCB -> ShortByteString -> Maybe ResolveEnv
-onALPN ri s alpn = onALPN' ri s alpn $ makeOneshotResolver alpn Nothing
+onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> (ALPN, [ResolveInfo])
+onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
 
-onALPN' :: ResolveInfo -> RD_SVCB -> ShortByteString -> Maybe OneshotResolver -> Maybe ResolveEnv
-onALPN' _ _ _ Nothing = Nothing
-onALPN' ri s alpn (Just resolver) = Just $ ResolveEnv resolver True rinfos
+extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
+extractResolveInfo ri s alpn = updateIPPort <$> ips
   where
     port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
     v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
@@ -108,5 +120,4 @@ onALPN' ri s alpn (Just resolver) = Just $ ResolveEnv resolver True rinfos
     ips = case v4s ++ v6s of
         [] -> []
         xs -> (\h -> (fromString h, port)) <$> xs
-    rinfos = updateIPPort <$> ips
     updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y}

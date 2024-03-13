@@ -6,6 +6,7 @@ module IOSpec where
 import Control.Exception
 import DNS.Do53.Internal
 import DNS.Types
+import Data.List.NonEmpty (NonEmpty (..))
 import Test.Hspec
 
 q :: Question
@@ -57,19 +58,19 @@ spec = describe "solvers" $ do
 
     it "resolves well concurrently (0)" $ do
         let resolver = udpResolver
-            renv = ResolveEnv resolver True [google, cloudflare]
+            renv = ResolveEnv resolver True $ google :| [cloudflare]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (1)" $ do
         let resolver = udpResolver
-            renv = ResolveEnv resolver True [cloudflare, bad0]
+            renv = ResolveEnv resolver True $ cloudflare :| [bad0]
         r <- resolve renv q mempty
         checkNoErr r
 
     it "resolves well concurrently (2)" $ do
         let resolver = udpResolver
-            renv = ResolveEnv resolver True [bad0, bad1]
+            renv = ResolveEnv resolver True $ bad0 :| [bad1]
         resolve renv q mempty `shouldThrow` dnsException
 
 dnsException :: Selector DNSError

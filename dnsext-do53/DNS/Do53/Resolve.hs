@@ -14,6 +14,8 @@ import DNS.Do53.Types
 import qualified DNS.Log as Log
 import qualified DNS.ThreadStats as TStat
 import DNS.Types
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NE
 
 ----------------------------------------------------------------
 
@@ -39,8 +41,7 @@ resolve :: ResolveEnv -> Resolver
 resolve _ Question{..} _
     | qtype == AXFR = return $ Left InvalidAXFRLookup
 resolve ResolveEnv{..} q qctl = case renvResolveInfos of
-    [] -> error "resolve"
-    [ri] -> resolver ri q qctl
+    ri :| [] -> resolver ri q qctl
     ris
         | concurrent -> resolveConcurrent ris resolver q qctl
         | otherwise -> resolveSequential ris resolver q qctl
@@ -49,23 +50,23 @@ resolve ResolveEnv{..} q qctl = case renvResolveInfos of
     resolver = renvResolver
 
 resolveSequential
-    :: [ResolveInfo] -> OneshotResolver -> Resolver
+    :: NonEmpty ResolveInfo -> OneshotResolver -> Resolver
 resolveSequential ris0 resolver q qctl = loop ris0
   where
-    loop [] = error "resolveSequential:loop"
-    loop [ri] = resolver ri q qctl
-    loop (ri : ris) = do
+    loop ris' = do
+        let (ri, mris) = NE.uncons ris'
         eres <- resolver ri q qctl
         case eres of
-            Left _ -> loop ris
+            Left e -> case mris of
+                Nothing -> return $ Left e
+                Just ris -> loop ris
             res@(Right _) -> return res
 
 resolveConcurrent
-    :: [ResolveInfo] -> OneshotResolver -> Resolver
-resolveConcurrent [] _ _ _ = error "resolveConcurrent" -- never reach
-resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} : _) resolver q@Question{..} qctl = do
+    :: NonEmpty ResolveInfo -> OneshotResolver -> Resolver
+resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Question{..} qctl = do
     caller <- TStat.getThreadLabel
-    r@Result{..} <- raceAny $ map (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver' ri)) ris
+    r@Result{..} <- raceAny $ NE.toList $ (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver' ri)) <$> ris
     let ~tag =
             "    query "
                 ++ show qname

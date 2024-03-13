@@ -192,7 +192,7 @@ data LookupEnv = LookupEnv
 data ResolveEnv = ResolveEnv
     { renvResolver :: OneshotResolver
     , renvConcurrent :: Bool
-    , renvResolveInfos :: [ResolveInfo]
+    , renvResolveInfos :: NonEmpty ResolveInfo
     }
 
 instance Show ResolveEnv where

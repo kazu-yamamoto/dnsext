@@ -24,6 +24,7 @@ import qualified DNS.Do53.Internal as DNS
 import DNS.Types hiding (InvalidEDNS, flags)
 import qualified DNS.Types as DNS
 import Data.IP (IP)
+import qualified Data.List.NonEmpty as NE
 
 -- this package
 import DNS.Iterative.Imports
@@ -54,7 +55,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
             ResolveEnv
                 { renvResolver = udpTcpResolver
                 , renvConcurrent = True -- should set True if multiple RIs are provided
-                , renvResolveInfos = ris
+                , renvResolveInfos = NE.fromList ris
                 }
         q = Question name typ IN
         doFlagSet

@@ -18,6 +18,7 @@ module DNS.Do53.Lookup (
 )
 where
 
+import qualified Data.List.NonEmpty as NE
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53
@@ -289,18 +290,18 @@ withLookupConfAndResolver lconf@LookupConf{..} resolver f = do
             return $ Just (cache, cacheconf)
         Nothing -> return Nothing
     ipports <- findAddrPorts lconfSeeds
-    let renv = resolvEnv resolver lconf ipports
+    let renv = resolveEnv resolver lconf $ NE.fromList ipports
         lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
-resolvEnv
-    :: OneshotResolver -> LookupConf -> [(IP, PortNumber)] -> ResolveEnv
-resolvEnv resolver lconf@LookupConf{..} hps = ResolveEnv resolver lconfConcurrent ris
+resolveEnv
+    :: OneshotResolver -> LookupConf -> NonEmpty (IP, PortNumber) -> ResolveEnv
+resolveEnv resolver lconf@LookupConf{..} hps = ResolveEnv resolver lconfConcurrent ris
   where
     ris = resolvInfos lconf hps
 
-resolvInfos :: LookupConf -> [(IP, PortNumber)] -> [ResolveInfo]
-resolvInfos LookupConf{..} hps = map mk hps
+resolvInfos :: LookupConf -> NonEmpty (IP, PortNumber) -> NonEmpty ResolveInfo
+resolvInfos LookupConf{..} hps = mk <$> hps
   where
     mk (h, p) =
         defaultResolveInfo
@@ -310,14 +311,3 @@ resolvInfos LookupConf{..} hps = map mk hps
             , rinfoUDPRetry = lconfUDPRetry
             , rinfoVCLimit = lconfVCLimit
             }
-
-{-
-modifyLookupEnv
-    :: OneshotResolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
-modifyLookupEnv resolver hps lenv@LookupEnv{..} =
-    lenv
-        { lenvResolveEnv = renv
-        }
-  where
-    renv = resolvEnv resolver lenvConcurrent lenvActions hps
--}
