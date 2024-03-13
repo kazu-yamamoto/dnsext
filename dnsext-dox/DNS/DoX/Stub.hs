@@ -4,12 +4,11 @@
 
 module DNS.DoX.Stub (
     doxPort,
+    lookupSVCBInfo,
+    lookupRawDoX,
+    toPipelineResolvers,
     makeResolver,
     makeOneshotResolver,
-    lookupRawDoX,
-    lookup_DNS,
-    extractSVCB,
-    svcbResolveInfos,
 )
 where
 
@@ -26,6 +25,8 @@ import Network.Socket (PortNumber)
 -- $setup
 -- >>> :set -XOverloadedStrings
 
+----------------------------------------------------------------
+
 {- FOURMOLU_DISABLE -}
 -- | From APLN to its port number.
 --
@@ -38,6 +39,8 @@ doxPort "h2"    = 443
 doxPort "h2c"   =  80
 doxPort "h3"    = 443
 doxPort _       =  53
+
+----------------------------------------------------------------
 
 -- | Making resolver according to ALPN.
 --
@@ -61,23 +64,34 @@ makeOneshotResolver "h3"  = Just http3Resolver
 makeOneshotResolver _     = Nothing
 {- FOURMOLU_ENABLE -}
 
+----------------------------------------------------------------
+
 -- | Looking up SVCB RR first and lookup the target automatically
 --   according to the priority of the values of SVCB RR.
 lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Result)
 lookupRawDoX lenv@LookupEnv{..} q = do
-    er <- lookup_DNS lenv
+    er <- lookupSVCBInfo lenv
+    case er of
+        Left err -> return $ Left err
+        Right addss -> do
+            let renv = head $ head $ toResolveEnvs <$> addss
+            resolve renv q lenvQueryControls
+
+----------------------------------------------------------------
+
+type SVCBInfo = (ALPN, [ResolveInfo])
+
+lookupSVCBInfo :: LookupEnv -> IO (Either DNSError [[SVCBInfo]])
+lookupSVCBInfo lenv@LookupEnv{..} = do
+    er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
     case er of
         Left err -> return $ Left err
         Right Result{..} -> do
             let ss = extractSVCB resultReply
+                ri = NE.head $ renvResolveInfos $ lenvResolveEnv
+                addss = svcbResolveInfos ri ss
             logIt lenv ss
-            let ri = NE.head $ renvResolveInfos $ lenvResolveEnv
-                renvs = svcbResolveEnvs ri ss
-                renv = head $ head renvs
-            resolve renv q lenvQueryControls
-
-lookup_DNS :: LookupEnv -> IO (Either DNSError Result)
-lookup_DNS lenv = lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
+            return $ Right addss
 
 extractSVCB :: Reply -> [RD_SVCB]
 extractSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
@@ -90,23 +104,37 @@ logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
         | multi = prettyShowRData . toRData <$> ss
         | otherwise = show <$> ss
 
-svcbResolveEnvs :: ResolveInfo -> [RD_SVCB] -> [[ResolveEnv]]
-svcbResolveEnvs ri ss = mapMaybe toResolveInfo <$> svcbResolveInfos ri ss
-  where
-    toResolveInfo (_, []) = Nothing
-    toResolveInfo (alpn, ris) = case makeOneshotResolver alpn of
-        Nothing -> Nothing
-        Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+----------------------------------------------------------------
 
-svcbResolveInfos :: ResolveInfo -> [RD_SVCB] -> [[(ALPN, [ResolveInfo])]]
+toResolveEnvs :: [SVCBInfo] -> [ResolveEnv]
+toResolveEnvs sis = mapMaybe toResolveEnv sis
+
+toResolveEnv :: SVCBInfo -> Maybe ResolveEnv
+toResolveEnv (_, []) = Nothing
+toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
+    Nothing -> Nothing
+    Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+
+toPipelineResolvers :: [SVCBInfo] -> [[(Resolver -> IO ()) -> IO ()]]
+toPipelineResolvers sis = toPipelineResolver <$> sis
+
+toPipelineResolver :: SVCBInfo -> [(Resolver -> IO ()) -> IO ()]
+toPipelineResolver (_, []) = []
+toPipelineResolver (alpn, ris) = case makeResolver alpn of
+    Nothing -> []
+    Just resolver -> resolver <$> ris
+
+----------------------------------------------------------------
+
+svcbResolveInfos :: ResolveInfo -> [RD_SVCB] -> [[SVCBInfo]]
 svcbResolveInfos ri ss = onPriority ri <$> ss
 
-onPriority :: ResolveInfo -> RD_SVCB -> [(ALPN, [ResolveInfo])]
+onPriority :: ResolveInfo -> RD_SVCB -> [SVCBInfo]
 onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
     Nothing -> []
     Just alpns -> onALPN ri s <$> alpn_names alpns
 
-onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> (ALPN, [ResolveInfo])
+onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> SVCBInfo
 onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
 
 extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
