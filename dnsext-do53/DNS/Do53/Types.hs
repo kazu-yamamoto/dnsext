@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Types (
@@ -194,6 +195,9 @@ data ResolveEnv = ResolveEnv
     , renvResolveInfos :: [ResolveInfo]
     }
 
+instance Show ResolveEnv where
+    show ResolveEnv{..} = "ResolveEnv {" ++ show renvResolveInfos ++ "}"
+
 ----------------------------------------------------------------
 
 -- | Information for resolvers.
@@ -204,6 +208,7 @@ data ResolveInfo = ResolveInfo
     , rinfoUDPRetry :: UDPRetry
     , rinfoVCLimit :: VCLimit
     }
+    deriving (Show)
 
 defaultResolveInfo :: ResolveInfo
 defaultResolveInfo =
@@ -252,6 +257,9 @@ data ResolveActions = ResolveActions
     , ractionLog :: PutLines
     , ractionFlags :: [ResolveActionsFlag]
     }
+
+instance Show ResolveActions where
+    show ResolveActions{..} = "ResolveActions { ractionTimeoutTime = " ++ show ractionTimeoutTime ++ "}"
 
 defaultResolveActions :: ResolveActions
 defaultResolveActions =
