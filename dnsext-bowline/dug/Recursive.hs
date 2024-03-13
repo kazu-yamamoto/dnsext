@@ -44,7 +44,7 @@ recursiveQeury mserver port dox putLines raflags ctl domain typ | dox == "auto" 
         lookupRawDoX lenv q
 recursiveQeury mserver port dox putLines raflags ctl domain typ = do
     conf <- getCustomConf mserver port ctl putLines raflags
-    let resolver = case makeOneshotResolver dox Nothing of
+    let resolver = case makeOneshotResolver dox of
             Just r -> r
             Nothing -> udpTcpResolver
     withLookupConfAndResolver conf resolver $ \lenv -> do

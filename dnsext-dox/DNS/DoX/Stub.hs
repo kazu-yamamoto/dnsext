@@ -7,6 +7,9 @@ module DNS.DoX.Stub (
     makeResolver,
     makeOneshotResolver,
     lookupRawDoX,
+    lookup_DNS,
+    extractSVCB,
+    svcbResolveInfos,
 )
 where
 
@@ -39,25 +42,23 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> Maybe ShortByteString -> Maybe PipelineResolver
-makeResolver alpn mpath = case alpn of
-    "tcp" -> Just withTcpResolver
-    "dot" -> Just withTlsResolver
-    "doq" -> Just withQuicResolver
-    "h2"  -> Just $ withHttp2Resolver  (fromMaybe "/dns-query" mpath)
-    "h2c" -> Just $ withHttp2cResolver (fromMaybe "/dns-query" mpath)
-    "h3"  -> Just $ withHttp3Resolver  (fromMaybe "/dns-query" mpath)
-    _     -> Nothing
+makeResolver :: ALPN -> Maybe PipelineResolver
+makeResolver "tcp" = Just withTcpResolver
+makeResolver "dot" = Just withTlsResolver
+makeResolver "doq" = Just withQuicResolver
+makeResolver "h2"  = Just withHttp2Resolver
+makeResolver "h2c" = Just withHttp2cResolver
+makeResolver "h3"  = Just withHttp3Resolver
+makeResolver _     = Nothing
 
-makeOneshotResolver :: ALPN -> Maybe ShortByteString -> Maybe OneshotResolver
-makeOneshotResolver alpn mpath = case alpn of
-    "tcp" -> Just tcpResolver
-    "dot" -> Just tlsResolver
-    "doq" -> Just quicResolver
-    "h2"  -> Just $ http2Resolver  (fromMaybe "/dns-query" mpath)
-    "h2c" -> Just $ http2cResolver (fromMaybe "/dns-query" mpath)
-    "h3"  -> Just $ http3Resolver  (fromMaybe "/dns-query" mpath)
-    _     -> Nothing
+makeOneshotResolver :: ALPN -> Maybe OneshotResolver
+makeOneshotResolver "tcp" = Just tcpResolver
+makeOneshotResolver "dot" = Just tlsResolver
+makeOneshotResolver "doq" = Just quicResolver
+makeOneshotResolver "h2"  = Just http2Resolver
+makeOneshotResolver "h2c" = Just http2cResolver
+makeOneshotResolver "h3"  = Just http3Resolver
+makeOneshotResolver _     = Nothing
 {- FOURMOLU_ENABLE -}
 
 -- | Looking up SVCB RR first and lookup the target automatically
@@ -68,16 +69,18 @@ lookupRawDoX lenv@LookupEnv{..} q = do
     case er of
         Left err -> return $ Left err
         Right Result{..} -> do
-            let ss = extraceSVCB resultReply
+            let ss = extractSVCB resultReply
             logIt lenv ss
             let ri = NE.head $ renvResolveInfos $ lenvResolveEnv
-            auto ri ss q lenvQueryControls
+                renvs = svcbResolveEnvs ri ss
+                renv = head $ head renvs
+            resolve renv q lenvQueryControls
 
 lookup_DNS :: LookupEnv -> IO (Either DNSError Result)
 lookup_DNS lenv = lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
 
-extraceSVCB :: Reply -> [RD_SVCB]
-extraceSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
+extractSVCB :: Reply -> [RD_SVCB]
+extractSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
 
 logIt :: LookupEnv -> [RD_SVCB] -> IO ()
 logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
@@ -87,17 +90,16 @@ logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
         | multi = prettyShowRData . toRData <$> ss
         | otherwise = show <$> ss
 
-auto :: ResolveInfo -> [RD_SVCB] -> Resolver
-auto ri ss q qctl = resolve (head $ head renvs) q qctl
+svcbResolveEnvs :: ResolveInfo -> [RD_SVCB] -> [[ResolveEnv]]
+svcbResolveEnvs ri ss = mapMaybe toResolveInfo <$> svcbResolveInfos ri ss
   where
-    renvs = mapMaybe toResolveInfo <$> svcbResolvers ri ss
     toResolveInfo (_, []) = Nothing
-    toResolveInfo (alpn, ris) = case makeOneshotResolver alpn Nothing of -- fixme mpath
+    toResolveInfo (alpn, ris) = case makeOneshotResolver alpn of
         Nothing -> Nothing
         Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
 
-svcbResolvers :: ResolveInfo -> [RD_SVCB] -> [[(ALPN, [ResolveInfo])]]
-svcbResolvers ri ss = onPriority ri <$> ss
+svcbResolveInfos :: ResolveInfo -> [RD_SVCB] -> [[(ALPN, [ResolveInfo])]]
+svcbResolveInfos ri ss = onPriority ri <$> ss
 
 onPriority :: ResolveInfo -> RD_SVCB -> [(ALPN, [ResolveInfo])]
 onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
@@ -110,14 +112,16 @@ onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
 extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
 extractResolveInfo ri s alpn = updateIPPort <$> ips
   where
-    port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
-    v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
+    params = svcb_params s
+    port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port params
+    mdohpath = dohpath <$> extractSvcParam SPK_DoHPath params
+    v4s = case extractSvcParam SPK_IPv4Hint params of
         Nothing -> []
         Just v4 -> show <$> hint_ipv4s v4
-    v6s = case extractSvcParam SPK_IPv6Hint $ svcb_params s of
+    v6s = case extractSvcParam SPK_IPv6Hint params of
         Nothing -> []
         Just v6 -> show <$> hint_ipv6s v6
     ips = case v4s ++ v6s of
         [] -> []
         xs -> (\h -> (fromString h, port)) <$> xs
-    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y}
+    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath}

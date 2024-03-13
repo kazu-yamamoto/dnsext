@@ -207,6 +207,7 @@ data ResolveInfo = ResolveInfo
     , rinfoActions :: ResolveActions
     , rinfoUDPRetry :: UDPRetry
     , rinfoVCLimit :: VCLimit
+    , rinfoPath :: Maybe ShortByteString
     }
     deriving (Show)
 
@@ -218,6 +219,7 @@ defaultResolveInfo =
         , rinfoActions = defaultResolveActions
         , rinfoUDPRetry = 3
         , rinfoVCLimit = 2048
+        , rinfoPath = Nothing
         }
 
 data Result = Result

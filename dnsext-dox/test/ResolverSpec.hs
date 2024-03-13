@@ -72,9 +72,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "1.1.1.1"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Right Result{..} <- http2Resolver "/dns-query" ri0 q mempty
+        Right Result{..} <- http2Resolver ri0 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -82,9 +83,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "8.8.8.8"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Right Result{..} <- http2Resolver "/dns-query" ri1 q mempty
+        Right Result{..} <- http2Resolver ri1 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -92,9 +94,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Right Result{..} <- http2Resolver "/dns-query" ri2 q mempty
+        Right Result{..} <- http2Resolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -102,9 +105,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "103.2.57.5"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Right Result{..} <- http2Resolver "/dns-query" ri3 q mempty
+        Right Result{..} <- http2Resolver ri3 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -113,8 +117,9 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Right Result{..} <- http3Resolver "/dns-query" ri2 q mempty
+        Right Result{..} <- http3Resolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
