@@ -18,7 +18,7 @@ import DNS.Do53.Internal (
 import DNS.DoX.Stub
 import qualified DNS.Log as Log
 import DNS.SVCB
-import DNS.Types (DNSError, Question (..))
+import DNS.Types (DNSError, Domain, Question (..))
 import qualified DNS.Types as DNS
 import Data.ByteString.Short (ShortByteString)
 import Data.Either
@@ -33,22 +33,20 @@ recursiveQeury
     -> ShortByteString
     -> Log.PutLines
     -> [DNS.ResolveActionsFlag]
-    -> QueryControls
-    -> HostName
-    -> TYPE
+    -> (Domain, TYPE, QueryControls)
     -> IO (Either DNSError Result)
-recursiveQeury mserver port dox putLines raflags ctl domain typ | dox == "auto" = do
+recursiveQeury mserver port dox putLines raflags (domain, typ, ctl) | dox == "auto" = do
     conf <- getCustomConf mserver port ctl putLines raflags
     withLookupConfAndResolver conf udpTcpResolver $ \lenv -> do
-        let q = Question (DNS.fromRepresentation domain) typ DNS.IN
+        let q = Question domain typ DNS.IN
         lookupRawDoX lenv q
-recursiveQeury mserver port dox putLines raflags ctl domain typ = do
+recursiveQeury mserver port dox putLines raflags (domain, typ, ctl) = do
     conf <- getCustomConf mserver port ctl putLines raflags
     let resolver = case makeOneshotResolver dox of
             Just r -> r
             Nothing -> udpTcpResolver
     withLookupConfAndResolver conf resolver $ \lenv -> do
-        let q = Question (DNS.fromRepresentation domain) typ DNS.IN
+        let q = Question domain typ DNS.IN
         DNS.lookupRaw lenv q
 
 getCustomConf

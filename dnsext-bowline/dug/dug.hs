@@ -18,11 +18,11 @@ import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
-import DNS.Types (TYPE (..), runInitIO)
+import DNS.Types (Domain, TYPE (..), fromRepresentation, runInitIO)
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
-import Data.List (intercalate, isPrefixOf)
+import Data.List (intercalate, isPrefixOf, partition)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -132,8 +132,8 @@ main = do
         putStr $ usageInfo help options
         putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
-    let (at, plus, targets) = divide args
-    (dom, typ) <- getDomTyp targets
+    let (at, dtq) = partition ("@" `isPrefixOf`) args
+    qs <- getQueries dtq
     port <- getPort optPort optDoX
     (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
     tid <- forkIO logger
@@ -141,18 +141,27 @@ main = do
     (msg, header) <-
         if optIterative
             then do
-                let ctl = mconcat $ map toFlag plus
-                ex <- iterativeQuery optDisableV6NS putLines ctl dom typ
+                when (not (null at)) $ do
+                    putStrLn "@ cannot used with '-i'"
+                    exitFailure
+                target <- case qs of
+                    [] -> do
+                        putStrLn "domain must be specified"
+                        exitFailure
+                    [q] -> return q
+                    _ -> do
+                        putStrLn "multiple domains must not be specified"
+                        exitFailure
+                ex <- iterativeQuery optDisableV6NS putLines target
                 case ex of
                     Left e -> fail e
                     Right msg -> return (msg, ";; ")
             else do
                 let mserver = map (drop 1) at
-                    ctl = mconcat $ map toFlag plus
                     raflags
                         | optMultiline = [RAFlagMultiLine]
                         | otherwise = []
-                ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
+                ex <- recursiveQeury mserver port optDoX putLines raflags $ head qs
                 case ex of
                     Left e -> fail (show e)
                     Right Result{..} -> do
@@ -194,17 +203,6 @@ main = do
 
 ----------------------------------------------------------------
 
-divide :: [String] -> ([String], [String], [String])
-divide ls = loop ls (id, id, id)
-  where
-    loop [] (b0, b1, b2) = (b0 [], b1 [], b2 [])
-    loop (x : xs) (b0, b1, b2)
-        | "@" `isPrefixOf` x = loop xs (b0 . (x :), b1, b2)
-        | "+" `isPrefixOf` x = loop xs (b0, b1 . (x :), b2)
-        | otherwise = loop xs (b0, b1, b2 . (x :))
-
-----------------------------------------------------------------
-
 getArgsOpts :: [String] -> IO ([String], Options)
 getArgsOpts args = case getOpt Permute options args of
     (o, n, []) -> return (n, foldl (flip id) defaultOptions o)
@@ -212,18 +210,46 @@ getArgsOpts args = case getOpt Permute options args of
         mapM_ putStr errs
         exitFailure
 
-getDomTyp :: [String] -> IO (String, TYPE)
-getDomTyp [h] = return (h, A)
-getDomTyp [h, t] = do
-    let mtyp' = readMaybe t
-    case mtyp' of
-        Just typ' -> return (h, typ')
-        Nothing -> do
-            putStrLn $ "Type " ++ t ++ " is not supported"
-            exitFailure
-getDomTyp _ = do
-    putStrLn "One or two arguments are necessary"
+----------------------------------------------------------------
+
+getQueries :: [String] -> IO [(Domain, TYPE, QueryControls)]
+getQueries xs0 = loop xs0 id
+  where
+    loop [] build = return $ build []
+    loop xs build = do
+        (q, ys) <- getQuery xs
+        loop ys (build . (q :))
+
+getQuery :: [String] -> IO ((Domain, TYPE, QueryControls), [String])
+getQuery [] = do
+    putStrLn "never reach"
     exitFailure
+getQuery (x : xs)
+    | '.' `notElem` x = do
+        putStrLn $ show x ++ " does not contain '.'"
+        exitFailure
+    | otherwise = do
+        let d = fromRepresentation x
+        case xs of
+            [] -> return ((d, A, mempty), [])
+            y : ys
+                | '.' `elem` y -> return ((d, A, mempty), xs)
+                | "+" `isPrefixOf` y -> do
+                    let (qs, zs) = span ("+" `isPrefixOf`) ys
+                        qctls = mconcat $ map toFlag (y : qs)
+                    return ((d, A, qctls), zs)
+                | otherwise -> do
+                    let mtyp = readMaybe y
+                    case mtyp of
+                        Nothing -> do
+                            putStrLn $ "Type " ++ y ++ " is not supported"
+                            exitFailure
+                        Just typ -> do
+                            let (qs, zs) = span ("+" `isPrefixOf`) ys
+                                qctls = mconcat $ map toFlag qs
+                            return ((d, typ, qctls), zs)
+
+----------------------------------------------------------------
 
 getPort :: Maybe String -> ALPN -> IO PortNumber
 getPort Nothing optDoX = return $ doxPort optDoX
