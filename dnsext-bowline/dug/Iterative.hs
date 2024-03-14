@@ -14,11 +14,11 @@ import DNS.Types
 iterativeQuery
     :: Bool
     -> Log.PutLines
-    -> (Domain, TYPE, QueryControls)
+    -> (Question, QueryControls)
     -> IO (Either String DNSMessage)
-iterativeQuery disableV6NS putLines q = do
+iterativeQuery disableV6NS putLines qq = do
     env <- setup disableV6NS putLines
-    resolve env q
+    resolve env qq
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
@@ -29,5 +29,5 @@ setup disableV6NS putLines = do
     newEnv putLines (\_ -> return ()) disableV6NS Nothing Nothing [] cacheOps tcache tmout
 
 resolve
-    :: Env -> (Domain, TYPE, QueryControls) -> IO (Either String DNSMessage)
-resolve env (d, t, ctl) = resolveResponseIterative env (Question d t IN) ctl
+    :: Env -> (Question, QueryControls) -> IO (Either String DNSMessage)
+resolve env (q, ctl) = resolveResponseIterative env q ctl

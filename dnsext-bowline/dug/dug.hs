@@ -18,7 +18,14 @@ import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
-import DNS.Types (Domain, TYPE (..), fromRepresentation, runInitIO)
+import DNS.Types (
+    CLASS (..),
+    DNSMessage,
+    Question (..),
+    TYPE (..),
+    fromRepresentation,
+    runInitIO,
+ )
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
@@ -137,6 +144,7 @@ main = do
     port <- getPort optPort optDoX
     (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
     tid <- forkIO logger
+    let putLn = mkPutline optMultiline optJSON putLines
     t0 <- T.getUnixTime
     (msg, header) <-
         if optIterative
@@ -164,23 +172,9 @@ main = do
                 ex <- recursiveQeury mserver port optDoX putLines raflags $ head qs
                 case ex of
                     Left e -> fail (show e)
-                    Right Result{..} -> do
-                        let Reply{..} = resultReply
-                        let h =
-                                ";; "
-                                    ++ show resultIP
-                                    ++ "#"
-                                    ++ show resultPort
-                                    ++ "/"
-                                    ++ resultTag
-                                    ++ ", Tx:"
-                                    ++ show replyTxBytes
-                                    ++ "bytes"
-                                    ++ ", Rx:"
-                                    ++ show replyRxBytes
-                                    ++ "bytes"
-                                    ++ ", "
-                        return (replyDNSMessage, h)
+                    Right r -> do
+                        let h = mkHeader r
+                        return (replyDNSMessage (resultReply r), h)
     t1 <- T.getUnixTime
     let T.UnixDiffTime s u = t1 `T.diffUnixTime` t0
     let sec = if s /= 0 then show s ++ "sec " else ""
@@ -191,15 +185,46 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let oflags
-            | optMultiline = [Multiline]
-            | otherwise = []
-        res
-            | optJSON = showJSON msg
-            | otherwise = pprResult oflags msg
-    putLines Log.WARN Nothing [res]
+    putLn msg
     killThread tid
     flush
+
+----------------------------------------------------------------
+
+mkHeader :: Result -> String
+mkHeader Result{..} =
+    ";; "
+        ++ show resultIP
+        ++ "#"
+        ++ show resultPort
+        ++ "/"
+        ++ resultTag
+        ++ ", Tx:"
+        ++ show replyTxBytes
+        ++ "bytes"
+        ++ ", Rx:"
+        ++ show replyRxBytes
+        ++ "bytes"
+        ++ ", "
+  where
+    Reply{..} = resultReply
+
+----------------------------------------------------------------
+
+mkPutline
+    :: Bool
+    -> Bool
+    -> (Log.Level -> Maybe a -> [String] -> IO ())
+    -> DNSMessage
+    -> IO ()
+mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
+  where
+    oflags
+        | multi = [Multiline]
+        | otherwise = []
+    res
+        | json = showJSON
+        | otherwise = pprResult oflags
 
 ----------------------------------------------------------------
 
@@ -212,7 +237,7 @@ getArgsOpts args = case getOpt Permute options args of
 
 ----------------------------------------------------------------
 
-getQueries :: [String] -> IO [(Domain, TYPE, QueryControls)]
+getQueries :: [String] -> IO [(Question, QueryControls)]
 getQueries xs0 = loop xs0 id
   where
     loop [] build = return $ build []
@@ -220,7 +245,8 @@ getQueries xs0 = loop xs0 id
         (q, ys) <- getQuery xs
         loop ys (build . (q :))
 
-getQuery :: [String] -> IO ((Domain, TYPE, QueryControls), [String])
+-- Question d t IN
+getQuery :: [String] -> IO ((Question, QueryControls), [String])
 getQuery [] = do
     putStrLn "never reach"
     exitFailure
@@ -231,13 +257,13 @@ getQuery (x : xs)
     | otherwise = do
         let d = fromRepresentation x
         case xs of
-            [] -> return ((d, A, mempty), [])
+            [] -> return ((Question d A IN, mempty), [])
             y : ys
-                | '.' `elem` y -> return ((d, A, mempty), xs)
+                | '.' `elem` y -> return ((Question d A IN, mempty), xs)
                 | "+" `isPrefixOf` y -> do
                     let (qs, zs) = span ("+" `isPrefixOf`) ys
                         qctls = mconcat $ map toFlag (y : qs)
-                    return ((d, A, qctls), zs)
+                    return ((Question d A IN, qctls), zs)
                 | otherwise -> do
                     let mtyp = readMaybe y
                     case mtyp of
@@ -247,7 +273,7 @@ getQuery (x : xs)
                         Just typ -> do
                             let (qs, zs) = span ("+" `isPrefixOf`) ys
                                 qctls = mconcat $ map toFlag qs
-                            return ((d, typ, qctls), zs)
+                            return ((Question d typ IN, qctls), zs)
 
 ----------------------------------------------------------------
 
