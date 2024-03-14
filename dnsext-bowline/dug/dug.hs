@@ -23,7 +23,6 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.List (intercalate, isPrefixOf)
-import Data.Maybe (mapMaybe)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -89,6 +88,11 @@ options =
         ["json"]
         (NoArg (\opts -> opts{optJSON = True}))
         "use JSON encoding"
+    , Option
+        ['m']
+        ["multi"]
+        (NoArg (\opts -> opts{optMultiline = True}))
+        "use multiline output"
     ]
 
 data Options = Options
@@ -99,6 +103,7 @@ data Options = Options
     , optPort :: Maybe String
     , optDoX :: ShortByteString
     , optLogLevel :: Log.Level
+    , optMultiline :: Bool
     }
     deriving (Show)
 
@@ -112,6 +117,7 @@ defaultOptions =
         , optPort = Nothing
         , optDoX = "do53"
         , optLogLevel = Log.WARN
+        , optMultiline = False
         }
 
 main :: IO ()
@@ -143,7 +149,9 @@ main = do
             else do
                 let mserver = map (drop 1) at
                     ctl = mconcat $ map toFlag plus
-                    raflags = mapMaybe toResolveActionsFlag plus
+                    raflags
+                        | optMultiline = [RAFlagMultiLine]
+                        | otherwise = []
                 ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
                 case ex of
                     Left e -> fail (show e)
@@ -174,7 +182,9 @@ main = do
                 ++ "usec"
                 ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    let oflags = mapMaybe toOutputFlag plus
+    let oflags
+            | optMultiline = [Multiline]
+            | otherwise = []
         res
             | optJSON = showJSON msg
             | otherwise = pprResult oflags msg
@@ -251,17 +261,7 @@ toFlag "+cdflag"    = cdFlag FlagSet
 toFlag "+nocdflag"  = cdFlag FlagClear
 toFlag "+adflag"    = adFlag FlagSet
 toFlag "+noadflag"  = adFlag FlagClear
-toFlag _            = mempty -- fixme
-
-toOutputFlag :: String -> Maybe OutputFlag
-toOutputFlag "+multi"   = Just Multiline
-toOutputFlag "+nomulti" = Nothing
-toOutputFlag  _         = Nothing
-
-toResolveActionsFlag :: String -> Maybe ResolveActionsFlag
-toResolveActionsFlag "+multi"   = Just RAFlagMultiLine
-toResolveActionsFlag "+nomulti" = Nothing
-toResolveActionsFlag  _         = Nothing
+toFlag _            = mempty
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -270,7 +270,7 @@ help :: String
 help =
     intercalate
         "\n"
-        [ "Usage: dug [@server] [name [query-type [query-option]]] [options]"
+        [ "Usage: dug [options] [@server]* [name [query-type [query-option]]]+"
         , ""
         , "query-type: a | aaaa | ns | txt | ptr | ..."
         , ""
@@ -279,7 +279,6 @@ help =
         , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
         , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
         , "  +[no]adflag: [un]set AD (Authentic Data) bit"
-        , "  +[no]multi:  [un]set flag for multi-line format"
         , ""
         , "options:"
         ]
