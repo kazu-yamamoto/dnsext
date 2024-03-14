@@ -144,50 +144,77 @@ main = do
     port <- getPort optPort optDoX
     (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
     tid <- forkIO logger
+    let raflags
+            | optMultiline = [RAFlagMultiLine]
+            | otherwise = []
     let putLn = mkPutline optMultiline optJSON putLines
     t0 <- T.getUnixTime
-    (msg, header) <-
-        if optIterative
-            then do
-                when (not (null at)) $ do
-                    putStrLn "@ cannot used with '-i'"
+    ------------------------
+    if optIterative
+        then do
+            when (not (null at)) $ do
+                putStrLn "@ cannot used with '-i'"
+                exitFailure
+            target <- case qs of
+                [] -> do
+                    putStrLn "domain must be specified"
                     exitFailure
-                target <- case qs of
-                    [] -> do
-                        putStrLn "domain must be specified"
-                        exitFailure
-                    [q] -> return q
-                    _ -> do
-                        putStrLn "multiple domains must not be specified"
-                        exitFailure
-                ex <- iterativeQuery optDisableV6NS putLines target
-                case ex of
-                    Left e -> fail e
-                    Right msg -> return (msg, ";; ")
-            else do
-                let mserver = map (drop 1) at
-                    raflags
-                        | optMultiline = [RAFlagMultiLine]
-                        | otherwise = []
-                ex <- recursiveQeury mserver port optDoX putLines raflags $ head qs
-                case ex of
-                    Left e -> fail (show e)
-                    Right r -> do
-                        let h = mkHeader r
-                        return (replyDNSMessage (resultReply r), h)
+                [q] -> return q
+                _ -> do
+                    putStrLn "multiple domains must not be specified"
+                    exitFailure
+            ex <- iterativeQuery optDisableV6NS putLines target
+            case ex of
+                Left e -> fail e
+                Right msg -> putLn msg
+        else do
+            let mserver = map (drop 1) at
+            ex <- recursiveQeury mserver port optDoX putLines raflags $ head qs
+            case ex of
+                Left e -> fail (show e)
+                Right r -> do
+                    let h = mkHeader r
+                        msg = replyDNSMessage (resultReply r)
+                    putLines Log.WARN (Just Green) [h]
+                    putLn msg
+    ------------------------
+    putTime t0 putLines
+    killThread tid
+    flush
+
+----------------------------------------------------------------
+
+putTime
+    :: T.UnixTime
+    -> (Log.Level -> Maybe Color -> [String] -> IO ())
+    -> IO ()
+putTime t0 putLines = do
     t1 <- T.getUnixTime
     let T.UnixDiffTime s u = t1 `T.diffUnixTime` t0
     let sec = if s /= 0 then show s ++ "sec " else ""
         tm =
-            header
+            ";; "
                 ++ sec
                 ++ show (u `div` 1000)
                 ++ "usec"
-                ++ "\n"
     putLines Log.WARN (Just Green) [tm]
-    putLn msg
-    killThread tid
-    flush
+
+----------------------------------------------------------------
+
+mkPutline
+    :: Bool
+    -> Bool
+    -> (Log.Level -> Maybe Color -> [String] -> IO ())
+    -> DNSMessage
+    -> IO ()
+mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
+  where
+    oflags
+        | multi = [Multiline]
+        | otherwise = []
+    res
+        | json = showJSON
+        | otherwise = pprResult oflags
 
 ----------------------------------------------------------------
 
@@ -205,26 +232,8 @@ mkHeader Result{..} =
         ++ ", Rx:"
         ++ show replyRxBytes
         ++ "bytes"
-        ++ ", "
   where
     Reply{..} = resultReply
-
-----------------------------------------------------------------
-
-mkPutline
-    :: Bool
-    -> Bool
-    -> (Log.Level -> Maybe a -> [String] -> IO ())
-    -> DNSMessage
-    -> IO ()
-mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
-  where
-    oflags
-        | multi = [Multiline]
-        | otherwise = []
-    res
-        | json = showJSON
-        | otherwise = pprResult oflags
 
 ----------------------------------------------------------------
 
