@@ -45,6 +45,8 @@ import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQeury)
 
+----------------------------------------------------------------
+
 options :: [OptDescr (Options -> Options)]
 options =
     [ Option
@@ -102,6 +104,8 @@ options =
         "use multiline output"
     ]
 
+----------------------------------------------------------------
+
 data Options = Options
     { optHelp :: Bool
     , optIterative :: Bool
@@ -126,6 +130,8 @@ defaultOptions =
         , optLogLevel = Log.WARN
         , optMultiline = False
         }
+
+----------------------------------------------------------------
 
 main :: IO ()
 main = do
