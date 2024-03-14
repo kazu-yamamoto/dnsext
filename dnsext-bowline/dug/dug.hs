@@ -140,35 +140,20 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, Options{..}) <- getArgs >>= getArgsOpts
+    (args, opts@Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
         putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
-    let (at, dtq) = partition ("@" `isPrefixOf`) args
-    qs <- getQueries dtq
-    port <- getPort optPort optDoX
-    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    ------------------------
+    (at, port, qs, raflags, logger, putLn, putLines, flush) <-
+        cookOpts args opts
     tid <- forkIO logger
-    let raflags
-            | optMultiline = [RAFlagMultiLine]
-            | otherwise = []
-    let putLn = mkPutline optMultiline optJSON putLines
     t0 <- T.getUnixTime
     ------------------------
     if optIterative
         then do
-            when (not (null at)) $ do
-                putStrLn "@ cannot used with '-i'"
-                exitFailure
-            target <- case qs of
-                [] -> do
-                    putStrLn "domain must be specified"
-                    exitFailure
-                [q] -> return q
-                _ -> do
-                    putStrLn "multiple domains must not be specified"
-                    exitFailure
+            target <- checkIterative at qs
             ex <- iterativeQuery optDisableV6NS putLines target
             case ex of
                 Left e -> fail e
@@ -187,6 +172,51 @@ main = do
     putTime t0 putLines
     killThread tid
     flush
+
+----------------------------------------------------------------
+
+cookOpts
+    :: [String]
+    -> Options
+    -> IO
+        ( [String]
+        , PortNumber
+        , [(Question, QueryControls)]
+        , [ResolveActionsFlag]
+        , IO ()
+        , DNSMessage -> IO ()
+        , Log.PutLines
+        , IO ()
+        )
+cookOpts args Options{..} = do
+    let (at, dtq) = partition ("@" `isPrefixOf`) args
+    qs <- getQueries dtq
+    port <- getPort optPort optDoX
+    let raflags
+            | optMultiline = [RAFlagMultiLine]
+            | otherwise = []
+    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    let putLn = mkPutline optMultiline optJSON putLines
+    return (at, port, qs, raflags, logger, putLn, putLines, flush)
+
+----------------------------------------------------------------
+
+checkIterative
+    :: [String]
+    -> [(Question, QueryControls)]
+    -> IO (Question, QueryControls)
+checkIterative at qs = do
+    when (not (null at)) $ do
+        putStrLn "@ cannot used with '-i'"
+        exitFailure
+    case qs of
+        [] -> do
+            putStrLn "domain must be specified"
+            exitFailure
+        [q] -> return q
+        _ -> do
+            putStrLn "multiple domains must not be specified"
+            exitFailure
 
 ----------------------------------------------------------------
 
