@@ -8,6 +8,7 @@ import DNS.Do53.Client (
     QueryControls,
     ResolveActions (..),
     Seeds (..),
+    withLookupConf,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -36,7 +37,7 @@ recursiveQeury
     -> IO (Either DNSError Result)
 recursiveQeury mserver port dox putLines raflags (q, ctl) | dox == "auto" = do
     conf <- getCustomConf mserver port ctl putLines raflags
-    withLookupConfAndResolver conf udpTcpResolver $ \lenv ->
+    withLookupConf conf $ \lenv ->
         lookupRawDoX lenv q
 recursiveQeury mserver port dox putLines raflags (q, ctl) = do
     conf <- getCustomConf mserver port ctl putLines raflags
