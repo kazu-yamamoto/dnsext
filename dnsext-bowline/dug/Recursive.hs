@@ -69,7 +69,7 @@ recursiveQeury mserver port dox putLn putLines raflags qcs = do
             refs <- replicateM len $ newIORef False
             let targets = zip qcs refs
             stdoutLock <- newMVar ()
-            foldr1 race_ $ map (resolver stdoutLock putLn putLines targets) pipes
+            foldr1 concurrently_ $ map (resolver stdoutLock putLn putLines targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [(Resolver -> IO ()) -> IO ()])
 resolvePipeline conf = do

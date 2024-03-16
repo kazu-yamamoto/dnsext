@@ -150,6 +150,6 @@ extractResolveInfo ri s alpn = updateIPPort <$> ips
         Nothing -> []
         Just v6 -> show <$> hint_ipv6s v6
     ips = case v4s ++ v6s of
-        [] -> []
+        [] -> [(rinfoIP ri, port)] -- no "ipv4hint" nor "ipv6hint"
         xs -> (\h -> (fromString h, port)) <$> xs
     updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath}
