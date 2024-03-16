@@ -51,23 +51,7 @@ recursiveQeury mserver port dox putLn putLines raflags qcs = do
     conf <- getCustomConf mserver port mempty putLines raflags
     mx <-
         if dox == "auto"
-            then do
-                er <- withLookupConf conf lookupSVCBInfo
-                case er of
-                    Left err -> do
-                        print err
-                        exitFailure
-                    Right si -> do
-                        let psss = map toPipelineResolvers si
-                        case psss of
-                            [] -> do
-                                putStrLn "No proper SVCB"
-                                exitFailure
-                            pss : _ -> case pss of
-                                [] -> do
-                                    putStrLn "No proper SVCB"
-                                    exitFailure
-                                ps : _ -> return $ Just ps
+            then resolvePipeline conf
             else case makeResolver dox of
                 Just r -> do
                     let ris = makeResolveInfo putLines raflags port <$> (read <$> mserver)
@@ -86,6 +70,25 @@ recursiveQeury mserver port dox putLn putLines raflags qcs = do
             let targets = zip qcs refs
             stdoutLock <- newMVar ()
             foldr1 race_ $ map (resolver stdoutLock putLn putLines targets) pipes
+
+resolvePipeline :: LookupConf -> IO (Maybe [(Resolver -> IO ()) -> IO ()])
+resolvePipeline conf = do
+    er <- withLookupConf conf lookupSVCBInfo
+    case er of
+        Left err -> do
+            print err
+            exitFailure
+        Right si -> do
+            let psss = map toPipelineResolvers si
+            case psss of
+                [] -> do
+                    putStrLn "No proper SVCB"
+                    exitFailure
+                pss : _ -> case pss of
+                    [] -> do
+                        putStrLn "No proper SVCB"
+                        exitFailure
+                    ps : _ -> return $ Just ps
 
 resolver
     :: MVar ()
