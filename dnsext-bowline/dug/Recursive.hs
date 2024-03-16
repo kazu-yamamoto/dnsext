@@ -1,8 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
 module Recursive (recursiveQeury) where
 
+import Control.Concurrent
+import Control.Concurrent.Async
+import Control.Monad
 import DNS.Do53.Client (
     LookupConf (..),
     QueryControls,
@@ -12,40 +16,122 @@ import DNS.Do53.Client (
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
+    LookupEnv (..),
+    Reply (..),
+    ResolveInfo (..),
+    Resolver,
     Result (..),
-    udpTcpResolver,
-    withLookupConfAndResolver,
+    defaultResolveInfo,
+    resolve,
  )
 import DNS.DoX.Stub
 import qualified DNS.Log as Log
-import DNS.Types (DNSError, Question (..))
+import DNS.Types (Question (..))
 import qualified DNS.Types as DNS
 import Data.ByteString.Short (ShortByteString)
 import Data.Either
-import Data.IP (IPv4, IPv6)
+import Data.IORef
+import Data.IP (IP, IPv4, IPv6)
 import Data.String
 import Network.Socket (HostName, PortNumber)
+import System.Console.ANSI.Types
+import System.Exit (exitFailure)
 import Text.Read (readMaybe)
 
 recursiveQeury
     :: [HostName]
     -> PortNumber
     -> ShortByteString
+    -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> [DNS.ResolveActionsFlag]
-    -> (Question, QueryControls)
-    -> IO (Either DNSError Result)
-recursiveQeury mserver port dox putLines raflags (q, ctl) | dox == "auto" = do
-    conf <- getCustomConf mserver port ctl putLines raflags
-    withLookupConf conf $ \lenv ->
-        lookupRawDoX lenv q
-recursiveQeury mserver port dox putLines raflags (q, ctl) = do
-    conf <- getCustomConf mserver port ctl putLines raflags
-    let resolver = case makeOneshotResolver dox of
-            Just r -> r
-            Nothing -> udpTcpResolver
-    withLookupConfAndResolver conf resolver $ \lenv ->
-        DNS.lookupRaw lenv q
+    -> [(Question, QueryControls)]
+    -> IO ()
+recursiveQeury mserver port dox putLn putLines raflags qcs = do
+    conf <- getCustomConf mserver port mempty putLines raflags
+    mx <-
+        if dox == "auto"
+            then do
+                er <- withLookupConf conf lookupSVCBInfo
+                case er of
+                    Left err -> do
+                        print err
+                        exitFailure
+                    Right si -> do
+                        let psss = map toPipelineResolvers si
+                        case psss of
+                            [] -> do
+                                putStrLn "No proper SVCB"
+                                exitFailure
+                            pss : _ -> case pss of
+                                [] -> do
+                                    putStrLn "No proper SVCB"
+                                    exitFailure
+                                ps : _ -> return $ Just ps
+            else case makeResolver dox of
+                Just r -> do
+                    let ris = makeResolveInfo putLines raflags port <$> (read <$> mserver)
+                    return $ Just (r <$> ris)
+                Nothing -> return Nothing
+    case mx of
+        Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
+            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult putLn putLines
+            mapM_ printIt qcs
+        Just [] -> do
+            putStrLn "No proper SVCB"
+            exitFailure
+        Just pipes -> do
+            let len = length qcs
+            refs <- replicateM len $ newIORef False
+            let targets = zip qcs refs
+            stdoutLock <- newMVar ()
+            foldr1 race_ $ map (resolver stdoutLock putLn putLines targets) pipes
+
+resolver
+    :: MVar ()
+    -> (DNS.DNSMessage -> IO ())
+    -> Log.PutLines
+    -> [((Question, QueryControls), IORef Bool)]
+    -> ((Resolver -> IO ()) -> IO ())
+    -> IO ()
+resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
+    foldr1 concurrently_ $ map (printIt resolv) targets
+  where
+    printIt resolv ((q, ctl), ref) = do
+        er <- resolv q ctl
+        notyet <- atomicModifyIORef' ref (True,)
+        unless notyet $ withMVar stdoutLock $ \() ->
+            printResult putLn putLines er
+
+printResult
+    :: (DNS.DNSMessage -> IO ())
+    -> Log.PutLines
+    -> Either DNS.DNSError Result
+    -> IO ()
+printResult _ _ (Left err) = print err
+printResult putLn putLines (Right r@Result{..}) = do
+    let h = mkHeader r
+    putLines Log.WARN (Just Green) [h]
+    let Reply{..} = resultReply
+    putLn replyDNSMessage
+
+makeResolveInfo
+    :: Log.PutLines
+    -> [DNS.ResolveActionsFlag]
+    -> PortNumber
+    -> IP
+    -> ResolveInfo
+makeResolveInfo putLines raflags port ip =
+    defaultResolveInfo
+        { rinfoIP = ip
+        , rinfoPort = port
+        , rinfoUDPRetry = 2
+        , rinfoActions =
+            DNS.defaultResolveActions
+                { ractionLog = putLines
+                , ractionFlags = raflags
+                }
+        }
 
 getCustomConf
     :: [HostName]
@@ -89,3 +175,22 @@ isNumeric h = case readMaybe h :: Maybe IPv4 of
     Nothing -> case readMaybe h :: Maybe IPv6 of
         Just _ -> True
         Nothing -> False
+
+----------------------------------------------------------------
+
+mkHeader :: Result -> String
+mkHeader Result{..} =
+    ";; "
+        ++ show resultIP
+        ++ "#"
+        ++ show resultPort
+        ++ "/"
+        ++ resultTag
+        ++ ", Tx:"
+        ++ show replyTxBytes
+        ++ "bytes"
+        ++ ", Rx:"
+        ++ show replyRxBytes
+        ++ "bytes"
+  where
+    Reply{..} = resultReply

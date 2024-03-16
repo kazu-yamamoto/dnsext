@@ -14,7 +14,6 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
-import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
@@ -154,20 +153,10 @@ main = do
     if optIterative
         then do
             target <- checkIterative at qs
-            ex <- iterativeQuery optDisableV6NS putLines target
-            case ex of
-                Left e -> fail e
-                Right msg -> putLn msg
+            iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            ex <- recursiveQeury mserver port optDoX putLines raflags $ head qs
-            case ex of
-                Left e -> fail (show e)
-                Right r -> do
-                    let h = mkHeader r
-                        msg = replyDNSMessage (resultReply r)
-                    putLines Log.WARN (Just Green) [h]
-                    putLn msg
+            recursiveQeury mserver port optDoX putLn putLines raflags qs
     ------------------------
     putTime t0 putLines
     killThread tid
@@ -251,25 +240,6 @@ mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
     res
         | json = showJSON
         | otherwise = pprResult oflags
-
-----------------------------------------------------------------
-
-mkHeader :: Result -> String
-mkHeader Result{..} =
-    ";; "
-        ++ show resultIP
-        ++ "#"
-        ++ show resultPort
-        ++ "/"
-        ++ resultTag
-        ++ ", Tx:"
-        ++ show replyTxBytes
-        ++ "bytes"
-        ++ ", Rx:"
-        ++ show replyRxBytes
-        ++ "bytes"
-  where
-    Reply{..} = resultReply
 
 ----------------------------------------------------------------
 

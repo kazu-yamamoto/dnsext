@@ -13,12 +13,16 @@ import DNS.Types
 
 iterativeQuery
     :: Bool
+    -> (DNSMessage -> IO ())
     -> Log.PutLines
     -> (Question, QueryControls)
-    -> IO (Either String DNSMessage)
-iterativeQuery disableV6NS putLines qq = do
+    -> IO ()
+iterativeQuery disableV6NS putLn putLines qq = do
     env <- setup disableV6NS putLines
-    resolve env qq
+    er <- resolve env qq
+    case er of
+        Left e -> print e
+        Right msg -> putLn msg
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
