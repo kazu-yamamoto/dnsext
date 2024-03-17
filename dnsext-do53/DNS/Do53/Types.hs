@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Resolver related data types.
 module DNS.Do53.Types (
@@ -29,6 +30,8 @@ module DNS.Do53.Types (
     Result (..),
     Reply (..),
     Resolver,
+    PipelineResolver,
+    OneshotResolver,
 
     -- * IO
     Recv,
@@ -44,7 +47,6 @@ import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
-import System.Timeout (timeout)
 import Prelude
 
 import DNS.Do53.Id
@@ -140,9 +142,9 @@ newtype VCLimit = VCLimit {unVCLimit :: Int} deriving (Eq, Ord, Num, Show)
 data LookupConf = LookupConf
     { lconfSeeds :: Seeds
     -- ^ Server information.
-    , lconfRetry :: UDPRetry
+    , lconfUDPRetry :: UDPRetry
     -- ^ The number of UDP retries including the first try.
-    , lconfLimit :: VCLimit
+    , lconfVCLimit :: VCLimit
     -- ^ How many bytes are allowed to be received on a virtual circuit.
     , lconfConcurrent :: Bool
     -- ^ Concurrent queries if multiple DNS servers are specified.
@@ -166,8 +168,8 @@ defaultLookupConf :: LookupConf
 defaultLookupConf =
     LookupConf
         { lconfSeeds = SeedsFilePath "/etc/resolv.conf"
-        , lconfRetry = 3
-        , lconfLimit = 32 * 1024
+        , lconfUDPRetry = 3
+        , lconfVCLimit = 8 * 1024
         , lconfConcurrent = False
         , lconfCacheConf = Nothing
         , lconfQueryControls = mempty
@@ -188,10 +190,13 @@ data LookupEnv = LookupEnv
     }
 
 data ResolveEnv = ResolveEnv
-    { renvResolver :: Resolver
+    { renvResolver :: OneshotResolver
     , renvConcurrent :: Bool
-    , renvResolveInfos :: [ResolveInfo]
+    , renvResolveInfos :: NonEmpty ResolveInfo
     }
+
+instance Show ResolveEnv where
+    show ResolveEnv{..} = "ResolveEnv {" ++ show renvResolveInfos ++ "}"
 
 ----------------------------------------------------------------
 
@@ -200,7 +205,11 @@ data ResolveInfo = ResolveInfo
     { rinfoIP :: IP
     , rinfoPort :: PortNumber
     , rinfoActions :: ResolveActions
+    , rinfoUDPRetry :: UDPRetry
+    , rinfoVCLimit :: VCLimit
+    , rinfoPath :: Maybe ShortByteString
     }
+    deriving (Show)
 
 defaultResolveInfo :: ResolveInfo
 defaultResolveInfo =
@@ -208,6 +217,9 @@ defaultResolveInfo =
         { rinfoIP = "127.0.0.1"
         , rinfoPort = 53
         , rinfoActions = defaultResolveActions
+        , rinfoUDPRetry = 3
+        , rinfoVCLimit = 2048
+        , rinfoPath = Nothing
         }
 
 data Result = Result
@@ -226,7 +238,10 @@ data Reply = Reply
     deriving (Eq, Show)
 
 -- | The type of resolvers (DNS over X).
-type Resolver = ResolveInfo -> Question -> QueryControls -> IO Result
+type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
+
+type PipelineResolver = ResolveInfo -> (Resolver -> IO ()) -> IO ()
+type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
 
@@ -236,7 +251,8 @@ pattern RAFlagMultiLine :: ResolveActionsFlag
 pattern RAFlagMultiLine = ResolveActionsFlag 1
 
 data ResolveActions = ResolveActions
-    { ractionTimeout :: IO Reply -> IO (Maybe Reply)
+    { ractionTimeoutTime :: Int
+    -- ^ Microseconds
     , ractionGenId :: IO Identifier
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
@@ -244,10 +260,13 @@ data ResolveActions = ResolveActions
     , ractionFlags :: [ResolveActionsFlag]
     }
 
+instance Show ResolveActions where
+    show ResolveActions{..} = "ResolveActions { ractionTimeoutTime = " ++ show ractionTimeoutTime ++ "}"
+
 defaultResolveActions :: ResolveActions
 defaultResolveActions =
     ResolveActions
-        { ractionTimeout = timeout 3000000
+        { ractionTimeoutTime = 3000000
         , ractionGenId = singleGenId
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso

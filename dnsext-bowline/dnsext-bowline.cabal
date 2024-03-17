@@ -64,6 +64,7 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
+        async,
         ansi-terminal,
         base16-bytestring,
         bytestring,

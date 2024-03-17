@@ -21,7 +21,7 @@ spec = describe "solvers" $ do
                     , rinfoPort = 853
                     }
 
-        Result{..} <- tlsResolver 32768 ri0 q mempty
+        Right Result{..} <- tlsResolver ri0 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -31,7 +31,7 @@ spec = describe "solvers" $ do
                     , rinfoPort = 853
                     }
 
-        Result{..} <- tlsResolver 32768 ri1 q mempty
+        Right Result{..} <- tlsResolver ri1 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -41,7 +41,7 @@ spec = describe "solvers" $ do
                     , rinfoPort = 853
                     }
 
-        Result{..} <- tlsResolver 32768 ri2 q mempty
+        Right Result{..} <- tlsResolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -51,7 +51,7 @@ spec = describe "solvers" $ do
                     , rinfoPort = 853
                     }
 
-        Result{..} <- tlsResolver 32768 ri3 q mempty
+        Right Result{..} <- tlsResolver ri3 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldSatisfy` (\rc -> rc == NoErr || rc == Refused) -- IIJ public DNS refuses GitHub?
         when (rcode replyDNSMessage == Refused) $ putStrLn $ "    NOTICE: receive Refused from " ++ show (rinfoIP ri3)
@@ -63,7 +63,7 @@ spec = describe "solvers" $ do
                     , rinfoPort = 853
                     }
 
-        Result{..} <- quicResolver 32768 ri2 q mempty
+        Right Result{..} <- quicResolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -72,9 +72,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "1.1.1.1"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Result{..} <- http2Resolver "/dns-query" 32768 ri0 q mempty
+        Right Result{..} <- http2Resolver ri0 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -82,9 +83,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "8.8.8.8"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Result{..} <- http2Resolver "/dns-query" 32768 ri1 q mempty
+        Right Result{..} <- http2Resolver ri1 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -92,9 +94,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Result{..} <- http2Resolver "/dns-query" 32768 ri2 q mempty
+        Right Result{..} <- http2Resolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -102,9 +105,10 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "103.2.57.5"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Result{..} <- http2Resolver "/dns-query" 32768 ri3 q mempty
+        Right Result{..} <- http2Resolver ri3 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr
 
@@ -113,8 +117,9 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "94.140.14.140"
                     , rinfoPort = 443
+                    , rinfoPath = Just "/dns-query"
                     }
 
-        Result{..} <- http3Resolver "/dns-query" 32768 ri2 q mempty
+        Right Result{..} <- http3Resolver ri2 q mempty
         let Reply{..} = resultReply
         rcode replyDNSMessage `shouldBe` NoErr

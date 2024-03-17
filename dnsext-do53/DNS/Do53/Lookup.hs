@@ -15,11 +15,10 @@ module DNS.Do53.Lookup (
     -- * Misc
     withLookupConf,
     withLookupConfAndResolver,
-    modifyLookupEnv,
 )
 where
 
-import Control.Exception as E
+import qualified Data.List.NonEmpty as NE
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53
@@ -257,7 +256,7 @@ lookupRaw
     -- ^ LookupEnv obtained via 'withLookupConf'
     -> Question
     -> IO (Either DNSError Result)
-lookupRaw LookupEnv{..} q = E.try $ resolve lenvResolveEnv q lenvQueryControls
+lookupRaw LookupEnv{..} q = resolve lenvResolveEnv q lenvQueryControls
 
 ----------------------------------------------------------------
 
@@ -279,45 +278,36 @@ findAddrPorts (SeedsFilePath file)  = map (\h -> (fromString h, dnsPort)) <$> ge
 -- | Giving a thread-safe 'LookupEnv' to the function of the second
 --   argument.
 withLookupConf :: LookupConf -> (LookupEnv -> IO a) -> IO a
-withLookupConf lconf@LookupConf{..} f = do
-    let resolver = udpTcpResolver lconfRetry lconfLimit
-    withLookupConfAndResolver lconf resolver f
+withLookupConf lconf f = withLookupConfAndResolver lconf udpTcpResolver f
 
 withLookupConfAndResolver
-    :: LookupConf -> Resolver -> (LookupEnv -> IO a) -> IO a
-withLookupConfAndResolver LookupConf{..} resolver f = do
+    :: LookupConf -> OneshotResolver -> (LookupEnv -> IO a) -> IO a
+withLookupConfAndResolver lconf@LookupConf{..} resolver f = do
     mcache <- case lconfCacheConf of
         Just cacheconf -> do
             let memoConf = getDefaultStubConf 4096 (pruningDelay cacheconf) getEpochTime
             cache <- newRRCache memoConf
             return $ Just (cache, cacheconf)
         Nothing -> return Nothing
-    ris <- findAddrPorts lconfSeeds
-    let renv = resolvEnv resolver lconfConcurrent lconfActions ris
+    ipports <- findAddrPorts lconfSeeds
+    let renv = resolveEnv resolver lconf $ NE.fromList ipports
         lenv = LookupEnv mcache lconfQueryControls lconfConcurrent renv lconfActions
     f lenv
 
-resolvEnv
-    :: Resolver -> Bool -> ResolveActions -> [(IP, PortNumber)] -> ResolveEnv
-resolvEnv resolver conc actions hps = ResolveEnv resolver conc ris
+resolveEnv
+    :: OneshotResolver -> LookupConf -> NonEmpty (IP, PortNumber) -> ResolveEnv
+resolveEnv resolver lconf@LookupConf{..} hps = ResolveEnv resolver lconfConcurrent ris
   where
-    ris = resolvInfos actions hps
+    ris = resolvInfos lconf hps
 
-resolvInfos :: ResolveActions -> [(IP, PortNumber)] -> [ResolveInfo]
-resolvInfos actions hps = map mk hps
+resolvInfos :: LookupConf -> NonEmpty (IP, PortNumber) -> NonEmpty ResolveInfo
+resolvInfos LookupConf{..} hps = mk <$> hps
   where
     mk (h, p) =
         defaultResolveInfo
             { rinfoIP = h
             , rinfoPort = p
-            , rinfoActions = actions
+            , rinfoActions = lconfActions
+            , rinfoUDPRetry = lconfUDPRetry
+            , rinfoVCLimit = lconfVCLimit
             }
-
-modifyLookupEnv
-    :: Resolver -> [(IP, PortNumber)] -> LookupEnv -> LookupEnv
-modifyLookupEnv resolver hps lenv@LookupEnv{..} =
-    lenv
-        { lenvResolveEnv = renv
-        }
-  where
-    renv = resolvEnv resolver lenvConcurrent lenvActions hps

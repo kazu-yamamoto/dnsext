@@ -4,12 +4,14 @@
 
 module DNS.DoX.Stub (
     doxPort,
+    lookupSVCBInfo,
+    lookupRawDoX,
+    toPipelineResolvers,
     makeResolver,
-    lookupDoX,
+    makeOneshotResolver,
 )
 where
 
-import Control.Exception (try)
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Imports
@@ -17,10 +19,13 @@ import DNS.DoX.Internal
 import qualified DNS.Log as Log
 import DNS.SVCB
 import DNS.Types
-import Network.Socket (HostName, PortNumber)
+import qualified Data.List.NonEmpty as NE
+import Network.Socket (PortNumber)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+
+----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
 -- | From APLN to its port number.
@@ -35,90 +40,116 @@ doxPort "h2c"   =  80
 doxPort "h3"    = 443
 doxPort _       =  53
 
+----------------------------------------------------------------
+
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> VCLimit -> Maybe ShortByteString -> Maybe Resolver
-makeResolver alpn lim mpath = case alpn of
-    "tcp" -> Just $ tcpResolver  lim
-    "dot" -> Just $ tlsResolver  lim
-    "doq" -> Just $ quicResolver lim
-    "h2"  -> Just $ http2Resolver  (fromMaybe "/dns-query" mpath) lim
-    "h2c" -> Just $ http2cResolver (fromMaybe "/dns-query" mpath) lim
-    "h3"  -> Just $ http3Resolver  (fromMaybe "/dns-query" mpath) lim
-    _     -> Nothing
+makeResolver :: ALPN -> Maybe PipelineResolver
+makeResolver "tcp" = Just withTcpResolver
+makeResolver "dot" = Just withTlsResolver
+makeResolver "doq" = Just withQuicResolver
+makeResolver "h2"  = Just withHttp2Resolver
+makeResolver "h2c" = Just withHttp2cResolver
+makeResolver "h3"  = Just withHttp3Resolver
+makeResolver _     = Nothing
+
+makeOneshotResolver :: ALPN -> Maybe OneshotResolver
+makeOneshotResolver "tcp" = Just tcpResolver
+makeOneshotResolver "dot" = Just tlsResolver
+makeOneshotResolver "doq" = Just quicResolver
+makeOneshotResolver "h2"  = Just http2Resolver
+makeOneshotResolver "h2c" = Just http2cResolver
+makeOneshotResolver "h3"  = Just http3Resolver
+makeOneshotResolver _     = Nothing
 {- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
 
 -- | Looking up SVCB RR first and lookup the target automatically
 --   according to the priority of the values of SVCB RR.
-lookupDoX :: LookupConf -> HostName -> TYPE -> IO (Either DNSError Result)
-lookupDoX conf domain typ = do
-    let lim = lconfLimit conf
-        retry = lconfRetry conf
-        resolver = udpTcpResolver retry lim
-        q = Question "_dns.resolver.arpa" SVCB IN
-    withLookupConfAndResolver conf resolver $ \lenv -> do
-        er <- lookupRaw lenv q
-        case er of
-            Left err -> return $ Left err
-            Right Result{..} -> do
-                let Reply{..} = resultReply
-                    ss = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
-                    multi = RAFlagMultiLine `elem` ractionFlags (lconfActions conf)
-                    r =
-                        if multi
-                            then map (prettyShowRData . toRData) ss
-                            else map show ss
-                ractionLog (lconfActions conf) Log.DEMO Nothing r
-                auto domain typ (unVCLimit lim) (lenvActions lenv) resultIP ss
+lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Result)
+lookupRawDoX lenv@LookupEnv{..} q = do
+    er <- lookupSVCBInfo lenv
+    case er of
+        Left err -> return $ Left err
+        Right addss -> do
+            let renv = head $ head $ toResolveEnvs <$> addss
+            resolve renv q lenvQueryControls
 
-auto
-    :: HostName
-    -> TYPE
-    -> Int
-    -> ResolveActions
-    -> IP
-    -> [RD_SVCB]
-    -> IO (Either DNSError Result)
-auto _ _ _ _ _ [] = return $ Left UnknownDNSError
-auto domain typ lim actions ip0 ss0 = loop ss0
+----------------------------------------------------------------
+
+type SVCBInfo = (ALPN, [ResolveInfo])
+
+lookupSVCBInfo :: LookupEnv -> IO (Either DNSError [[SVCBInfo]])
+lookupSVCBInfo lenv@LookupEnv{..} = do
+    er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
+    case er of
+        Left err -> return $ Left err
+        Right Result{..} -> do
+            let ss = extractSVCB resultReply
+                ri = NE.head $ renvResolveInfos $ lenvResolveEnv
+                addss = svcbResolveInfos ri ss
+            logIt lenv ss
+            return $ Right addss
+
+extractSVCB :: Reply -> [RD_SVCB]
+extractSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD_SVCB]
+
+logIt :: LookupEnv -> [RD_SVCB] -> IO ()
+logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
   where
-    loop [] = return $ Left UnknownDNSError
-    loop (s : ss) = do
-        let malpns = extractSvcParam SPK_ALPN $ svcb_params s
-        case malpns of
-            Nothing -> loop ss
-            Just alpns -> go $ alpn_names alpns
-      where
-        go [] = loop ss
-        go (alpn : alpns) = case makeResolver alpn (fromIntegral lim) Nothing of
-            Nothing -> go alpns
-            Just resolver -> do
-                mrply <- resolveDoX s alpn resolver
-                case mrply of
-                    Left _ -> go alpns
-                    _ -> return mrply
-    q = Question (fromRepresentation domain) typ IN
-    resolveDoX s alpn resolver = try $ resolve renv q mempty
-      where
-        port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port $ svcb_params s
-        v4s = case extractSvcParam SPK_IPv4Hint $ svcb_params s of
-            Nothing -> []
-            Just v4 -> show <$> hint_ipv4s v4
-        v6s = case extractSvcParam SPK_IPv6Hint $ svcb_params s of
-            Nothing -> []
-            Just v6 -> show <$> hint_ipv6s v6
-        ips = case v4s ++ v6s of
-            [] -> [(ip0, port)]
-            xs -> map (\h -> (fromString h, port)) xs
-        rinfos =
-            map
-                ( \(x, y) ->
-                    defaultResolveInfo
-                        { rinfoIP = x
-                        , rinfoPort = y
-                        , rinfoActions = actions
-                        }
-                )
-                ips
-        renv = ResolveEnv resolver True rinfos
+    multi = RAFlagMultiLine `elem` ractionFlags lenvActions
+    r
+        | multi = prettyShowRData . toRData <$> ss
+        | otherwise = show <$> ss
+
+----------------------------------------------------------------
+
+toResolveEnvs :: [SVCBInfo] -> [ResolveEnv]
+toResolveEnvs sis = mapMaybe toResolveEnv sis
+
+toResolveEnv :: SVCBInfo -> Maybe ResolveEnv
+toResolveEnv (_, []) = Nothing
+toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
+    Nothing -> Nothing
+    Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+
+toPipelineResolvers :: [SVCBInfo] -> [[(Resolver -> IO ()) -> IO ()]]
+toPipelineResolvers sis = toPipelineResolver <$> sis
+
+toPipelineResolver :: SVCBInfo -> [(Resolver -> IO ()) -> IO ()]
+toPipelineResolver (_, []) = []
+toPipelineResolver (alpn, ris) = case makeResolver alpn of
+    Nothing -> []
+    Just resolver -> resolver <$> ris
+
+----------------------------------------------------------------
+
+svcbResolveInfos :: ResolveInfo -> [RD_SVCB] -> [[SVCBInfo]]
+svcbResolveInfos ri ss = onPriority ri <$> ss
+
+onPriority :: ResolveInfo -> RD_SVCB -> [SVCBInfo]
+onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
+    Nothing -> []
+    Just alpns -> onALPN ri s <$> alpn_names alpns
+
+onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> SVCBInfo
+onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
+
+extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
+extractResolveInfo ri s alpn = updateIPPort <$> ips
+  where
+    params = svcb_params s
+    port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port params
+    mdohpath = dohpath <$> extractSvcParam SPK_DoHPath params
+    v4s = case extractSvcParam SPK_IPv4Hint params of
+        Nothing -> []
+        Just v4 -> show <$> hint_ipv4s v4
+    v6s = case extractSvcParam SPK_IPv6Hint params of
+        Nothing -> []
+        Just v6 -> show <$> hint_ipv6s v6
+    ips = case v4s ++ v6s of
+        [] -> [(rinfoIP ri, port)] -- no "ipv4hint" nor "ipv6hint"
+        xs -> (\h -> (fromString h, port)) <$> xs
+    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath}

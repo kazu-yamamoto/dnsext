@@ -5,32 +5,38 @@ module DNS.DoX.HTTP3 where
 
 import DNS.Do53.Client
 import DNS.Do53.Internal
-import DNS.Types
 import Network.HTTP3.Client
-import Network.QUIC
 import qualified Network.QUIC.Client as QUIC
 import qualified UnliftIO.Exception as E
 
 import DNS.DoX.HTTP2
-import DNS.DoX.Imports
 import DNS.DoX.QUIC
 
-http3Resolver :: ShortByteString -> VCLimit -> Resolver
-http3Resolver path lim ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
+withHttp3Resolver :: PipelineResolver
+withHttp3Resolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
+        let proto = "H3"
         ident <- ractionGenId rinfoActions
-        h3resolver conn conf ident path lim ri q qctl
+        run conn cliconf conf $
+            doHTTP proto ident ri body
   where
     cc = getQUICParams rinfoIP rinfoPort "h3"
+    cliconf =
+        ClientConfig
+            { scheme = "https"
+            , authority = show rinfoIP
+            }
 
-h3resolver
-    :: Connection -> Config -> Identifier -> ShortByteString -> VCLimit -> Resolver
-h3resolver conn conf ident path lim ri@ResolveInfo{..} q qctl = do
-    let proto = "H3"
-    withTimeout ri proto $
-        run conn cliconf conf $
-            doHTTP proto ident path lim ri q qctl
+http3Resolver :: OneshotResolver
+http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
+    E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
+        let proto = "H3"
+        ident <- ractionGenId rinfoActions
+        withTimeout ri $
+            run conn cliconf conf $
+                doHTTPOneshot proto ident ri q qctl
   where
+    cc = getQUICParams rinfoIP rinfoPort "h3"
     cliconf =
         ClientConfig
             { scheme = "https"

@@ -7,22 +7,22 @@ import DNS.Iterative.Query (Env, newEnv, resolveResponseIterative)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
-import Data.String (fromString)
-import Network.Socket (HostName)
 import System.Timeout (timeout)
 
 import DNS.Types
 
 iterativeQuery
     :: Bool
+    -> (DNSMessage -> IO ())
     -> Log.PutLines
-    -> QueryControls
-    -> HostName
-    -> TYPE
-    -> IO (Either String DNSMessage)
-iterativeQuery disableV6NS putLines ctl domain typ = do
+    -> (Question, QueryControls)
+    -> IO ()
+iterativeQuery disableV6NS putLn putLines qq = do
     env <- setup disableV6NS putLines
-    resolve env ctl domain typ
+    er <- resolve env qq
+    case er of
+        Left e -> print e
+        Right msg -> putLn msg
 
 setup :: Bool -> Log.PutLines -> IO Env
 setup disableV6NS putLines = do
@@ -33,7 +33,5 @@ setup disableV6NS putLines = do
     newEnv putLines (\_ -> return ()) disableV6NS Nothing Nothing [] cacheOps tcache tmout
 
 resolve
-    :: Env -> QueryControls -> String -> TYPE -> IO (Either String DNSMessage)
-resolve env ictl n ty = resolveResponseIterative env (Question domain ty IN) ictl
-  where
-    domain = fromString n
+    :: Env -> (Question, QueryControls) -> IO (Either String DNSMessage)
+resolve env (q, ctl) = resolveResponseIterative env q ctl

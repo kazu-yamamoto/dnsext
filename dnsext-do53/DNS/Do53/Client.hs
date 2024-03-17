@@ -33,8 +33,8 @@ module DNS.Do53.Client (
 
     -- ** Accessors
     lconfSeeds,
-    lconfRetry,
-    lconfLimit,
+    lconfUDPRetry,
+    lconfVCLimit,
     lconfConcurrent,
     lconfCacheConf,
     lconfQueryControls,
@@ -52,7 +52,7 @@ module DNS.Do53.Client (
     -- ** Actions
     ResolveActions,
     defaultResolveActions,
-    ractionTimeout,
+    ractionTimeoutTime,
     ractionGenId,
     ractionGetTime,
     ractionLog,

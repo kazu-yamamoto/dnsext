@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,10 +9,17 @@ module DNS.Do53.Do53 (
     vcResolver,
     checkRespM,
     toResult,
+    lazyTag,
 )
 where
 
 import Control.Exception as E
+import qualified Data.ByteString as BS
+import Network.Socket
+import qualified Network.UDP as UDP
+import System.IO.Error (annotateIOError)
+import System.Timeout (timeout)
+
 import DNS.Do53.IO
 import DNS.Do53.Imports
 import DNS.Do53.Query
@@ -21,10 +27,6 @@ import DNS.Do53.Types
 import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
-import qualified Data.ByteString as BS
-import Network.Socket (close)
-import qualified Network.UDP as UDP
-import System.IO.Error (annotateIOError)
 
 -- | Check response for a matching identifier and question.  If we ever do
 -- pipelined TCP, we'll need to handle out of order responses.  See:
@@ -46,119 +48,28 @@ checkRespM q seqno resp
 
 ----------------------------------------------------------------
 
-data TCPFallback = TCPFallback deriving (Show, Typeable)
-
-instance Exception TCPFallback
-
 -- | A resolver using UDP and TCP.
-udpTcpResolver :: UDPRetry -> VCLimit -> Resolver
-udpTcpResolver retry lim ri q qctl =
-    udpResolver retry ri q qctl `E.catch` \TCPFallback -> tcpResolver lim ri q qctl
+udpTcpResolver :: OneshotResolver
+udpTcpResolver ri q qctl = do
+    er <- udpResolver ri q qctl
+    case er of
+        r@(Right res) -> do
+            let tc = trunCation $ flags $ replyDNSMessage $ resultReply res
+            if tc
+                then tcpResolver ri q qctl
+                else return r
+        e@(Left _) -> return e
 
 ----------------------------------------------------------------
 
-ioErrorToDNSError :: Question -> ResolveInfo -> String -> IOError -> IO a
-ioErrorToDNSError q ResolveInfo{..} protoName ioe = throwIO $ NetworkFailure aioe
+fromIOError :: Question -> ResolveInfo -> String -> IOError -> DNSError
+fromIOError q ResolveInfo{..} protoName ioe = NetworkFailure aioe
   where
     loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
 
-----------------------------------------------------------------
-
--- | A resolver using UDP.
---   UDP attempts must use the same ID and accept delayed answers.
-udpResolver :: UDPRetry -> Resolver
-udpResolver retry ri@ResolveInfo{..} q@Question{..} _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError q ri "UDP") $ go _qctl
-  where
-    ~tag =
-        "    query "
-            ++ show qname
-            ++ " "
-            ++ show qtype
-            ++ " to "
-            ++ show rinfoIP
-            ++ "#"
-            ++ show rinfoPort
-            ++ "/UDP"
-    -- Using only one socket and the same identifier.
-    go qctl = bracket open UDP.close $ \sock -> do
-        ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
-        let send = UDP.send sock
-            recv = UDP.recv sock
-        ident <- ractionGenId rinfoActions
-        loop retry ident qctl send recv
-
-    loop 0 _ _ _ _ = E.throwIO RetryLimitExceeded
-    loop cnt ident qctl0 send recv = do
-        mrply <- solve ident qctl0 send recv
-        case mrply of
-            Nothing -> loop (cnt - 1) ident qctl0 send recv
-            Just rply -> do
-                let ans = replyDNSMessage rply
-                    fl = flags ans
-                    tc = trunCation fl
-                when tc $ E.throwIO TCPFallback
-                let rc = rcode ans
-                    eh = ednsHeader ans
-                    qctl = ednsEnabled FlagClear <> qctl0
-                -- loop with the same cnt if qctl /= qctl0
-                if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-                    then loop cnt ident qctl send recv
-                    else return $ toResult ri "UDP" rply
-
-    solve ident qctl send recv = do
-        let qry = encodeQuery ident q qctl
-        ractionTimeout rinfoActions $ do
-            _ <- send qry
-            let tx = BS.length qry
-            getAnswer ident recv tx
-
-    getAnswer ident recv tx = do
-        ans <- recv `E.catch` ioErrorToDNSError q ri "UDP"
-        now <- ractionGetTime rinfoActions
-        case decodeAt now ans of
-            Left e -> do
-                ractionLog rinfoActions Log.DEBUG Nothing $
-                    let showHex8 w
-                            | w >= 16 = showHex w
-                            | otherwise = ('0' :) . showHex w
-                        dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
-                     in ["udpResolver.getAnswer: decodeAt Left: ", show rinfoIP ++ ", ", dumpBS ans]
-                E.throwIO e
-            Right msg
-                | checkResp q ident msg -> do
-                    let rx = BS.length ans
-                    return $ Reply msg tx rx
-                -- Just ignoring a wrong answer.
-                | otherwise -> do
-                    ractionLog rinfoActions Log.DEBUG Nothing $
-                        ["udpResolver.getAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
-                    getAnswer ident recv tx
-
-    open = UDP.clientSocket (show rinfoIP) (show rinfoPort) True -- connected
-
-----------------------------------------------------------------
-
--- | A resolver using TCP.
-tcpResolver :: VCLimit -> Resolver
-tcpResolver lim ri@ResolveInfo{..} q qctl = vcResolver "TCP" perform ri q qctl
-  where
-    -- Using a fresh connection
-    perform solve = bracket open close $ \sock -> do
-        ractionSetSockOpt rinfoActions sock
-        let send = sendVC $ sendTCP sock
-            recv = recvVC lim $ recvTCP sock
-        solve send recv
-
-    open = openTCP rinfoIP rinfoPort
-
--- | Generic resolver for virtual circuit.
-vcResolver :: String -> ((Send -> RecvMany -> IO Reply) -> IO Reply) -> Resolver
-vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (ioErrorToDNSError q ri proto) $ go _qctl
+lazyTag :: ResolveInfo -> Question -> String -> String
+lazyTag ResolveInfo{..} Question{..} proto = tag
   where
     ~tag =
         "    query "
@@ -171,32 +82,126 @@ vcResolver proto perform ri@ResolveInfo{..} q@Question{..} _qctl = do
             ++ show rinfoPort
             ++ "/"
             ++ proto
-    go qctl0 = do
-        rply <- perform $ solve qctl0
-        let ans = replyDNSMessage rply
-            rc = rcode ans
-            eh = ednsHeader ans
-            qctl = ednsEnabled FlagClear <> qctl0
-        -- If we first tried with EDNS, retry without on FormatErr.
-        if rc == FormatErr && eh == NoEDNS && qctl /= qctl0
-            then do
-                toResult ri proto <$> perform (solve qctl)
-            else return $ toResult ri proto rply
 
-    solve qctl send recv = do
+analyzeReply :: Reply -> QueryControls -> Maybe QueryControls
+analyzeReply rply qctl0
+    | rc == FormatErr && eh == NoEDNS && qctl /= qctl0 = Just qctl
+    | otherwise = Nothing
+  where
+    ans = replyDNSMessage rply
+    rc = rcode ans
+    eh = ednsHeader ans
+    qctl = ednsEnabled FlagClear <> qctl0
+
+----------------------------------------------------------------
+
+-- | A resolver using UDP.
+--   UDP attempts must use the same ID and accept delayed answers.
+udpResolver :: OneshotResolver
+udpResolver ri@ResolveInfo{..} q _qctl = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    E.handle (return . Left . fromIOError q ri "UDP") $ go _qctl
+  where
+    ~tag = lazyTag ri q "UDP"
+    -- Using only one socket and the same identifier.
+    go qctl = bracket open UDP.close $ \sock -> do
+        ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
+        let send = UDP.send sock
+            recv = UDP.recv sock
+        ident <- ractionGenId rinfoActions
+        loop rinfoUDPRetry ident qctl send recv
+
+    loop 0 _ _ _ _ = return $ Left RetryLimitExceeded
+    loop cnt ident qctl0 send recv = do
+        mrply <- sendQueryRecvAnswer ident qctl0 send recv
+        case mrply of
+            Nothing -> loop (cnt - 1) ident qctl0 send recv
+            Just rply -> do
+                let mqctl = analyzeReply rply qctl0
+                case mqctl of
+                    Nothing -> return $ Right $ toResult ri "UDP" rply
+                    Just qctl -> loop cnt ident qctl send recv
+
+    sendQueryRecvAnswer ident qctl send recv = do
+        let qry = encodeQuery ident q qctl
+        timeout (ractionTimeoutTime rinfoActions) $ do
+            _ <- send qry
+            let tx = BS.length qry
+            recvAnswer ident recv tx
+
+    recvAnswer ident recv tx = do
+        ans <- recv
+        now <- ractionGetTime rinfoActions
+        case decodeAt now ans of
+            Left e -> do
+                ractionLog rinfoActions Log.DEBUG Nothing $
+                    let showHex8 w
+                            | w >= 16 = showHex w
+                            | otherwise = ('0' :) . showHex w
+                        dumpBS = ("\"" ++) . (++ "\"") . foldr (\w s -> "\\x" ++ showHex8 w s) "" . BS.unpack
+                     in ["udpResolver.recvAnswer: decodeAt Left: ", show rinfoIP ++ ", ", dumpBS ans]
+                E.throwIO e
+            Right msg
+                | checkResp q ident msg -> do
+                    let rx = BS.length ans
+                    return $ Reply msg tx rx
+                -- Just ignoring a wrong answer.
+                | otherwise -> do
+                    ractionLog rinfoActions Log.DEBUG Nothing $
+                        ["udpResolver.recvAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
+                    recvAnswer ident recv tx
+
+    open = UDP.clientSocket (show rinfoIP) (show rinfoPort) True -- connected
+
+----------------------------------------------------------------
+
+-- | A resolver using TCP.
+tcpResolver :: OneshotResolver
+tcpResolver ri@ResolveInfo{..} q qctl =
+    -- Using a fresh connection
+    bracket open close $ \sock -> do
+        ractionSetSockOpt rinfoActions sock
+        let send = sendVC $ sendTCP sock
+            recv = recvVC rinfoVCLimit $ recvTCP sock
+        vcResolver "TCP" send recv ri q qctl
+  where
+    open = openTCP rinfoIP rinfoPort
+
+-- | Generic resolver for virtual circuit.
+vcResolver :: String -> Send -> RecvMany -> OneshotResolver
+vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
+    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    E.handle (return . Left . fromIOError q ri proto) $ go _qctl
+  where
+    ~tag = lazyTag ri q proto
+    go qctl0 = do
+        erply <- sendQueryRecvAnswer qctl0
+        case erply of
+            Left e -> return $ Left e
+            Right rply -> do
+                let mqctl = analyzeReply rply qctl0
+                case mqctl of
+                    Nothing -> return $ Right $ toResult ri proto rply
+                    Just qctl -> do
+                        erply' <- sendQueryRecvAnswer qctl
+                        case erply' of
+                            Left e' -> return $ Left e'
+                            Right rply' -> return $ Right $ toResult ri proto rply'
+
+    sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
         ident <- ractionGenId rinfoActions
         let qry = encodeQuery ident q qctl
-        mres <- ractionTimeout rinfoActions $ do
+        mres <- timeout (ractionTimeoutTime rinfoActions) $ do
             _ <- send qry
             let tx = BS.length qry
-            getAnswer ident recv tx
+            recvAnswer ident tx
         case mres of
-            Nothing -> E.throwIO TimeoutExpired
-            Just res -> return res
+            Nothing -> return $ Left TimeoutExpired
+            Just res -> return $ Right res
 
-    getAnswer ident recv tx = do
-        (rx, bss) <- recv `E.catch` ioErrorToDNSError q ri proto
+    recvAnswer ident tx = do
+        (rx, bss) <- recv
         now <- ractionGetTime rinfoActions
         case decodeChunks now bss of
             Left e -> E.throwIO e

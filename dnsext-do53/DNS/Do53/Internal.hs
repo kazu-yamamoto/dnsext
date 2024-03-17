@@ -22,27 +22,35 @@ module DNS.Do53.Internal (
     recvManyN,
     recvManyNN,
 
-    -- * Resolve
-    resolve,
-    ResolveEnv (..),
+    -- * Resolver
+    Resolver,
+    Result (..),
+    toResult,
+    Reply (..),
+
+    -- * Pipeline resolver
+    PipelineResolver,
+    withTcpResolver,
+    withVCResolver,
+
+    -- * One-shot resolver
+    OneshotResolver,
+    udpTcpResolver,
+    udpResolver,
+    tcpResolver,
+    vcResolver,
 
     -- * Resolver information
     ResolveInfo (..),
     defaultResolveInfo,
+    UDPRetry,
+    VCLimit (..),
     ResolveActions (..),
     defaultResolveActions,
 
-    -- * Resolver: DNS over X
-    Result (..),
-    toResult,
-    Reply (..),
-    Resolver,
-    udpTcpResolver,
-    udpResolver,
-    tcpResolver,
-
-    -- * Resolver for virtual circuit
-    vcResolver,
+    -- * One shot resolve function
+    resolve,
+    ResolveEnv (..),
 
     -- * Query
     encodeQuery,
@@ -52,12 +60,10 @@ module DNS.Do53.Internal (
     newConcurrentGenId,
 
     -- * Misc
-    checkRespM,
-    UDPRetry,
-    VCLimit (..),
     LookupEnv (..),
-    modifyLookupEnv,
+    checkRespM,
     withLookupConfAndResolver,
+    lazyTag,
 )
 where
 
@@ -68,3 +74,4 @@ import DNS.Do53.Lookup
 import DNS.Do53.Query
 import DNS.Do53.Resolve
 import DNS.Do53.Types
+import DNS.Do53.VC

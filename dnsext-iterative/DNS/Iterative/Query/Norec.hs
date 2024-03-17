@@ -1,8 +1,6 @@
 module DNS.Iterative.Query.Norec (norec) where
 
 -- GHC packages
-import qualified Control.Exception as E
-import System.Timeout (timeout)
 
 -- other packages
 
@@ -13,7 +11,7 @@ import DNS.Do53.Client (
     ractionGenId,
     ractionGetTime,
     ractionLog,
-    ractionTimeout,
+    ractionTimeoutTime,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -26,6 +24,7 @@ import qualified DNS.Do53.Internal as DNS
 import DNS.Types hiding (InvalidEDNS, flags)
 import qualified DNS.Types as DNS
 import Data.IP (IP)
+import qualified Data.List.NonEmpty as NE
 
 -- this package
 import DNS.Iterative.Imports
@@ -45,16 +44,18 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
-                        , ractionTimeout = timeout 10000000
+                        , ractionTimeoutTime = 10000000
                         }
+                , rinfoUDPRetry = 3
+                , rinfoVCLimit = 8 * 1024
                 }
             | aserver <- aservers
             ]
         renv =
             ResolveEnv
-                { renvResolver = udpTcpResolver 3 (32 * 1024) -- 3 is retry
+                { renvResolver = udpTcpResolver
                 , renvConcurrent = True -- should set True if multiple RIs are provided
-                , renvResolveInfos = ris
+                , renvResolveInfos = NE.fromList ris
                 }
         q = Question name typ IN
         doFlagSet
@@ -64,7 +65,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     either
         (Left . DnsError)
         (handleResponseError Left Right . DNS.replyDNSMessage . DNS.resultReply)
-        <$> E.try (DNS.resolve renv q qctl)
+        <$> DNS.resolve renv q qctl
 
 -- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage

@@ -14,16 +14,21 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
-import DNS.Do53.Internal (Reply (..), Result (..))
 import DNS.DoX.Stub
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
-import DNS.Types (TYPE (..), runInitIO)
+import DNS.Types (
+    CLASS (..),
+    DNSMessage,
+    Question (..),
+    TYPE (..),
+    fromRepresentation,
+    runInitIO,
+ )
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
-import Data.List (intercalate, isPrefixOf)
-import Data.Maybe (mapMaybe)
+import Data.List (intercalate, isPrefixOf, partition)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -38,6 +43,8 @@ import Iterative (iterativeQuery)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQeury)
+
+----------------------------------------------------------------
 
 options :: [OptDescr (Options -> Options)]
 options =
@@ -89,7 +96,14 @@ options =
         ["json"]
         (NoArg (\opts -> opts{optJSON = True}))
         "use JSON encoding"
+    , Option
+        ['m']
+        ["multi"]
+        (NoArg (\opts -> opts{optMultiline = True}))
+        "use multiline output"
     ]
+
+----------------------------------------------------------------
 
 data Options = Options
     { optHelp :: Bool
@@ -99,6 +113,7 @@ data Options = Options
     , optPort :: Maybe String
     , optDoX :: ShortByteString
     , optLogLevel :: Log.Level
+    , optMultiline :: Bool
     }
     deriving (Show)
 
@@ -112,7 +127,10 @@ defaultOptions =
         , optPort = Nothing
         , optDoX = "do53"
         , optLogLevel = Log.WARN
+        , optMultiline = False
         }
+
+----------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -121,77 +139,107 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, Options{..}) <- getArgs >>= getArgsOpts
+    (args, opts@Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
         putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
-    let (at, plus, targets) = divide args
-    (dom, typ) <- getDomTyp targets
-    port <- getPort optPort optDoX
-    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    ------------------------
+    (at, port, qs, raflags, logger, putLn, putLines, flush) <-
+        cookOpts args opts
     tid <- forkIO logger
     t0 <- T.getUnixTime
-    (msg, header) <-
-        if optIterative
-            then do
-                let ctl = mconcat $ map toFlag plus
-                ex <- iterativeQuery optDisableV6NS putLines ctl dom typ
-                case ex of
-                    Left e -> fail e
-                    Right msg -> return (msg, ";; ")
-            else do
-                let mserver = map (drop 1) at
-                    ctl = mconcat $ map toFlag plus
-                    raflags = mapMaybe toResolveActionsFlag plus
-                ex <- recursiveQeury mserver port optDoX putLines raflags ctl dom typ
-                case ex of
-                    Left e -> fail (show e)
-                    Right Result{..} -> do
-                        let Reply{..} = resultReply
-                        let h =
-                                ";; "
-                                    ++ show resultIP
-                                    ++ "#"
-                                    ++ show resultPort
-                                    ++ "/"
-                                    ++ resultTag
-                                    ++ ", Tx:"
-                                    ++ show replyTxBytes
-                                    ++ "bytes"
-                                    ++ ", Rx:"
-                                    ++ show replyRxBytes
-                                    ++ "bytes"
-                                    ++ ", "
-                        return (replyDNSMessage, h)
-    t1 <- T.getUnixTime
-    let T.UnixDiffTime s u = t1 `T.diffUnixTime` t0
-    let sec = if s /= 0 then show s ++ "sec " else ""
-        tm =
-            header
-                ++ sec
-                ++ show (u `div` 1000)
-                ++ "usec"
-                ++ "\n"
-    putLines Log.WARN (Just Green) [tm]
-    let oflags = mapMaybe toOutputFlag plus
-        res
-            | optJSON = showJSON msg
-            | otherwise = pprResult oflags msg
-    putLines Log.WARN Nothing [res]
+    ------------------------
+    if optIterative
+        then do
+            target <- checkIterative at qs
+            iterativeQuery optDisableV6NS putLn putLines target
+        else do
+            let mserver = map (drop 1) at
+            recursiveQeury mserver port optDoX putLn putLines raflags qs
+    ------------------------
+    putTime t0 putLines
     killThread tid
     flush
 
 ----------------------------------------------------------------
 
-divide :: [String] -> ([String], [String], [String])
-divide ls = loop ls (id, id, id)
+cookOpts
+    :: [String]
+    -> Options
+    -> IO
+        ( [String]
+        , PortNumber
+        , [(Question, QueryControls)]
+        , [ResolveActionsFlag]
+        , IO ()
+        , DNSMessage -> IO ()
+        , Log.PutLines
+        , IO ()
+        )
+cookOpts args Options{..} = do
+    let (at, dtq) = partition ("@" `isPrefixOf`) args
+    qs <- getQueries dtq
+    port <- getPort optPort optDoX
+    let raflags
+            | optMultiline = [RAFlagMultiLine]
+            | otherwise = []
+    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    let putLn = mkPutline optMultiline optJSON putLines
+    return (at, port, qs, raflags, logger, putLn, putLines, flush)
+
+----------------------------------------------------------------
+
+checkIterative
+    :: [String]
+    -> [(Question, QueryControls)]
+    -> IO (Question, QueryControls)
+checkIterative at qs = do
+    when (not (null at)) $ do
+        putStrLn "@ cannot used with '-i'"
+        exitFailure
+    case qs of
+        [] -> do
+            putStrLn "domain must be specified"
+            exitFailure
+        [q] -> return q
+        _ -> do
+            putStrLn "multiple domains must not be specified"
+            exitFailure
+
+----------------------------------------------------------------
+
+putTime
+    :: T.UnixTime
+    -> (Log.Level -> Maybe Color -> [String] -> IO ())
+    -> IO ()
+putTime t0 putLines = do
+    t1 <- T.getUnixTime
+    let T.UnixDiffTime s u = t1 `T.diffUnixTime` t0
+    let sec = if s /= 0 then show s ++ "sec " else ""
+        tm =
+            ";; "
+                ++ sec
+                ++ show (u `div` 1000)
+                ++ "usec"
+    putLines Log.WARN (Just Green) [tm]
+
+----------------------------------------------------------------
+
+mkPutline
+    :: Bool
+    -> Bool
+    -> (Log.Level -> Maybe Color -> [String] -> IO ())
+    -> DNSMessage
+    -> IO ()
+mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
   where
-    loop [] (b0, b1, b2) = (b0 [], b1 [], b2 [])
-    loop (x : xs) (b0, b1, b2)
-        | "@" `isPrefixOf` x = loop xs (b0 . (x :), b1, b2)
-        | "+" `isPrefixOf` x = loop xs (b0, b1 . (x :), b2)
-        | otherwise = loop xs (b0, b1, b2 . (x :))
+    oflags
+        | multi = [Multiline]
+        | otherwise = []
+    res
+        | json = showJSON
+        | otherwise = pprResult oflags
 
 ----------------------------------------------------------------
 
@@ -202,18 +250,47 @@ getArgsOpts args = case getOpt Permute options args of
         mapM_ putStr errs
         exitFailure
 
-getDomTyp :: [String] -> IO (String, TYPE)
-getDomTyp [h] = return (h, A)
-getDomTyp [h, t] = do
-    let mtyp' = readMaybe t
-    case mtyp' of
-        Just typ' -> return (h, typ')
-        Nothing -> do
-            putStrLn $ "Type " ++ t ++ " is not supported"
-            exitFailure
-getDomTyp _ = do
-    putStrLn "One or two arguments are necessary"
+----------------------------------------------------------------
+
+getQueries :: [String] -> IO [(Question, QueryControls)]
+getQueries xs0 = loop xs0 id
+  where
+    loop [] build = return $ build []
+    loop xs build = do
+        (q, ys) <- getQuery xs
+        loop ys (build . (q :))
+
+-- Question d t IN
+getQuery :: [String] -> IO ((Question, QueryControls), [String])
+getQuery [] = do
+    putStrLn "never reach"
     exitFailure
+getQuery (x : xs)
+    | '.' `notElem` x = do
+        putStrLn $ show x ++ " does not contain '.'"
+        exitFailure
+    | otherwise = do
+        let d = fromRepresentation x
+        case xs of
+            [] -> return ((Question d A IN, mempty), [])
+            y : ys
+                | '.' `elem` y -> return ((Question d A IN, mempty), xs)
+                | "+" `isPrefixOf` y -> do
+                    let (qs, zs) = span ("+" `isPrefixOf`) ys
+                        qctls = mconcat $ map toFlag (y : qs)
+                    return ((Question d A IN, qctls), zs)
+                | otherwise -> do
+                    let mtyp = readMaybe y
+                    case mtyp of
+                        Nothing -> do
+                            putStrLn $ "Type " ++ y ++ " is not supported"
+                            exitFailure
+                        Just typ -> do
+                            let (qs, zs) = span ("+" `isPrefixOf`) ys
+                                qctls = mconcat $ map toFlag qs
+                            return ((Question d typ IN, qctls), zs)
+
+----------------------------------------------------------------
 
 getPort :: Maybe String -> ALPN -> IO PortNumber
 getPort Nothing optDoX = return $ doxPort optDoX
@@ -251,17 +328,7 @@ toFlag "+cdflag"    = cdFlag FlagSet
 toFlag "+nocdflag"  = cdFlag FlagClear
 toFlag "+adflag"    = adFlag FlagSet
 toFlag "+noadflag"  = adFlag FlagClear
-toFlag _            = mempty -- fixme
-
-toOutputFlag :: String -> Maybe OutputFlag
-toOutputFlag "+multi"   = Just Multiline
-toOutputFlag "+nomulti" = Nothing
-toOutputFlag  _         = Nothing
-
-toResolveActionsFlag :: String -> Maybe ResolveActionsFlag
-toResolveActionsFlag "+multi"   = Just RAFlagMultiLine
-toResolveActionsFlag "+nomulti" = Nothing
-toResolveActionsFlag  _         = Nothing
+toFlag _            = mempty
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -270,7 +337,7 @@ help :: String
 help =
     intercalate
         "\n"
-        [ "Usage: dug [@server] [name [query-type [query-option]]] [options]"
+        [ "Usage: dug [options] [@server]* [name [query-type [query-option]]]+"
         , ""
         , "query-type: a | aaaa | ns | txt | ptr | ..."
         , ""
@@ -279,7 +346,6 @@ help =
         , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
         , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
         , "  +[no]adflag: [un]set AD (Authentic Data) bit"
-        , "  +[no]multi:  [un]set flag for multi-line format"
         , ""
         , "options:"
         ]

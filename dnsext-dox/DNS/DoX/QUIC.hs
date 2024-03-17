@@ -11,17 +11,27 @@ import Network.Socket
 
 import DNS.DoX.Imports
 
-quicResolver :: VCLimit -> Resolver
-quicResolver lim ri@ResolveInfo{..} q qctl = vcResolver "QUIC" perform ri q qctl
+withQuicResolver :: PipelineResolver
+withQuicResolver ri@ResolveInfo{..} body = run cc $ \conn -> do
+    strm <- stream conn
+    let sendDoQ bs = do
+            sendVC (sendStreamMany strm) bs
+            shutdownStream strm
+        recvDoQ = recvVC rinfoVCLimit $ recvStream strm
+    withVCResolver "QUIC" sendDoQ recvDoQ ri body
   where
     cc = getQUICParams rinfoIP rinfoPort "doq"
-    perform solve = run cc $ \conn -> do
-        strm <- stream conn
-        let sendDoQ bs = do
-                sendVC (sendStreamMany strm) bs
-                shutdownStream strm
-            recvDoQ = recvVC lim $ recvStream strm
-        solve sendDoQ recvDoQ
+
+quicResolver :: OneshotResolver
+quicResolver ri@ResolveInfo{..} q qctl = run cc $ \conn -> do
+    strm <- stream conn
+    let sendDoQ bs = do
+            sendVC (sendStreamMany strm) bs
+            shutdownStream strm
+        recvDoQ = recvVC rinfoVCLimit $ recvStream strm
+    vcResolver "QUIC" sendDoQ recvDoQ ri q qctl
+  where
+    cc = getQUICParams rinfoIP rinfoPort "doq"
 
 getQUICParams :: IP -> PortNumber -> ByteString -> ClientConfig
 getQUICParams addr port alpn =

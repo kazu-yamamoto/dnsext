@@ -13,6 +13,7 @@ module DNS.Do53.Imports (
     module Numeric,
     ByteString,
     EpochTime,
+    NonEmpty,
     PortNumber,
     ShortByteString,
     Socket,
@@ -30,6 +31,7 @@ import Data.ByteString.Short (ShortByteString)
 import Data.Function
 import Data.IP
 import Data.List hiding (lookup)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
