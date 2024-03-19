@@ -14,7 +14,7 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
-import DNS.DoX.Stub
+import DNS.DoX.Client
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
 import DNS.Types (

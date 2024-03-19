@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-module DNS.DoX.Stub (
+module DNS.DoX.Client (
     -- * SVCB information
     lookupSVCBInfo,
     SVCBInfo,

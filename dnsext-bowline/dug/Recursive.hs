@@ -24,7 +24,7 @@ import DNS.Do53.Internal (
     defaultResolveInfo,
     resolve,
  )
-import DNS.DoX.Stub
+import DNS.DoX.Client
 import qualified DNS.Log as Log
 import DNS.Types (Question (..))
 import qualified DNS.Types as DNS
