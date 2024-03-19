@@ -29,9 +29,10 @@ module DNS.Do53.Internal (
     Reply (..),
 
     -- * Pipeline resolver
+    PersistentResolver,
     PipelineResolver,
-    withTcpResolver,
-    withVCResolver,
+    tcpPersistentResolver,
+    vcPersistentResolver,
 
     -- * One-shot resolver
     OneshotResolver,

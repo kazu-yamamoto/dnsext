@@ -1,14 +1,14 @@
 module DNS.DoX.Internal (
     http2Resolver,
-    withHttp2Resolver,
+    http2PersistentResolver,
     http2cResolver,
-    withHttp2cResolver,
+    http2cPersistentResolver,
     http3Resolver,
-    withHttp3Resolver,
+    http3PersistentResolver,
     tlsResolver,
-    withTlsResolver,
+    tlsPersistentResolver,
     quicResolver,
-    withQuicResolver,
+    quicPersistentResolver,
 )
 where
 

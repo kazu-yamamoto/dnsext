@@ -2,13 +2,22 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-module DNS.DoX.Stub (
-    doxPort,
+module DNS.DoX.Client (
+    -- * SVCB information
     lookupSVCBInfo,
-    lookupRawDoX,
+    SVCBInfo,
+
+    -- * Pipeline resolver
     toPipelineResolvers,
-    makeResolver,
+    makePersistentResolver,
+
+    -- * Oneshot resolver
+    toResolveEnvs,
+    lookupRawDoX,
     makeOneshotResolver,
+
+    -- * ALPN
+    doxPort,
 )
 where
 
@@ -45,14 +54,14 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> Maybe PipelineResolver
-makeResolver "tcp" = Just withTcpResolver
-makeResolver "dot" = Just withTlsResolver
-makeResolver "doq" = Just withQuicResolver
-makeResolver "h2"  = Just withHttp2Resolver
-makeResolver "h2c" = Just withHttp2cResolver
-makeResolver "h3"  = Just withHttp3Resolver
-makeResolver _     = Nothing
+makePersistentResolver :: ALPN -> Maybe PersistentResolver
+makePersistentResolver "tcp" = Just tcpPersistentResolver
+makePersistentResolver "dot" = Just tlsPersistentResolver
+makePersistentResolver "doq" = Just quicPersistentResolver
+makePersistentResolver "h2"  = Just http2PersistentResolver
+makePersistentResolver "h2c" = Just http2cPersistentResolver
+makePersistentResolver "h3"  = Just http3PersistentResolver
+makePersistentResolver _     = Nothing
 
 makeOneshotResolver :: ALPN -> Maybe OneshotResolver
 makeOneshotResolver "tcp" = Just tcpResolver
@@ -115,12 +124,12 @@ toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
     Nothing -> Nothing
     Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
 
-toPipelineResolvers :: [SVCBInfo] -> [[(Resolver -> IO ()) -> IO ()]]
+toPipelineResolvers :: [SVCBInfo] -> [[PipelineResolver]]
 toPipelineResolvers sis = toPipelineResolver <$> sis
 
-toPipelineResolver :: SVCBInfo -> [(Resolver -> IO ()) -> IO ()]
+toPipelineResolver :: SVCBInfo -> [PipelineResolver]
 toPipelineResolver (_, []) = []
-toPipelineResolver (alpn, ris) = case makeResolver alpn of
+toPipelineResolver (alpn, ris) = case makePersistentResolver alpn of
     Nothing -> []
     Just resolver -> resolver <$> ris
 

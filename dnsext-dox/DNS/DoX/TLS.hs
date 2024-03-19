@@ -9,14 +9,14 @@ import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
 
-withTlsResolver :: PipelineResolver
-withTlsResolver ri@ResolveInfo{..} body =
+tlsPersistentResolver :: PersistentResolver
+tlsPersistentResolver ri@ResolveInfo{..} body =
     -- Using a fresh connection
     H2.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do
         recvN <- makeRecvN "" $ H2.recvTLS ctx
         let sendDoT = sendVC $ H2.sendManyTLS ctx
             recvDoT = recvVC rinfoVCLimit recvN
-        withVCResolver "TLS" sendDoT recvDoT ri body
+        vcPersistentResolver "TLS" sendDoT recvDoT ri body
   where
     settings =
         H2.defaultSettings

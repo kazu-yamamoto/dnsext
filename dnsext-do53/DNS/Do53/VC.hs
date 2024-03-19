@@ -1,8 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Do53.VC (
-    withVCResolver,
-    withTcpResolver,
+    vcPersistentResolver,
+    tcpPersistentResolver,
 ) where
 
 import Control.Concurrent
@@ -31,16 +31,16 @@ import DNS.Types.Decode
 
 type RVar = MVar (Either DNSError Reply)
 
-withTcpResolver :: PipelineResolver
-withTcpResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
+tcpPersistentResolver :: PersistentResolver
+tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC rinfoVCLimit $ recvTCP sock
-    withVCResolver "TCP" send recv ri body
+    vcPersistentResolver "TCP" send recv ri body
   where
     open = openTCP rinfoIP rinfoPort
 
-withVCResolver :: String -> Send -> RecvMany -> PipelineResolver
-withVCResolver proto send recv ri@ResolveInfo{..} body = do
+vcPersistentResolver :: String -> Send -> RecvMany -> PersistentResolver
+vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
     race_

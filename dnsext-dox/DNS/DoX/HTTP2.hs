@@ -4,9 +4,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.DoX.HTTP2 (
-    withHttp2Resolver,
+    http2PersistentResolver,
     http2Resolver,
-    withHttp2cResolver,
+    http2cPersistentResolver,
     http2cResolver,
     doHTTP,
     doHTTPOneshot,
@@ -39,8 +39,8 @@ withTimeout ResolveInfo{..} action = do
         Nothing -> return $ Left TimeoutExpired
         Just res -> return res
 
-withHttp2Resolver :: PipelineResolver
-withHttp2Resolver ri@ResolveInfo{..} body = do
+http2PersistentResolver :: PersistentResolver
+http2PersistentResolver ri@ResolveInfo{..} body = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
     H2.run settings (show rinfoIP) rinfoPort $
@@ -64,8 +64,8 @@ http2Resolver ri@ResolveInfo{..} q qctl = do
             { H2.settingsValidateCert = False
             }
 
-withHttp2cResolver :: PipelineResolver
-withHttp2cResolver ri@ResolveInfo{..} body = do
+http2cPersistentResolver :: PersistentResolver
+http2cPersistentResolver ri@ResolveInfo{..} body = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions
     H2.runH2C H2.defaultSettings (show rinfoIP) rinfoPort $

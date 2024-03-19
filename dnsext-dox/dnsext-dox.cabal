@@ -21,8 +21,8 @@ source-repository head
 
 library
     exposed-modules:
+        DNS.DoX.Client
         DNS.DoX.Internal
-        DNS.DoX.Stub
 
     other-modules:
         DNS.DoX.HTTP2
