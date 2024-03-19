@@ -18,31 +18,31 @@ import DNS.Do53.Internal (newConcurrentGenId)
 import qualified DNS.Log as Log
 import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
+import DNS.SEC (RD_DNSKEY, RD_DS)
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
-import DNS.Types (Domain, ResourceRecord, RCODE (..))
-import DNS.SEC (RD_DNSKEY, RD_DS)
+import DNS.Types (Domain, RCODE (..), ResourceRecord)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Helpers (findDelegation, nsList)
 import qualified DNS.Iterative.Query.LocalZone as Local
+import DNS.Iterative.Query.Types
 import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
 -- | Creating a new 'Env'.
 newEnv
-    :: Log.PutLines
-    -> (DNSTAP.Message -> IO ())
-    -> Bool              -- ^ disabling IPv6
-    -> Maybe ([RD_DNSKEY], [RD_DS])
-    -> Maybe ([ResourceRecord], [ResourceRecord])  -- ^ root-servers
-    -> [(Domain, LocalZoneType, [ResourceRecord])]
+    :: Log.PutLines -- ^ Log
+    -> (DNSTAP.Message -> IO ()) -- ^ DNSTAP
+    -> Bool -- ^ Disabling IPv6
+    -> Maybe ([RD_DNSKEY], [RD_DS]) -- ^ Anchor
+    -> Maybe ([ResourceRecord], [ResourceRecord])  -- ^ Root-servers
+    -> [(Domain, LocalZoneType, [ResourceRecord])] -- ^ Local zones
     -> RRCacheOps
     -> TimeCache
-    -> (IO Reply -> IO (Maybe Reply))
+    -> (IO Reply -> IO (Maybe Reply)) -- ^ Timeout
     -> IO Env
 newEnv putLines putDNSTAP disableV6NS rdnskey root lzones RRCacheOps{..} TimeCache{..} tmout = do
     let localName = Local.nameMap lzones

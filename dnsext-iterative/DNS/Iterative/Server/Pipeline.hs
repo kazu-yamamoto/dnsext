@@ -13,7 +13,7 @@ import Data.ByteString (ByteString)
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types (DNSFlags (..), DNSMessage (..), EDNSheader (..), EDNS (..), Question (..), RCODE (..))
+import DNS.Types (DNSFlags (..), DNSMessage (..), EDNS (..), EDNSheader (..), Question (..), RCODE (..))
 import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
@@ -32,11 +32,18 @@ import DNS.Iterative.Stats
 
 ----------------------------------------------------------------
 
---                          <------ Pipeline ----->
+getWorkerStats :: Int -> IO [WorkerStatOP]
+getWorkerStats workersN = replicateM workersN getWorkerStatOP
+
+----------------------------------------------------------------
+
+-- |
+-- @
+--                          |------ Pipeline ------|
 --
 --                                       Iterative IO
 --                                         Req Resp
---                            cache         ^   |
+--                  ToCacher  cache         ^   |
 --                              |           |   v
 --        +--------+ shared +--------+    +--------+    +--------+
 -- Req -> | recver | -----> | cacher | -> | worker | -> | sender | -> Resp
@@ -45,13 +52,16 @@ import DNS.Iterative.Stats
 --                               +--------------------------+
 --                                        Cache hit
 --                 Input BS       Input Msg        Output
-
-----------------------------------------------------------------
-
-getWorkerStats :: Int -> IO [WorkerStatOP]
-getWorkerStats workersN = replicateM workersN getWorkerStatOP
-
-mkPipeline :: Env -> Int -> Int -> [WorkerStatOP] -> IO ([IO ()], [IO ()], ToCacher)
+-- @
+mkPipeline
+    :: Env
+    -> Int
+    -- ^ The number of cashers
+    -> Int
+    -- ^ The number of workers
+    -> [WorkerStatOP]
+    -> IO ([IO ()], [IO ()], ToCacher)
+    -- ^ (worker actions, cacher actions, input to cacher)
 mkPipeline env cachersN _workersN workerStats = do
     qr <- newTQueueIO
     let toCacher = atomically . writeTQueue qr
@@ -60,7 +70,7 @@ mkPipeline env cachersN _workersN workerStats = do
     let toWorker = atomically . writeTQueue qw
         fromCacher = atomically $ readTQueue qw
     let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
-    let workers = [ workerLogic env wstat fromCacher | wstat <- workerStats ]
+    let workers = [workerLogic env wstat fromCacher | wstat <- workerStats]
     return (cachers, workers, toCacher)
 
 ----------------------------------------------------------------
@@ -90,8 +100,8 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
     setWorkerStat WWaitDequeue
     inp@Input{..} <- fromCacher
     case question inputQuery of
-        q : _  -> setWorkerStat (WRun q)
-        []     -> pure ()
+        q : _ -> setWorkerStat (WRun q)
+        [] -> pure ()
     ex <- getResponseIterative env inputQuery
     setWorkerStat WWaitEnqueue
     case ex of
@@ -107,16 +117,17 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
 logicDenied :: Env -> Input DNSMessage -> IO ()
 logicDenied env _inp@Input{} = do
     incStats (stats_ env) ResolveDenied
-    {- {- not reply for deny case. -}
-    let replyMsg =
-            inputQuery
-                { flags = (flags inputQuery){isResponse = True}
-                , rcode = FormatErr
-                }
-    let bs = DNS.encode replyMsg
-    record env inp replyMsg bs
-    inputToSender $ Output bs inputPeerInfo
-     -}
+
+{- {- not reply for deny case. -}
+let replyMsg =
+        inputQuery
+            { flags = (flags inputQuery){isResponse = True}
+            , rcode = FormatErr
+            }
+let bs = DNS.encode replyMsg
+record env inp replyMsg bs
+inputToSender $ Output bs inputPeerInfo
+ -}
 
 ----------------------------------------------------------------
 
@@ -134,9 +145,9 @@ record env Input{..} reply rspWire = do
         Question{..} = head $ question inputQuery
         DNSFlags{..} = flags reply
     case ednsHeader inputQuery of
-        EDNSheader (EDNS {..})
-            | ednsDnssecOk  -> incStats st QueryDO
-        _                   -> pure ()
+        EDNSheader (EDNS{..})
+            | ednsDnssecOk -> incStats st QueryDO
+        _ -> pure ()
     incStatsM st fromQueryTypes qtype (Just QueryTypeOther)
     incStatsM st fromDNSClass qclass (Just DNSClassOther)
     let rc = rcode reply

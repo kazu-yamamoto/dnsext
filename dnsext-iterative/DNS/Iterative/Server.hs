@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- | The server side of full resolver.
 module DNS.Iterative.Server (
     -- * Types
     Server,
@@ -16,6 +17,7 @@ module DNS.Iterative.Server (
     mkPipeline,
     getWorkerStats,
     ToCacher,
+    Input,
 
     -- * UDP
     UdpServerConfig (..),
@@ -59,8 +61,8 @@ import qualified DNS.RRCache as RRCache
 import DNS.TimeCache (TimeCache (..), newTimeCache)
 
 import Control.Concurrent (getNumCapabilities)
-import Data.String (fromString)
 import Data.ByteString.Builder
+import Data.String (fromString)
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =
