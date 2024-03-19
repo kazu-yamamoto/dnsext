@@ -30,7 +30,7 @@ module DNS.Do53.Types (
     Result (..),
     Reply (..),
     Resolver,
-    PipelineResolver,
+    PersistentResolver,
     OneshotResolver,
 
     -- * IO
@@ -240,7 +240,7 @@ data Reply = Reply
 -- | The type of resolvers (DNS over X).
 type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
 
-type PipelineResolver = ResolveInfo -> (Resolver -> IO ()) -> IO ()
+type PersistentResolver = ResolveInfo -> (Resolver -> IO ()) -> IO ()
 type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------

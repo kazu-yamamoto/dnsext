@@ -11,7 +11,7 @@ import Network.Socket
 
 import DNS.DoX.Imports
 
-withQuicResolver :: PipelineResolver
+withQuicResolver :: PersistentResolver
 withQuicResolver ri@ResolveInfo{..} body = run cc $ \conn -> do
     strm <- stream conn
     let sendDoQ bs = do

@@ -29,7 +29,7 @@ module DNS.Do53.Internal (
     Reply (..),
 
     -- * Pipeline resolver
-    PipelineResolver,
+    PersistentResolver,
     withTcpResolver,
     withVCResolver,
 

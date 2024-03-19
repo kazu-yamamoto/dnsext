@@ -39,7 +39,7 @@ withTimeout ResolveInfo{..} action = do
         Nothing -> return $ Left TimeoutExpired
         Just res -> return res
 
-withHttp2Resolver :: PipelineResolver
+withHttp2Resolver :: PersistentResolver
 withHttp2Resolver ri@ResolveInfo{..} body = do
     let proto = "H2"
     ident <- ractionGenId rinfoActions
@@ -64,7 +64,7 @@ http2Resolver ri@ResolveInfo{..} q qctl = do
             { H2.settingsValidateCert = False
             }
 
-withHttp2cResolver :: PipelineResolver
+withHttp2cResolver :: PersistentResolver
 withHttp2cResolver ri@ResolveInfo{..} body = do
     let proto = "H2C"
     ident <- ractionGenId rinfoActions

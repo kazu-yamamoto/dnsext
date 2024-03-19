@@ -3,13 +3,21 @@
 {-# LANGUAGE TupleSections #-}
 
 module DNS.DoX.Stub (
-    doxPort,
+    -- * SVCB information
     lookupSVCBInfo,
-    lookupRawDoX,
+    SVCBInfo,
+
+    -- * Pipeline resolver
     toPipelineResolvers,
     makeResolver,
+
+    -- * Oneshot resolver
+    toResolveEnvs,
+    lookupRawDoX,
     makeOneshotResolver,
-    SVCBInfo,
+
+    -- * ALPN
+    doxPort,
 )
 where
 
@@ -46,7 +54,7 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> Maybe PipelineResolver
+makeResolver :: ALPN -> Maybe PersistentResolver
 makeResolver "tcp" = Just withTcpResolver
 makeResolver "dot" = Just withTlsResolver
 makeResolver "doq" = Just withQuicResolver

@@ -31,7 +31,7 @@ import DNS.Types.Decode
 
 type RVar = MVar (Either DNSError Reply)
 
-withTcpResolver :: PipelineResolver
+withTcpResolver :: PersistentResolver
 withTcpResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC rinfoVCLimit $ recvTCP sock
@@ -39,7 +39,7 @@ withTcpResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
   where
     open = openTCP rinfoIP rinfoPort
 
-withVCResolver :: String -> Send -> RecvMany -> PipelineResolver
+withVCResolver :: String -> Send -> RecvMany -> PersistentResolver
 withVCResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
