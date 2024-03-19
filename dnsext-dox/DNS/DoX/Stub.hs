@@ -55,12 +55,12 @@ doxPort _       =  53
 --
 --  The third argument is a path for HTTP query.
 makePersistentResolver :: ALPN -> Maybe PersistentResolver
-makePersistentResolver "tcp" = Just withTcpResolver
-makePersistentResolver "dot" = Just withTlsResolver
-makePersistentResolver "doq" = Just withQuicResolver
-makePersistentResolver "h2"  = Just withHttp2Resolver
-makePersistentResolver "h2c" = Just withHttp2cResolver
-makePersistentResolver "h3"  = Just withHttp3Resolver
+makePersistentResolver "tcp" = Just tcpPersistentResolver
+makePersistentResolver "dot" = Just tlsPersistentResolver
+makePersistentResolver "doq" = Just quicPersistentResolver
+makePersistentResolver "h2"  = Just http2PersistentResolver
+makePersistentResolver "h2c" = Just http2cPersistentResolver
+makePersistentResolver "h3"  = Just http3PersistentResolver
 makePersistentResolver _     = Nothing
 
 makeOneshotResolver :: ALPN -> Maybe OneshotResolver

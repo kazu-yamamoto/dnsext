@@ -12,8 +12,8 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.HTTP2
 import DNS.DoX.QUIC
 
-withHttp3Resolver :: PersistentResolver
-withHttp3Resolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
+http3PersistentResolver :: PersistentResolver
+http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
         let proto = "H3"
         ident <- ractionGenId rinfoActions
