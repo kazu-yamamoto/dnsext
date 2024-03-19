@@ -9,6 +9,7 @@ module DNS.DoX.Stub (
     toPipelineResolvers,
     makeResolver,
     makeOneshotResolver,
+    SVCBInfo,
 )
 where
 
