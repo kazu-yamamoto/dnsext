@@ -9,7 +9,7 @@ module DNS.DoX.Stub (
 
     -- * Pipeline resolver
     toPipelineResolvers,
-    makeResolver,
+    makePersistentResolver,
 
     -- * Oneshot resolver
     toResolveEnvs,
@@ -54,14 +54,14 @@ doxPort _       =  53
 -- | Making resolver according to ALPN.
 --
 --  The third argument is a path for HTTP query.
-makeResolver :: ALPN -> Maybe PersistentResolver
-makeResolver "tcp" = Just withTcpResolver
-makeResolver "dot" = Just withTlsResolver
-makeResolver "doq" = Just withQuicResolver
-makeResolver "h2"  = Just withHttp2Resolver
-makeResolver "h2c" = Just withHttp2cResolver
-makeResolver "h3"  = Just withHttp3Resolver
-makeResolver _     = Nothing
+makePersistentResolver :: ALPN -> Maybe PersistentResolver
+makePersistentResolver "tcp" = Just withTcpResolver
+makePersistentResolver "dot" = Just withTlsResolver
+makePersistentResolver "doq" = Just withQuicResolver
+makePersistentResolver "h2"  = Just withHttp2Resolver
+makePersistentResolver "h2c" = Just withHttp2cResolver
+makePersistentResolver "h3"  = Just withHttp3Resolver
+makePersistentResolver _     = Nothing
 
 makeOneshotResolver :: ALPN -> Maybe OneshotResolver
 makeOneshotResolver "tcp" = Just tcpResolver
@@ -124,12 +124,12 @@ toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
     Nothing -> Nothing
     Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
 
-toPipelineResolvers :: [SVCBInfo] -> [[(Resolver -> IO ()) -> IO ()]]
+toPipelineResolvers :: [SVCBInfo] -> [[PipelineResolver]]
 toPipelineResolvers sis = toPipelineResolver <$> sis
 
-toPipelineResolver :: SVCBInfo -> [(Resolver -> IO ()) -> IO ()]
+toPipelineResolver :: SVCBInfo -> [PipelineResolver]
 toPipelineResolver (_, []) = []
-toPipelineResolver (alpn, ris) = case makeResolver alpn of
+toPipelineResolver (alpn, ris) = case makePersistentResolver alpn of
     Nothing -> []
     Just resolver -> resolver <$> ris
 

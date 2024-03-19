@@ -17,9 +17,9 @@ import DNS.Do53.Client (
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
     LookupEnv (..),
+    PipelineResolver,
     Reply (..),
     ResolveInfo (..),
-    Resolver,
     Result (..),
     defaultResolveInfo,
     resolve,
@@ -52,7 +52,7 @@ recursiveQeury mserver port dox putLn putLines raflags qcs = do
     mx <-
         if dox == "auto"
             then resolvePipeline conf
-            else case makeResolver dox of
+            else case makePersistentResolver dox of
                 Just r -> do
                     let ris = makeResolveInfo putLines raflags port <$> (read <$> mserver)
                     return $ Just (r <$> ris)
@@ -71,7 +71,7 @@ recursiveQeury mserver port dox putLn putLines raflags qcs = do
             stdoutLock <- newMVar ()
             foldr1 concurrently_ $ map (resolver stdoutLock putLn putLines targets) pipes
 
-resolvePipeline :: LookupConf -> IO (Maybe [(Resolver -> IO ()) -> IO ()])
+resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
 resolvePipeline conf = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
@@ -95,7 +95,7 @@ resolver
     -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> [((Question, QueryControls), IORef Bool)]
-    -> ((Resolver -> IO ()) -> IO ())
+    -> PipelineResolver
     -> IO ()
 resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
     foldr1 concurrently_ $ map (printIt resolv) targets
