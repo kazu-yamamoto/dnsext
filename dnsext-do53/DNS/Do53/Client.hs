@@ -56,8 +56,6 @@ module DNS.Do53.Client (
     ractionGenId,
     ractionGetTime,
     ractionLog,
-    ractionFlags,
-    ResolveActionsFlag (RAFlagMultiLine),
     Reply,
 
     -- ** Query control

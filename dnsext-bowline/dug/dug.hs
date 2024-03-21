@@ -8,7 +8,6 @@ import Control.Monad (when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
-    ResolveActionsFlag (..),
     adFlag,
     cdFlag,
     doFlag,
@@ -145,8 +144,7 @@ main = do
         putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
         exitSuccess
     ------------------------
-    (at, port, qs, raflags, logger, putLn, putLines, flush) <-
-        cookOpts args opts
+    (at, port, qs, logger, putLn, putLines, flush) <- cookOpts args opts
     tid <- forkIO logger
     t0 <- T.getUnixTime
     ------------------------
@@ -156,7 +154,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQeury mserver port optDoX putLn putLines raflags qs
+            recursiveQeury mserver port optDoX putLn putLines qs
     ------------------------
     putTime t0 putLines
     killThread tid
@@ -171,7 +169,6 @@ cookOpts
         ( [String]
         , PortNumber
         , [(Question, QueryControls)]
-        , [ResolveActionsFlag]
         , IO ()
         , DNSMessage -> IO ()
         , Log.PutLines
@@ -181,12 +178,9 @@ cookOpts args Options{..} = do
     let (at, dtq) = partition ("@" `isPrefixOf`) args
     qs <- getQueries dtq
     port <- getPort optPort optDoX
-    let raflags
-            | optMultiline = [RAFlagMultiLine]
-            | otherwise = []
     (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
     let putLn = mkPutline optMultiline optJSON putLines
-    return (at, port, qs, raflags, logger, putLn, putLines, flush)
+    return (at, port, qs, logger, putLn, putLines, flush)
 
 ----------------------------------------------------------------
 

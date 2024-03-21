@@ -26,7 +26,6 @@ module DNS.Do53.Types (
     defaultResolveInfo,
     ResolveActions (..),
     defaultResolveActions,
-    ResolveActionsFlag (RAFlagMultiLine),
     Result (..),
     Reply (..),
     Resolver,
@@ -253,11 +252,6 @@ type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
 
-newtype ResolveActionsFlag = ResolveActionsFlag Int deriving (Eq)
-
-pattern RAFlagMultiLine :: ResolveActionsFlag
-pattern RAFlagMultiLine = ResolveActionsFlag 1
-
 data ResolveActions = ResolveActions
     { ractionTimeoutTime :: Int
     -- ^ Microseconds
@@ -265,7 +259,6 @@ data ResolveActions = ResolveActions
     , ractionGetTime :: IO EpochTime
     , ractionSetSockOpt :: Socket -> IO ()
     , ractionLog :: PutLines
-    , ractionFlags :: [ResolveActionsFlag]
     }
 
 instance Show ResolveActions where
@@ -279,7 +272,6 @@ defaultResolveActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
-        , ractionFlags = []
         }
 
 rsso :: Socket -> IO ()

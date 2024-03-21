@@ -44,17 +44,16 @@ recursiveQeury
     -> ShortByteString
     -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
-    -> [DNS.ResolveActionsFlag]
     -> [(Question, QueryControls)]
     -> IO ()
-recursiveQeury mserver port dox putLn putLines raflags qcs = do
-    conf <- getCustomConf mserver port mempty putLines raflags
+recursiveQeury mserver port dox putLn putLines qcs = do
+    conf <- getCustomConf mserver port mempty putLines
     mx <-
         if dox == "auto"
             then resolvePipeline conf
             else case makePersistentResolver dox of
                 Just r -> do
-                    let ris = makeResolveInfo putLines raflags port <$> (read <$> mserver)
+                    let ris = makeResolveInfo putLines port <$> (read <$> mserver)
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
     case mx of
@@ -120,11 +119,10 @@ printResult putLn putLines (Right r@Result{..}) = do
 
 makeResolveInfo
     :: Log.PutLines
-    -> [DNS.ResolveActionsFlag]
     -> PortNumber
     -> IP
     -> ResolveInfo
-makeResolveInfo putLines raflags port ip =
+makeResolveInfo putLines port ip =
     defaultResolveInfo
         { rinfoIP = ip
         , rinfoPort = port
@@ -132,7 +130,6 @@ makeResolveInfo putLines raflags port ip =
         , rinfoActions =
             DNS.defaultResolveActions
                 { ractionLog = putLines
-                , ractionFlags = raflags
                 }
         }
 
@@ -141,9 +138,8 @@ getCustomConf
     -> PortNumber
     -> QueryControls
     -> Log.PutLines
-    -> [DNS.ResolveActionsFlag]
     -> IO LookupConf
-getCustomConf mserver port ctl putLines raflags = case mserver of
+getCustomConf mserver port ctl putLines = case mserver of
     [] -> return conf
     hs -> do
         as <- concat <$> mapM toNumeric hs
@@ -158,7 +154,6 @@ getCustomConf mserver port ctl putLines raflags = case mserver of
             , lconfActions =
                 DNS.defaultResolveActions
                     { ractionLog = putLines
-                    , ractionFlags = raflags
                     }
             }
 

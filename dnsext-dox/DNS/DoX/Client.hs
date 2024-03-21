@@ -108,10 +108,7 @@ extractSVCB Reply{..} = sort (extractResourceData Answer replyDNSMessage) :: [RD
 logIt :: LookupEnv -> [RD_SVCB] -> IO ()
 logIt LookupEnv{..} ss = ractionLog lenvActions Log.DEMO Nothing r
   where
-    multi = RAFlagMultiLine `elem` ractionFlags lenvActions
-    r
-        | multi = prettyShowRData . toRData <$> ss
-        | otherwise = show <$> ss
+    r = prettyShowRData . toRData <$> ss
 
 ----------------------------------------------------------------
 
