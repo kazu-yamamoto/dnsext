@@ -68,6 +68,7 @@ executable dug
         ansi-terminal,
         base16-bytestring,
         bytestring,
+        directory,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-dox,

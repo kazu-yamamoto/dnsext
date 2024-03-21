@@ -19,8 +19,10 @@ import DNS.Do53.Internal (
     LookupEnv (..),
     PipelineResolver,
     Reply (..),
+    ResolveActions (..),
     ResolveInfo (..),
     Result (..),
+    defaultResolveActions,
     defaultResolveInfo,
     resolve,
  )
@@ -28,6 +30,7 @@ import DNS.DoX.Client
 import qualified DNS.Log as Log
 import DNS.Types (Question (..))
 import qualified DNS.Types as DNS
+import qualified Data.ByteString as BS
 import Data.ByteString.Short (ShortByteString)
 import Data.Either
 import Data.IORef
@@ -35,6 +38,7 @@ import Data.IP (IP, IPv4, IPv6)
 import Data.String
 import Network.Socket (HostName, PortNumber)
 import System.Console.ANSI.Types
+import System.Directory (doesFileExist)
 import System.Exit (exitFailure)
 import Text.Read (readMaybe)
 
@@ -45,15 +49,31 @@ recursiveQeury
     -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> [(Question, QueryControls)]
+    -> Maybe FilePath
     -> IO ()
-recursiveQeury mserver port dox putLn putLines qcs = do
-    conf <- getCustomConf mserver port mempty putLines
+recursiveQeury mserver port dox putLn putLines qcs mfile = do
+    mbs <- case mfile of
+        Nothing -> return Nothing
+        Just file -> do
+            exist <- doesFileExist file
+            if exist
+                then Just <$> BS.readFile file
+                else return Nothing
+    let ractions =
+            defaultResolveActions
+                { ractionLog = putLines
+                , ractionSaveResumption = \bs -> case mfile of
+                    Nothing -> return ()
+                    Just file -> BS.writeFile file bs
+                , ractionResumptionInfo = mbs
+                }
+    conf <- getCustomConf mserver port mempty ractions
     mx <-
         if dox == "auto"
             then resolvePipeline conf
             else case makePersistentResolver dox of
                 Just r -> do
-                    let ris = makeResolveInfo putLines port <$> (read <$> mserver)
+                    let ris = makeResolveInfo ractions port <$> (read <$> mserver)
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
     case mx of
@@ -118,28 +138,25 @@ printResult putLn putLines (Right r@Result{..}) = do
     putLn replyDNSMessage
 
 makeResolveInfo
-    :: Log.PutLines
+    :: ResolveActions
     -> PortNumber
     -> IP
     -> ResolveInfo
-makeResolveInfo putLines port ip =
+makeResolveInfo ractions port ip =
     defaultResolveInfo
         { rinfoIP = ip
         , rinfoPort = port
         , rinfoUDPRetry = 2
-        , rinfoActions =
-            DNS.defaultResolveActions
-                { ractionLog = putLines
-                }
+        , rinfoActions = ractions
         }
 
 getCustomConf
     :: [HostName]
     -> PortNumber
     -> QueryControls
-    -> Log.PutLines
+    -> ResolveActions
     -> IO LookupConf
-getCustomConf mserver port ctl putLines = case mserver of
+getCustomConf mserver port ctl ractions = case mserver of
     [] -> return conf
     hs -> do
         as <- concat <$> mapM toNumeric hs
@@ -151,10 +168,7 @@ getCustomConf mserver port ctl putLines = case mserver of
             { lconfUDPRetry = 2
             , lconfQueryControls = ctl
             , lconfConcurrent = True
-            , lconfActions =
-                DNS.defaultResolveActions
-                    { ractionLog = putLines
-                    }
+            , lconfActions = ractions
             }
 
     toNumeric :: HostName -> IO [HostName]

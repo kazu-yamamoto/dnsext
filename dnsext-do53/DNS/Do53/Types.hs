@@ -254,11 +254,19 @@ type OneshotResolver = ResolveInfo -> Resolver
 
 data ResolveActions = ResolveActions
     { ractionTimeoutTime :: Int
-    -- ^ Microseconds
+    -- ^ Time of timeout in microseconds.
     , ractionGenId :: IO Identifier
+    -- ^ Generating identifiers.
     , ractionGetTime :: IO EpochTime
+    -- ^ Getting time.
     , ractionSetSockOpt :: Socket -> IO ()
+    -- ^ Setting socket options.
     , ractionLog :: PutLines
+    -- ^ Logging.
+    , ractionSaveResumption :: ByteString -> IO ()
+    -- ^ Saving resumption information.
+    , ractionResumptionInfo :: Maybe ByteString
+    -- ^ Resumption information
     }
 
 instance Show ResolveActions where
@@ -272,6 +280,8 @@ defaultResolveActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
+        , ractionSaveResumption = \_ -> return ()
+        , ractionResumptionInfo = Nothing
         }
 
 rsso :: Socket -> IO ()

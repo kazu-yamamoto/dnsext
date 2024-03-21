@@ -91,6 +91,14 @@ options =
             "<log-level>"
         )
         "set the log level"
+    , Option
+        ['r']
+        ["resumption-file"]
+        ( ReqArg
+            (\file opts -> opts{optResumptionFile = Just file})
+            "<file>"
+        )
+        "specify a file to save resumption information"
     ]
 
 ----------------------------------------------------------------
@@ -103,6 +111,7 @@ data Options = Options
     , optDoX :: ShortByteString
     , optFormat :: OutputFlag
     , optLogLevel :: Log.Level
+    , optResumptionFile :: Maybe FilePath
     }
     deriving (Show)
 
@@ -116,6 +125,7 @@ defaultOptions =
         , optDoX = "do53"
         , optFormat = Singleline
         , optLogLevel = Log.WARN
+        , optResumptionFile = Nothing
         }
 
 ----------------------------------------------------------------
@@ -146,7 +156,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQeury mserver port optDoX putLn putLines qs
+            recursiveQeury mserver port optDoX putLn putLines qs optResumptionFile
     ------------------------
     putTime t0 putLines
     killThread tid

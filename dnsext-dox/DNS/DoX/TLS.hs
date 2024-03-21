@@ -3,11 +3,14 @@
 
 module DNS.DoX.TLS where
 
+import Codec.Serialise
 import DNS.Do53.Internal
 import Data.ByteString.Char8 ()
+import qualified Data.ByteString.Lazy as BL
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
+import Network.TLS
 
 tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body =
@@ -21,6 +24,18 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
     settings =
         H2.defaultSettings
             { H2.settingsValidateCert = False
+            , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions of
+                Nothing -> Nothing
+                Just r -> case deserialiseOrFail $ BL.fromStrict r of
+                    Left _ -> Nothing
+                    Right x -> Just x
+            , H2.settingsSessionManager =
+                noSessionManager
+                    { sessionEstablish = \sid sd -> do
+                        let bs = BL.toStrict $ serialise (sid, sd)
+                        ractionSaveResumption rinfoActions bs
+                        return Nothing
+                    }
             }
 
 tlsResolver :: OneshotResolver

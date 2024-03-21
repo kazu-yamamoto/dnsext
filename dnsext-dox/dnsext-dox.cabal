@@ -49,6 +49,7 @@ library
         network >=2.3,
         quic,
         recv >=0.1.0,
+        serialise,
         time-manager,
         tls,
         unliftio
