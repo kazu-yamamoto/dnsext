@@ -31,6 +31,7 @@ import DNS.Types.Decode
 
 type RVar = MVar (Either DNSError Reply)
 
+-- | Persistent resolver over TCP.
 tcpPersistentResolver :: PersistentResolver
 tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
@@ -39,6 +40,7 @@ tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> 
   where
     open = openTCP rinfoIP rinfoPort
 
+-- | Making a persistent resolver.
 vcPersistentResolver :: String -> Send -> RecvMany -> PersistentResolver
 vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     inpQ <- newTQueueIO

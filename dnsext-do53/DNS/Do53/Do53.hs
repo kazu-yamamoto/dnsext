@@ -209,6 +209,7 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
                 Nothing -> return $ Reply msg tx rx
                 Just err -> E.throwIO err
 
+-- | Converting 'Reply' to 'Result'.
 toResult :: ResolveInfo -> String -> Reply -> Result
 toResult ResolveInfo{..} tag rply =
     Result

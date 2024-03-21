@@ -238,12 +238,17 @@ data Reply = Reply
     }
     deriving (Eq, Show)
 
--- | The type of resolvers (DNS over X).
+-- | The resolver type to send a question and receive a result.
 type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
 
+-- | Concurrent resolver which can be shared by multiple threads.
 type PipelineResolver = (Resolver -> IO ()) -> IO ()
 
+-- | Resolver whose connection is persistent.
 type PersistentResolver = ResolveInfo -> PipelineResolver
+
+-- | Resolver whose connection is established on the fly and send a
+-- question only once.
 type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
