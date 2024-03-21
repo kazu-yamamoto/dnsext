@@ -13,11 +13,11 @@ import DNS.Types
 
 ----------------------------------------------------------------
 
-{- FOURMOLU_DISABLE -}
 data OutputFlag
-    = Multiline
+    = Singleline
+    | Multiline
+    | JSONstyle
     deriving (Eq, Show)
-{- FOURMOLU_ENABLE -}
 
 type Flags = [OutputFlag]
 type Print = ReaderT Flags (Writer (Endo String))

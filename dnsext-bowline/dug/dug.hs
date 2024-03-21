@@ -76,30 +76,21 @@ options =
         )
         "enable DoX"
     , Option
-        []
-        ["debug"]
-        (NoArg (\opts -> opts{optLogLevel = Log.DEBUG}))
-        "set the log level to DEBUG"
+        ['f']
+        ["format"]
+        ( ReqArg
+            (\fmt opts -> opts{optFormat = convOutputFlag fmt})
+            "<format>"
+        )
+        "set the output format"
     , Option
-        []
-        ["warn"]
-        (NoArg (\opts -> opts{optLogLevel = Log.WARN}))
-        "set the log level to WARN"
-    , Option
-        []
-        ["demo"]
-        (NoArg (\opts -> opts{optLogLevel = Log.DEMO}))
-        "set the log level to DEMO"
-    , Option
-        ['j']
-        ["json"]
-        (NoArg (\opts -> opts{optJSON = True}))
-        "use JSON encoding"
-    , Option
-        ['m']
-        ["multi"]
-        (NoArg (\opts -> opts{optMultiline = True}))
-        "use multiline output"
+        ['l']
+        ["log-level"]
+        ( ReqArg
+            (\ll opts -> opts{optLogLevel = convLogLevel ll})
+            "<log-level>"
+        )
+        "set the log level"
     ]
 
 ----------------------------------------------------------------
@@ -108,11 +99,10 @@ data Options = Options
     { optHelp :: Bool
     , optIterative :: Bool
     , optDisableV6NS :: Bool
-    , optJSON :: Bool
     , optPort :: Maybe String
     , optDoX :: ShortByteString
+    , optFormat :: OutputFlag
     , optLogLevel :: Log.Level
-    , optMultiline :: Bool
     }
     deriving (Show)
 
@@ -122,11 +112,10 @@ defaultOptions =
         { optHelp = False
         , optIterative = False
         , optDisableV6NS = False
-        , optJSON = False
         , optPort = Nothing
         , optDoX = "do53"
+        , optFormat = Singleline
         , optLogLevel = Log.WARN
-        , optMultiline = False
         }
 
 ----------------------------------------------------------------
@@ -141,7 +130,10 @@ main = do
     (args, opts@Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         putStr $ usageInfo help options
-        putStrLn "\n  <proto> = auto|tcp|dot|doq|h2|h2c|h3"
+        putStr "\n"
+        putStrLn "  <proto>     = auto | tcp | dot | doq | h2 | h2c | h3"
+        putStrLn "  <format>    = multi | json"
+        putStrLn "  <log-level> = debug | warn | demo"
         exitSuccess
     ------------------------
     (at, port, qs, logger, putLn, putLines, flush) <- cookOpts args opts
@@ -179,7 +171,7 @@ cookOpts args Options{..} = do
     qs <- getQueries dtq
     port <- getPort optPort optDoX
     (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
-    let putLn = mkPutline optMultiline optJSON putLines
+    let putLn = mkPutline optFormat putLines
     return (at, port, qs, logger, putLn, putLines, flush)
 
 ----------------------------------------------------------------
@@ -221,19 +213,16 @@ putTime t0 putLines = do
 ----------------------------------------------------------------
 
 mkPutline
-    :: Bool
-    -> Bool
+    :: OutputFlag
     -> (Log.Level -> Maybe Color -> [String] -> IO ())
     -> DNSMessage
     -> IO ()
-mkPutline multi json putLines msg = putLines Log.WARN Nothing [res msg]
+mkPutline format putLines msg = putLines Log.WARN Nothing [res msg]
   where
-    oflags
-        | multi = [Multiline]
-        | otherwise = []
-    res
-        | json = showJSON
-        | otherwise = pprResult oflags
+    res = case format of
+        JSONstyle -> showJSON
+        Singleline -> pprResult []
+        Multiline -> pprResult [Multiline]
 
 ----------------------------------------------------------------
 
@@ -304,6 +293,16 @@ convDoX dox = case dox' of
   x       -> Short.toShort x
   where
     dox' = C8.pack dox
+
+convOutputFlag :: String -> OutputFlag
+convOutputFlag "json"  = JSONstyle
+convOutputFlag "multi" = Multiline
+convOutputFlag _       = Singleline
+
+convLogLevel :: String -> Log.Level
+convLogLevel "demo"  = Log.DEMO
+convLogLevel "warn"  = Log.WARN
+convLogLevel _       = Log.DEBUG
 
 ----------------------------------------------------------------
 
