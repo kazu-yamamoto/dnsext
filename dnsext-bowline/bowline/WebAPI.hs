@@ -19,6 +19,9 @@ import Types
 doStats :: Control -> IO Response
 doStats Control{..} = responseBuilder HTTP.ok200 [] <$> getStats
 
+doWStats :: Control -> IO Response
+doWStats Control{..} = responseBuilder HTTP.ok200 [] <$> getWStats
+
 doReload :: Control -> Command -> IO Response
 doReload Control{..} ctl = do
     setCommand ctl
@@ -37,6 +40,7 @@ app mng req sendResp = getResp >>= sendResp
         | requestMethod req == HTTP.methodGet = case rawPathInfo req of
             "/metrics" -> doStats mng
             "/stats" -> doStats mng
+            "/wstats" -> doWStats mng
             "/reload" -> doReload mng Reload
             "/keep-cache" -> doReload mng KeepCache
             "/quit" -> doQuit mng
