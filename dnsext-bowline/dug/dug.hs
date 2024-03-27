@@ -42,6 +42,7 @@ import Iterative (iterativeQuery)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQeury)
+import Types
 
 ----------------------------------------------------------------
 
@@ -104,36 +105,15 @@ options =
         ["0rtt"]
         (NoArg (\opts -> opts{opt0RTT = True}))
         "use 0-RTT (aka early data)"
+    , Option
+        ['k']
+        ["keylog-file"]
+        ( ReqArg
+            (\file opts -> opts{optKeyLogFile = Just file})
+            "<file>"
+        )
+        "specify a file to save TLS main secret keys"
     ]
-
-----------------------------------------------------------------
-
-data Options = Options
-    { optHelp :: Bool
-    , optIterative :: Bool
-    , optDisableV6NS :: Bool
-    , optPort :: Maybe String
-    , optDoX :: ShortByteString
-    , optFormat :: OutputFlag
-    , optLogLevel :: Log.Level
-    , optResumptionFile :: Maybe FilePath
-    , opt0RTT :: Bool
-    }
-    deriving (Show)
-
-defaultOptions :: Options
-defaultOptions =
-    Options
-        { optHelp = False
-        , optIterative = False
-        , optDisableV6NS = False
-        , optPort = Nothing
-        , optDoX = "do53"
-        , optFormat = Singleline
-        , optLogLevel = Log.WARN
-        , optResumptionFile = Nothing
-        , opt0RTT = False
-        }
 
 ----------------------------------------------------------------
 
@@ -163,7 +143,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQeury mserver port optDoX putLn putLines qs optResumptionFile opt0RTT
+            recursiveQeury mserver port putLn putLines qs opts
     ------------------------
     putTime t0 putLines
     killThread tid

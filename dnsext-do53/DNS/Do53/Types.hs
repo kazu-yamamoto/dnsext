@@ -263,6 +263,8 @@ data ResolveActions = ResolveActions
     -- ^ Setting socket options.
     , ractionLog :: PutLines
     -- ^ Logging.
+    , ractionKeyLog :: String -> IO ()
+    -- ^ Logging for TLS main secrets.
     , ractionSaveResumption :: ByteString -> IO ()
     -- ^ Saving resumption information.
     , ractionResumptionInfo :: Maybe ByteString
@@ -282,6 +284,7 @@ defaultResolveActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
+        , ractionKeyLog = \ ~_ -> return ()
         , ractionSaveResumption = \_ -> return ()
         , ractionResumptionInfo = Nothing
         , ractionUseEarlyData = False

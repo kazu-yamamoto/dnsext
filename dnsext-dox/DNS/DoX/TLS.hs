@@ -37,6 +37,7 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
                         ractionSaveResumption rinfoActions bs
                         return Nothing
                     }
+            , H2.settingsKeyLogger = ractionKeyLog rinfoActions
             }
 
 tlsResolver :: OneshotResolver

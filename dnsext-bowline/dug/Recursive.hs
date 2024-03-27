@@ -31,7 +31,6 @@ import qualified DNS.Log as Log
 import DNS.Types (Question (..))
 import qualified DNS.Types as DNS
 import qualified Data.ByteString as BS
-import Data.ByteString.Short (ShortByteString)
 import Data.Either
 import Data.IORef
 import Data.IP (IP, IPv4, IPv6)
@@ -42,18 +41,18 @@ import System.Directory (doesFileExist)
 import System.Exit (exitFailure)
 import Text.Read (readMaybe)
 
+import Types
+
 recursiveQeury
     :: [HostName]
     -> PortNumber
-    -> ShortByteString
     -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> [(Question, QueryControls)]
-    -> Maybe FilePath
-    -> Bool
+    -> Options
     -> IO ()
-recursiveQeury mserver port dox putLn putLines qcs mfile rtt0 = do
-    mbs <- case mfile of
+recursiveQeury mserver port putLn putLines qcs Options{..} = do
+    mbs <- case optResumptionFile of
         Nothing -> return Nothing
         Just file -> do
             exist <- doesFileExist file
@@ -63,17 +62,20 @@ recursiveQeury mserver port dox putLn putLines qcs mfile rtt0 = do
     let ractions =
             defaultResolveActions
                 { ractionLog = putLines
-                , ractionSaveResumption = \bs -> case mfile of
-                    Nothing -> return ()
-                    Just file -> BS.writeFile file bs
-                , ractionUseEarlyData = rtt0
+                , ractionSaveResumption = case optResumptionFile of
+                    Nothing -> \_ -> return ()
+                    Just file -> BS.writeFile file
+                , ractionUseEarlyData = opt0RTT
                 , ractionResumptionInfo = mbs
+                , ractionKeyLog = case optKeyLogFile of
+                    Nothing -> \_ -> return ()
+                    Just file -> \msg -> appendFile file (msg ++ "\n")
                 }
     conf <- getCustomConf mserver port mempty ractions
     mx <-
-        if dox == "auto"
+        if optDoX == "auto"
             then resolvePipeline conf
-            else case makePersistentResolver dox of
+            else case makePersistentResolver optDoX of
                 Just r -> do
                     let ris = makeResolveInfo ractions port <$> (read <$> mserver)
                     return $ Just (r <$> ris)
