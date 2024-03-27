@@ -50,8 +50,9 @@ recursiveQeury
     -> Log.PutLines
     -> [(Question, QueryControls)]
     -> Maybe FilePath
+    -> Bool
     -> IO ()
-recursiveQeury mserver port dox putLn putLines qcs mfile = do
+recursiveQeury mserver port dox putLn putLines qcs mfile rtt0 = do
     mbs <- case mfile of
         Nothing -> return Nothing
         Just file -> do
@@ -65,6 +66,7 @@ recursiveQeury mserver port dox putLn putLines qcs mfile = do
                 , ractionSaveResumption = \bs -> case mfile of
                     Nothing -> return ()
                     Just file -> BS.writeFile file bs
+                , ractionUseEarlyData = rtt0
                 , ractionResumptionInfo = mbs
                 }
     conf <- getCustomConf mserver port mempty ractions

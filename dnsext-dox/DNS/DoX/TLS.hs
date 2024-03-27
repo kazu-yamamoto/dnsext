@@ -29,6 +29,7 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
                 Just r -> case deserialiseOrFail $ BL.fromStrict r of
                     Left _ -> Nothing
                     Right x -> Just x
+            , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
             , H2.settingsSessionManager =
                 noSessionManager
                     { sessionEstablish = \sid sd -> do

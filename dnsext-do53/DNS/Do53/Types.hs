@@ -266,7 +266,9 @@ data ResolveActions = ResolveActions
     , ractionSaveResumption :: ByteString -> IO ()
     -- ^ Saving resumption information.
     , ractionResumptionInfo :: Maybe ByteString
-    -- ^ Resumption information
+    -- ^ Resumption information.
+    , ractionUseEarlyData :: Bool
+    -- ^ Use 0-RTT or not.
     }
 
 instance Show ResolveActions where
@@ -282,6 +284,7 @@ defaultResolveActions =
         , ractionLog = \_ _ ~_ -> return ()
         , ractionSaveResumption = \_ -> return ()
         , ractionResumptionInfo = Nothing
+        , ractionUseEarlyData = False
         }
 
 rsso :: Socket -> IO ()

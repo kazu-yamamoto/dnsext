@@ -99,6 +99,11 @@ options =
             "<file>"
         )
         "specify a file to save resumption information"
+    , Option
+        ['0']
+        ["0rtt"]
+        (NoArg (\opts -> opts{opt0RTT = True}))
+        "use 0-RTT (aka early data)"
     ]
 
 ----------------------------------------------------------------
@@ -112,6 +117,7 @@ data Options = Options
     , optFormat :: OutputFlag
     , optLogLevel :: Log.Level
     , optResumptionFile :: Maybe FilePath
+    , opt0RTT :: Bool
     }
     deriving (Show)
 
@@ -126,6 +132,7 @@ defaultOptions =
         , optFormat = Singleline
         , optLogLevel = Log.WARN
         , optResumptionFile = Nothing
+        , opt0RTT = False
         }
 
 ----------------------------------------------------------------
@@ -156,7 +163,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQeury mserver port optDoX putLn putLines qs optResumptionFile
+            recursiveQeury mserver port optDoX putLn putLines qs optResumptionFile opt0RTT
     ------------------------
     putTime t0 putLines
     killThread tid
