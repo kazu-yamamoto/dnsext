@@ -21,24 +21,27 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
             recvDoT = recvVC rinfoVCLimit recvN
         vcPersistentResolver "TLS" sendDoT recvDoT ri body
   where
-    settings =
-        H2.defaultSettings
-            { H2.settingsValidateCert = False
-            , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions of
-                Nothing -> Nothing
-                Just r -> case deserialiseOrFail $ BL.fromStrict r of
-                    Left _ -> Nothing
-                    Right x -> Just x
-            , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
-            , H2.settingsSessionManager =
-                noSessionManager
-                    { sessionEstablish = \sid sd -> do
-                        let bs = BL.toStrict $ serialise (sid, sd)
-                        ractionSaveResumption rinfoActions bs
-                        return Nothing
-                    }
-            , H2.settingsKeyLogger = ractionKeyLog rinfoActions
-            }
+    settings = makeSettings ri
+
+makeSettings :: ResolveInfo -> H2.Settings
+makeSettings ResolveInfo{..} =
+    H2.defaultSettings
+        { H2.settingsValidateCert = False
+        , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions of
+            Nothing -> Nothing
+            Just r -> case deserialiseOrFail $ BL.fromStrict r of
+                Left _ -> Nothing
+                Right x -> Just x
+        , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
+        , H2.settingsSessionManager =
+            noSessionManager
+                { sessionEstablish = \sid sd -> do
+                    let bs = BL.toStrict $ serialise (sid, sd)
+                    ractionSaveResumption rinfoActions bs
+                    return Nothing
+                }
+        , H2.settingsKeyLogger = ractionKeyLog rinfoActions
+        }
 
 tlsResolver :: OneshotResolver
 tlsResolver ri@ResolveInfo{..} q qctl =

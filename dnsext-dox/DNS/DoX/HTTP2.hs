@@ -16,7 +16,6 @@ where
 
 import DNS.Do53.Client
 import DNS.Do53.Internal
-import DNS.DoX.Imports
 import qualified DNS.Log as Log
 import DNS.Types
 import DNS.Types.Decode
@@ -32,6 +31,9 @@ import qualified Network.HTTP2.TLS.Client as H2
 import System.Timeout (timeout)
 import qualified UnliftIO.Exception as E
 
+import DNS.DoX.Imports
+import DNS.DoX.TLS
+
 withTimeout :: ResolveInfo -> IO (Either DNSError Result) -> IO (Either DNSError Result)
 withTimeout ResolveInfo{..} action = do
     mres <- timeout (ractionTimeoutTime rinfoActions) action
@@ -46,10 +48,7 @@ http2PersistentResolver ri@ResolveInfo{..} body = do
     H2.run settings (show rinfoIP) rinfoPort $
         doHTTP proto ident ri body
   where
-    settings =
-        H2.defaultSettings
-            { H2.settingsValidateCert = False
-            }
+    settings = makeSettings ri
 
 http2Resolver :: OneshotResolver
 http2Resolver ri@ResolveInfo{..} q qctl = do
@@ -59,10 +58,7 @@ http2Resolver ri@ResolveInfo{..} q qctl = do
         H2.run settings (show rinfoIP) rinfoPort $
             doHTTPOneshot proto ident ri q qctl
   where
-    settings =
-        H2.defaultSettings
-            { H2.settingsValidateCert = False
-            }
+    settings = makeSettings ri
 
 http2cPersistentResolver :: PersistentResolver
 http2cPersistentResolver ri@ResolveInfo{..} body = do
