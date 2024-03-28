@@ -59,6 +59,7 @@ executable dug
         JSON
         Output
         Recursive
+        Types
 
     default-language: Haskell2010
     ghc-options:      -Wall -threaded

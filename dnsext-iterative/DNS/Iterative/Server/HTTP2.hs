@@ -44,6 +44,7 @@ http2Server VcServerConfig{..} env toCacher port host = do
             { H2TLS.settingsTimeout = vc_idle_timeout
             , H2TLS.settingsSlowlorisSize = vc_slowloris_size
             , H2TLS.settingsSessionManager = vc_session_manager
+            , H2TLS.settingsEarlyDataSize = vc_early_data_size
             }
 
 http2cServer :: VcServerConfig -> Server

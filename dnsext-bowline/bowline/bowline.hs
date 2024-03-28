@@ -8,7 +8,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (getRootServers, getRootSep)
+import DNS.Iterative.Internal (getRootSep, getRootServers)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -142,6 +142,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_slowloris_size = cnf_vc_slowloris_size
                 , vc_credentials = creds
                 , vc_session_manager = sm
+                , vc_early_data_size = cnf_early_data_size
                 }
     conc = foldr concurrently_ $ return ()
     udpconf = UdpServerConfig{}

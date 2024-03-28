@@ -263,10 +263,14 @@ data ResolveActions = ResolveActions
     -- ^ Setting socket options.
     , ractionLog :: PutLines
     -- ^ Logging.
+    , ractionKeyLog :: String -> IO ()
+    -- ^ Logging for TLS main secrets.
     , ractionSaveResumption :: ByteString -> IO ()
     -- ^ Saving resumption information.
     , ractionResumptionInfo :: Maybe ByteString
-    -- ^ Resumption information
+    -- ^ Resumption information.
+    , ractionUseEarlyData :: Bool
+    -- ^ Use 0-RTT or not.
     }
 
 instance Show ResolveActions where
@@ -280,8 +284,10 @@ defaultResolveActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
+        , ractionKeyLog = \ ~_ -> return ()
         , ractionSaveResumption = \_ -> return ()
         , ractionResumptionInfo = Nothing
+        , ractionUseEarlyData = False
         }
 
 rsso :: Socket -> IO ()
