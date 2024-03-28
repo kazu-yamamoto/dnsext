@@ -8,6 +8,7 @@ module DNS.Iterative.Server (
     PortNumber,
     Env,
     newEnv,
+    newEnv',
     RRCacheOps (..),
     newRRCacheOps,
     TimeCache (..),

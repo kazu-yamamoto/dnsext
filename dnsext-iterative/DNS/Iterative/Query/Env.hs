@@ -3,6 +3,7 @@
 module DNS.Iterative.Query.Env (
     Env (..),
     newEnv,
+    newEnv',
     newEmptyEnv,
 ) where
 
@@ -67,6 +68,21 @@ newEnv putLines putDNSTAP disableV6NS rdnskey root lzones RRCacheOps{..} TimeCac
         -- , idGen_ = <default>
         -- , stats_ = <default>
         , timeout_ = tmout
+        }
+
+newEnv' :: Maybe ([ResourceRecord], [ResourceRecord])
+        -> [(Domain, LocalZoneType, [ResourceRecord])]
+        -> IO Env
+newEnv' root lzones = do
+    let localName = Local.nameMap lzones
+        localApex = Local.apexMap localName lzones
+    env0 <- newEmptyEnv
+    rootHint <- getRootHint $ fromMaybe rootServers root
+    pure $
+        env0
+        { rootHint_ = rootHint
+        , lookupLocalApex_ = Local.lookupApex localApex
+        , lookupLocalDomain_ = Local.lookupName localName
         }
 
 newEmptyEnv :: IO Env
