@@ -68,6 +68,7 @@ data Config = Config
     , cnf_webapi :: Bool
     , cnf_webapi_addr :: String
     , cnf_webapi_port :: Int
+    , cnf_cache_max_negative_ttl :: Int
     }
     deriving (Show)
 
@@ -117,6 +118,7 @@ defaultConfig =
         , cnf_webapi = True
         , cnf_webapi_addr = "127.0.0.1"
         , cnf_webapi_port = 8080
+        , cnf_cache_max_negative_ttl = 3600
         }
 
 ----------------------------------------------------------------
@@ -213,6 +215,7 @@ makeConfig def conf =
         , cnf_webapi = get "webapi" cnf_webapi
         , cnf_webapi_addr = get "webapi-addr" cnf_webapi_addr
         , cnf_webapi_port = get "webapi-port" cnf_webapi_port
+        , cnf_cache_max_negative_ttl = get "cache-max-negative-ttl" cnf_cache_max_negative_ttl
         }
   where
     get k func = maybe (func def) fromConf $ lookup k conf
