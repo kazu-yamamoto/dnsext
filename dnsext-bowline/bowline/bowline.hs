@@ -8,7 +8,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (getRootServers, getRootSep)
+import DNS.Iterative.Internal (getRootSep, getRootServers)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache

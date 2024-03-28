@@ -27,7 +27,7 @@ import qualified Network.QUIC as QUIC
 import Network.Socket
 import Network.TLS (Credentials (..), SessionManager)
 import qualified Network.UDP as UDP
-import System.IO.Error (tryIOError, ioeSetLocation)
+import System.IO.Error (ioeSetLocation, tryIOError)
 
 data PeerInfo
     = PeerInfoUDP UDP.ClientSockAddr
@@ -41,12 +41,13 @@ peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoH2 sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
 
-{- FORMOLU_DISABLE -}
+{- FOURMOLU_DISABLE -}
 sockAddrInet6 :: SockAddr -> Bool
-sockAddrInet6 SockAddrInet {}   = False
-sockAddrInet6 SockAddrInet6 {}  = True
-sockAddrInet6 SockAddrUnix {}   = False
-{- FORMOLU_ENABLE -}
+sockAddrInet6 SockAddrInet{}  = False
+sockAddrInet6 SockAddrInet6{} = True
+sockAddrInet6 SockAddrUnix{}  = False
+
+{- FOURMOLU_ENABLE -}
 
 data Input a = Input
     { inputQuery :: a
