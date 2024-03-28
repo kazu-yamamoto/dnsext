@@ -59,6 +59,7 @@ getQUICParams ResolveInfo{..} alpn =
         , ccVersions = [Version1]
         , ccResumption = rinfo
         , ccUse0RTT = ractionUseEarlyData rinfoActions
+        , ccKeyLog = ractionKeyLog rinfoActions
         }
   where
     rinfo = case ractionResumptionInfo rinfoActions of
