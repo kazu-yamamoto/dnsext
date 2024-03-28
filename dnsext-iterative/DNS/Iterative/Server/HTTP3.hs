@@ -39,7 +39,7 @@ http3Server VcServerConfig{..} env toCacher port host = do
     return [http3server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h3")
-    sconf = getServerConfig vc_credentials host port "h3"
+    sconf = getServerConfig vc_credentials vc_session_manager host port "h3"
     conf mgr =
         H3.Config
             { confHooks = H3.defaultHooks

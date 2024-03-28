@@ -18,7 +18,7 @@ import qualified DNS.ThreadStats as TStat
 import qualified Network.QUIC as QUIC
 import Network.QUIC.Server (ServerConfig (..))
 import qualified Network.QUIC.Server as QUIC
-import Network.TLS (Credentials (..))
+import Network.TLS (Credentials (..), SessionManager)
 import qualified System.TimeManager as T
 
 -- this package
@@ -36,7 +36,7 @@ quicServer VcServerConfig{..} env toCacher port host = do
     return [quicserver]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/quic")
-    sconf = getServerConfig vc_credentials host port "doq"
+    sconf = getServerConfig vc_credentials vc_session_manager host port "doq"
     maxSize = fromIntegral vc_query_max_size
     go mgr conn = do
         info <- QUIC.getConnectionInfo conn
@@ -66,10 +66,12 @@ quicServer VcServerConfig{..} env toCacher port host = do
             sender = senderLogicVC env send fromX
         TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
-getServerConfig :: Credentials -> String -> PortNumber -> ByteString -> ServerConfig
-getServerConfig creds host port alpn =
+getServerConfig :: Credentials -> SessionManager -> String -> PortNumber -> ByteString -> ServerConfig
+getServerConfig creds sm host port alpn =
     QUIC.defaultServerConfig
         { scAddresses = [(read host, port)]
         , scALPN = Just (\_ bss -> if alpn `elem` bss then return alpn else return "")
         , scCredentials = creds
+        , scUse0RTT = True
+        , scSessionManager = sm
         }
