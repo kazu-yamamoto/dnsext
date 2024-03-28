@@ -77,6 +77,7 @@ data VcServerConfig = VcServerConfig
     , vc_slowloris_size :: Int
     , vc_credentials :: Credentials
     , vc_session_manager :: SessionManager
+    , vc_early_data_size :: Int
     }
 
 withLocationIOE :: String -> IO a -> IO a

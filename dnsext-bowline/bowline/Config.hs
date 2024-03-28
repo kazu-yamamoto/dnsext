@@ -57,6 +57,7 @@ data Config = Config
     , cnf_h2_port :: Int
     , cnf_h3 :: Bool
     , cnf_h3_port :: Int
+    , cnf_early_data_size :: Int
     , cnf_monitor_port :: Int
     , cnf_monitor_addrs :: [String]
     , cnf_monitor_stdio :: Bool
@@ -105,6 +106,7 @@ defaultConfig =
         , cnf_h2_port = 443
         , cnf_h3 = True
         , cnf_h3_port = 443
+        , cnf_early_data_size = 4096
         , cnf_monitor_port = 10023
         , cnf_monitor_addrs = []
         , cnf_monitor_stdio = False
@@ -200,6 +202,7 @@ makeConfig def conf =
         , cnf_h2_port = get "h2-port" cnf_h2_port
         , cnf_h3 = get "h3" cnf_h3
         , cnf_h3_port = get "h3-port" cnf_h3_port
+        , cnf_early_data_size = get "early_data_size" cnf_early_data_size
         , cnf_monitor_port = get "monitor-port" cnf_monitor_port
         , cnf_monitor_addrs = get "monitor-addrs" cnf_monitor_addrs
         , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio

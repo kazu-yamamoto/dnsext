@@ -33,6 +33,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
             { H2.settingsTimeout = vc_idle_timeout
             , H2.settingsSlowlorisSize = vc_slowloris_size
             , H2.settingsSessionManager = vc_session_manager
+            , H2.settingsEarlyDataSize = vc_early_data_size
             }
     go _ backend = do
         let mysa = H2.mySockAddr backend

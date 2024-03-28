@@ -142,6 +142,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_slowloris_size = cnf_vc_slowloris_size
                 , vc_credentials = creds
                 , vc_session_manager = sm
+                , vc_early_data_size = cnf_early_data_size
                 }
     conc = foldr concurrently_ $ return ()
     udpconf = UdpServerConfig{}
