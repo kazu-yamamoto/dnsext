@@ -20,7 +20,7 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
         run conn cliconf conf $
             doHTTP proto ident ri body
   where
-    cc = getQUICParams rinfoIP rinfoPort "h3"
+    cc = getQUICParams ri "h3"
     cliconf =
         ClientConfig
             { scheme = "https"
@@ -36,7 +36,7 @@ http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
             run conn cliconf conf $
                 doHTTPOneshot proto ident ri q qctl
   where
-    cc = getQUICParams rinfoIP rinfoPort "h3"
+    cc = getQUICParams ri "h3"
     cliconf =
         ClientConfig
             { scheme = "https"
