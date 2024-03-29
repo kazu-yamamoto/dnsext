@@ -102,6 +102,7 @@ runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , rootAnchor_ = trustAnchor
+                , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
                 , insert_ = insertCache
                 , getCache_ = readCache
                 , expireCache_ = expireCache
