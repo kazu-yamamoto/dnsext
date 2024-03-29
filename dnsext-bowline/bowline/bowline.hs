@@ -8,7 +8,7 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (getRootSep, getRootServers)
+import DNS.Iterative.Internal (Env (..), getRootSep, getRootServers)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -72,9 +72,9 @@ run readConfig = do
                 go tcache (Just cache) mng
 
 runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
-runConfig tcache mcache mng0 conf@Config{..} = do
+runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
     -- Setup
-    gcache@GlobalCache{..} <- case mcache of
+    gcache@GlobalCache{gcacheRRCacheOps = RRCacheOps{..}, ..} <- case mcache of
         Nothing -> getCache tcache conf
         Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
@@ -95,7 +95,20 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootServers' cnf_root_hints
-    env <- newEnv putLines putDNSTAP disable_v6_ns trustAnchor rootHint cnf_local_zones gcacheRRCacheOps tcache tmout
+    env <-
+        newEnv' rootHint cnf_local_zones <&> \env0 ->
+            env0
+                { logLines_ = putLines
+                , logDNSTAP_ = putDNSTAP
+                , disableV6NS_ = disable_v6_ns
+                , rootAnchor_ = trustAnchor
+                , insert_ = insertCache
+                , getCache_ = readCache
+                , expireCache_ = expireCache
+                , currentSeconds_ = getTime
+                , timeString_ = getTimeStr
+                , timeout_ = tmout
+                }
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
