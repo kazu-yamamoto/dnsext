@@ -19,6 +19,7 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
         ident <- ractionGenId rinfoActions
         run conn cliconf conf $
             doHTTP proto ident ri body
+        saveResumptionInfo conn ri
   where
     cc = getQUICParams ri "h3"
     cliconf =
@@ -32,9 +33,12 @@ http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
         let proto = "H3"
         ident <- ractionGenId rinfoActions
-        withTimeout ri $
-            run conn cliconf conf $
-                doHTTPOneshot proto ident ri q qctl
+        withTimeout ri $ do
+            res <-
+                run conn cliconf conf $
+                    doHTTPOneshot proto ident ri q qctl
+            saveResumptionInfo conn ri
+            return res
   where
     cc = getQUICParams ri "h3"
     cliconf =

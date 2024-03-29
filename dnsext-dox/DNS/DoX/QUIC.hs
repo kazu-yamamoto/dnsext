@@ -12,21 +12,21 @@ import Network.QUIC
 import Network.QUIC.Client
 import Network.QUIC.Internal hiding (Recv, shared)
 
+import DNS.DoX.HTTP2
 import DNS.DoX.Imports
 
 quicPersistentResolver :: PersistentResolver
-quicPersistentResolver ri@ResolveInfo{..} body = run cc $ \conn -> do
+quicPersistentResolver ri body = run cc $ \conn -> do
     body $ resolv conn ri
-    rinfo <- getResumptionInfo conn
-    when (isResumptionPossible rinfo) $ do
-        let bs = BL.toStrict $ serialise rinfo
-        ractionSaveResumption rinfoActions bs
+    saveResumptionInfo conn ri
   where
     cc = getQUICParams ri "doq"
 
 quicResolver :: OneshotResolver
-quicResolver ri q qctl = run cc $ \conn -> do
-    resolv conn ri q qctl
+quicResolver ri q qctl = run cc $ \conn -> withTimeout ri $ do
+    res <- resolv conn ri q qctl
+    saveResumptionInfo conn ri
+    return res
   where
     cc = getQUICParams ri "doq"
 
@@ -47,6 +47,13 @@ resolv conn ri@ResolveInfo{..} q qctl = do
             Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions
+
+saveResumptionInfo :: Connection -> ResolveInfo -> IO ()
+saveResumptionInfo conn ResolveInfo{..} = do
+    rinfo <- getResumptionInfo conn
+    when (isResumptionPossible rinfo) $ do
+        let bs = BL.toStrict $ serialise rinfo
+        ractionSaveResumption rinfoActions bs
 
 getQUICParams :: ResolveInfo -> ByteString -> ClientConfig
 getQUICParams ResolveInfo{..} alpn =
