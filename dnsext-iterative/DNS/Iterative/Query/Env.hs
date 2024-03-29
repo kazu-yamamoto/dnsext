@@ -101,6 +101,7 @@ newEmptyEnv = do
         , rootHint_ = rootHint
         , lookupLocalApex_ = \_ -> Nothing
         , lookupLocalDomain_ = \_ _ -> Just (NoErr, [], [])
+        , maxNegativeTTL_ = 3600
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
         , expireCache_ = \_ -> pure ()

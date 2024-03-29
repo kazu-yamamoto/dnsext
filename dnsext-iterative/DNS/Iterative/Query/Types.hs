@@ -70,6 +70,7 @@ data Env = Env
     , rootHint_ :: Delegation
     , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
     , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
+    , maxNegativeTTL_ :: TTL
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()

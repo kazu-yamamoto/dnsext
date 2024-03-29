@@ -207,25 +207,21 @@ cacheSectionNegative
     -> ContextT IO [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
+    maxNegativeTTL <- asks maxNegativeTTL_
     getSec <- asks currentSeconds_
+    let {- the minimum of the SOA.MINIMUM field and SOA's TTL
+           https://datatracker.ietf.org/doc/html/rfc2308#section-3
+           https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
+        soaTTL ttl soa = minimum [DNS.soa_minimum soa, ttl, maxNegativeTTL]
+        fromSOA ResourceRecord{..} = (,) rrname . soaTTL rrttl <$> DNS.fromRData rdata
+        cacheNoSOA _rrs rank = cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
+        nullSOA = withSection getRanked msg cacheNoSOA
     Verify.cases getSec zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
         either (ncWarn >>> ($> [])) (doCache >>> ($> soaRRset : nws)) $ single ps
   where
-    fromSOA :: ResourceRecord -> Maybe (Domain, TTL)
-    fromSOA ResourceRecord{..} = (,) rrname . soaTTL <$> DNS.fromRData rdata
-      where
-        {- the minimum of the SOA.MINIMUM field and SOA's TTL
-           https://datatracker.ietf.org/doc/html/rfc2308#section-3
-           https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
-        soaTTL soa = minimum [DNS.soa_minimum soa, rrttl, maxNCacheTTL]
-        maxNCacheTTL = 21600
-    nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ defaultTTL rank $> []
-      where
-        defaultTTL = 1800
-
     single xs = case xs of
         [] -> Left "no SOA records found"
         [x] -> Right x
@@ -266,8 +262,8 @@ failWithCache dom typ cls rank e = do
 
 cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
 cacheRCODE dom typ rcode rank = do
-    let defaultTTL = 1800
-    cacheNegativeNoSOA rcode dom typ defaultTTL rank
+    maxNegativeTTL <- asks maxNegativeTTL_
+    cacheNegativeNoSOA rcode dom typ maxNegativeTTL rank
 
 cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
 cacheNegative zone dom typ ttl rank = do
