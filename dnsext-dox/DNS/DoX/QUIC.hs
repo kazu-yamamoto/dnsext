@@ -56,7 +56,6 @@ getQUICParams ResolveInfo{..} alpn =
         , ccALPN = \_ -> return $ Just [alpn]
         , ccDebugLog = False
         , ccValidate = False
-        , ccVersions = [Version1]
         , ccResumption = rinfo
         , ccUse0RTT = ractionUseEarlyData rinfoActions
         , ccKeyLog = ractionKeyLog rinfoActions
