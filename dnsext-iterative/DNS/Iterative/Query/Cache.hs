@@ -322,6 +322,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 cacheNoDelegation :: Delegation -> Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery ()
 cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NoErr = cacheNoDataNS $> ()
@@ -343,6 +344,7 @@ cacheNoDelegation d zone dnskeys dom msg
     cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode msg
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> ExceptT QueryError (ContextT IO) [RRset]
