@@ -26,7 +26,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (fromShort)
 import qualified Data.ByteString.Short as Short
 import Network.HTTP.Types
-import Network.HTTP2.Client (Client, Request, Response, getResponseBodyChunk, requestBuilder)
+import Network.HTTP2.Client (Client, SendRequest, getResponseBodyChunk, requestBuilder)
 import qualified Network.HTTP2.TLS.Client as H2
 import System.Timeout (timeout)
 import qualified UnliftIO.Exception as E
@@ -79,7 +79,7 @@ resolv
     :: String
     -> Word16
     -> ResolveInfo
-    -> (Request -> (Response -> IO (Either DNSError Result)) -> IO (Either DNSError Result))
+    -> SendRequest
     -> Resolver
 resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
     sendRequest req $ \rsp -> do
