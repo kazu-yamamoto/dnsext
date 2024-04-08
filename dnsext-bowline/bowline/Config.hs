@@ -352,6 +352,9 @@ nestedConfs n cs0 =  do
 readConfig :: FilePath -> IO [Conf]
 readConfig path = parseFile config path >>= nestedConfs nestedLimit
 
+readArg :: String -> IO Conf
+readArg = parseString arg
+
 ----------------------------------------------------------------
 
 config :: Parser [Conf]
@@ -378,6 +381,9 @@ config = commentLines *> many cfield <* eof
 -- Right ("listc",CV_Strings ["d e","f"])
 field :: Parser Conf
 field = (,) <$> key <*> (sep *> value) <* trailing
+
+arg :: Parser Conf
+arg = (,) <$> key <*> (char '=' *> value)
 
 key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
