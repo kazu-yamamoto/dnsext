@@ -26,6 +26,8 @@ EOF
 
 set -e
 
+[ ! -r ./params ] || . ./params
+
 GHC_OPTIMIZE=-O
 if [ x"$NO_OPTIMIZE" != x ]; then
     GHC_OPTIMIZE='-O0'
