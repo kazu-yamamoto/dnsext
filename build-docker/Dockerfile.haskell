@@ -90,7 +90,7 @@ set -e -x
 sed \
     -e '\@^include: .*$@d' \
     -e '1i include: etc/default-local.conf' \
-    -e 's@^disable-v6-ns: .*$@disable-v6-ns: no@' \
+    -e 's@^disable-v6-ns: .*$@disable-v6-ns: yes@' \
     -e 's@^dns-addrs: .*$@dns-addrs: 0.0.0.0,::@' \
     -e 's@^cnf_dns_addrs: .*$@cnf_dns_addrs: 0.0.0.0@' \
     -e 's@^monitor-addrs: .*$@monitor-addrs: 0.0.0.0,::@' \
