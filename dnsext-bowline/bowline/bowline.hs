@@ -169,8 +169,9 @@ main = do
     args <- getArgs
     case args of
         [] -> run (return defaultConfig)
-        [confFile] -> run (parseConfig confFile)
-        _ -> help
+        a : _
+            | a `elem` ["-h", "-help", "--help"] -> help
+        confFile : _ -> run (parseConfig confFile)
 
 ----------------------------------------------------------------
 
