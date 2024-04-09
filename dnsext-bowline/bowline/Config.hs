@@ -377,7 +377,7 @@ config = commentLines *> many cfield <* eof
 -- >>> parse field "" "listc: \"d e\" f # comment \n"
 -- Right ("listc",CV_Strings ["d e","f"])
 field :: Parser Conf
-field = (,) <$> key <*> (sep *> value)
+field = (,) <$> key <*> (sep *> value) <* trailing
 
 key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
@@ -393,12 +393,12 @@ value = choice [try cv_int, try cv_bool, cv_strings]
 
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
-cv_int = CV_Int . read <$> many1 digit <* trailing
+cv_int = CV_Int . read <$> many1 digit
 
 cv_bool :: Parser ConfValue
 cv_bool =
-    CV_Bool True <$ string "yes" <* trailing
-        <|> CV_Bool False <$ string "no" <* trailing
+    CV_Bool True <$ string "yes"
+        <|> CV_Bool False <$ string "no"
 
 {- FOURMOLU_DISABLE -}
 cv_string' :: Parser String
@@ -409,18 +409,14 @@ cv_string' =
 
 {- FOURMOLU_DISABLE -}
 -- |
--- >>> parse cv_strings "" "\"conf.txt\"\n"
+-- >>> parse cv_strings "" "\"conf.txt\""
 -- Right (CV_String "conf.txt")
--- >>> parse cv_strings "" "\"conf.txt\" # foo\n"
--- Right (CV_String "conf.txt")
--- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static\n"
--- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
--- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static # foo\n"
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static"
 -- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (try (spcs1 *> cv_string')) <* trailing
+    vs <- many (try (spcs1 *> cv_string'))
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
