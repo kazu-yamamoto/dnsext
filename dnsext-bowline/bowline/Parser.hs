@@ -2,6 +2,7 @@
 module Parser (
     -- * Utilities
     parseFile,
+    parseString,
 
     -- * Parsers
     spcs,
@@ -31,7 +32,14 @@ parseFile p file = do
     hdl <- openFile file ReadMode
     hSetEncoding hdl latin1
     bs <- BL.hGetContents hdl
-    case parse p "parseFile" bs of
+    parseLBS "parseFile" p bs
+
+parseString :: Parser a -> String -> IO a
+parseString p = parseLBS "parseString" p . BL.pack
+
+parseLBS :: SourceName -> Parser a -> BL.ByteString -> IO a
+parseLBS tag p bs =
+    case parse p tag bs of
         Right x -> return x
         Left e -> throwIO . userError . show $ e
 

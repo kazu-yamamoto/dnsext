@@ -166,8 +166,8 @@ showConfig2 conf =
 ----------------------------------------------------------------
 
 -- | Parsing a configuration file to get an 'Config'.
-parseConfig :: FilePath -> IO Config
-parseConfig file = makeConfig defaultConfig <$> readConfig file
+parseConfig :: FilePath -> [String] -> IO Config
+parseConfig file args = makeConfig defaultConfig <$> ((++) <$> mapM readArg args <*> readConfig file)
 
 makeConfig :: Config -> [Conf] -> Config
 makeConfig def conf =
@@ -352,6 +352,9 @@ nestedConfs n cs0 =  do
 readConfig :: FilePath -> IO [Conf]
 readConfig path = parseFile config path >>= nestedConfs nestedLimit
 
+readArg :: String -> IO Conf
+readArg = parseString arg
+
 ----------------------------------------------------------------
 
 config :: Parser [Conf]
@@ -359,8 +362,28 @@ config = commentLines *> many cfield <* eof
   where
     cfield = field <* commentLines
 
+-- |
+-- >>> parse field "" "int: 3\n"
+-- Right ("int",CV_Int 3)
+-- >>> parse field "" "bool: yes\n"
+-- Right ("bool",CV_Bool True)
+-- >>> parse field "" "str: foo\n"
+-- Right ("str",CV_String "foo")
+-- >>> parse field "" "prefix-int: 127.0.0.1,::1 # comment \n"
+-- Right ("prefix-int",CV_String "127.0.0.1,::1")
+-- >>> parse field "" "prefix-bool-1: nothing # comment \n"
+-- Right ("prefix-bool-1",CV_String "nothing")
+-- >>> parse field "" "prefix-bool-2: yesterday # comment \n"
+-- Right ("prefix-bool-2",CV_String "yesterday")
+-- >>> parse field "" "list: \"a b\" c\n"
+-- Right ("list",CV_Strings ["a b","c"])
+-- >>> parse field "" "listc: \"d e\" f # comment \n"
+-- Right ("listc",CV_Strings ["d e","f"])
 field :: Parser Conf
-field = (,) <$> key <*> (sep *> value)
+field = (,) <$> key <*> (sep *> value) <* trailing
+
+arg :: Parser Conf
+arg = (,) <$> key <*> (char '=' *> value)
 
 key :: Parser String
 key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
@@ -374,14 +397,17 @@ dquote = void $ char '"'
 value :: Parser ConfValue
 value = choice [try cv_int, try cv_bool, cv_strings]
 
+eov :: Parser ()
+eov = void (lookAhead $ choice [char '#', char ' ', char '\n']) <|> eof
+
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
-cv_int = CV_Int . read <$> many1 digit <* trailing
+cv_int = CV_Int . read <$> many1 digit <* eov
 
 cv_bool :: Parser ConfValue
 cv_bool =
-    CV_Bool True <$ string "yes" <* trailing
-        <|> CV_Bool False <$ string "no" <* trailing
+    CV_Bool True <$ string "yes" <* eov
+        <|> CV_Bool False <$ string "no" <* eov
 
 {- FOURMOLU_DISABLE -}
 cv_string' :: Parser String
@@ -392,18 +418,14 @@ cv_string' =
 
 {- FOURMOLU_DISABLE -}
 -- |
--- >>> parse cv_strings "" "\"conf.txt\"\n"
+-- >>> parse cv_strings "" "\"conf.txt\""
 -- Right (CV_String "conf.txt")
--- >>> parse cv_strings "" "\"conf.txt\" # foo\n"
--- Right (CV_String "conf.txt")
--- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static\n"
--- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
--- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static # foo\n"
+-- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static"
 -- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (try (spcs1 *> cv_string')) <* trailing
+    vs <- many (try (spcs1 *> cv_string'))
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
