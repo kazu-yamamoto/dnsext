@@ -391,14 +391,17 @@ dquote = void $ char '"'
 value :: Parser ConfValue
 value = choice [try cv_int, try cv_bool, cv_strings]
 
+eov :: Parser ()
+eov = void (lookAhead $ choice [char '#', char ' ', char '\n']) <|> eof
+
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
-cv_int = CV_Int . read <$> many1 digit
+cv_int = CV_Int . read <$> many1 digit <* eov
 
 cv_bool :: Parser ConfValue
 cv_bool =
-    CV_Bool True <$ string "yes"
-        <|> CV_Bool False <$ string "no"
+    CV_Bool True <$ string "yes" <* eov
+        <|> CV_Bool False <$ string "no" <* eov
 
 {- FOURMOLU_DISABLE -}
 cv_string' :: Parser String
