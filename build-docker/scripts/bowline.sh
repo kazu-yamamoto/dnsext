@@ -1,3 +1,3 @@
 #! /bin/sh
 
-/opt/bowline/bin/bowline /opt/bowline/etc/bowline.conf
+/opt/bowline/bin/bowline /opt/bowline/etc/bowline.conf "$@"

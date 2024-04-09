@@ -4,7 +4,7 @@ usage() {
     cat <<EOF
 Usage: $0
 
-       $0 {-N | CUSTOM_CONF_DIR} {default|bookworm|bullseye|buster}
+       $0 {-N | CUSTOM_CONF_DIR} [bookworm|bullseye|buster]
 
        $0 {-N | CUSTOM_CONF_DIR} IMAGE
 
