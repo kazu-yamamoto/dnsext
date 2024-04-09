@@ -47,7 +47,7 @@ data GlobalCache = GlobalCache
 ----------------------------------------------------------------
 
 help :: IO ()
-help = putStrLn "bowline [<confFile>]"
+help = putStrLn "bowline [<confFile>] [<conf-key>=<conf-value> ...]"
 
 ----------------------------------------------------------------
 
@@ -171,7 +171,7 @@ main = do
         [] -> run (return defaultConfig)
         a : _
             | a `elem` ["-h", "-help", "--help"] -> help
-        confFile : _ -> run (parseConfig confFile)
+        confFile : aargs -> run (parseConfig confFile aargs)
 
 ----------------------------------------------------------------
 

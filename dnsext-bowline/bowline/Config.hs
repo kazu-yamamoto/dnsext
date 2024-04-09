@@ -166,8 +166,8 @@ showConfig2 conf =
 ----------------------------------------------------------------
 
 -- | Parsing a configuration file to get an 'Config'.
-parseConfig :: FilePath -> IO Config
-parseConfig file = makeConfig defaultConfig <$> readConfig file
+parseConfig :: FilePath -> [String] -> IO Config
+parseConfig file args = makeConfig defaultConfig <$> ((++) <$> mapM readArg args <*> readConfig file)
 
 makeConfig :: Config -> [Conf] -> Config
 makeConfig def conf =
