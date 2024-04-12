@@ -291,9 +291,14 @@ fillDelegationDS src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (list1 nullIPs query =<< delegationIPs src) (lift . fill . toDSs) =<< lift (lookupValid delegationZone DS)
+            maybe (list1 nullIPs query =<< delegationIPs src) (lift . fill) =<< lift (lookupDS delegationZone)
   where
-    toDSs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
+    dsNegative _soa _rank = Just []
+    dsNegativeNoSOA rc = guard (rc == NoErr) $> []
+    dsPositive rrset =  guard (rrsetValid rrset) $> [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
+    dsLookupResult (lkResult, _rank) = foldLookupResult dsNegative dsNegativeNoSOA dsPositive lkResult
+    lookupDS :: Domain -> ContextT IO (Maybe [RD_DS])
+    lookupDS zone = lookupRRsetEither "" zone DS <&> (>>= dsLookupResult)
     fill dss = return dest{delegationDS = FilledDS dss}
     nullIPs = lift $ logLn Log.WARN "fillDelegationDS: ip list is null" *> return dest
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDS: " ++ es) *> throwDnsError DNS.ServerFailure
