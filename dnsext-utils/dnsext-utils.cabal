@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               dnsext-utils
-version:            0.0.0.0
+version:            0.0.0
 license-file:       LICENSE
 maintainer:         ex8k.hibino@gmail.com, kazu@iij.ad.jp
 author:             Kei Hibino and Kazu Yamamoto
