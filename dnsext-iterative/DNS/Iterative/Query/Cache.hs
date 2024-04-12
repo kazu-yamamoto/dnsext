@@ -8,6 +8,7 @@ module DNS.Iterative.Query.Cache (
     lookupRRsetEither,
     lookupCache,
     lookupErrorRCODE,
+    cacheNoData,
     failWithCache,
     failWithCacheOrigName,
     cacheAnswer,
@@ -259,6 +260,9 @@ failWithCache dom typ cls rank e = do
   where
     cacheRCODE_ = cacheRCODE dom typ
 {- FOURMOLU_ENABLE -}
+
+cacheNoData :: Domain -> TYPE -> Ranking -> ContextT IO ()
+cacheNoData dom typ rank = cacheRCODE dom typ NoErr rank
 
 cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
 cacheRCODE dom typ rcode rank = do
