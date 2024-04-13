@@ -177,8 +177,6 @@ data Ranking
     --
     deriving (Eq, Ord, Show)
 
--- ranking, derived order, the lower the beter
-
 rankedSection
     :: Ranking
     -> Ranking
