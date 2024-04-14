@@ -12,6 +12,12 @@ module DNS.RRCache.Types (
     stubLookup,
     stubInsert,
     Ranking (..),
+    RankedSectionCPS,
+    getRank,
+    getRanked,
+    rkAnswer,
+    rkAuthority,
+    rkAdditional,
     rankedAnswer,
     rankedAuthority,
     rankedAdditional,
@@ -177,38 +183,51 @@ data Ranking
     --
     deriving (Eq, Ord, Show)
 
-rankedSection
+type RankedSectionK a = Ranking -> Ranking -> (DNSMessage -> [ResourceRecord]) -> a
+type RankedSectionCPS a = RankedSectionK a -> a
+
+mkRankedSection
     :: Ranking
     -> Ranking
     -> (DNSMessage -> [ResourceRecord])
-    -> DNSMessage
-    -> ([ResourceRecord], Ranking)
-rankedSection authRank noauthRank section msg =
-    (,) (section msg) $
-        if DNS.authAnswer (DNS.flags msg) then authRank else noauthRank
+    -> RankedSectionCPS a
+mkRankedSection authRank noauthRank section k = k authRank noauthRank section
+
+getRankK :: RankedSectionK (DNSMessage -> Ranking)
+getRankK authRank noauthRank _ msg = if DNS.authAnswer (DNS.flags msg) then authRank else noauthRank
+
+getRankedSectionK :: RankedSectionK (DNSMessage -> ([ResourceRecord], Ranking))
+getRankedSectionK authRank noauthRank section msg = (section msg, getRankK authRank noauthRank section msg)
+
+getRank :: RankedSectionCPS (DNSMessage -> Ranking)
+           -> DNSMessage -> Ranking
+getRank cps = cps getRankK
+
+getRanked :: RankedSectionCPS (DNSMessage -> ([ResourceRecord], Ranking))
+          -> DNSMessage -> ([ResourceRecord], Ranking)
+getRanked cps = cps getRankedSectionK
+
+rkAnswer :: RankedSectionCPS a
+rkAnswer = mkRankedSection RankAuthAnswer RankAnswer DNS.answer
+
+{- FOURMOLU_DISABLE -}
+rkAuthority :: RankedSectionCPS a
+rkAuthority = mkRankedSection RankAdditional RankAdditional DNS.authority
+             {- avoid security hole with authorized reply and authority section case.
+                RankAdditional does not overwrite glue. -}
+{- FOURMOLU_ENABLE -}
+
+rkAdditional :: RankedSectionCPS a
+rkAdditional = mkRankedSection RankAdditional RankAdditional DNS.additional
 
 rankedAnswer :: DNSMessage -> ([ResourceRecord], Ranking)
-rankedAnswer =
-    rankedSection
-        RankAuthAnswer
-        RankAnswer
-        DNS.answer
+rankedAnswer = getRanked rkAnswer
 
 rankedAuthority :: DNSMessage -> ([ResourceRecord], Ranking)
-rankedAuthority =
-    rankedSection
-        {- avoid security hole with authorized reply and authority section case.
-           RankAdditional does not overwrite glue. -}
-        RankAdditional
-        RankAdditional
-        DNS.authority
+rankedAuthority = getRanked rkAuthority
 
 rankedAdditional :: DNSMessage -> ([ResourceRecord], Ranking)
-rankedAdditional =
-    rankedSection
-        RankAdditional
-        RankAdditional
-        DNS.additional
+rankedAdditional = getRanked rkAdditional
 
 ---
 
