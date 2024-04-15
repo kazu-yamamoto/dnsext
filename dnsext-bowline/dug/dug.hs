@@ -85,13 +85,13 @@ options =
         )
         "set the output format"
     , Option
-        ['l']
-        ["log-level"]
+        ['v']
+        ["verbose"]
         ( ReqArg
-            (\ll opts -> opts{optLogLevel = convLogLevel ll})
-            "<log-level>"
+            (\n opts -> opts{optLogLevel = convLogLevel n})
+            "<verbosity>"
         )
-        "set the log level"
+        "set the verbosity"
     , Option
         ['r']
         ["resumption-file"]
@@ -106,7 +106,7 @@ options =
         (NoArg (\opts -> opts{opt0RTT = True}))
         "use 0-RTT (aka early data)"
     , Option
-        ['k']
+        ['l']
         ["keylog-file"]
         ( ReqArg
             (\file opts -> opts{optKeyLogFile = Just file})
@@ -130,7 +130,7 @@ main = do
         putStr "\n"
         putStrLn "  <proto>     = auto | tcp | dot | doq | h2 | h2c | h3"
         putStrLn "  <format>    = multi | json"
-        putStrLn "  <log-level> = debug | warn | demo"
+        putStrLn "  <verbosity> = 0 | 1 | 2"
         exitSuccess
     ------------------------
     (at, port, qs, logger, putLn, putLines, flush) <- cookOpts args opts
@@ -297,9 +297,9 @@ convOutputFlag "multi" = Multiline
 convOutputFlag _       = Singleline
 
 convLogLevel :: String -> Log.Level
-convLogLevel "demo"  = Log.DEMO
-convLogLevel "warn"  = Log.WARN
-convLogLevel _       = Log.DEBUG
+convLogLevel "0" = Log.WARN
+convLogLevel "1" = Log.DEMO
+convLogLevel _ = Log.DEBUG
 
 ----------------------------------------------------------------
 
