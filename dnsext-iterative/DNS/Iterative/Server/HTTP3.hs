@@ -8,7 +8,7 @@ module DNS.Iterative.Server.HTTP3 (
 -- GHC packages
 
 import Data.ByteString.Builder (byteString)
-import Data.ByteString.Char8 ()
+import qualified Data.ByteString.Char8 as C8
 
 -- dnsext-* packages
 import qualified DNS.Log as Log
@@ -64,8 +64,12 @@ doHTTP env toCacher req aux sendResponse = do
             let inp = Input bs mysa peerInfo DOH toSender
             toCacher inp
             Output bs' _ <- fromX
-            let response = H2.responseBuilder HT.ok200 header $ byteString bs'
+            let header = mkHeader bs'
+                response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sendResponse response []
   where
     -- fixme record
-    header = [(HT.hContentType, "application/dns-message")]
+    mkHeader bs =
+        [ (HT.hContentType, "application/dns-message")
+        , (HT.hContentLength, C8.pack $ show $ C8.length bs)
+        ]

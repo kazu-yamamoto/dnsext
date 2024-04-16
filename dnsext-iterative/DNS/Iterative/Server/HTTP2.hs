@@ -10,8 +10,8 @@ module DNS.Iterative.Server.HTTP2 (
 
 -- GHC packages
 import Control.Monad (forever)
-import qualified Data.ByteString as BS
 import Data.ByteString.Builder (byteString)
+import qualified Data.ByteString.Char8 as C8
 
 -- dnsext-* packages
 import DNS.Do53.Internal
@@ -77,20 +77,24 @@ doHTTP name incQuery env toCacher ServerIO{..} = do
                     toCacher inp
         sender = forever $ do
             Output bs' (PeerInfoH2 _ strm) <- fromX
-            let response = H2.responseBuilder HT.ok200 header $ byteString bs'
+            let header = mkHeader bs'
+                response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sioWriteResponse strm response
     return $ TStat.concurrently_ (name ++ "-send") sender (name ++ "-recv") receiver
   where
-    header = [(HT.hContentType, "application/dns-message")]
+    mkHeader bs =
+        [ (HT.hContentType, "application/dns-message")
+        , (HT.hContentLength, C8.pack $ show $ C8.length bs)
+        ]
 
-getInput :: H2.Request -> IO (Either String BS.ByteString)
+getInput :: H2.Request -> IO (Either String C8.ByteString)
 getInput req
     | method == Just "GET" = case H2.requestPath req of
-        Just path | "/dns-query?dns=" `BS.isPrefixOf` path -> return $ Right $ decodeBase64Lenient $ BS.drop 15 path
+        Just path | "/dns-query?dns=" `C8.isPrefixOf` path -> return $ Right $ decodeBase64Lenient $ C8.drop 15 path
         _ -> return $ Left "illegal URL"
     | method == Just "POST" = do
         (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
-        return $ Right $ BS.concat rqs
+        return $ Right $ C8.concat rqs
     | otherwise = return $ Left "illegal method"
   where
     method = H2.requestMethod req
