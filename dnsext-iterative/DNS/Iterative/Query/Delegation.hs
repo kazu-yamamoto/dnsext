@@ -18,6 +18,8 @@ import qualified Data.Set as Set
 -- dnsext packages
 import qualified DNS.Log as Log
 import DNS.RRCache (
+    getRank,
+    getRanked,
     rankedAdditional,
     rankedAuthority,
  )
@@ -95,12 +97,13 @@ delegationWithCache zone dnskeys dom msg = do
     getSec <- lift $ asks currentSeconds_
     maybe (notFound $> noDelegation) (found getSec >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where
-    found getSec k = Verify.cases getSec zone dnskeys rankedAuthority msg dom DS fromDS (nullDS k) ncDS (withDS k)
+    rankedDS = Cache.rkAuthority
+    found getSec k = Verify.cases getSec zone dnskeys (getRanked rankedDS) msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
-    {- TODO: NoData DS negative cache -}
     nullDS k = do
         unsignedDelegationOrNoData $> ()
         lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        lift $ cacheNoData dom DS (getRank rankedDS msg)
         lift $ caches $> k []
     ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
