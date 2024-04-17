@@ -36,9 +36,10 @@ import Data.Word
 import Numeric
 
 import DNS.Types (Domain, unconsDomain)
+import DNS.Types.Internal (Label)
 import DNS.Types.Time (EpochTime)
 
-unconsLabels :: Domain -> a -> (ShortByteString -> Domain -> a) -> a
+unconsLabels :: Domain -> a -> (Label -> Domain -> a) -> a
 unconsLabels d nothing just = case unconsDomain d of
     Nothing -> nothing
     Just (x, xs) -> just x $ xs
