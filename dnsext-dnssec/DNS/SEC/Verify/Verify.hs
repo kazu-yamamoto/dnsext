@@ -158,7 +158,7 @@ verifyRRSIGwith RRSIGImpl{..} now RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rr
     {- TODO: check rrsig_num_labels -}
     unless (rrsig_inception <= now && now < rrsig_expiration) $
         Left $
-            "verifyRRSIGwith: not valid period of RRSIG: to be valid,  time "
+            "verifyRRSIGwith: not valid period of RRSIG: to be valid, time "
                 ++ show now
                 ++ " must be between "
                 ++ show rrsig_inception
