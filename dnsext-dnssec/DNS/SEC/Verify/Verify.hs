@@ -155,7 +155,13 @@ verifyRRSIGwith RRSIGImpl{..} now RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rr
                 ++ show dnskey_pubalg
                 ++ " =/= "
                 ++ show rrsig_pubalg
-    {- TODO: check rrsig_num_labels -}
+
+    unless (numLabels rrset_name >= fromIntegral rrsig_num_labels) $
+        Left $
+            "verifyRRSIGwith: number of rrname labels is too small: "
+                ++ ("rrname-labels=" ++ show (numLabels rrset_name))
+                ++ " < "
+                ++ ("rrsig-labels=" ++ show rrsig_num_labels)
     unless (rrsig_inception <= now && now < rrsig_expiration) $
         Left $
             "verifyRRSIGwith: not valid period of RRSIG: to be valid, time "
