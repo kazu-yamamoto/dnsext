@@ -600,13 +600,14 @@ ed25519 =
             " l02Woi0iS8Aa25FQkUd9RMzZHJpBoRQwAQEX1SxZJA4= "
     sig_rd =
         rd_rrsig'
-            MX 15 3
+            {- apply updated vector in Errata of RFC 8080 https://www.rfc-editor.org/errata/rfc8080 -}
+            MX 15 2
             3600
             1440021600 1438207200 {- RFC8080 has integer data! -}
             3613
             "example.com."
-            " Edk+IB9KNNWg0HAjm7FazXyrd5m3Rk8zNZbvNpAcM+eysqcUOMIjWoevFkj \
-            \ H5GaMWeG96GUVZu6ECKOQmemHDg== "
+            " oL9krJun7xfBOIWcGHi7mag5/hdZrKWw15jPGrHpjQeRAvTdszaPD+QLs3f \
+            \ x8A4M3e23mRZ9VrbpMngwcrqNAg== "
 
 -- example from https://datatracker.ietf.org/doc/html/rfc8080#section-6.2
 ed448 :: RRSIG_CASE
@@ -643,14 +644,15 @@ ed448 =
             \ 1FYYUcJKm1MDpJtIA "
     sig_rd =
         rd_rrsig'
-            MX 16 3
+            {- apply updated vector in Errata of RFC 8080 https://www.rfc-editor.org/errata/rfc8080 -}
+            MX 16 2
             3600
             1440021600 1438207200 {- RFC8080 has integer data! -}
             9713
             "example.com."
-            " Nmc0rgGKpr3GKYXcB1JmqqS4NYwhmechvJTqVzt3jR+Qy/lSLFoIk1L+9e3 \
-            \ 9GPL+5tVzDPN3f9kAwiu8KCuPPjtl227ayaCZtRKZuJax7n9NuYlZJIusX0 \
-            \ SOIOKBGzG+yWYtz1/jjbzl5GGkWvREUCUA "
+            " 3cPAHkmlnxcDHMyg7vFC34l0blBhuG1qpwLmjInI8w1CMB29FkEAIJUA0am \
+            \ xWndkmnBZ6SKiwZSAxGILn/NBtOXft0+Gj7FSvOKxE/07+4RQvE581N3Aj/ \
+            \ JtIyaiYVdnYtyMWbSNyGEY2213WKsJlwEA "
 
 someRDataLength :: RRSIG_CASE
 someRDataLength =
