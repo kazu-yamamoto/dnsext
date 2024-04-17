@@ -171,6 +171,7 @@ module DNS.Types (
     revLabels,
     superDomains,
     isSubDomainOf,
+    labelsCount,
 
     -- ** Mailbox
     Mailbox,
