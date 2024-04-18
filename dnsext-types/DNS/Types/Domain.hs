@@ -9,6 +9,7 @@ module DNS.Types.Domain (
     Domain,
     superDomains,
     isSubDomainOf,
+    labelsCount,
     domainSize,
     unconsDomain,
     wireLabels,
@@ -689,6 +690,10 @@ Domain dx `isSubDomainOf` Domain dy =
         || let lx = V.length dx
                ly = V.length dy
             in lx > ly && G.basicUnsafeSlice (lx - ly) ly dx == dy
+
+-- | just count labels of domain
+labelsCount :: Domain -> Int
+labelsCount = V.length . wireLabels
 
 ----------------------------------------------------------------
 

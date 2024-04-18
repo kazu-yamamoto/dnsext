@@ -17,6 +17,7 @@ module DNS.SEC.Imports (
     module Numeric,
     EpochTime,
     unconsLabels,
+    numLabels,
 )
 where
 
@@ -35,7 +36,7 @@ import Data.Typeable
 import Data.Word
 import Numeric
 
-import DNS.Types (Domain, unconsDomain)
+import DNS.Types (Domain, unconsDomain, labelsCount)
 import DNS.Types.Internal (Label)
 import DNS.Types.Time (EpochTime)
 
@@ -43,3 +44,12 @@ unconsLabels :: Domain -> a -> (Label -> Domain -> a) -> a
 unconsLabels d nothing just = case unconsDomain d of
     Nothing -> nothing
     Just (x, xs) -> just x $ xs
+
+{- FOURMOLU_DISABLE -}
+numLabels :: Domain -> Int
+numLabels d = unconsLabels d 0 nlabels
+  where
+    nlabels "*" _ = c - 1
+    nlabels _   _ = c
+    c = labelsCount d
+{- FOURMOLU_ENABLE -}
