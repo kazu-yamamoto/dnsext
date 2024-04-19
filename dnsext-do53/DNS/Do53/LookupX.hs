@@ -36,7 +36,7 @@
 --   >>> :set -XOverloadedStrings
 --   >>>
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupA env "www.example.com"
---   Right [93.184.216.34]
+--   Right [93.184.215.14]
 --
 --   The only error that we can easily cause is a timeout. We do this
 --   by creating and utilizing a 'LookupConf' which has a timeout of

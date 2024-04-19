@@ -45,7 +45,7 @@ import DNS.Types.Internal (section)
 --   Example:
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookup env "www.example.com" A
---   Right [93.184.216.34]
+--   Right [93.184.215.14]
 lookup :: LookupEnv -> Domain -> TYPE -> IO (Either DNSError [RData])
 lookup env dom typ = lookupSection Answer env q
   where
