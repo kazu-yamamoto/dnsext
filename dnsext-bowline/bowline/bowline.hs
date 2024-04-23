@@ -71,9 +71,9 @@ run readConfig = do
                 go tcache (Just cache) mng
 
 runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
-runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
+runConfig tcache mcache mng0 conf@Config{..} = do
     -- Setup
-    gcache@GlobalCache{gcacheRRCacheOps = RRCacheOps{..}, ..} <- case mcache of
+    gcache@GlobalCache{..} <- case mcache of
         Nothing -> getCache tcache conf
         Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
@@ -94,19 +94,15 @@ runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
     disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootServers' cnf_root_hints
+    let setOps = setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
     env <-
         newEnv rootHint cnf_local_zones <&> \env0 ->
-            env0
+            (setOps env0)
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , rootAnchor_ = trustAnchor
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
-                , insert_ = insertCache
-                , getCache_ = readCache
-                , expireCache_ = expireCache
-                , currentSeconds_ = getTime
-                , timeString_ = getTimeStr
                 , timeout_ = tmout
                 }
     creds <- getCreds conf
