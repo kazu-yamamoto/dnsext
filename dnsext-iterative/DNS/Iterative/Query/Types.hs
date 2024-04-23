@@ -2,6 +2,7 @@ module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
     LocalZoneType (..),
+    LocalZones,
     Env (..),
     QueryContext (..),
     queryContextIN,
@@ -24,6 +25,7 @@ module DNS.Iterative.Query.Types (
 
 -- GHC packages
 import Data.IORef (IORef)
+import Data.Map (Map)
 
 -- other packages
 
@@ -58,6 +60,8 @@ data LocalZoneType
     | LZ_Redirect
     deriving Show
 {- FOURMOLU_ENABLE -}
+
+type LocalZones = (Map Domain [(Domain, LocalZoneType, [RRset])], Map Domain [RRset])
 
 ----------
 -- Monad and context
