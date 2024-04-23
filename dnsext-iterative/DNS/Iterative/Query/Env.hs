@@ -5,6 +5,9 @@ module DNS.Iterative.Query.Env (
     newEnv,
     newEmptyEnv,
     --
+    setRRCacheOps,
+    setTimeCache,
+    --
     getRootSep,
     getRootServers,
 ) where
@@ -17,6 +20,7 @@ import System.Timeout (timeout)
 
 -- dnsext packages
 import DNS.Do53.Internal (newConcurrentGenId)
+import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
 import DNS.Types (Domain, RCODE (..), ResourceRecord)
@@ -75,6 +79,21 @@ newEmptyEnv = do
         , timeout_ = timeout 5000000
         }
 {- FOURMOLU_ENABLE -}
+
+setRRCacheOps :: RRCacheOps -> Env -> Env
+setRRCacheOps RRCacheOps{..} env0 =
+    env0
+        { insert_ = insertCache
+        , getCache_ = readCache
+        , expireCache_ = expireCache
+        }
+
+setTimeCache :: TimeCache -> Env -> Env
+setTimeCache TimeCache{..} env0 =
+    env0
+        { currentSeconds_ = getTime
+        , timeString_ = getTimeStr
+        }
 
 -- {-# ANN getRootHint ("HLint: ignore Use tuple-section") #-}
 getRootHint :: ([ResourceRecord], [ResourceRecord]) -> IO Delegation
