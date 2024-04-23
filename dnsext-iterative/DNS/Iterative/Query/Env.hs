@@ -74,20 +74,20 @@ newEnv putLines putDNSTAP disableV6NS rdnskey root lzones RRCacheOps{..} TimeCac
         , timeout_ = tmout
         }
 
-newEnv' :: Maybe ([ResourceRecord], [ResourceRecord])
-        -> [(Domain, LocalZoneType, [ResourceRecord])]
-        -> IO Env
+newEnv'
+    :: Maybe ([ResourceRecord], [ResourceRecord])
+    -> [(Domain, LocalZoneType, [ResourceRecord])]
+    -> IO Env
 newEnv' root lzones = do
     let localName = Local.nameMap lzones
         localApex = Local.apexMap localName lzones
-    env0 <- newEmptyEnv
     rootHint <- getRootHint $ fromMaybe rootServers root
-    pure $
+    newEmptyEnv <&> \env0 ->
         env0
-        { rootHint_ = rootHint
-        , lookupLocalApex_ = Local.lookupApex localApex
-        , lookupLocalDomain_ = Local.lookupName localName
-        }
+            { rootHint_ = rootHint
+            , lookupLocalApex_ = Local.lookupApex localApex
+            , lookupLocalDomain_ = Local.lookupName localName
+            }
 
 newEmptyEnv :: IO Env
 newEmptyEnv = do
