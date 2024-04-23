@@ -5,6 +5,9 @@ module DNS.Iterative.Query.Env (
     newEnv,
     newEnv',
     newEmptyEnv,
+    --
+    getRootSep,
+    getRootServers,
 ) where
 
 -- GHC packages
@@ -29,7 +32,8 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers (findDelegation, nsList)
 import qualified DNS.Iterative.Query.LocalZone as Local
 import DNS.Iterative.Query.Types
-import DNS.Iterative.RootServers (rootServers)
+import DNS.Iterative.RootServers (rootServers, getRootServers)
+import DNS.Iterative.RootTrustAnchors (getRootSep)
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
