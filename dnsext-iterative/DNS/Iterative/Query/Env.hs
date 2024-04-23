@@ -10,6 +10,7 @@ module DNS.Iterative.Query.Env (
     --
     getRootSep,
     getRootHint,
+    getLocalZones,
 ) where
 
 -- GHC packages
@@ -94,3 +95,8 @@ setTimeCache TimeCache{..} env0 =
 
 getRootHint :: FilePath -> IO Delegation
 getRootHint = withRootDelegation fail pure <=< getRootServers
+
+getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
+getLocalZones lzones = (Local.apexMap localName lzones, localName)
+  where
+    localName = Local.nameMap lzones
