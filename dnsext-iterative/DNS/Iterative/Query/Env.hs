@@ -3,7 +3,6 @@
 module DNS.Iterative.Query.Env (
     Env (..),
     newEnv,
-    newEnv',
     newEmptyEnv,
     --
     getRootSep,
@@ -47,13 +46,6 @@ newEnv root lzones = do
             , lookupLocalApex_ = Local.lookupApex localApex
             , lookupLocalDomain_ = Local.lookupName localName
             }
-
-{-# DEPRECATED newEnv' "use newEnv" #-}
-newEnv'
-    :: Maybe ([ResourceRecord], [ResourceRecord])
-    -> [(Domain, LocalZoneType, [ResourceRecord])]
-    -> IO Env
-newEnv' = newEnv
 
 newEmptyEnv :: IO Env
 newEmptyEnv = do
