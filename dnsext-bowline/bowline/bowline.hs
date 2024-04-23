@@ -95,7 +95,7 @@ runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootServers' cnf_root_hints
     env <-
-        newEnv' rootHint cnf_local_zones <&> \env0 ->
+        newEnv rootHint cnf_local_zones <&> \env0 ->
             env0
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP
