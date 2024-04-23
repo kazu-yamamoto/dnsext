@@ -1,18 +1,15 @@
 module DNS.Iterative.Internal (
     -- * types
     module DNS.Iterative.Query.Types,
-    newEnv,
+    module DNS.Iterative.Query.Env,
     getResponseIterative,
     CacheResult (..),
     getResponseCached,
     getResultIterative,
     getResultCached,
     replyMessage,
-    getRootSep,
-    getRootServers,
 
     -- * testing
-    newEmptyEnv,
     newTestCache,
     runResolve,
     runResolveExact,
@@ -37,5 +34,3 @@ import DNS.Iterative.Query.TestEnv
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import DNS.Iterative.Query.Verify
-import DNS.Iterative.RootServers
-import DNS.Iterative.RootTrustAnchors
