@@ -9,6 +9,7 @@ module DNS.Iterative.Query.Env (
     setTimeCache,
     --
     getRootSep,
+    getRootHint,
     getRootServers,
 ) where
 
@@ -93,3 +94,6 @@ setTimeCache TimeCache{..} env0 =
         { currentSeconds_ = getTime
         , timeString_ = getTimeStr
         }
+
+getRootHint :: FilePath -> IO Delegation
+getRootHint = withRootDelegation fail pure <=< getRootServers
