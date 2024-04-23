@@ -10,7 +10,6 @@ module DNS.Iterative.Query.Env (
     --
     getRootSep,
     getRootHint,
-    getRootServers,
 ) where
 
 -- GHC packages
