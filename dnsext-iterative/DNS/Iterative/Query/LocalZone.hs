@@ -94,9 +94,7 @@ lookupApexOn f aMap dom = do
     find ((dom `isSubDomainOf`) . f) subs
 
 lookupApex :: Map Domain [(Domain, LocalZoneType, [RRset])] -> Domain -> Maybe (Domain, LocalZoneType, [RRset])
-lookupApex aMap dom = do
-    (_super, subs) <- Map.lookupLE dom aMap
-    find ((dom `isSubDomainOf`) . lzDomain) subs
+lookupApex = lookupApexOn lzDomain
 
 {- FOURMOLU_DISABLE -}
 -- |
