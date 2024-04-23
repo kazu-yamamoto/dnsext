@@ -15,6 +15,7 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6)
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
 
@@ -100,6 +101,14 @@ axList disableV6NS pdom h = foldr takeAx []
         , Just v6 <- DNS.rdataField rd DNS.aaaa_ipv6 =
             h (IPv6 v6) rr : xs
     takeAx _ xs = xs
+
+rootHint :: Delegation
+rootHint = withRootDelegation error id rootServers
+
+withRootDelegation :: (String -> a) -> (Delegation -> a) -> ([ResourceRecord], [ResourceRecord]) -> a
+withRootDelegation left right (ns, as) =
+    maybe (left "withRootDelegation: bad configuration. NS list is empty?") (right . ($ [])) $
+        findDelegation (nsList (fromString ".") (,) ns) as
 
 -- | The existence or non-existence of a Delegation is independent of the existence of [DS_RD].
 -- >>> mkRR n ty rd = ResourceRecord n ty IN 3600000 rd
