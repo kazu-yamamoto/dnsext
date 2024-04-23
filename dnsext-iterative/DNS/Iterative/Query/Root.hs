@@ -55,7 +55,7 @@ refreshRoot = do
         let fallback s = lift $ do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                asks rootHint_
+                fromMaybe rootHint <$> asks rootHint_
         either fallback return =<< rootPriming
 
 {- FOURMOLU_DISABLE -}
@@ -68,7 +68,7 @@ steps of root priming
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming = do
     disableV6NS <- lift $ asks disableV6NS_
-    Delegation{delegationNS = hintDes} <- lift $ asks rootHint_
+    Delegation{delegationNS = hintDes} <- lift $ fromMaybe rootHint <$> asks rootHint_
     ips <- dentryToRandomIP 2 2 disableV6NS $ NE.toList hintDes
     lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
     seps <- lift $ asks rootAnchor_
