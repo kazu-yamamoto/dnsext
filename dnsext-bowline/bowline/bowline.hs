@@ -8,7 +8,6 @@ import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard)
-import DNS.Iterative.Internal (Env (..), getRootSep, getRootServers)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -96,7 +95,7 @@ runConfig tcache@TimeCache{..} mcache mng0 conf@Config{..} = do
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootServers' cnf_root_hints
     env <-
-        newEnv' rootHint cnf_local_zones <&> \env0 ->
+        newEnv rootHint cnf_local_zones <&> \env0 ->
             env0
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP

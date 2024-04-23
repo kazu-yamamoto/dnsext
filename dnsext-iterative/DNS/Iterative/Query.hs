@@ -1,7 +1,6 @@
 module DNS.Iterative.Query (
     -- * Env
-    Env,
-    newEnv,
+    module DNS.Iterative.Query.Env,
 
     -- * Iterative query
     resolveResponseIterative,
