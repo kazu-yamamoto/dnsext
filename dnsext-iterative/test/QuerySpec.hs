@@ -24,6 +24,7 @@ import DNS.Iterative.Internal (
     QueryContext (..),
     getResultIterative,
     newEmptyEnv,
+    rootHint,
     newTestCache,
     queryContextIN,
     refreshRoot,
@@ -79,7 +80,6 @@ spec = do
 envSpec :: Spec
 envSpec = describe "env" $ do
     it "rootHint" $ do
-        rootHint <- rootHint_ <$> newEmptyEnv
         let sp p = case p of Delegation{} -> True -- check not error
         rootHint `shouldSatisfy` sp
 

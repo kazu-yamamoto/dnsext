@@ -18,6 +18,7 @@ module DNS.Iterative.Internal (
     printResult,
     refreshRoot,
     rootPriming,
+    rootHint,
     rrsetValid,
     --
     rrWithRRSIG,

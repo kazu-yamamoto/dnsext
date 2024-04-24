@@ -67,7 +67,7 @@ data Env = Env
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
-    , rootHint_ :: Delegation
+    , rootHint_ :: Maybe Delegation
     , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
     , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
     , maxNegativeTTL_ :: TTL
