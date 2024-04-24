@@ -95,14 +95,16 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
     rootHint <- mapM getRootHint' cnf_root_hints
     let setOps = setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
+        localZones = getLocalZones cnf_local_zones
     env <-
-        newEnv Nothing cnf_local_zones <&> \env0 ->
+        newEnv Nothing [] <&> \env0 ->
             (setOps env0)
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , rootAnchor_ = trustAnchor
                 , rootHint_ = rootHint
+                , localZones_ = localZones
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
                 , timeout_ = tmout
                 }

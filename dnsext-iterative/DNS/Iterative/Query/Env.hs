@@ -10,6 +10,7 @@ module DNS.Iterative.Query.Env (
     --
     getRootSep,
     getRootHint,
+    getLocalZones,
 ) where
 
 -- GHC packages
@@ -23,7 +24,7 @@ import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
-import DNS.Types (Domain, RCODE (..), ResourceRecord)
+import DNS.Types (Domain, ResourceRecord)
 
 -- this package
 import DNS.Iterative.Imports
@@ -47,8 +48,7 @@ newEnv root lzones = do
     newEmptyEnv <&> \env0 ->
         env0
             { rootHint_ = rootHint'
-            , lookupLocalApex_ = Local.lookupApex localApex
-            , lookupLocalDomain_ = Local.lookupName localName
+            , localZones_ = (localApex, localName)
             }
 
 newEmptyEnv :: IO Env
@@ -64,8 +64,7 @@ newEmptyEnv = do
         , disableV6NS_ = False
         , rootAnchor_ = Nothing
         , rootHint_ = Nothing
-        , lookupLocalApex_ = \_ -> Nothing
-        , lookupLocalDomain_ = \_ _ -> Just (NoErr, [], [])
+        , localZones_ = mempty
         , maxNegativeTTL_ = 3600
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
@@ -96,3 +95,8 @@ setTimeCache TimeCache{..} env0 =
 
 getRootHint :: FilePath -> IO Delegation
 getRootHint = withRootDelegation fail pure <=< getRootServers
+
+getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
+getLocalZones lzones = (Local.apexMap localName lzones, localName)
+  where
+    localName = Local.nameMap lzones

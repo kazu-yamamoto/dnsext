@@ -2,6 +2,7 @@ module DNS.Iterative.Query.Types (
     Result,
     ResultRRS,
     LocalZoneType (..),
+    LocalZones,
     Env (..),
     QueryContext (..),
     queryContextIN,
@@ -24,6 +25,7 @@ module DNS.Iterative.Query.Types (
 
 -- GHC packages
 import Data.IORef (IORef)
+import Data.Map (Map)
 
 -- other packages
 
@@ -59,6 +61,8 @@ data LocalZoneType
     deriving Show
 {- FOURMOLU_ENABLE -}
 
+type LocalZones = (Map Domain [(Domain, LocalZoneType, [RRset])], Map Domain [RRset])
+
 ----------
 -- Monad and context
 
@@ -68,8 +72,7 @@ data Env = Env
     , disableV6NS_ :: Bool
     , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
     , rootHint_ :: Maybe Delegation
-    , lookupLocalApex_ :: Domain -> Maybe (Domain, LocalZoneType, [RRset])
-    , lookupLocalDomain_ :: (Domain, LocalZoneType, [RRset]) -> Question -> Maybe ResultRRS
+    , localZones_ :: LocalZones
     , maxNegativeTTL_ :: TTL
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
