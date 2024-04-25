@@ -22,7 +22,6 @@ import DNS.Do53.Internal (
  )
 import qualified DNS.Do53.Internal as DNS
 import DNS.Types
-import Data.IP (IP)
 import qualified Data.List.NonEmpty as NE
 
 -- this package
@@ -33,7 +32,7 @@ import DNS.Iterative.Query.Types
    Note about flags in request to an authoritative server.
   * RD (Recursion Desired) must be 0 for request to authoritative server
   * EDNS must be enable for DNSSEC OK request -}
-norec :: Bool -> [IP] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     let ris =
             [ defaultResolveInfo

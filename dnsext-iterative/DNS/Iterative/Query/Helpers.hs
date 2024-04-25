@@ -186,7 +186,7 @@ foldIPList n v4 v6 both ips = foldIPList' n v4 v6 both v4list v6list
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [IP]
+dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [Address]
 dentryToRandomIP entries addrs disableV6NS des = do
     acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
     es    <- map NE.toList <$> sequence acts               {- run randomly choice actions, ipv4 or ipv6  -}
@@ -220,7 +220,7 @@ dentryToRandomIP entries addrs disableV6NS des = do
 -- True
 -- >>> expect1 (all v4)                     (dentryIPsetChoices True  [de46])
 -- True
-dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty IP)]
+dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty Address)]
 dentryIPsetChoices disableV6NS des = mapMaybe choose des
   where
     choose  DEonlyNS{}           = Nothing
