@@ -190,6 +190,8 @@ data DEntry
     | DEwithA4 !Domain !(NonEmpty IPv4)
     | DEwithA6 !Domain !(NonEmpty IPv6)
     | DEonlyNS !Domain
+    | DEstubA4 !(NonEmpty (IPv4, PortNumber))
+    | DEstubA6 !(NonEmpty (IPv6, PortNumber))
     deriving (Show)
 
 ----------
