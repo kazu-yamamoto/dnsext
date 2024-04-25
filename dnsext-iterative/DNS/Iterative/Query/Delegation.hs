@@ -87,6 +87,8 @@ noV4DEntry (DEonlyNS {})          = True
 noV4DEntry (DEwithA4 _ (_:|_))    = False
 noV4DEntry (DEwithA6 _ _)         = True
 noV4DEntry (DEwithAx _ (_:|_) _)  = False
+noV4DEntry (DEstubA4  (_:|_))     = False
+noV4DEntry (DEstubA6  (_:|_))     = True
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

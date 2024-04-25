@@ -235,6 +235,8 @@ dentryIPsetChoices disableV6NS des = mapMaybe choose des
     choose (DEwithAx _ i4s i6s)
         | disableV6NS            = Just $ pure $ v4do53 i4s
         | otherwise              = Just $ randomizedChoice (v4do53 i4s) (v6do53 i6s)
+    choose (DEstubA4 i4s)        = Just $ pure [(IPv4 i, p) | (i, p) <- i4s]
+    choose (DEstubA6 i6s)        = Just $ pure [(IPv6 i, p) | (i, p) <- i6s]
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -263,6 +265,8 @@ dentryIPnull disableV6NS des = all ipNull des
     ipNull (DEwithA4 _ (_:|_))    = False  {- not null - with NonEmpty IPv4 -}
     ipNull  DEwithA6{}            = disableV6NS
     ipNull (DEwithAx _ (_:|_) _)  = False  {- not null - with NonEmpty IPv4 -}
+    ipNull (DEstubA4 (_:|_))      = False
+    ipNull (DEstubA6 (_:|_))      = disableV6NS
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
