@@ -32,7 +32,7 @@ setup disableV6NS putLines = do
     cacheOps <- Cache.newRRCacheOps cacheConf
     let tmout = timeout 3000000
         setOps = setRRCacheOps cacheOps . setTimeCache tcache
-    newEnv Nothing [] <&> \env0 ->
+    newEnv <&> \env0 ->
         (setOps env0)
             { logLines_ = putLines
             , disableV6NS_ = disableV6NS
