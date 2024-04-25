@@ -314,7 +314,7 @@ fillDelegationDS src dest
 queryDS
     :: Domain
     -> [RD_DNSKEY]
-    -> [IP]
+    -> [Address]
     -> Domain
     -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS zone dnskeys ips dom = do
