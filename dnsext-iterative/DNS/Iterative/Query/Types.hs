@@ -45,6 +45,7 @@ import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
 import Data.IP (IP, IPv4, IPv6)
+import Network.Socket (PortNumber)
 
 -- this package
 import DNS.Iterative.Imports
@@ -158,7 +159,7 @@ data DFreshState
     deriving Show
 {- FOURMOLU_ENABLE -}
 
-type Address = IP
+type Address = (IP, PortNumber)
 
 -- | Delegation information for domain
 data Delegation = Delegation

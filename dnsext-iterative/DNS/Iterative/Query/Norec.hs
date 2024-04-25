@@ -37,6 +37,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
     let ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
+                , rinfoPort = port
                 , rinfoActions =
                     defaultResolveActions
                         { ractionGenId = idGen_ cxt
@@ -47,7 +48,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                 , rinfoUDPRetry = 3
                 , rinfoVCLimit = 8 * 1024
                 }
-            | aserver <- aservers
+            | (aserver, port) <- aservers
             ]
         renv =
             ResolveEnv

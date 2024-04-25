@@ -1,3 +1,5 @@
+{-# LANGUAGE MonadComprehensions #-}
+
 module DNS.Iterative.Query.Helpers where
 
 -- GHC packages
@@ -199,8 +201,8 @@ dentryToRandomIP entries addrs disableV6NS des = do
 
 {- FOURMOLU_DISABLE -}
 -- |
--- >>> v4 i = case i of { IPv4{} -> True  ; IPv6{} -> False }
--- >>> v6 i = case i of { IPv4{} -> False ; IPv6{} -> True  }
+-- >>> v4 (i,_) = case i of { IPv4{} -> True  ; IPv6{} -> False }
+-- >>> v6 (i,_) = case i of { IPv4{} -> False ; IPv6{} -> True  }
 -- >>> expect1 p as = do { [a] <- pure as; is <- a; pure $ p $ NE.toList is }
 --
 -- >>> de4 = DEwithA4 "example." ("192.0.2.33" :| ["192.0.2.34"])
@@ -212,7 +214,7 @@ dentryToRandomIP entries addrs disableV6NS des = do
 -- >>> de6 = DEwithA6 "example." ("2001:db8::21" :| ["2001:db8::22"])
 -- >>> expect1 (all v6) (dentryIPsetChoices False [de6])
 -- True
--- >>> null             (dentryIPsetChoices True  [de6] :: [IO (NonEmpty IP)])
+-- >>> null             (dentryIPsetChoices True  [de6] :: [IO (NonEmpty Address)])
 -- True
 --
 -- >>> de46 = DEwithAx "example." ("192.0.2.35" :| ["192.0.2.36"]) ("2001:db8::23" :| ["2001:db8::24"])
@@ -223,14 +225,16 @@ dentryToRandomIP entries addrs disableV6NS des = do
 dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty Address)]
 dentryIPsetChoices disableV6NS des = mapMaybe choose des
   where
+    v4do53 i4s = [(IPv4 i, 53) | i <- i4s]
+    v6do53 i6s = [(IPv6 i, 53) | i <- i6s]
     choose  DEonlyNS{}           = Nothing
-    choose (DEwithA4 _ i4s)      = Just $ pure $ NE.map IPv4 i4s
+    choose (DEwithA4 _ i4s)      = Just $ pure $ v4do53 i4s
     choose (DEwithA6 _ i6s)
         | disableV6NS            = Nothing
-        | otherwise              = Just $ pure $ NE.map IPv6 i6s
+        | otherwise              = Just $ pure $ v6do53 i6s
     choose (DEwithAx _ i4s i6s)
-        | disableV6NS            = Just $ pure $ NE.map IPv4 i4s
-        | otherwise              = Just $ randomizedChoice (NE.map IPv4 i4s) (NE.map IPv6 i6s)
+        | disableV6NS            = Just $ pure $ v4do53 i4s
+        | otherwise              = Just $ randomizedChoice (v4do53 i4s) (v6do53 i6s)
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
