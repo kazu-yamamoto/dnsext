@@ -97,7 +97,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let setOps = setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
     env <-
-        newEnv Nothing [] <&> \env0 ->
+        newEnv <&> \env0 ->
             (setOps env0)
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP

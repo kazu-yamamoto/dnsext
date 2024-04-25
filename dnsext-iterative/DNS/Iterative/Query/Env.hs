@@ -37,19 +37,8 @@ import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
 -- | Creating a new 'Env'.
-newEnv
-    :: Maybe ([ResourceRecord], [ResourceRecord])
-    -> [(Domain, LocalZoneType, [ResourceRecord])]
-    -> IO Env
-newEnv root lzones = do
-    let localName = Local.nameMap lzones
-        localApex = Local.apexMap localName lzones
-    rootHint' <- mapM (withRootDelegation fail pure) root
-    newEmptyEnv <&> \env0 ->
-        env0
-            { rootHint_ = rootHint'
-            , localZones_ = (localApex, localName)
-            }
+newEnv :: IO Env
+newEnv = newEmptyEnv
 
 newEmptyEnv :: IO Env
 newEmptyEnv = do
