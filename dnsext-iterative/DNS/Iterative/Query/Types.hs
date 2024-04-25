@@ -8,6 +8,7 @@ module DNS.Iterative.Query.Types (
     QueryContext (..),
     queryContextIN,
     RRset (..),
+    Address,
     DEntry (..),
     ContextT,
     CasesNotFilledDS (..),
@@ -43,7 +44,7 @@ import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
-import Data.IP (IPv4, IPv6)
+import Data.IP (IP, IPv4, IPv6)
 
 -- this package
 import DNS.Iterative.Imports
@@ -156,6 +157,8 @@ data DFreshState
     | CachedD  {- From cache -}
     deriving Show
 {- FOURMOLU_ENABLE -}
+
+type Address = IP
 
 -- | Delegation information for domain
 data Delegation = Delegation
