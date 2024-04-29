@@ -155,12 +155,14 @@ data Delegation = Delegation
     }
     deriving (Show)
 
+{- FOURMOLU_DISABLE -}
 chainedStateDS :: Delegation -> Bool
 chainedStateDS d = case delegationDS d of
-    NotFilledDS _ -> False
-    (FilledDS []) -> False
-    (FilledDS (_ : _)) -> True
-    FilledRoot -> True
+    NotFilledDS _     -> False
+    FilledDS []       -> False
+    FilledDS (_ : _)  -> True
+    FilledRoot        -> True
+{- FOURMOLU_ENABLE -}
 
 data DEntry
     = DEwithAx !Domain !(NonEmpty IPv4) !(NonEmpty IPv6)
