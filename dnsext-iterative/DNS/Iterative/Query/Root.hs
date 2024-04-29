@@ -98,7 +98,7 @@ rootPriming = do
                     pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys FreshD
 
     verifyRoot = (FilledDS [rootSepDS], (map fst <$>) . Verify.sepDNSKEY [rootSepDS] "." . dnskeyList ".")
-    verifyConf (ks, [])  = (FilledRoot   , \_ -> Right ks)
+    verifyConf (ks, [])  = (FilledAnchor , \_ -> Right ks)
     verifyConf (ks, dss) = (FilledDS dss , \_ -> map fst <$> Verify.sepDNSKEY dss "." ks)
 
     body seps ips = do

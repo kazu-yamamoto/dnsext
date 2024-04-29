@@ -131,7 +131,7 @@ data CasesNotFilledDS
 data MayFilledDS
     = NotFilledDS CasesNotFilledDS
     | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
-    | FilledRoot
+    | FilledAnchor      {- filled by specified trust-anchor dnskey -}
     deriving (Show)
 
 data DFreshState
@@ -161,7 +161,7 @@ chainedStateDS d = case delegationDS d of
     NotFilledDS _     -> False
     FilledDS []       -> False
     FilledDS (_ : _)  -> True
-    FilledRoot        -> True
+    FilledAnchor      -> True
 {- FOURMOLU_ENABLE -}
 
 data DEntry
