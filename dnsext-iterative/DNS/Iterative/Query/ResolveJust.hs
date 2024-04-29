@@ -115,7 +115,7 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
+        let dnssecOK = chainedStateDS nss && not (null delegationDNSKEY)
         norec dnssecOK sas n typ
 {- FOURMOLU_ENABLE -}
 
@@ -163,7 +163,7 @@ iterative_ dc nss0 (x : xs)  =
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
+        let dnssecOK = chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
@@ -254,7 +254,7 @@ servsChildZone nss dom msg =
 fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
-    when (delegationHasDS filled && null delegationDNSKEY) $ do
+    when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
         lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is not null, and DNSKEY is null"
         lift . clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"

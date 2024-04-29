@@ -12,7 +12,7 @@ module DNS.Iterative.Query.Types (
     CasesNotFilledDS (..),
     MayFilledDS (..),
     Delegation (..),
-    delegationHasDS,
+    chainedStateDS,
     QueryError (..),
     DNSQuery,
     MayVerifiedRRS (..),
@@ -155,8 +155,8 @@ data Delegation = Delegation
     }
     deriving (Show)
 
-delegationHasDS :: Delegation -> Bool
-delegationHasDS d = case delegationDS d of
+chainedStateDS :: Delegation -> Bool
+chainedStateDS d = case delegationDS d of
     NotFilledDS _ -> False
     (FilledDS []) -> False
     (FilledDS (_ : _)) -> True
