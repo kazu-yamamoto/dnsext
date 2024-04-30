@@ -41,9 +41,10 @@ resolveByCache
     :: Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
 resolveByCache =
+    fmap (fmap (fmap (\(x,y,z) -> (x,(y,z))))) .
     resolveLogic
         "cache"
-        (\_ -> pure ((), ([], [])))
+        (\_ -> pure ((), [], []))
         (\_ _ -> pure ((), Nothing, ([], [])))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
@@ -53,20 +54,20 @@ resolveByCache =
 resolve
     :: Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
-resolve = resolveLogic "query" resolveCNAME resolveTYPE
+resolve = fmap (fmap (fmap (\(x,y,z) -> (x,(y,z))))) . resolveLogic "query" resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |
    result value of resolveLogic:
    * Left ResultRRS                 - cached result
-   * Right (a, ([RRset], [RRset]))  - queried result like (DNSMessage, ([RRset], [RRset]))
+   * Right (a, [RRset], [RRset])    - queried result like (DNSMessage, [RRset], [RRset])
    * QueryError                     - other errors   -}
 resolveLogic
     :: String
-    -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
+    -> (Domain -> DNSQuery (a, [RRset], [RRset]))
     -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
     -> Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (a, ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (a, [RRset], [RRset]))
 resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     env <- lift ask
     maybe (called *> notLocal) local =<< takeLocalResult env q
@@ -105,8 +106,8 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = lift (logLn_ Log.DEMO $ show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = do
-                    (msg, cname, vsec) <- typeHandler bn typ
-                    maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
+                    (msg, cname, (ans, auth)) <- typeHandler bn typ
+                    maybe (pure ((dcnRRsets [], bn), Right (msg, ans, auth))) recCNAMEs_ cname
 
                 withERRC (rc, soa) = pure ((dcnRRsets [], bn), Left (rc, [], soa))
 
@@ -157,10 +158,10 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
 {- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
-resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
+resolveCNAME :: Domain -> DNSQuery (DNSMessage, [RRset], [RRset])
 resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
-    (,) msg <$> cacheAnswer d bn CNAME msg
+    uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
 
 {- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
    結果が CNAME なら、その RR も返す.
