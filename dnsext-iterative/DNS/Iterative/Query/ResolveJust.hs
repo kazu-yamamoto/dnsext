@@ -115,8 +115,8 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
-        norec dnssecOK sas n typ
+        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
+        norec withDO sas n typ
 {- FOURMOLU_ENABLE -}
 
 maxNotSublevelDelegation :: Int
@@ -163,11 +163,11 @@ iterative_ dc nss0 (x : xs)  =
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = delegationHasDS nss && not (null delegationDNSKEY)
+        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-        msg <- norec dnssecOK sas name requestDelegationTYPE
+        msg <- norec withDO sas name requestDelegationTYPE
         let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
             sharedHandler = servsChildZone nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg
@@ -254,9 +254,9 @@ servsChildZone nss dom msg =
 fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
-    when (delegationHasDS filled && null delegationDNSKEY) $ do
+    when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
-        lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is not null, and DNSKEY is null"
+        lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
         lift . clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
@@ -270,7 +270,7 @@ fillsDNSSEC nss d = do
 -- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithA4 h1 (a1:|[]) :| [DEwithA4 h2 (a2:|[])]) ds [dummyDNSKEY] FreshD
 -- >>> parent = withNS2 "org." "a0.org.afilias-nst.info." "199.19.56.1" "a2.org.afilias-nst.info." "199.249.112.1" (FilledDS [dummyDS])
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
--- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; FilledRoot -> True }
+-- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; FilledAnchor -> True }
 -- >>> env <- _newTestEnv _noLogging
 -- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryContextIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
@@ -287,7 +287,7 @@ fillDelegationDS src dest
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
-        FilledRoot -> pure dest {- specified root-dnskey case, filled root -}
+        FilledAnchor -> pure dest {- specified trust-anchor dnskey case -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
@@ -334,7 +334,7 @@ fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone =
     {- DS(Delegation Signer) is not filled -}
     lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     return d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledRoot} = return d {- assume filled in root-priming -}
+fillDelegationDNSKEY d@Delegation{delegationDS = FilledAnchor} = return d {- assume filled in root-priming -}
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =

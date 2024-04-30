@@ -12,7 +12,7 @@ module DNS.Iterative.Query.Types (
     CasesNotFilledDS (..),
     MayFilledDS (..),
     Delegation (..),
-    delegationHasDS,
+    chainedStateDS,
     QueryError (..),
     DNSQuery,
     MayVerifiedRRS (..),
@@ -131,7 +131,7 @@ data CasesNotFilledDS
 data MayFilledDS
     = NotFilledDS CasesNotFilledDS
     | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
-    | FilledRoot
+    | FilledAnchor      {- filled by specified trust-anchor dnskey -}
     deriving (Show)
 
 data DFreshState
@@ -155,12 +155,14 @@ data Delegation = Delegation
     }
     deriving (Show)
 
-delegationHasDS :: Delegation -> Bool
-delegationHasDS d = case delegationDS d of
-    NotFilledDS _ -> False
-    (FilledDS []) -> False
-    (FilledDS (_ : _)) -> True
-    FilledRoot -> True
+{- FOURMOLU_DISABLE -}
+chainedStateDS :: Delegation -> Bool
+chainedStateDS d = case delegationDS d of
+    NotFilledDS _     -> False
+    FilledDS []       -> False
+    FilledDS (_ : _)  -> True
+    FilledAnchor      -> True
+{- FOURMOLU_ENABLE -}
 
 data DEntry
     = DEwithAx !Domain !(NonEmpty IPv4) !(NonEmpty IPv6)
