@@ -14,10 +14,7 @@ module DNS.Iterative.Query.Resolve (
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
 import qualified DNS.Log as Log
-import DNS.RRCache (
-    Ranking (RankAdditional),
-    rankedAnswer,
- )
+import DNS.RRCache (Ranking (RankAdditional), rankedAnswer)
 import qualified DNS.RRCache as Cache
 import DNS.Types
 import qualified DNS.Types as DNS
@@ -36,11 +33,7 @@ runResolve
     :: Env
     -> Question
     -> QueryControls
-    -> IO
-        ( Either
-            QueryError
-            (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
-        )
+    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset]))))
 runResolve cxt q cd = runDNSQuery (resolve q) cxt $ QueryContext cd q
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
