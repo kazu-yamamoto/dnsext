@@ -212,7 +212,7 @@ getResultIterative q = do
     ((cnrrs, _rn), etm) <- resolve q
     reqDO <- lift . lift $ asks requestDO
     let fromRRsets = concatMap $ rrListFromRRset reqDO
-        fromMessage (msg, (vans, vauth)) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
+        fromMessage (msg, vans, vauth) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
 resultFromRRS :: RequestDO -> ResultRRS -> Result

@@ -34,14 +34,13 @@ runResolve
     :: Env
     -> Question
     -> QueryControls
-    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset]))))
+    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (DNSMessage, [RRset], [RRset])))
 runResolve cxt q cd = runDNSQuery (resolve q) cxt $ QueryContext cd q
 
 resolveByCache
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), [RRset], [RRset]))
 resolveByCache =
-    fmap (fmap (fmap (\(x,y,z) -> (x,(y,z))))) .
     resolveLogic
         "cache"
         (\_ -> pure ((), [], []))
@@ -53,8 +52,8 @@ resolveByCache =
    目的の TYPE の結果レコードをキャッシュする. -}
 resolve
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
-resolve = fmap (fmap (fmap (\(x,y,z) -> (x,(y,z))))) . resolveLogic "query" resolveCNAME resolveTYPE
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, [RRset], [RRset]))
+resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |

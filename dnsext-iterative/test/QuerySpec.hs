@@ -153,7 +153,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         verified rrsets
             | all rrsetValid rrsets = Verified
             | otherwise = NotVerified
-        checkVAnswer (msg, (vans, _))
+        checkVAnswer (msg, vans, _)
             | null vans = VEmpty rcode
             | otherwise = VNotEmpty rcode (verified vans)
           where
