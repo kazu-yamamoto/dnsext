@@ -115,8 +115,8 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = chainedStateDS nss && not (null delegationDNSKEY)
-        norec dnssecOK sas n typ
+        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
+        norec withDO sas n typ
 {- FOURMOLU_ENABLE -}
 
 maxNotSublevelDelegation :: Int
@@ -163,11 +163,11 @@ iterative_ dc nss0 (x : xs)  =
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
-        let dnssecOK = chainedStateDS nss && not (null delegationDNSKEY)
+        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-        msg <- norec dnssecOK sas name requestDelegationTYPE
+        msg <- norec withDO sas name requestDelegationTYPE
         let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
             sharedHandler = servsChildZone nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg
