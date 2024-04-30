@@ -256,7 +256,7 @@ fillsDNSSEC nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
-        lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is not null, and DNSKEY is null"
+        lift . logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
         lift . clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
