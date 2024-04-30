@@ -254,15 +254,6 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
 
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
 
-resolveByCache
-    :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
-resolveByCache =
-    resolveLogic
-        "cache"
-        (\_ -> pure ((), ([], [])))
-        (\_ _ -> pure ((), Nothing, ([], [])))
-
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO rs@RRset{..} = case reqDO of
     NoDnssecOK -> rrs
