@@ -34,12 +34,12 @@ runResolve
     :: Env
     -> Question
     -> QueryControls
-    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (DNSMessage, [RRset], [RRset])))
+    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage)))
 runResolve cxt q cd = runDNSQuery (resolve q) cxt $ QueryContext cd q
 
 resolveByCache
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), [RRset], [RRset]))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' ()))
 resolveByCache =
     resolveLogic
         "cache"
@@ -52,21 +52,21 @@ resolveByCache =
    目的の TYPE の結果レコードをキャッシュする. -}
 resolve
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, [RRset], [RRset]))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |
    result value of resolveLogic:
    * Left ResultRRS                 - cached result
-   * Right (a, [RRset], [RRset])    - queried result like (DNSMessage, [RRset], [RRset])
+   * Right (ResultRRS' a)           - queried result like (ResultRRS' DNSMessage)
    * QueryError                     - other errors   -}
 resolveLogic
     :: String
-    -> (Domain -> DNSQuery (a, [RRset], [RRset]))
-    -> (Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (a, [RRset], [RRset])))
+    -> (Domain -> DNSQuery (ResultRRS' a))
+    -> (Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' a)))
     -> Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (a, [RRset], [RRset]))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
 resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     env <- lift ask
     maybe (called *> notLocal) local =<< takeLocalResult env q
@@ -155,7 +155,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
 {- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
-resolveCNAME :: Domain -> DNSQuery (DNSMessage, [RRset], [RRset])
+resolveCNAME :: Domain -> DNSQuery (ResultRRS' DNSMessage)
 resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
     uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
@@ -164,7 +164,7 @@ resolveCNAME bn = do
    結果が CNAME の場合、そのドメイン名と RRset を返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
 {- returns: result msg, cname, verified answer, verified authority -}
-resolveTYPE :: Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (DNSMessage, [RRset], [RRset]))
+resolveTYPE :: Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' DNSMessage))
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveExact bn typ
     let cnDomain rr = DNS.rdataField (rdata rr) DNS.cname_domain

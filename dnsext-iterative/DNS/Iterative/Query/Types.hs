@@ -1,5 +1,6 @@
 module DNS.Iterative.Query.Types (
     Result,
+    ResultRRS',
     ResultRRS,
     LocalZoneType (..),
     LocalZones,
@@ -206,4 +207,5 @@ data RRset = RRset
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, [ResourceRecord], [ResourceRecord])
-type ResultRRS = (RCODE, [RRset], [RRset])
+type ResultRRS' a = (a, [RRset], [RRset])
+type ResultRRS = ResultRRS' RCODE
