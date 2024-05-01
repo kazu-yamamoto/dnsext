@@ -34,17 +34,17 @@ runResolve
     :: Env
     -> Question
     -> QueryControls
-    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset]))))
+    -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage)))
 runResolve cxt q cd = runDNSQuery (resolve q) cxt $ QueryContext cd q
 
 resolveByCache
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS ((), ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' ()))
 resolveByCache =
     resolveLogic
         "cache"
-        (\_ -> pure ((), ([], [])))
-        (\_ _ -> pure ((), Nothing, ([], [])))
+        (\_ -> pure ((), [], []))
+        (\_ _ -> pure $ Right ((), [], []))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
@@ -52,21 +52,21 @@ resolveByCache =
    目的の TYPE の結果レコードをキャッシュする. -}
 resolve
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (DNSMessage, ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
 resolve = resolveLogic "query" resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |
    result value of resolveLogic:
    * Left ResultRRS                 - cached result
-   * Right (a, ([RRset], [RRset]))  - queried result like (DNSMessage, ([RRset], [RRset]))
+   * Right (ResultRRS' a)           - queried result like (ResultRRS' DNSMessage)
    * QueryError                     - other errors   -}
 resolveLogic
     :: String
-    -> (Domain -> DNSQuery (a, ([RRset], [RRset])))
-    -> (Domain -> TYPE -> DNSQuery (a, Maybe (Domain, RRset), ([RRset], [RRset])))
+    -> (Domain -> DNSQuery (ResultRRS' a))
+    -> (Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' a)))
     -> Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (a, ([RRset], [RRset])))
+    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
 resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     env <- lift ask
     maybe (called *> notLocal) local =<< takeLocalResult env q
@@ -104,9 +104,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = lift (logLn_ Log.DEMO $ show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
-                noCache = do
-                    (msg, cname, vsec) <- typeHandler bn typ
-                    maybe (pure ((dcnRRsets [], bn), Right (msg, vsec))) recCNAMEs_ cname
+                noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . Right) =<< typeHandler bn typ
 
                 withERRC (rc, soa) = pure ((dcnRRsets [], bn), Left (rc, [], soa))
 
@@ -157,26 +155,26 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
 {- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
-resolveCNAME :: Domain -> DNSQuery (DNSMessage, ([RRset], [RRset]))
+resolveCNAME :: Domain -> DNSQuery (ResultRRS' DNSMessage)
 resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
-    (,) msg <$> cacheAnswer d bn CNAME msg
+    uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
 
-{- 目的の TYPE のレコードの取得を試み、結果の DNSMessage を返す.
-   結果が CNAME なら、その RR も返す.
+{- 目的の TYPE のレコードを取得できた場合には、結果の DNSMessage と RRset を返す.
+   結果が CNAME の場合、そのドメイン名と RRset を返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
 {- returns: result msg, cname, verified answer, verified authority -}
-resolveTYPE :: Domain -> TYPE -> DNSQuery (DNSMessage, Maybe (Domain, RRset), ([RRset], [RRset]))
+resolveTYPE :: Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' DNSMessage))
 resolveTYPE bn typ = do
     (msg, delegation@Delegation{..}) <- resolveExact bn typ
     let cnDomain rr = DNS.rdataField (rdata rr) DNS.cname_domain
-        nullCNAME = (,,) msg Nothing <$> cacheAnswer delegation bn typ msg
-        ncCNAME _ncLog = pure (msg, Nothing, ([], []))
+        nullCNAME = Right . uncurry ((,,) msg) <$> cacheAnswer delegation bn typ msg
+        ncCNAME _ncLog = pure $ Right (msg, [], [])
         ansHasTYPE = any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg
         mkResult cnames cnameRRset cacheCNAME = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
-            lift cacheCNAME $> (msg, cninfo, ([], []))
+            lift cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
     getSec <- lift $ asks currentSeconds_
     Verify.cases getSec delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
