@@ -77,13 +77,6 @@ nsList
     -> [a]
 nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
 
-cnameList
-    :: Domain
-    -> (Domain -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-cnameList = rrListWith CNAME $ \rd -> DNS.rdataField rd DNS.cname_domain
-
 axList
     :: Bool
     -> (Domain -> Bool)
