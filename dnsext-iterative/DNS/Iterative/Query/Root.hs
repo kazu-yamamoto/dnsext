@@ -63,56 +63,54 @@ refreshRoot = do
 {- FOURMOLU_DISABLE -}
 {-
 steps of root priming
-1. get DNSKEY RRset of root-domain using `cachedDNSKEY` steps
+1. get DNSKEY RRset of root-domain using `fillDelegationDNSKEY` steps
 2. query NS from root-domain with DO flag - get NS RRset and RRSIG
 3. verify NS RRset of root-domain with RRSIGa
  -}
 rootPriming :: DNSQuery (Either String Delegation)
-rootPriming = do
-    disableV6NS <- lift $ asks disableV6NS_
-    Delegation{delegationNS = hintDes} <- lift $ fromMaybe rootHint <$> asks rootHint_
-    ips <- dentryToRandomIP 2 2 disableV6NS $ NE.toList hintDes
-    lift . logLn Log.DEMO $ unwords $ "root-server addresses for priming:" : [show ip | ip <- ips]
-    seps <- lift $ asks rootAnchor_
-    body seps ips
+rootPriming =
+    priming =<< fillDelegationDNSKEY =<< getHint
   where
-    left s = pure $ Left $ "rootPriming: " ++ s
+    left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
         putDelegation PPFull delegationNS (logLn Log.DEMO) (logLn Log.DEBUG . ("zone: \".\":\n" ++))
-    nullNS = left "no NS RRs"
-    ncNS _ncLog = left "not canonical NS RRs"
+    nullNS = pure $ left "no NS RRs"
+    ncNS _ncLog = pure $ left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
-    verify getSec dnskeys msgNS dsState = Verify.cases getSec "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+
+    verify getSec hint msgNS = Verify.cases getSec "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
         \nsps nsRRset cacheNS -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
                     (axList False (`Set.member` nsSet) (\_ rr -> rr) rrs, cacheSection axRRs rank)
-                mkD dom ents = Delegation dom ents dsState [] FreshD
-            case findDelegation' mkD nsps axRRs of
-                Nothing -> left "no delegation"
-                Just d | not $ rrsetValid nsRRset -> do
-                    logResult (delegationNS d) Red "verification failed - RRSIG of NS: \".\""
-                    left "DNSSEC verification failed"
-                Just (Delegation{..}) -> do
-                    cacheNS *> cacheAX
-                    logResult delegationNS Green "verification success - RRSIG of NS: \".\""
-                    pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys FreshD
+                result "."  ents
+                    | not $ rrsetValid nsRRset =
+                          logResult ents Red "verification failed - RRSIG of NS: \".\"" $> left "DNSSEC verification failed"
+                    | otherwise                = do
+                          cacheNS *> cacheAX
+                          logResult ents Green "verification success - RRSIG of NS: \".\""
+                          pure $ Right $ hint{delegationNS = ents, delegationFresh = FreshD}
+                result apex _ents = pure $ left $ "inconsistent zone apex: " ++ show apex ++ ", not \".\""
+            fromMaybe (pure $ left "no delegation") $ findDelegation' result nsps axRRs
+      where
+        dnskeys = delegationDNSKEY hint
 
-    verifySEP dss = (map fst <$>) . Verify.sepDNSKEY dss "." . dnskeyList "."
-    verifyRoot = (FilledDS [rootSepDS], verifySEP [rootSepDS])
-    sepResult s ss = (AnchorSEP [] (s :| ss), \_ -> Right (s : ss))
-    verifyConf (sep, [])  = list verifyRoot sepResult sep
-    verifyConf ([] , dss) = (FilledDS dss , verifySEP dss)
-    verifyConf (sep, dss) = (FilledDS dss , \_ -> map fst <$> Verify.sepDNSKEY dss "." sep)
-
-    body seps ips = do
-        let (dsState, getSEPs) = maybe verifyRoot verifyConf seps
-            getVerified dnskeys = do
-                getSec <- lift $ asks currentSeconds_
-                msgNS <- norec True ips "." NS
-                lift $ verify getSec dnskeys msgNS dsState
-        either (pure . Left . ("rootPriming: " ++)) getVerified =<< cachedDNSKEY' getSEPs ips "."
+    getHint = do
+        hint <- lift $ fromMaybe rootHint <$> asks rootHint_
+        anchor <- lift $ asks rootAnchor_
+        maybe (pure . setRoot) setAnchor anchor hint
+      where
+        invalidSEP s = lift (logLn Log.WARN $ "root-priming: inconsistent SEP: " ++ s) *> throwDnsError ServerFailure
+        sepResult dss d sep = list (setRoot d) (\s ss -> d{delegationDS = AnchorSEP dss (s :| ss)}) sep
+        setRoot              d = d{delegationDS = FilledDS [rootSepDS]}
+        setAnchor (sep, [])  d = pure $ sepResult [] d sep
+        setAnchor (sep, dss) d = either invalidSEP (pure . sepResult dss d . map fst) $ Verify.sepDNSKEY dss "." sep
+    priming hint = do
+        getSec <- lift $ asks currentSeconds_
+        ips <- delegationIPs hint
+        msgNS <- norec True ips "." NS
+        lift $ verify getSec hint msgNS
 {- FOURMOLU_ENABLE -}
 
 ---
