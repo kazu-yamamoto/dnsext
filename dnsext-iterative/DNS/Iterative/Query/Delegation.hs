@@ -73,7 +73,7 @@ lookupDelegation zone = do
         getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
-            let nss = sort $ nsList zone const rrs
+            let nss = sort $ rrListWith NS (`DNS.rdataField` DNS.ns_domain) zone const rrs
             case nss of
                 []     -> return $ Just noDelegation {- hit null NS list, so no delegation -}
                 _ : _  -> fromDEs . concat <$> mapM (lookupDEntry zone) nss
@@ -120,7 +120,8 @@ delegationWithCache zone dnskeys dom msg = do
     domTraceMsg = show zone ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
-        let nsps_ = nsList dom (,) rrs in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
+        let nsps_ = rrListWith NS (`DNS.rdataField` DNS.ns_domain) dom (,) rrs
+        in (nsps_, cacheNoRRSIG (map snd nsps_) rank)
 
     (adds, cacheAdds) = withSection rankedAdditional msg $ \rrs rank ->
         let axs = filter match rrs in (axs, cacheSection axs rank)
