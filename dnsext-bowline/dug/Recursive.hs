@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 
-module Recursive (recursiveQeury) where
+module Recursive (recursiveQuery) where
 
 import Control.Concurrent
 import Control.Concurrent.Async
@@ -43,7 +43,7 @@ import Text.Read (readMaybe)
 
 import Types
 
-recursiveQeury
+recursiveQuery
     :: [HostName]
     -> PortNumber
     -> (DNS.DNSMessage -> IO ())
@@ -51,7 +51,7 @@ recursiveQeury
     -> [(Question, QueryControls)]
     -> Options
     -> IO ()
-recursiveQeury mserver port putLn putLines qcs Options{..} = do
+recursiveQuery mserver port putLn putLines qcs Options{..} = do
     mbs <- case optResumptionFile of
         Nothing -> return Nothing
         Just file -> do

@@ -41,7 +41,7 @@ import qualified DNS.Log as Log
 import Iterative (iterativeQuery)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
-import Recursive (recursiveQeury)
+import Recursive (recursiveQuery)
 import Types
 
 ----------------------------------------------------------------
@@ -143,7 +143,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQeury mserver port putLn putLines qs opts
+            recursiveQuery mserver port putLn putLines qs opts
     ------------------------
     putTime t0 putLines
     killThread tid
