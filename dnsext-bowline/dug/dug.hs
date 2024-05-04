@@ -19,6 +19,7 @@ import DNS.SVCB (ALPN, addResourceDataForSVCB)
 import DNS.Types (
     CLASS (..),
     DNSMessage,
+    Domain,
     Question (..),
     TYPE (..),
     fromRepresentation,
@@ -243,32 +244,39 @@ getQueries xs0 = loop xs0 id
 -- Question d t IN
 getQuery :: [String] -> IO ((Question, QueryControls), [String])
 getQuery [] = do
-    putStrLn "never reach"
+    putStrLn "never reached"
     exitFailure
-getQuery (x : xs)
-    | '.' `notElem` x = do
-        putStrLn $ show x ++ " does not contain '.'"
+getQuery xs = do
+    (queryName, xs1) <- getQueryName xs
+    (queryType, xs2) <- getQueryType xs1
+    (queryControls, ys) <- getQueryControls xs2
+    return ((Question queryName queryType IN, queryControls), ys)
+
+getQueryName :: [String] -> IO (Domain, [String])
+getQueryName [] = do
+    putStrLn "Query name must be specified"
+    exitFailure
+getQueryName (queryName : ys)
+    | '.' `notElem` queryName = do
+        putStrLn $ show queryName ++ " does not contain '.'"
         exitFailure
+    | otherwise = return (fromRepresentation queryName, ys)
+
+getQueryType :: [String] -> IO (TYPE, [String])
+getQueryType [] = return (A, [])
+getQueryType (queryType' : ys)
+    | "+" `isPrefixOf` queryType' = return (A, queryType' : ys)
+    | Just queryType <- readMaybe queryType' = return (queryType, ys)
     | otherwise = do
-        let d = fromRepresentation x
-        case xs of
-            [] -> return ((Question d A IN, mempty), [])
-            y : ys
-                | '.' `elem` y -> return ((Question d A IN, mempty), xs)
-                | "+" `isPrefixOf` y -> do
-                    let (qs, zs) = span ("+" `isPrefixOf`) ys
-                        qctls = mconcat $ map toFlag (y : qs)
-                    return ((Question d A IN, qctls), zs)
-                | otherwise -> do
-                    let mtyp = readMaybe y
-                    case mtyp of
-                        Nothing -> do
-                            putStrLn $ "Type " ++ y ++ " is not supported"
-                            exitFailure
-                        Just typ -> do
-                            let (qs, zs) = span ("+" `isPrefixOf`) ys
-                                qctls = mconcat $ map toFlag qs
-                            return ((Question d typ IN, qctls), zs)
+        putStrLn $ "Type " ++ queryType' ++ " is not supported"
+        exitFailure
+
+getQueryControls :: [String] -> IO (QueryControls, [String])
+getQueryControls [] = return (mempty, [])
+getQueryControls xs = do
+    let (queryControls', ys) = span ("+" `isPrefixOf`) xs
+    queryControls <- fmap mconcat $ sequence $ map toFlag queryControls'
+    return (queryControls, ys)
 
 ----------------------------------------------------------------
 
@@ -303,22 +311,24 @@ convLogLevel _ = Log.DEBUG
 
 ----------------------------------------------------------------
 
-toFlag :: String -> QueryControls
-toFlag "+rec"       = rdFlag FlagSet
-toFlag "+recurse"   = rdFlag FlagSet
-toFlag "+norec"     = rdFlag FlagClear
-toFlag "+norecurse" = rdFlag FlagClear
-toFlag "+dnssec"    = doFlag FlagSet
-toFlag "+nodnssec"  = doFlag FlagClear
-toFlag "+rdflag"    = rdFlag FlagSet
-toFlag "+nordflag"  = rdFlag FlagClear
-toFlag "+doflag"    = doFlag FlagSet
-toFlag "+nodoflag"  = doFlag FlagClear
-toFlag "+cdflag"    = cdFlag FlagSet
-toFlag "+nocdflag"  = cdFlag FlagClear
-toFlag "+adflag"    = adFlag FlagSet
-toFlag "+noadflag"  = adFlag FlagClear
-toFlag _            = mempty
+toFlag :: String -> IO QueryControls
+toFlag "+rec"       = return $ rdFlag FlagSet
+toFlag "+recurse"   = return $ rdFlag FlagSet
+toFlag "+norec"     = return $ rdFlag FlagClear
+toFlag "+norecurse" = return $ rdFlag FlagClear
+toFlag "+dnssec"    = return $ doFlag FlagSet
+toFlag "+nodnssec"  = return $ doFlag FlagClear
+toFlag "+rdflag"    = return $ rdFlag FlagSet
+toFlag "+nordflag"  = return $ rdFlag FlagClear
+toFlag "+doflag"    = return $ doFlag FlagSet
+toFlag "+nodoflag"  = return $ doFlag FlagClear
+toFlag "+cdflag"    = return $ cdFlag FlagSet
+toFlag "+nocdflag"  = return $ cdFlag FlagClear
+toFlag "+adflag"    = return $ adFlag FlagSet
+toFlag "+noadflag"  = return $ adFlag FlagClear
+toFlag x            = do
+    putStrLn $ "Unrecognized query control " ++ x
+    exitFailure
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -327,11 +337,11 @@ help :: String
 help =
     intercalate
         "\n"
-        [ "Usage: dug [options] [@server]* [name [query-type [query-option]]]+"
+        [ "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
         , ""
         , "query-type: a | aaaa | ns | txt | ptr | ..."
         , ""
-        , "query-option:"
+        , "query-control:"
         , "  +[no]rdflag: [un]set RD (Recursion Desired) bit, +[no]rec[curse]"
         , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
         , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
