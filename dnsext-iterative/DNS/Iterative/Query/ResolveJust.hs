@@ -329,42 +329,6 @@ queryDS zone dnskeys ips dom = do
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
-    {- DS(Delegation Signer) is not filled -}
-    lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
-    return d
-fillDelegationDNSKEY d@Delegation{delegationDS = AnchorSEP {}} = return d {- filled by trust-anchor -}
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
-    maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
-  where
-    zone = delegationZone
-    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
-    fill dnskeys = return d{delegationDNSKEY = dnskeys}
-    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> return d
-    query ips = do
-        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
--- Get authoritative server addresses from the delegation information.
-delegationIPs :: Delegation -> DNSQuery [IP]
-delegationIPs Delegation{..} = do
-    disableV6NS <- lift (asks disableV6NS_)
-    ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
-    when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
-    pure ips
-  where
-    dentry = NE.toList delegationNS
-    entryNum = 2
-    addrNum = 2
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 fillDelegation :: Int -> Delegation -> DNSQuery Delegation
 fillDelegation dc d0 = do
     disableV6NS <- lift (asks disableV6NS_)

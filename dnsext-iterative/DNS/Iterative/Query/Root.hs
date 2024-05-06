@@ -2,9 +2,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Root (
+    fillDelegationDNSKEY,
+    delegationIPs,
+    --
     refreshRoot,
     rootPriming,
-    cachedDNSKEY,
 ) where
 
 -- GHC packages
@@ -167,10 +169,6 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY :: [RD_DS] -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY [] _ _ = pure $ Left "cachedDSNKEY: no DS entry"
-cachedDNSKEY dss aservers dom = cachedDNSKEY' ((map fst <$>) . Verify.sepDNSKEY dss dom . dnskeyList dom) aservers dom
-
 cachedDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY' getSEPs aservers zone = do
     msg <- norec True aservers zone DNSKEY
