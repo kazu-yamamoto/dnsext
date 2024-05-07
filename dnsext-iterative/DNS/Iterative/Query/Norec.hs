@@ -21,8 +21,7 @@ import DNS.Do53.Internal (
     udpTcpResolver,
  )
 import qualified DNS.Do53.Internal as DNS
-import DNS.Types hiding (InvalidEDNS, flags)
-import qualified DNS.Types as DNS
+import DNS.Types
 import Data.IP (IP)
 import qualified Data.List.NonEmpty as NE
 
@@ -66,21 +65,6 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
         (Left . DnsError)
         (handleResponseError Left Right . DNS.replyDNSMessage . DNS.resultReply)
         <$> DNS.resolve renv q qctl
-
--- responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
--- responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
-
-handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
-handleResponseError e f msg
-    | not (DNS.isResponse flags) = e $ NotResponse (DNS.isResponse flags) msg
-    | DNS.ednsHeader msg == DNS.InvalidEDNS =
-        e $ InvalidEDNS (DNS.ednsHeader msg) msg
-    | DNS.rcode msg
-        `notElem` [DNS.NoErr, DNS.NameErr] =
-        e $ HasError (DNS.rcode msg) msg
-    | otherwise = f msg
-  where
-    flags = DNS.flags msg
 
 dnsQueryT :: (Env -> QueryContext -> IO (Either QueryError a)) -> DNSQuery a
 dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k

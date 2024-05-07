@@ -5,7 +5,6 @@ module DNS.Iterative.Query.Resolve (
     runResolve,
     resolveByCache,
     resolve,
-    resolveLogic,
 ) where
 
 -- GHC packages

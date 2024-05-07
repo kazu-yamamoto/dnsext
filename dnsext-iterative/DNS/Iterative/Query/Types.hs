@@ -22,6 +22,7 @@ module DNS.Iterative.Query.Types (
     runDNSQuery,
     throwDnsError,
     handleDnsError,
+    handleResponseError,
 ) where
 
 -- GHC packages
@@ -40,7 +41,7 @@ import DNS.RRCache (
  )
 import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types
+import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
 import Data.IP (IPv4, IPv6)
 
@@ -117,6 +118,21 @@ handleDnsError
     -> DNSQuery a
     -> DNSQuery a
 handleDnsError left right q = either left right =<< lift (runExceptT q)
+
+-- example instances
+-- - responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
+-- - responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
+handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
+handleResponseError e f msg
+    | not (DNS.isResponse flags_) = e $ NotResponse (DNS.isResponse flags_) msg
+    | DNS.ednsHeader msg == DNS.InvalidEDNS =
+        e $ InvalidEDNS (DNS.ednsHeader msg) msg
+    | DNS.rcode msg
+        `notElem` [DNS.NoErr, DNS.NameErr] =
+        e $ HasError (DNS.rcode msg) msg
+    | otherwise = f msg
+  where
+    flags_ = DNS.flags msg
 
 ----------
 -- Delegation

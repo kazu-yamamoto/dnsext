@@ -70,20 +70,6 @@ withSection
     -> a
 withSection getRanked msg body = uncurry body $ getRanked msg
 
-nsList
-    :: Domain
-    -> (Domain -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-nsList = rrListWith NS $ \rd -> DNS.rdataField rd DNS.ns_domain
-
-cnameList
-    :: Domain
-    -> (Domain -> ResourceRecord -> a)
-    -> [ResourceRecord]
-    -> [a]
-cnameList = rrListWith CNAME $ \rd -> DNS.rdataField rd DNS.cname_domain
-
 axList
     :: Bool
     -> (Domain -> Bool)
@@ -108,13 +94,13 @@ rootHint = withRootDelegation error id rootServers
 withRootDelegation :: (String -> a) -> (Delegation -> a) -> ([ResourceRecord], [ResourceRecord]) -> a
 withRootDelegation left right (ns, as) =
     maybe (left "withRootDelegation: bad configuration. NS list is empty?") (right . ($ [])) $
-        findDelegation (nsList (fromString ".") (,) ns) as
+        findDelegation (rrListWith NS (`DNS.rdataField` DNS.ns_domain) (fromString ".") (,) ns) as
 
 -- | The existence or non-existence of a Delegation is independent of the existence of [DS_RD].
 -- >>> mkRR n ty rd = ResourceRecord n ty IN 3600000 rd
 -- >>> ns = [mkRR "." NS $ rd_ns "m.root-servers.net."]
 -- >>> as =[mkRR "m.root-servers.net." A $ rd_a "202.12.27.33", mkRR "m.root-servers.net." AAAA $ rd_aaaa "2001:dc3::35"]
--- >>> delegationNS . ($ []) <$> findDelegation (nsList (fromString ".") (,) ns) as
+-- >>> delegationNS . ($ []) <$> findDelegation (rrListWith NS (`DNS.rdataField` DNS.ns_domain) "." (,) ns) as
 -- Just (DEwithAx "m.root-servers.net." (202.12.27.33 :| []) (2001:dc3::35 :| []) :| [])
 findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
 findDelegation = findDelegation' (\dom ents dss -> Delegation dom ents (FilledDS dss) [] FreshD)
