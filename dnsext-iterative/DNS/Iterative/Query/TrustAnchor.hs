@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Iterative.Query.Root (
+module DNS.Iterative.Query.TrustAnchor (
     fillDelegationDNSKEY,
     delegationIPs,
     --

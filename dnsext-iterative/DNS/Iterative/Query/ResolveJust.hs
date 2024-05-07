@@ -38,7 +38,7 @@ import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Norec
 import DNS.Iterative.Query.Random
-import DNS.Iterative.Query.Root
+import DNS.Iterative.Query.TrustAnchor
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
