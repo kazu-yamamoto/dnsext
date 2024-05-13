@@ -132,15 +132,11 @@ findDelegation' k nsps adds = do
 -- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
 -- True
 rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
-rrnamePairs [] _gs = []
-rrnamePairs (d : ds) [] = (d, []) : rrnamePairs ds []
-rrnamePairs dds@(d : ds) ggs@(g : gs)
-    | d < an = (d, []) : rrnamePairs ds ggs
-    | d == an = (d, g) : rrnamePairs ds gs
-    | otherwise {- d >  an  -} = rrnamePairs dds gs -- unknown additional RRs. just skip
+rrnamePairs = merge id (rrname . head) nullRR noName pair
   where
-    an = rrname a
-    a = head g
+    nullRR n = ((n, []) :)
+    noName _ = id
+    pair n g = ((n, g) :)
 
 {- FOURMOLU_DISABLE -}
 foldDNSErrorToRCODE :: a -> (RCODE -> a) -> DNSError -> a
