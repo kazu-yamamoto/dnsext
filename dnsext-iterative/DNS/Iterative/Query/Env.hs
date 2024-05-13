@@ -8,6 +8,8 @@ module DNS.Iterative.Query.Env (
     setRRCacheOps,
     setTimeCache,
     --
+    readRootHint,
+    setRootHint,
     getRootSep,
     getRootHint,
     getLocalZones,
@@ -28,7 +30,7 @@ import DNS.Types (Domain, ResourceRecord)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Helpers (withRootDelegation)
+import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import DNS.Iterative.Query.Types
 import DNS.Iterative.RootServers (getRootServers)
@@ -81,6 +83,12 @@ setTimeCache TimeCache{..} env0 =
         { currentSeconds_ = getTime
         , timeString_ = getTimeStr
         }
+
+readRootHint :: FilePath -> IO Delegation
+readRootHint = withRootDelegation fail pure <=< getRootServers
+
+setRootHint :: Maybe Delegation -> Env -> Env
+setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = Just d}) md
 
 getRootHint :: FilePath -> IO Delegation
 getRootHint = withRootDelegation fail pure <=< getRootServers
