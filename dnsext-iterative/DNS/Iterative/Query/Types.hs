@@ -73,7 +73,7 @@ data Env = Env
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
-    , rootHint_ :: Maybe Delegation
+    , rootHint_ :: Delegation
     , localZones_ :: LocalZones
     , maxNegativeTTL_ :: TTL
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()

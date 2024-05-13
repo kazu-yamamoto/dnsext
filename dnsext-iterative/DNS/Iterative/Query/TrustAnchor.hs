@@ -57,7 +57,7 @@ refreshRoot = do
         let fallback s = lift $ do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                fromMaybe rootHint <$> asks rootHint_
+                asks rootHint_
         either fallback return =<< rootPriming
 
 {- FOURMOLU_DISABLE -}
@@ -98,7 +98,7 @@ rootPriming =
         dnskeys = delegationDNSKEY hint
 
     getHint = do
-        hint <- lift $ fromMaybe rootHint <$> asks rootHint_
+        hint <- lift $ asks rootHint_
         anchor <- lift $ asks rootAnchor_
         maybe (pure . setRoot) setAnchor anchor hint
       where

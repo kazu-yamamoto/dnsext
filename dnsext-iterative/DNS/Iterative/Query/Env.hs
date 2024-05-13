@@ -54,7 +54,7 @@ newEmptyEnv = do
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
         , rootAnchor_ = Nothing
-        , rootHint_ = Nothing
+        , rootHint_ = rootHint
         , localZones_ = mempty
         , maxNegativeTTL_ = 3600
         , insert_ = \_ _ _ _ -> pure ()
@@ -88,7 +88,7 @@ readRootHint :: FilePath -> IO Delegation
 readRootHint = withRootDelegation fail pure <=< getRootServers
 
 setRootHint :: Maybe Delegation -> Env -> Env
-setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = Just d}) md
+setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
 
 getRootHint :: FilePath -> IO Delegation
 getRootHint = withRootDelegation fail pure <=< getRootServers
