@@ -88,13 +88,13 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         getRootSep' path = do
             putStrLn $ "loading trust-anchor-file: " ++ path
             getRootSep path
-        getRootHint' path = do
+        readRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
-            getRootHint path
+            readRootHint path
     disable_v6_ns <- check_for_v6_ns
     trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
-    rootHint <- mapM getRootHint' cnf_root_hints
-    let setOps = setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
+    rootHint <- mapM readRootHint' cnf_root_hints
+    let setOps = setRootHint rootHint . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
     env <-
         newEnv <&> \env0 ->
@@ -103,7 +103,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , rootAnchor_ = trustAnchor
-                , rootHint_ = rootHint
                 , localZones_ = localZones
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
                 , timeout_ = tmout
