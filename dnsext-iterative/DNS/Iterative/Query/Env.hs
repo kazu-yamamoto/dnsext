@@ -10,12 +10,18 @@ module DNS.Iterative.Query.Env (
     --
     readRootHint,
     setRootHint,
+    --
+    TrustAnchors,
+    readTrustAnchors,
+    setRootAnchor,
     getRootSep,
     getLocalZones,
 ) where
 
 -- GHC packages
 import Data.IORef (newIORef)
+import Data.Map (Map)
+import qualified Data.Map as Map
 import System.Timeout (timeout)
 
 -- other packages
@@ -24,8 +30,11 @@ import System.Timeout (timeout)
 import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
+import DNS.SEC
 import DNS.TimeCache (TimeCache (..), noneTimeCache)
-import DNS.Types (Domain, ResourceRecord)
+import DNS.Types
+import DNS.ZoneFile (Record (R_RR))
+import qualified DNS.ZoneFile as Zone
 
 -- this package
 import DNS.Iterative.Imports
@@ -88,6 +97,40 @@ readRootHint = withRootDelegation fail pure <=< getRootServers
 
 setRootHint :: Maybe Delegation -> Env -> Env
 setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
+
+type TrustAnchors = Map Domain ([RD_DS], [RD_DNSKEY])
+
+{- FOURMOLU_DISABLE -}
+readTrustAnchors :: [FilePath] -> IO TrustAnchors
+readTrustAnchors ps = do
+    pairs <- mapM readAnchor ps
+    let (ds, ks) = unzip pairs
+        dss  = ngroup $ concat ds
+        keys = ngroup $ concat ks
+    pure $ Map.fromList $ merge' dss keys
+  where
+    ngroup :: [(Domain, a)] -> [(Domain, [a])]
+    ngroup = map repn . groupBy ((==) `on` fst) . sortOn fst
+    repn xs = (fst $ head xs, map snd xs)
+    --
+    nullKEY (n,d) = ((n, (d, [])) :)
+    nullDS  (n,k) = ((n, ([], k)) :)
+    cons (n,d) (_,k) = ((n, (d, k)) :)
+    merge' = merge fst fst nullKEY nullDS cons
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+readAnchor :: FilePath -> IO ([(Domain, RD_DS)], [(Domain, RD_DNSKEY)])
+readAnchor path = do
+    rs <- Zone.parseFile path
+    let rrs = [ rr | R_RR rr <- rs ]
+        dss  = [ (rrname, ds) | ResourceRecord{ rrtype = DS    , .. } <- rrs, Just ds <- [fromRData rdata] ]
+        keys = [ (rrname, ky) | ResourceRecord{ rrtype = DNSKEY, .. } <- rrs, Just ky <- [fromRData rdata] ]
+    pure (dss, keys)
+{- FOURMOLU_ENABLE -}
+
+setRootAnchor :: TrustAnchors -> Env -> Env
+setRootAnchor as env0 = maybe env0 (\(d,k) -> env0 {rootAnchor_ = Just (k,d) }) $ Map.lookup (fromString ".") as
 
 getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
 getLocalZones lzones = (Local.apexMap localName lzones, localName)
