@@ -7,7 +7,7 @@ module Main where
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (concurrently_, race_, wait)
 import Control.Concurrent.STM
-import Control.Monad (guard)
+import Control.Monad (guard, when)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -85,16 +85,16 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             | otherwise = do
                 let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
                 foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
-        getRootSep' path = do
-            putStrLn $ "loading trust-anchor-file: " ++ path
-            getRootSep path
+        readTrustAnchors' ps = do
+            when (not $ null ps) $ putStrLn $ "loading trust-anchor-file: " ++ (unwords ps)
+            readTrustAnchors ps
         readRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
-    trustAnchor <- mapM getRootSep' cnf_trust_anchor_file
+    trustAnchors <- readTrustAnchors' $ maybe [] (:[]) cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
-    let setOps = setRootHint rootHint . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
+    let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
     env <-
         newEnv <&> \env0 ->
@@ -102,7 +102,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 { logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
-                , rootAnchor_ = trustAnchor
                 , localZones_ = localZones
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
                 , timeout_ = tmout
