@@ -274,3 +274,29 @@ list :: b -> (a -> [a] -> b) ->  [a] -> b
 list nil _     []    =  nil
 list _   cons (x:xs) =  cons x xs
 {- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- | generalized merge result of two sorted-lists
+-- >>> let merge' = merge id id (\x -> ((x :: Int,0):)) (\y -> ((0,y):)) (\x y -> ((x,y):))
+-- >>> merge' [] []
+-- []
+-- >>> merge' [1] []
+-- [(1,0)]
+-- >>> merge' [] [2]
+-- [(0,2)]
+-- >>> merge' [1,3,4,6] [1,2,5,6]
+-- [(1,1),(0,2),(3,0),(4,0),(0,5),(6,6)]
+merge :: Ord k
+      => (a -> k) -> (b -> k)
+      -> (a -> [c] -> [c]) -> (b -> [c] -> [c]) -> (a -> b -> [c] -> [c])
+      -> [a] -> [b] -> [c]
+merge keyx keyy consx consy cons = rec_
+  where
+    rec_       []            []       = []
+    rec_       []           (ys:yss)  = consy ys   $ rec_  []   yss
+    rec_      (xs:xss)       []       = consx xs   $ rec_  xss  []
+    rec_ xss0@(xs:xss) yss0@(ys:yss)  = case compare (keyx xs) (keyy ys) of
+        LT                           -> consx xs   $ rec_  xss  yss0
+        GT                           -> consy ys   $ rec_  xss0 yss
+        EQ                           -> cons xs ys $ rec_  xss  yss
+{- FOURMOLU_ENABLE -}
