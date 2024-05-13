@@ -11,7 +11,6 @@ module DNS.Iterative.Query.Env (
     readRootHint,
     setRootHint,
     getRootSep,
-    getRootHint,
     getLocalZones,
 ) where
 
@@ -89,9 +88,6 @@ readRootHint = withRootDelegation fail pure <=< getRootServers
 
 setRootHint :: Maybe Delegation -> Env -> Env
 setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
-
-getRootHint :: FilePath -> IO Delegation
-getRootHint = withRootDelegation fail pure <=< getRootServers
 
 getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
 getLocalZones lzones = (Local.apexMap localName lzones, localName)
