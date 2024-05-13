@@ -233,15 +233,11 @@ data Match a b
 -- >>> matchSortedGroup id id [[1], [2], [4], [6], [7]] [[1], [3], [4], [5], [7], [8]] :: [Match [Int] [Int]]
 -- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7]),MRight [8]]
 matchSortedGroup :: Ord a => (k -> a) -> (s -> a) -> [[k]] -> [[s]] -> [Match [k] [s]]
-matchSortedGroup kx ky = rec_
+matchSortedGroup kx ky = merge (kx . head) (ky . head) left right pair
   where
-    rec_       []            []       = []
-    rec_       []           (ys:yss1) = MRight ys : rec_ [] yss1
-    rec_      (xs:xss1)      []       = MLeft  xs : rec_ xss1 []
-    rec_  xss@(xs:xss1) yss@(ys:yss1) = case compare (kx $ head xs) (ky $ head ys) of
-        LT                           -> MLeft  xs : rec_ xss1 yss
-        EQ                           -> Match (xs, ys) : rec_ xss1 yss1
-        GT                           -> MRight ys : rec_ xss yss1
+    left  x    = (MLeft x     :)
+    right y    = (MRight y    :)
+    pair  x y  = (Match (x,y) :)
 {- FOURMOLU_ENABLE -}
 
 rejectLimit :: Int
