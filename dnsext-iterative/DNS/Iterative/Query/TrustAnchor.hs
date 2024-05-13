@@ -36,7 +36,6 @@ import DNS.Iterative.Query.Norec
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
-import DNS.Iterative.RootTrustAnchors (rootSepDS)
 
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do
@@ -100,13 +99,7 @@ rootPriming =
     getHint = do
         hint <- lift $ asks rootHint_
         anchor <- lift $ asks rootAnchor_
-        maybe (pure . setRoot) setAnchor anchor hint
-      where
-        invalidSEP s = lift (logLn Log.WARN $ "root-priming: inconsistent SEP: " ++ s) *> throwDnsError ServerFailure
-        anchorSEP dss d sep = d{delegationDS = AnchorSEP dss sep}
-        setRoot              d = d{delegationDS = FilledDS [rootSepDS]}
-        setAnchor (sep, [])  d = pure $ list (setRoot d) (\s ss -> anchorSEP [] d $ s:|ss) sep
-        setAnchor (sep, dss) d = either invalidSEP (pure . anchorSEP dss d . fmap fst) $ Verify.sepDNSKEY dss "." sep
+        pure hint{delegationDS = anchor}
     priming hint = do
         getSec <- lift $ asks currentSeconds_
         ips <- delegationIPs hint

@@ -20,6 +20,7 @@ module DNS.Iterative.Query.Env (
 
 -- GHC packages
 import Data.IORef (newIORef)
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 import System.Timeout (timeout)
@@ -41,8 +42,9 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import DNS.Iterative.Query.Types
+import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
-import DNS.Iterative.RootTrustAnchors (getRootSep)
+import DNS.Iterative.RootTrustAnchors (getRootSep, rootSepDS)
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
@@ -61,7 +63,7 @@ newEmptyEnv = do
         { logLines_ = \_ _ ~_ -> pure ()
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
-        , rootAnchor_ = Nothing
+        , rootAnchor_ = FilledDS [rootSepDS]
         , rootHint_ = rootHint
         , localZones_ = mempty
         , maxNegativeTTL_ = 3600
@@ -98,7 +100,7 @@ readRootHint = withRootDelegation fail pure <=< getRootServers
 setRootHint :: Maybe Delegation -> Env -> Env
 setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
 
-type TrustAnchors = Map Domain ([RD_DS], [RD_DNSKEY])
+type TrustAnchors = Map Domain MayFilledDS
 
 {- FOURMOLU_DISABLE -}
 readTrustAnchors :: [FilePath] -> IO TrustAnchors
@@ -107,16 +109,23 @@ readTrustAnchors ps = do
     let (ds, ks) = unzip pairs
         dss  = ngroup $ concat ds
         keys = ngroup $ concat ks
-    pure $ Map.fromList $ merge' dss keys
+        results = merge fst fst nullKEY nullDS cons dss keys
+        lefts = ["  skipping, mismatch between DS and SEP, zone = " <> show n : map ("    " ++) e | (n, Left e) <- results]
+    when (not $ null lefts) $ do
+        putStrLn "trust-anchor: mismatch zone(s) are found"
+        mapM_ (putStr . unlines) lefts
+    pure $ Map.fromList [(n, r) | (n, Right r) <- results]
   where
     ngroup :: [(Domain, a)] -> [(Domain, [a])]
     ngroup = map repn . groupBy ((==) `on` fst) . sortOn fst
     repn xs = (fst $ head xs, map snd xs)
     --
-    nullKEY (n,d) = ((n, (d, [])) :)
-    nullDS  (n,k) = ((n, ([], k)) :)
-    cons (n,d) (_,k) = ((n, (d, k)) :)
-    merge' = merge fst fst nullKEY nullDS cons
+    nullKEY (n,d) = ((n, pure $ FilledDS d) :)
+    nullDS  (n,k) xs = list xs (\s ss -> (n, pure $ AnchorSEP [] $ s:|ss) : xs) k
+    cons (n,d) (_,k) xs = either mismatch match $ Verify.sepDNSKEY d n k
+      where
+        mismatch e = (n, Left $ e : map show d ++ map show k) : xs
+        match vs = case NE.unzip vs of (sep, ds:|dss) -> (n, pure $ AnchorSEP (ds:dss) sep) : xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -130,7 +139,7 @@ readAnchor path = do
 {- FOURMOLU_ENABLE -}
 
 setRootAnchor :: TrustAnchors -> Env -> Env
-setRootAnchor as env0 = maybe env0 (\(d,k) -> env0 {rootAnchor_ = Just (k,d) }) $ Map.lookup (fromString ".") as
+setRootAnchor as env0 = maybe env0 (\v -> env0 {rootAnchor_ = v }) $ Map.lookup (fromString ".") as
 
 getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
 getLocalZones lzones = (Local.apexMap localName lzones, localName)

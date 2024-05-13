@@ -72,7 +72,7 @@ data Env = Env
     { logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
-    , rootAnchor_ :: Maybe ([RD_DNSKEY], [RD_DS])
+    , rootAnchor_ :: MayFilledDS
     , rootHint_ :: Delegation
     , localZones_ :: LocalZones
     , maxNegativeTTL_ :: TTL
