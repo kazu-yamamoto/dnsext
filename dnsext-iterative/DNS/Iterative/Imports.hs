@@ -36,7 +36,7 @@ import Data.Bits
 import Data.Bool (bool)
 import Data.ByteString (ByteString)
 import Data.Function
-import Data.Functor
+import Data.Functor hiding (unzip)
 import Data.List
 import Data.List.NonEmpty (NonEmpty (..), nonEmpty)
 import Data.Maybe
