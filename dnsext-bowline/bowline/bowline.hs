@@ -92,7 +92,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
-    trustAnchors <- readTrustAnchors' $ maybe [] (:[]) cnf_trust_anchor_file
+    trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
