@@ -16,6 +16,8 @@ module DNS.Iterative.Query.Env (
     setRootAnchor,
     --
     getLocalZones,
+    --
+    getStubZones,
 ) where
 
 -- GHC packages
@@ -41,6 +43,7 @@ import qualified DNS.ZoneFile as Zone
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
+import qualified DNS.Iterative.Query.StubZone as Stub
 import DNS.Iterative.Query.Types
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
@@ -154,3 +157,12 @@ getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
 getLocalZones lzones = (Local.apexMap localName lzones, localName)
   where
     localName = Local.nameMap lzones
+
+---
+
+{- FOURMOLU_DISABLE -}
+getStubZones :: [(Domain, [Domain], [Address])] -> TrustAnchors -> IO StubZones
+getStubZones zones anchors = either fail pure $ Stub.getStubMap zones'
+  where
+    zones' = [ (apex, ns, as, dstate) | (apex, ns, as) <- zones, let dstate = fromMaybe (FilledDS []) $ Map.lookup apex anchors ]
+{- FOURMOLU_ENABLE -}
