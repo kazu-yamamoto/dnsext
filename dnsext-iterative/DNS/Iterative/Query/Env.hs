@@ -14,7 +14,7 @@ module DNS.Iterative.Query.Env (
     TrustAnchors,
     readTrustAnchors,
     setRootAnchor,
-    getRootSep,
+    --
     getLocalZones,
 ) where
 
@@ -44,7 +44,7 @@ import qualified DNS.Iterative.Query.LocalZone as Local
 import DNS.Iterative.Query.Types
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
-import DNS.Iterative.RootTrustAnchors (getRootSep, rootSepDS)
+import DNS.Iterative.RootTrustAnchors (rootSepDS)
 import DNS.Iterative.Stats
 
 {- FOURMOLU_DISABLE -}
@@ -79,6 +79,8 @@ newEmptyEnv = do
         }
 {- FOURMOLU_ENABLE -}
 
+---
+
 setRRCacheOps :: RRCacheOps -> Env -> Env
 setRRCacheOps RRCacheOps{..} env0 =
     env0
@@ -94,11 +96,15 @@ setTimeCache TimeCache{..} env0 =
         , timeString_ = getTimeStr
         }
 
+---
+
 readRootHint :: FilePath -> IO Delegation
 readRootHint = withRootDelegation fail pure <=< getRootServers
 
 setRootHint :: Maybe Delegation -> Env -> Env
 setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
+
+---
 
 type TrustAnchors = Map Domain MayFilledDS
 
@@ -140,6 +146,8 @@ readAnchor path = do
 
 setRootAnchor :: TrustAnchors -> Env -> Env
 setRootAnchor as env0 = maybe env0 (\v -> env0 {rootAnchor_ = v }) $ Map.lookup (fromString ".") as
+
+---
 
 getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
 getLocalZones lzones = (Local.apexMap localName lzones, localName)
