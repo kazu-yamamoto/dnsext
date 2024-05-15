@@ -18,7 +18,7 @@ import Data.String (fromString)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
-import DNS.Iterative.Internal (LocalZoneType (..))
+import DNS.Iterative.Internal (LocalZoneType (..), Address)
 import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 
@@ -273,6 +273,37 @@ getLocalData a []        = (a [], [])
 getLocalData a xxs@((k, v):xs)
     | k == "local-data"  = getLocalData (a . (fromConf v :)) xs
     | otherwise          = (a [], xxs)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getStubZone :: [Conf] -> Maybe ((Domain, [Domain], [Address]), [Conf])
+getStubZone  []  = Nothing
+getStubZone ((k, v):xs)
+    | k == "stub-zone" =
+      let apex = fromString $ fromConf v
+          (ds, as, ys) = getStubContent id id xs
+      in           Just ((apex, ds, as), ys)
+    | otherwise  = getStubZone xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getStubContent :: ([Domain] -> [Domain]) -> ([Address] -> [Address]) -> [Conf] -> ([Domain], [Address], [Conf])
+getStubContent ds as      []  = (ds [], as [], [])
+getStubContent ds as xss@((k, v):xs)
+    | k == "stub-addr"         =
+      let (ip', port') = break (== '@') vstr
+          ip = read' "stub-zone: ip-address format error" ip'
+          port = case port' of
+              []   -> 53
+              _:p  -> read' "stub-zone: port format error" p
+      in                         getStubContent ds (as . ((ip, port) :)) xs
+    | k == "stub-host"         = getStubContent (ds . (fromString vstr :)) as xs
+    | otherwise                = (ds [], as [], xss)
+  where
+    read' e s = case [ x | (x, "") <- reads s ] of
+        []   -> error e
+        x:_  -> x
+    ~vstr = fromConf v
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
