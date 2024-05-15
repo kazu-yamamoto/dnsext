@@ -38,6 +38,7 @@ import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Norec
 import DNS.Iterative.Query.Random
+import qualified DNS.Iterative.Query.StubZone as Stub
 import DNS.Iterative.Query.TrustAnchor
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
@@ -102,8 +103,8 @@ resolveExactDC dc n typ
         lift . logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
-        root <- refreshRoot
-        (mmsg, nss) <- iterative_ dc root $ DNS.superDomains n
+        anchor <- getAnchor
+        (mmsg, nss) <- iterative_ dc anchor $ DNS.superDomains' (delegationZone anchor) n
         let reuseMsg msg
                 | typ == requestDelegationTYPE  = do
                       lift $ logLn Log.DEMO $ "resolve-exact: skip exact query " ++ show (n, typ) ++ " for last no-delegation"
@@ -112,6 +113,9 @@ resolveExactDC dc n typ
         (,) <$> maybe (request nss) reuseMsg mmsg <*> pure nss
   where
     mdc = maxNotSublevelDelegation
+    getAnchor = do
+        stub <- lift $ asks stubZones_
+        maybe refreshRoot pure $ Stub.lookupStub stub n
     request nss@Delegation{..} = do
         sas <- delegationIPs nss
         lift . logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
