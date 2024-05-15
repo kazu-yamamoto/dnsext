@@ -35,6 +35,7 @@ data Config = Config
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
     , cnf_local_zones :: [(Domain, LocalZoneType, [ResourceRecord])]
+    , cnf_stub_zones :: [(Domain, [Domain], [Address])]
     , cnf_dns_addrs :: [String]
     , cnf_resolve_timeout :: Int
     , cnf_cachers :: Int
@@ -85,6 +86,7 @@ defaultConfig =
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
         , cnf_local_zones = []
+        , cnf_stub_zones = []
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_resolve_timeout = 10000000
         , cnf_cachers = 4
@@ -182,6 +184,7 @@ makeConfig def conf =
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
         , cnf_local_zones = localZones
+        , cnf_stub_zones = stubZones
         , cnf_dns_addrs = get "dns-addrs" cnf_dns_addrs
         , cnf_resolve_timeout = get "resolve-timeout" cnf_resolve_timeout
         , cnf_cachers = get "cachers" cnf_cachers
@@ -226,6 +229,8 @@ makeConfig def conf =
     parseLocalZone (d, zt, xs) = evalStateT ((,,) d zt . subdoms d <$> mapM getRR xs) defaultContext{cx_zone = d, cx_name = d}
     subdoms d rrs = [rr | rr <- rrs, rrname rr `isSubDomainOf` d]
     getRR s = StateT $ parseLineRR $ fromString s
+    --
+    stubZones = unfoldr getStubZone conf
 
 -- $setup
 -- >>> :seti -XOverloadedStrings
