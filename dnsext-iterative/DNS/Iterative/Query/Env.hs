@@ -66,6 +66,7 @@ newEmptyEnv = do
         , rootAnchor_ = FilledDS [rootSepDS]
         , rootHint_ = rootHint
         , localZones_ = mempty
+        , stubZones_ = mempty
         , maxNegativeTTL_ = 3600
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0

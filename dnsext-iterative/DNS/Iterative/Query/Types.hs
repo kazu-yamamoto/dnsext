@@ -4,6 +4,7 @@ module DNS.Iterative.Query.Types (
     ResultRRS,
     LocalZoneType (..),
     LocalZones,
+    StubZones,
     Env (..),
     QueryContext (..),
     queryContextIN,
@@ -66,6 +67,7 @@ data LocalZoneType
 {- FOURMOLU_ENABLE -}
 
 type LocalZones = (Map Domain [(Domain, LocalZoneType, [RRset])], Map Domain [RRset])
+type StubZones = Map Domain [Delegation]
 
 ----------
 -- Monad and context
@@ -77,6 +79,7 @@ data Env = Env
     , rootAnchor_ :: MayFilledDS
     , rootHint_ :: Delegation
     , localZones_ :: LocalZones
+    , stubZones_ :: StubZones
     , maxNegativeTTL_ :: TTL
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
