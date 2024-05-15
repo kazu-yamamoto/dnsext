@@ -169,6 +169,7 @@ module DNS.Types (
     unconsDomain,
     wireLabels,
     revLabels,
+    superDomains',
     superDomains,
     isSubDomainOf,
     labelsCount,
