@@ -96,6 +96,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
+    stubZones <- getStubZones cnf_stub_zones trustAnchors
     env <-
         newEnv <&> \env0 ->
             (setOps env0)
@@ -103,6 +104,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , localZones_ = localZones
+                , stubZones_ = stubZones
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
                 , timeout_ = tmout
                 }

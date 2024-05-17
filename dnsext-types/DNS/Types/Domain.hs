@@ -7,6 +7,7 @@
 module DNS.Types.Domain (
     IsRepresentation (..),
     Domain,
+    superDomains',
     superDomains,
     isSubDomainOf,
     labelsCount,
@@ -652,6 +653,22 @@ shortToString = C8.unpack . Short.fromShort
 
 ----------------------------------------------------------------
 
+-- | `superDomains' u d` super domains of `d` with upper bound `u`
+--
+-- >>> superDomains' "c." "a.b.c."
+-- ["b.c.","a.b.c."]
+-- >>> superDomains' "." "."
+-- []
+superDomains' :: Domain -> Domain -> [Domain]
+superDomains' ul d0@(Domain wl0) = go wl0 [d0]
+  where
+    go wl ss = case V.uncons wl of
+        Nothing -> [] -- only the case of rootDomain
+        Just (_, wl')
+            | wl' == ul' -> ss
+            | otherwise -> go wl' (Domain wl' : ss)
+    Domain ul' = ul
+
 -- | Creating super domains.
 --
 -- >>> superDomains "www.example.com"
@@ -663,13 +680,7 @@ shortToString = C8.unpack . Short.fromShort
 -- >>> superDomains "."
 -- []
 superDomains :: Domain -> [Domain]
-superDomains d0@(Domain wl0) = go wl0 [d0]
-  where
-    go wl ss = case V.uncons wl of
-        Nothing -> [] -- only the case of rootDomain
-        Just (_, wl')
-            | wl' == V.empty -> ss
-            | otherwise -> go wl' (Domain wl' : ss)
+superDomains = superDomains' "."
 
 -- | Sub-domain or not.
 --

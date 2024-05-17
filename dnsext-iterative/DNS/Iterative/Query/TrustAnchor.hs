@@ -25,7 +25,6 @@ import DNS.RRCache (
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP)
 import System.Console.ANSI.Types
 
 -- this package
@@ -142,7 +141,7 @@ fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
 
 {- FOURMOLU_DISABLE -}
 -- Get authoritative server addresses from the delegation information.
-delegationIPs :: Delegation -> DNSQuery [IP]
+delegationIPs :: Delegation -> DNSQuery [Address]
 delegationIPs Delegation{..} = do
     disableV6NS <- lift (asks disableV6NS_)
     ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
@@ -161,7 +160,7 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY getSEPs aservers zone = do
     msg <- norec True aservers zone DNSKEY
     let rcode = DNS.rcode msg

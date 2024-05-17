@@ -4,10 +4,12 @@ module DNS.Iterative.Query.Types (
     ResultRRS,
     LocalZoneType (..),
     LocalZones,
+    StubZones,
     Env (..),
     QueryContext (..),
     queryContextIN,
     RRset (..),
+    Address,
     DEntry (..),
     ContextT,
     CasesNotFilledDS (..),
@@ -43,7 +45,8 @@ import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
-import Data.IP (IPv4, IPv6)
+import Data.IP (IP, IPv4, IPv6)
+import Network.Socket (PortNumber)
 
 -- this package
 import DNS.Iterative.Imports
@@ -64,6 +67,7 @@ data LocalZoneType
 {- FOURMOLU_ENABLE -}
 
 type LocalZones = (Map Domain [(Domain, LocalZoneType, [RRset])], Map Domain [RRset])
+type StubZones = Map Domain [Delegation]
 
 ----------
 -- Monad and context
@@ -75,6 +79,7 @@ data Env = Env
     , rootAnchor_ :: MayFilledDS
     , rootHint_ :: Delegation
     , localZones_ :: LocalZones
+    , stubZones_ :: StubZones
     , maxNegativeTTL_ :: TTL
     , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
     , getCache_ :: IO Cache
@@ -157,6 +162,8 @@ data DFreshState
     deriving Show
 {- FOURMOLU_ENABLE -}
 
+type Address = (IP, PortNumber)
+
 -- | Delegation information for domain
 data Delegation = Delegation
     { delegationZone :: Domain
@@ -186,6 +193,8 @@ data DEntry
     | DEwithA4 !Domain !(NonEmpty IPv4)
     | DEwithA6 !Domain !(NonEmpty IPv6)
     | DEonlyNS !Domain
+    | DEstubA4 !(NonEmpty (IPv4, PortNumber))
+    | DEstubA6 !(NonEmpty (IPv6, PortNumber))
     deriving (Show)
 
 ----------

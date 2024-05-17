@@ -1,3 +1,5 @@
+{-# LANGUAGE MonadComprehensions #-}
+
 module DNS.Iterative.Query.Helpers where
 
 -- GHC packages
@@ -186,7 +188,7 @@ foldIPList n v4 v6 both ips = foldIPList' n v4 v6 both v4list v6list
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [IP]
+dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [Address]
 dentryToRandomIP entries addrs disableV6NS des = do
     acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
     es    <- map NE.toList <$> sequence acts               {- run randomly choice actions, ipv4 or ipv6  -}
@@ -199,8 +201,8 @@ dentryToRandomIP entries addrs disableV6NS des = do
 
 {- FOURMOLU_DISABLE -}
 -- |
--- >>> v4 i = case i of { IPv4{} -> True  ; IPv6{} -> False }
--- >>> v6 i = case i of { IPv4{} -> False ; IPv6{} -> True  }
+-- >>> v4 (i,_) = case i of { IPv4{} -> True  ; IPv6{} -> False }
+-- >>> v6 (i,_) = case i of { IPv4{} -> False ; IPv6{} -> True  }
 -- >>> expect1 p as = do { [a] <- pure as; is <- a; pure $ p $ NE.toList is }
 --
 -- >>> de4 = DEwithA4 "example." ("192.0.2.33" :| ["192.0.2.34"])
@@ -212,7 +214,7 @@ dentryToRandomIP entries addrs disableV6NS des = do
 -- >>> de6 = DEwithA6 "example." ("2001:db8::21" :| ["2001:db8::22"])
 -- >>> expect1 (all v6) (dentryIPsetChoices False [de6])
 -- True
--- >>> null             (dentryIPsetChoices True  [de6] :: [IO (NonEmpty IP)])
+-- >>> null             (dentryIPsetChoices True  [de6] :: [IO (NonEmpty Address)])
 -- True
 --
 -- >>> de46 = DEwithAx "example." ("192.0.2.35" :| ["192.0.2.36"]) ("2001:db8::23" :| ["2001:db8::24"])
@@ -220,17 +222,21 @@ dentryToRandomIP entries addrs disableV6NS des = do
 -- True
 -- >>> expect1 (all v4)                     (dentryIPsetChoices True  [de46])
 -- True
-dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty IP)]
+dentryIPsetChoices :: MonadIO m => Bool -> [DEntry] -> [m (NonEmpty Address)]
 dentryIPsetChoices disableV6NS des = mapMaybe choose des
   where
+    v4do53 i4s = [(IPv4 i, 53) | i <- i4s]
+    v6do53 i6s = [(IPv6 i, 53) | i <- i6s]
     choose  DEonlyNS{}           = Nothing
-    choose (DEwithA4 _ i4s)      = Just $ pure $ NE.map IPv4 i4s
+    choose (DEwithA4 _ i4s)      = Just $ pure $ v4do53 i4s
     choose (DEwithA6 _ i6s)
         | disableV6NS            = Nothing
-        | otherwise              = Just $ pure $ NE.map IPv6 i6s
+        | otherwise              = Just $ pure $ v6do53 i6s
     choose (DEwithAx _ i4s i6s)
-        | disableV6NS            = Just $ pure $ NE.map IPv4 i4s
-        | otherwise              = Just $ randomizedChoice (NE.map IPv4 i4s) (NE.map IPv6 i6s)
+        | disableV6NS            = Just $ pure $ v4do53 i4s
+        | otherwise              = Just $ randomizedChoice (v4do53 i4s) (v6do53 i6s)
+    choose (DEstubA4 i4s)        = Just $ pure [(IPv4 i, p) | (i, p) <- i4s]
+    choose (DEstubA6 i6s)        = Just $ pure [(IPv6 i, p) | (i, p) <- i6s]
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -259,6 +265,8 @@ dentryIPnull disableV6NS des = all ipNull des
     ipNull (DEwithA4 _ (_:|_))    = False  {- not null - with NonEmpty IPv4 -}
     ipNull  DEwithA6{}            = disableV6NS
     ipNull (DEwithAx _ (_:|_) _)  = False  {- not null - with NonEmpty IPv4 -}
+    ipNull (DEstubA4 (_:|_))      = False
+    ipNull (DEstubA6 (_:|_))      = disableV6NS
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

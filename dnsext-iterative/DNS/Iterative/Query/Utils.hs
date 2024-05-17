@@ -118,10 +118,14 @@ ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
     map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT $ toList des
   where
-    toT (DEwithAx d i4s i6s) = (d, map IPv4 (toList i4s) ++ map IPv6 (toList i6s))
-    toT (DEwithA4 d i4s) = (d, map IPv4 $ toList i4s)
-    toT (DEwithA6 d i6s) = (d, map IPv6 $ toList i6s)
+    withP toIP is p = [ (toIP i, p) | i <- toList is]
+    toT (DEwithAx d i4s i6s) = (d, withP IPv4 i4s 53 ++ withP IPv6 i6s 53)
+    toT (DEwithA4 d i4s) = (d, withP IPv4 i4s 53)
+    toT (DEwithA6 d i6s) = (d, withP IPv6 i6s 53)
     toT (DEonlyNS d) = (d, [])
+    toT (DEstubA4 i4s) = ("<stub>", [(IPv4 i, p) | (i, p) <- toList i4s])
+    toT (DEstubA6 i6s) = ("<stub>", [(IPv6 i, p) | (i, p) <- toList i6s])
     bundle xss@(x : _) = (fst x, concatMap snd xss)
     bundle [] = ("", []) -- never reach
-    pp (d, is) = (show d ++ " " ++ show is, length is)
+    pp (d, is) = (show d ++ " " ++ intercalate ", " (map showA is), length is)
+    showA (ip, port) = show ip ++ "@" ++ show port
