@@ -80,15 +80,16 @@ rootPriming =
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
 
     verify getSec hint msgNS = Verify.cases getSec "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
-        \nsps nsRRset cacheNS -> do
+        \nsps nsRRset postAction -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
                     (axList False (`Set.member` nsSet) (\_ rr -> rr) rrs, cacheSection axRRs rank)
                 result "."  ents
-                    | not $ rrsetValid nsRRset =
+                    | not $ rrsetValid nsRRset = do
+                          postAction  {- Call action for logging error info. `Verify.cacheRRset` does not cache invalids -}
                           logResult ents Red "verification failed - RRSIG of NS: \".\"" $> left "DNSSEC verification failed"
                     | otherwise                = do
-                          cacheNS *> cacheAX
+                          postAction *> cacheAX
                           logResult ents Green "verification success - RRSIG of NS: \".\""
                           pure $ Right $ hint{delegationNS = ents, delegationFresh = FreshD}
                 result apex _ents = pure $ left $ "inconsistent zone apex: " ++ show apex ++ ", not \".\""
