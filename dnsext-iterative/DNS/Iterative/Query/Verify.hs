@@ -177,7 +177,7 @@ rrWithRRSIG' now dnskeys0 name typ cls sortedRDatas sigs0 noverify left right = 
         , s <- ["  error: " ++ em, "    " ++ show sigrd, "    " ++ showKey key dnskeyTag]
         ]
     noValids
-        | null keySigSets  = unlines $ "no-match key-tags or no-supported keys:" : map ("  " ++) showUnusedKeysSigs
+        | null verifies    = unlines $ "no-match key-tags or no-supported keys:" : map ("  " ++) showUnusedKeysSigs
         | otherwise        = unlines $ "no good sigs:" : verifyErrors
 
     result
