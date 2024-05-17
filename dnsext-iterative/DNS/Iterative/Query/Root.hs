@@ -97,9 +97,12 @@ rootPriming = do
                     logResult delegationNS Green "verification success - RRSIG of NS: \".\""
                     pure $ Right $ Delegation delegationZone delegationNS delegationDS dnskeys FreshD
 
-    verifyRoot = (FilledDS [rootSepDS], (map fst <$>) . Verify.sepDNSKEY [rootSepDS] "." . dnskeyList ".")
-    verifyConf (ks, [])  = (FilledAnchor , \_ -> Right ks)
-    verifyConf (ks, dss) = (FilledDS dss , \_ -> map fst <$> Verify.sepDNSKEY dss "." ks)
+    verifySEP dss = (map fst <$>) . Verify.sepDNSKEY dss "." . dnskeyList "."
+    verifyRoot = (FilledDS [rootSepDS], verifySEP [rootSepDS])
+    sepResult s ss = (AnchorSEP [] (s :| ss), \_ -> Right (s : ss))
+    verifyConf (sep, [])  = list verifyRoot sepResult sep
+    verifyConf ([] , dss) = (FilledDS dss , verifySEP dss)
+    verifyConf (sep, dss) = (FilledDS dss , \_ -> map fst <$> Verify.sepDNSKEY dss "." sep)
 
     body seps ips = do
         let (dsState, getSEPs) = maybe verifyRoot verifyConf seps
