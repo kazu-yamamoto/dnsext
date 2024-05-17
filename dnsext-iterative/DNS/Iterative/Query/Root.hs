@@ -127,7 +127,7 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
     zone = delegationZone
     getSEP = case delegationDS of
         AnchorSEP _ (s :| ss)  -> \_ -> Right (s : ss)
-        FilledDS dss@(_:_)     -> (map fst <$>) . Verify.sepDNSKEY dss zone . dnskeyList zone
+        FilledDS dss@(_:_)     -> (map fst <$>) . Verify.sepDNSKEY dss zone . rrListWith DNSKEY DNS.fromRData zone const
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -143,7 +143,7 @@ fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> pure d
     query ips = do
         lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY' getSEP ips zone
+        either verifyFailed (lift . fill) =<< cachedDNSKEY getSEP ips zone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -167,8 +167,8 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY' getSEPs aservers zone = do
+cachedDNSKEY :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY getSEPs aservers zone = do
     msg <- norec True aservers zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
@@ -186,6 +186,3 @@ cachedDNSKEY' getSEPs aservers zone = do
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         getSec <- lift $ asks currentSeconds_
         Verify.cases getSec zone seps rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
-
-dnskeyList :: Domain -> [ResourceRecord] -> [RD_DNSKEY]
-dnskeyList dom rrs = rrListWith DNSKEY DNS.fromRData dom const rrs
