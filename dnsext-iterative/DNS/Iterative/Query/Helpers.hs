@@ -132,15 +132,11 @@ findDelegation' k nsps adds = do
 -- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
 -- True
 rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
-rrnamePairs [] _gs = []
-rrnamePairs (d : ds) [] = (d, []) : rrnamePairs ds []
-rrnamePairs dds@(d : ds) ggs@(g : gs)
-    | d < an = (d, []) : rrnamePairs ds ggs
-    | d == an = (d, g) : rrnamePairs ds gs
-    | otherwise {- d >  an  -} = rrnamePairs dds gs -- unknown additional RRs. just skip
+rrnamePairs = merge id (rrname . head) nullRR noName pair
   where
-    an = rrname a
-    a = head g
+    nullRR n = ((n, []) :)
+    noName _ = id
+    pair n g = ((n, g) :)
 
 {- FOURMOLU_DISABLE -}
 foldDNSErrorToRCODE :: a -> (RCODE -> a) -> DNSError -> a
@@ -273,4 +269,30 @@ list1 _   cons xs@(_:_) =  cons xs
 list :: b -> (a -> [a] -> b) ->  [a] -> b
 list nil _     []    =  nil
 list _   cons (x:xs) =  cons x xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+-- | generalized merge result of two sorted-lists
+-- >>> let merge' = merge id id (\x -> ((x :: Int,0):)) (\y -> ((0,y):)) (\x y -> ((x,y):))
+-- >>> merge' [] []
+-- []
+-- >>> merge' [1] []
+-- [(1,0)]
+-- >>> merge' [] [2]
+-- [(0,2)]
+-- >>> merge' [1,3,4,6] [1,2,5,6]
+-- [(1,1),(0,2),(3,0),(4,0),(0,5),(6,6)]
+merge :: Ord k
+      => (a -> k) -> (b -> k)
+      -> (a -> [c] -> [c]) -> (b -> [c] -> [c]) -> (a -> b -> [c] -> [c])
+      -> [a] -> [b] -> [c]
+merge keyx keyy consx consy cons = rec_
+  where
+    rec_       []            []       = []
+    rec_       []           (ys:yss)  = consy ys   $ rec_  []   yss
+    rec_      (xs:xss)       []       = consx xs   $ rec_  xss  []
+    rec_ xss0@(xs:xss) yss0@(ys:yss)  = case compare (keyx xs) (keyy ys) of
+        LT                           -> consx xs   $ rec_  xss  yss0
+        GT                           -> consy ys   $ rec_  xss0 yss
+        EQ                           -> cons xs ys $ rec_  xss  yss
 {- FOURMOLU_ENABLE -}
