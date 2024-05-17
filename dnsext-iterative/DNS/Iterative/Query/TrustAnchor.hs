@@ -103,10 +103,10 @@ rootPriming =
         maybe (pure . setRoot) setAnchor anchor hint
       where
         invalidSEP s = lift (logLn Log.WARN $ "root-priming: inconsistent SEP: " ++ s) *> throwDnsError ServerFailure
-        sepResult dss d sep = list (setRoot d) (\s ss -> d{delegationDS = AnchorSEP dss (s :| ss)}) sep
+        anchorSEP dss d sep = d{delegationDS = AnchorSEP dss sep}
         setRoot              d = d{delegationDS = FilledDS [rootSepDS]}
-        setAnchor (sep, [])  d = pure $ sepResult [] d sep
-        setAnchor (sep, dss) d = either invalidSEP (pure . sepResult dss d . map fst) $ Verify.sepDNSKEY dss "." sep
+        setAnchor (sep, [])  d = pure $ list (setRoot d) (\s ss -> anchorSEP [] d $ s:|ss) sep
+        setAnchor (sep, dss) d = either invalidSEP (pure . anchorSEP dss d . fmap fst) $ Verify.sepDNSKEY dss "." sep
     priming hint = do
         getSec <- lift $ asks currentSeconds_
         ips <- delegationIPs hint
@@ -127,12 +127,12 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
   where
     zone = delegationZone
     getSEP = case delegationDS of
-        AnchorSEP _ (s :| ss)  -> \_ -> Right (s : ss)
-        FilledDS dss@(_:_)     -> (map fst <$>) . Verify.sepDNSKEY dss zone . rrListWith DNSKEY DNS.fromRData zone const
+        AnchorSEP _ sep     -> \_ -> Right sep
+        FilledDS dss@(_:_)  -> (fmap fst <$>) . Verify.sepDNSKEY dss zone . rrListWith DNSKEY DNS.fromRData zone const
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
     maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
@@ -168,7 +168,7 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [IP] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY getSEPs aservers zone = do
     msg <- norec True aservers zone DNSKEY
     let rcode = DNS.rcode msg
@@ -180,10 +180,9 @@ cachedDNSKEY getSEPs aservers zone = do
     cachedResult krds dnskeyRRset cacheDNSKEY
         | rrsetValid dnskeyRRset = lift cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
-    verifyDNSKEY _   []   = pure $ Left "cachedDSNKEY: no SEP key"
-    verifyDNSKEY msg seps = do
+    verifyDNSKEY msg (s:|ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         getSec <- lift $ asks currentSeconds_
-        Verify.cases getSec zone seps rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+        Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
