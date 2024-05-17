@@ -30,7 +30,7 @@ data Config = Config
     , cnf_log_level :: Log.Level
     , cnf_cert_file :: FilePath
     , cnf_key_file :: FilePath
-    , cnf_trust_anchor_file :: Maybe FilePath
+    , cnf_trust_anchor_file :: [FilePath]
     , cnf_root_hints :: Maybe FilePath
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
@@ -80,7 +80,7 @@ defaultConfig =
         , cnf_log_level = Log.WARN
         , cnf_cert_file = "fullchain.pem"
         , cnf_key_file = "privkey.pem"
-        , cnf_trust_anchor_file = Nothing
+        , cnf_trust_anchor_file = []
         , cnf_root_hints = Nothing
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
@@ -177,7 +177,7 @@ makeConfig def conf =
         , cnf_log_level = get "log-level" cnf_log_level
         , cnf_cert_file = get "cert-file" cnf_cert_file
         , cnf_key_file = get "key-file" cnf_key_file
-        , cnf_trust_anchor_file = get "trust-anchor-file" cnf_trust_anchor_file
+        , cnf_trust_anchor_file = getTrustAnchorFile conf
         , cnf_root_hints = get "root-hints" cnf_root_hints
         , cnf_cache_size = get "cache-size" cnf_cache_size
         , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
@@ -229,6 +229,9 @@ makeConfig def conf =
 
 -- $setup
 -- >>> :seti -XOverloadedStrings
+
+getTrustAnchorFile :: [Conf] -> [FilePath]
+getTrustAnchorFile = map (fromConf . snd) . filter ((== "trust-anchor-file") . fst)
 
 {- FOURMOLU_DISABLE -}
 -- |
