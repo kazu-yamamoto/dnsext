@@ -147,8 +147,8 @@ data CasesNotFilledDS
 
 data MayFilledDS
     = NotFilledDS CasesNotFilledDS
-    | FilledDS [RD_DS]  {- Filled [] - confirmed DS does not exist | Filled (_:_) exist -}
-    | FilledAnchor      {- filled by specified trust-anchor dnskey -}
+    | FilledDS [RD_DS]                        {- Filled [] - DS does not exist | Filled (_:_) - DS exist, include DS only anchor -}
+    | AnchorSEP [RD_DS] (NonEmpty RD_DNSKEY)  {- with specified trust-anchor dnskey -}
     deriving (Show)
 
 data DFreshState
@@ -178,7 +178,7 @@ chainedStateDS d = case delegationDS d of
     NotFilledDS _     -> False
     FilledDS []       -> False
     FilledDS (_ : _)  -> True
-    FilledAnchor      -> True
+    AnchorSEP {}      -> True
 {- FOURMOLU_ENABLE -}
 
 data DEntry

@@ -38,7 +38,7 @@ import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Norec
 import DNS.Iterative.Query.Random
-import DNS.Iterative.Query.Root
+import DNS.Iterative.Query.TrustAnchor
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -270,7 +270,7 @@ fillsDNSSEC nss d = do
 -- >>> withNS2 dom h1 a1 h2 a2 ds = Delegation dom (DEwithA4 h1 (a1:|[]) :| [DEwithA4 h2 (a2:|[])]) ds [dummyDNSKEY] FreshD
 -- >>> parent = withNS2 "org." "a0.org.afilias-nst.info." "199.19.56.1" "a2.org.afilias-nst.info." "199.249.112.1" (FilledDS [dummyDS])
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
--- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; FilledAnchor -> True }
+-- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; AnchorSEP {} -> True }
 -- >>> env <- _newTestEnv _noLogging
 -- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryContextIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
@@ -287,7 +287,7 @@ fillDelegationDS src dest
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
-        FilledAnchor -> pure dest {- specified trust-anchor dnskey case -}
+        AnchorSEP {} -> pure dest {- specified trust-anchor dnskey case -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             lift $ logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
@@ -327,42 +327,6 @@ queryDS zone dnskeys ips dom = do
     verifyResult dsrds dsRRset cacheDS
         | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
-
-{- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
-    {- DS(Delegation Signer) is not filled -}
-    lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
-    return d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledAnchor} = return d {- assume filled in root-priming -}
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = return d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS (_ : _), delegationDNSKEY = _ : _} = return d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_ : _), delegationDNSKEY = [], ..} =
-    maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
-  where
-    zone = delegationZone
-    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
-    fill dnskeys = return d{delegationDNSKEY = dnskeys}
-    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> return d
-    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> return d
-    query ips = do
-        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
--- Get authoritative server addresses from the delegation information.
-delegationIPs :: Delegation -> DNSQuery [IP]
-delegationIPs Delegation{..} = do
-    disableV6NS <- lift (asks disableV6NS_)
-    ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
-    when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
-    pure ips
-  where
-    dentry = NE.toList delegationNS
-    entryNum = 2
-    addrNum = 2
-{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 fillDelegation :: Int -> Delegation -> DNSQuery Delegation
