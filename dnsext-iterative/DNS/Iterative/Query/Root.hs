@@ -121,10 +121,19 @@ fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone =
     {- DS(Delegation Signer) is not filled -}
     lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     pure d
-fillDelegationDNSKEY d@Delegation{delegationDS = AnchorSEP {}} = pure d {- filled by trust-anchor -}
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS (_:_), delegationDNSKEY = _:_} = pure d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_:_), delegationDNSKEY = [], ..} =
+fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
+  where
+    zone = delegationZone
+    getSEP = case delegationDS of
+        AnchorSEP _ (s :| ss)  -> \_ -> Right (s : ss)
+        FilledDS dss@(_:_)     -> (map fst <$>) . Verify.sepDNSKEY dss zone . dnskeyList zone
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String [RD_DNSKEY]) -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
+fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
     maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
   where
     zone = delegationZone
@@ -134,7 +143,7 @@ fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS dss@(_:_), delegationD
     verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> pure d
     query ips = do
         lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY dss ips zone
+        either verifyFailed (lift . fill) =<< cachedDNSKEY' getSEP ips zone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
