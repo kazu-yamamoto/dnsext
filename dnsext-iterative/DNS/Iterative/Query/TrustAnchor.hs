@@ -24,6 +24,7 @@ import DNS.RRCache (
     rankedAdditional,
     rankedAnswer,
  )
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
@@ -182,5 +183,8 @@ cachedDNSKEY getSEPs aservers zone = do
         Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec dnssecOK aservers name typ =
-    ExceptT $ either (Left . DnsError) (handleResponseError Left Right) <$> Norec.norec' dnssecOK aservers name typ
+norec dnssecOK aservers name typ = ExceptT $ do
+    e <- Norec.norec' dnssecOK aservers name typ
+    either left (pure . handleResponseError Left Right) e
+  where
+    left e = cacheDNSError name typ Cache.RankAnswer e $> Left (DnsError e)
