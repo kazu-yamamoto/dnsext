@@ -31,7 +31,7 @@ import System.Console.ANSI.Types
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Norec
+import qualified DNS.Iterative.Query.Norec as Norec
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -178,3 +178,7 @@ cachedDNSKEY getSEPs aservers zone = do
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         getSec <- lift $ asks currentSeconds_
         Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+
+norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec dnssecOK aservers name typ =
+    ExceptT $ either (Left . DnsError) (handleResponseError Left Right) <$> Norec.norec' dnssecOK aservers name typ
