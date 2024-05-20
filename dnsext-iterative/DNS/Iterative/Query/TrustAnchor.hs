@@ -5,6 +5,8 @@ module DNS.Iterative.Query.TrustAnchor (
     fillDelegationDNSKEY,
     delegationIPs,
     --
+    norec,
+    --
     refreshRoot,
     rootPriming,
 ) where

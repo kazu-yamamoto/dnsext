@@ -1,4 +1,4 @@
-module DNS.Iterative.Query.Norec (norec', norec) where
+module DNS.Iterative.Query.Norec (norec') where
 
 -- GHC packages
 
@@ -68,40 +68,3 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
 
 contextT :: Monad m => (Env -> QueryContext -> m a) -> ContextT m a
 contextT k = ReaderT $ ReaderT . k
-
-norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
-    let ris =
-            [ defaultResolveInfo
-                { rinfoIP = aserver
-                , rinfoPort = port
-                , rinfoActions =
-                    defaultResolveActions
-                        { ractionGenId = idGen_ cxt
-                        , ractionGetTime = currentSeconds_ cxt
-                        , ractionLog = logLines_ cxt
-                        , ractionTimeoutTime = 10000000
-                        }
-                , rinfoUDPRetry = 3
-                , rinfoVCLimit = 8 * 1024
-                }
-            | (aserver, port) <- aservers
-            ]
-        renv =
-            ResolveEnv
-                { renvResolver = udpTcpResolver
-                , renvConcurrent = True -- should set True if multiple RIs are provided
-                , renvResolveInfos = NE.fromList ris
-                }
-        q = Question name typ IN
-        doFlagSet
-            | dnsssecOK = FlagSet
-            | otherwise = FlagClear
-        qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
-    either
-        (Left . DnsError)
-        (handleResponseError Left Right . DNS.replyDNSMessage)
-        <$> DNS.resolve renv q qctl
-
-dnsQueryT :: (Env -> QueryContext -> IO (Either QueryError a)) -> DNSQuery a
-dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
