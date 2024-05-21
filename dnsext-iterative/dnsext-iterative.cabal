@@ -37,6 +37,7 @@ library
         DNS.Iterative.Query.Types
         DNS.Iterative.Query.Utils
         DNS.Iterative.Query.Verify
+        DNS.Iterative.Query.WitnessInfo
         DNS.Iterative.RootServers
         DNS.Iterative.RootTrustAnchors
         DNS.Iterative.Server.HTTP2
