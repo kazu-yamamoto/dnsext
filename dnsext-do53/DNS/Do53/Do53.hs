@@ -10,6 +10,7 @@ module DNS.Do53.Do53 (
     checkRespM,
     toResult,
     lazyTag,
+    fromIOException,
 )
 where
 
@@ -62,10 +63,10 @@ udpTcpResolver ri q qctl = do
 
 ----------------------------------------------------------------
 
-fromIOError :: Question -> ResolveInfo -> String -> IOError -> DNSError
-fromIOError q ResolveInfo{..} protoName ioe = NetworkFailure aioe
+fromIOException :: String -> ResolveInfo -> String -> E.IOException -> DNSError
+fromIOException str ResolveInfo{..} protoName ioe = NetworkFailure aioe
   where
-    loc = show q ++ ": " ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
+    loc = str ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
     aioe = annotateIOError ioe loc Nothing Nothing
 
 lazyTag :: ResolveInfo -> Question -> String -> String
@@ -100,7 +101,8 @@ analyzeReply rply qctl0
 udpResolver :: OneshotResolver
 udpResolver ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (return . Left . fromIOError q ri "UDP") $ go _qctl
+    let str = show q ++ ": "
+    E.handle (return . Left . fromIOException str ri "UDP") $ go _qctl
   where
     ~tag = lazyTag ri q "UDP"
     -- Using only one socket and the same identifier.
@@ -171,7 +173,8 @@ tcpResolver ri@ResolveInfo{..} q qctl =
 vcResolver :: String -> Send -> RecvMany -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    E.handle (return . Left . fromIOError q ri proto) $ go _qctl
+    let str = show q ++ ": "
+    E.handle (return . Left . fromIOException str ri proto) $ go _qctl
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do
