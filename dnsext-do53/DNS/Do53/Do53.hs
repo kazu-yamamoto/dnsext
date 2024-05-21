@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -101,8 +102,15 @@ analyzeReply rply qctl0
 udpResolver :: OneshotResolver
 udpResolver ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    let str = show q ++ ": "
-    E.handle (return . Left . fromIOException str ri "UDP") $ go _qctl
+    ex <- E.try $ go _qctl
+    case ex of
+        Right r -> return r
+        Left se
+            | Just (e :: DNSError) <- fromException se -> return $ Left e
+            | Just (e :: E.IOException) <- fromException se -> do
+                let str = show q ++ ": "
+                return $ Left $ fromIOException str ri "UDP" e
+            | otherwise -> return $ Left $ BadThing (show se)
   where
     ~tag = lazyTag ri q "UDP"
     -- Using only one socket and the same identifier.
@@ -173,8 +181,15 @@ tcpResolver ri@ResolveInfo{..} q qctl =
 vcResolver :: String -> Send -> RecvMany -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
     ractionLog rinfoActions Log.DEMO Nothing [tag]
-    let str = show q ++ ": "
-    E.handle (return . Left . fromIOException str ri proto) $ go _qctl
+    ex <- E.try $ go _qctl
+    case ex of
+        Right r -> return r
+        Left se
+            | Just (e :: DNSError) <- fromException se -> return $ Left e
+            | Just (e :: E.IOException) <- fromException se -> do
+                let str = show q ++ ": "
+                return $ Left $ fromIOException str ri proto e
+            | otherwise -> return $ Left $ BadThing (show se)
   where
     ~tag = lazyTag ri q proto
     go qctl0 = do

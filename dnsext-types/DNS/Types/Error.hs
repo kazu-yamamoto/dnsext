@@ -50,6 +50,8 @@ data DNSError
       BadConfiguration
     | -- | Network failure.
       NetworkFailure IOException
+    | -- | Bad thing happens.
+      BadThing String -- SomeException cannot be used due to Eq
     | -- | Wire format cannot be decoded.
       DecodeError String
     | -- | Error is unknown
