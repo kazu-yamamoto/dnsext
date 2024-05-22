@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module DNS.Iterative.Query.Cache (
     lookupValid,
@@ -43,6 +44,7 @@ import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
+import DNS.Iterative.Query.WitnessInfo
 
 ---- import for doctest
 import DNS.Iterative.Query.TestEnv
@@ -378,16 +380,18 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
         | noDS          = pure []
         | otherwise     = Verify.getNoDatas   zone dnskeys rankedAuthority msg qname qtype
                           nullK invalidK (noWitnessK "NoData")
-                          resultK resultK resultK resultK
+                          resultK resultK resultK3 resultK3
     witnessNameError
         | noDS          = pure []
         | otherwise     = Verify.getNameError zone dnskeys rankedAuthority msg qname
                           nullK invalidK (noWitnessK "NameError")
-                          resultK resultK
+                          resultK resultK3
     invalidK s = failed $ "NSEC/NSEC3 NameErr/NoData: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
-    resultK w rrsets _ = lift $ success w $> rrsets
+    resultK  w rrsets _ = lift $ success w *> winfo witnessInfoNSEC  w $> rrsets
+    resultK3 w rrsets _ = lift $ success w *> winfo witnessInfoNSEC3 w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
+    winfo wi w = clogLn Log.DEMO (Just Cyan) $ unlines $ map ("  " ++) $ wi w
     failed = nsecFailed
     ~qinfo = show qname ++ " " ++ show qtype
 
