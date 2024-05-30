@@ -94,7 +94,7 @@ options =
         )
         "set the verbosity"
     , Option
-        ['r']
+        ['R']
         ["resumption-file"]
         ( ReqArg
             (\file opts -> opts{optResumptionFile = Just file})
@@ -102,7 +102,7 @@ options =
         )
         "specify a file to save resumption information"
     , Option
-        ['0']
+        ['Z']
         ["0rtt"]
         (NoArg (\opts -> opts{opt0RTT = True}))
         "use 0-RTT (aka early data)"
