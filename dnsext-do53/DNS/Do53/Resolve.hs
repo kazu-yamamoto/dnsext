@@ -66,20 +66,23 @@ resolveConcurrent
     :: NonEmpty ResolveInfo -> OneshotResolver -> Resolver
 resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Question{..} qctl = do
     caller <- TStat.getThreadLabel
-    r@Result{..} <- raceAny $ NE.toList $ (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver' ri)) <$> ris
-    let ~tag =
-            "    query "
-                ++ show qname
-                ++ " "
-                ++ show qtype
-                ++ " to "
-                ++ show resultIP
-                ++ "#"
-                ++ show resultPort
-                ++ "/"
-                ++ resultTag
-    ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]
-    return $ Right r
+    ex <- E.try $ raceAny $ NE.toList $ (\ri -> (caller ++ ": do53-res: " ++ show (rinfoIP ri), resolver' ri)) <$> ris
+    case ex of
+        Right r@Result{..} -> do
+            let ~tag =
+                    "    query "
+                        ++ show qname
+                        ++ " "
+                        ++ show qtype
+                        ++ " to "
+                        ++ show resultIP
+                        ++ "#"
+                        ++ show resultPort
+                        ++ "/"
+                        ++ resultTag
+            ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]
+            return $ Right r
+        le@(Left (_ :: DNSError)) -> return le
   where
     resolver' ri = do
         erply <- resolver ri q qctl

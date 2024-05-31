@@ -15,7 +15,6 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Tuple (swap)
 import Network.Socket
-import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
 -- import System.IO.Error (annotateIOError)
@@ -73,7 +72,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     recver ref = forever $ do
         (rx, bss) <-
             recv `E.catch` \ne -> do
-                let e = ioErrorToDNSError ri proto ne
+                let e = fromIOException "" ri proto ne
                 cleanup ref e
                 E.throwIO e
         now <- ractionGetTime rinfoActions
@@ -89,9 +88,3 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     cleanup ref e = do
         vars <- IM.elems <$> readIORef ref
         mapM_ (\var -> putMVar var (Left e)) vars
-
-ioErrorToDNSError :: ResolveInfo -> String -> IOError -> DNSError
-ioErrorToDNSError ResolveInfo{..} protoName ioe = NetworkFailure aioe
-  where
-    loc = protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
-    aioe = annotateIOError ioe loc Nothing Nothing
