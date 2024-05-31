@@ -245,6 +245,7 @@ module DNS.Types (
 
     -- ** Errors
     DNSError (..),
+    unwrapDNSErrorInfo,
 
     -- ** Seconds
     Seconds (..),
