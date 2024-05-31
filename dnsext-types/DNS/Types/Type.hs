@@ -27,6 +27,7 @@ module DNS.Types.Type (
     getTYPE,
     putTYPE,
     addType,
+    allTYPEs,
 ) where
 
 import Data.Char (toUpper)
@@ -181,6 +182,10 @@ defaultTypeShowDict = foldr (uncurry insertTypeShowDict) IM.empty typeAndNames
 {-# NOINLINE globalTypeShowDict #-}
 globalTypeShowDict :: IORef TypeShowDict
 globalTypeShowDict = unsafePerformIO $ newIORef defaultTypeShowDict
+
+-- | All available types.
+allTYPEs :: IO [String]
+allTYPEs = (map snd) . IM.toList <$> readIORef globalTypeShowDict
 
 ----------------------------------------------------------------
 

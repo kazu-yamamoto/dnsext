@@ -22,12 +22,14 @@ import DNS.Types (
     Domain,
     Question (..),
     TYPE (..),
+    allTYPEs,
     fromRepresentation,
     runInitIO,
  )
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
+import Data.Char (toLower)
 import Data.List (intercalate, isPrefixOf, partition)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
@@ -127,7 +129,8 @@ main = do
         addResourceDataForSVCB
     (args, opts@Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
-        putStr $ usageInfo help options
+        msg <- help
+        putStr $ usageInfo msg options
         putStr "\n"
         putStrLn "  <proto>     = auto | tcp | dot | doq | h2 | h2c | h3"
         putStrLn "  <format>    = multi | json"
@@ -333,19 +336,21 @@ toFlag x            = do
 
 ----------------------------------------------------------------
 
-help :: String
-help =
-    intercalate
-        "\n"
-        [ "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
-        , ""
-        , "query-type: a | aaaa | ns | txt | ptr | ..."
-        , ""
-        , "query-control:"
-        , "  +[no]rdflag: [un]set RD (Recursion Desired) bit, +[no]rec[curse]"
-        , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
-        , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
-        , "  +[no]adflag: [un]set AD (Authentic Data) bit"
-        , ""
-        , "options:"
-        ]
+help :: IO String
+help = do
+    types <- intercalate " | " . map (map toLower) <$> allTYPEs
+    return $
+        intercalate
+            "\n"
+            [ "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
+            , ""
+            , "query-type: " ++ types
+            , ""
+            , "query-control:"
+            , "  +[no]rdflag: [un]set RD (Recursion Desired) bit, +[no]rec[curse]"
+            , "  +[no]doflag: [un]set DO (DNSSEC OK) bit, +[no]dnssec"
+            , "  +[no]cdflag: [un]set CD (Checking Disabled) bit"
+            , "  +[no]adflag: [un]set AD (Authentic Data) bit"
+            , ""
+            , "options:"
+            ]

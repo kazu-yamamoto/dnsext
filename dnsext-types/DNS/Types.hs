@@ -204,6 +204,7 @@ module DNS.Types (
     ),
     fromTYPE,
     toTYPE,
+    allTYPEs,
 
     -- ** OPCODE
     OPCODE (
