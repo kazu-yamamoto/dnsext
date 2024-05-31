@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -92,14 +91,32 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Questi
 
 ----------------------------------------------------------------
 
+-- $setup
+-- >>> :seti -Wno-type-defaults
+-- >>> import Data.Functor
+-- >>> import Control.Concurrent
+
 raceAny :: [(String, IO a)] -> IO a
 raceAny ios = TStat.withAsyncs ios waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
 waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 
+-- |
 -- The first value is returned and others are canceled at that time.
 -- The last exception is returned when all throws an exception.
+--
+-- >>> tsleep n = threadDelay $ n * 100 * 1000
+-- >>> right n x = tsleep n $> x
+-- >>> left = fail
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", left "bad")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a2", left "bad"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", left "bad"), ("a2", right 2 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good2"
 waitAnyRightSTM :: [Async a] -> STM a
 waitAnyRightSTM [] = error "waitAnyRightSTM"
 waitAnyRightSTM (a : as) = do
