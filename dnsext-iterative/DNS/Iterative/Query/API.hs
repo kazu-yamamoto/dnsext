@@ -187,7 +187,7 @@ replyMessage eas ident rqs =
     rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
 
     queryError qe = case qe of
-        DnsError e -> dnsError e
+        DnsError e _ -> dnsError e
         NotResponse{} -> Right $ message (DNS.ServFail, [], [])
         InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
         HasError rc _m -> Right $ message (rc, [], [])

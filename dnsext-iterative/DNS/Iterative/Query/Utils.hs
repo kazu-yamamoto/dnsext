@@ -41,7 +41,7 @@ logQueryErrors prefix q = do
           lift $ logQueryError qe
           throwE qe
       logQueryError qe = case qe of
-          DnsError de           -> logDnsError de []
+          DnsError de ss        -> logDnsError de ss
           NotResponse resp msg  -> logNotResponse resp msg
           InvalidEDNS eh msg    -> logInvalidEDNS eh msg
           HasError rcode msg    -> logHasError rcode msg
