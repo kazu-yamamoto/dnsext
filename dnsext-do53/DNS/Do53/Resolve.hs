@@ -6,7 +6,7 @@ module DNS.Do53.Resolve (
 )
 where
 
-import Control.Concurrent.Async (Async, waitCatchSTM, waitSTM)
+import Control.Concurrent.Async (Async, waitCatchSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
 import DNS.Do53.Types
@@ -117,20 +117,24 @@ waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 -- "good1"
 -- >>> TStat.withAsyncs [("a1", left "bad"), ("a2", right 2 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
 -- "good2"
+-- >>> TStat.withAsyncs [("a1", left "bad1"), ("a2", left "bad2"), ("a3", left "bad3")] (atomically . waitAnyRightSTM)
+-- *** Exception: user error (bad3)
 waitAnyRightSTM :: [Async a] -> STM a
-waitAnyRightSTM [] = error "waitAnyRightSTM"
-waitAnyRightSTM (a : as) = do
-    let w = waitSTM a -- may throw an exception
-        ws = map waitRightSTM as -- exeptions are ignored
-        -- If "w" is reached, all of the others throw an exception.
-    foldr orElse retry ws `orElse` w
+waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
-waitRightSTM :: Async b -> STM b
-waitRightSTM a = do
-    r <- waitCatchSTM a
-    -- Here this IO thread is dead.  A value of "Either SomeException
-    -- a" is passed by "putTMVar".  After "retry", "waitCatchSTM" waits
-    -- forever because "putTMVar" is never called again. Yes, the
-    -- thread is dead already.  So, this transaction stays until
-    -- canceled.
-    either (const retry) return r
+getAnyRight :: [STM (Either SomeException a)] -> STM a
+getAnyRight ws0 = rec_ (throwSTM $ userError "getAnyRight: null input") id ws0
+  where
+    size = length ws0
+    rec_ err0 blocked []
+        | null blocked' = err0 {- no blocked STM, null input case -}
+        | length blocked' == size = retry {- all blocked case -}
+        | otherwise = getAnyRight blocked' {- retry for only blocked STMs -}
+      where
+        blocked' = blocked []
+    rec_ err0 blocked (t:ts) = do
+        {- accumulate blocked STM. only the Right blocked case is returned and Left is thrown. -}
+        e <- t `orElse` (Right <$> rec_ err0 (blocked . (t:)) ts)
+        case e of
+            Left err -> rec_ (throwSTM err) blocked ts {- replace error result, and check nexts -}
+            Right rv -> pure rv
