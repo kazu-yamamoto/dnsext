@@ -71,7 +71,7 @@ spec = describe "solvers" $ do
     it "resolves well concurrently (2)" $ do
         let resolver = udpResolver
             renv = ResolveEnv resolver True $ bad0 :| [bad1]
-        resolve renv q mempty `shouldThrow` dnsException
+        resolve renv q mempty `shouldReturn` Left RetryLimitExceeded
 
 dnsException :: Selector DNSError
 dnsException = const True
