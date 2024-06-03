@@ -3,6 +3,7 @@
 
 module DNS.Do53.Resolve (
     resolve,
+    raceAny,
 )
 where
 
@@ -97,29 +98,29 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Questi
 -- >>> import Data.Functor
 -- >>> import Control.Concurrent
 
+-- | Racing IO actions with the special core for exceptions.  The
+-- fastest value is returned and others are canceled at that time.  The
+-- last exception is returned when all throws an exception.
+--
+-- >>> tsleep n = threadDelay $ n * 100 * 1000
+-- >>> right n x = tsleep n $> x
+-- >>> left = fail
+-- >>> raceAny [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", right 20 "good3")]
+-- "good1"
+-- >>> raceAny [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", left "bad")]
+-- "good1"
+-- >>> raceAny [("a1", right 1 "good1"), ("a2", left "bad"), ("a3", right 20 "good3")]
+-- "good1"
+-- >>> raceAny [("a1", left "bad"), ("a2", right 2 "good2"), ("a3", right 20 "good3")]
+-- "good2"
+-- >>> raceAny [("a1", left "bad1"), ("a2", left "bad2"), ("a3", left "bad3")]
+-- *** Exception: user error (bad3)
 raceAny :: [(String, IO a)] -> IO a
 raceAny ios = TStat.withAsyncs ios waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
 waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 
--- |
--- The first value is returned and others are canceled at that time.
--- The last exception is returned when all throws an exception.
---
--- >>> tsleep n = threadDelay $ n * 100 * 1000
--- >>> right n x = tsleep n $> x
--- >>> left = fail
--- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
--- "good1"
--- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", left "bad")] (atomically . waitAnyRightSTM)
--- "good1"
--- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a2", left "bad"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
--- "good1"
--- >>> TStat.withAsyncs [("a1", left "bad"), ("a2", right 2 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
--- "good2"
--- >>> TStat.withAsyncs [("a1", left "bad1"), ("a2", left "bad2"), ("a3", left "bad3")] (atomically . waitAnyRightSTM)
--- *** Exception: user error (bad3)
 waitAnyRightSTM :: [Async a] -> STM a
 waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
