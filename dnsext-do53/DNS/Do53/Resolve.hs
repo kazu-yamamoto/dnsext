@@ -128,16 +128,19 @@ getAnyRight [] = error "getAnyRight: null input"
 getAnyRight ws0 = go id ws0
   where
     size = length ws0
-    go blocked []
-        | length blocked' == size = retry -- all blocked case
-        | otherwise = getAnyRight blocked' -- retry for only blocked STMs
+    go blockedB []
+        | length blocked == size = retry -- all blocked case
+        | otherwise = getAnyRight blocked -- retry for only blocked STMs
       where
-        blocked' = blocked []
-    go blocked (t : ts) = do
+        blocked = blockedB []
+    go blockedB (t : ts) = do
         -- accumulate blocked STM. only the Right blocked case is returned and Left is thrown.
-        e <- t `orElse` (Right <$> go (blocked . (t :)) ts)
+        ---- t is not blocked
+        --------------- t is blocked
+        e <- t `orElse` (Right <$> go (blockedB . (t :)) ts)
         case e of
-            Left err -> do
-                when (null ts && null (blocked [])) $ throwSTM err
-                go blocked ts -- replace error result, and check nexts
             Right rv -> pure rv
+            Left err -> do
+                when (null ts && null (blockedB [])) $ throwSTM err
+                -- go through with ts
+                go blockedB ts
