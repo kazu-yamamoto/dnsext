@@ -9,6 +9,7 @@ where
 import Control.Concurrent.Async (Async, waitCatchSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
+import Control.Monad (when)
 import DNS.Do53.Types
 import qualified DNS.Log as Log
 import qualified DNS.ThreadStats as TStat
@@ -123,18 +124,20 @@ waitAnyRightSTM :: [Async a] -> STM a
 waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
 getAnyRight :: [STM (Either SomeException a)] -> STM a
-getAnyRight ws0 = go (throwSTM $ userError "getAnyRight: null input") id ws0
+getAnyRight [] = error "getAnyRight: null input"
+getAnyRight ws0 = go id ws0
   where
     size = length ws0
-    go err0 blocked []
-        | null blocked' = err0 -- no blocked STM, null input case
+    go blocked []
         | length blocked' == size = retry -- all blocked case
         | otherwise = getAnyRight blocked' -- retry for only blocked STMs
       where
         blocked' = blocked []
-    go err0 blocked (t : ts) = do
+    go blocked (t : ts) = do
         -- accumulate blocked STM. only the Right blocked case is returned and Left is thrown.
-        e <- t `orElse` (Right <$> go err0 (blocked . (t :)) ts)
+        e <- t `orElse` (Right <$> go (blocked . (t :)) ts)
         case e of
-            Left err -> go (throwSTM err) blocked ts -- replace error result, and check nexts
+            Left err -> do
+                when (null ts && null (blocked [])) $ throwSTM err
+                go blocked ts -- replace error result, and check nexts
             Right rv -> pure rv
