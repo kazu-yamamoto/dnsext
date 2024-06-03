@@ -65,6 +65,7 @@ module DNS.Do53.Internal (
     checkRespM,
     withLookupConfAndResolver,
     lazyTag,
+    raceAny,
 )
 where
 

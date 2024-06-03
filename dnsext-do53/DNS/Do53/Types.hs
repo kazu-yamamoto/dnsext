@@ -238,9 +238,11 @@ data Reply = Reply
     deriving (Eq, Show)
 
 -- | The resolver type to send a question and receive a result.
+--   Exceptions are not thrown.
 type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
 
 -- | Concurrent resolver which can be shared by multiple threads.
+--   'DNSError' is thrown.
 type PipelineResolver = (Resolver -> IO ()) -> IO ()
 
 -- | Resolver whose connection is persistent.
