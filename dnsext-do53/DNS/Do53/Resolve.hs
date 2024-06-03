@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -7,9 +6,10 @@ module DNS.Do53.Resolve (
 )
 where
 
-import Control.Concurrent.Async (Async, waitCatchSTM, waitSTM)
+import Control.Concurrent.Async (Async, waitCatchSTM)
 import Control.Concurrent.STM
 import Control.Exception as E
+import Control.Monad (when)
 import DNS.Do53.Types
 import qualified DNS.Log as Log
 import qualified DNS.ThreadStats as TStat
@@ -92,28 +92,52 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Questi
 
 ----------------------------------------------------------------
 
+-- $setup
+-- >>> :seti -Wno-type-defaults
+-- >>> import Data.Functor
+-- >>> import Control.Concurrent
+
 raceAny :: [(String, IO a)] -> IO a
 raceAny ios = TStat.withAsyncs ios waitAnyRightCancel
 
 waitAnyRightCancel :: [Async a] -> IO a
 waitAnyRightCancel asyncs = atomically (waitAnyRightSTM asyncs)
 
+-- |
 -- The first value is returned and others are canceled at that time.
 -- The last exception is returned when all throws an exception.
+--
+-- >>> tsleep n = threadDelay $ n * 100 * 1000
+-- >>> right n x = tsleep n $> x
+-- >>> left = fail
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a1", right 20 "good2"), ("a3", left "bad")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", right 1 "good1"), ("a2", left "bad"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good1"
+-- >>> TStat.withAsyncs [("a1", left "bad"), ("a2", right 2 "good2"), ("a3", right 20 "good3")] (atomically . waitAnyRightSTM)
+-- "good2"
+-- >>> TStat.withAsyncs [("a1", left "bad1"), ("a2", left "bad2"), ("a3", left "bad3")] (atomically . waitAnyRightSTM)
+-- *** Exception: user error (bad3)
 waitAnyRightSTM :: [Async a] -> STM a
-waitAnyRightSTM [] = error "waitAnyRightSTM"
-waitAnyRightSTM (a : as) = do
-    let w = waitSTM a -- may throw an exception
-        ws = map waitRightSTM as -- exeptions are ignored
-        -- If "w" is reached, all of the others throw an exception.
-    foldr orElse retry ws `orElse` w
+waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
-waitRightSTM :: Async b -> STM b
-waitRightSTM a = do
-    r <- waitCatchSTM a
-    -- Here this IO thread is dead.  A value of "Either SomeException
-    -- a" is passed by "putTMVar".  After "retry", "waitCatchSTM" waits
-    -- forever because "putTMVar" is never called again. Yes, the
-    -- thread is dead already.  So, this transaction stays until
-    -- canceled.
-    either (const retry) return r
+getAnyRight :: [STM (Either SomeException a)] -> STM a
+getAnyRight [] = error "getAnyRight: null input"
+getAnyRight ws0 = go id True ws0
+  where
+    -- The blocked list is original list: all is blocked
+    go _ True [] = retry
+    -- The blocked list is not original list: retry for only blocked STMs
+    go blockedB False [] = getAnyRight $ blockedB []
+    go blockedB orig (t : ts) = do
+        ---- t is not blocked
+        --------------- t is blocked, accumulate blocked STM
+        e <- t `orElse` (Right <$> go (blockedB . (t :)) orig ts)
+        case e of
+            Right rv -> pure rv
+            Left err -> do
+                when (null ts && null (blockedB [])) $ throwSTM err
+                -- go through with ts, not original list anymore
+                go blockedB False ts
