@@ -123,18 +123,18 @@ waitAnyRightSTM :: [Async a] -> STM a
 waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
 getAnyRight :: [STM (Either SomeException a)] -> STM a
-getAnyRight ws0 = rec_ (throwSTM $ userError "getAnyRight: null input") id ws0
+getAnyRight ws0 = go (throwSTM $ userError "getAnyRight: null input") id ws0
   where
     size = length ws0
-    rec_ err0 blocked []
-        | null blocked' = err0 {- no blocked STM, null input case -}
-        | length blocked' == size = retry {- all blocked case -}
-        | otherwise = getAnyRight blocked' {- retry for only blocked STMs -}
+    go err0 blocked []
+        | null blocked' = err0 -- no blocked STM, null input case
+        | length blocked' == size = retry -- all blocked case
+        | otherwise = getAnyRight blocked' -- retry for only blocked STMs
       where
         blocked' = blocked []
-    rec_ err0 blocked (t:ts) = do
-        {- accumulate blocked STM. only the Right blocked case is returned and Left is thrown. -}
-        e <- t `orElse` (Right <$> rec_ err0 (blocked . (t:)) ts)
+    go err0 blocked (t : ts) = do
+        -- accumulate blocked STM. only the Right blocked case is returned and Left is thrown.
+        e <- t `orElse` (Right <$> go err0 (blocked . (t :)) ts)
         case e of
-            Left err -> rec_ (throwSTM err) blocked ts {- replace error result, and check nexts -}
+            Left err -> go (throwSTM err) blocked ts -- replace error result, and check nexts
             Right rv -> pure rv
