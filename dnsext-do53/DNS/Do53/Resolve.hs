@@ -125,22 +125,19 @@ waitAnyRightSTM = getAnyRight . map waitCatchSTM
 
 getAnyRight :: [STM (Either SomeException a)] -> STM a
 getAnyRight [] = error "getAnyRight: null input"
-getAnyRight ws0 = go id ws0
+getAnyRight ws0 = go id True ws0
   where
-    size = length ws0
-    go blockedB []
-        | length blocked == size = retry -- all blocked case
-        | otherwise = getAnyRight blocked -- retry for only blocked STMs
-      where
-        blocked = blockedB []
-    go blockedB (t : ts) = do
-        -- accumulate blocked STM. only the Right blocked case is returned and Left is thrown.
+    -- The blocked list is original list: all is blocked
+    go _ True [] = retry
+    -- The blocked list is not original list: retry for only blocked STMs
+    go blockedB False [] = getAnyRight $ blockedB []
+    go blockedB orig (t : ts) = do
         ---- t is not blocked
-        --------------- t is blocked
-        e <- t `orElse` (Right <$> go (blockedB . (t :)) ts)
+        --------------- t is blocked, accumulate blocked STM
+        e <- t `orElse` (Right <$> go (blockedB . (t :)) orig ts)
         case e of
             Right rv -> pure rv
             Left err -> do
                 when (null ts && null (blockedB [])) $ throwSTM err
-                -- go through with ts
-                go blockedB ts
+                -- go through with ts, not original list anymore
+                go blockedB False ts
