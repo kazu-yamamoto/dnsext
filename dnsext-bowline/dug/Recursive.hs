@@ -71,13 +71,13 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
                     Nothing -> \_ -> return ()
                     Just file -> \msg -> appendFile file (msg ++ "\n")
                 }
-    conf <- getCustomConf mserver port mempty ractions
+    (conf, aps) <- getCustomConf mserver port mempty ractions
     mx <-
         if optDoX == "auto"
             then resolvePipeline conf
             else case makePersistentResolver optDoX of
                 Just r -> do
-                    let ris = makeResolveInfo ractions port <$> (read <$> mserver)
+                    let ris = makeResolveInfo ractions aps
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
     case mx of
@@ -143,29 +143,30 @@ printResult putLn putLines (Right r@Result{..}) = do
 
 makeResolveInfo
     :: ResolveActions
-    -> PortNumber
-    -> IP
-    -> ResolveInfo
-makeResolveInfo ractions port ip =
-    defaultResolveInfo
-        { rinfoIP = ip
-        , rinfoPort = port
-        , rinfoUDPRetry = 2
-        , rinfoActions = ractions
-        }
+    -> [(IP, PortNumber)]
+    -> [ResolveInfo]
+makeResolveInfo ractions aps = mk <$> aps
+  where
+    mk (ip, port) =
+        defaultResolveInfo
+            { rinfoIP = ip
+            , rinfoPort = port
+            , rinfoUDPRetry = 2
+            , rinfoActions = ractions
+            }
 
 getCustomConf
     :: [HostName]
     -> PortNumber
     -> QueryControls
     -> ResolveActions
-    -> IO LookupConf
+    -> IO (LookupConf, [(IP, PortNumber)])
 getCustomConf mserver port ctl ractions = case mserver of
-    [] -> return conf
+    [] -> return (conf, [])
     hs -> do
         as <- concat <$> mapM toNumeric hs
         let aps = map (\h -> (fromString h, port)) as
-        return $ conf{lconfSeeds = SeedsAddrPorts aps}
+        return (conf{lconfSeeds = SeedsAddrPorts aps}, aps)
   where
     conf =
         DNS.defaultLookupConf
