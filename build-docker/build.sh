@@ -88,6 +88,59 @@ build_with_haskell() {
 
 ## ----------
 
+[ x"$BOWLINE_BUILD_METHOD" != x ] || BOWLINE_BUILD_METHOD=ghcup
+
+case "$BOWLINE_BUILD_METHOD" in
+    ghcup)
+        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.6.4
+        [ x"$DEBIAN_REVISON" != x ] || DEBIAN_REVISON=bookworm
+        #--
+        set -x
+        debian_rev="$DEBIAN_REVISON"
+        ghc_version="$GHC_VERSION"
+        case "$ghc_version" in
+            9.6.*)
+                CABAL_VERSION=3.10.1.0
+                ;;
+            9.4.*)
+                CABAL_VERSION=3.8.1.0
+                ;;
+            *)
+                cat <<EOF
+Unsupported GHC version: $ghc_version
+EOF
+                exit 1
+                ;;
+        esac
+        DEBIAN_TAG=${debian_rev}-slim
+        result_tag_debian=${debian_rev}
+
+        build_with_ghcup
+        ;;
+
+    haskell)
+        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.4.8
+        #--
+        set -x
+        HAKELL_TAG=${GHC_VERSION}-slim-buster
+        DEBIAN_TAG=buster-slim
+        ghc_version=${GHC_VERSION}
+        result_tag_debian=buster
+
+        build_with_haskell
+        ;;
+
+    *)
+        cat <<EOF
+Unknown BOWLINE_BUILD_METHOD: $BOWLINE_BUILD_METHOD
+EOF
+        exit 1
+        ;;
+esac
+
+exit 0
+
+
 case "$1" in
     -h|--help)
         usage
