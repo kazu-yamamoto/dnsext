@@ -2,7 +2,11 @@
 
 usage() {
         cat <<EOF
-Usage: $0 -x [REVISION_TO_BUILD [CLONE_URL]]
+Usage: $0 -n [REVISION_TO_BUILD [CLONE_URL]]
+
+         Not execute, but print commands
+
+       $0 -x [REVISION_TO_BUILD [CLONE_URL]]
 
          Execute build process
 
@@ -32,7 +36,7 @@ CHAIN_SUBJ_CN=bowline.example.com
 
 build_with_ghcup() {
     tag_bowline=bowline:${bowline_revision}
-    docker buildx build \
+    $N docker buildx build \
            -t ${tag_bowline} \
            --build-arg GHC_OPTIMIZE=${GHC_OPTIMIZE} \
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
@@ -50,17 +54,17 @@ build_with_ghcup() {
            .
 
     tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
-    docker image tag ${tag_bowline} ${tag_ghcup}
+    $N docker image tag ${tag_bowline} ${tag_ghcup}
     if [ "${ghc_version}" = 9.6.4 ]; then
-        docker image tag ${tag_ghcup} bowline:${result_tag_debian}
+        $N docker image tag ${tag_ghcup} bowline:${result_tag_debian}
         if [ "${result_tag_debian}" = bookworm ]; then
-            docker image tag bowline:${result_tag_debian} bowline:latest
+            $N docker image tag bowline:${result_tag_debian} bowline:latest
         fi
     fi
 }
 
 build_with_haskell() {
-    docker buildx build \
+    $N docker buildx build \
            -t bowline:${ghc_version}-${result_tag_debian}-haskell \
            --build-arg GHC_OPTIMIZE=${GHC_OPTIMIZE} \
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
@@ -79,13 +83,18 @@ build_with_haskell() {
 
 ## ----------
 
+N=:
 case "$1" in
     -h|--help)
         usage
         exit 0
         ;;
 
+    -n)
+        ;;
+
     -x)
+        N=''
         ;;
 
     *)
