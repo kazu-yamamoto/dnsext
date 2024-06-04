@@ -117,4 +117,4 @@ EXPOSE 10023/tcp
 
 EXPOSE 8080/tcp
 
-ENTRYPOINT ["/usr/bin/tini", "/bowline.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/bowline.sh"]
