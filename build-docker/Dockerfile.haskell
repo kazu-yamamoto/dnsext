@@ -20,7 +20,7 @@ set -e -x
 apt-get update
 DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends \
-  build-essential binutils ca-certificates curl git openssl
+  build-essential binutils ca-certificates curl git openssl tini
 EOF
 
 WORKDIR /tmp/src
@@ -80,6 +80,7 @@ EOF
 FROM debian:${DEBIAN_TAG}
 
 COPY --from=builder /opt/bowline /opt/bowline
+COPY --from=builder /usr/bin/tini /usr/bin/tini
 COPY scripts /
 
 WORKDIR /opt/bowline/
@@ -116,4 +117,4 @@ EXPOSE 10023/tcp
 
 EXPOSE 8080/tcp
 
-CMD ["/bowline.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/bowline.sh"]

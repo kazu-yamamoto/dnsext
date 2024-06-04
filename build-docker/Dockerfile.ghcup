@@ -23,7 +23,7 @@ apt-get update
 DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends \
   build-essential binutils ca-certificates curl git openssl \
-  libgmp-dev libz-dev
+  libgmp-dev libz-dev tini
 
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
      BOOTSTRAP_HASKELL_NONINTERACTIVE=1                  \
@@ -98,6 +98,7 @@ EOF
 FROM debian:${DEBIAN_TAG}
 
 COPY --from=builder /opt/bowline /opt/bowline
+COPY --from=builder /usr/bin/tini /usr/bin/tini
 COPY scripts /
 
 WORKDIR /opt/bowline/
@@ -134,4 +135,4 @@ EXPOSE 10023/tcp
 
 EXPOSE 8080/tcp
 
-CMD ["/bowline.sh"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/bowline.sh"]
