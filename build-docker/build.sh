@@ -1,26 +1,15 @@
 #! /bin/sh
 
 usage() {
-    cat<<EOF
-Usage: $0
+        cat <<EOF
+Usage: $0 -x [REVISION_TO_BUILD [CLONE_URL]]
 
-         Build with default params
+         Execute build process
 
        $0 {-h|--help}
 
          Show this help texts
 
-       $0 ghcup DEBIAN_REVISION GHC_VERSION
-
-         Build with ghcup
-
-       $0 haskell HASKELL_IMAGE_TAG
-
-         Build with haskell docker image
-
-       $0 examples
-
-         Show example commands
 EOF
 }
 
@@ -40,8 +29,6 @@ PRIVKEY_ALG=EC
 PRIVKEY_ALGOPT=ec_paramgen_curve:P-256
 CHAIN_SUBJ_CN=bowline.example.com
 
-[ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-docker
-
 
 build_with_ghcup() {
     tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
@@ -57,6 +44,7 @@ build_with_ghcup() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
+           --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
            -f Dockerfile.ghcup \
            .
@@ -81,10 +69,37 @@ build_with_haskell() {
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
+           --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
            -f Dockerfile.haskell \
            .
 }
+
+## ----------
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+
+    -x)
+        ;;
+
+    *)
+        usage
+        exit 1
+        ;;
+esac
+shift
+
+set -x
+DNSEXT_REV="$1"
+[ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-docker
+
+CLONE_URL="$2"
+[ x"$CLONE_URL" != x ] || CLONE_URL=http://github.com/kazu-yamamoto/dnsext
+set +x
 
 ## ----------
 
