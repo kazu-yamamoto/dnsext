@@ -4,6 +4,7 @@ ARG DEBIAN_TAG
 
 FROM haskell:${HAKELL_TAG} as builder
 
+ARG CLONE_URL
 ARG DNSEXT_REV
 
 ARG PRIVKEY_ALG
@@ -28,7 +29,7 @@ WORKDIR /tmp/src
 ## Setup source tree
 RUN <<EOF
 set -e -x
-git clone http://github.com/kazu-yamamoto/dnsext dnsext
+git clone ${CLONE_URL}
 ( cd dnsext
   git checkout ${DNSEXT_REV}
   for dir in \
