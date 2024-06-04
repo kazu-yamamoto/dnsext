@@ -31,9 +31,9 @@ CHAIN_SUBJ_CN=bowline.example.com
 
 
 build_with_ghcup() {
-    tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
+    tag_bowline=bowline:${bowline_revision}
     docker buildx build \
-           -t ${tag_ghcup} \
+           -t ${tag_bowline} \
            --build-arg GHC_OPTIMIZE=${GHC_OPTIMIZE} \
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
@@ -49,8 +49,10 @@ build_with_ghcup() {
            -f Dockerfile.ghcup \
            .
 
+    tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
+    docker image tag ${tag_bowline} ${tag_ghcup}
     if [ "${ghc_version}" = 9.6.4 ]; then
-        docker image tag "${tag_ghcup}" bowline:${result_tag_debian}
+        docker image tag ${tag_ghcup} bowline:${result_tag_debian}
         if [ "${result_tag_debian}" = bookworm ]; then
             docker image tag bowline:${result_tag_debian} bowline:latest
         fi
@@ -95,10 +97,12 @@ shift
 
 set -x
 DNSEXT_REV="$1"
-[ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-docker
+[ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-latest
 
 CLONE_URL="$2"
 [ x"$CLONE_URL" != x ] || CLONE_URL=http://github.com/kazu-yamamoto/dnsext
+
+bowline_revision=${DNSEXT_REV#dist-}
 set +x
 
 ## ----------
