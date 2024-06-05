@@ -163,7 +163,7 @@ data QueryError
 type ContextT m = ReaderT Env (ReaderT QueryContext m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-class MonadReaderQC m where
+class Monad m => MonadReaderQC m where
     asksQC :: (QueryContext -> a) -> m a
 
 instance Monad m => MonadReaderQC (ContextT m) where
