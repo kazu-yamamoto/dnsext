@@ -43,7 +43,7 @@ library
         dnsext-utils,
         http-types,
         http2 >= 5.2 && < 5.3,
-        http2-tls >= 0.2.10 && < 0.3,
+        http2-tls >= 0.3 && < 0.4,
         http3,
         iproute,
         network >=2.3,
