@@ -85,7 +85,7 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
             let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult putLn putLines
             mapM_ printIt qcs
         Just [] -> do
-            putStrLn "No proper SVCB"
+            putStrLn $ show optDoX ++ " connection cannot be created"
             exitFailure
         Just pipes -> do
             let len = length qcs
