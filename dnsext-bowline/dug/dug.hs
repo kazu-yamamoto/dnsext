@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Main (main) where
@@ -26,10 +27,12 @@ import DNS.Types (
     fromRepresentation,
     runInitIO,
  )
+import Data.Bits
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Char (toLower)
+import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (intercalate, isPrefixOf, partition)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
@@ -37,6 +40,7 @@ import System.Console.ANSI.Types
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
+import Text.Printf (printf)
 import Text.Read (readMaybe)
 
 import qualified DNS.Log as Log
@@ -250,20 +254,30 @@ getQuery [] = do
     putStrLn "never reached"
     exitFailure
 getQuery xs = do
-    (queryName, xs1) <- getQueryName xs
-    (queryType, xs2) <- getQueryType xs1
+    (queryName, rev, xs1) <- getQueryName xs
+    (queryType', xs2) <- getQueryType xs1
+    let queryType
+            | rev = PTR
+            | otherwise = queryType'
     (queryControls, ys) <- getQueryControls xs2
     return ((Question queryName queryType IN, queryControls), ys)
 
-getQueryName :: [String] -> IO (Domain, [String])
+getQueryName :: [String] -> IO (Domain, Bool, [String])
 getQueryName [] = do
     putStrLn "Query name must be specified"
     exitFailure
 getQueryName (queryName : ys)
-    | '.' `notElem` queryName = do
+    | Just (IPv4 ip4) <- readMaybe queryName = do
+        let name = intercalate "." (map show $ reverse $ fromIPv4 ip4) ++ ".in-addr.arpa"
+        return (fromRepresentation name, True, ys)
+    | Just (IPv6 ip6) <- readMaybe queryName = do
+        print $ fromIPv6b ip6
+        let name = intercalate "." (map (printf "%x") $ reverse $ concat $ map (\x -> [x !>>. 4, x .&. 0xf]) $ fromIPv6b ip6) ++ ".ip6.arpa"
+        return (fromRepresentation name, True, ys)
+    | '.' `elem` queryName = return (fromRepresentation queryName, False, ys)
+    | otherwise = do
         putStrLn $ show queryName ++ " does not contain '.'"
         exitFailure
-    | otherwise = return (fromRepresentation queryName, ys)
 
 getQueryType :: [String] -> IO (TYPE, [String])
 getQueryType [] = return (A, [])
