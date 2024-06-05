@@ -74,6 +74,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     notLocal
         | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
         | typ == Cache.ERR = pure (([], n0), Left (DNS.NoErr, [], []))
+        | typ == ANY       = pure (([], n0), Left (DNS.NotImpl, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
