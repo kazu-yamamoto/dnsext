@@ -272,7 +272,7 @@ getQueryName (queryName : ys)
         return (fromRepresentation name, True, ys)
     | Just (IPv6 ip6) <- readMaybe queryName = do
         print $ fromIPv6b ip6
-        let name = intercalate "." (map (printf "%x") $ reverse $ concat $ map (\x -> [x !>>. 4, x .&. 0xf]) $ fromIPv6b ip6) ++ ".ip6.arpa"
+        let name = intercalate "." (map (printf "%x") $ reverse $ concat $ map (\x -> [x `unsafeShiftR` 4, x .&. 0xf]) $ fromIPv6b ip6) ++ ".ip6.arpa"
         return (fromRepresentation name, True, ys)
     | '.' `elem` queryName = return (fromRepresentation queryName, False, ys)
     | otherwise = do
