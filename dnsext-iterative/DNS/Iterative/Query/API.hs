@@ -16,9 +16,7 @@ module DNS.Iterative.Query.API (
 
 -- dnsext packages
 import DNS.Do53.Client (
-    EdnsControls (..),
     FlagOp (..),
-    HeaderControls (..),
     QueryControls (..),
  )
 import qualified DNS.Do53.Client as DNS
@@ -34,47 +32,6 @@ import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils (logQueryErrors)
 
 -----
-
-{- datatypes to propagate request flags -}
-
-data RequestDO
-    = DnssecOK
-    | NoDnssecOK
-    deriving (Show)
-
-data RequestCD
-    = CheckDisabled
-    | NoCheckDisabled
-    deriving (Show)
-
-data RequestAD
-    = AuthenticatedData
-    | NoAuthenticatedData
-    deriving (Show)
-
-{- request flags to pass iterative query.
-  * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
-    * https://datatracker.ietf.org/doc/html/rfc4035#section-3.2.1
-  * CD (Checking Disabled)
-  * AD (Authenticated Data)
-    * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7
-      "setting the AD bit in a query as a signal indicating that the requester understands and is interested in the value of the AD bit in the response" -}
-requestDO :: QueryContext -> RequestDO
-requestDO QueryContext{..} = case extDO $ qctlEdns qcontrol_ of
-    FlagSet -> DnssecOK
-    _ -> NoDnssecOK
-
-_requestCD :: QueryContext -> RequestCD
-_requestCD QueryContext{..} = case cdBit $ qctlHeader qcontrol_ of
-    FlagSet -> CheckDisabled
-    _ -> NoCheckDisabled
-
-_requestAD :: QueryContext -> RequestAD
-_requestAD QueryContext{..} = case adBit $ qctlHeader qcontrol_ of
-    FlagSet -> AuthenticatedData
-    _ -> NoAuthenticatedData
-
----
 
 {-
 反復検索の概要

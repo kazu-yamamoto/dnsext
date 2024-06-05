@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Types (
     Result,
@@ -10,6 +11,12 @@ module DNS.Iterative.Query.Types (
     Env (..),
     QueryContext (..),
     queryContextIN,
+    RequestDO (..),
+    requestDO,
+    RequestCD (..),
+    requestCD,
+    RequestAD (..),
+    requestAD,
     RRset (..),
     Address,
     DEntry (..),
@@ -37,7 +44,7 @@ import Data.Map (Map)
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Client (QueryControls (..), Reply)
+import DNS.Do53.Client (EdnsControls (..), FlagOp (..), HeaderControls (..), QueryControls (..), Reply)
 import qualified DNS.Log as Log
 import DNS.RRCache (
     CRSet,
@@ -102,6 +109,44 @@ data QueryContext = QueryContext
 
 queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
 queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
+
+{- Datatypes for request flags to pass iterative query.
+  * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
+    * https://datatracker.ietf.org/doc/html/rfc4035#section-3.2.1 The DO Bit
+  * CD (Checking Disabled)
+  * AD (Authenticated Data)
+    * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7 Setting the AD Bit on Queries
+      "setting the AD bit in a query as a signal indicating that the requester understands
+       and is interested in the value of the AD bit in the response" -}
+data RequestDO
+    = DnssecOK
+    | NoDnssecOK
+    deriving (Show)
+
+data RequestCD
+    = CheckDisabled
+    | NoCheckDisabled
+    deriving (Show)
+
+data RequestAD
+    = AuthenticatedData
+    | NoAuthenticatedData
+    deriving (Show)
+
+requestDO :: QueryContext -> RequestDO
+requestDO QueryContext{..} = case extDO $ qctlEdns qcontrol_ of
+    FlagSet -> DnssecOK
+    _ -> NoDnssecOK
+
+requestCD :: QueryContext -> RequestCD
+requestCD QueryContext{..} = case cdBit $ qctlHeader qcontrol_ of
+    FlagSet -> CheckDisabled
+    _ -> NoCheckDisabled
+
+requestAD :: QueryContext -> RequestAD
+requestAD QueryContext{..} = case adBit $ qctlHeader qcontrol_ of
+    FlagSet -> AuthenticatedData
+    _ -> NoAuthenticatedData
 
 data QueryError
     = DnsError DNSError [String]
