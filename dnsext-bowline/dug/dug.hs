@@ -141,8 +141,8 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2"
         exitSuccess
     ------------------------
-    (at, port, qs, logger, putLn, putLines, killLogger) <- cookOpts args opts
-    void $ forkIO logger
+    (at, port, qs, runLogger, putLn, putLines, killLogger) <- cookOpts args opts
+    void $ forkIO runLogger
     t0 <- T.getUnixTime
     ------------------------
     if optIterative
@@ -174,9 +174,9 @@ cookOpts args Options{..} = do
     let (at, dtq) = partition ("@" `isPrefixOf`) args
     qs <- getQueries dtq
     port <- getPort optPort optDoX
-    (logger, putLines, kill) <- Log.new Log.Stdout optLogLevel
+    (runLogger, putLines, killLogger) <- Log.new Log.Stdout optLogLevel
     let putLn = mkPutline optFormat putLines
-    return (at, port, qs, logger, putLn, putLines, kill)
+    return (at, port, qs, runLogger, putLn, putLines, killLogger)
 
 ----------------------------------------------------------------
 

@@ -77,7 +77,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         Nothing -> getCache tcache conf
         Just c -> return c
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, flush) <- getLogger conf
+    (runLogger, putLines, killLogger) <- getLogger conf
     gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
@@ -132,7 +132,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         -- Teardown
         `finally` do
             mapM_ maybeKill [tidA, tidL, tidW]
-            flush
+            killLogger
     threadDelay 500000 -- avoiding address already in use
     return gcache
   where
