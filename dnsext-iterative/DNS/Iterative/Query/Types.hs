@@ -13,11 +13,8 @@ module DNS.Iterative.Query.Types (
     queryContext,
     queryContextIN,
     RequestDO (..),
-    requestDO,
     RequestCD (..),
-    requestCD,
     RequestAD (..),
-    requestAD,
     RRset (..),
     Address,
     DEntry (..),
@@ -104,12 +101,14 @@ data Env = Env
     }
 
 data QueryContext = QueryContext
-    { qcontrol_ :: QueryControls
-    , origQuestion_ :: Question
+    { origQuestion_ :: Question
+    , requestDO_ :: RequestDO
+    , requestCD_ :: RequestCD
+    , requestAD_ :: RequestAD
     }
 
 queryContext :: Question -> QueryControls -> QueryContext
-queryContext q qctl = QueryContext qctl q
+queryContext q qctl = QueryContext q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
 
 queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
 queryContextIN dom typ qctl = queryContext (Question dom typ IN) qctl
@@ -137,18 +136,18 @@ data RequestAD
     | NoAuthenticatedData
     deriving (Show)
 
-requestDO :: QueryContext -> RequestDO
-requestDO QueryContext{..} = case extDO $ qctlEdns qcontrol_ of
+toRequestDO :: QueryControls -> RequestDO
+toRequestDO qctl = case extDO $ qctlEdns qctl of
     FlagSet -> DnssecOK
     _ -> NoDnssecOK
 
-requestCD :: QueryContext -> RequestCD
-requestCD QueryContext{..} = case cdBit $ qctlHeader qcontrol_ of
+toRequestCD :: QueryControls -> RequestCD
+toRequestCD qctl = case cdBit $ qctlHeader qctl of
     FlagSet -> CheckDisabled
     _ -> NoCheckDisabled
 
-requestAD :: QueryContext -> RequestAD
-requestAD QueryContext{..} = case adBit $ qctlHeader qcontrol_ of
+toRequestAD :: QueryControls -> RequestAD
+toRequestAD qctl = case adBit $ qctlHeader qctl of
     FlagSet -> AuthenticatedData
     _ -> NoAuthenticatedData
 

@@ -167,7 +167,7 @@ replyMessage eas ident rqs =
 getResultIterative :: Question -> DNSQuery Result
 getResultIterative q = do
     ((cnrrs, _rn), etm) <- resolve q
-    reqDO <- asksQC requestDO
+    reqDO <- asksQC requestDO_
     let fromRRsets = concatMap $ rrListFromRRset reqDO
         fromMessage (msg, vans, vauth) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
@@ -181,7 +181,7 @@ resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets c
 getResultCached :: Question -> DNSQuery (Maybe Result)
 getResultCached q = do
     ((cnrrs, _rn), e) <- resolveByCache q
-    reqDO <- asksQC requestDO
+    reqDO <- asksQC requestDO_
     return $ either (Just . makeResult reqDO cnrrs . resultFromRRS reqDO) (const Nothing) e
 
 makeResult :: RequestDO -> [RRset] -> Result -> Result
