@@ -80,18 +80,20 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
                     let ris = makeResolveInfo ractions aps
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
+    stdoutLock <- newMVar ()
     case mx of
         Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult putLn putLines
+            -- UDP
+            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult stdoutLock putLn putLines
             mapM_ printIt qcs
         Just [] -> do
             putStrLn $ show optDoX ++ " connection cannot be created"
             exitFailure
         Just pipes -> do
+            -- VC
             let len = length qcs
             refs <- replicateM len $ newIORef False
             let targets = zip qcs refs
-            stdoutLock <- newMVar ()
             raceAny $ map (resolver stdoutLock putLn putLines targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
@@ -126,20 +128,21 @@ resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
     printIt resolv ((q, ctl), ref) = do
         er <- resolv q ctl
         notyet <- atomicModifyIORef' ref (True,)
-        unless notyet $ withMVar stdoutLock $ \() ->
-            printResult putLn putLines er
+        unless notyet $ printResult stdoutLock putLn putLines er
 
 printResult
-    :: (DNS.DNSMessage -> IO ())
+    :: MVar ()
+    -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> Either DNS.DNSError Result
     -> IO ()
-printResult _ _ (Left err) = print err
-printResult putLn putLines (Right r@Result{..}) = do
-    let h = mkHeader r
-    putLines Log.WARN (Just Green) [h]
-    let Reply{..} = resultReply
-    putLn replyDNSMessage
+printResult _ _ _ (Left err) = print err
+printResult stdoutLock putLn putLines (Right r@Result{..}) =
+    withMVar stdoutLock $ \() -> do
+        let h = mkHeader r
+        putLines Log.WARN (Just Green) [h]
+        let Reply{..} = resultReply
+        putLn replyDNSMessage
 
 makeResolveInfo
     :: ResolveActions

@@ -2,16 +2,19 @@ module DNS.Log (
     new,
     Level (..),
     Output (..),
+    Logger,
     PutLines,
+    KillLogger,
 ) where
 
 -- GHC packages
+import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Monad (forever, void, when)
+import Control.Monad (when)
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
-    hPutStr,
+    hPutStrLn,
     hSetBuffering,
     stderr,
     stdout,
@@ -20,7 +23,6 @@ import System.IO (
 -- other packages
 import System.Console.ANSI (hSetSGR, hSupportsANSIColor)
 import System.Console.ANSI.Types
-import qualified UnliftIO.Exception as E
 
 -- this package
 
@@ -39,45 +41,52 @@ instance Show Output where
     show Stdout = "Stdout"
     show Stderr = "Stderr"
 
+type Logger = IO ()
 type PutLines = Level -> Maybe Color -> [String] -> IO ()
+type KillLogger = IO ()
 
-new :: Output -> Level -> IO (IO (), PutLines, IO ())
+new :: Output -> Level -> IO (Logger, PutLines, KillLogger)
 new Stdout = newHandleLogger stdout
 new Stderr = newHandleLogger stderr
 
 newHandleLogger
-    :: Handle -> Level -> IO (IO (), PutLines, IO ())
+    :: Handle -> Level -> IO (Logger, PutLines, KillLogger)
 newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     colorize <- hSupportsANSIColor outFh
     inQ <- newTQueueIO
-    let logger = logLoop inQ
-        put = logLines colorize inQ
-    return (logger, put, flush inQ)
+    mvar <- newEmptyMVar
+    let logger = loggerLoop inQ mvar
+        put = putLines colorize inQ
+        kill = killLogger inQ mvar
+    return (logger, put, kill)
   where
-    logLines colorize inQ lv color ~xs
+    killLogger inQ mvar = do
+        atomically $ writeTQueue inQ Nothing
+        takeMVar mvar
+
+    putLines colorize inQ lv color ~xs
         | colorize = withColor color
         | otherwise = withColor Nothing
       where
         withColor c =
             when (loggerLevel <= lv) $
                 atomically $
-                    writeTQueue inQ (c, xs)
+                    writeTQueue inQ $
+                        Just (c, xs)
 
-    logLoop inQ = forever write
+    loggerLoop inQ mvar = loop
       where
-        write = void $ E.tryAny (atomically (readTQueue inQ) >>= logit)
+        loop = do
+            me <- atomically (readTQueue inQ)
+            case me of
+                Nothing -> putMVar mvar ()
+                Just e -> do
+                    logit e
+                    loop
 
-    flush inQ = do
-        mx <- atomically $ tryReadTQueue inQ
-        case mx of
-            Nothing -> return ()
-            Just x -> do
-                logit x
-                flush inQ
-
-    logit (Nothing, xs) = hPutStr outFh $ unlines xs
+    logit (Nothing, xs) = mapM_ (hPutStrLn outFh) xs
     logit (Just c, xs) = do
         hSetSGR outFh [SetColor Foreground Vivid c]
-        hPutStr outFh $ unlines xs
+        mapM_ (hPutStrLn outFh) xs
         hSetSGR outFh [Reset]

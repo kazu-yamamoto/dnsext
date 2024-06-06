@@ -4,8 +4,8 @@
 
 module Main (main) where
 
-import Control.Concurrent (forkIO, killThread)
-import Control.Monad (when)
+import Control.Concurrent (forkIO)
+import Control.Monad (void, when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
@@ -141,8 +141,8 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2"
         exitSuccess
     ------------------------
-    (at, port, qs, logger, putLn, putLines, flushLog) <- cookOpts args opts
-    loggerId <- forkIO logger
+    (at, port, qs, logger, putLn, putLines, killLogger) <- cookOpts args opts
+    void $ forkIO logger
     t0 <- T.getUnixTime
     ------------------------
     if optIterative
@@ -153,9 +153,8 @@ main = do
             let mserver = map (drop 1) at
             recursiveQuery mserver port putLn putLines qs opts
     ------------------------
-    flushLog
-    killThread loggerId
     putTime t0 putLines
+    killLogger
 
 ----------------------------------------------------------------
 
@@ -175,9 +174,9 @@ cookOpts args Options{..} = do
     let (at, dtq) = partition ("@" `isPrefixOf`) args
     qs <- getQueries dtq
     port <- getPort optPort optDoX
-    (logger, putLines, flush) <- Log.new Log.Stdout optLogLevel
+    (logger, putLines, kill) <- Log.new Log.Stdout optLogLevel
     let putLn = mkPutline optFormat putLines
-    return (at, port, qs, logger, putLn, putLines, flush)
+    return (at, port, qs, logger, putLn, putLines, kill)
 
 ----------------------------------------------------------------
 
