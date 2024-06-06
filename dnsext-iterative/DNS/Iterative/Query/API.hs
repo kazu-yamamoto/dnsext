@@ -61,7 +61,7 @@ getResponseIterative'
     -> [DNS.Question]
     -> IO (Either String DNSMessage)
 getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
-    ers <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
+    ers <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
     return $ replyMessage ers (DNS.identifier reqM) qs
   where
     reqF = DNS.flags reqM
@@ -91,7 +91,7 @@ getResponseCached env reqM = case DNS.question reqM of
 
 getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
 getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
-    ex <- runDNSQuery getResult env $ QueryContext (ctrlFromRequestHeader reqF reqEH) q
+    ex <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
     case ex of
         Right Nothing -> return CResultMissHit
         Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r

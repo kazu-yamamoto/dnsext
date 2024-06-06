@@ -19,5 +19,5 @@ import DNS.Types
 
 resolveResponseIterative :: Env -> Question -> QueryControls -> IO (Either String DNSMessage)
 resolveResponseIterative env q ictl = do
-    ers <- runDNSQuery (getResultIterative q) env $ QueryContext ictl q
+    ers <- runDNSQuery (getResultIterative q) env $ queryContext q ictl
     return $ replyMessage ers 0 {- dummy id -} [q]

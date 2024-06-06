@@ -10,6 +10,7 @@ module DNS.Iterative.Query.Types (
     StubZones,
     Env (..),
     QueryContext (..),
+    queryContext,
     queryContextIN,
     RequestDO (..),
     requestDO,
@@ -107,8 +108,11 @@ data QueryContext = QueryContext
     , origQuestion_ :: Question
     }
 
+queryContext :: Question -> QueryControls -> QueryContext
+queryContext q qctl = QueryContext qctl q
+
 queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
-queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
+queryContextIN dom typ qctl = queryContext (Question dom typ IN) qctl
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
