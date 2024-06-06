@@ -141,8 +141,8 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2"
         exitSuccess
     ------------------------
-    (at, port, qs, logger, putLn, putLines, flush) <- cookOpts args opts
-    tid <- forkIO logger
+    (at, port, qs, logger, putLn, putLines, flushLog) <- cookOpts args opts
+    loggerId <- forkIO logger
     t0 <- T.getUnixTime
     ------------------------
     if optIterative
@@ -153,9 +153,9 @@ main = do
             let mserver = map (drop 1) at
             recursiveQuery mserver port putLn putLines qs opts
     ------------------------
+    flushLog
+    killThread loggerId
     putTime t0 putLines
-    killThread tid
-    flush
 
 ----------------------------------------------------------------
 
