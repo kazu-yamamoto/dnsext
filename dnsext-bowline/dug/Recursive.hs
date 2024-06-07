@@ -6,8 +6,6 @@ module Recursive (recursiveQuery) where
 
 import Control.Concurrent
 import Control.Concurrent.Async
-import Control.Concurrent.STM
-import Control.Monad
 import DNS.Do53.Client (
     LookupConf (..),
     QueryControls,
@@ -43,8 +41,6 @@ import System.Exit (exitFailure)
 import Text.Read (readMaybe)
 
 import Types
-
-data Race = Start | Taken | Finished deriving (Eq, Show)
 
 recursiveQuery
     :: [HostName]
@@ -83,22 +79,19 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
                     let ris = makeResolveInfo ractions aps
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
-    stdoutLock <- newMVar ()
     case mx of
         Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
             -- UDP
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult stdoutLock putLn putLines
+            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult putLn putLines
             mapM_ printIt qcs
         Just [] -> do
             putStrLn $ show optDoX ++ " connection cannot be created"
             exitFailure
         Just pipes -> do
             -- VC
-            let len = length qcs
-            refs <- replicateM len $ newTVarIO Start
-            let targets = zip qcs refs
             -- racing with multiple connections
-            raceAny $ map (resolver stdoutLock putLn putLines targets) pipes
+            mapM_ (printResult putLn putLines)
+                =<< mapConcurrently (\qc -> racePipes qc pipes) qcs
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
 resolvePipeline conf = do
@@ -119,45 +112,27 @@ resolvePipeline conf = do
                         exitFailure
                     ps : _ -> return $ Just ps
 
-resolver
-    :: MVar ()
-    -> (DNS.DNSMessage -> IO ())
-    -> Log.PutLines
-    -> [((Question, QueryControls), TVar Race)]
-    -> PipelineResolver
-    -> IO ()
-resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
-    -- running concurrently for multiple target domains
-    foldr1 concurrently_ $ map (printIt resolv) targets
-  where
-    printIt resolv ((q, ctl), tvar) = do
-        er <- resolv q ctl
-        rac <- atomically $ do
-            r <- readTVar tvar
-            when (r == Start) $ writeTVar tvar Taken
-            return r
-        case rac of
-            Start -> do
-                printResult stdoutLock putLn putLines er
-                atomically $ writeTVar tvar Finished
-            Taken -> atomically $ do
-                r <- readTVar tvar
-                check (r == Finished)
-            Finished -> return ()
+
+racePipes :: (Question, QueryControls)
+          -> [PipelineResolver]
+          -> IO (Either DNS.DNSError Result)
+racePipes (q, ctl) pipes = do
+    rref <- newEmptyMVar
+    -- fastest one wins
+    raceAny [ pipeline $ \resolv -> resolv q ctl >>= putMVar rref | pipeline <- pipes ]
+    readMVar rref
 
 printResult
-    :: MVar ()
-    -> (DNS.DNSMessage -> IO ())
+    :: (DNS.DNSMessage -> IO ())
     -> Log.PutLines
     -> Either DNS.DNSError Result
     -> IO ()
-printResult _ _ _ (Left err) = print err
-printResult stdoutLock putLn putLines (Right r@Result{..}) =
-    withMVar stdoutLock $ \() -> do
-        let h = mkHeader r
-        putLines Log.WARN (Just Green) [h]
-        let Reply{..} = resultReply
-        putLn replyDNSMessage
+printResult _ _ (Left err) = print err
+printResult putLn putLines (Right r@Result{..}) = do
+  let h = mkHeader r
+  putLines Log.WARN (Just Green) [h]
+  let Reply{..} = resultReply
+  putLn replyDNSMessage
 
 makeResolveInfo
     :: ResolveActions
