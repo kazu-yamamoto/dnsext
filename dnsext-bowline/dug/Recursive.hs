@@ -5,6 +5,8 @@
 module Recursive (recursiveQuery) where
 
 import Control.Concurrent
+import Control.Concurrent.Async
+import Control.Concurrent.STM
 import Control.Monad
 import DNS.Do53.Client (
     LookupConf (..),
@@ -32,7 +34,6 @@ import DNS.Types (Question (..))
 import qualified DNS.Types as DNS
 import qualified Data.ByteString as BS
 import Data.Either
-import Data.IORef
 import Data.IP (IP, IPv4, IPv6)
 import Data.String
 import Network.Socket (HostName, PortNumber)
@@ -42,6 +43,8 @@ import System.Exit (exitFailure)
 import Text.Read (readMaybe)
 
 import Types
+
+data Race = Start | Taken | Finished deriving (Eq, Show)
 
 recursiveQuery
     :: [HostName]
@@ -92,8 +95,9 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
         Just pipes -> do
             -- VC
             let len = length qcs
-            refs <- replicateM len $ newIORef False
+            refs <- replicateM len $ newTVarIO Start
             let targets = zip qcs refs
+            -- racing with multiple connections
             raceAny $ map (resolver stdoutLock putLn putLines targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
@@ -119,16 +123,27 @@ resolver
     :: MVar ()
     -> (DNS.DNSMessage -> IO ())
     -> Log.PutLines
-    -> [((Question, QueryControls), IORef Bool)]
+    -> [((Question, QueryControls), TVar Race)]
     -> PipelineResolver
     -> IO ()
 resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
-    raceAny $ map (printIt resolv) targets
+    -- running concurrently for multiple target domains
+    foldr1 concurrently_ $ map (printIt resolv) targets
   where
-    printIt resolv ((q, ctl), ref) = do
+    printIt resolv ((q, ctl), tvar) = do
         er <- resolv q ctl
-        notyet <- atomicModifyIORef' ref (True,)
-        unless notyet $ printResult stdoutLock putLn putLines er
+        rac <- atomically $ do
+            r <- readTVar tvar
+            when (r == Start) $ writeTVar tvar Taken
+            return r
+        case rac of
+            Start -> do
+                printResult stdoutLock putLn putLines er
+                atomically $ writeTVar tvar Finished
+            Taken -> atomically $ do
+                r <- readTVar tvar
+                check (r == Finished)
+            Finished -> return ()
 
 printResult
     :: MVar ()
