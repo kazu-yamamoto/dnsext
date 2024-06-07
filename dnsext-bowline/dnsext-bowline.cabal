@@ -81,6 +81,7 @@ executable dug
         network,
         prettyprinter,
         random,
+        stm,
         transformers,
         unix-time
 
