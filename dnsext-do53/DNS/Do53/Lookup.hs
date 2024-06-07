@@ -19,6 +19,7 @@ module DNS.Do53.Lookup (
 where
 
 import qualified Data.List.NonEmpty as NE
+import Text.Read (readMaybe)
 import Prelude hiding (lookup)
 
 import DNS.Do53.Do53
@@ -270,7 +271,12 @@ findAddrPorts (SeedsAddr      nh)   = return [(nh, dnsPort)]
 findAddrPorts (SeedsAddrPort  nh p) = return [(nh, p)]
 findAddrPorts (SeedsAddrs     nss)  = return $ map (,dnsPort) nss
 findAddrPorts (SeedsAddrPorts nhps) = return nhps
-findAddrPorts (SeedsFilePath file)  = map (\h -> (fromString h, dnsPort)) <$> getDefaultDnsServers file
+findAddrPorts (SeedsFilePath file)  =
+    catMaybes . map safeAP <$> getDefaultDnsServers file
+  where
+    safeAP h = case readMaybe h of
+      Nothing -> Nothing
+      Just a -> Just (a, dnsPort)
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
