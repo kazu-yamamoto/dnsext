@@ -126,9 +126,9 @@ lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ ->
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) notVerified valid) logMark dom typ
+lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) noSig valid) logMark dom typ
   where
-    notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
+    noSig ttl rds = Just (noSigRRset dom typ DNS.IN ttl rds)
     valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
@@ -184,23 +184,23 @@ lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
   where
-    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA notVerified valid now dom_ typ_ cls cache
+    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA noSig valid now dom_ typ_ cls cache
       where
         {- negative hit. ranking for empty-data and SOA result. -}
         negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         negativeNoSOA _ttl = Just . LKNegativeNoSOA
-        notVerified ttl = Just . LKPositive . notVerifiedRRset dom typ DNS.IN ttl
+        noSig ttl = Just . LKPositive . noSigRRset dom typ DNS.IN ttl
         valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
 
     soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
-        positive = Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset srcDom SOA DNS.IN ttl
+        positive = Cache.positiveCases noSig valid
+        noSig = noSigRRset srcDom SOA DNS.IN ttl
         valid = validRRset srcDom SOA DNS.IN ttl
         ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
 
-notVerifiedRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
-notVerifiedRRset dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
+noSigRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
+noSigRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidNoSig
 
 validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
@@ -333,6 +333,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     verify getSec = Verify.cases getSec zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
+                {- TODO: add case for check-disabled -}
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())

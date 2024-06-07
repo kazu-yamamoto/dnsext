@@ -46,7 +46,7 @@ runEmbedResult dom emb = (DNS.NameErr, [], [soa emb])
             , rrsClass = IN
             , rrsTTL = ncttl
             , rrsRDatas = [DNS.rd_soa mname mail ser refresh retry expire ncttl]
-            , rrsMayVerified = NotVerifiedRRS
+            , rrsMayVerified = notValidNoSig
             }
 
 -- result for special IP-address block from reverse lookup domain

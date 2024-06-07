@@ -89,7 +89,7 @@ cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
     verifiedK rrset@(RRset dom typ cls minTTL rds sigrds) = rightK0 fromRDs rrset (logInv *> cache)
       where
         cache = cacheRRset rank dom typ cls minTTL rds sigrds
-        logInv = mayVerifiedRRS (pure ()) (logInvalids . lines) (const $ pure ()) $ rrsMayVerified rrset
+        logInv = mayVerifiedRRS (pure ()) (pure ()) (logInvalids . lines) (const $ pure ()) $ rrsMayVerified rrset
         logInvalids  []    = clogLn Log.DEMO (Just Cyan)  "cases: InvalidRRS"
         logInvalids (e:es) = clogLn Log.DEMO (Just Cyan) ("cases: InvalidRRS: " ++ e) *> logLines Log.DEMO es
     rightK rrset sortedRRs = do
@@ -107,8 +107,8 @@ withVerifiedRRset
 withVerifiedRRset now dnskeys0 RRset{..} sortedRDatas sigs0 vk =
     vk $ RRset rrsName rrsType rrsClass minTTL rrsRDatas mayVerified
   where
-    noverify = (rrsTTL, NotVerifiedRRS)
-    invalid err = (rrsTTL, InvalidRRS err)
+    noverify = (rrsTTL, notValidNoSig)
+    invalid err = (rrsTTL, notValidInvalid err)
     valid goodSigs = (minimum $ rrsTTL : sigTTLs ++ map fromIntegral expireTTLs, ValidRRS sigrds)
       where
         (sigrds, sigTTLs) = unzip goodSigs
@@ -422,10 +422,10 @@ nsecxWithValid' withZippedSigs tag dnskeys getRanked msg nullK ncK invalidK vali
         (_ranges, rrsets) = unzip rps
         valid = all rrsetValid rrsets
 
-        notValidErrors = header : esInvalid ++ esNotVerified
+        notValidErrors = header : esInvalid ++ esNoSig
         header = tag ++ " verify errors: "
-        esInvalid = [ie | set <- rrsets, InvalidRRS ie <- [rrsMayVerified set]]
-        esNotVerified = "not-verified RRset list:" : ["  " ++ showRRset set | set <- rrsets, NotVerifiedRRS <- [rrsMayVerified set]]
+        esInvalid = [ie | set <- rrsets, NotValidRRS (NV_Invalid ie) <- [rrsMayVerified set]]
+        esNoSig = "no-sig RRset list:" : ["  " ++ showRRset set | set <- rrsets, NotValidRRS NV_NoSig <- [rrsMayVerified set]]
         showRRset RRset{..} = unwords [show rrsName, show rrsType, show rrsRDatas]
 
 {- FOURMOLU_DISABLE -}
@@ -463,7 +463,7 @@ canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [(Int, DNS.Buil
 canonicalRRset rrs leftK rightK =
     SEC.canonicalRRsetSorted' sortedRRs leftK mkRRset
   where
-    mkRRset dom typ cls ttl rds = rightK (RRset dom typ cls ttl rds NotVerifiedRRS) sortedRDatas
+    mkRRset dom typ cls ttl rds = rightK (RRset dom typ cls ttl rds notValidNoSig) sortedRDatas
     (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset
@@ -477,9 +477,10 @@ cacheRRset
     -> MayVerifiedRRS
     -> m ()
 cacheRRset rank dom typ cls ttl rds mv =
-    mayVerifiedRRS notVerivied (const $ pure ()) valid mv
+    mayVerifiedRRS noSig checkDisalbed (const $ pure ()) valid mv
   where
-    notVerivied = Cache.notVerified rds (pure ()) doCache
+    noSig = Cache.notVerified rds (pure ()) doCache
+    checkDisalbed = pure ()
     valid sigs = Cache.valid rds sigs (pure ()) doCache
     doCache crs = do
         insertRRSet <- asks insert_

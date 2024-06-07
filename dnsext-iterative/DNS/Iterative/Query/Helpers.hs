@@ -54,10 +54,10 @@ rrsigList zone dom typ rrs = rrListWith RRSIG getSIGRD dom pair rrs
     pair rd rr = (rd, rrttl rr)
 
 rrsetGoodSigs :: RRset -> [RD_RRSIG]
-rrsetGoodSigs = mayVerifiedRRS [] (const []) id . rrsMayVerified
+rrsetGoodSigs = mayVerifiedRRS [] [] (const []) id . rrsMayVerified
 
 rrsetValid :: RRset -> Bool
-rrsetValid = mayVerifiedRRS False (const False) (const True) . rrsMayVerified
+rrsetValid = mayVerifiedRRS False False (const False) (const True) . rrsMayVerified
 
 sigrdTypeWith :: TYPE -> RD_RRSIG -> Maybe RD_RRSIG
 sigrdTypeWith sigType sigrd = guard (rrsig_type sigrd == sigType) $> sigrd
