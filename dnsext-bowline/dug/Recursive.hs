@@ -17,6 +17,7 @@ import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
     LookupEnv (..),
     PipelineResolver,
+    Resolver,
     Reply (..),
     ResolveActions (..),
     ResolveInfo (..),
@@ -90,8 +91,9 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
         Just pipes -> do
             -- VC
             -- racing with multiple connections
-            mapM_ (printResult putLn putLines)
-                =<< mapConcurrently (\qc -> racePipes qc pipes) qcs
+            withPipelines pipes $
+                \resolvers -> mapM_ (printResult putLn putLines)
+                    =<< mapConcurrently (\qc -> raceResolvers qc resolvers) qcs
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
 resolvePipeline conf = do
@@ -112,14 +114,19 @@ resolvePipeline conf = do
                         exitFailure
                     ps : _ -> return $ Just ps
 
+withPipelines :: [PipelineResolver] -> ([Resolver] -> IO ()) -> IO ()
+withPipelines pset body = go id pset
+  where
+    go rs  [] = body (rs [])
+    go rs (p:ps) = p $ \resolv -> go (rs . (resolv:)) ps
 
-racePipes :: (Question, QueryControls)
-          -> [PipelineResolver]
-          -> IO (Either DNS.DNSError Result)
-racePipes (q, ctl) pipes = do
+raceResolvers :: (Question, QueryControls)
+              -> [Resolver]
+              -> IO (Either DNS.DNSError Result)
+raceResolvers (q, ctl) resolvers = do
     rref <- newEmptyMVar
     -- fastest one wins
-    raceAny [ pipeline $ \resolv -> resolv q ctl >>= putMVar rref | pipeline <- pipes ]
+    raceAny [ resolv q ctl >>= putMVar rref | resolv <- resolvers ]
     readMVar rref
 
 printResult
