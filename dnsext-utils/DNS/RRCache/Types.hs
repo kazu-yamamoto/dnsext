@@ -56,6 +56,8 @@ module DNS.RRCache.Types (
     --
     mkNotVerified,
     notVerified,
+    mkCheckDisabled,
+    checkDisabled,
     mkValid,
     valid,
     negWithSOA,
@@ -111,13 +113,15 @@ type RRSIGs = NonEmpty RD_RRSIG
 {- FOURMOLU_DISABLE -}
 data Positive
     = PosNotVerified RDatas        {- not verified -}
+    | PosCheckDisabled RDatas      {- only for check-disabled state. may verify again  -}
     {-- | PosVerifyFailed RDatas   {- verification failed -} {- unused state -} --}
     | PosValid RDatas RRSIGs       {- verification succeeded -}
     deriving (Eq, Show)
 
-positiveCases :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
-positiveCases notVerified_ valid_ pos = case pos of
+positiveCases :: ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
+positiveCases notVerified_ checkDisabled_ valid_ pos = case pos of
     PosNotVerified rds -> notVerified_ $ NE.toList rds
+    PosCheckDisabled rds  -> checkDisabled_ $ NE.toList rds
     PosValid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
 
 data Negative
@@ -141,8 +145,9 @@ hitCases1 negative_ posivtive_ hit = case hit of
     Negative neg  -> negative_ neg
     Positive pos  -> posivtive_ pos
 
-hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
-hitCases soa_ nsoa_ notVerified_ valid_ = hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ valid_)
+hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
+hitCases soa_ nsoa_ notVerified_ checkDisabled_ valid_ =
+    hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ checkDisabled_ valid_)
 {- FOURMOLU_ENABLE -}
 
 mkNotVerified :: RData -> [RData] -> Hit
@@ -150,6 +155,12 @@ mkNotVerified d ds = Positive $ PosNotVerified (d :| ds)
 
 notVerified :: [RData] -> a -> (Hit -> a) -> a
 notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
+
+mkCheckDisabled :: RData -> [RData] -> Hit
+mkCheckDisabled d ds = Positive $ PosCheckDisabled (d :| ds)
+
+checkDisabled :: [RData] -> a -> (Hit -> a) -> a
+checkDisabled rds nothing just = cons1 rds nothing ((just .) . mkCheckDisabled)
 
 mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> Hit
 mkValid d ds s ss = Positive $ PosValid (d :| ds) (s :| ss)
@@ -168,10 +179,10 @@ negNoSOA :: RCODE -> Hit
 negNoSOA = Negative . NegNoSOA
 
 positiveRDatas :: Positive -> [RData]
-positiveRDatas = positiveCases id const
+positiveRDatas = positiveCases id id const
 
 positiveRRSIGs :: Positive -> a -> ([RD_RRSIG] -> a) -> a
-positiveRRSIGs pos nothing just = positiveCases (const nothing) (\_ sigs -> just sigs) pos
+positiveRRSIGs pos nothing just = positiveCases (const nothing) (const nothing) (\_ sigs -> just sigs) pos
 
 ---
 
@@ -469,7 +480,7 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 toRDatas :: Hit -> ([RData], [RD_RRSIG])
-toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (,)
+toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe Hit
 fromRDatas rds = rds `listseq` notVerified rds Nothing Just
