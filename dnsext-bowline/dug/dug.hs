@@ -280,11 +280,12 @@ getQueryName (queryName : ys)
 
 getQueryType :: [String] -> IO (TYPE, [String])
 getQueryType [] = return (A, [])
-getQueryType (queryType' : ys)
-    | "+" `isPrefixOf` queryType' = return (A, queryType' : ys)
-    | Just queryType <- readMaybe queryType' = return (queryType, ys)
+getQueryType (queryType : ys)
+    | '.' `elem` queryType = return (A, queryType : ys)
+    | "+" `isPrefixOf` queryType = return (A, queryType : ys)
+    | Just qt <- readMaybe queryType = return (qt, ys)
     | otherwise = do
-        putStrLn $ "Type " ++ queryType' ++ " is not supported"
+        putStrLn $ "Type " ++ queryType ++ " is not supported"
         exitFailure
 
 getQueryControls :: [String] -> IO (QueryControls, [String])
