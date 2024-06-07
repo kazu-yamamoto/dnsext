@@ -5,6 +5,7 @@
 module Recursive (recursiveQuery) where
 
 import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Monad
 import DNS.Do53.Client (
     LookupConf (..),
@@ -94,6 +95,7 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
             let len = length qcs
             refs <- replicateM len $ newIORef False
             let targets = zip qcs refs
+            -- racing with multiple connections
             raceAny $ map (resolver stdoutLock putLn putLines targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
@@ -123,7 +125,8 @@ resolver
     -> PipelineResolver
     -> IO ()
 resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
-    raceAny $ map (printIt resolv) targets
+    -- running concurrently for multiple target domains
+    foldr1 concurrently_ $ map (printIt resolv) targets
   where
     printIt resolv ((q, ctl), ref) = do
         er <- resolv q ctl
