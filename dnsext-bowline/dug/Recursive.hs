@@ -156,6 +156,7 @@ makeResolveInfo ractions aps = mk <$> aps
             , rinfoPort = port
             , rinfoUDPRetry = 2
             , rinfoActions = ractions
+            , rinfoVCLimit = 8192
             }
 
 getCustomConf
