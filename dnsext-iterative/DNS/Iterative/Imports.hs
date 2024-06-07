@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-dodgy-imports #-}
+
 module DNS.Iterative.Imports (
     ByteString,
     module Control.Applicative,
