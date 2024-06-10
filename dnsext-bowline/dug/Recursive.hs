@@ -93,7 +93,8 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} = do
             let len = length qcs
             refs <- replicateM len $ newTVarIO False
             let targets = zip qcs refs
-            -- racing with multiple connections
+            -- racing with multiple connections.
+            -- Slow connections are killed by the fastest one.
             raceAny $ map (resolver putLnSTM putLinesSTM targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
