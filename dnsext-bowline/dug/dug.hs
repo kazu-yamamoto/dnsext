@@ -5,6 +5,7 @@
 module Main (main) where
 
 import Control.Concurrent (forkIO)
+import Control.Concurrent.STM (STM, atomically)
 import Control.Monad (void, when)
 import DNS.Do53.Client (
     FlagOp (..),
@@ -141,7 +142,9 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2"
         exitSuccess
     ------------------------
-    (at, port, qs, runLogger, putLn, putLines, killLogger) <- cookOpts args opts
+    (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
+    let putLn = atomically . putLnSTM
+        putLines a b c = atomically $ putLinesSTM a b c
     void $ forkIO runLogger
     t0 <- T.getUnixTime
     ------------------------
@@ -151,7 +154,7 @@ main = do
             iterativeQuery optDisableV6NS putLn putLines target
         else do
             let mserver = map (drop 1) at
-            recursiveQuery mserver port putLn putLines qs opts
+            recursiveQuery mserver port putLnSTM putLinesSTM qs opts
     ------------------------
     putTime t0 putLines
     killLogger
@@ -166,15 +169,15 @@ cookOpts
         , PortNumber
         , [(Question, QueryControls)]
         , IO ()
-        , DNSMessage -> IO ()
-        , Log.PutLines
+        , DNSMessage -> STM ()
+        , Log.PutLinesSTM
         , IO ()
         )
 cookOpts args Options{..} = do
     let (at, dtq) = partition ("@" `isPrefixOf`) args
     qs <- getQueries dtq
     port <- getPort optPort optDoX
-    (runLogger, putLines, killLogger) <- Log.new Log.Stdout optLogLevel
+    (runLogger, putLines, killLogger) <- Log.new' Log.Stdout optLogLevel
     let putLn = mkPutline optFormat putLines
     return (at, port, qs, runLogger, putLn, putLines, killLogger)
 
@@ -218,10 +221,10 @@ putTime t0 putLines = do
 
 mkPutline
     :: OutputFlag
-    -> (Log.Level -> Maybe Color -> [String] -> IO ())
+    -> (Log.Level -> Maybe Color -> [String] -> STM ())
     -> DNSMessage
-    -> IO ()
-mkPutline format putLines msg = putLines Log.WARN Nothing [res msg]
+    -> STM ()
+mkPutline format putLinesSTM msg = putLinesSTM Log.WARN Nothing [res msg]
   where
     res = case format of
         JSONstyle -> showJSON

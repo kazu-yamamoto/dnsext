@@ -1,9 +1,11 @@
 module DNS.Log (
     new,
+    new',
     Level (..),
     Output (..),
     Logger,
     PutLines,
+    PutLinesSTM,
     KillLogger,
 ) where
 
@@ -43,14 +45,26 @@ instance Show Output where
 
 type Logger = IO ()
 type PutLines = Level -> Maybe Color -> [String] -> IO ()
+type PutLinesSTM = Level -> Maybe Color -> [String] -> STM ()
 type KillLogger = IO ()
 
 new :: Output -> Level -> IO (Logger, PutLines, KillLogger)
-new Stdout = newHandleLogger stdout
-new Stderr = newHandleLogger stderr
+new Stdout l = toIO $ newHandleLogger stdout l
+new Stderr l = toIO $ newHandleLogger stderr l
+
+new' :: Output -> Level -> IO (Logger, PutLinesSTM, KillLogger)
+new' Stdout = newHandleLogger stdout
+new' Stderr = newHandleLogger stderr
+
+toIO
+    :: IO (Logger, PutLinesSTM, KillLogger)
+    -> IO (Logger, PutLines, KillLogger)
+toIO action = do
+    (x, y, z) <- action
+    return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
 newHandleLogger
-    :: Handle -> Level -> IO (Logger, PutLines, KillLogger)
+    :: Handle -> Level -> IO (Logger, PutLinesSTM, KillLogger)
 newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     colorize <- hSupportsANSIColor outFh
@@ -71,9 +85,8 @@ newHandleLogger outFh loggerLevel = do
       where
         withColor c =
             when (loggerLevel <= lv) $
-                atomically $
-                    writeTQueue inQ $
-                        Just (c, xs)
+                writeTQueue inQ $
+                    Just (c, xs)
 
     loggerLoop inQ mvar = loop
       where
