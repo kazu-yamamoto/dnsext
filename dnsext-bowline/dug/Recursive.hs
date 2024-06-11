@@ -4,7 +4,6 @@
 
 module Recursive (recursiveQuery) where
 
-import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
@@ -44,17 +43,15 @@ import Text.Read (readMaybe)
 
 import Types
 
-data Race = Start | Taken | Finished deriving (Eq, Show)
-
 recursiveQuery
     :: [HostName]
     -> PortNumber
-    -> (DNS.DNSMessage -> IO ())
-    -> Log.PutLines
+    -> (DNS.DNSMessage -> STM ())
+    -> Log.PutLinesSTM
     -> [(Question, QueryControls)]
     -> Options
     -> IO ()
-recursiveQuery mserver port putLn putLines qcs Options{..} = do
+recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} = do
     mbs <- case optResumptionFile of
         Nothing -> return Nothing
         Just file -> do
@@ -64,7 +61,7 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
                 else return Nothing
     let ractions =
             defaultResolveActions
-                { ractionLog = putLines
+                { ractionLog = \a b c -> atomically $ putLinesSTM a b c
                 , ractionSaveResumption = case optResumptionFile of
                     Nothing -> \_ -> return ()
                     Just file -> BS.writeFile file
@@ -83,11 +80,10 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
                     let ris = makeResolveInfo ractions aps
                     return $ Just (r <$> ris)
                 Nothing -> return Nothing
-    stdoutLock <- newMVar ()
     case mx of
         Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
             -- UDP
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= printResult stdoutLock putLn putLines
+            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printResultSTM putLnSTM putLinesSTM
             mapM_ printIt qcs
         Just [] -> do
             putStrLn $ show optDoX ++ " connection cannot be created"
@@ -95,10 +91,11 @@ recursiveQuery mserver port putLn putLines qcs Options{..} = do
         Just pipes -> do
             -- VC
             let len = length qcs
-            refs <- replicateM len $ newTVarIO Start
+            refs <- replicateM len newEmptyTMVarIO
             let targets = zip qcs refs
-            -- racing with multiple connections
-            raceAny $ map (resolver stdoutLock putLn putLines targets) pipes
+            -- racing with multiple connections.
+            -- Slow connections are killed by the fastest one.
+            raceAny $ map (resolver putLnSTM putLinesSTM targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
 resolvePipeline conf = do
@@ -120,44 +117,32 @@ resolvePipeline conf = do
                     ps : _ -> return $ Just ps
 
 resolver
-    :: MVar ()
-    -> (DNS.DNSMessage -> IO ())
-    -> Log.PutLines
-    -> [((Question, QueryControls), TVar Race)]
+    :: (DNS.DNSMessage -> STM ())
+    -> Log.PutLinesSTM
+    -> [((Question, QueryControls), TMVar ())]
     -> PipelineResolver
     -> IO ()
-resolver stdoutLock putLn putLines targets pipeline = pipeline $ \resolv ->
+resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
     -- running concurrently for multiple target domains
     foldr1 concurrently_ $ map (printIt resolv) targets
   where
-    printIt resolv ((q, ctl), tvar) = do
+    printIt resolv ((q, ctl), tmvar) = do
         er <- resolv q ctl
-        rac <- atomically $ do
-            r <- readTVar tvar
-            when (r == Start) $ writeTVar tvar Taken
-            return r
-        case rac of
-            Start -> do
-                printResult stdoutLock putLn putLines er
-                atomically $ writeTVar tvar Finished
-            Taken -> atomically $ do
-                r <- readTVar tvar
-                check (r == Finished)
-            Finished -> return ()
+        atomically $ do
+            putTMVar tmvar () {- wait for the first thread to finish consistent with raceAny effect -}
+            printResultSTM putLnSTM putLinesSTM er
 
-printResult
-    :: MVar ()
-    -> (DNS.DNSMessage -> IO ())
-    -> Log.PutLines
+printResultSTM
+    :: (DNS.DNSMessage -> STM ())
+    -> Log.PutLinesSTM
     -> Either DNS.DNSError Result
-    -> IO ()
-printResult _ _ _ (Left err) = print err
-printResult stdoutLock putLn putLines (Right r@Result{..}) =
-    withMVar stdoutLock $ \() -> do
-        let h = mkHeader r
-        putLines Log.WARN (Just Green) [h]
-        let Reply{..} = resultReply
-        putLn replyDNSMessage
+    -> STM ()
+printResultSTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
+printResultSTM putLnSTM putLinesSTM (Right r@Result{..}) = do
+    let h = mkHeader r
+    putLinesSTM Log.WARN (Just Green) [h]
+    let Reply{..} = resultReply
+    putLnSTM replyDNSMessage
 
 makeResolveInfo
     :: ResolveActions
