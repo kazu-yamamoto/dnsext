@@ -76,11 +76,12 @@ withLookupCache h logMark dom typ = do
 handleHits :: (TTL -> Domain -> Maybe a)
            -> (TTL -> RCODE -> Maybe a)
            -> (TTL -> [RData] -> Maybe a)
+           -> (TTL -> [RData] -> Maybe a)
            -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
            -> CacheHandler a
-handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
+handleHits soah nsoah nsh cdh vh now = Cache.lookupAlive now result
   where
-    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nvh ttl) (vh ttl) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nsh ttl) (cdh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
 -- | lookup RRs without sigs. empty RR list result for negative case.
@@ -108,11 +109,13 @@ handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
 lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
 lookupRR dom typ = withLookupCache h "" dom typ
   where
-    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
+    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
+lookupErrorRCODE dom = withLookupCache h "" dom Cache.ERR
+    where
+      h = handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ -> Nothing) (\_ _ _ -> Nothing)
 
 -- |
 --
@@ -126,9 +129,11 @@ lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ ->
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) noSig valid) logMark dom typ
+lookupRRset logMark dom typ =
+    withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) noSig checkDisabled valid) logMark dom typ
   where
     noSig ttl rds = Just (noSigRRset dom typ DNS.IN ttl rds)
+    checkDisabled ttl rds = Just (checkDisabledRRset dom typ DNS.IN ttl rds)
     valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
@@ -184,23 +189,28 @@ lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
   where
-    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA noSig valid now dom_ typ_ cls cache
+    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA noSig checkDisabled valid now dom_ typ_ cls cache
       where
         {- negative hit. ranking for empty-data and SOA result. -}
         negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         negativeNoSOA _ttl = Just . LKNegativeNoSOA
         noSig ttl = Just . LKPositive . noSigRRset dom typ DNS.IN ttl
+        checkDisabled ttl = Just . LKPositive . checkDisabledRRset dom typ DNS.IN ttl
         valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
 
     soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
-        positive = Cache.positiveCases noSig valid
+        positive = Cache.positiveCases noSig checkDisabled valid
         noSig = noSigRRset srcDom SOA DNS.IN ttl
+        checkDisabled = checkDisabledRRset dom typ DNS.IN ttl
         valid = validRRset srcDom SOA DNS.IN ttl
         ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
 
 noSigRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
 noSigRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidNoSig
+
+checkDisabledRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
+checkDisabledRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidCheckDisabled
 
 validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)

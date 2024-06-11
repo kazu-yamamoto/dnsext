@@ -480,7 +480,7 @@ cacheRRset rank dom typ cls ttl rds mv =
     mayVerifiedRRS noSig checkDisalbed (const $ pure ()) valid mv
   where
     noSig = Cache.notVerified rds (pure ()) doCache
-    checkDisalbed = pure ()
+    checkDisalbed = Cache.checkDisabled rds (pure ()) doCache
     valid sigs = Cache.valid rds sigs (pure ()) doCache
     doCache crs = do
         insertRRSet <- asks insert_
