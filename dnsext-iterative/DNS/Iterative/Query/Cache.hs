@@ -115,11 +115,12 @@ lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
         notVerified = notVerifiedRRset dom typ DNS.IN ttl
         valid = validRRset dom typ DNS.IN ttl
 
-    soaResult ettl srcDom ttl crs rank = LKNegative <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
       where
         positive = Cache.positiveHit notVerified valid
-        notVerified = notVerifiedRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
-        valid = validRRset srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -})
+        notVerified = notVerifiedRRset srcDom SOA DNS.IN ttl
+        valid = validRRset srcDom SOA DNS.IN ttl
+        ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
 
 notVerifiedRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
 notVerifiedRRset dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
