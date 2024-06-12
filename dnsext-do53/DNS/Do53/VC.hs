@@ -62,8 +62,8 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
         return $ case mres of
             Nothing -> Left TimeoutExpired
             Just (Left e) -> Left e
-            Just (Right (Reply _ msg _ rx)) -> case checkRespM q ident msg of
-                Nothing -> Right $ Reply name msg tx rx
+            Just (Right rp) -> case checkRespM q ident (replyDNSMessage rp) of
+                Nothing -> Right $ rp{replyTxBytes = tx}
                 Just err -> Left err
 
     sender inpQ = forever (atomically (readTQueue inpQ) >>= send)
