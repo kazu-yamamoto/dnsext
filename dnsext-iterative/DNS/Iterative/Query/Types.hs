@@ -101,7 +101,7 @@ queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
 queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
 
 data QueryError
-    = DnsError DNSError
+    = DnsError DNSError [String]
     | NotResponse Bool DNSMessage
     | InvalidEDNS DNS.EDNSheader DNSMessage
     | HasError DNS.RCODE DNSMessage
@@ -115,7 +115,7 @@ runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwE . DnsError
+throwDnsError = throwE . (`DnsError` [])
 
 handleDnsError
     :: (QueryError -> DNSQuery a)

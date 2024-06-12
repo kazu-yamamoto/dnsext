@@ -187,4 +187,5 @@ norec dnssecOK aservers name typ = ExceptT $ do
     e <- Norec.norec' dnssecOK aservers name typ
     either left (pure . handleResponseError Left Right) e
   where
-    left e = cacheDNSError name typ Cache.RankAnswer e $> Left (DnsError e)
+    left e = cacheDNSError name typ Cache.RankAnswer e $> dnsError e
+    dnsError e = Left $ uncurry DnsError $ unwrapDNSErrorInfo e

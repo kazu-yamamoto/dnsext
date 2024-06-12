@@ -59,7 +59,7 @@ resolveSequential ris0 resolver q qctl = loop ris0
         eres <- resolver ri q qctl
         case eres of
             Left e -> case mris of
-                Nothing -> return $ Left e
+                Nothing -> return $ Left $ appendErrorContext q ri e
                 Just ris -> loop ris
             res@(Right _) -> return res
 
@@ -82,10 +82,15 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Questi
         le@(Left (_ :: DNSError)) -> return le
   where
     resolver' ri = do
-        erply <- resolver ri q qctl
+        erply <- E.mapException (appendErrorContext q ri) $ resolver ri q qctl
         case erply of
             Right rply -> return rply
-            Left e -> throwIO e
+            Left e -> throwIO $ appendErrorContext q ri e
+
+appendErrorContext :: Question -> ResolveInfo -> DNSError -> DNSError
+appendErrorContext Question{..} ResolveInfo{..} e = DNSErrorInfo e info
+  where
+    ~info = "query " ++ show qname ++ " " ++ show qtype ++ " to " ++ show rinfoIP ++ "#" ++ show rinfoPort
 
 ----------------------------------------------------------------
 

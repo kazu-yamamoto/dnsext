@@ -41,16 +41,18 @@ logQueryErrors prefix q = do
           lift $ logQueryError qe
           throwE qe
       logQueryError qe = case qe of
-          DnsError de           -> logDnsError de
+          DnsError de ss        -> logDnsError de ss
           NotResponse resp msg  -> logNotResponse resp msg
           InvalidEDNS eh msg    -> logInvalidEDNS eh msg
           HasError rcode msg    -> logHasError rcode msg
           QueryDenied           -> logQueryDenied
-      logDnsError de = case de of
-          NetworkFailure {}   -> putLog $ show de
-          DecodeError {}      -> putLog $ show de
-          UnknownDNSError {}  -> putLog $ show de
+      logDnsError de ss = case de of
+          NetworkFailure {}   -> putLog detail
+          DecodeError {}      -> putLog detail
+          RetryLimitExceeded  -> putLog detail
+          UnknownDNSError {}  -> putLog detail
           _                   -> pure ()
+        where detail = show de ++ ": " ++ intercalate ", " ss
       logNotResponse False  msg  = putLog $ pprMessage "not response:" msg
       logNotResponse True  _msg  = pure ()
       logInvalidEDNS DNS.InvalidEDNS  msg = putLog $ pprMessage "invalid EDNS:" msg

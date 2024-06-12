@@ -54,8 +54,21 @@ data DNSError
       BadThing String -- SomeException cannot be used due to Eq
     | -- | Wire format cannot be decoded.
       DecodeError String
+    | -- | Additional DNSError info
+      DNSErrorInfo DNSError ~String
     | -- | Error is unknown
       UnknownDNSError
     deriving (Eq, Show, Typeable)
 
 instance Exception DNSError
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> unwrapDNSErrorInfo (DNSErrorInfo RetryLimitExceeded "with \"foo.example.\" A")
+-- (RetryLimitExceeded,["with \"foo.example.\" A"])
+unwrapDNSErrorInfo :: DNSError -> (DNSError, [String])
+unwrapDNSErrorInfo = go id
+  where
+    go a (DNSErrorInfo e s) = go (a . (s:)) e
+    go a e                  = (e, a [])
+{- FOURMOLU_ENABLE -}
