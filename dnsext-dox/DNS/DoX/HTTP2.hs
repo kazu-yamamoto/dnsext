@@ -90,9 +90,10 @@ resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ Right $ toResult ri proto $ Reply msg tx rx
+                Nothing -> return $ Right $ toResult name $ Reply msg tx rx
                 Just err -> return $ Left err
   where
+    name = nameTag ri proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire
@@ -119,10 +120,11 @@ doHTTPOneshot
     -> QueryControls
     -> Client (Either DNSError Result)
 doHTTPOneshot proto ident ri@ResolveInfo{..} q qctl sendRequest _aux = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    ractionLog rinfoActions Log.DEMO Nothing [qtag]
     resolv proto ident ri sendRequest q qctl
   where
-    ~tag = lazyTag ri q proto
+    ~name = nameTag ri proto
+    ~qtag = queryTag q name
 
 clientDoHHeaders :: Int -> RequestHeaders
 clientDoHHeaders len =

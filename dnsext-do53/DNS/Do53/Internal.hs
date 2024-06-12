@@ -64,7 +64,8 @@ module DNS.Do53.Internal (
     LookupEnv (..),
     checkRespM,
     withLookupConfAndResolver,
-    lazyTag,
+    nameTag,
+    queryTag,
     raceAny,
 )
 where

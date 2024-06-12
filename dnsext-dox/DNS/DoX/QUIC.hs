@@ -43,10 +43,11 @@ resolv conn ri@ResolveInfo{..} q qctl = do
     case decodeChunks now bss of
         Left e -> return $ Left e
         Right msg -> case checkRespM q ident msg of -- fixme
-            Nothing -> return $ Right $ toResult ri "doq" $ Reply msg tx rx
+            Nothing -> return $ Right $ toResult name $ Reply msg tx rx
             Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions
+    name = nameTag ri "QUIC"
 
 saveResumptionInfo :: Connection -> ResolveInfo -> IO ()
 saveResumptionInfo conn ResolveInfo{..} = do

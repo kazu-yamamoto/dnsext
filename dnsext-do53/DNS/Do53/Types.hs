@@ -223,9 +223,7 @@ defaultResolveInfo =
         }
 
 data Result = Result
-    { resultIP :: IP
-    , resultPort :: PortNumber
-    , resultTag :: String
+    { resultTag :: String
     , resultReply :: Reply
     }
     deriving (Eq, Show)

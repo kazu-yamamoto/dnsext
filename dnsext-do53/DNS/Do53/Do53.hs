@@ -10,7 +10,8 @@ module DNS.Do53.Do53 (
     vcResolver,
     checkRespM,
     toResult,
-    lazyTag,
+    nameTag,
+    queryTag,
     fromIOException,
 )
 where
@@ -64,26 +65,24 @@ udpTcpResolver ri q qctl = do
 
 ----------------------------------------------------------------
 
-fromIOException :: String -> ResolveInfo -> String -> E.IOException -> DNSError
-fromIOException str ResolveInfo{..} protoName ioe = NetworkFailure aioe
+fromIOException :: String -> E.IOException -> DNSError
+fromIOException tag ioe = NetworkFailure aioe
   where
-    loc = str ++ protoName ++ show rinfoPort ++ "@" ++ show rinfoIP
-    aioe = annotateIOError ioe loc Nothing Nothing
+    aioe = annotateIOError ioe tag Nothing Nothing
 
-lazyTag :: ResolveInfo -> Question -> String -> String
-lazyTag ResolveInfo{..} Question{..} proto = tag
+nameTag :: ResolveInfo -> String -> String
+nameTag ResolveInfo{..} proto = show rinfoIP ++ "#" ++ show rinfoPort ++ "/" ++ proto
+
+queryTag :: Question -> String -> String
+queryTag Question{..} tag = tag'
   where
-    ~tag =
+    ~tag' =
         "    query "
             ++ show qname
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ show rinfoIP
-            ++ "#"
-            ++ show rinfoPort
-            ++ "/"
-            ++ proto
+            ++ tag
 
 analyzeReply :: Reply -> QueryControls -> Maybe QueryControls
 analyzeReply rply qctl0
@@ -101,18 +100,18 @@ analyzeReply rply qctl0
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: OneshotResolver
 udpResolver ri@ResolveInfo{..} q _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    ractionLog rinfoActions Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
         Left se
             | Just (e :: DNSError) <- fromException se -> return $ Left e
             | Just (e :: E.IOException) <- fromException se -> do
-                let str = show q ++ ": "
-                return $ Left $ fromIOException str ri "UDP" e
+                return $ Left $ fromIOException qtag e
             | otherwise -> return $ Left $ BadThing (show se)
   where
-    ~tag = lazyTag ri q "UDP"
+    name = nameTag ri "UDP"
+    ~qtag = queryTag q name
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
@@ -129,7 +128,7 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
             Just rply -> do
                 let mqctl = analyzeReply rply qctl0
                 case mqctl of
-                    Nothing -> return $ Right $ toResult ri "UDP" rply
+                    Nothing -> return $ Right $ toResult name rply
                     Just qctl -> loop cnt ident qctl send recv
 
     sendQueryRecvAnswer ident qctl send recv = do
@@ -180,18 +179,18 @@ tcpResolver ri@ResolveInfo{..} q qctl =
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> Send -> RecvMany -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    ractionLog rinfoActions Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
         Left se
             | Just (e :: DNSError) <- fromException se -> return $ Left e
             | Just (e :: E.IOException) <- fromException se -> do
-                let str = show q ++ ": "
-                return $ Left $ fromIOException str ri proto e
+                return $ Left $ fromIOException qtag e
             | otherwise -> return $ Left $ BadThing (show se)
   where
-    ~tag = lazyTag ri q proto
+    name = nameTag ri proto
+    ~qtag = queryTag q name
     go qctl0 = do
         erply <- sendQueryRecvAnswer qctl0
         case erply of
@@ -199,12 +198,12 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
             Right rply -> do
                 let mqctl = analyzeReply rply qctl0
                 case mqctl of
-                    Nothing -> return $ Right $ toResult ri proto rply
+                    Nothing -> return $ Right $ toResult name rply
                     Just qctl -> do
                         erply' <- sendQueryRecvAnswer qctl
                         case erply' of
                             Left e' -> return $ Left e'
-                            Right rply' -> return $ Right $ toResult ri proto rply'
+                            Right rply' -> return $ Right $ toResult name rply'
 
     sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
@@ -228,11 +227,9 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
                 Just err -> E.throwIO err
 
 -- | Converting 'Reply' to 'Result'.
-toResult :: ResolveInfo -> String -> Reply -> Result
-toResult ResolveInfo{..} tag rply =
+toResult :: String -> Reply -> Result
+toResult tag rply =
     Result
-        { resultIP = rinfoIP
-        , resultPort = rinfoPort
-        , resultTag = tag
+        { resultTag = tag
         , resultReply = rply
         }

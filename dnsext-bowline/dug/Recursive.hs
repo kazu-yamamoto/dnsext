@@ -204,10 +204,6 @@ isNumeric h = case readMaybe h :: Maybe IPv4 of
 mkHeader :: Result -> String
 mkHeader Result{..} =
     ";; "
-        ++ show resultIP
-        ++ "#"
-        ++ show resultPort
-        ++ "/"
         ++ resultTag
         ++ ", Tx:"
         ++ show replyTxBytes
