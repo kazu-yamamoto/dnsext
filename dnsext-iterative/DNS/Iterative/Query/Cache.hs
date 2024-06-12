@@ -357,7 +357,7 @@ cacheNoDelegation d zone dnskeys dom msg
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> ExceptT QueryError (ContextT IO) [RRset]
+wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery [RRset]
 wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
   where
     witnessWildcardExpansion
