@@ -5,6 +5,8 @@ module DNS.Iterative.Query.TrustAnchor (
     fillDelegationDNSKEY,
     delegationIPs,
     --
+    norec,
+    --
     refreshRoot,
     rootPriming,
 ) where
@@ -22,6 +24,7 @@ import DNS.RRCache (
     rankedAdditional,
     rankedAnswer,
  )
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
@@ -31,7 +34,7 @@ import System.Console.ANSI.Types
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Norec
+import qualified DNS.Iterative.Query.Norec as Norec
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -178,3 +181,10 @@ cachedDNSKEY getSEPs aservers zone = do
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         getSec <- lift $ asks currentSeconds_
         Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+
+norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec dnssecOK aservers name typ = ExceptT $ do
+    e <- Norec.norec' dnssecOK aservers name typ
+    either left (pure . handleResponseError Left Right) e
+  where
+    left e = cacheDNSError name typ Cache.RankAnswer e $> Left (DnsError e)

@@ -1,4 +1,4 @@
-module DNS.Iterative.Query.Norec (norec) where
+module DNS.Iterative.Query.Norec (norec') where
 
 -- GHC packages
 
@@ -32,8 +32,8 @@ import DNS.Iterative.Query.Types
    Note about flags in request to an authoritative server.
   * RD (Recursion Desired) must be 0 for request to authoritative server
   * EDNS must be enable for DNSSEC OK request -}
-norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
-norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
+norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
+norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
     let ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
@@ -58,13 +58,13 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
                 }
         q = Question name typ IN
         doFlagSet
-            | dnsssecOK = FlagSet
+            | dnssecOK = FlagSet
             | otherwise = FlagClear
         qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
     either
-        (Left . DnsError)
-        (handleResponseError Left Right . DNS.replyDNSMessage)
+        Left
+        (Right . DNS.replyDNSMessage)
         <$> DNS.resolve renv q qctl
 
-dnsQueryT :: (Env -> QueryContext -> IO (Either QueryError a)) -> DNSQuery a
-dnsQueryT k = ExceptT $ ReaderT $ ReaderT . k
+contextT :: Monad m => (Env -> QueryContext -> m a) -> ContextT m a
+contextT k = ReaderT $ ReaderT . k

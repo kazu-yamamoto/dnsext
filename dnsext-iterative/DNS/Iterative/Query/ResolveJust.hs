@@ -36,7 +36,6 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Norec
 import DNS.Iterative.Query.Random
 import qualified DNS.Iterative.Query.StubZone as Stub
 import DNS.Iterative.Query.TrustAnchor
