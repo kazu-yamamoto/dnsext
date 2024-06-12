@@ -91,7 +91,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} = do
         Just pipes -> do
             -- VC
             let len = length qcs
-            refs <- replicateM len newEmptyTMVarIO
+            refs <- replicateM len $ newTVarIO False
             let targets = zip qcs refs
             -- racing with multiple connections.
             -- Slow connections are killed by the fastest one.
@@ -119,18 +119,20 @@ resolvePipeline conf = do
 resolver
     :: (DNS.DNSMessage -> STM ())
     -> Log.PutLinesSTM
-    -> [((Question, QueryControls), TMVar ())]
+    -> [((Question, QueryControls), TVar Bool)]
     -> PipelineResolver
     -> IO ()
 resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
     -- running concurrently for multiple target domains
     foldr1 concurrently_ $ map (printIt resolv) targets
   where
-    printIt resolv ((q, ctl), tmvar) = do
+    printIt resolv ((q, ctl), tvar) = do
         er <- resolv q ctl
         atomically $ do
-            putTMVar tmvar () {- wait for the first thread to finish consistent with raceAny effect -}
-            printResultSTM putLnSTM putLinesSTM er
+            done <- readTVar tvar
+            unless done $ do
+                printResultSTM putLnSTM putLinesSTM er
+                writeTVar tvar True
 
 printResultSTM
     :: (DNS.DNSMessage -> STM ())
