@@ -24,8 +24,6 @@ module DNS.Do53.Internal (
 
     -- * Resolver
     Resolver,
-    Result (..),
-    toResult,
     Reply (..),
 
     -- * Pipeline resolver

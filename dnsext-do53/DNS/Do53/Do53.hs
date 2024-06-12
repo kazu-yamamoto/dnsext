@@ -9,7 +9,6 @@ module DNS.Do53.Do53 (
     tcpResolver,
     vcResolver,
     checkRespM,
-    toResult,
     nameTag,
     queryTag,
     fromIOException,
@@ -57,7 +56,7 @@ udpTcpResolver ri q qctl = do
     er <- udpResolver ri q qctl
     case er of
         r@(Right res) -> do
-            let tc = trunCation $ flags $ replyDNSMessage $ resultReply res
+            let tc = trunCation $ flags $ replyDNSMessage res
             if tc
                 then tcpResolver ri q qctl
                 else return r
@@ -128,7 +127,7 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
             Just rply -> do
                 let mqctl = analyzeReply rply qctl0
                 case mqctl of
-                    Nothing -> return $ Right $ toResult name rply
+                    Nothing -> return $ Right $ rply
                     Just qctl -> loop cnt ident qctl send recv
 
     sendQueryRecvAnswer ident qctl send recv = do
@@ -153,7 +152,7 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
-                    return $ Reply msg tx rx
+                    return $ Reply name msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog rinfoActions Log.DEBUG Nothing $
@@ -198,12 +197,12 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
             Right rply -> do
                 let mqctl = analyzeReply rply qctl0
                 case mqctl of
-                    Nothing -> return $ Right $ toResult name rply
+                    Nothing -> return $ Right rply
                     Just qctl -> do
                         erply' <- sendQueryRecvAnswer qctl
                         case erply' of
                             Left e' -> return $ Left e'
-                            Right rply' -> return $ Right $ toResult name rply'
+                            Right rply' -> return $ Right rply'
 
     sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
@@ -223,13 +222,5 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
-                Nothing -> return $ Reply msg tx rx
+                Nothing -> return $ Reply name msg tx rx
                 Just err -> E.throwIO err
-
--- | Converting 'Reply' to 'Result'.
-toResult :: String -> Reply -> Result
-toResult tag rply =
-    Result
-        { resultTag = tag
-        , resultReply = rply
-        }

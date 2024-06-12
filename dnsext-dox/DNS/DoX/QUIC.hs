@@ -43,7 +43,7 @@ resolv conn ri@ResolveInfo{..} q qctl = do
     case decodeChunks now bss of
         Left e -> return $ Left e
         Right msg -> case checkRespM q ident msg of -- fixme
-            Nothing -> return $ Right $ toResult name $ Reply msg tx rx
+            Nothing -> return $ Right $ Reply name msg tx rx
             Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions

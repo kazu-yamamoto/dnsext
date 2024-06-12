@@ -62,8 +62,8 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
         return $ case mres of
             Nothing -> Left TimeoutExpired
             Just (Left e) -> Left e
-            Just (Right (Reply msg _ rx)) -> case checkRespM q ident msg of
-                Nothing -> Right $ toResult name $ Reply msg tx rx
+            Just (Right (Reply _ msg _ rx)) -> case checkRespM q ident msg of
+                Nothing -> Right $ Reply name msg tx rx
                 Just err -> Left err
 
     sender inpQ = forever (atomically (readTQueue inpQ) >>= send)
@@ -84,7 +84,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var $ Right $ Reply msg 0 {- dummy -} rx
+                putMVar var $ Right $ Reply name msg 0 {- dummy -} rx
 
     cleanup ref e = do
         vars <- IM.elems <$> readIORef ref

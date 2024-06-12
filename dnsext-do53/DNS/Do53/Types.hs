@@ -26,7 +26,6 @@ module DNS.Do53.Types (
     defaultResolveInfo,
     ResolveActions (..),
     defaultResolveActions,
-    Result (..),
     Reply (..),
     Resolver,
     OneshotResolver,
@@ -222,14 +221,9 @@ defaultResolveInfo =
         , rinfoPath = Nothing
         }
 
-data Result = Result
-    { resultTag :: String
-    , resultReply :: Reply
-    }
-    deriving (Eq, Show)
-
 data Reply = Reply
-    { replyDNSMessage :: DNSMessage
+    { replyTag :: String
+    , replyDNSMessage :: DNSMessage
     , replyTxBytes :: Int
     , replyRxBytes :: Int
     }
@@ -237,7 +231,7 @@ data Reply = Reply
 
 -- | The resolver type to send a question and receive a result.
 --   Exceptions are not thrown.
-type Resolver = Question -> QueryControls -> IO (Either DNSError Result)
+type Resolver = Question -> QueryControls -> IO (Either DNSError Reply)
 
 -- | Concurrent resolver which can be shared by multiple threads.
 --   'DNSError' is thrown.
