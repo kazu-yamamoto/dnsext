@@ -89,10 +89,7 @@ lookupFreshSection env q@Question{..} sec = do
     eres <- lookupRaw env q
     case eres of
         Left err -> return $ Left err
-        Right res -> do
-            let Result{..} = res
-                Reply{..} = resultReply
-            return $ fromDNSMessage replyDNSMessage toRD
+        Right Reply{..} -> return $ fromDNSMessage replyDNSMessage toRD
   where
     correct ResourceRecord{..} = rrtype == qtype
     toRD = map rdata . filter correct . section sec
@@ -128,8 +125,8 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
                 -- Probably a network error happens.
                 -- We do not cache anything.
                 return $ Left err
-            Right Result{..} -> do
-                let ans = replyDNSMessage resultReply
+            Right res -> do
+                let ans = replyDNSMessage res
                     ex = fromDNSMessage ans toRR
                 case ex of
                     Left NameError -> do
@@ -256,7 +253,7 @@ lookupRaw
     :: LookupEnv
     -- ^ LookupEnv obtained via 'withLookupConf'
     -> Question
-    -> IO (Either DNSError Result)
+    -> IO (Either DNSError Reply)
 lookupRaw LookupEnv{..} q = resolve lenvResolveEnv q lenvQueryControls
 
 ----------------------------------------------------------------

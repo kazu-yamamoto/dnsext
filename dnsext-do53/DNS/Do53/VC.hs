@@ -48,6 +48,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
         (concurrently_ (sender inpQ) (recver ref))
         (body $ resolve inpQ ref)
   where
+    name = nameTag ri proto
     emp = IM.empty :: IntMap RVar
     resolve inpQ ref q qctl = do
         ident <- ractionGenId rinfoActions
@@ -61,8 +62,8 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
         return $ case mres of
             Nothing -> Left TimeoutExpired
             Just (Left e) -> Left e
-            Just (Right (Reply msg _ rx)) -> case checkRespM q ident msg of
-                Nothing -> Right $ toResult ri proto $ Reply msg tx rx
+            Just (Right rp) -> case checkRespM q ident (replyDNSMessage rp) of
+                Nothing -> Right $ rp{replyTxBytes = tx}
                 Just err -> Left err
 
     sender inpQ = forever (atomically (readTQueue inpQ) >>= send)
@@ -72,7 +73,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     recver ref = forever $ do
         (rx, bss) <-
             recv `E.catch` \ne -> do
-                let e = fromIOException "" ri proto ne
+                let e = fromIOException name ne
                 cleanup ref e
                 E.throwIO e
         now <- ractionGetTime rinfoActions
@@ -83,7 +84,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var $ Right $ Reply msg 0 {- dummy -} rx
+                putMVar var $ Right $ Reply name msg 0 {- dummy -} rx
 
     cleanup ref e = do
         vars <- IM.elems <$> readIORef ref

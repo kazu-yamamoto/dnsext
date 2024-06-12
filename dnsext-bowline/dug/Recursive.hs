@@ -21,7 +21,6 @@ import DNS.Do53.Internal (
     Reply (..),
     ResolveActions (..),
     ResolveInfo (..),
-    Result (..),
     defaultResolveActions,
     defaultResolveInfo,
     raceAny,
@@ -83,7 +82,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} = do
     case mx of
         Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
             -- UDP
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printResultSTM putLnSTM putLinesSTM
+            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printReplySTM putLnSTM putLinesSTM
             mapM_ printIt qcs
         Just [] -> do
             putStrLn $ show optDoX ++ " connection cannot be created"
@@ -131,19 +130,18 @@ resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
         atomically $ do
             done <- readTVar tvar
             unless done $ do
-                printResultSTM putLnSTM putLinesSTM er
+                printReplySTM putLnSTM putLinesSTM er
                 writeTVar tvar True
 
-printResultSTM
+printReplySTM
     :: (DNS.DNSMessage -> STM ())
     -> Log.PutLinesSTM
-    -> Either DNS.DNSError Result
+    -> Either DNS.DNSError Reply
     -> STM ()
-printResultSTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
-printResultSTM putLnSTM putLinesSTM (Right r@Result{..}) = do
+printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
+printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
     let h = mkHeader r
     putLinesSTM Log.WARN (Just Green) [h]
-    let Reply{..} = resultReply
     putLnSTM replyDNSMessage
 
 makeResolveInfo
@@ -201,19 +199,13 @@ isNumeric h = case readMaybe h :: Maybe IPv4 of
 
 ----------------------------------------------------------------
 
-mkHeader :: Result -> String
-mkHeader Result{..} =
+mkHeader :: Reply -> String
+mkHeader Reply{..} =
     ";; "
-        ++ show resultIP
-        ++ "#"
-        ++ show resultPort
-        ++ "/"
-        ++ resultTag
+        ++ replyTag
         ++ ", Tx:"
         ++ show replyTxBytes
         ++ "bytes"
         ++ ", Rx:"
         ++ show replyRxBytes
         ++ "bytes"
-  where
-    Reply{..} = resultReply

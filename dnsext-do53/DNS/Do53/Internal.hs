@@ -24,8 +24,6 @@ module DNS.Do53.Internal (
 
     -- * Resolver
     Resolver,
-    Result (..),
-    toResult,
     Reply (..),
 
     -- * Pipeline resolver
@@ -64,7 +62,8 @@ module DNS.Do53.Internal (
     LookupEnv (..),
     checkRespM,
     withLookupConfAndResolver,
-    lazyTag,
+    nameTag,
+    queryTag,
     raceAny,
 )
 where

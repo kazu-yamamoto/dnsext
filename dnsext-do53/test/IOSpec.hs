@@ -76,8 +76,6 @@ spec = describe "solvers" $ do
 dnsException :: Selector DNSError
 dnsException = const True
 
-checkNoErr :: Either DNSError Result -> Expectation
+checkNoErr :: Either DNSError Reply -> Expectation
 checkNoErr (Left e) = throwIO e
-checkNoErr (Right Result{..}) = rcode replyDNSMessage `shouldBe` NoErr
-  where
-    Reply{..} = resultReply
+checkNoErr (Right Reply{..}) = rcode replyDNSMessage `shouldBe` NoErr

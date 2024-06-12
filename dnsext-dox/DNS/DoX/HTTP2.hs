@@ -34,7 +34,7 @@ import qualified UnliftIO.Exception as E
 import DNS.DoX.Imports
 import DNS.DoX.TLS
 
-withTimeout :: ResolveInfo -> IO (Either DNSError Result) -> IO (Either DNSError Result)
+withTimeout :: ResolveInfo -> IO (Either DNSError Reply) -> IO (Either DNSError Reply)
 withTimeout ResolveInfo{..} action = do
     mres <- timeout (ractionTimeoutTime rinfoActions) action
     case mres of
@@ -90,9 +90,10 @@ resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ Right $ toResult ri proto $ Reply msg tx rx
+                Nothing -> return $ Right $ Reply name msg tx rx
                 Just err -> return $ Left err
   where
+    name = nameTag ri proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire
@@ -117,12 +118,13 @@ doHTTPOneshot
     -> ResolveInfo
     -> Question
     -> QueryControls
-    -> Client (Either DNSError Result)
+    -> Client (Either DNSError Reply)
 doHTTPOneshot proto ident ri@ResolveInfo{..} q qctl sendRequest _aux = do
-    ractionLog rinfoActions Log.DEMO Nothing [tag]
+    ractionLog rinfoActions Log.DEMO Nothing [qtag]
     resolv proto ident ri sendRequest q qctl
   where
-    ~tag = lazyTag ri q proto
+    ~name = nameTag ri proto
+    ~qtag = queryTag q name
 
 clientDoHHeaders :: Int -> RequestHeaders
 clientDoHHeaders len =

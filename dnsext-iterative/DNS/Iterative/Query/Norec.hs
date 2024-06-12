@@ -63,7 +63,7 @@ norec dnsssecOK aservers name typ = dnsQueryT $ \cxt _qctl -> do
         qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
     either
         (Left . DnsError)
-        (handleResponseError Left Right . DNS.replyDNSMessage . DNS.resultReply)
+        (handleResponseError Left Right . DNS.replyDNSMessage)
         <$> DNS.resolve renv q qctl
 
 dnsQueryT :: (Env -> QueryContext -> IO (Either QueryError a)) -> DNSQuery a

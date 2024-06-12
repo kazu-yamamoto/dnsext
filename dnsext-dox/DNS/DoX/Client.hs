@@ -77,7 +77,7 @@ makeOneshotResolver _     = Nothing
 
 -- | Looking up SVCB RR first and lookup the target automatically
 --   according to the priority of the values of SVCB RR.
-lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Result)
+lookupRawDoX :: LookupEnv -> Question -> IO (Either DNSError Reply)
 lookupRawDoX lenv@LookupEnv{..} q = do
     er <- lookupSVCBInfo lenv
     case er of
@@ -95,8 +95,8 @@ lookupSVCBInfo lenv@LookupEnv{..} = do
     er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
     case er of
         Left err -> return $ Left err
-        Right Result{..} -> do
-            let ss = extractSVCB resultReply
+        Right res -> do
+            let ss = extractSVCB res
                 ri = NE.head $ renvResolveInfos $ lenvResolveEnv
                 addss = svcbResolveInfos ri ss
             logIt lenv ss
