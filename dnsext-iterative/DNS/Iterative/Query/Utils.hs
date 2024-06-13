@@ -40,7 +40,7 @@ logQueryErrors prefix q = do
       handleDnsError left return q
     where
       left qe = do
-          lift $ logQueryError qe
+          logQueryError qe
           throwError qe
       logQueryError qe = case qe of
           DnsError de ss        -> logDnsError de ss

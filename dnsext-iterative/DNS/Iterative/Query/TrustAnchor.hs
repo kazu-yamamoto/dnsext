@@ -42,7 +42,7 @@ import qualified DNS.Iterative.Query.Verify as Verify
 
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do
-    curRef <- lift $ asks currentRoot_
+    curRef <- asks currentRoot_
     let refresh = do
             n <- getRoot
             liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
@@ -51,12 +51,12 @@ refreshRoot = do
             current <- liftIO $ readIORef curRef
             maybe refresh return current
         checkLife = do
-            nsc <- lift $ lookupCache "." NS
+            nsc <- lookupCache "." NS
             maybe refresh (const keep) nsc
     checkLife
   where
     getRoot = do
-        let fallback s = lift $ do
+        let fallback s = do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
                 asks rootHint_
@@ -100,14 +100,14 @@ rootPriming =
         dnskeys = delegationDNSKEY hint
 
     getHint = do
-        hint <- lift $ asks rootHint_
-        anchor <- lift $ asks rootAnchor_
+        hint <- asks rootHint_
+        anchor <- asks rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
-        getSec <- lift $ asks currentSeconds_
+        getSec <- asks currentSeconds_
         ips <- delegationIPs hint
         msgNS <- norec True ips "." NS
-        lift $ verify getSec hint msgNS
+        verify getSec hint msgNS
 {- FOURMOLU_ENABLE -}
 
 ---
@@ -116,7 +116,7 @@ rootPriming =
 fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
-    lift $ logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
+    logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     pure d
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
@@ -131,23 +131,23 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
 fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
-    maybe (list1 nullIPs query =<< delegationIPs d) (lift . fill . toDNSKEYs) =<< lift (lookupValid zone DNSKEY)
+    maybe (list1 nullIPs query =<< delegationIPs d) (fill . toDNSKEYs) =<< lookupValid zone DNSKEY
   where
     zone = delegationZone
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
-    nullIPs = lift $ logLn Log.WARN "fillDelegationDNSKEY: ip list is null" *> pure d
-    verifyFailed ~es = lift (logLn Log.WARN $ "fillDelegationDNSKEY: " ++ es) *> pure d
+    nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" $> d
+    verifyFailed ~es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) $> d
     query ips = do
-        lift $ logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed (lift . fill) =<< cachedDNSKEY getSEP ips zone
+        logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
+        either verifyFailed fill =<< cachedDNSKEY getSEP ips zone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 -- Get authoritative server addresses from the delegation information.
 delegationIPs :: Delegation -> DNSQuery [Address]
 delegationIPs Delegation{..} = do
-    disableV6NS <- lift (asks disableV6NS_)
+    disableV6NS <- asks disableV6NS_
     ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
     when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
     pure ips
@@ -180,7 +180,7 @@ cachedDNSKEY getSEPs aservers zone = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
-        getSec <- lift $ asks currentSeconds_
+        getSec <- asks currentSeconds_
         Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage

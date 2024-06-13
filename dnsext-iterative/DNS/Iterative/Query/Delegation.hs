@@ -138,12 +138,12 @@ delegationWithCache zone dnskeys dom msg = do
 
 {- FOURMOLU_DISABLE -}
 fillCachedDelegation :: Delegation -> DNSQuery Delegation
-fillCachedDelegation d = list noAvail result =<< lift (concat <$> mapM fill des)
+fillCachedDelegation d = list noAvail result =<< concat <$> mapM fill des
   where
     des = delegationNS d
     fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
     fill  e            = pure [e]
-    noAvail = lift (logLines Log.DEMO ("fillCachedDelegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
+    noAvail = logLines Log.DEMO ("fillCachedDelegation - no NS available: " : pprNS des) *> throwDnsError DNS.ServerFailure
     pprNS (e:|es) = map (("  " ++) . show) $ e : es
     result e es = pure $ d{delegationNS = e :| es}
 {- FOURMOLU_ENABLE -}
@@ -253,7 +253,7 @@ unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift ns
     noverify s = putLog (Just Yellow) $ "nsec no verification - " ++ s
     failed s = pure $ putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
 
-    putLog color s = lift $ clogLn Log.DEMO color s
+    putLog color s = clogLn Log.DEMO color s
 
     witnessInfo w = SEC.witnessName w ++ ": " ++ SEC.witnessDelegation w traceInfo qinfo
     traceInfo = show zone ++ " -> " ++ show qname_

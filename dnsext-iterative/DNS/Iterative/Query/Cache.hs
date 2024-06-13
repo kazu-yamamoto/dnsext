@@ -262,7 +262,7 @@ failWithCacheOrigName rank e = do
 {- FOURMOLU_DISABLE -}
 failWithCache :: Domain -> TYPE -> CLASS -> Ranking -> DNSError -> DNSQuery a
 failWithCache dom typ cls rank e = do
-    when (cls == IN) $ lift $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
+    when (cls == IN) $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
     throwDnsError e
   where
     cacheRCODE_ = cacheRCODE dom typ
@@ -342,7 +342,7 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = lift (asks currentSeconds_) >>=
+    nameErrors = asks currentSeconds_ >>=
         \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -371,7 +371,7 @@ wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
     nullK = pure []
     invalidK s = failed $ "NSEC/NSEC3 WildcardExpansion: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
-    resultK w rrsets _ = lift $ success w $> rrsets
+    resultK w rrsets _ = success w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
     failed = nsecFailed
     qinfo = show qname ++ " " ++ show qtype
@@ -399,8 +399,8 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
                           resultK resultK3
     invalidK s = failed $ "NSEC/NSEC3 NameErr/NoData: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
-    resultK  w rrsets _ = lift $ success w *> winfo witnessInfoNSEC  w $> rrsets
-    resultK3 w rrsets _ = lift $ success w *> winfo witnessInfoNSEC3 w $> rrsets
+    resultK  w rrsets _ = success w *> winfo witnessInfoNSEC  w $> rrsets
+    resultK3 w rrsets _ = success w *> winfo witnessInfoNSEC3 w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
     winfo wi w = clogLn Log.DEMO (Just Cyan) $ unlines $ map ("  " ++) $ wi w
     failed = nsecFailed
@@ -414,4 +414,4 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
 {- FOURMOLU_ENABLE -}
 
 nsecFailed :: String -> DNSQuery a
-nsecFailed s = lift (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+nsecFailed s = (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
