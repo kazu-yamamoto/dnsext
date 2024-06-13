@@ -57,15 +57,15 @@ import DNS.Iterative.Query.Utils
 -- nc case is not canonical RRset.
 -- right case is after verified, with valid or invalid RRset.
 cases
-    :: MonadIO m
+    :: (MonadIO m, MonadReader Env m)
     => IO EpochTime
     -> Domain
     -> [RD_DNSKEY]
     -> (dm -> ([ResourceRecord], Ranking)) -> dm
     -> Domain  -> TYPE
     -> (ResourceRecord -> Maybe a)
-    -> m b -> (ContextT IO () -> m b)
-    -> ([a] -> RRset -> ContextT IO () -> m b)
+    -> m b -> (m () -> m b)
+    -> ([a] -> RRset -> m () -> m b)
     -> m b
 cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
     withSection getRanked msg $ \srrs rank -> cases' getSec zone dnskeys srrs rank rrn rrty h nullK withNcLog withRRS
@@ -73,6 +73,7 @@ cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
     withNcLog rrs s = ncK $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
     withRRS x rrset cache = rightK x rrset (logInv *> cache)
       where logInv = mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
+    logInvalids :: (MonadIO m, MonadReader Env m) => String -> m ()
     logInvalids es = do
         (x, xs) <- pure $ case lines es of
             [] -> ("", [])
@@ -83,7 +84,7 @@ cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
 
 {- FOURMOLU_DISABLE -}
 cases'
-    :: MonadIO m
+    :: (MonadIO m, MonadReader Env m)
     => IO EpochTime
     -> Domain
     -> [RD_DNSKEY]
@@ -91,7 +92,7 @@ cases'
     -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
     -> m b -> ([ResourceRecord] -> String -> m b)
-    -> ([a] -> RRset -> ContextT IO () -> m b)
+    -> ([a] -> RRset -> m () -> m b)
     -> m b
 {- FOURMOLU_ENABLE -}
 cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK rightK0
@@ -497,14 +498,15 @@ canonicalRRset rrs leftK rightK =
     (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset
-    :: Ranking
+    :: (MonadIO m, MonadReader Env m)
+    => Ranking
     -> Domain
     -> TYPE
     -> CLASS
     -> TTL
     -> [RData]
     -> MayVerifiedRRS
-    -> ContextT IO ()
+    -> m ()
 cacheRRset rank dom typ cls ttl rds mv =
     mayVerifiedRRS notVerivied (const $ pure ()) valid mv
   where
