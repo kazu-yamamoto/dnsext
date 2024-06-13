@@ -83,7 +83,6 @@ library
         stm,
         time-manager,
         tls,
-        transformers,
         unliftio,
         word8
 
