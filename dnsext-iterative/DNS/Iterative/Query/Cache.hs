@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Cache (
     lookupValid,
@@ -52,7 +52,7 @@ import DNS.Iterative.Query.TestEnv
 
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
-withLookupCache :: CacheHandler a -> String -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+withLookupCache :: (MonadIO m, MonadReader Env m) => CacheHandler a -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
 withLookupCache h logMark dom typ = do
     cache <- liftIO =<< asks getCache_
     ts <- liftIO =<< asks currentSeconds_
@@ -65,7 +65,7 @@ withLookupCache h logMark dom typ = do
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
-lookupRRset :: String -> Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
@@ -82,7 +82,7 @@ guardValid m = do
     guard $ rrsetValid rrset
     m
 
-lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupValid :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
 
 {- FOURMOLU_DISABLE -}
@@ -100,7 +100,8 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 {- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (LookupResult, Ranking))
+lookupRRsetEither :: (MonadIO m, MonadReader Env m)
+                  => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler LookupResult
@@ -131,7 +132,8 @@ validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 ---
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XFlexibleContexts
 
 _newTestEnv :: IO Env
 _newTestEnv = newTestEnv (const $ pure ()) False 2048
@@ -159,26 +161,27 @@ _newTestEnv = newTestEnv (const $ pure ()) False 2048
 -- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err3
 -- Just []
-lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
+lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
   where
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
-lookupErrorRCODE :: Domain -> ContextT IO (Maybe (RCODE, Ranking))
+lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
 lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
 
 {- FOURMOLU_DISABLE -}
-lookupCache' :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+lookupCache' :: (MonadIO m, MonadReader Env m)
+             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
              -> (Seconds -> [RData] -> Maybe a)
              -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
-             -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+             -> Domain -> TYPE -> m (Maybe (a, Ranking))
 lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
   where
     mkAlive now = Cache.lookupAlive now result
     result ttl crs rank = (,) <$> Cache.unCRSet soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
-cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
@@ -193,7 +196,7 @@ cacheNoRRSIG rrs0 rank = do
             liftIO $ Cache.notVerified rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
-cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheSection :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
   where
     rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
@@ -265,27 +268,27 @@ failWithCache dom typ cls rank e = do
     cacheRCODE_ = cacheRCODE dom typ
 {- FOURMOLU_ENABLE -}
 
-cacheDNSError :: Domain -> TYPE -> Ranking -> DNSError -> ContextT IO ()
+cacheDNSError :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> DNSError -> m ()
 cacheDNSError dom typ rank e =
     foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
   where
     cacheRCODE_ = cacheRCODE dom typ
 
-cacheNoData :: Domain -> TYPE -> Ranking -> ContextT IO ()
+cacheNoData :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> m ()
 cacheNoData dom typ rank = cacheRCODE dom typ NoErr rank
 
-cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
+cacheRCODE :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> RCODE -> Ranking -> m ()
 cacheRCODE dom typ rcode rank = do
     maxNegativeTTL <- asks maxNegativeTTL_
     cacheNegativeNoSOA rcode dom typ maxNegativeTTL rank
 
-cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegative :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> TYPE -> TTL -> Ranking -> m ()
 cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     liftIO $ cpsInsertNegative zone dom typ ttl rank insertRRSet
 
-cacheNegativeNoSOA :: RCODE -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegativeNoSOA :: (MonadIO m, MonadReader Env m) => RCODE -> Domain -> TYPE -> TTL -> Ranking -> m ()
 cacheNegativeNoSOA rc dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
