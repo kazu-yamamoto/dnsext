@@ -59,7 +59,7 @@ mayDelegation n h (MayDelegation m) = maybe n h m
 {- FOURMOLU_DISABLE -}
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
-lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
+lookupDelegation :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe MayDelegation)
 lookupDelegation zone = do
     disableV6NS <- asks disableV6NS_
     let noCachedV4NS es = disableV6NS && all noV4DEntry es
@@ -72,7 +72,7 @@ lookupDelegation zone = do
             | otherwise = list Nothing ((Just .) . hasDelegation') es
           where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
-        getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
+        getDelegation :: (MonadIO m, MonadReader Env m) => ([ResourceRecord], a) -> m (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
             let nss = sort $ rrListWith NS (`DNS.rdataField` DNS.ns_domain) zone const rrs
@@ -149,7 +149,7 @@ fillCachedDelegation d = list noAvail result =<< lift (concat <$> mapM fill des)
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-lookupDEntry :: Domain -> Domain -> ContextT IO [DEntry]
+lookupDEntry :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> m [DEntry]
 lookupDEntry zone ns = do
     withERR =<< lookupCache ns Cache.ERR
   where
