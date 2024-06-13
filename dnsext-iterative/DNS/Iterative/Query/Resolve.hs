@@ -68,9 +68,9 @@ resolveLogic
     -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
 resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     env <- lift ask
-    maybe (called *> notLocal) local =<< takeLocalResult env q
+    maybe (called *> notLocal) local' =<< takeLocalResult env q
   where
-    local result = return (([], n0), Left result)
+    local' result = pure (([], n0), Left result)
     notLocal
         | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
         | typ == Cache.ERR = pure (([], n0), Left (DNS.NoErr, [], []))
