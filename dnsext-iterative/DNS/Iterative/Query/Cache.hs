@@ -297,9 +297,9 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    getSec <- lift $ asks currentSeconds_
+    getSec <- asks currentSeconds_
     (result, cacheX) <- verify getSec
-    lift cacheX
+    cacheX
     return result
   where
     qinfo = show dom ++ " " ++ show typ
@@ -310,7 +310,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
                 | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
-        lift $ clogLn Log.DEMO verifyColor verifyMsg
+        clogLn Log.DEMO verifyColor verifyMsg
         raiseOnVerifyFailure
         pure (([xRRset], nws), cacheX)
       where
@@ -344,7 +344,7 @@ cacheNoDelegation d zone dnskeys dom msg
   where
     nameErrors = lift (asks currentSeconds_) >>=
         \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
-        \_rds _cnRRset cacheCNAME -> lift cacheCNAME *> cacheNoDataNS
+        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}

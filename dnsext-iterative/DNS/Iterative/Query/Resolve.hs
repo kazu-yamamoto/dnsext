@@ -175,7 +175,7 @@ resolveTYPE bn typ = do
         mkResult cnames cnameRRset cacheCNAME = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
-            lift cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
+            cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
     getSec <- lift $ asks currentSeconds_
     Verify.cases getSec delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 

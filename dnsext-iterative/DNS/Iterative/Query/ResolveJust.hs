@@ -329,7 +329,7 @@ queryDS zone dnskeys ips dom = do
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
     ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
     verifyResult dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = lift cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
+        | rrsetValid dsRRset = cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
 
 {- FOURMOLU_DISABLE -}

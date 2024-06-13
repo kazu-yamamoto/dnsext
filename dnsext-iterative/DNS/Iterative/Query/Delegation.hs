@@ -98,7 +98,7 @@ noV4DEntry (DEstubA6  (_:|_))     = True
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
-    getSec <- lift $ asks currentSeconds_
+    getSec <- asks currentSeconds_
     maybe (notFound $> noDelegation) (found getSec >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where
     rankedDS = Cache.rkAuthority
@@ -106,20 +106,20 @@ delegationWithCache zone dnskeys dom msg = do
     fromDS = DNS.fromRData . rdata
     nullDS k = do
         unsignedDelegationOrNoData $> ()
-        lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
-        lift $ cacheNoData dom DS (getRank rankedDS msg)
-        lift $ caches $> k []
-    ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
+        vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        cacheNoData dom DS (getRank rankedDS msg)
+        caches $> k []
+    ncDS _ncLog = vrfyLog (Just Red) "delegation - not canonical DS" *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = lift $ do
+        | rrsetValid dsRRset = do
             let x = k dsrds
             vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
             caches *> cacheDS $> x
         | otherwise =
-            lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
+            vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS" *> throwDnsError DNS.ServerFailure
     caches = cacheNS *> cacheAdds
 
-    notFound = lift $ vrfyLog Nothing "no delegation"
+    notFound = vrfyLog Nothing "no delegation"
     vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
     domTraceMsg = show zone ++ " -> " ++ show dom
 
