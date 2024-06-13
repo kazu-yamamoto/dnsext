@@ -78,8 +78,14 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
         | typ == ANY       = pure (([], n0), Left (DNS.NotImpl, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
-    logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
-    called = logLn_ Log.DEBUG $ show (n0, typ, cls)
+    logLines_ lv = logLines lv . map (("resolve-with-cname: " ++ logMark ++ ": ") ++)
+    logLn_ lv s = logLines_ lv [s]
+    called = do
+        let qcstr flag fsel = (("  " ++ flag ++ ": ") ++) . show <$> asksQC fsel
+        do_ <- qcstr "DO" requestDO_
+        cd_ <- qcstr "CD" requestCD_
+        ad_ <- qcstr "AD" requestAD_
+        logLines_ Log.DEMO [ unwords [show n0, show typ, show cls], do_, cd_, ad_ ]
     justCNAME bn = do
         let noCache = do
                 result <- cnameHandler bn
