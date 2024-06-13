@@ -208,11 +208,12 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: Domain -> [RD_DNSKEY]
+    :: (MonadIO m, MonadReader Env m, MonadReaderQC m)
+    => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([ResourceRecord], Ranking)) -> DNSMessage
     -> [RRset]
-    -> ContextT IO [RRset] {- returns verified authority section -}
+    -> m [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
@@ -249,7 +250,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         plogLines lv xs = do
             let key = [showQ' "key" dom typ]
                 query = showQ "query" (question msg)
-            orig <- (\q -> showQ "orig-query" [q]) <$> lift (asks origQuestion_)
+            orig <- (\q -> showQ "orig-query" [q]) <$> asksQC origQuestion_
             logLines lv $ ("cacheSectionNegative: " ++ unwords (withCtx $ key ++ query ++ orig)) : xs
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
@@ -319,9 +320,9 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
-        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
+        DNS.NoErr      -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
@@ -349,12 +350,12 @@ cacheNoDelegation d zone dnskeys dom msg
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
+    nullCNAME = cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
     ncCNAME _ncLog = cacheNoDataNS
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
-    cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
+    cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode msg
 {- FOURMOLU_ENABLE -}
