@@ -168,8 +168,8 @@ ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adF
 guardRequestHeader :: DNSFlags -> EDNSheader -> DNSQuery ()
 guardRequestHeader reqF reqEH
     | reqEH == DNS.InvalidEDNS =
-        throwE $ InvalidEDNS DNS.InvalidEDNS DNS.defaultResponse
-    | not rd = throwE $ HasError DNS.Refused DNS.defaultResponse
+        throwError $ InvalidEDNS DNS.InvalidEDNS DNS.defaultResponse
+    | not rd = throwError $ HasError DNS.Refused DNS.defaultResponse
     | otherwise = pure ()
   where
     rd = DNS.recDesired reqF

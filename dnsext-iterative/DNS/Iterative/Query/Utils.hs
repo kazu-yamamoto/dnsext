@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Utils where
@@ -39,7 +40,7 @@ logQueryErrors prefix q = do
     where
       left qe = do
           lift $ logQueryError qe
-          throwE qe
+          throwError qe
       logQueryError qe = case qe of
           DnsError de ss        -> logDnsError de ss
           NotResponse resp msg  -> logNotResponse resp msg
