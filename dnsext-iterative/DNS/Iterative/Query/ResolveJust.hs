@@ -347,7 +347,7 @@ fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
 fillDelegationOnNull dc disableV6NS d0@Delegation{..}
     | dentryIPnull disableV6NS dentry  = case nonEmpty names of
         Nothing      -> do
-            Question qn qty _ <- lift (lift $ asks origQuestion_)
+            Question qn qty _ <- asksQC origQuestion_
             logLines Log.DEMO
                 [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
                 , "  zone: " ++ show zone
@@ -416,7 +416,7 @@ resolveNS zone disableV6NS dc ns = do
                 | disableV6NS  = "empty A: disable-v6ns: "
                 | otherwise    = "empty A|AAAA: "
             showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-        orig <- showOrig <$> lift (lift $ asks origQuestion_)
+        orig <- showOrig <$> asksQC origQuestion_
         logLn Log.WARN $
             "resolveNS: serv-fail, "
             ++ emptyInfo

@@ -257,7 +257,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
 
 failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
 failWithCacheOrigName rank e = do
-    Question dom _typ cls <- lift $ lift $ asks origQuestion_
+    Question dom _typ cls <- asksQC origQuestion_
     failWithCache dom Cache.ERR cls rank e
 
 {- FOURMOLU_DISABLE -}
