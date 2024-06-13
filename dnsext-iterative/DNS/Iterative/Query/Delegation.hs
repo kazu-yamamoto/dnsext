@@ -215,7 +215,7 @@ unsignedDelegationOrNoDataAction
     :: Domain -> [RD_DNSKEY]
     -> Domain -> TYPE -> DNSMessage
     -> DNSQuery [RRset]
-unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift nsec
+unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = nsec
   where
     nsec  = Verify.nsecWithValid   dnskeys rankedAuthority msg nullNSEC invalidK nsecK
     nullNSEC = nsec3
@@ -242,16 +242,16 @@ unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift ns
         wildcardNoData     rs  = SEC.wildcardNoDataNSEC3      zone rs qname_ qtype_
         noData             rs  = SEC.noDataNSEC3              zone rs qname_ qtype_
 
-    nullK = pure $ noverify "no NSEC/NSEC3 records" $> []
+    nullK = noverify "no NSEC/NSEC3 records" $> []
     invalidK s = failed $ "invalid NSEC/NSEC3: " ++ traceInfo ++ " : " ++ s
-    noWitnessK s = pure $ noverify ("nsec witness not found: " ++ traceInfo ++ " : " ++ s) $> []
-    resultK  w rrsets _ = pure $ success w *> winfo witnessInfoNSEC  w $> rrsets
-    resultK3 w rrsets _ = pure $ success w *> winfo witnessInfoNSEC3 w $> rrsets
+    noWitnessK s =noverify ("nsec witness not found: " ++ traceInfo ++ " : " ++ s) $> []
+    resultK  w rrsets _ = success w *> winfo witnessInfoNSEC  w $> rrsets
+    resultK3 w rrsets _ = success w *> winfo witnessInfoNSEC3 w $> rrsets
 
     success w = putLog (Just Green) $ "nsec verification success - " ++ witnessInfo w
     winfo wi w = putLog (Just Cyan) $ unlines $ map ("  " ++) $ wi w
     noverify s = putLog (Just Yellow) $ "nsec no verification - " ++ s
-    failed s = pure $ putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+    failed s = putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
 
     putLog color s = clogLn Log.DEMO color s
 
