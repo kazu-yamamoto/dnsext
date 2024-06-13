@@ -15,6 +15,6 @@ import DNS.Iterative.Query.Rev
 takeLocalResult :: Env -> Question -> DNSQuery (Maybe ResultRRS)
 takeLocalResult Env{localZones_ = (apexes, names)} q@(Question dom _ cls)
     | cls /= IN                          = pure Nothing  {- not support other than IN -}
-    | Just apex <- lookupApex apexes dom = maybe (throwE QueryDenied) (pure . Just) $ lookupName names apex q
+    | Just apex <- lookupApex apexes dom = maybe (throwError QueryDenied) (pure . Just) $ lookupName names apex q
     | otherwise                          = pure $ takeSpecialRevDomainResult dom
 {- FOURMOLU_ENABLE -}

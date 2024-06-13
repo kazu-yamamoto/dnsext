@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Resolve (
@@ -67,10 +68,10 @@ resolveLogic
     -> Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
 resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
-    env <- lift ask
-    maybe (called *> notLocal) local =<< takeLocalResult env q
+    env <- ask
+    maybe (called *> notLocal) local' =<< takeLocalResult env q
   where
-    local result = return (([], n0), Left result)
+    local' result = pure (([], n0), Left result)
     notLocal
         | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
         | typ == Cache.ERR = pure (([], n0), Left (DNS.NoErr, [], []))
@@ -78,7 +79,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
     logLn_ lv s = logLn lv $ "resolve-with-cname: " ++ logMark ++ ": " ++ s
-    called = lift $ logLn_ Log.DEBUG $ show (n0, typ, cls)
+    called = logLn_ Log.DEBUG $ show (n0, typ, cls)
     justCNAME bn = do
         let noCache = do
                 result <- cnameHandler bn
@@ -91,28 +92,28 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             noSOA rc            = (rc, [], [])
 
         maybe
-            (maybe noCache withERRC =<< lift (lookupERR bn))
+            (maybe noCache withERRC =<< lookupERR bn)
             {- target RR is not CNAME destination, but CNAME result is NoErr -}
             (cachedCNAME . foldLookupResult negative noSOA (\cname -> (DNS.NoErr, [cname], [])))
-            =<< lift (lookupType bn CNAME)
+            =<< lookupType bn CNAME
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
     -- recCNAMEs :: Int -> Domain -> [RRset] -> DNSQuery (([RRset], Domain), Either Result a)
     recCNAMEs cc bn dcnRRsets
         | cc > mcc = do
-            lift $ logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
+            logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
         | otherwise = do
-            let recCNAMEs_ (cn, cnRRset) = lift (logLn_ Log.DEMO $ show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            let recCNAMEs_ (cn, cnRRset) = logLn_ Log.DEMO (show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . Right) =<< typeHandler bn typ
 
                 withERRC (rc, soa) = pure ((dcnRRsets [], bn), Left (rc, [], soa))
 
                 noTypeCache =
                     maybe
-                        (maybe noCache withERRC =<< lift (lookupERR bn))
+                        (maybe noCache withERRC =<< lookupERR bn)
                         recCNAMEs_ {- recurse with cname cache -}
-                        =<< lift ((withCN =<<) . joinLKR <$> lookupType bn CNAME)
+                        =<< (withCN =<<) . joinLKR <$> lookupType bn CNAME
                   where
                     {- when CNAME has NODATA, do not loop with CNAME domain -}
                     joinLKR = (foldLookupResult (\_ _ -> Nothing) (\_ -> Nothing) Just =<<)
@@ -132,11 +133,11 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
                         (\rc -> (rc, [], []))
                         (\xrrs -> (DNS.NoErr, [xrrs], [] {- return cached result with target typ -}))
                 )
-                =<< lift (lookupType bn typ)
+                =<< lookupType bn typ
       where
         mcc = maxCNameChain
 
-    lookupERR :: Domain -> ContextT IO (Maybe (RCODE, [RRset]))
+    lookupERR :: Domain -> DNSQuery (Maybe (RCODE, [RRset]))
     lookupERR name =
         maybe (pure Nothing) (foldLookupResult soah (\rc -> pure $ Just (rc, [])) inconsistent)
             =<< lookupType name Cache.ERR
@@ -174,8 +175,8 @@ resolveTYPE bn typ = do
         mkResult cnames cnameRRset cacheCNAME = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
-            lift cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
-    getSec <- lift $ asks currentSeconds_
+            cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
+    getSec <- asks currentSeconds_
     Verify.cases getSec delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
 maxCNameChain :: Int

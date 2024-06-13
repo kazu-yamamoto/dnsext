@@ -59,7 +59,7 @@ mayDelegation n h (MayDelegation m) = maybe n h m
 {- FOURMOLU_DISABLE -}
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
-lookupDelegation :: Domain -> ContextT IO (Maybe MayDelegation)
+lookupDelegation :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe MayDelegation)
 lookupDelegation zone = do
     disableV6NS <- asks disableV6NS_
     let noCachedV4NS es = disableV6NS && all noV4DEntry es
@@ -72,7 +72,7 @@ lookupDelegation zone = do
             | otherwise = list Nothing ((Just .) . hasDelegation') es
           where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
-        getDelegation :: ([ResourceRecord], a) -> ContextT IO (Maybe MayDelegation)
+        getDelegation :: (MonadIO m, MonadReader Env m) => ([ResourceRecord], a) -> m (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
             let nss = sort $ rrListWith NS (`DNS.rdataField` DNS.ns_domain) zone const rrs
@@ -98,7 +98,7 @@ noV4DEntry (DEstubA6  (_:|_))     = True
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
-    getSec <- lift $ asks currentSeconds_
+    getSec <- asks currentSeconds_
     maybe (notFound $> noDelegation) (found getSec >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where
     rankedDS = Cache.rkAuthority
@@ -106,20 +106,20 @@ delegationWithCache zone dnskeys dom msg = do
     fromDS = DNS.fromRData . rdata
     nullDS k = do
         unsignedDelegationOrNoData $> ()
-        lift $ vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
-        lift $ cacheNoData dom DS (getRank rankedDS msg)
-        lift $ caches $> k []
-    ncDS _ncLog = lift (vrfyLog (Just Red) "delegation - not canonical DS") *> throwDnsError DNS.ServerFailure
+        vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        cacheNoData dom DS (getRank rankedDS msg)
+        caches $> k []
+    ncDS _ncLog = vrfyLog (Just Red) "delegation - not canonical DS" *> throwDnsError DNS.ServerFailure
     withDS k dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = lift $ do
+        | rrsetValid dsRRset = do
             let x = k dsrds
             vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
             caches *> cacheDS $> x
         | otherwise =
-            lift (vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS") *> throwDnsError DNS.ServerFailure
+            vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS" *> throwDnsError DNS.ServerFailure
     caches = cacheNS *> cacheAdds
 
-    notFound = lift $ vrfyLog Nothing "no delegation"
+    notFound = vrfyLog Nothing "no delegation"
     vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
     domTraceMsg = show zone ++ " -> " ++ show dom
 
@@ -138,18 +138,18 @@ delegationWithCache zone dnskeys dom msg = do
 
 {- FOURMOLU_DISABLE -}
 fillCachedDelegation :: Delegation -> DNSQuery Delegation
-fillCachedDelegation d = list noAvail result =<< lift (concat <$> mapM fill des)
+fillCachedDelegation d = list noAvail result =<< concat <$> mapM fill des
   where
     des = delegationNS d
     fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns
     fill  e            = pure [e]
-    noAvail = lift (logLines Log.DEMO ("fillCachedDelegation - no NS available: " : pprNS des)) *> throwDnsError DNS.ServerFailure
+    noAvail = logLines Log.DEMO ("fillCachedDelegation - no NS available: " : pprNS des) *> throwDnsError DNS.ServerFailure
     pprNS (e:|es) = map (("  " ++) . show) $ e : es
     result e es = pure $ d{delegationNS = e :| es}
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-lookupDEntry :: Domain -> Domain -> ContextT IO [DEntry]
+lookupDEntry :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> m [DEntry]
 lookupDEntry zone ns = do
     withERR =<< lookupCache ns Cache.ERR
   where
@@ -215,7 +215,7 @@ unsignedDelegationOrNoDataAction
     :: Domain -> [RD_DNSKEY]
     -> Domain -> TYPE -> DNSMessage
     -> DNSQuery [RRset]
-unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift nsec
+unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = nsec
   where
     nsec  = Verify.nsecWithValid   dnskeys rankedAuthority msg nullNSEC invalidK nsecK
     nullNSEC = nsec3
@@ -242,18 +242,18 @@ unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = join $ lift ns
         wildcardNoData     rs  = SEC.wildcardNoDataNSEC3      zone rs qname_ qtype_
         noData             rs  = SEC.noDataNSEC3              zone rs qname_ qtype_
 
-    nullK = pure $ noverify "no NSEC/NSEC3 records" $> []
+    nullK = noverify "no NSEC/NSEC3 records" $> []
     invalidK s = failed $ "invalid NSEC/NSEC3: " ++ traceInfo ++ " : " ++ s
-    noWitnessK s = pure $ noverify ("nsec witness not found: " ++ traceInfo ++ " : " ++ s) $> []
-    resultK  w rrsets _ = pure $ success w *> winfo witnessInfoNSEC  w $> rrsets
-    resultK3 w rrsets _ = pure $ success w *> winfo witnessInfoNSEC3 w $> rrsets
+    noWitnessK s =noverify ("nsec witness not found: " ++ traceInfo ++ " : " ++ s) $> []
+    resultK  w rrsets _ = success w *> winfo witnessInfoNSEC  w $> rrsets
+    resultK3 w rrsets _ = success w *> winfo witnessInfoNSEC3 w $> rrsets
 
     success w = putLog (Just Green) $ "nsec verification success - " ++ witnessInfo w
     winfo wi w = putLog (Just Cyan) $ unlines $ map ("  " ++) $ wi w
     noverify s = putLog (Just Yellow) $ "nsec no verification - " ++ s
-    failed s = pure $ putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+    failed s = putLog (Just Red) ( "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
 
-    putLog color s = lift $ clogLn Log.DEMO color s
+    putLog color s = clogLn Log.DEMO color s
 
     witnessInfo w = SEC.witnessName w ++ ": " ++ SEC.witnessDelegation w traceInfo qinfo
     traceInfo = show zone ++ " -> " ++ show qname_

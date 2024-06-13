@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Utils where
@@ -19,18 +20,19 @@ import System.Console.ANSI.Types
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
 
-logLines :: Log.Level -> [String] -> ContextT IO ()
-logLines level xs = do
+clogLines :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> [String] -> m ()
+clogLines level color xs = do
     putLines <- asks logLines_
-    liftIO $ putLines level Nothing xs
+    liftIO $ putLines level color xs
 
-logLn :: Log.Level -> String -> ContextT IO ()
-logLn level = logLines level . (: [])
+logLines :: (MonadIO m, MonadReader Env m) => Log.Level -> [String] -> m ()
+logLines level xs = clogLines level Nothing xs
 
-clogLn :: Log.Level -> Maybe Color -> String -> ContextT IO ()
-clogLn level color s = do
-    putLines <- asks logLines_
-    liftIO $ putLines level color [s]
+logLn :: (MonadIO m, MonadReader Env m) => Log.Level -> String -> m ()
+logLn level s = clogLines level Nothing [s]
+
+clogLn :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> String -> m ()
+clogLn level color s = clogLines level color [s]
 
 {- FOURMOLU_DISABLE -}
 logQueryErrors :: String -> DNSQuery a -> DNSQuery a
@@ -38,8 +40,8 @@ logQueryErrors prefix q = do
       handleDnsError left return q
     where
       left qe = do
-          lift $ logQueryError qe
-          throwE qe
+          logQueryError qe
+          throwError qe
       logQueryError qe = case qe of
           DnsError de ss        -> logDnsError de ss
           NotResponse resp msg  -> logNotResponse resp msg

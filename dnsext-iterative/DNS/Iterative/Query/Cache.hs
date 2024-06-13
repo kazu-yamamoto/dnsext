@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Cache (
     lookupValid,
@@ -52,7 +52,7 @@ import DNS.Iterative.Query.TestEnv
 
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
-withLookupCache :: CacheHandler a -> String -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+withLookupCache :: (MonadIO m, MonadReader Env m) => CacheHandler a -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
 withLookupCache h logMark dom typ = do
     cache <- liftIO =<< asks getCache_
     ts <- liftIO =<< asks currentSeconds_
@@ -65,7 +65,7 @@ withLookupCache h logMark dom typ = do
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
-lookupRRset :: String -> Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
@@ -82,7 +82,7 @@ guardValid m = do
     guard $ rrsetValid rrset
     m
 
-lookupValid :: Domain -> TYPE -> ContextT IO (Maybe (RRset, Ranking))
+lookupValid :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
 
 {- FOURMOLU_DISABLE -}
@@ -100,7 +100,8 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 {- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
-lookupRRsetEither :: String -> Domain -> TYPE -> ContextT IO (Maybe (LookupResult, Ranking))
+lookupRRsetEither :: (MonadIO m, MonadReader Env m)
+                  => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler LookupResult
@@ -131,7 +132,8 @@ validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 ---
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XFlexibleContexts
 
 _newTestEnv :: IO Env
 _newTestEnv = newTestEnv (const $ pure ()) False 2048
@@ -159,26 +161,27 @@ _newTestEnv = newTestEnv (const $ pure ()) False 2048
 -- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err3
 -- Just []
-lookupCache :: Domain -> TYPE -> ContextT IO (Maybe ([ResourceRecord], Ranking))
+lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
   where
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
-lookupErrorRCODE :: Domain -> ContextT IO (Maybe (RCODE, Ranking))
+lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
 lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
 
 {- FOURMOLU_DISABLE -}
-lookupCache' :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+lookupCache' :: (MonadIO m, MonadReader Env m)
+             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
              -> (Seconds -> [RData] -> Maybe a)
              -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
-             -> Domain -> TYPE -> ContextT IO (Maybe (a, Ranking))
+             -> Domain -> TYPE -> m (Maybe (a, Ranking))
 lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
   where
     mkAlive now = Cache.lookupAlive now result
     result ttl crs rank = (,) <$> Cache.unCRSet soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
-cacheNoRRSIG :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
@@ -193,7 +196,7 @@ cacheNoRRSIG rrs0 rank = do
             liftIO $ Cache.notVerified rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
-cacheSection :: [ResourceRecord] -> Ranking -> ContextT IO ()
+cacheSection :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
   where
     rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
@@ -205,11 +208,12 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: Domain -> [RD_DNSKEY]
+    :: (MonadIO m, MonadReader Env m, MonadReaderQC m)
+    => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([ResourceRecord], Ranking)) -> DNSMessage
     -> [RRset]
-    -> ContextT IO [RRset] {- returns verified authority section -}
+    -> m [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
@@ -246,46 +250,46 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         plogLines lv xs = do
             let key = [showQ' "key" dom typ]
                 query = showQ "query" (question msg)
-            orig <- (\q -> showQ "orig-query" [q]) <$> lift (asks origQuestion_)
+            orig <- (\q -> showQ "orig-query" [q]) <$> asksQC origQuestion_
             logLines lv $ ("cacheSectionNegative: " ++ unwords (withCtx $ key ++ query ++ orig)) : xs
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
 failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
 failWithCacheOrigName rank e = do
-    Question dom _typ cls <- lift $ lift $ asks origQuestion_
+    Question dom _typ cls <- asksQC origQuestion_
     failWithCache dom Cache.ERR cls rank e
 
 {- FOURMOLU_DISABLE -}
 failWithCache :: Domain -> TYPE -> CLASS -> Ranking -> DNSError -> DNSQuery a
 failWithCache dom typ cls rank e = do
-    when (cls == IN) $ lift $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
+    when (cls == IN) $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
     throwDnsError e
   where
     cacheRCODE_ = cacheRCODE dom typ
 {- FOURMOLU_ENABLE -}
 
-cacheDNSError :: Domain -> TYPE -> Ranking -> DNSError -> ContextT IO ()
+cacheDNSError :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> DNSError -> m ()
 cacheDNSError dom typ rank e =
     foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
   where
     cacheRCODE_ = cacheRCODE dom typ
 
-cacheNoData :: Domain -> TYPE -> Ranking -> ContextT IO ()
+cacheNoData :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> m ()
 cacheNoData dom typ rank = cacheRCODE dom typ NoErr rank
 
-cacheRCODE :: Domain -> TYPE -> RCODE -> Ranking -> ContextT IO ()
+cacheRCODE :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> RCODE -> Ranking -> m ()
 cacheRCODE dom typ rcode rank = do
     maxNegativeTTL <- asks maxNegativeTTL_
     cacheNegativeNoSOA rcode dom typ maxNegativeTTL rank
 
-cacheNegative :: Domain -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegative :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> TYPE -> TTL -> Ranking -> m ()
 cacheNegative zone dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     liftIO $ cpsInsertNegative zone dom typ ttl rank insertRRSet
 
-cacheNegativeNoSOA :: RCODE -> Domain -> TYPE -> TTL -> Ranking -> ContextT IO ()
+cacheNegativeNoSOA :: (MonadIO m, MonadReader Env m) => RCODE -> Domain -> TYPE -> TTL -> Ranking -> m ()
 cacheNegativeNoSOA rc dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegativeNoSOA: " ++ show (rc, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
@@ -294,9 +298,9 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    getSec <- lift $ asks currentSeconds_
+    getSec <- asks currentSeconds_
     (result, cacheX) <- verify getSec
-    lift cacheX
+    cacheX
     return result
   where
     qinfo = show dom ++ " " ++ show typ
@@ -307,7 +311,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
                 | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
-        lift $ clogLn Log.DEMO verifyColor verifyMsg
+        clogLn Log.DEMO verifyColor verifyMsg
         raiseOnVerifyFailure
         pure (([xRRset], nws), cacheX)
       where
@@ -316,9 +320,9 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     nullX = doCacheEmpty <&> \e -> (([], e), pure ())
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
-        DNS.NoErr      -> lift . cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
-        DNS.NameErr    -> lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
-        _ | crc rcode  -> lift $ cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
+        DNS.NoErr      -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
+        DNS.NameErr    -> cacheSectionNegative zone dnskeys dom Cache.ERR rankedAnswer msg =<< witnessNameErr
+        _ | crc rcode  -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg []
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
@@ -339,19 +343,19 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = lift (asks currentSeconds_) >>=
+    nameErrors = asks currentSeconds_ >>=
         \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
-        \_rds _cnRRset cacheCNAME -> lift cacheCNAME *> cacheNoDataNS
+        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
-    nullCNAME = lift . cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
+    nullCNAME = cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
     ncCNAME _ncLog = cacheNoDataNS
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
-    cacheNoDataNS = lift $ cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
+    cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
     (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode msg
 {- FOURMOLU_ENABLE -}
@@ -368,7 +372,7 @@ wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
     nullK = pure []
     invalidK s = failed $ "NSEC/NSEC3 WildcardExpansion: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
-    resultK w rrsets _ = lift $ success w $> rrsets
+    resultK w rrsets _ = success w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
     failed = nsecFailed
     qinfo = show qname ++ " " ++ show qtype
@@ -396,8 +400,8 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
                           resultK resultK3
     invalidK s = failed $ "NSEC/NSEC3 NameErr/NoData: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
-    resultK  w rrsets _ = lift $ success w *> winfo witnessInfoNSEC  w $> rrsets
-    resultK3 w rrsets _ = lift $ success w *> winfo witnessInfoNSEC3 w $> rrsets
+    resultK  w rrsets _ = success w *> winfo witnessInfoNSEC  w $> rrsets
+    resultK3 w rrsets _ = success w *> winfo witnessInfoNSEC3 w $> rrsets
     success w = clogLn Log.DEMO (Just Green) $ "nsec verification success - " ++ SEC.witnessName w ++ ": " ++ qinfo
     winfo wi w = clogLn Log.DEMO (Just Cyan) $ unlines $ map ("  " ++) $ wi w
     failed = nsecFailed
@@ -411,4 +415,4 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
 {- FOURMOLU_ENABLE -}
 
 nsecFailed :: String -> DNSQuery a
-nsecFailed s = lift (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+nsecFailed s = (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure

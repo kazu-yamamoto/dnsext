@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module DNS.Iterative.Query.Types (
     Result,
     ResultRRS',
@@ -18,6 +20,7 @@ module DNS.Iterative.Query.Types (
     chainedStateDS,
     QueryError (..),
     DNSQuery,
+    MonadReaderQC (..),
     MayVerifiedRRS (..),
     mayVerifiedRRS,
     DFreshState (..),
@@ -111,11 +114,22 @@ data QueryError
 type ContextT m = ReaderT Env (ReaderT QueryContext m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
+class MonadReaderQC m where
+    asksQC :: (QueryContext -> a) -> m a
+
+instance Monad m => MonadReaderQC (ContextT m) where
+    asksQC = lift . asks
+    {-# INLINEABLE asksQC #-}
+
+instance MonadReaderQC DNSQuery where
+    asksQC = lift . asksQC
+    {-# INLINEABLE asksQC #-}
+
 runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwE . (`DnsError` [])
+throwDnsError = throwError . (`DnsError` [])
 
 handleDnsError
     :: (QueryError -> DNSQuery a)
@@ -126,7 +140,7 @@ handleDnsError left right q = either left right =<< lift (runExceptT q)
 
 -- example instances
 -- - responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
--- - responseErrDNSQuery = handleResponseError throwE return  :: DNSMessage -> DNSQuery DNSMessage
+-- - responseErrDNSQuery = handleResponseError throwError pure  :: DNSMessage -> DNSQuery DNSMessage
 handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
 handleResponseError e f msg
     | not (DNS.isResponse flags_) = e $ NotResponse (DNS.isResponse flags_) msg
