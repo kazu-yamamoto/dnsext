@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module DNS.Iterative.Query.Types (
     Result,
     ResultRRS',
@@ -18,6 +20,7 @@ module DNS.Iterative.Query.Types (
     chainedStateDS,
     QueryError (..),
     DNSQuery,
+    MonadReaderQC (..),
     MayVerifiedRRS (..),
     mayVerifiedRRS,
     DFreshState (..),
@@ -110,6 +113,17 @@ data QueryError
 
 type ContextT m = ReaderT Env (ReaderT QueryContext m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
+
+class MonadReaderQC m where
+    asksQC :: (QueryContext -> a) -> m a
+
+instance Monad m => MonadReaderQC (ContextT m) where
+    asksQC = lift . asks
+    {-# INLINEABLE asksQC #-}
+
+instance MonadReaderQC DNSQuery where
+    asksQC = lift . asksQC
+    {-# INLINEABLE asksQC #-}
 
 runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
