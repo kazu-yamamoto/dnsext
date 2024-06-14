@@ -29,7 +29,6 @@ import DNS.Types.Time (EpochTime)
 
 -- this package
 import DNS.RRCache (
-    CRSet,
     Cache,
     Question (..),
     Ranking (..),
@@ -123,7 +122,7 @@ rankings = [RankAuthAnswer, RankAnswer, RankAdditional]
 
 -----
 
-genCrsAssoc :: [(TYPE, Gen CRSet)]
+genCrsAssoc :: [(TYPE, Gen Cache.Hit)]
 genCrsAssoc =
     [ (A, crset . (DNS.rd_a <$>) <$> listOf1 (elements v4List))
     , (NS, crset . (DNS.rd_ns <$>) <$> listOf1 (elements nsList))
@@ -140,7 +139,7 @@ toULString s = zipWith ulc <$> vectorOf (length s) arbitrary <*> pure s
         | upper = toUpper
         | otherwise = toLower
 
-genWrongCRPair :: Gen (Question, CRSet)
+genWrongCRPair :: Gen (Question, Cache.Hit)
 genWrongCRPair = do
     (typ, genCrs) <- elements wrongs
     key <- Question <$> elements sbsDomainList <*> pure typ <*> pure DNS.IN
@@ -154,7 +153,7 @@ genWrongCRPair = do
         , typ /= gtyp
         ]
 
-genCRsRec :: Gen ((Question, Gen CRSet), Domain)
+genCRsRec :: Gen ((Question, Gen Cache.Hit), Domain)
 genCRsRec = do
     (typ, genCrs) <- elements genCrsAssoc
     let labelList
@@ -164,10 +163,10 @@ genCRsRec = do
     (,) (Question (DNS.fromRepresentation lbl) typ DNS.IN, genCrs)
         <$> (DNS.fromRepresentation <$> toULString lbl)
 
-genCRsPair :: Gen (Question, Gen CRSet)
+genCRsPair :: Gen (Question, Gen Cache.Hit)
 genCRsPair = fst <$> genCRsRec
 
-genCRPair :: Gen (Question, CRSet)
+genCRPair :: Gen (Question, Cache.Hit)
 genCRPair = do
     (key, genCrs) <- genCRsPair
     crs <- genCrs
@@ -226,7 +225,7 @@ instance Arbitrary AKey where
                     <*> pure DNS.IN
                 )
 
-newtype AWrongCRPair = AWrongCRPair (Question, CRSet) deriving (Show)
+newtype AWrongCRPair = AWrongCRPair (Question, Cache.Hit) deriving (Show)
 
 instance Arbitrary AWrongCRPair where
     arbitrary = AWrongCRPair <$> genWrongCRPair
@@ -236,12 +235,12 @@ newtype ATTL = ATTL TTL deriving (Show)
 instance Arbitrary ATTL where
     arbitrary = ATTL <$> genTTL
 
-newtype ACRPair = ACRPair (Question, CRSet) deriving (Show)
+newtype ACRPair = ACRPair (Question, Cache.Hit) deriving (Show)
 
 instance Arbitrary ACRPair where
     arbitrary = ACRPair <$> genCRPair
 
-newtype ACRRec = ACRRec (Question, CRSet, Domain) deriving (Show)
+newtype ACRRec = ACRRec (Question, Cache.Hit, Domain) deriving (Show)
 
 instance Arbitrary ACRRec where
     arbitrary =
@@ -275,7 +274,7 @@ newtype ARankOrdsCo = ARankOrdsCo (Ranking, Ranking) deriving (Show)
 instance Arbitrary ARankOrdsCo where
     arbitrary = ARankOrdsCo <$> genRankOrdsCo
 
-newtype ACR2 = ACR2 (Question, (CRSet, CRSet)) deriving (Show)
+newtype ACR2 = ACR2 (Question, (Cache.Hit, Cache.Hit)) deriving (Show)
 
 instance Arbitrary ACR2 where
     arbitrary = ACR2 <$> gen

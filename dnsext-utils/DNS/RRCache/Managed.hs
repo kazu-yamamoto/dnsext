@@ -81,7 +81,7 @@ expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
     expires_ c = maybe c id $ Cache.expires ts c
 
 {- for full-resolver. using current EpochTime -}
-insertWithExpiresRRCache :: Question -> TTL -> CRSet -> Ranking -> RRCache -> IO ()
+insertWithExpiresRRCache :: Question -> TTL -> Cache.Hit -> Ranking -> RRCache -> IO ()
 insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     t <- rrCacheGetTime
     let withExpire = Cache.insertWithExpires t k ttl crs rank
@@ -89,11 +89,11 @@ insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
 
 ---
 {- for stub. no alive check -}
-lookupRRCache :: Question -> RRCache -> IO (Maybe (EpochTime, CRSet))
+lookupRRCache :: Question -> RRCache -> IO (Maybe (EpochTime, Cache.Hit))
 lookupRRCache k rrCache = Cache.stubLookup k <$> readRRCache rrCache
 
 {- for stub. not using current EpochTime -}
-insertRRCache :: Question -> EpochTime -> CRSet -> RRCache -> IO ()
+insertRRCache :: Question -> EpochTime -> Cache.Hit -> RRCache -> IO ()
 insertRRCache k tim crs (RRCache _ reaper) = do
     let ins = Cache.stubInsert k tim crs
     reaperUpdate reaper $ \cache -> maybe cache id $ ins cache
@@ -107,7 +107,7 @@ keyForNX :: Question -> Question
 keyForNX = keyForERR
 
 data RRCacheOps = RRCacheOps
-    { insertCache :: Question -> TTL -> CRSet -> Ranking -> IO ()
+    { insertCache :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
     , readCache :: IO Cache
     , expireCache :: EpochTime -> IO ()
     , stopCache :: IO ()

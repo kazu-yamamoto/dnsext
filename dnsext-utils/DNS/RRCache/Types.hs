@@ -24,7 +24,6 @@ module DNS.RRCache.Types (
     cpsInsertSection,
     cpsInsertNegative,
     cpsInsertNegativeNoSOA,
-    insertSetEmpty,
     TYPE (ERR, NX),
 
     -- * handy interface
@@ -42,20 +41,25 @@ module DNS.RRCache.Types (
     dumpKeys,
 
     -- * low-level, cache entry
-    Positive (..),
     RDatas,
     RRSIGs,
-    positiveHit,
     positiveRDatas,
     positiveRRSIGs,
+    --
+    Positive (..),
+    positiveCases,
+    Negative (..),
+    negativeCases,
     Hit (..),
-    foldHit,
-    CRSet,
+    hitCases1,
+    hitCases,
+    --
     mkNotVerified,
     notVerified,
     mkValid,
     valid,
-    unCRSet,
+    negWithSOA,
+    negNoSOA,
 
     -- * tests
     lookup,
@@ -106,55 +110,68 @@ type RRSIGs = NonEmpty RD_RRSIG
 
 {- FOURMOLU_DISABLE -}
 data Positive
-    = NotVerified RDatas        {- not verified -}
-    {-- | VerifyFailed RDatas   {- verification failed -} {- unused state -} --}
-    | Valid RDatas RRSIGs       {- verification succeeded -}
+    = PosNotVerified RDatas        {- not verified -}
+    {-- | PosVerifyFailed RDatas   {- verification failed -} {- unused state -} --}
+    | PosValid RDatas RRSIGs       {- verification succeeded -}
     deriving (Eq, Show)
 
-positiveHit :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
-positiveHit notVerified_ valid_ pos = case pos of
-    NotVerified rds -> notVerified_ $ NE.toList rds
-    Valid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
+positiveCases :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
+positiveCases notVerified_ valid_ pos = case pos of
+    PosNotVerified rds -> notVerified_ $ NE.toList rds
+    PosValid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
 
+data Negative
+    = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
+    | NegNoSOA RCODE               {- without SOA -}
+    deriving (Eq, Show)
+
+negativeCases :: (Domain -> a) -> (RCODE -> a) -> Negative -> a
+negativeCases withSOA_ withoutSOA_ neg = case neg of
+    NegSOA zone  -> withSOA_ zone
+    NegNoSOA rc  -> withoutSOA_ rc
+
+-- cache hit cases
 data Hit
-    = Negative Domain           {- Negative hit, NXDOMAIN or NODATA, hold zone-domain delegation from -}
-    | NegativeNoSOA RCODE       {- Negative hit with NO SOA -}
-    | Positive Positive         {- Positive hit -}
+    = Negative Negative            {- Negative hit -}
+    | Positive Positive            {- Positive hit -}
     deriving (Eq, Show)
 
-foldHit :: (Domain -> a) -> (RCODE -> a) -> (Positive -> a) -> Hit -> a
-foldHit negative nsoa positive hit = case hit of
-    Negative soa         -> negative soa
-    NegativeNoSOA rcode  -> nsoa rcode
-    Positive pos         -> positive pos
+hitCases1 :: (Negative -> a) -> (Positive -> a) -> Hit -> a
+hitCases1 negative_ posivtive_ hit = case hit of
+    Negative neg  -> negative_ neg
+    Positive pos  -> posivtive_ pos
+
+hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
+hitCases soa_ nsoa_ notVerified_ valid_ = hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ valid_)
 {- FOURMOLU_ENABLE -}
 
-type CRSet = Hit
+mkNotVerified :: RData -> [RData] -> Hit
+mkNotVerified d ds = Positive $ PosNotVerified (d :| ds)
 
-mkNotVerified :: RData -> [RData] -> CRSet
-mkNotVerified d ds = Positive $ NotVerified (d :| ds)
-
-notVerified :: [RData] -> a -> (CRSet -> a) -> a
+notVerified :: [RData] -> a -> (Hit -> a) -> a
 notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
 
-mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> CRSet
-mkValid d ds s ss = Positive $ Valid (d :| ds) (s :| ss)
+mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> Hit
+mkValid d ds s ss = Positive $ PosValid (d :| ds) (s :| ss)
 
-valid :: [RData] -> [RD_RRSIG] -> a -> (CRSet -> a) -> a
+valid :: [RData] -> [RD_RRSIG] -> a -> (Hit -> a) -> a
 valid rds sigs nothing just = cons1 rds nothing withRds
   where
     withRds d ds = cons1 sigs nothing withSigs
       where
         withSigs s ss = just $ mkValid d ds s ss
 
-unCRSet :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> CRSet -> a
-unCRSet negative nsoa notVerified_ valid_ = foldHit negative nsoa (positiveHit notVerified_ valid_)
+negWithSOA :: Domain -> Hit
+negWithSOA = Negative . NegSOA
+
+negNoSOA :: RCODE -> Hit
+negNoSOA = Negative . NegNoSOA
 
 positiveRDatas :: Positive -> [RData]
-positiveRDatas = positiveHit id const
+positiveRDatas = positiveCases id const
 
 positiveRRSIGs :: Positive -> a -> ([RD_RRSIG] -> a) -> a
-positiveRRSIGs pos nothing just = positiveHit (const nothing) (\_ sigs -> just sigs) pos
+positiveRRSIGs pos nothing just = positiveCases (const nothing) (\_ sigs -> just sigs) pos
 
 ---
 
@@ -231,7 +248,7 @@ rankedAdditional = getRanked rkAdditional
 
 ---
 
-data Val = Val CRSet Ranking deriving (Show)
+data Val = Val Hit Ranking deriving (Show)
 
 data Cache = Cache (OrdPSQ Question EpochTime Val) Int {- max size -}
 
@@ -252,6 +269,7 @@ lookup now dom typ cls = lookupAlive now result dom typ cls
   where
     result ttl crs rank = Just (extractRRSet dom typ cls ttl crs, rank)
 
+{- FOURMOLU_DISABLE -}
 -- when cache has EMPTY, returns SOA
 lookupEither
     :: EpochTime
@@ -263,17 +281,19 @@ lookupEither
 lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
   where
     result ttl crs rank = case crs of
-        Negative soaDom -> do
-            sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache {- EMPTY hit. empty ranking and SOA result. -}
-            return (Left sp, rank)
-        _ ->
-            Just (Right $ extractRRSet dom typ DNS.IN ttl crs, rank)
+        Negative neg  -> negativeCases (wsoa_ ttl rank) (nsoa_ rank) neg
+        Positive {}   -> Just (Right $ extractRRSet dom typ DNS.IN ttl crs, rank)
+    wsoa_ ttl rank soaDom = do
+        sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache {- EMPTY hit. empty ranking and SOA result. -}
+        Just (Left sp, rank)
+    nsoa_ rank _rc = Just (Left ([], RankAdditional {- FIXME, dummy rank value for no-SOA -}), rank)
     soaResult ettl srcDom ttl crs rank =
         Just (extractRRSet srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -}) crs, rank)
+{- FOURMOLU_ENABLE -}
 
 lookupAlive
     :: EpochTime
-    -> (TTL -> CRSet -> Ranking -> Maybe a)
+    -> (TTL -> Hit -> Ranking -> Maybe a)
     -> Domain
     -> TYPE
     -> CLASS
@@ -286,13 +306,13 @@ lookupAlive now mk dom typ cls = lookup_ mkAlive $ Question dom typ cls
         mk ttl crset rank
 
 -- lookup interface for stub resolver
-stubLookup :: Question -> Cache -> Maybe (EpochTime, CRSet)
+stubLookup :: Question -> Cache -> Maybe (EpochTime, Hit)
 stubLookup k = lookup_ result k
   where
     result eol crs _ = Just (eol, crs)
 
 lookup_
-    :: (EpochTime -> CRSet -> Ranking -> Maybe a)
+    :: (EpochTime -> Hit -> Ranking -> Maybe a)
     -> Question
     -> Cache
     -> Maybe a
@@ -310,8 +330,8 @@ lookup_ mk k (Cache cache _) = do
 -- Nothing
 -- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.IN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (NotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (NotVerified (192.168.32.1 :| []))) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.32.1 :| []))) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
@@ -340,7 +360,7 @@ insertRRs now rrs rank = updateAll
 -- @
 --    cpsInsertNegative sdom dom typ ttl rank (insert now) cache  -- insert Maybe action
 -- @
-insert :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insert :: EpochTime -> Question -> TTL -> Hit -> Ranking -> Cache -> Maybe Cache
 insert _ _ _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
     maybe sized withOldRank lookupRank
@@ -366,7 +386,7 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
             Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
 
 -- insert interface for stub resolver
-stubInsert :: Question -> EpochTime -> CRSet -> Cache -> Maybe Cache
+stubInsert :: Question -> EpochTime -> Hit -> Cache -> Maybe Cache
 stubInsert _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 stubInsert k eol crs (Cache c xsz) =
     sized
@@ -388,7 +408,7 @@ expires now (Cache c xsz) =
             | otherwise -> Nothing
         Nothing -> Nothing
 
-insertWithExpires :: EpochTime -> Question -> TTL -> CRSet -> Ranking -> Cache -> Maybe Cache
+insertWithExpires :: EpochTime -> Question -> TTL -> Hit -> Ranking -> Cache -> Maybe Cache
 insertWithExpires now k ttl crs rank = withExpire
   where
     ins = insert now k ttl crs rank
@@ -447,10 +467,10 @@ now <+ ttl = now + fromIntegral ttl
 
 infixl 6 <+
 
-toRDatas :: CRSet -> ([RData], [RD_RRSIG])
-toRDatas = unCRSet (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (,)
+toRDatas :: Hit -> ([RData], [RD_RRSIG])
+toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (,)
 
-fromRDatas :: [RData] -> Maybe CRSet
+fromRDatas :: [RData] -> Maybe Hit
 fromRDatas rds = rds `listseq` notVerified rds Nothing Just
   where
     listRnf :: [a] -> ()
@@ -464,7 +484,7 @@ rrSetKey (ResourceRecord rrname rrtype rrclass _rrttl rd)
         Just (Question rrname rrtype rrclass)
     | otherwise = Nothing
 
-takeRRSet :: [ResourceRecord] -> Maybe ((Question -> TTL -> CRSet -> a) -> a)
+takeRRSet :: [ResourceRecord] -> Maybe ((Question -> TTL -> Hit -> a) -> a)
 takeRRSet [] = Nothing
 takeRRSet rrs@(_ : _) = do
     ps <- mapM rrSetKey rrs -- rrtype and rdata are consistent for each RR
@@ -475,7 +495,7 @@ takeRRSet rrs@(_ : _) = do
     return $ \h -> h k' ttl rds
 
 {- FOURMOLU_DISABLE -}
-extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> CRSet -> [ResourceRecord]
+extractRRSet :: Domain -> TYPE -> CLASS -> TTL -> Hit -> [ResourceRecord]
 extractRRSet dom ty cls ttl crs =
     [ResourceRecord dom ty cls ttl rd | rd <- rds] ++
     [ResourceRecord dom RRSIG cls ttl $ DNS.toRData sig | sig <- ss]
@@ -486,7 +506,7 @@ extractRRSet dom ty cls ttl crs =
 cpsInsertSection
     :: [ResourceRecord]
     -> Ranking
-    -> ([[ResourceRecord]], [(Question -> TTL -> CRSet -> Ranking -> a) -> a])
+    -> ([[ResourceRecord]], [(Question -> TTL -> Hit -> Ranking -> a) -> a])
 cpsInsertSection rs0 r0 = (errRS, iset rrss r0)
   where
     key rr = (DNS.rrname rr, DNS.rrtype rr, DNS.rrclass rr)
@@ -498,23 +518,16 @@ cpsInsertSection rs0 r0 = (errRS, iset rrss r0)
 cpsInsertNegative
     :: Domain
     -> Domain -> TYPE -> TTL -> Ranking
-    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
-cpsInsertNegative soaDom dom typ ttl rank h = soaDom `seq` h key ttl (Negative soaDom) rank
+    -> ((Question -> TTL -> Hit -> Ranking -> a) -> a)
+cpsInsertNegative soaDom dom typ ttl rank h = soaDom `seq` h key ttl (negWithSOA soaDom) rank
   where
     key = Question dom typ DNS.IN
-
-{-# DEPRECATED insertSetEmpty "use cpsInsertNegative instead of this" #-}
-insertSetEmpty
-    :: Domain
-    -> Domain -> TYPE -> TTL -> Ranking
-    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
-insertSetEmpty = cpsInsertNegative
 
 cpsInsertNegativeNoSOA
     :: RCODE
     -> Domain -> TYPE -> TTL -> Ranking
-    -> ((Question -> TTL -> CRSet -> Ranking -> a) -> a)
-cpsInsertNegativeNoSOA rcode dom typ ttl rank h = rcode `seq` h key ttl (NegativeNoSOA rcode) rank
+    -> ((Question -> TTL -> Hit -> Ranking -> a) -> a)
+cpsInsertNegativeNoSOA rcode dom typ ttl rank h = rcode `seq` h key ttl (negNoSOA rcode) rank
   where
     key = Question dom typ DNS.IN
 {- FOURMOLU_ENABLE -}
