@@ -123,7 +123,7 @@ resolver
     -> IO ()
 resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
     -- running concurrently for multiple target domains
-    foldr1 concurrently_ $ map (printIt resolv) targets
+    mapConcurrently_ (printIt resolv) targets
   where
     printIt resolv ((q, ctl), tvar) = do
         er <- resolv q ctl
