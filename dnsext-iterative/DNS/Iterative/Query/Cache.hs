@@ -50,6 +50,13 @@ import DNS.Iterative.Query.WitnessInfo
 ---- import for doctest
 import DNS.Iterative.Query.TestEnv
 
+-- $setup
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XFlexibleContexts
+
+_newTestEnv :: IO Env
+_newTestEnv = newTestEnv (const $ pure ()) False 2048
+
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
 withLookupCache :: (MonadIO m, MonadReader Env m) => CacheHandler a -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
@@ -65,6 +72,18 @@ withLookupCache h logMark dom typ = do
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
+-- |
+--
+-- >>> env <- _newTestEnv
+-- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
+-- >>> rrs n ty rds = [ResourceRecord n ty IN 7200 rd | rd <- rds]
+-- >>> pos1 = cacheNoRRSIG (rrs "p1.example.com." A [rd_a "10.0.0.3", rd_a "10.0.0.4"]) Cache.RankAnswer *> lookupRRset "test" "p1.example.com." A
+-- >>> fmap (rrsRDatas . fst) <$> runCxt pos1
+-- Just [10.0.0.3,10.0.0.4]
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRset "test" "nodata1.example.com." A
+-- >>> runCxt nodata1
+-- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
@@ -130,13 +149,6 @@ validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
-
--- $setup
--- >>> :seti -XOverloadedStrings
--- >>> :seti -XFlexibleContexts
-
-_newTestEnv :: IO Env
-_newTestEnv = newTestEnv (const $ pure ()) False 2048
 
 -- | lookup RRs without sigs. empty RR list result for negative case.
 --
