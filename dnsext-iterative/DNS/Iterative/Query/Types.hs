@@ -44,11 +44,8 @@ import Data.Map (Map)
 -- dnsext packages
 import DNS.Do53.Client (EdnsControls (..), FlagOp (..), HeaderControls (..), QueryControls (..), Reply)
 import qualified DNS.Log as Log
-import DNS.RRCache (
-    CRSet,
-    Cache,
-    Ranking,
- )
+import DNS.RRCache (Cache, Ranking)
+import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types hiding (InvalidEDNS)
@@ -89,7 +86,7 @@ data Env = Env
     , localZones_ :: LocalZones
     , stubZones_ :: StubZones
     , maxNegativeTTL_ :: TTL
-    , insert_ :: Question -> TTL -> CRSet -> Ranking -> IO ()
+    , insert_ :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()
     , currentRoot_ :: IORef (Maybe Delegation)

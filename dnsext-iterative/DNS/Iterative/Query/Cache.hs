@@ -70,9 +70,9 @@ lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
   where
     mkAlive :: CacheHandler RRset
     mkAlive ts = Cache.lookupAlive ts result
-    result ttl crs rank = (,) <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
-        positive = Cache.positiveHit notVerified valid
+        positive = Cache.positiveCases notVerified valid
         notVerified = notVerifiedRRset dom typ DNS.IN ttl
         valid = validRRset dom typ DNS.IN ttl
 
@@ -108,17 +108,17 @@ lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
     mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
     result now cache ttl crs rank = (,) <$> hit <*> pure rank
       where
-        hit = Cache.foldHit negative negativeNoSOA positive crs
+        hit = Cache.hitCases1 (Cache.negativeCases negative negativeNoSOA) positive crs
         {- EMPTY hit. empty ranking and SOA result. -}
         negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         negativeNoSOA = Just . LKNegativeNoSOA
-        positive = Just . LKPositive . Cache.positiveHit notVerified valid
+        positive = Just . LKPositive . Cache.positiveCases notVerified valid
         notVerified = notVerifiedRRset dom typ DNS.IN ttl
         valid = validRRset dom typ DNS.IN ttl
 
-    soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.foldHit (const Nothing) (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
-        positive = Cache.positiveHit notVerified valid
+        positive = Cache.positiveCases notVerified valid
         notVerified = notVerifiedRRset srcDom SOA DNS.IN ttl
         valid = validRRset srcDom SOA DNS.IN ttl
         ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
@@ -178,7 +178,7 @@ lookupCache' :: (MonadIO m, MonadReader Env m)
 lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
   where
     mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = (,) <$> Cache.unCRSet soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
 cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
