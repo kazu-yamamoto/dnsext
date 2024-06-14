@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Types (
     Result,
@@ -9,7 +10,11 @@ module DNS.Iterative.Query.Types (
     StubZones,
     Env (..),
     QueryContext (..),
+    queryContext,
     queryContextIN,
+    RequestDO (..),
+    RequestCD (..),
+    RequestAD (..),
     RRset (..),
     Address,
     DEntry (..),
@@ -37,7 +42,7 @@ import Data.Map (Map)
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Client (QueryControls (..), Reply)
+import DNS.Do53.Client (EdnsControls (..), FlagOp (..), HeaderControls (..), QueryControls (..), Reply)
 import qualified DNS.Log as Log
 import DNS.RRCache (
     CRSet,
@@ -96,12 +101,55 @@ data Env = Env
     }
 
 data QueryContext = QueryContext
-    { qcontrol_ :: QueryControls
-    , origQuestion_ :: Question
+    { origQuestion_ :: Question
+    , requestDO_ :: RequestDO
+    , requestCD_ :: RequestCD
+    , requestAD_ :: RequestAD
     }
 
+queryContext :: Question -> QueryControls -> QueryContext
+queryContext q qctl = QueryContext q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
+
 queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
-queryContextIN dom typ qctl = QueryContext qctl $ Question dom typ IN
+queryContextIN dom typ qctl = queryContext (Question dom typ IN) qctl
+
+{- Datatypes for request flags to pass iterative query.
+  * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
+    * https://datatracker.ietf.org/doc/html/rfc4035#section-3.2.1 The DO Bit
+  * CD (Checking Disabled)
+  * AD (Authenticated Data)
+    * https://datatracker.ietf.org/doc/html/rfc6840#section-5.7 Setting the AD Bit on Queries
+      "setting the AD bit in a query as a signal indicating that the requester understands
+       and is interested in the value of the AD bit in the response" -}
+data RequestDO
+    = DnssecOK
+    | NoDnssecOK
+    deriving (Show)
+
+data RequestCD
+    = CheckDisabled
+    | NoCheckDisabled
+    deriving (Show)
+
+data RequestAD
+    = AuthenticatedData
+    | NoAuthenticatedData
+    deriving (Show)
+
+toRequestDO :: QueryControls -> RequestDO
+toRequestDO qctl = case extDO $ qctlEdns qctl of
+    FlagSet -> DnssecOK
+    _ -> NoDnssecOK
+
+toRequestCD :: QueryControls -> RequestCD
+toRequestCD qctl = case cdBit $ qctlHeader qctl of
+    FlagSet -> CheckDisabled
+    _ -> NoCheckDisabled
+
+toRequestAD :: QueryControls -> RequestAD
+toRequestAD qctl = case adBit $ qctlHeader qctl of
+    FlagSet -> AuthenticatedData
+    _ -> NoAuthenticatedData
 
 data QueryError
     = DnsError DNSError [String]

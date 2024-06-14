@@ -21,7 +21,7 @@ import qualified DNS.Log as Log
 import DNS.Iterative.Internal (
     Delegation (..),
     Env (..),
-    QueryContext (..),
+    queryContext,
     getResultIterative,
     newEmptyEnv,
     rootHint,
@@ -131,7 +131,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         getReply n0 ty ident = do
             let n = fromString n0
                 q = Question n ty DNS.IN
-            e <- runDNSQuery (getResultIterative q) cxt $ QueryContext mempty q
+            e <- runDNSQuery (getResultIterative q) cxt $ queryContext q mempty
             return $ replyMessage e ident [DNS.Question n ty DNS.IN]
 
     let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure
