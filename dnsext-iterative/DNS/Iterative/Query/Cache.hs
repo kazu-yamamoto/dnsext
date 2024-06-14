@@ -128,15 +128,10 @@ lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
+lookupRRset logMark dom typ = lookupCache' (const Nothing) (const Nothing) notVerified valid logMark dom typ
   where
-    mkAlive :: CacheHandler RRset
-    mkAlive ts = Cache.lookupAlive ts result
-    result ttl crs rank = (,) <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
-      where
-        positive = Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset dom typ DNS.IN ttl
-        valid = validRRset dom typ DNS.IN ttl
+    notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
+    valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
 guardValid m = do
