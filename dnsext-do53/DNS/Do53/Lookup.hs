@@ -28,6 +28,7 @@ import DNS.Do53.Resolve
 import DNS.Do53.System
 import DNS.Do53.Types
 import DNS.RRCache hiding (lookup)
+import qualified DNS.RRCache as Cache
 import DNS.Types hiding (Seconds)
 import DNS.Types.Internal (section)
 
@@ -101,8 +102,8 @@ lookupCacheSection
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     err <- lookupRRCache (keyForERR q) c
     case err of
-        Just (_, Negative{}) -> return $ Left NameError
-        Just (_, NegativeNoSOA rc) -> pure $ Left $ case rc of
+        Just (_, Negative (NegSOA {})) -> return $ Left NameError
+        Just (_, Negative (NegNoSOA rc)) -> return $ Left $ case rc of
             FormatErr -> FormatError
             ServFail -> ServerFailure
             NameErr -> NameError
@@ -114,7 +115,6 @@ lookupCacheSection env@LookupEnv{..} q@Question{..} = do
             case mx of
                 Nothing -> notCached
                 Just (_, Negative{}) -> return $ Right [] {- NoData -}
-                Just (_, NegativeNoSOA{}) -> return $ Right [] {- NoData -}
                 Just (_, Positive pos) -> return $ Right $ positiveRDatas pos
   where
     notCached = do
@@ -151,7 +151,7 @@ cachePositive cconf c k now rss
     rds = map rdata rss
     ttl = minimum $ map rrttl rss -- rss is non-empty
 
-insertPositive :: CacheConf -> RRCache -> Question -> EpochTime -> CRSet -> TTL -> IO ()
+insertPositive :: CacheConf -> RRCache -> Question -> EpochTime -> Cache.Hit -> TTL -> IO ()
 insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertRRCache k p v c
@@ -161,11 +161,11 @@ insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
 cacheNegative :: CacheConf -> RRCache -> Question -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
     [] -> return () -- does not cache anything
-    soa : _ -> insertNegative cconf c k now (Negative $ rrname soa) $ rrttl soa
+    soa : _ -> insertNegative cconf c k now (Cache.negWithSOA $ rrname soa) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 
-insertNegative :: CacheConf -> RRCache -> Question -> EpochTime -> CRSet -> TTL -> IO ()
+insertNegative :: CacheConf -> RRCache -> Question -> EpochTime -> Cache.Hit -> TTL -> IO ()
 insertNegative _ c k now v ttl = when (ttl /= 0) $ do
     let p = now + life
     insertRRCache k p v c
