@@ -61,13 +61,6 @@ module DNS.RRCache.Types (
     negWithSOA,
     negNoSOA,
 
-    -- * deprecated
-    positiveHit,
-    foldHit,
-    CRSet,
-    unCRSet,
-    insertSetEmpty,
-
     -- * tests
     lookup,
     lookupEither,
@@ -127,10 +120,6 @@ positiveCases notVerified_ valid_ pos = case pos of
     PosNotVerified rds -> notVerified_ $ NE.toList rds
     PosValid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
 
-{-# DEPRECATED positiveHit "use Cache.positiveCases" #-}
-positiveHit :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
-positiveHit = positiveCases
-
 data Negative
     = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
     | NegNoSOA RCODE               {- without SOA -}
@@ -152,20 +141,9 @@ hitCases1 negative_ posivtive_ hit = case hit of
     Negative neg  -> negative_ neg
     Positive pos  -> posivtive_ pos
 
-{-# DEPRECATED foldHit "use Cache.hitCases1 and Cache.negativeCases" #-}
-foldHit :: (Domain -> a) -> (RCODE -> a) -> (Positive -> a) -> Hit -> a
-foldHit soa_ nsoa_ positive_ hit = hitCases1 (negativeCases soa_ nsoa_) positive_ hit
-
 hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
 hitCases soa_ nsoa_ notVerified_ valid_ = hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ valid_)
 {- FOURMOLU_ENABLE -}
-
-{-# DEPRECATED CRSet "use Cache.Hit" #-}
-type CRSet = Hit
-
-{-# DEPRECATED unCRSet "use Cache.hitCases" #-}
-unCRSet :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
-unCRSet = hitCases
 
 mkNotVerified :: RData -> [RData] -> Hit
 mkNotVerified d ds = Positive $ PosNotVerified (d :| ds)
@@ -544,13 +522,6 @@ cpsInsertNegative
 cpsInsertNegative soaDom dom typ ttl rank h = soaDom `seq` h key ttl (negWithSOA soaDom) rank
   where
     key = Question dom typ DNS.IN
-
-{-# DEPRECATED insertSetEmpty "use cpsInsertNegative instead of this" #-}
-insertSetEmpty
-    :: Domain
-    -> Domain -> TYPE -> TTL -> Ranking
-    -> ((Question -> TTL -> Hit -> Ranking -> a) -> a)
-insertSetEmpty = cpsInsertNegative
 
 cpsInsertNegativeNoSOA
     :: RCODE
