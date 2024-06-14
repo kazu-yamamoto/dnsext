@@ -72,6 +72,49 @@ withLookupCache h logMark dom typ = do
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
+{- FOURMOLU_DISABLE -}
+lookupCache' :: (MonadIO m, MonadReader Env m)
+             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
+             -> (TTL -> [RData] -> Maybe a)
+             -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
+             -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
+lookupCache' soah nsoah nvh vh logMark dom typ = withLookupCache mkAlive logMark dom typ
+  where
+    mkAlive now = Cache.lookupAlive now result
+    result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
+{- FOURMOLU_ENABLE -}
+
+-- | lookup RRs without sigs. empty RR list result for negative case.
+--
+-- >>> env <- _newTestEnv
+-- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
+-- >>> fmap (map rdata . fst) <$> runCxt pos1
+-- Just [10.0.0.3]
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
+-- >>> fmap fst <$> runCxt nodata1
+-- Just []
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
+-- >>> fmap fst <$> runCxt nodata2
+-- Just []
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err1
+-- Just []
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err2
+-- Just []
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err3
+-- Just []
+lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) "" dom typ
+  where
+    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+
+lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
+lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) "" dom Cache.ERR
+
 -- |
 --
 -- >>> env <- _newTestEnv
@@ -149,49 +192,6 @@ validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
-
--- | lookup RRs without sigs. empty RR list result for negative case.
---
--- >>> env <- _newTestEnv
--- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
--- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
--- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
--- >>> fmap (map rdata . fst) <$> runCxt pos1
--- Just [10.0.0.3]
--- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
--- >>> fmap fst <$> runCxt nodata1
--- Just []
--- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
--- >>> fmap fst <$> runCxt nodata2
--- Just []
--- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err1
--- Just []
--- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err2
--- Just []
--- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err3
--- Just []
-lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
-  where
-    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
-
-lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
-
-{- FOURMOLU_DISABLE -}
-lookupCache' :: (MonadIO m, MonadReader Env m)
-             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
-             -> (Seconds -> [RData] -> Maybe a)
-             -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
-             -> Domain -> TYPE -> m (Maybe (a, Ranking))
-lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
-  where
-    mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
-{- FOURMOLU_ENABLE -}
 
 cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheNoRRSIG rrs0 rank = do
