@@ -7,7 +7,7 @@ module DNS.Iterative.Query.Cache (
     LookupResult,
     foldLookupResult,
     lookupRRsetEither,
-    lookupCache,
+    lookupRR,
     lookupErrorRCODE,
     cacheDNSError,
     cacheNoData,
@@ -50,6 +50,13 @@ import DNS.Iterative.Query.WitnessInfo
 ---- import for doctest
 import DNS.Iterative.Query.TestEnv
 
+-- $setup
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XFlexibleContexts
+
+_newTestEnv :: IO Env
+_newTestEnv = newTestEnv (const $ pure ()) False 2048
+
 type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
 
 withLookupCache :: (MonadIO m, MonadReader Env m) => CacheHandler a -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
@@ -65,16 +72,64 @@ withLookupCache h logMark dom typ = do
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
     return result
 
-lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache mkAlive logMark dom typ
+{- FOURMOLU_DISABLE -}
+handleHits :: (TTL -> Domain -> Maybe a)
+           -> (TTL -> RCODE -> Maybe a)
+           -> (TTL -> [RData] -> Maybe a)
+           -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
+           -> CacheHandler a
+handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
   where
-    mkAlive :: CacheHandler RRset
-    mkAlive ts = Cache.lookupAlive ts result
-    result ttl crs rank = (,) <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
-      where
-        positive = Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset dom typ DNS.IN ttl
-        valid = validRRset dom typ DNS.IN ttl
+    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nvh ttl) (vh ttl) crs <*> pure rank
+{- FOURMOLU_ENABLE -}
+
+-- | lookup RRs without sigs. empty RR list result for negative case.
+--
+-- >>> env <- _newTestEnv
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupRR "p2.example.com." A
+-- >>> fmap (map rdata . fst) <$> runCxt pos1
+-- Just [10.0.0.3]
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRR "nodata1.example.com." A
+-- >>> fmap fst <$> runCxt nodata1
+-- Just []
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupRR "nodata2.example.com." A
+-- >>> fmap fst <$> runCxt nodata2
+-- Just []
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err1.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err1
+-- Just []
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err2.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err2
+-- Just []
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err3.example.com." Cache.ERR
+-- >>> fmap fst <$> runCxt err3
+-- Just []
+lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupRR dom typ = withLookupCache h "" dom typ
+  where
+    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
+    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+
+lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
+lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
+
+-- |
+--
+-- >>> env <- _newTestEnv
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p1.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRset "test" "p1.example.com." A
+-- >>> fmap (rrsRDatas . fst) <$> runCxt pos1
+-- Just [10.0.0.3,10.0.0.4]
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRset "test" "nodata1.example.com." A
+-- >>> runCxt nodata1
+-- Nothing
+lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
+lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) notVerified valid) logMark dom typ
+  where
+    notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
+    valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
 guardValid m = do
@@ -100,21 +155,42 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 {- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
+--
+-- >>> env <- _newTestEnv
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p0.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRsetEither "test" "p0.example.com." A
+-- >>> fmap (foldLookupResult (\_ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
+-- Just "[10.0.0.3,10.0.0.4]"
+-- >>> soa = cacheNoRRSIG [ResourceRecord "example.com." SOA IN 7200 $ rd_soa "ns1.example.com." "root@example.com." 2024061601 3600 900 604800 900] Cache.RankAuthAnswer
+-- >>> getSOA = foldLookupResult (\rrset _ -> show $ rrsType rrset) (\_ -> "neg-no-soa") (\_ -> "pos-rrset")
+-- >>> getRC = foldLookupResult (\_ _ -> "neg-soa") (\rc -> show rc) (\_ -> "pos-rrset")
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRsetEither "test" "nodata1.example.com." A
+-- >>> fmap (getSOA . fst) <$> runCxt (soa *> nodata1)
+-- Just "SOA"
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupRRsetEither "test" "nodata2.example.com." A
+-- >>> fmap (getRC . fst) <$> runCxt nodata2
+-- Just "NoError"
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err1.example.com." Cache.ERR
+-- >>> fmap (getSOA . fst) <$> runCxt (soa *> err1)
+-- Just "SOA"
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err2.example.com." Cache.ERR
+-- >>> fmap (getRC . fst) <$> runCxt err2
+-- Just "ServFail"
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err3.example.com." Cache.ERR
+-- >>> fmap (getRC . fst) <$> runCxt err3
+-- Just "Refused"
 lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
-lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
+lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
   where
-    mkAlive :: CacheHandler LookupResult
-    mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
-    result now cache ttl crs rank = (,) <$> hit <*> pure rank
+    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA notVerified valid now dom_ typ_ cls cache
       where
-        hit = Cache.hitCases1 (Cache.negativeCases negative negativeNoSOA) positive crs
-        {- EMPTY hit. empty ranking and SOA result. -}
-        negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
-        negativeNoSOA = Just . LKNegativeNoSOA
-        positive = Just . LKPositive . Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset dom typ DNS.IN ttl
-        valid = validRRset dom typ DNS.IN ttl
+        {- negative hit. ranking for empty-data and SOA result. -}
+        negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
+        negativeNoSOA _ttl = Just . LKNegativeNoSOA
+        notVerified ttl = Just . LKPositive . notVerifiedRRset dom typ DNS.IN ttl
+        valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
 
     soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
@@ -130,56 +206,6 @@ validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
-
--- $setup
--- >>> :seti -XOverloadedStrings
--- >>> :seti -XFlexibleContexts
-
-_newTestEnv :: IO Env
-_newTestEnv = newTestEnv (const $ pure ()) False 2048
-
--- | lookup RRs without sigs. empty RR list result for negative case.
---
--- >>> env <- _newTestEnv
--- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
--- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
--- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
--- >>> fmap (map rdata . fst) <$> runCxt pos1
--- Just [10.0.0.3]
--- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
--- >>> fmap fst <$> runCxt nodata1
--- Just []
--- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
--- >>> fmap fst <$> runCxt nodata2
--- Just []
--- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err1
--- Just []
--- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err2
--- Just []
--- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
--- >>> fmap fst <$> runCxt err3
--- Just []
-lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) dom typ
-  where
-    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
-
-lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) dom Cache.ERR
-
-{- FOURMOLU_DISABLE -}
-lookupCache' :: (MonadIO m, MonadReader Env m)
-             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
-             -> (Seconds -> [RData] -> Maybe a)
-             -> (Seconds -> [RData] -> [RD_RRSIG] -> Maybe a)
-             -> Domain -> TYPE -> m (Maybe (a, Ranking))
-lookupCache' soah nsoah nvh vh dom typ = withLookupCache mkAlive "" dom typ
-  where
-    mkAlive now = Cache.lookupAlive now result
-    result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
-{- FOURMOLU_ENABLE -}
 
 cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
 cacheNoRRSIG rrs0 rank = do

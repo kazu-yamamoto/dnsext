@@ -51,7 +51,7 @@ refreshRoot = do
             current <- liftIO $ readIORef curRef
             maybe refresh return current
         checkLife = do
-            nsc <- lookupCache "." NS
+            nsc <- lookupRR "." NS
             maybe refresh (const keep) nsc
     checkLife
   where
