@@ -73,13 +73,14 @@ withLookupCache h logMark dom typ = do
     return result
 
 {- FOURMOLU_DISABLE -}
-handleHits :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+handleHits :: (TTL -> Domain -> Maybe a)
+           -> (TTL -> RCODE -> Maybe a)
            -> (TTL -> [RData] -> Maybe a)
            -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
            -> CacheHandler a
 handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
   where
-    result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nvh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
 -- | lookup RRs without sigs. empty RR list result for negative case.
@@ -107,11 +108,11 @@ handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
 lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
 lookupCache dom typ = withLookupCache h "" dom typ
   where
-    h = handleHits (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
+    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = withLookupCache (handleHits (\_ -> Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
+lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
 
 -- |
 --
@@ -125,7 +126,7 @@ lookupErrorRCODE dom = withLookupCache (handleHits (\_ -> Just NameErr) Just (\_
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache (handleHits (const Nothing) (const Nothing) notVerified valid) logMark dom typ
+lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) notVerified valid) logMark dom typ
   where
     notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
     valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
