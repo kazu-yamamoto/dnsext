@@ -182,19 +182,15 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 -- Just "Refused"
 lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
-lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
+lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
   where
-    mkAlive :: CacheHandler LookupResult
-    mkAlive now dom_ typ_ cls cache = Cache.lookupAlive now (result now cache) dom_ typ_ cls cache
-    result now cache ttl crs rank = (,) <$> hit <*> pure rank
+    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA notVerified valid now dom_ typ_ cls cache
       where
-        hit = Cache.hitCases1 (Cache.negativeCases negative negativeNoSOA) positive crs
-        {- EMPTY hit. empty ranking and SOA result. -}
-        negative soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
-        negativeNoSOA = Just . LKNegativeNoSOA
-        positive = Just . LKPositive . Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset dom typ DNS.IN ttl
-        valid = validRRset dom typ DNS.IN ttl
+        {- negative hit. ranking for empty-data and SOA result. -}
+        negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
+        negativeNoSOA _ttl = Just . LKNegativeNoSOA
+        notVerified ttl = Just . LKPositive . notVerifiedRRset dom typ DNS.IN ttl
+        valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
 
     soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
