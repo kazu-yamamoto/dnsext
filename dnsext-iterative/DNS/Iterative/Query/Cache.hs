@@ -8,7 +8,6 @@ module DNS.Iterative.Query.Cache (
     foldLookupResult,
     lookupRRsetEither,
     lookupRR,
-    lookupCache,
     lookupErrorRCODE,
     cacheDNSError,
     cacheNoData,
@@ -111,10 +110,6 @@ lookupRR dom typ = withLookupCache h "" dom typ
   where
     h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
-
-{-# DEPRECATED lookupCache "use lookupRR" #-}
-lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupCache = lookupRR
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
 lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
