@@ -85,8 +85,7 @@ handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
 -- | lookup RRs without sigs. empty RR list result for negative case.
 --
 -- >>> env <- _newTestEnv
--- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
--- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
 -- >>> fmap (map rdata . fst) <$> runCxt pos1
 -- Just [10.0.0.3]
@@ -117,10 +116,9 @@ lookupErrorRCODE dom = withLookupCache (handleHits (\_ -> Just NameErr) Just (\_
 -- |
 --
 -- >>> env <- _newTestEnv
--- >>> cxtIN = queryContextIN "pqr.example.com." A mempty
--- >>> runCxt c = runReaderT (runReaderT c env) cxtIN
--- >>> rrs n ty rds = [ResourceRecord n ty IN 7200 rd | rd <- rds]
--- >>> pos1 = cacheNoRRSIG (rrs "p1.example.com." A [rd_a "10.0.0.3", rd_a "10.0.0.4"]) Cache.RankAnswer *> lookupRRset "test" "p1.example.com." A
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p1.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRset "test" "p1.example.com." A
 -- >>> fmap (rrsRDatas . fst) <$> runCxt pos1
 -- Just [10.0.0.3,10.0.0.4]
 -- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRset "test" "nodata1.example.com." A
