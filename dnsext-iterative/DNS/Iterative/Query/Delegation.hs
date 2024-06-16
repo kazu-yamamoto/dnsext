@@ -80,7 +80,7 @@ lookupDelegation zone = do
                 []     -> return $ Just noDelegation {- hit null NS list, so no delegation -}
                 _ : _  -> fromDEs . concat <$> mapM (lookupDEntry zone) nss
 
-    maybe (return Nothing) getDelegation =<< lookupCache zone NS
+    maybe (return Nothing) getDelegation =<< lookupRR zone NS
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -151,14 +151,14 @@ fillCachedDelegation d = list noAvail result =<< concat <$> mapM fill des
 {- FOURMOLU_DISABLE -}
 lookupDEntry :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> m [DEntry]
 lookupDEntry zone ns = do
-    withERR =<< lookupCache ns Cache.ERR
+    withERR =<< lookupRR ns Cache.ERR
   where
     withERR Just{}   = pure []  {- skip DEntry with error NS name -}
     withERR Nothing  = do
         let takeV4 = rrListWith A    (`DNS.rdataField` DNS.a_ipv4)    ns const
             takeV6 = rrListWith AAAA (`DNS.rdataField` DNS.aaaa_ipv6) ns const
-        lk4 <- fmap (takeV4 . fst) <$> lookupCache ns A
-        lk6 <- fmap (takeV6 . fst) <$> lookupCache ns AAAA
+        lk4 <- fmap (takeV4 . fst) <$> lookupRR ns A
+        lk6 <- fmap (takeV6 . fst) <$> lookupRR ns AAAA
         pure $ dentryFromCache zone ns lk4 lk6
 {- FOURMOLU_ENABLE -}
 
