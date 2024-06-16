@@ -154,6 +154,31 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 {- FOURMOLU_ENABLE -}
 
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
+--
+-- >>> env <- _newTestEnv
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p0.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRsetEither "test" "p0.example.com." A
+-- >>> fmap (foldLookupResult (\_ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
+-- Just "[10.0.0.3,10.0.0.4]"
+-- >>> soa = cacheNoRRSIG [ResourceRecord "example.com." SOA IN 7200 $ rd_soa "ns1.example.com." "root@example.com." 2024061601 3600 900 604800 900] Cache.RankAuthAnswer
+-- >>> getSOA = foldLookupResult (\rrset _ -> show $ rrsType rrset) (\_ -> "neg-no-soa") (\_ -> "pos-rrset")
+-- >>> getRC = foldLookupResult (\_ _ -> "neg-soa") (\rc -> show rc) (\_ -> "pos-rrset")
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRsetEither "test" "nodata1.example.com." A
+-- >>> fmap (getSOA . fst) <$> runCxt (soa *> nodata1)
+-- Just "SOA"
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupRRsetEither "test" "nodata2.example.com." A
+-- >>> fmap (getRC . fst) <$> runCxt nodata2
+-- Just "NoError"
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err1.example.com." Cache.ERR
+-- >>> fmap (getSOA . fst) <$> runCxt (soa *> err1)
+-- Just "SOA"
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err2.example.com." Cache.ERR
+-- >>> fmap (getRC . fst) <$> runCxt err2
+-- Just "ServFail"
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRRsetEither "test" "err3.example.com." Cache.ERR
+-- >>> fmap (getRC . fst) <$> runCxt err3
+-- Just "Refused"
 lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache mkAlive logMark dom typ
