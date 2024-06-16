@@ -73,14 +73,12 @@ withLookupCache h logMark dom typ = do
     return result
 
 {- FOURMOLU_DISABLE -}
-lookupCache' :: (MonadIO m, MonadReader Env m)
-             => (Domain -> Maybe a) -> (RCODE -> Maybe a)
-             -> (TTL -> [RData] -> Maybe a)
-             -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
-             -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
-lookupCache' soah nsoah nvh vh logMark dom typ = withLookupCache mkAlive logMark dom typ
+handleHits :: (Domain -> Maybe a) -> (RCODE -> Maybe a)
+           -> (TTL -> [RData] -> Maybe a)
+           -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
+           -> CacheHandler a
+handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
   where
-    mkAlive now = Cache.lookupAlive now result
     result ttl crs rank = (,) <$> Cache.hitCases soah nsoah (nvh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
@@ -108,12 +106,13 @@ lookupCache' soah nsoah nvh vh logMark dom typ = withLookupCache mkAlive logMark
 -- >>> fmap fst <$> runCxt err3
 -- Just []
 lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = lookupCache' (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds) "" dom typ
+lookupCache dom typ = withLookupCache h "" dom typ
   where
+    h = handleHits (const $ Just []) (const $ Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing) "" dom Cache.ERR
+lookupErrorRCODE dom = withLookupCache (handleHits (\_ -> Just NameErr) Just (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
 
 -- |
 --
@@ -128,7 +127,7 @@ lookupErrorRCODE dom = lookupCache' (const $ Just NameErr) Just (\_ _ -> Nothing
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = lookupCache' (const Nothing) (const Nothing) notVerified valid logMark dom typ
+lookupRRset logMark dom typ = withLookupCache (handleHits (const Nothing) (const Nothing) notVerified valid) logMark dom typ
   where
     notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
     valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
