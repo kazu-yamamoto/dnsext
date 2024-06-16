@@ -7,6 +7,7 @@ module DNS.Iterative.Query.Cache (
     LookupResult,
     foldLookupResult,
     lookupRRsetEither,
+    lookupRR,
     lookupCache,
     lookupErrorRCODE,
     cacheDNSError,
@@ -87,29 +88,33 @@ handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
 --
 -- >>> env <- _newTestEnv
 -- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
--- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupCache "p2.example.com." A
+-- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupRR "p2.example.com." A
 -- >>> fmap (map rdata . fst) <$> runCxt pos1
 -- Just [10.0.0.3]
--- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata1.example.com." A
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRR "nodata1.example.com." A
 -- >>> fmap fst <$> runCxt nodata1
 -- Just []
--- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupCache "nodata2.example.com." A
+-- >>> nodata2 = cacheNegativeNoSOA NoErr "nodata2.example.com." A 7200 Cache.RankAnswer *> lookupRR "nodata2.example.com." A
 -- >>> fmap fst <$> runCxt nodata2
 -- Just []
--- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err1.example.com." Cache.ERR
+-- >>> err1 = cacheNegative "example.com." "err1.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err1.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err1
 -- Just []
--- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err2.example.com." Cache.ERR
+-- >>> err2 = cacheNegativeNoSOA ServFail "err2.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err2.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err2
 -- Just []
--- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupCache "err3.example.com." Cache.ERR
+-- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err3.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err3
 -- Just []
-lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupCache dom typ = withLookupCache h "" dom typ
+lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupRR dom typ = withLookupCache h "" dom typ
   where
     h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+
+{-# DEPRECATED lookupCache "use lookupRR" #-}
+lookupCache :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupCache = lookupRR
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
 lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
