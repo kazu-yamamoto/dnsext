@@ -63,9 +63,6 @@ module DNS.RRCache.Types (
     negWithSOA,
     negNoSOA,
 
-    mkNotVerified,
-    notVerified,
-
     -- * tests
     lookup,
     lookupEither,
@@ -158,14 +155,6 @@ mkNoSig d ds = Positive $ PosNoSig (d :| ds)
 
 noSig :: [RData] -> a -> (Hit -> a) -> a
 noSig rds nothing just = cons1 rds nothing ((just .) . mkNoSig)
-
-{-# DEPRECATED mkNotVerified "use mkNoSig" #-}
-mkNotVerified :: RData -> [RData] -> Hit
-mkNotVerified = mkNoSig
-
-{-# DEPRECATED notVerified "use noSig" #-}
-notVerified :: [RData] -> a -> (Hit -> a) -> a
-notVerified = noSig
 
 mkCheckDisabled :: RData -> [RData] -> Hit
 mkCheckDisabled d ds = Positive $ PosCheckDisabled (d :| ds)
