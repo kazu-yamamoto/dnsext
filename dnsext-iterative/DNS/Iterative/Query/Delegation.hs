@@ -98,11 +98,10 @@ noV4DEntry (DEstubA6  (_:|_))     = True
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     {- There is delegation information only when there is a selectable NS -}
-    getSec <- asks currentSeconds_
-    maybe (notFound $> noDelegation) (found getSec >>> (<&> hasDelegation)) $ findDelegation nsps adds
+    maybe (notFound $> noDelegation) (found >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where
     rankedDS = Cache.rkAuthority
-    found getSec k = Verify.cases getSec zone dnskeys (getRanked rankedDS) msg dom DS fromDS (nullDS k) ncDS (withDS k)
+    found k = Verify.cases NoCheckDisabled zone dnskeys (getRanked rankedDS) msg dom DS fromDS (nullDS k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     nullDS k = do
         unsignedDelegationOrNoData $> ()

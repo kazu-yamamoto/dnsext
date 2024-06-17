@@ -81,7 +81,7 @@ rootPriming =
     ncNS _ncLog = pure $ left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
 
-    verify getSec hint msgNS = Verify.cases getSec "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
+    verify hint msgNS = Verify.cases NoCheckDisabled "." dnskeys rankedAnswer msgNS "." NS pairNS nullNS ncNS $
         \nsps nsRRset postAction -> do
             let nsSet = Set.fromList $ map fst nsps
                 (axRRs, cacheAX) = withSection rankedAdditional msgNS $ \rrs rank ->
@@ -104,10 +104,9 @@ rootPriming =
         anchor <- asks rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
-        getSec <- asks currentSeconds_
         ips <- delegationIPs hint
         msgNS <- norec True ips "." NS
-        verify getSec hint msgNS
+        verify hint msgNS
 {- FOURMOLU_ENABLE -}
 
 ---
@@ -180,8 +179,7 @@ cachedDNSKEY getSEPs aservers zone = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
-        getSec <- asks currentSeconds_
-        Verify.cases getSec zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+        Verify.cases NoCheckDisabled zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnssecOK aservers name typ = ExceptT $ do

@@ -54,7 +54,7 @@ import DNS.Iterative.Query.Utils
 -- right case is after verified, with valid or invalid RRset.
 cases
     :: (MonadIO m, MonadReader Env m)
-    => IO EpochTime
+    => RequestCD
     -> Domain
     -> [RD_DNSKEY]
     -> (dm -> ([ResourceRecord], Ranking)) -> dm
@@ -63,8 +63,9 @@ cases
     -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
-cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
-    withSection getRanked msg $ \srrs rank -> cases' getSec NoCheckDisabled zone dnskeys srrs rank rrn rrty h nullK ncK rightK
+cases reqCD zone dnskeys getRanked msg rrn rrty h nullK ncK rightK = do
+    getSec <- asks currentSeconds_
+    withSection getRanked msg $ \srrs rank -> cases' getSec reqCD zone dnskeys srrs rank rrn rrty h nullK ncK rightK
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

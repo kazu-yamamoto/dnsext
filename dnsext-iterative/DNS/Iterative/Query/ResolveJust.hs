@@ -217,10 +217,10 @@ servsChildZone nss dom msg =
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
-        getSec <- asks currentSeconds_
+        reqQC <- asksQC requestCD_
         case soaRRs of
             [] -> fallback
-            [_] -> getWorkaround >>= verifySOA getSec
+            [_] -> getWorkaround >>= verifySOA reqQC
             _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
@@ -228,9 +228,9 @@ servsChildZone nss dom msg =
             logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
-        verifySOA getSec wd
+        verifySOA reqQC wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases getSec zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases reqQC zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
           where
             zone = delegationZone wd
             dnskeys = delegationDNSKEY wd
@@ -323,8 +323,7 @@ queryDS
     -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS zone dnskeys ips dom = do
     msg <- norec True ips dom DS
-    getSec <- asks currentSeconds_
-    Verify.cases getSec zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
     ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")

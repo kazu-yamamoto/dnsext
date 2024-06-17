@@ -253,7 +253,7 @@ cacheSectionNegative
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
-    getSec <- asks currentSeconds_
+    reqCD <- asksQC requestCD_
     let {- the minimum of the SOA.MINIMUM field and SOA's TTL
            https://datatracker.ietf.org/doc/html/rfc2308#section-3
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
@@ -261,7 +261,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         fromSOA ResourceRecord{..} = (,) rrname . soaTTL rrttl <$> DNS.fromRData rdata
         cacheNoSOA _rrs rank = cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
         nullSOA = withSection getRanked msg cacheNoSOA
-    Verify.cases getSec zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
+    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
@@ -334,13 +334,12 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    getSec <- asks currentSeconds_
-    (result, cacheX) <- verify getSec
+    (result, cacheX) <- verify =<< asksQC requestCD_
     cacheX
     return result
   where
     qinfo = show dom ++ " " ++ show typ
-    verify getSec = Verify.cases getSec zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
                 {- TODO: add case for check-disabled -}
@@ -380,8 +379,8 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = asks currentSeconds_ >>=
-        \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+    nameErrors = asksQC requestCD_ >>=
+        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,

@@ -182,8 +182,8 @@ resolveTYPE bn typ = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
             cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
-    getSec <- asks currentSeconds_
-    Verify.cases getSec delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
+    reqCD <- asksQC requestCD_
+    Verify.cases reqCD delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
 maxCNameChain :: Int
 maxCNameChain = 16
