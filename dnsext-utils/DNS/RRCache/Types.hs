@@ -54,14 +54,17 @@ module DNS.RRCache.Types (
     hitCases1,
     hitCases,
     --
-    mkNotVerified,
-    notVerified,
+    mkNoSig,
+    noSig,
     mkCheckDisabled,
     checkDisabled,
     mkValid,
     valid,
     negWithSOA,
     negNoSOA,
+
+    mkNotVerified,
+    notVerified,
 
     -- * tests
     lookup,
@@ -112,7 +115,7 @@ type RRSIGs = NonEmpty RD_RRSIG
 
 {- FOURMOLU_DISABLE -}
 data Positive
-    = PosNotVerified RDatas        {- not verified -}
+    = PosNoSig RDatas              {- request RRSIG, but not returned -}
     | PosCheckDisabled RDatas      {- only for check-disabled state. may verify again  -}
     {-- | PosVerifyFailed RDatas   {- verification failed -} {- unused state -} --}
     | PosValid RDatas RRSIGs       {- verification succeeded -}
@@ -120,9 +123,9 @@ data Positive
 
 positiveCases :: ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
 positiveCases notVerified_ checkDisabled_ valid_ pos = case pos of
-    PosNotVerified rds -> notVerified_ $ NE.toList rds
+    PosNoSig rds          -> notVerified_ $ NE.toList rds
     PosCheckDisabled rds  -> checkDisabled_ $ NE.toList rds
-    PosValid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
+    PosValid rds ss       -> valid_ (NE.toList rds) (NE.toList ss)
 
 data Negative
     = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
@@ -150,11 +153,19 @@ hitCases soa_ nsoa_ notVerified_ checkDisabled_ valid_ =
     hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ checkDisabled_ valid_)
 {- FOURMOLU_ENABLE -}
 
-mkNotVerified :: RData -> [RData] -> Hit
-mkNotVerified d ds = Positive $ PosNotVerified (d :| ds)
+mkNoSig :: RData -> [RData] -> Hit
+mkNoSig d ds = Positive $ PosNoSig (d :| ds)
 
+noSig :: [RData] -> a -> (Hit -> a) -> a
+noSig rds nothing just = cons1 rds nothing ((just .) . mkNoSig)
+
+{-# DEPRECATED mkNotVerified "use mkNoSig" #-}
+mkNotVerified :: RData -> [RData] -> Hit
+mkNotVerified = mkNoSig
+
+{-# DEPRECATED notVerified "use noSig" #-}
 notVerified :: [RData] -> a -> (Hit -> a) -> a
-notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
+notVerified = noSig
 
 mkCheckDisabled :: RData -> [RData] -> Hit
 mkCheckDisabled d ds = Positive $ PosCheckDisabled (d :| ds)
@@ -341,8 +352,8 @@ lookup_ mk k (Cache cache _) = do
 -- Nothing
 -- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.IN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.32.1 :| []))) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNoSig (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNoSig (192.168.32.1 :| []))) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
@@ -483,7 +494,7 @@ toRDatas :: Hit -> ([RData], [RD_RRSIG])
 toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe Hit
-fromRDatas rds = rds `listseq` notVerified rds Nothing Just
+fromRDatas rds = rds `listseq` noSig rds Nothing Just
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())
