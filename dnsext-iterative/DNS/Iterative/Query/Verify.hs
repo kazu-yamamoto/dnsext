@@ -64,18 +64,7 @@ cases
     -> ([a] -> RRset -> m () -> m b)
     -> m b
 cases getSec zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
-    withSection getRanked msg $ \srrs rank -> cases' getSec zone dnskeys srrs rank rrn rrty h nullK withNcLog withRRS
-  where
-    withNcLog rrs s = ncK $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
-    withRRS x rrset cache = rightK x rrset (logInv *> cache)
-      where logInv = mayVerifiedRRS (pure ()) logInvalids (const $ pure ()) $ rrsMayVerified rrset
-    logInvalids :: (MonadIO m, MonadReader Env m) => String -> m ()
-    logInvalids es = do
-        (x, xs) <- pure $ case lines es of
-            [] -> ("", [])
-            x : xs -> (": " ++ x, xs)
-        clogLn Log.DEMO (Just Cyan) $ "cases: InvalidRRS" ++ x
-        logLines Log.DEMO xs
+    withSection getRanked msg $ \srrs rank -> cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK rightK
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -87,20 +76,26 @@ cases'
     -> [ResourceRecord] -> Ranking
     -> Domain -> TYPE
     -> (ResourceRecord -> Maybe a)
-    -> m b -> ([ResourceRecord] -> String -> m b)
+    -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
-{- FOURMOLU_ENABLE -}
-cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK rightK0
+cases' getSec zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
     | null xRRs = nullK
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
+    ncK rrs s = ncK0 $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
     sigs = rrsigList zone rrn rrty srrs
-    rightK rrs sortedRRs = do
+    verifiedK rrset@(RRset dom typ cls minTTL rds sigrds) = rightK0 fromRDs rrset (logInv *> cache)
+      where
+        cache = cacheRRset rank dom typ cls minTTL rds sigrds
+        logInv = mayVerifiedRRS (pure ()) (logInvalids . lines) (const $ pure ()) $ rrsMayVerified rrset
+        logInvalids  []    = clogLn Log.DEMO (Just Cyan)  "cases: InvalidRRS"
+        logInvalids (e:es) = clogLn Log.DEMO (Just Cyan) ("cases: InvalidRRS: " ++ e) *> logLines Log.DEMO es
+    rightK rrset sortedRRs = do
         now <- liftIO getSec
-        withVerifiedRRset now dnskeys rrs sortedRRs sigs $ \rrset@(RRset dom typ cls minTTL rds sigrds) ->
-            rightK0 fromRDs rrset (cacheRRset rank dom typ cls minTTL rds sigrds)
+        withVerifiedRRset now dnskeys rrset sortedRRs sigs verifiedK
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 withVerifiedRRset
