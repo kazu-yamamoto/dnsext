@@ -479,7 +479,7 @@ cacheRRset
 cacheRRset rank dom typ cls ttl rds mv =
     mayVerifiedRRS noSig checkDisalbed (const $ pure ()) valid mv
   where
-    noSig = Cache.notVerified rds (pure ()) doCache
+    noSig = Cache.noSig rds (pure ()) doCache
     checkDisalbed = Cache.checkDisabled rds (pure ()) doCache
     valid sigs = Cache.valid rds sigs (pure ()) doCache
     doCache crs = do

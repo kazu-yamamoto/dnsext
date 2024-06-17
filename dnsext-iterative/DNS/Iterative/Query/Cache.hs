@@ -229,7 +229,7 @@ cacheNoRRSIG rrs0 rank = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
             plogLn Log.DEBUG $ unwords ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
-            liftIO $ Cache.notVerified rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
+            liftIO $ Cache.noSig rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
 cacheSection :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
