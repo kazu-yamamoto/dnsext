@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy as BL
 import Network.QUIC
 import Network.QUIC.Client
 import Network.QUIC.Internal hiding (Recv, shared)
+import qualified Network.TLS as TLS
 
 import DNS.DoX.HTTP2
 import DNS.DoX.Imports
@@ -18,17 +19,19 @@ import DNS.DoX.Imports
 quicPersistentResolver :: PersistentResolver
 quicPersistentResolver ri body = run cc $ \conn -> do
     body $ resolv conn ri
-    saveResumptionInfo conn ri
+    saveResumptionInfo conn ri tag
   where
-    cc = getQUICParams ri "doq"
+    tag = nameTag ri "QUIC"
+    cc = getQUICParams ri tag "doq"
 
 quicResolver :: OneshotResolver
 quicResolver ri q qctl = run cc $ \conn -> withTimeout ri $ do
     res <- resolv conn ri q qctl
-    saveResumptionInfo conn ri
+    saveResumptionInfo conn ri tag
     return res
   where
-    cc = getQUICParams ri "doq"
+    tag = nameTag ri "QUIC"
+    cc = getQUICParams ri tag "doq"
 
 resolv :: Connection -> ResolveInfo -> Resolver
 resolv conn ri@ResolveInfo{..} q qctl = do
@@ -43,33 +46,44 @@ resolv conn ri@ResolveInfo{..} q qctl = do
     case decodeChunks now bss of
         Left e -> return $ Left e
         Right msg -> case checkRespM q ident msg of -- fixme
-            Nothing -> return $ Right $ Reply name msg tx rx
+            Nothing -> return $ Right $ Reply tag msg tx rx
             Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions
-    name = nameTag ri "QUIC"
+    tag = nameTag ri "QUIC"
 
-saveResumptionInfo :: Connection -> ResolveInfo -> IO ()
-saveResumptionInfo conn ResolveInfo{..} = do
+saveResumptionInfo :: Connection -> ResolveInfo -> NameTag -> IO ()
+saveResumptionInfo conn ResolveInfo{..} tag = do
     rinfo <- getResumptionInfo conn
     when (isResumptionPossible rinfo) $ do
         let bs = BL.toStrict $ serialise rinfo
-        ractionSaveResumption rinfoActions bs
+        ractionOnResumptionInfo rinfoActions tag bs
 
-getQUICParams :: ResolveInfo -> ByteString -> ClientConfig
-getQUICParams ResolveInfo{..} alpn =
+getQUICParams :: ResolveInfo -> NameTag -> ByteString -> ClientConfig
+getQUICParams ResolveInfo{..} tag alpn0 =
     defaultClientConfig
         { ccServerName = show rinfoIP
         , ccPortName = show rinfoPort
-        , ccALPN = \_ -> return $ Just [alpn]
+        , ccALPN = \_ -> return $ Just [alpn0]
         , ccDebugLog = False
         , ccValidate = False
         , ccResumption = rinfo
         , ccUse0RTT = ractionUseEarlyData rinfoActions
         , ccKeyLog = ractionKeyLog rinfoActions
+        , ccHooks =
+            defaultHooks
+                { onConnectionEstablished = \ConnectionInfo{..} -> do
+                    let ~ver = if version == Version1 then "v1" else "v2"
+                        ~mode = case handshakeMode of
+                            TLS.PreSharedKey -> "Resumption"
+                            TLS.RTT0 -> "0-RTT"
+                            x -> show x
+                        ~msg = ver ++ "(" ++ mode ++ ")"
+                    ractionOnConnectionInfo rinfoActions tag msg
+                }
         }
   where
-    rinfo = case ractionResumptionInfo rinfoActions of
+    rinfo = case ractionResumptionInfo rinfoActions tag of
         Nothing -> defaultResumptionInfo
         Just r -> case deserialiseOrFail $ BL.fromStrict r of
             Left _ -> defaultResumptionInfo

@@ -5,7 +5,7 @@
 module Main (main) where
 
 import Control.Concurrent (forkIO)
-import Control.Concurrent.STM (STM, atomically)
+import Control.Concurrent.STM (STM, atomically, newTQueueIO, tryReadTQueue)
 import Control.Monad (void, when)
 import DNS.Do53.Client (
     FlagOp (..),
@@ -15,6 +15,7 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
+import DNS.Do53.Internal (NameTag (..))
 import DNS.DoX.Client
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
@@ -33,8 +34,9 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Char (toLower)
+import Data.Function (on)
 import Data.IP (IP (..), fromIPv4, fromIPv6b)
-import Data.List (intercalate, isPrefixOf, partition)
+import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
 import qualified Data.UnixTime as T
 import Network.Socket (PortNumber)
 import System.Console.ANSI.Types
@@ -147,6 +149,7 @@ main = do
         putLines a b c = atomically $ putLinesSTM a b c
     void $ forkIO runLogger
     t0 <- T.getUnixTime
+    tq <- newTQueueIO
     ------------------------
     if optIterative
         then do
@@ -154,10 +157,26 @@ main = do
             iterativeQuery putLn putLines target opts
         else do
             let mserver = map (drop 1) at
-            recursiveQuery mserver port putLnSTM putLinesSTM qs opts
+            recursiveQuery mserver port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
     killLogger
+    sentinel tq
+  where
+    sentinel tq = do
+        xs <- readQ
+        let summary = map unzip $ groupBy ((==) `on` fst) $ nub $ sort xs
+        mapM_ printIt summary
+      where
+        printIt (NameTag tag : _, ds) = putStrLn $ tag ++ ": " ++ intercalate ", " (reverse ds)
+        printIt (_, _) = error "printIt"
+        readQ = do
+            mx <- atomically $ tryReadTQueue tq
+            case mx of
+                Nothing -> return []
+                Just x -> do
+                    xs <- readQ
+                    return (x : xs)
 
 ----------------------------------------------------------------
 

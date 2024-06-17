@@ -43,45 +43,45 @@ withTimeout ResolveInfo{..} action = do
 
 http2PersistentResolver :: PersistentResolver
 http2PersistentResolver ri@ResolveInfo{..} body = do
-    let proto = "H2"
     ident <- ractionGenId rinfoActions
     H2.run settings (show rinfoIP) rinfoPort $
-        doHTTP proto ident ri body
+        doHTTP tag ident ri body
   where
-    settings = makeSettings ri
+    tag = nameTag ri "H2"
+    settings = makeSettings ri tag
 
 http2Resolver :: OneshotResolver
 http2Resolver ri@ResolveInfo{..} q qctl = do
-    let proto = "H2"
     ident <- ractionGenId rinfoActions
     withTimeout ri $
         H2.run settings (show rinfoIP) rinfoPort $
-            doHTTPOneshot proto ident ri q qctl
+            doHTTPOneshot tag ident ri q qctl
   where
-    settings = makeSettings ri
+    tag = nameTag ri "H2"
+    settings = makeSettings ri tag
 
 http2cPersistentResolver :: PersistentResolver
 http2cPersistentResolver ri@ResolveInfo{..} body = do
-    let proto = "H2C"
+    let tag = nameTag ri "H2C"
     ident <- ractionGenId rinfoActions
     H2.runH2C H2.defaultSettings (show rinfoIP) rinfoPort $
-        doHTTP proto ident ri body
+        doHTTP tag ident ri body
 
 http2cResolver :: OneshotResolver
 http2cResolver ri@ResolveInfo{..} q qctl = do
-    let proto = "H2C"
+    let tag = nameTag ri "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri $
         H2.runH2C H2.defaultSettings (show rinfoIP) rinfoPort $
-            doHTTPOneshot proto ident ri q qctl
+            doHTTPOneshot tag ident ri q qctl
 
 resolv
-    :: String
+    :: NameTag
     -> Word16
     -> ResolveInfo
     -> SendRequest
     -> Resolver
-resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
+resolv tag ident ResolveInfo{..} sendRequest q qctl =
     sendRequest req $ \rsp -> do
         when (responseStatus rsp /= Just ok200) $ E.throwIO OperationRefused
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp
@@ -90,10 +90,9 @@ resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ Right $ Reply name msg tx rx
+                Nothing -> return $ Right $ Reply tag msg tx rx
                 Just err -> return $ Left err
   where
-    name = nameTag ri proto
     getTime = ractionGetTime rinfoActions
     wire = encodeQuery ident q qctl
     tx = BS.length wire
@@ -104,27 +103,26 @@ resolv proto ident ri@ResolveInfo{..} sendRequest q qctl =
     req = requestBuilder methodPost path hdr $ BB.byteString wire
 
 doHTTP
-    :: String
+    :: NameTag
     -> Word16
     -> ResolveInfo
     -> (Resolver -> IO a)
     -> Client a
-doHTTP proto ident ri body sendRequest _aux =
-    body $ resolv proto ident ri sendRequest
+doHTTP tag ident ri body sendRequest _aux =
+    body $ resolv tag ident ri sendRequest
 
 doHTTPOneshot
-    :: String
+    :: NameTag
     -> Identifier
     -> ResolveInfo
     -> Question
     -> QueryControls
     -> Client (Either DNSError Reply)
-doHTTPOneshot proto ident ri@ResolveInfo{..} q qctl sendRequest _aux = do
+doHTTPOneshot tag ident ri@ResolveInfo{..} q qctl sendRequest _aux = do
     ractionLog rinfoActions Log.DEMO Nothing [qtag]
-    resolv proto ident ri sendRequest q qctl
+    resolv tag ident ri sendRequest q qctl
   where
-    ~name = nameTag ri proto
-    ~qtag = queryTag q name
+    ~qtag = queryTag q tag
 
 clientDoHHeaders :: Int -> RequestHeaders
 clientDoHHeaders len =

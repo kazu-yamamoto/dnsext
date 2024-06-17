@@ -4,13 +4,14 @@
 module DNS.DoX.TLS where
 
 import Codec.Serialise
-import DNS.Do53.Internal
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as BL
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
 import Network.TLS
+
+import DNS.Do53.Internal
 
 tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body =
@@ -19,28 +20,38 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
         recvN <- makeRecvN "" $ H2.recvTLS ctx
         let sendDoT = sendVC $ H2.sendManyTLS ctx
             recvDoT = recvVC rinfoVCLimit recvN
-        vcPersistentResolver "TLS" sendDoT recvDoT ri body
+        vcPersistentResolver tag sendDoT recvDoT ri body
   where
-    settings = makeSettings ri
+    tag = nameTag ri "TLS"
+    settings = makeSettings ri tag
 
-makeSettings :: ResolveInfo -> H2.Settings
-makeSettings ResolveInfo{..} =
+makeSettings :: ResolveInfo -> NameTag -> H2.Settings
+makeSettings ResolveInfo{..} tag =
     H2.defaultSettings
         { H2.settingsValidateCert = False
-        , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions of
+        , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
+        , H2.settingsKeyLogger = ractionKeyLog rinfoActions
+        , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions tag of
             Nothing -> Nothing
             Just r -> case deserialiseOrFail $ BL.fromStrict r of
                 Left _ -> Nothing
                 Right x -> Just x
-        , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
         , H2.settingsSessionManager =
             noSessionManager
                 { sessionEstablish = \sid sd -> do
                     let bs = BL.toStrict $ serialise (sid, sd)
-                    ractionSaveResumption rinfoActions bs
+                    ractionOnResumptionInfo rinfoActions tag bs
                     return Nothing
                 }
-        , H2.settingsKeyLogger = ractionKeyLog rinfoActions
+        , H2.settingsOnServerFinished = \Information{..} -> do
+            let ~ver = if infoVersion == TLS13 then "v1.3" else "v1.2"
+                ~mode = case infoTLS13HandshakeMode of
+                    Nothing -> if infoTLS12Resumption then "Resumption" else "FullHandshake"
+                    Just PreSharedKey -> "Resumption"
+                    Just RTT0 -> "0-RTT"
+                    Just x -> show x
+                ~msg = ver ++ "(" ++ mode ++ ")"
+            ractionOnConnectionInfo rinfoActions tag msg
         }
 
 tlsResolver :: OneshotResolver

@@ -15,13 +15,13 @@ import DNS.DoX.QUIC
 http3PersistentResolver :: PersistentResolver
 http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
-        let proto = "H3"
         ident <- ractionGenId rinfoActions
         run conn cliconf conf $
-            doHTTP proto ident ri body
-        saveResumptionInfo conn ri
+            doHTTP tag ident ri body
+        saveResumptionInfo conn ri tag
   where
-    cc = getQUICParams ri "h3"
+    tag = nameTag ri "H3"
+    cc = getQUICParams ri tag "h3"
     cliconf =
         ClientConfig
             { scheme = "https"
@@ -31,16 +31,16 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
 http3Resolver :: OneshotResolver
 http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
     E.bracket allocSimpleConfig freeSimpleConfig $ \conf -> do
-        let proto = "H3"
         ident <- ractionGenId rinfoActions
         withTimeout ri $ do
             res <-
                 run conn cliconf conf $
-                    doHTTPOneshot proto ident ri q qctl
-            saveResumptionInfo conn ri
+                    doHTTPOneshot tag ident ri q qctl
+            saveResumptionInfo conn ri tag
             return res
   where
-    cc = getQUICParams ri "h3"
+    tag = nameTag ri "H3"
+    cc = getQUICParams ri tag "h3"
     cliconf =
         ClientConfig
             { scheme = "https"

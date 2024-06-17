@@ -62,6 +62,7 @@ module DNS.Do53.Internal (
     LookupEnv (..),
     checkRespM,
     withLookupConfAndResolver,
+    NameTag (..),
     nameTag,
     queryTag,
     raceAny,

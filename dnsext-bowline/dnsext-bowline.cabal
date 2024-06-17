@@ -65,8 +65,8 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        async,
         ansi-terminal,
+        async,
         base16-bytestring,
         bytestring,
         directory,
@@ -80,8 +80,11 @@ executable dug
         iproute,
         network,
         prettyprinter,
+        quic,
         random,
+        serialise,
         stm,
+        tls,
         transformers,
         unix-time
 
