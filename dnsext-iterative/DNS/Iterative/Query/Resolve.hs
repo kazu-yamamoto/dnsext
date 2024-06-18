@@ -153,12 +153,27 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             logLn_ Log.WARN $ "inconsistent ERR cache found: dom=" ++ show name ++ ", " ++ show rrs
             return Nothing
 
-    lookupType bn t = (replyRank =<<) <$> lookupRRsetEither logMark bn t
-    replyRank (x, rank)
-        -- 最も低い ranking は reply の answer に利用しない
-        -- https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1
-        | rank <= RankAdditional = Nothing
-        | otherwise = Just x
+    lookupType bn t = maybe (pure empty) filterLookup =<< lookupRRsetEither logMark bn t
+    filterLookup (x, rank) = do
+        reqCD <- asksQC requestCD_
+        pure $ do
+            guardReply rank
+            guardLookup reqCD x
+            Just x
+    --
+    guardLookup reqCD = foldLookupResult (guardNegative reqCD) (guardNegativeNoSOA reqCD) (guardPositive reqCD)
+    guardNegative reqCD soa soaRank = guardReply soaRank *> guardMayVerified reqCD soa
+    guardNegativeNoSOA CheckDisabled   _rc = empty    {- query again for verification error -}
+    guardNegativeNoSOA NoCheckDisabled _rc = pure ()
+    guardPositive reqCD rrset = guardMayVerified reqCD rrset
+    --
+    guardMayVerified reqCD rrset = mayVerifiedRRS (pure ()) guardCD (\_ -> empty) (\_ -> pure ()) $ rrsMayVerified rrset
+      where guardCD = guardAllowCachedCD reqCD
+    guardAllowCachedCD CheckDisabled    = pure ()
+    guardAllowCachedCD NoCheckDisabled  = empty
+    {- 最も低い ranking は reply の answer に利用しない
+     - https://datatracker.ietf.org/doc/html/rfc2181#section-5.4.1 -}
+    guardReply rank = guard (rank > RankAdditional)
 {- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
