@@ -376,14 +376,15 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
     withOldRank r = do
         guard $ rank > r
         inserted -- replacing rank does not change size
-    eol = now <+ ttl
-    inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
     sized
         | PSQ.size c < xsz = inserted
         | otherwise = do
             (_, l, _, deleted) <- PSQ.minView c
             guard $ eol > l -- Guard if the tried to insert has the smallest lifetime
             Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
+    --
+    inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
+    eol = now <+ ttl
 
 -- insert interface for stub resolver
 stubInsert :: Question -> EpochTime -> Hit -> Cache -> Maybe Cache
