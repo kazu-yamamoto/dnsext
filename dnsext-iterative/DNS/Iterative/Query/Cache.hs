@@ -15,6 +15,7 @@ module DNS.Iterative.Query.Cache (
     failWithCacheOrigName,
     cacheAnswer,
     cacheSection,
+    cacheSectionNegative,
     cacheNoRRSIG,
     cacheNoDelegation,
 ) where
