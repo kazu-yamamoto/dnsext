@@ -181,7 +181,8 @@ cachedDNSKEY getSEPs sas zone = do
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
     verifyDNSKEY msg (s:|ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
-            nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
+            {- no DNSKEY case -}
+            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         Verify.cases NoCheckDisabled zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
