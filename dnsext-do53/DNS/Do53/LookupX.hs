@@ -44,8 +44,9 @@
 --
 --   >>> let badrc = defaultLookupConf { lconfUDPRetry = 1, lconfActions = defaultResolveActions { ractionTimeoutTime = 0 } }
 --   >>>
---   >>> withLookupConf badrc $ \env -> lookupA env "www.example.com"
---   Left RetryLimitExceeded
+--   >>> Left err <- withLookupConf badrc $ \env -> lookupA env "www.example.com"
+--   >>> fst $ unwrapDNSErrorInfo err
+--   RetryLimitExceeded
 --
 --   As is the convention, successful results will always be wrapped
 --   in a 'Right' while errors will be wrapped in a 'Left'.
