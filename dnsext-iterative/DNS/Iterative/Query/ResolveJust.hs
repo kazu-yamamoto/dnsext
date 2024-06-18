@@ -117,9 +117,10 @@ resolveExactDC dc n typ
         stub <- asks stubZones_
         maybe refreshRoot pure $ Stub.lookupStub stub n
     request nss@Delegation{..} = do
+        checkEnabled <- getCheckEnabled
         sas <- delegationIPs nss
         logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
-        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
+        let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         norec withDO sas n typ
 {- FOURMOLU_ENABLE -}
 
@@ -152,22 +153,23 @@ iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 -- snd: delegation for last domain
 iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery (Maybe DNSMessage, Delegation)
 iterative_ _  nss0  []       = pure (Nothing, nss0)
-iterative_ dc nss0 (x : xs)  =
+iterative_ dc nss0 (x : xs)  = do
+    checkEnabled <- getCheckEnabled
     {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
-    recurse . fmap (mayDelegation nss0 id) =<< step nss0
+    recurse . fmap (mayDelegation nss0 id) =<< step checkEnabled nss0
   where
     recurse (m, nss) = list1 (pure (m, nss)) (iterative_ dc nss) xs
     --                                       {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
-    stepQuery :: Delegation -> DNSQuery (DNSMessage, MayDelegation)
-    stepQuery nss@Delegation{..} = do
+    stepQuery :: Bool -> Delegation -> DNSQuery (DNSMessage, MayDelegation)
+    stepQuery checkEnabled nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
         logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
-        let withDO = chainedStateDS nss && not (null delegationDNSKEY)
+        let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
@@ -196,10 +198,10 @@ iterative_ dc nss0 (x : xs)  =
         _          -> throw' ServerFailure
       where throw' e = logLn Log.DEMO ("iterative: " ++ show e ++ " with cached RCODE: " ++ show rc) *> throwDnsError e
 
-    step :: Delegation -> DNSQuery (Maybe DNSMessage, MayDelegation)
-    step nss@Delegation{..} = do
+    step :: Bool -> Delegation -> DNSQuery (Maybe DNSMessage, MayDelegation)
+    step checkEnabled nss@Delegation{..} = do
         let notDelegatedMsg (msg, md) = mayDelegation (Just msg, noDelegation) ((,) Nothing . hasDelegation) md
-            stepQuery' = notDelegatedMsg <$> stepQuery nss
+            stepQuery' = notDelegatedMsg <$> stepQuery checkEnabled nss
             getDelegation FreshD  = stepQuery' {- refresh for fresh parent -}
             getDelegation CachedD = lookupERR >>= maybe (lookupDelegation name >>= maybe stepQuery' withoutMsg) withERRC
             fills md = mapM (fillsDNSSEC nss) =<< mapM (fillDelegation dc) md
@@ -217,10 +219,10 @@ servsChildZone nss dom msg =
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
-        getSec <- asks currentSeconds_
+        reqQC <- asksQC requestCD_
         case soaRRs of
             [] -> fallback
-            [_] -> getWorkaround >>= verifySOA getSec
+            [_] -> getWorkaround >>= verifySOA reqQC
             _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
@@ -228,9 +230,9 @@ servsChildZone nss dom msg =
             logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
             logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
-        verifySOA getSec wd
+        verifySOA reqQC wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases getSec zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases reqQC zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
           where
             zone = delegationZone wd
             dnskeys = delegationDNSKEY wd
@@ -257,6 +259,13 @@ servsChildZone nss dom msg =
 
 fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC nss d = do
+    reqCD <- asksQC requestCD_
+    fillsDNSSEC' reqCD nss d
+
+{- FOURMOLU_DISABLE -}
+fillsDNSSEC' :: RequestCD -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC' CheckDisabled   _nss d = pure d
+fillsDNSSEC' NoCheckDisabled  nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
@@ -264,6 +273,13 @@ fillsDNSSEC nss d = do
         clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
+{- FOURMOLU_ENABLE -}
+
+getCheckEnabled :: MonadReaderQC m => m Bool
+getCheckEnabled = noCD <$> asksQC requestCD_
+  where
+    noCD NoCheckDisabled = True
+    noCD CheckDisabled   = False
 
 -- | Fill DS for delegation info. The result must be `FilledDS` for success query.
 --
@@ -323,8 +339,7 @@ queryDS
     -> DNSQuery (Either String [RD_DS], Color, String)
 queryDS zone dnskeys ips dom = do
     msg <- norec True ips dom DS
-    getSec <- asks currentSeconds_
-    Verify.cases getSec zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
     ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")

@@ -20,7 +20,7 @@ import DNS.Iterative.Query.ZoneMap
 -- >>> :seti -XStandaloneDeriving
 -- >>> deriving instance Eq RRset
 -- >>> :seti -XOverloadedStrings
--- >>> rrset dom typ rds = RRset dom typ IN 3600 rds NotVerifiedRRS
+-- >>> rrset dom typ rds = RRset dom typ IN 3600 rds notValidNoSig
 -- >>> kvp dom ps = (dom, [rrset dom typ rds | (typ, rds) <- ps ])
 -- >>> kvp1 dom typ rds = kvp dom [(typ, rds)]
 
@@ -32,7 +32,7 @@ nameMap lzones =
     rrKey = (,,) <$> rrname <*> rrtype <*> rrclass
     withName []            = error "newEnv.withName: group must not be null!"
     withName rrss@(rrs:_)  = (rrsName rrs, rrss)
-    getRRset rrs = canonicalRRset rrs (const Nothing) (\n t c ttl rds -> Just $ RRset n t c ttl rds NotVerifiedRRS)
+    getRRset rrs = canonicalRRset rrs (const Nothing) (\n t c ttl rds -> Just $ RRset n t c ttl rds notValidNoSig)
     zoneRRsets (_d, _zt, rrs) = mapMaybe getRRset $ groupBy ((==) `on` rrKey) $ sortOn rrKey rrs
     byName = map withName . groupBy ((==) `on` rrsName)
 {- FOURMOLU_ENABLE -}

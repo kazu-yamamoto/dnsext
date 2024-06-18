@@ -76,11 +76,12 @@ withLookupCache h logMark dom typ = do
 handleHits :: (TTL -> Domain -> Maybe a)
            -> (TTL -> RCODE -> Maybe a)
            -> (TTL -> [RData] -> Maybe a)
+           -> (TTL -> [RData] -> Maybe a)
            -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
            -> CacheHandler a
-handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
+handleHits soah nsoah nsh cdh vh now = Cache.lookupAlive now result
   where
-    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nvh ttl) (vh ttl) crs <*> pure rank
+    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nsh ttl) (cdh ttl) (vh ttl) crs <*> pure rank
 {- FOURMOLU_ENABLE -}
 
 -- | lookup RRs without sigs. empty RR list result for negative case.
@@ -108,11 +109,13 @@ handleHits soah nsoah nvh vh now = Cache.lookupAlive now result
 lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
 lookupRR dom typ = withLookupCache h "" dom typ
   where
-    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR (\ttl rds _sigs -> mapRR ttl rds)
+    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR mapRR (\ttl rds _sigs -> mapRR ttl rds)
     mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ _ -> Nothing)) "" dom Cache.ERR
+lookupErrorRCODE dom = withLookupCache h "" dom Cache.ERR
+    where
+      h = handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ -> Nothing) (\_ _ _ -> Nothing)
 
 -- |
 --
@@ -126,9 +129,11 @@ lookupErrorRCODE dom = withLookupCache (handleHits (\_ _ -> Just NameErr) (\_ ->
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) notVerified valid) logMark dom typ
+lookupRRset logMark dom typ =
+    withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) noSig checkDisabled valid) logMark dom typ
   where
-    notVerified ttl rds = Just (notVerifiedRRset dom typ DNS.IN ttl rds)
+    noSig ttl rds = Just (noSigRRset dom typ DNS.IN ttl rds)
+    checkDisabled ttl rds = Just (checkDisabledRRset dom typ DNS.IN ttl rds)
     valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
@@ -184,23 +189,28 @@ lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
 lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
   where
-    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA notVerified valid now dom_ typ_ cls cache
+    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA noSig checkDisabled valid now dom_ typ_ cls cache
       where
         {- negative hit. ranking for empty-data and SOA result. -}
         negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
         negativeNoSOA _ttl = Just . LKNegativeNoSOA
-        notVerified ttl = Just . LKPositive . notVerifiedRRset dom typ DNS.IN ttl
+        noSig ttl = Just . LKPositive . noSigRRset dom typ DNS.IN ttl
+        checkDisabled ttl = Just . LKPositive . checkDisabledRRset dom typ DNS.IN ttl
         valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
 
     soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
       where
-        positive = Cache.positiveCases notVerified valid
-        notVerified = notVerifiedRRset srcDom SOA DNS.IN ttl
+        positive = Cache.positiveCases noSig checkDisabled valid
+        noSig = noSigRRset srcDom SOA DNS.IN ttl
+        checkDisabled = checkDisabledRRset dom typ DNS.IN ttl
         valid = validRRset srcDom SOA DNS.IN ttl
         ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
 
-notVerifiedRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
-notVerifiedRRset dom typ cls ttl rds = RRset dom typ cls ttl rds NotVerifiedRRS
+noSigRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
+noSigRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidNoSig
+
+checkDisabledRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
+checkDisabledRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidCheckDisabled
 
 validRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> [RD_RRSIG] -> RRset
 validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
@@ -219,7 +229,7 @@ cacheNoRRSIG rrs0 rank = do
         insertRRSet <- asks insert_
         hrrs $ \dom typ cls ttl rds -> do
             plogLn Log.DEBUG $ unwords ["RRset:", show (((dom, typ, cls), ttl), rank), ' ' : show rds]
-            liftIO $ Cache.notVerified rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
+            liftIO $ Cache.noSig rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
 cacheSection :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
@@ -243,7 +253,7 @@ cacheSectionNegative
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
-    getSec <- asks currentSeconds_
+    reqCD <- asksQC requestCD_
     let {- the minimum of the SOA.MINIMUM field and SOA's TTL
            https://datatracker.ietf.org/doc/html/rfc2308#section-3
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
@@ -251,7 +261,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         fromSOA ResourceRecord{..} = (,) rrname . soaTTL rrttl <$> DNS.fromRData rdata
         cacheNoSOA _rrs rank = cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
         nullSOA = withSection getRanked msg cacheNoSOA
-    Verify.cases getSec zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
+    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
         let doCache (soaDom, ncttl) = do
                 cacheSOA
                 withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom dom typ ncttl rank
@@ -324,15 +334,15 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    getSec <- asks currentSeconds_
-    (result, cacheX) <- verify getSec
+    (result, cacheX) <- verify =<< asksQC requestCD_
     cacheX
     return result
   where
     qinfo = show dom ++ " " ++ show typ
-    verify getSec = Verify.cases getSec zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
+    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
+                {- TODO: add case for check-disabled -}
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
@@ -369,8 +379,8 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = asks currentSeconds_ >>=
-        \getSec -> Verify.cases getSec zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
+    nameErrors = asksQC requestCD_ >>=
+        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,

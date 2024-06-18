@@ -26,6 +26,10 @@ module DNS.Iterative.Query.Types (
     QueryError (..),
     DNSQuery,
     MonadReaderQC (..),
+    CasesNotValid (..),
+    notValidNoSig,
+    notValidCheckDisabled,
+    notValidInvalid,
     MayVerifiedRRS (..),
     mayVerifiedRRS,
     DFreshState (..),
@@ -159,7 +163,7 @@ data QueryError
 type ContextT m = ReaderT Env (ReaderT QueryContext m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-class MonadReaderQC m where
+class Monad m => MonadReaderQC m where
     asksQC :: (QueryContext -> a) -> m a
 
 instance Monad m => MonadReaderQC (ContextT m) where
@@ -261,19 +265,34 @@ data DEntry
 
 {- FOURMOLU_DISABLE -}
 data MayVerifiedRRS
-    = NotVerifiedRRS       {- not judged valid or invalid -}
-    | InvalidRRS String    {- RRSIG found, but no RRSIG is passed -}
-    | ValidRRS [RD_RRSIG]  {- any RRSIG is passed. [RD_RRSIG] should be not null -}
+    = NotValidRRS CasesNotValid  {- not verified or invalid -}
+    | ValidRRS [RD_RRSIG]        {- any RRSIG is passed. [RD_RRSIG] should be not null -}
     deriving Eq
 
-instance Show MayVerifiedRRS where
-  show = mayVerifiedRRS "NotVerifiedRRS" ("InvalidRRS " ++) (("ValidRRS " ++) . show)
+data CasesNotValid
+    = NV_NoSig                   {- request RRSIG, but not returned -}
+    | NV_CheckDisabled           {- only for check-disabled state, so unknown whether verifiable or not. may verify again -}
+    | NV_Invalid String          {- RRSIG exists, but no good RRSIG is found -}
+    deriving (Eq, Show)
 
-mayVerifiedRRS :: a -> (String -> a) -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
-mayVerifiedRRS notVerified invalid valid m = case m of
-    NotVerifiedRRS  ->  notVerified
-    InvalidRRS es   ->  invalid es
-    ValidRRS sigs   ->  valid sigs
+notValidNoSig :: MayVerifiedRRS
+notValidNoSig = NotValidRRS NV_NoSig
+
+notValidCheckDisabled :: MayVerifiedRRS
+notValidCheckDisabled = NotValidRRS NV_CheckDisabled
+
+notValidInvalid :: String -> MayVerifiedRRS
+notValidInvalid = NotValidRRS . NV_Invalid
+
+instance Show MayVerifiedRRS where
+  show = mayVerifiedRRS "NotValidRRS NoSig" "NotValidRRS CheckDisabled" ("NotValidRRS_Invalid " ++) (("ValidRRS " ++) . show)
+
+mayVerifiedRRS :: a -> a -> (String -> a) -> ([RD_RRSIG] -> a) -> MayVerifiedRRS -> a
+mayVerifiedRRS noSig checkDisabled invalid valid m = case m of
+    NotValidRRS  NV_NoSig           ->  noSig
+    NotValidRRS  NV_CheckDisabled   ->  checkDisabled
+    NotValidRRS (NV_Invalid es)     ->  invalid es
+    ValidRRS sigs                   ->  valid sigs
 {- FOURMOLU_ENABLE -}
 
 data RRset = RRset

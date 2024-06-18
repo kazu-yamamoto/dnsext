@@ -54,8 +54,10 @@ module DNS.RRCache.Types (
     hitCases1,
     hitCases,
     --
-    mkNotVerified,
-    notVerified,
+    mkNoSig,
+    noSig,
+    mkCheckDisabled,
+    checkDisabled,
     mkValid,
     valid,
     negWithSOA,
@@ -110,15 +112,17 @@ type RRSIGs = NonEmpty RD_RRSIG
 
 {- FOURMOLU_DISABLE -}
 data Positive
-    = PosNotVerified RDatas        {- not verified -}
+    = PosNoSig RDatas              {- request RRSIG, but not returned -}
+    | PosCheckDisabled RDatas      {- only for check-disabled state. may verify again  -}
     {-- | PosVerifyFailed RDatas   {- verification failed -} {- unused state -} --}
     | PosValid RDatas RRSIGs       {- verification succeeded -}
     deriving (Eq, Show)
 
-positiveCases :: ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
-positiveCases notVerified_ valid_ pos = case pos of
-    PosNotVerified rds -> notVerified_ $ NE.toList rds
-    PosValid rds ss  -> valid_ (NE.toList rds) (NE.toList ss)
+positiveCases :: ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Positive -> a
+positiveCases notVerified_ checkDisabled_ valid_ pos = case pos of
+    PosNoSig rds          -> notVerified_ $ NE.toList rds
+    PosCheckDisabled rds  -> checkDisabled_ $ NE.toList rds
+    PosValid rds ss       -> valid_ (NE.toList rds) (NE.toList ss)
 
 data Negative
     = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
@@ -141,15 +145,22 @@ hitCases1 negative_ posivtive_ hit = case hit of
     Negative neg  -> negative_ neg
     Positive pos  -> posivtive_ pos
 
-hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
-hitCases soa_ nsoa_ notVerified_ valid_ = hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ valid_)
+hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
+hitCases soa_ nsoa_ notVerified_ checkDisabled_ valid_ =
+    hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ checkDisabled_ valid_)
 {- FOURMOLU_ENABLE -}
 
-mkNotVerified :: RData -> [RData] -> Hit
-mkNotVerified d ds = Positive $ PosNotVerified (d :| ds)
+mkNoSig :: RData -> [RData] -> Hit
+mkNoSig d ds = Positive $ PosNoSig (d :| ds)
 
-notVerified :: [RData] -> a -> (Hit -> a) -> a
-notVerified rds nothing just = cons1 rds nothing ((just .) . mkNotVerified)
+noSig :: [RData] -> a -> (Hit -> a) -> a
+noSig rds nothing just = cons1 rds nothing ((just .) . mkNoSig)
+
+mkCheckDisabled :: RData -> [RData] -> Hit
+mkCheckDisabled d ds = Positive $ PosCheckDisabled (d :| ds)
+
+checkDisabled :: [RData] -> a -> (Hit -> a) -> a
+checkDisabled rds nothing just = cons1 rds nothing ((just .) . mkCheckDisabled)
 
 mkValid :: RData -> [RData] -> RD_RRSIG -> [RD_RRSIG] -> Hit
 mkValid d ds s ss = Positive $ PosValid (d :| ds) (s :| ss)
@@ -168,10 +179,10 @@ negNoSOA :: RCODE -> Hit
 negNoSOA = Negative . NegNoSOA
 
 positiveRDatas :: Positive -> [RData]
-positiveRDatas = positiveCases id const
+positiveRDatas = positiveCases id id const
 
 positiveRRSIGs :: Positive -> a -> ([RD_RRSIG] -> a) -> a
-positiveRRSIGs pos nothing just = positiveCases (const nothing) (\_ sigs -> just sigs) pos
+positiveRRSIGs pos nothing just = positiveCases (const nothing) (const nothing) (\_ sigs -> just sigs) pos
 
 ---
 
@@ -330,8 +341,8 @@ lookup_ mk k (Cache cache _) = do
 -- Nothing
 -- >>> Just c1 = insertRRs 0 [ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.1"), ResourceRecord "a.example.com." A DNS.IN 1 (DNS.rd_a "192.168.32.1"), ResourceRecord "example.com." A DNS.IN 1 (DNS.rd_a "192.168.1.2")] RankAnswer c0
 -- >>> mapM_ print $ dump c1
--- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
--- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNotVerified (192.168.32.1 :| []))) RankAnswer))
+-- (Question {qname = "example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNoSig (192.168.1.1 :| [192.168.1.2]))) RankAnswer))
+-- (Question {qname = "a.example.com.", qtype = A, qclass = IN},(1,Val (Positive (PosNoSig (192.168.32.1 :| []))) RankAnswer))
 insertRRs :: EpochTime -> [ResourceRecord] -> Ranking -> Cache -> Maybe Cache
 insertRRs now rrs rank = updateAll
   where
@@ -363,18 +374,19 @@ insertRRs now rrs rank = updateAll
 insert :: EpochTime -> Question -> TTL -> Hit -> Ranking -> Cache -> Maybe Cache
 insert _ _ _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
-    maybe sized withOldRank lookupRank
+    maybe sized withOldPRI lookupRank
   where
     lookupRank =
         lookupAlive
             now
-            (\_ _crset r -> Just r)
+            (\_ ohit r -> Just (verifiedPRI ohit, r))
             dom
             typ
             cls
             cache
-    withOldRank r = do
-        guard $ rank > r
+    withOldPRI (vp, r) = do
+        let nvp = verifiedPRI crs
+        guard $ (nvp > vp) || (nvp == vp) && rank > r
         inserted -- replacing rank does not change size
     sized
         | PSQ.size c < xsz = inserted
@@ -383,8 +395,14 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
             guard $ eol > l -- Guard if the tried to insert has the smallest lifetime
             Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
     --
+    verifiedPRI = hitCases1 (\_ -> VP_NoCD) (positiveCases (\_ -> VP_NoCD) (\_ -> VP_CD) (\_ _ -> VP_NoCD))
     inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
     eol = now <+ ttl
+
+data VerifiedPriority
+    = VP_CD
+    | VP_NoCD
+    deriving (Eq, Ord)
 
 -- insert interface for stub resolver
 stubInsert :: Question -> EpochTime -> Hit -> Cache -> Maybe Cache
@@ -469,10 +487,10 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 toRDatas :: Hit -> ([RData], [RD_RRSIG])
-toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (,)
+toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe Hit
-fromRDatas rds = rds `listseq` notVerified rds Nothing Just
+fromRDatas rds = rds `listseq` noSig rds Nothing Just
   where
     listRnf :: [a] -> ()
     listRnf = liftRnf (`seq` ())

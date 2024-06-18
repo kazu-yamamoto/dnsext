@@ -146,7 +146,7 @@ cachePositive
     :: CacheConf -> RRCache -> Question -> EpochTime -> [ResourceRecord] -> IO ()
 cachePositive cconf c k now rss
     | ttl == 0 = return () -- does not cache anything
-    | otherwise = notVerified rds (return ()) $ \v -> insertPositive cconf c k now v ttl
+    | otherwise = noSig rds (return ()) $ \v -> insertPositive cconf c k now v ttl
   where
     rds = map rdata rss
     ttl = minimum $ map rrttl rss -- rss is non-empty

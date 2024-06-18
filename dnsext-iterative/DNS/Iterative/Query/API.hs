@@ -112,10 +112,10 @@ ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adF
         | dnssecOK = FlagSet
         | otherwise = FlagClear
     cdOp
-        | dnssecOK, DNS.chkDisable reqF = FlagSet {- only check when DNSSEC OK -}
+        | DNS.chkDisable reqF = FlagSet
         | otherwise = FlagClear
     adOp
-        | dnssecOK, DNS.authenData reqF = FlagSet {- only check when DNSSEC OK -}
+        | DNS.authenData reqF = FlagSet
         | otherwise = FlagClear
 
     dnssecOK = case reqEH of
