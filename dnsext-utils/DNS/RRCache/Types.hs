@@ -374,18 +374,19 @@ insertRRs now rrs rank = updateAll
 insert :: EpochTime -> Question -> TTL -> Hit -> Ranking -> Cache -> Maybe Cache
 insert _ _ _ _ _ (Cache _ xsz) | xsz <= 0 = Nothing
 insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
-    maybe sized withOldRank lookupRank
+    maybe sized withOldPRI lookupRank
   where
     lookupRank =
         lookupAlive
             now
-            (\_ _crset r -> Just r)
+            (\_ ohit r -> Just (verifiedPRI ohit, r))
             dom
             typ
             cls
             cache
-    withOldRank r = do
-        guard $ rank > r
+    withOldPRI (vp, r) = do
+        let nvp = verifiedPRI crs
+        guard $ (nvp > vp) || (nvp == vp) && rank > r
         inserted -- replacing rank does not change size
     sized
         | PSQ.size c < xsz = inserted
@@ -394,8 +395,14 @@ insert now k@(Question dom typ cls) ttl crs rank cache@(Cache c xsz) =
             guard $ eol > l -- Guard if the tried to insert has the smallest lifetime
             Just $ Cache (PSQ.insert k eol (Val crs rank) deleted) xsz
     --
+    verifiedPRI = hitCases1 (\_ -> VP_NoCD) (positiveCases (\_ -> VP_NoCD) (\_ -> VP_CD) (\_ _ -> VP_NoCD))
     inserted = Just $ Cache (PSQ.insert k eol (Val crs rank) c) xsz
     eol = now <+ ttl
+
+data VerifiedPriority
+    = VP_CD
+    | VP_NoCD
+    deriving (Eq, Ord)
 
 -- insert interface for stub resolver
 stubInsert :: Question -> EpochTime -> Hit -> Cache -> Maybe Cache
