@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Cache (
@@ -19,6 +19,7 @@ module DNS.Iterative.Query.Cache (
     cacheNoDelegation,
 ) where
 
+{- FOURMOLU_DISABLE -}
 -- GHC packages
 
 -- other packages
@@ -26,11 +27,11 @@ module DNS.Iterative.Query.Cache (
 -- dnsext packages
 import qualified DNS.Log as Log
 import DNS.RRCache (
-    Ranking,
-    cpsInsertNegative,
-    cpsInsertNegativeNoSOA,
-    rankedAnswer,
-    rankedAuthority,
+    Ranking, rankedAnswer, rankedAuthority,
+    --
+    cpsInsertNegative, cpsInsertNegativeNoSOA,
+    --
+    negativeCases,  positiveCases,
  )
 import qualified DNS.RRCache as Cache
 import DNS.SEC
@@ -49,6 +50,7 @@ import DNS.Iterative.Query.WitnessInfo
 
 ---- import for doctest
 import DNS.Iterative.Query.TestEnv
+{- FOURMOLU_ENABLE -}
 
 -- $setup
 -- >>> :seti -XOverloadedStrings
@@ -57,31 +59,30 @@ import DNS.Iterative.Query.TestEnv
 _newTestEnv :: IO Env
 _newTestEnv = newTestEnv (const $ pure ()) False 2048
 
-type CacheHandler a = EpochTime -> Domain -> TYPE -> CLASS -> Cache.Cache -> Maybe (a, Ranking)
+type LookupHandler a = Cache.Hit -> TTL -> Ranking -> Maybe a
 
-withLookupCache :: (MonadIO m, MonadReader Env m) => CacheHandler a -> String -> Domain -> TYPE -> m (Maybe (a, Ranking))
-withLookupCache h logMark dom typ = do
+{- FOURMOLU_DISABLE -}
+lookupWithHandler :: (MonadIO m, MonadReader Env m)
+                  => (EpochTime -> Cache.Cache -> LookupHandler a)
+                  -> (a -> String) -> String -> Domain -> TYPE -> m (Maybe a)
+lookupWithHandler lh ppr logMark dom typ = do
     cache <- liftIO =<< asks getCache_
-    ts <- liftIO =<< asks currentSeconds_
-    let result = h ts dom typ DNS.IN cache
+    now <- liftIO =<< asks currentSeconds_
+    let result = Cache.lookupAlive now (flip (lh now cache)) dom typ DNS.IN cache
     logLn Log.DEBUG $
-        let pprResult = maybe "miss" (\(_, rank) -> "hit: " ++ show rank) result
+        let pprResult = maybe "miss" (("hit" ++) . ppr) result
             mark ws
                 | null logMark = ws
                 | otherwise = (logMark ++ ":") : ws
          in unwords $ "lookupCache:" : mark [show dom, show typ, show DNS.IN, ":", pprResult]
-    return result
+    pure result
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-handleHits :: (TTL -> Domain -> Maybe a)
-           -> (TTL -> RCODE -> Maybe a)
-           -> (TTL -> [RData] -> Maybe a)
-           -> (TTL -> [RData] -> Maybe a)
-           -> (TTL -> [RData] -> [RD_RRSIG] -> Maybe a)
-           -> CacheHandler a
-handleHits soah nsoah nsh cdh vh now = Cache.lookupAlive now result
-  where
-    result ttl crs rank = (,) <$> Cache.hitCases (soah ttl) (nsoah ttl) (nsh ttl) (cdh ttl) (vh ttl) crs <*> pure rank
+handleHits1 :: (Cache.Negative -> TTL -> Ranking -> Maybe a)
+            -> (Cache.Positive -> TTL -> Ranking -> Maybe a)
+            -> LookupHandler a
+handleHits1 = Cache.hitCases1
 {- FOURMOLU_ENABLE -}
 
 -- | lookup RRs without sigs. empty RR list result for negative case.
@@ -107,15 +108,15 @@ handleHits soah nsoah nsh cdh vh now = Cache.lookupAlive now result
 -- >>> fmap fst <$> runCxt err3
 -- Just []
 lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
-lookupRR dom typ = withLookupCache h "" dom typ
+lookupRR dom typ = lookupWithHandler h ((": " ++) . show . snd) "" dom typ
   where
-    h = handleHits (\_ _ -> Just []) (\_ _ -> Just []) mapRR mapRR (\ttl rds _sigs -> mapRR ttl rds)
-    mapRR ttl = Just . map (ResourceRecord dom typ DNS.IN ttl)
+    h _now _cache = handleHits1 (\_ _ rank -> Just ([], rank)) (positiveCases rrs rrs (\rds _sigs -> rrs rds))
+    rrs rds ttl rank = Just (map (ResourceRecord dom typ DNS.IN ttl) rds, rank)
 
 lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE, Ranking))
-lookupErrorRCODE dom = withLookupCache h "" dom Cache.ERR
-    where
-      h = handleHits (\_ _ -> Just NameErr) (\_ -> Just) (\_ _ -> Nothing) (\_ _ -> Nothing) (\_ _ _ -> Nothing)
+lookupErrorRCODE dom = lookupWithHandler h ((": " ++) . show . snd) "" dom Cache.ERR
+  where
+    h _ _ = handleHits1 (negativeCases (\_ _ -> Just . (,) NameErr) (\rc _ -> Just . (,) rc)) (\_ _ _ -> Nothing)
 
 -- |
 --
@@ -129,12 +130,12 @@ lookupErrorRCODE dom = withLookupCache h "" dom Cache.ERR
 -- >>> runCxt nodata1
 -- Nothing
 lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ =
-    withLookupCache (handleHits (\_ _ -> Nothing) (\_ _ -> Nothing) noSig checkDisabled valid) logMark dom typ
+lookupRRset logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) logMark dom typ
   where
-    noSig ttl rds = Just (noSigRRset dom typ DNS.IN ttl rds)
-    checkDisabled ttl rds = Just (checkDisabledRRset dom typ DNS.IN ttl rds)
-    valid ttl rds sigs = Just (validRRset dom typ DNS.IN ttl rds sigs)
+    h _ _ = handleHits1 (\_ _ _ -> Nothing) (positiveCases noSig checkDisabled valid)
+    noSig rds ttl rank = Just (noSigRRset dom typ DNS.IN ttl rds, rank)
+    checkDisabled rds ttl rank = Just (checkDisabledRRset dom typ DNS.IN ttl rds, rank)
+    valid rds sigs ttl rank = Just (validRRset dom typ DNS.IN ttl rds sigs, rank)
 
 guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
 guardValid m = do
@@ -159,6 +160,7 @@ foldLookupResult negative nsoa positive lkre = case lkre of
     LKPositive rrset       -> positive rrset
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 --
 -- >>> env <- _newTestEnv
@@ -187,24 +189,25 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 -- Just "Refused"
 lookupRRsetEither :: (MonadIO m, MonadReader Env m)
                   => String -> Domain -> TYPE -> m (Maybe (LookupResult, Ranking))
-lookupRRsetEither logMark dom typ = withLookupCache h logMark dom typ
+lookupRRsetEither logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) logMark dom typ
   where
-    h now dom_ typ_ cls cache = handleHits negative negativeNoSOA noSig checkDisabled valid now dom_ typ_ cls cache
+    h now cache = handleHits1 (negativeCases negSOA negNoSOA) (positiveCases noSig checkDisabled valid)
       where
         {- negative hit. ranking for empty-data and SOA result. -}
-        negative ttl soaDom = Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache
-        negativeNoSOA _ttl = Just . LKNegativeNoSOA
-        noSig ttl = Just . LKPositive . noSigRRset dom typ DNS.IN ttl
-        checkDisabled ttl = Just . LKPositive . checkDisabledRRset dom typ DNS.IN ttl
-        valid ttl rds = Just . LKPositive . validRRset dom typ DNS.IN ttl rds
+        negSOA soaDom ttl rank = (,) <$> Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache <*> pure rank
+        negNoSOA rc _ttl rank = Just (LKNegativeNoSOA rc, rank)
+        noSig rds ttl rank = Just (LKPositive $ noSigRRset dom typ DNS.IN ttl rds, rank)
+        checkDisabled rds ttl rank = Just (LKPositive $ checkDisabledRRset dom typ DNS.IN ttl rds, rank)
+        valid rds sigs ttl rank = Just (LKPositive $ validRRset dom typ DNS.IN ttl rds sigs, rank)
 
-    soaResult ettl srcDom sttl crs rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) crs <*> pure rank
+    soaResult ettl srcDom sttl hit rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) hit <*> pure rank
       where
-        positive = Cache.positiveCases noSig checkDisabled valid
-        noSig = noSigRRset srcDom SOA DNS.IN ttl
+        positive = positiveCases noSig checkDisabled valid
+        noSig rds = noSigRRset srcDom SOA DNS.IN ttl rds
         checkDisabled = checkDisabledRRset dom typ DNS.IN ttl
         valid = validRRset srcDom SOA DNS.IN ttl
         ttl = ettl `min` sttl {- minimum ttl of empty-data and soa -}
+{- FOURMOLU_ENABLE -}
 
 noSigRRset :: Domain -> TYPE -> CLASS -> TTL -> [RData] -> RRset
 noSigRRset dom typ cls ttl rds = RRset dom typ cls ttl rds notValidNoSig
