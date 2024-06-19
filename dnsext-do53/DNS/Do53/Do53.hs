@@ -99,7 +99,7 @@ analyzeReply rply qctl0
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: OneshotResolver
 udpResolver ri@ResolveInfo{rinfoActions=ResolveActions{..},..} q _qctl = do
-    ractionLog Log.DEMO Nothing [qtag]
+    unless ractionShortLog $ ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
@@ -178,7 +178,7 @@ tcpResolver ri@ResolveInfo{..} q qctl =
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> Send -> RecvMany -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{rinfoActions=ResolveActions{..}} q _qctl = do
-    ractionLog Log.DEMO Nothing [qtag]
+    unless ractionShortLog $ ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
