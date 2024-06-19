@@ -100,7 +100,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     env <-
         newEnv <&> \env0 ->
             (setOps env0)
-                { logLines_ = putLines
+                { shortLog_ = cnf_short_log
+                , logLines_ = putLines
                 , logDNSTAP_ = putDNSTAP
                 , disableV6NS_ = disable_v6_ns
                 , localZones_ = localZones
