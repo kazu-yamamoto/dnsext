@@ -100,14 +100,14 @@ resolveExact = resolveExactDC 0
 resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
-        logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
+        logLn Log.WARN $ unwords ["resolve-exact: not sub-level delegation limit exceeded:", show n, show typ]
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         anchor <- getAnchor
         (mmsg, nss) <- iterative_ dc anchor $ DNS.superDomains' (delegationZone anchor) n
         let reuseMsg msg
                 | typ == requestDelegationTYPE  = do
-                      logLn Log.DEMO $ "resolve-exact: skip exact query " ++ show (n, typ) ++ " for last no-delegation"
+                      logLn Log.DEMO $ unwords ["resolve-exact: skip exact query", show n, show typ, "for last no-delegation"]
                       pure msg
                 | otherwise                     = request nss
         (,) <$> maybe (request nss) reuseMsg mmsg <*> pure nss
@@ -119,7 +119,8 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
         sas <- delegationIPs nss
-        logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
+        let short = False
+        logLn Log.DEMO $ unwords (["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         norec withDO sas n typ
 {- FOURMOLU_ENABLE -}
