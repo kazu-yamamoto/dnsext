@@ -119,8 +119,8 @@ putDelegation pprs des h fallback  = case pprs of
     PPFull   -> h ppFull
     PPShort  -> h ppShort *> unless (null suffix) (fallback ppFull)
   where
-    ppFull  = "\t" ++ intercalate "\n\t" (map fst pps)
-    ppShort = "\t" ++ intercalate "\n\t" (map fst hd ++ suffix)
+    ppFull  = intercalate "\n" (map (indent . fst) pps)
+    ppShort = intercalate "\n" (map (indent . fst) hd ++ suffix)
     suffix = [ "... " ++ note  ++ " ..." | not $ null tl ]
     note = "plus " ++ show (length tl) ++ " names and " ++ show (sum $ map snd tl) ++ " glues"
     (hd, tl) = splitAt 2 pps
@@ -128,7 +128,7 @@ putDelegation pprs des h fallback  = case pprs of
 {- FOURMOLU_ENABLE -}
 
 ppDelegation :: NonEmpty DEntry -> String
-ppDelegation des = "\t" ++ intercalate "\n\t" (map fst $ ppDelegations des)
+ppDelegation des = intercalate "\n" (map (indent . fst) $ ppDelegations des)
 
 ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
@@ -143,5 +143,4 @@ ppDelegations des =
     toT (DEstubA6 i6s) = ("<stub>", [(IPv6 i, p) | (i, p) <- toList i6s])
     bundle xss@(x : _) = (fst x, concatMap snd xss)
     bundle [] = ("", []) -- never reach
-    pp (d, is) = (show d ++ " " ++ intercalate ", " (map showA is), length is)
-    showA (ip, port) = show ip ++ "@" ++ show port
+    pp (d, is) = (show d ++ " " ++ unwords (map pprAddr is), length is)
