@@ -78,14 +78,14 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
         | typ == ANY       = pure (([], n0), Left (DNS.NotImpl, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
-    logLines_ lv = logLines lv . map (("resolve-with-cname: " ++ logMark ++ ": ") ++)
+    logLines_ lv = logLines lv . pindents ("resolve-with-cname: " ++ logMark)
     logLn_ lv s = logLines_ lv [s]
     called = do
-        let qcstr flag fsel = (("  " ++ flag ++ ": ") ++) . show <$> asksQC fsel
-        do_ <- qcstr "DO" requestDO_
-        cd_ <- qcstr "CD" requestCD_
-        ad_ <- qcstr "AD" requestAD_
-        logLines_ Log.DEMO [ unwords [show n0, show typ, show cls], do_, cd_, ad_ ]
+        let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQC sel
+        do_ <- qbitstr "DnssecOK"           requestDO_  [(DnssecOK,           "1"), (NoDnssecOK,           "0")]
+        cd_ <- qbitstr "CheckDisabled"      requestCD_  [(CheckDisabled,      "1"), (NoCheckDisabled,      "0")]
+        ad_ <- qbitstr "AuthenticatedData"  requestAD_  [(AuthenticatedData,  "1"), (NoAuthenticatedData,  "0")]
+        logLines_ Log.DEMO [unwords [show n0, show typ, show cls], intercalate ", " [do_, cd_, ad_]]
     justCNAME bn = do
         let noCache = do
                 result <- cnameHandler bn

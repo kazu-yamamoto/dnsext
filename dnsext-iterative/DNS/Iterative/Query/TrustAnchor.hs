@@ -76,7 +76,8 @@ rootPriming =
     left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
-        putDelegation PPFull delegationNS (logLn Log.DEMO) (logLn Log.DEBUG . ("zone: \".\":\n" ++))
+        let short = False
+        logLn Log.DEMO $ ppDelegation short delegationNS
     nullNS = pure $ left "no NS RRs"
     ncNS _ncLog = pure $ left "not canonical NS RRs"
     pairNS rr = (,) <$> rdata rr `DNS.rdataField` DNS.ns_domain <*> pure rr
@@ -104,8 +105,11 @@ rootPriming =
         anchor <- asks rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
-        ips <- delegationIPs hint
-        msgNS <- norec True ips "." NS
+        sas <- delegationIPs hint
+        let zone = "."
+        let short = False
+        logLn Log.DEMO $ unwords (["root-priming: query", show zone, show NS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
+        msgNS <- norec True sas zone NS
         verify hint msgNS
 {- FOURMOLU_ENABLE -}
 
@@ -115,7 +119,7 @@ rootPriming =
 fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
-    logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
+    logLn Log.WARN $ "require-dnskey: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     pure d
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
@@ -135,11 +139,9 @@ fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
     zone = delegationZone
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
-    nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" $> d
-    verifyFailed ~es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) $> d
-    query ips = do
-        logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed fill =<< cachedDNSKEY getSEP ips zone
+    nullIPs = logLn Log.WARN "require-dnskey: address list is null" $> d
+    verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
+    query sas = either verifyFailed fill =<< cachedDNSKEY getSEP sas zone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -164,8 +166,10 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY getSEPs aservers zone = do
-    msg <- norec True aservers zone DNSKEY
+cachedDNSKEY getSEPs sas zone = do
+    let short = False
+    logLn Log.DEMO $ unwords (["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
+    msg <- norec True sas zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->

@@ -34,6 +34,18 @@ logLn level s = clogLines level Nothing [s]
 clogLn :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> String -> m ()
 clogLn level color s = clogLines level color [s]
 
+indent :: String -> String
+indent = (replicate 4 ' ' ++)
+
+{- FOURMOLU_DISABLE -}
+pindents :: String -> [String] -> [String]
+pindents _prefix  []     = []
+pindents  prefix (x:xs)  = (prefix ++ ": " ++ x) : map indent xs
+{- FOURMOLU_ENABLE -}
+
+pprAddr :: Address -> String
+pprAddr (ip, port) = show ip ++ "#" ++ show port
+
 {- FOURMOLU_DISABLE -}
 logQueryErrors :: String -> DNSQuery a -> DNSQuery a
 logQueryErrors prefix q = do
@@ -97,26 +109,20 @@ pprMessage title DNSMessage{..} =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-data PPMode
-    = PPShort
-    | PPFull
-    deriving Show
-
-putDelegation :: Applicative f => PPMode -> NonEmpty DEntry -> (String -> f ()) -> (String -> f ()) -> f ()
-putDelegation pprs des h fallback  = case pprs of
-    PPFull   -> h ppFull
-    PPShort  -> h ppShort *> unless (null suffix) (fallback ppFull)
+ppDelegation :: Bool -> NonEmpty DEntry -> String
+ppDelegation short des
+    | short      = ppShort
+    | otherwise  = ppFull
   where
-    ppFull  = "\t" ++ intercalate "\n\t" (map fst pps)
-    ppShort = "\t" ++ intercalate "\n\t" (map fst hd ++ suffix)
-    suffix = [ "... " ++ note  ++ " ..." | not $ null tl ]
-    note = "plus " ++ show (length tl) ++ " names and " ++ show (sum $ map snd tl) ++ " glues"
-    (hd, tl) = splitAt 2 pps
-    pps = ppDelegations des
+    ppFull  = intercalate "\n" [indent s | s <- names]
+    ppShort = intercalate "\n" [indent s | s <- nsHd ++ suffix]
+    suffix = [ "... " ++ note  ++ " ..." | not $ null glTl ]
+    note = "plus " ++ show (length glTl) ++ " names and " ++ show (sum glTl) ++ " glues"
+    nsHd = take n names
+    glTl = drop n glues
+    n = 2
+    (names, glues) = unzip $ ppDelegations des
 {- FOURMOLU_ENABLE -}
-
-ppDelegation :: NonEmpty DEntry -> String
-ppDelegation des = "\t" ++ intercalate "\n\t" (map fst $ ppDelegations des)
 
 ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
@@ -131,5 +137,4 @@ ppDelegations des =
     toT (DEstubA6 i6s) = ("<stub>", [(IPv6 i, p) | (i, p) <- toList i6s])
     bundle xss@(x : _) = (fst x, concatMap snd xss)
     bundle [] = ("", []) -- never reach
-    pp (d, is) = (show d ++ " " ++ intercalate ", " (map showA is), length is)
-    showA (ip, port) = show ip ++ "@" ++ show port
+    pp (d, is) = (show d ++ " " ++ unwords (map pprAddr is), length is)

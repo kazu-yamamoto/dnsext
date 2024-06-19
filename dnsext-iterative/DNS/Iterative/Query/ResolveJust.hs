@@ -100,14 +100,14 @@ resolveExact = resolveExactDC 0
 resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
-        logLn Log.WARN $ "resolve-exact: not sub-level delegation limit exceeded: " ++ show (n, typ)
+        logLn Log.WARN $ unwords ["resolve-exact: not sub-level delegation limit exceeded:", show n, show typ]
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         anchor <- getAnchor
         (mmsg, nss) <- iterative_ dc anchor $ DNS.superDomains' (delegationZone anchor) n
         let reuseMsg msg
                 | typ == requestDelegationTYPE  = do
-                      logLn Log.DEMO $ "resolve-exact: skip exact query " ++ show (n, typ) ++ " for last no-delegation"
+                      logLn Log.DEMO $ unwords ["resolve-exact: skip exact query", show n, show typ, "for last no-delegation"]
                       pure msg
                 | otherwise                     = request nss
         (,) <$> maybe (request nss) reuseMsg mmsg <*> pure nss
@@ -119,7 +119,8 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
         sas <- delegationIPs nss
-        logLn Log.DEMO $ unwords (["resolve-exact: query", show (n, typ), "servers:"] ++ [show sa | sa <- sas])
+        let short = False
+        logLn Log.DEMO $ unwords (["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         norec withDO sas n typ
 {- FOURMOLU_ENABLE -}
@@ -168,7 +169,8 @@ iterative_ dc nss0 (x : xs)  = do
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
-        logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
+        let short = False
+        logLn Log.DEMO $ unwords (["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
@@ -186,7 +188,8 @@ iterative_ dc nss0 (x : xs)  = do
         (,) msg <$> (handlers =<< delegationWithCache zone dnskeys name msg)
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
-        putDelegation PPFull delegationNS (zplogLn Log.DEMO) (zplogLn Log.DEBUG)
+        let short = False
+        zplogLn Log.DEMO $ ppDelegation short delegationNS
 
     lookupERR = fmap fst <$> lookupErrorRCODE name
     withoutMsg md = pure (Nothing, md)
@@ -269,7 +272,7 @@ fillsDNSSEC' NoCheckDisabled  nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
-        logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
+        logLn Log.WARN $ "require-ds-and-dnskey: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
         clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
@@ -303,15 +306,15 @@ fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
 fillDelegationDS src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
     | NotFilledDS o <- delegationDS src = do
-        logLn Log.WARN $ "fillDelegationDS: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
+        logLn Log.WARN $ "require-ds: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
         AnchorSEP {} -> pure dest {- specified trust-anchor dnskey case -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
-            logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (list1 nullIPs query =<< delegationIPs src) fill =<< lookupDS delegationZone
+            logLn Log.DEMO $ "require-ds: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
+            maybe (list1 nullAddrs query =<< delegationIPs src) fill =<< lookupDS delegationZone
   where
     dsNegative _soa _rank = Just []
     dsNegativeNoSOA rc = guard (rc == NoErr) $> []
@@ -320,16 +323,17 @@ fillDelegationDS src dest
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
     lookupDS zone = lookupRRsetEither "" zone DS <&> (>>= dsLookupResult)
     fill dss = pure dest{delegationDS = FilledDS dss}
-    nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" $> dest
-    verifyFailed ~es = logLn Log.WARN ("fillDelegationDS: " ++ es) *> throwDnsError DNS.ServerFailure
-    query ips = do
+    nullAddrs = logLn Log.WARN "require-ds: address list is null" $> dest
+    verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure
+    query sas = do
         let zone = delegationZone dest
             result (e, ~verifyColor, ~verifyMsg) = do
                 let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
                 clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
-        logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
-        result =<< queryDS (delegationZone src) (delegationDNSKEY src) ips zone
+        let short = False
+        logLn Log.DEMO $ unwords (["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
+        result =<< queryDS (delegationZone src) (delegationDNSKEY src) sas zone
 
 queryDS
     :: Domain

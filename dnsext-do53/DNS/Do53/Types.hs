@@ -257,6 +257,8 @@ data ResolveActions = ResolveActions
     -- ^ Setting socket options.
     , ractionLog :: PutLines
     -- ^ Logging.
+    , ractionShortLog :: Bool
+    -- ^ flag for short-log mode
     , ractionKeyLog :: String -> IO ()
     -- ^ Logging for TLS main secrets.
     , ractionSaveResumption :: ByteString -> IO ()
@@ -278,6 +280,7 @@ defaultResolveActions =
         , ractionGetTime = getEpochTime
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
+        , ractionShortLog = False
         , ractionKeyLog = \ ~_ -> return ()
         , ractionSaveResumption = \_ -> return ()
         , ractionResumptionInfo = Nothing
