@@ -8,10 +8,7 @@ module DNS.Iterative.Query.Norec (norec') where
 import DNS.Do53.Client (
     FlagOp (..),
     defaultResolveActions,
-    ractionGenId,
-    ractionGetTime,
-    ractionLog,
-    ractionTimeoutTime,
+    ResolveActions (..),
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (
@@ -34,6 +31,7 @@ import DNS.Iterative.Query.Types
   * EDNS must be enable for DNSSEC OK request -}
 norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
 norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
+    let short = False
     let ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
@@ -43,6 +41,7 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
+                        , ractionShortLog = short
                         , ractionTimeoutTime = 10000000
                         }
                 , rinfoUDPRetry = 3
