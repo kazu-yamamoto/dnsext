@@ -127,8 +127,21 @@ putDelegation pprs des h fallback  = case pprs of
     pps = ppDelegations des
 {- FOURMOLU_ENABLE -}
 
-ppDelegation :: NonEmpty DEntry -> String
-ppDelegation des = intercalate "\n" (map (indent . fst) $ ppDelegations des)
+{- FOURMOLU_DISABLE -}
+ppDelegation :: Bool -> NonEmpty DEntry -> String
+ppDelegation short des
+    | short      = ppShort
+    | otherwise  = ppFull
+  where
+    ppFull  = intercalate "\n" [indent s | s <- names]
+    ppShort = intercalate "\n" [indent s | s <- nsHd ++ suffix]
+    suffix = [ "... " ++ note  ++ " ..." | not $ null glTl ]
+    note = "plus " ++ show (length glTl) ++ " names and " ++ show (sum glTl) ++ " glues"
+    nsHd = take n names
+    glTl = drop n glues
+    n = 2
+    (names, glues) = unzip $ ppDelegations des
+{- FOURMOLU_ENABLE -}
 
 ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
