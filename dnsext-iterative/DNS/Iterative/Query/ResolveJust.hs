@@ -271,7 +271,7 @@ fillsDNSSEC' NoCheckDisabled  nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
-        logLn Log.WARN $ "fillsDNSSEC: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
+        logLn Log.WARN $ "require-ds-and-dnskey: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
         clogLn Log.DEMO (Just Red) $ zone ++ ": verification error. dangling DS chain. DS exists, and DNSKEY does not exists"
         throwDnsError DNS.ServerFailure
     return filled
@@ -305,15 +305,15 @@ fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
 fillDelegationDS src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
     | NotFilledDS o <- delegationDS src = do
-        logLn Log.WARN $ "fillDelegationDS: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
+        logLn Log.WARN $ "require-ds: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
         AnchorSEP {} -> pure dest {- specified trust-anchor dnskey case -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
-            logLn Log.DEMO $ "fillDelegationDS: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (list1 nullIPs query =<< delegationIPs src) fill =<< lookupDS delegationZone
+            logLn Log.DEMO $ "require-ds: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
+            maybe (list1 nullAddrs query =<< delegationIPs src) fill =<< lookupDS delegationZone
   where
     dsNegative _soa _rank = Just []
     dsNegativeNoSOA rc = guard (rc == NoErr) $> []
@@ -322,16 +322,17 @@ fillDelegationDS src dest
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
     lookupDS zone = lookupRRsetEither "" zone DS <&> (>>= dsLookupResult)
     fill dss = pure dest{delegationDS = FilledDS dss}
-    nullIPs = logLn Log.WARN "fillDelegationDS: ip list is null" $> dest
-    verifyFailed ~es = logLn Log.WARN ("fillDelegationDS: " ++ es) *> throwDnsError DNS.ServerFailure
-    query ips = do
+    nullAddrs = logLn Log.WARN "require-ds: address list is null" $> dest
+    verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure
+    query sas = do
         let zone = delegationZone dest
             result (e, ~verifyColor, ~verifyMsg) = do
                 let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
                 clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
-        logLn Log.DEMO . unwords $ ["fillDelegationDS: query", show (zone, DS), "servers:"] ++ [show ip | ip <- ips]
-        result =<< queryDS (delegationZone src) (delegationDNSKEY src) ips zone
+        let short = False
+        logLn Log.DEMO $ unwords (["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
+        result =<< queryDS (delegationZone src) (delegationDNSKEY src) sas zone
 
 queryDS
     :: Domain
