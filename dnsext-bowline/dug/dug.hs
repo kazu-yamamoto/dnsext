@@ -151,7 +151,7 @@ main = do
     if optIterative
         then do
             target <- checkIterative at qs
-            iterativeQuery optDisableV6NS putLn putLines target
+            iterativeQuery putLn putLines target opts
         else do
             let mserver = map (drop 1) at
             recursiveQuery mserver port putLnSTM putLinesSTM qs opts
