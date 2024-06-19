@@ -98,8 +98,8 @@ analyzeReply rply qctl0
 -- | A resolver using UDP.
 --   UDP attempts must use the same ID and accept delayed answers.
 udpResolver :: OneshotResolver
-udpResolver ri@ResolveInfo{..} q _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [qtag]
+udpResolver ri@ResolveInfo{rinfoActions=ResolveActions{..},..} q _qctl = do
+    ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
@@ -113,10 +113,10 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
     ~qtag = queryTag q name
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
-        ractionSetSockOpt rinfoActions $ UDP.udpSocket sock
+        ractionSetSockOpt $ UDP.udpSocket sock
         let send = UDP.send sock
             recv = UDP.recv sock
-        ident <- ractionGenId rinfoActions
+        ident <- ractionGenId
         loop rinfoUDPRetry ident qctl send recv
 
     loop 0 _ _ _ _ = return $ Left RetryLimitExceeded
@@ -132,17 +132,17 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
 
     sendQueryRecvAnswer ident qctl send recv = do
         let qry = encodeQuery ident q qctl
-        timeout (ractionTimeoutTime rinfoActions) $ do
+        timeout ractionTimeoutTime $ do
             _ <- send qry
             let tx = BS.length qry
             recvAnswer ident recv tx
 
     recvAnswer ident recv tx = do
         ans <- recv
-        now <- ractionGetTime rinfoActions
+        now <- ractionGetTime
         case decodeAt now ans of
             Left e -> do
-                ractionLog rinfoActions Log.DEBUG Nothing $
+                ractionLog Log.DEBUG Nothing $
                     let showHex8 w
                             | w >= 16 = showHex w
                             | otherwise = ('0' :) . showHex w
@@ -155,7 +155,7 @@ udpResolver ri@ResolveInfo{..} q _qctl = do
                     return $ Reply name msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
-                    ractionLog rinfoActions Log.DEBUG Nothing $
+                    ractionLog Log.DEBUG Nothing $
                         ["udpResolver.recvAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
                     recvAnswer ident recv tx
 
@@ -177,8 +177,8 @@ tcpResolver ri@ResolveInfo{..} q qctl =
 
 -- | Generic resolver for virtual circuit.
 vcResolver :: String -> Send -> RecvMany -> OneshotResolver
-vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
-    ractionLog rinfoActions Log.DEMO Nothing [qtag]
+vcResolver proto send recv ri@ResolveInfo{rinfoActions=ResolveActions{..}} q _qctl = do
+    ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
         Right r -> return r
@@ -206,9 +206,9 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
 
     sendQueryRecvAnswer qctl = do
         -- Using a fresh identifier.
-        ident <- ractionGenId rinfoActions
+        ident <- ractionGenId
         let qry = encodeQuery ident q qctl
-        mres <- timeout (ractionTimeoutTime rinfoActions) $ do
+        mres <- timeout ractionTimeoutTime $ do
             _ <- send qry
             let tx = BS.length qry
             recvAnswer ident tx
@@ -218,7 +218,7 @@ vcResolver proto send recv ri@ResolveInfo{..} q _qctl = do
 
     recvAnswer ident tx = do
         (rx, bss) <- recv
-        now <- ractionGetTime rinfoActions
+        now <- ractionGetTime
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
