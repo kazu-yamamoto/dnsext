@@ -82,7 +82,8 @@ type StubZones = Map Domain [Delegation]
 -- Monad and context
 
 data Env = Env
-    { logLines_ :: Log.PutLines
+    { shortLog_ :: Bool
+    , logLines_ :: Log.PutLines
     , logDNSTAP_ :: DNSTAP.Message -> IO ()
     , disableV6NS_ :: Bool
     , rootAnchor_ :: MayFilledDS

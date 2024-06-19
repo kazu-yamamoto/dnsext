@@ -63,7 +63,8 @@ newEmptyEnv = do
     let TimeCache {..} = noneTimeCache
     pure $
         Env
-        { logLines_ = \_ _ ~_ -> pure ()
+        { shortLog_ = False
+        , logLines_ = \_ _ ~_ -> pure ()
         , logDNSTAP_ = \_ -> pure ()
         , disableV6NS_ = False
         , rootAnchor_ = FilledDS [rootSepDS]
