@@ -118,7 +118,7 @@ rootPriming =
 fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
-    logLn Log.WARN $ "fillDelegationDNSKEY: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
+    logLn Log.WARN $ "require-dnskey: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     pure d
 fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
 fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
@@ -138,11 +138,9 @@ fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
     zone = delegationZone
     toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
-    nullIPs = logLn Log.WARN "fillDelegationDNSKEY: ip list is null" $> d
-    verifyFailed ~es = logLn Log.WARN ("fillDelegationDNSKEY: " ++ es) $> d
-    query ips = do
-        logLn Log.DEMO . unwords $ ["fillDelegationDNSKEY: query", show (zone, DNSKEY), "servers:"] ++ [show ip | ip <- ips]
-        either verifyFailed fill =<< cachedDNSKEY getSEP ips zone
+    nullIPs = logLn Log.WARN "require-dnskey: address list is null" $> d
+    verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
+    query sas = either verifyFailed fill =<< cachedDNSKEY getSEP sas zone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -167,8 +165,10 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY getSEPs aservers zone = do
-    msg <- norec True aservers zone DNSKEY
+cachedDNSKEY getSEPs sas zone = do
+    let short = False
+    logLn Log.DEMO $ unwords (["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
+    msg <- norec True sas zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
