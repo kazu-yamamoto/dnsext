@@ -34,6 +34,18 @@ logLn level s = clogLines level Nothing [s]
 clogLn :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> String -> m ()
 clogLn level color s = clogLines level color [s]
 
+indent :: String -> String
+indent = (replicate 4 ' ' ++)
+
+{- FOURMOLU_DISABLE -}
+pindents :: String -> [String] -> [String]
+pindents _prefix  []     = []
+pindents  prefix (x:xs)  = (prefix ++ ": " ++ x) : map indent xs
+{- FOURMOLU_ENABLE -}
+
+pprAddr :: Address -> String
+pprAddr (ip, port) = show ip ++ "#" ++ show port
+
 {- FOURMOLU_DISABLE -}
 logQueryErrors :: String -> DNSQuery a -> DNSQuery a
 logQueryErrors prefix q = do
