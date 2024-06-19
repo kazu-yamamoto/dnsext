@@ -28,6 +28,7 @@ data Config = Config
     { cnf_log :: Bool
     , cnf_log_output :: Log.Output
     , cnf_log_level :: Log.Level
+    , cnf_short_log :: Bool
     , cnf_cert_file :: FilePath
     , cnf_key_file :: FilePath
     , cnf_trust_anchor_file :: [FilePath]
@@ -79,6 +80,7 @@ defaultConfig =
         { cnf_log = True
         , cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
+        , cnf_short_log = False
         , cnf_cert_file = "fullchain.pem"
         , cnf_key_file = "privkey.pem"
         , cnf_trust_anchor_file = []
@@ -154,6 +156,7 @@ showConfig2 conf =
     [ -- field "capabilities" numCapabilities
       field'_ "log output" (showOut . cnf_log_output)
     , field' "log level" cnf_log_level
+    , field' "short log" cnf_short_log
     , field' "max cache size" cnf_cache_size
     , field' "disable queries to IPv6 NS" cnf_disable_v6_ns
     , field' "cachers" cnf_cachers
@@ -177,6 +180,7 @@ makeConfig def conf =
         { cnf_log = get "log" cnf_log
         , cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
+        , cnf_short_log = get "short-log" cnf_short_log
         , cnf_cert_file = get "cert-file" cnf_cert_file
         , cnf_key_file = get "key-file" cnf_key_file
         , cnf_trust_anchor_file = getTrustAnchorFile conf

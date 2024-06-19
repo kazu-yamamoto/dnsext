@@ -119,7 +119,7 @@ resolveExactDC dc n typ
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
         sas <- delegationIPs nss
-        let short = False
+        short <- asks shortLog_
         logLn Log.DEMO $ unwords (["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         norec withDO sas n typ
@@ -169,7 +169,7 @@ iterative_ dc nss0 (x : xs)  = do
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
-        let short = False
+        short <- asks shortLog_
         logLn Log.DEMO $ unwords (["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -188,7 +188,7 @@ iterative_ dc nss0 (x : xs)  = do
         (,) msg <$> (handlers =<< delegationWithCache zone dnskeys name msg)
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
-        let short = False
+        short <- asks shortLog_
         zplogLn Log.DEMO $ ppDelegation short delegationNS
 
     lookupERR = fmap fst <$> lookupErrorRCODE name
@@ -331,7 +331,7 @@ fillDelegationDS src dest
                 let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
                 clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
                 either verifyFailed fill e
-        let short = False
+        short <- asks shortLog_
         logLn Log.DEMO $ unwords (["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         result =<< queryDS (delegationZone src) (delegationDNSKEY src) sas zone
 

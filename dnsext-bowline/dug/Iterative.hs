@@ -12,21 +12,23 @@ import System.Timeout (timeout)
 
 import DNS.Types
 
+import Types (Options (..))
+
 iterativeQuery
-    :: Bool
-    -> (DNSMessage -> IO ())
+    :: (DNSMessage -> IO ())
     -> Log.PutLines
     -> (Question, QueryControls)
+    -> Options
     -> IO ()
-iterativeQuery disableV6NS putLn putLines qq = do
-    env <- setup disableV6NS putLines
+iterativeQuery putLn putLines qq opts = do
+    env <- setup putLines opts
     er <- resolve env qq
     case er of
         Left e -> print e
         Right msg -> putLn msg
 
-setup :: Bool -> Log.PutLines -> IO Env
-setup disableV6NS putLines = do
+setup :: Log.PutLines -> Options -> IO Env
+setup putLines Options{..} = do
     tcache@TimeCache{..} <- newTimeCache
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 getTime
     cacheOps <- Cache.newRRCacheOps cacheConf
@@ -34,8 +36,9 @@ setup disableV6NS putLines = do
         setOps = setRRCacheOps cacheOps . setTimeCache tcache
     newEnv <&> \env0 ->
         (setOps env0)
-            { logLines_ = putLines
-            , disableV6NS_ = disableV6NS
+            { shortLog_ = optShortLog
+            , logLines_ = putLines
+            , disableV6NS_ = optDisableV6NS
             , timeout_ = tmout
             }
 
