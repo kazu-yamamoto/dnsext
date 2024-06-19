@@ -31,7 +31,6 @@ import DNS.Iterative.Query.Types
   * EDNS must be enable for DNSSEC OK request -}
 norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
 norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
-    let short = False
     let ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
@@ -41,7 +40,7 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
                         { ractionGenId = idGen_ cxt
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
-                        , ractionShortLog = short
+                        , ractionShortLog = shortLog_ cxt
                         , ractionTimeoutTime = 10000000
                         }
                 , rinfoUDPRetry = 3

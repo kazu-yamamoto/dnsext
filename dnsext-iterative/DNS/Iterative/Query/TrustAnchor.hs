@@ -76,7 +76,7 @@ rootPriming =
     left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
-        let short = False
+        short <- asks shortLog_
         logLn Log.DEMO $ ppDelegation short delegationNS
     nullNS = pure $ left "no NS RRs"
     ncNS _ncLog = pure $ left "not canonical NS RRs"
@@ -167,7 +167,7 @@ steps to get verified and cached DNSKEY RRset
  -}
 cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY getSEPs sas zone = do
-    let short = False
+    short <- asks shortLog_
     logLn Log.DEMO $ unwords (["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
     msg <- norec True sas zone DNSKEY
     let rcode = DNS.rcode msg
