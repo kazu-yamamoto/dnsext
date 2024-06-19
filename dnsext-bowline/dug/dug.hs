@@ -96,7 +96,7 @@ options =
         ['v']
         ["verbose"]
         ( ReqArg
-            (\n opts -> opts{optLogLevel = convLogLevel n})
+            (\n opts -> opts{optLogLevel = convLogLevel n, optShortLog = convShortLog n})
             "<verbosity>"
         )
         "set the verbosity"
@@ -139,7 +139,7 @@ main = do
         putStr "\n"
         putStrLn "  <proto>     = auto | tcp | dot | doq | h2 | h2c | h3"
         putStrLn "  <format>    = multi | json"
-        putStrLn "  <verbosity> = 0 | 1 | 2"
+        putStrLn "  <verbosity> = 0 | 1 | 2 | s"
         exitSuccess
     ------------------------
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
@@ -324,9 +324,14 @@ convOutputFlag "json"  = JSONstyle
 convOutputFlag "multi" = Multiline
 convOutputFlag _       = Singleline
 
+convShortLog :: String -> Bool
+convShortLog "s" = True
+convShortLog _ = False
+
 convLogLevel :: String -> Log.Level
 convLogLevel "0" = Log.WARN
 convLogLevel "1" = Log.DEMO
+convLogLevel "s" = Log.DEMO  {- for short-log mode with DEMO log-level -}
 convLogLevel _ = Log.DEBUG
 
 ----------------------------------------------------------------
