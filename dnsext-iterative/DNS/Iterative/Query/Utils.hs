@@ -109,25 +109,6 @@ pprMessage title DNSMessage{..} =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-data PPMode
-    = PPShort
-    | PPFull
-    deriving Show
-
-putDelegation :: Applicative f => PPMode -> NonEmpty DEntry -> (String -> f ()) -> (String -> f ()) -> f ()
-putDelegation pprs des h fallback  = case pprs of
-    PPFull   -> h ppFull
-    PPShort  -> h ppShort *> unless (null suffix) (fallback ppFull)
-  where
-    ppFull  = intercalate "\n" (map (indent . fst) pps)
-    ppShort = intercalate "\n" (map (indent . fst) hd ++ suffix)
-    suffix = [ "... " ++ note  ++ " ..." | not $ null tl ]
-    note = "plus " ++ show (length tl) ++ " names and " ++ show (sum $ map snd tl) ++ " glues"
-    (hd, tl) = splitAt 2 pps
-    pps = ppDelegations des
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 ppDelegation :: Bool -> NonEmpty DEntry -> String
 ppDelegation short des
     | short      = ppShort
