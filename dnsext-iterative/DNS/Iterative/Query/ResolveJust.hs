@@ -169,7 +169,8 @@ iterative_ dc nss0 (x : xs)  = do
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
         sas <- delegationIPs nss
-        logLn Log.DEMO $ unwords (["iterative: query", show (name, A), "servers:"] ++ [show sa | sa <- sas])
+        let short = False
+        logLn Log.DEMO $ unwords (["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
