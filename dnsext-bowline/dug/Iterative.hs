@@ -36,7 +36,8 @@ setup putLines Options{..} = do
         setOps = setRRCacheOps cacheOps . setTimeCache tcache
     newEnv <&> \env0 ->
         (setOps env0)
-            { logLines_ = putLines
+            { shortLog_ = optShortLog
+            , logLines_ = putLines
             , disableV6NS_ = optDisableV6NS
             , timeout_ = tmout
             }
