@@ -125,17 +125,17 @@ queryContextIN dom typ qctl = queryContext (Question dom typ IN) qctl
 data RequestDO
     = DnssecOK
     | NoDnssecOK
-    deriving (Show)
+    deriving (Eq, Show)
 
 data RequestCD
     = CheckDisabled
     | NoCheckDisabled
-    deriving (Show)
+    deriving (Eq, Show)
 
 data RequestAD
     = AuthenticatedData
     | NoAuthenticatedData
-    deriving (Show)
+    deriving (Eq, Show)
 
 toRequestDO :: QueryControls -> RequestDO
 toRequestDO qctl = case extDO $ qctlEdns qctl of
