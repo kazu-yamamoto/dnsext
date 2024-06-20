@@ -87,7 +87,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
             case mx of
                 CResultMissHit -> toWorker inp
                 CResultHit replyMsg -> do
-                    incStats (stats_ env) CacheHit
+                    mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
                     inputToSender $ Output bs inputPeerInfo
@@ -106,7 +106,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
     setWorkerStat WWaitEnqueue
     case ex of
         Right replyMsg -> do
-            incStats (stats_ env) CacheMiss
+            mapM_ (incStats $ stats_ env) [CacheMiss, QueriesAll]
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
             inputToSender $ Output bs inputPeerInfo
@@ -116,7 +116,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
 
 logicDenied :: Env -> Input DNSMessage -> IO ()
 logicDenied env _inp@Input{} = do
-    incStats (stats_ env) ResolveDenied
+    mapM_ (incStats $ stats_ env) [ResolveDenied, QueriesAll]
 
 {- {- not reply for deny case. -}
 let replyMsg =

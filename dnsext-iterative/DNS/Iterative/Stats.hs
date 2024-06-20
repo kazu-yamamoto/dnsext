@@ -18,6 +18,8 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
+import Network.Socket (SockAddr (..))
+
 newtype StatsIx = StatsIx Int deriving (Eq, Ord, Enum, Ix)
 
 {- FOURMOLU_DISABLE -}
@@ -124,28 +126,40 @@ pattern RcodeServFail    = StatsIx 45
 pattern RcodeNoData     :: StatsIx
 pattern RcodeNoData      = StatsIx 46
 
+pattern QueriesAll      :: StatsIx
+pattern QueriesAll       = StatsIx 47
+
+pattern QueryIPv4       :: StatsIx
+pattern QueryIPv4        = StatsIx 48
+
 pattern QueryIPv6       :: StatsIx
-pattern QueryIPv6        = StatsIx 47
+pattern QueryIPv6        = StatsIx 49
 
 pattern QueryDO         :: StatsIx
-pattern QueryDO          = StatsIx 48
+pattern QueryDO          = StatsIx 50
 
 pattern QueryTCP        :: StatsIx
-pattern QueryTCP         = StatsIx 49
+pattern QueryTCP         = StatsIx 51
 pattern QueryTLS        :: StatsIx
-pattern QueryTLS         = StatsIx 50
+pattern QueryTLS         = StatsIx 52
 pattern QueryHTTPS      :: StatsIx
-pattern QueryHTTPS       = StatsIx 51
+pattern QueryHTTPS       = StatsIx 53
 pattern QueryQUIC       :: StatsIx
-pattern QueryQUIC        = StatsIx 52
+pattern QueryQUIC        = StatsIx 54
 pattern QueryHTTP3      :: StatsIx
-pattern QueryHTTP3       = StatsIx 53
+pattern QueryHTTP3       = StatsIx 55
 
-pattern QueriesAll      :: StatsIx
-pattern QueriesAll       = StatsIx 54
+pattern QueryTCP53      :: StatsIx
+pattern QueryTCP53       = StatsIx 56
+pattern QueryDoT        :: StatsIx
+pattern QueryDoT         = StatsIx 57
+pattern QueryDoH2C      :: StatsIx
+pattern QueryDoH2C       = StatsIx 58
+pattern QueryDoQ        :: StatsIx
+pattern QueryDoQ         = StatsIx 59
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 54
+pattern StatsIxMax       = StatsIx 59
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -198,14 +212,24 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (RcodeRefused,     "answer_rcodes_total{type=\"REFUSED\"}")
   , (RcodeServFail,    "answer_rcodes_total{type=\"SERVFAIL\"}")
   , (RcodeNoData,      "answer_rcodes_total{type=\"nodata\"}")
+  --
+  , (QueriesAll,       "queries_total")
+  --
+  , (QueryIPv4,        "query_ipv4_total")
   , (QueryIPv6,        "query_ipv6_total")
+  --
   , (QueryDO,          "query_edns_DO_total")
+  --
   , (QueryTCP,         "query_tcp_total")
   , (QueryTLS,         "query_tls_total")
   , (QueryHTTPS,       "query_https_total")
   , (QueryQUIC,        "query_quic_total")
   , (QueryHTTP3,       "query_http3_total")
-  , (QueriesAll,       "queries_total")
+  --
+  , (QueryTCP53,       "query_tcp53_total")
+  , (QueryDoT,         "query_dot_total")
+  , (QueryDoH2C,       "query_doh2c_total")
+  , (QueryDoQ,         "query_doq_total")
   ]
 {- FOURMOLU_ENABLE -}
 
@@ -306,41 +330,33 @@ readStats (Stats stats) prefix = do
 ---
 
 {- FOURMOLU_DISABLE -}
-incOnIPv6 :: Bool -> Stats -> IO a -> IO a
-incOnIPv6 inet6 stats act
-    | inet6      = incStats stats QueryIPv6 *> act
-    | otherwise  = act
+incOnPeerAddr :: SockAddr -> Stats -> IO a -> IO a
+incOnPeerAddr sa stats act = case sa of
+    SockAddrInet{}   -> incStats stats QueryIPv4 *> act
+    SockAddrInet6{}  -> incStats stats QueryIPv6 *> act
+    SockAddrUnix{}   -> act
 {- FOURMOLU_ENABLE -}
 
-incStatsUDP :: Bool -> Stats -> IO ()
-incStatsUDP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueriesAll
+incStatsDoX :: [StatsIx] -> SockAddr -> Stats -> IO ()
+incStatsDoX ixs sa stats = incOnPeerAddr sa stats (mapM_ (incStats stats) ixs)
 
-incStatsTCP :: Bool -> Stats -> IO ()
-incStatsTCP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+incStatsUDP53 :: SockAddr -> Stats -> IO ()
+incStatsUDP53 = incStatsDoX []
 
-{- FOURMOLU_DISABLE -}
-incStatsDoT :: Bool -> Stats -> IO ()
-incStatsDoT inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
-{- FOURMOLU_ENABLE -}
+incStatsTCP53 :: SockAddr -> Stats -> IO ()
+incStatsTCP53 = incStatsDoX [QueryTCP53, QueryTCP]
 
-{- FOURMOLU_DISABLE -}
-incStatsDoH2 :: Bool -> Stats -> IO ()
-incStatsDoH2 inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryHTTPS *> incStats stats QueryTLS *> incStats stats QueryTCP *> incStats stats QueriesAll
-{- FOURMOLU_ENABLE -}
+incStatsDoT :: SockAddr -> Stats -> IO ()
+incStatsDoT = incStatsDoX [QueryDoT, QueryTLS, QueryTCP]
 
-incStatsDoH2C :: Bool -> Stats -> IO ()
-incStatsDoH2C inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP *> incStats stats QueriesAll
+incStatsDoH2 :: SockAddr -> Stats -> IO ()
+incStatsDoH2 = incStatsDoX [QueryHTTPS, QueryTLS, QueryTCP]
 
-incStatsDoQ :: Bool -> Stats -> IO ()
-incStatsDoQ inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryQUIC *> incStats stats QueriesAll
+incStatsDoH2C :: SockAddr -> Stats -> IO ()
+incStatsDoH2C = incStatsDoX [QueryDoH2C, QueryTCP]
 
-{- FOURMOLU_DISABLE -}
-incStatsDoH3 :: Bool -> Stats -> IO ()
-incStatsDoH3 inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryHTTP3 *> incStats stats QueryQUIC *> incStats stats QueriesAll
-{- FOURMOLU_ENABLE -}
+incStatsDoQ :: SockAddr -> Stats -> IO ()
+incStatsDoQ = incStatsDoX [QueryDoQ, QueryQUIC]
+
+incStatsDoH3 :: SockAddr -> Stats -> IO ()
+incStatsDoH3 = incStatsDoX [QueryHTTP3, QueryQUIC]

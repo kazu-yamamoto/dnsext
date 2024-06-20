@@ -21,7 +21,7 @@ import qualified System.TimeManager as T
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
-import DNS.Iterative.Stats (incStatsTCP)
+import DNS.Iterative.Stats (incStatsTCP53)
 
 ----------------------------------------------------------------
 
@@ -41,11 +41,11 @@ tcpServer VcServerConfig{..} env toCacher port host = do
         th <- T.registerKillThread mgr $ return ()
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
-                incStatsTCP (sockAddrInet6 peersa) (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
                     else do
                         when (siz > vc_slowloris_size) $ T.tickle th
+                        incStatsTCP53 peersa (stats_ env)
                         return (BS.concat bss, peerInfo)
             send bs _ = do
                 DNS.sendVC (DNS.sendTCP sock) bs

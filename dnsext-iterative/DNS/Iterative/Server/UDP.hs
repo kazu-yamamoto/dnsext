@@ -17,7 +17,7 @@ import qualified Network.UDP as UDP
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
-import DNS.Iterative.Stats (incStatsUDP)
+import DNS.Iterative.Stats (incStatsUDP53)
 
 ----------------------------------------------------------------
 
@@ -34,7 +34,7 @@ udpServer _conf env toCacher port addr = do
         mysa = UDP.mySockAddr lsock
         recv = do
             (bs, csa@(UDP.ClientSockAddr csa' _)) <- UDP.recvFrom lsock
-            incStatsUDP (sockAddrInet6 csa') (stats_ env)
+            incStatsUDP53 csa' (stats_ env)
             return (bs, PeerInfoUDP csa)
         send bs peerInfo = do
             case peerInfo of

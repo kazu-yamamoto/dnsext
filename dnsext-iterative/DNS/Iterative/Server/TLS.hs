@@ -4,6 +4,7 @@
 module DNS.Iterative.Server.TLS where
 
 -- GHC packages
+import Data.Functor
 import qualified Data.ByteString as BS
 
 -- dnsext-* packages
@@ -43,10 +44,9 @@ tlsServer VcServerConfig{..} env toCacher port host = do
         (toSender, fromX) <- mkConnector
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
-                incStatsDoT (sockAddrInet6 peersa) (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
-                    else return (BS.concat bss, peerInfo)
+                    else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
             receiver = receiverLogicVC env mysa recv toCacher toSender DOT
             sender = senderLogicVC env send fromX
