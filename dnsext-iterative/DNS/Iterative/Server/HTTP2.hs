@@ -70,11 +70,11 @@ doHTTP name incQuery env toCacher ServerIO{..} = do
             (_, strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm
             einp <- getInput req
-            incQuery sioPeerSockAddr
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
                 Right bs -> do
                     let inp = Input bs sioMySockAddr peerInfo DOH toSender
+                    incQuery sioPeerSockAddr
                     toCacher inp
         sender = forever $ do
             Output bs' (PeerInfoH2 _ strm) <- fromX

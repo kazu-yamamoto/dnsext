@@ -49,11 +49,11 @@ quicServer VcServerConfig{..} env toCacher port host = do
                 let peerInfo = PeerInfoQUIC peersa strm
                 -- Without a designated thread, recvStream would block.
                 (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
-                incStatsDoQ peersa (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
                     else do
                         when (siz > vc_slowloris_size) $ T.tickle th
+                        incStatsDoQ peersa (stats_ env)
                         return (BS.concat bss, peerInfo)
             send bs peerInfo = do
                 case peerInfo of
