@@ -332,7 +332,7 @@ readStats (Stats stats) prefix = do
 {- FOURMOLU_DISABLE -}
 incOnPeerAddr :: SockAddr -> Stats -> IO a -> IO a
 incOnPeerAddr sa stats act = case sa of
-    SockAddrInet{}   -> act
+    SockAddrInet{}   -> incStats stats QueryIPv4 *> act
     SockAddrInet6{}  -> incStats stats QueryIPv6 *> act
     SockAddrUnix{}   -> act
 {- FOURMOLU_ENABLE -}
@@ -344,19 +344,19 @@ incStatsUDP53 :: SockAddr -> Stats -> IO ()
 incStatsUDP53 = incStatsDoX []
 
 incStatsTCP53 :: SockAddr -> Stats -> IO ()
-incStatsTCP53 = incStatsDoX [QueryTCP]
+incStatsTCP53 = incStatsDoX [QueryTCP53, QueryTCP]
 
 incStatsDoT :: SockAddr -> Stats -> IO ()
-incStatsDoT = incStatsDoX [QueryTLS, QueryTCP]
+incStatsDoT = incStatsDoX [QueryDoT, QueryTLS, QueryTCP]
 
 incStatsDoH2 :: SockAddr -> Stats -> IO ()
 incStatsDoH2 = incStatsDoX [QueryHTTPS, QueryTLS, QueryTCP]
 
 incStatsDoH2C :: SockAddr -> Stats -> IO ()
-incStatsDoH2C = incStatsDoX [QueryTCP]
+incStatsDoH2C = incStatsDoX [QueryDoH2C, QueryTCP]
 
 incStatsDoQ :: SockAddr -> Stats -> IO ()
-incStatsDoQ = incStatsDoX [QueryQUIC]
+incStatsDoQ = incStatsDoX [QueryDoQ, QueryQUIC]
 
 incStatsDoH3 :: SockAddr -> Stats -> IO ()
 incStatsDoH3 = incStatsDoX [QueryHTTP3, QueryQUIC]
