@@ -139,7 +139,7 @@ main = do
         putStr "\n"
         putStrLn "  <proto>     = auto | tcp | dot | doq | h2 | h2c | h3"
         putStrLn "  <format>    = multi | json"
-        putStrLn "  <verbosity> = 0 | 1 | 2 | s"
+        putStrLn "  <verbosity> = 0 | 1 | 2 | 3"
         exitSuccess
     ------------------------
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
@@ -325,13 +325,13 @@ convOutputFlag "multi" = Multiline
 convOutputFlag _       = Singleline
 
 convShortLog :: String -> Bool
-convShortLog "s" = True
+convShortLog "1" = True
 convShortLog _ = False
 
 convLogLevel :: String -> Log.Level
 convLogLevel "0" = Log.WARN
-convLogLevel "1" = Log.DEMO
-convLogLevel "s" = Log.DEMO  {- for short-log mode with DEMO log-level -}
+convLogLevel "1" = Log.DEMO  {- for short-log mode with DEMO log-level -}
+convLogLevel "2" = Log.DEMO
 convLogLevel _ = Log.DEBUG
 
 ----------------------------------------------------------------
