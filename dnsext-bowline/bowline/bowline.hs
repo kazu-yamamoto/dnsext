@@ -118,7 +118,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     monitor <- Mon.monitor conf env mng
     -- Run
     tidW <- runWriter
-    tidL <- runLogger
+    _tidL <- runLogger
     tidA <- API.new conf mng
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
@@ -132,7 +132,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     race_ concServer (conc monitor)
         -- Teardown
         `finally` do
-            mapM_ maybeKill [tidA, tidL, tidW]
+            mapM_ maybeKill [tidA, tidW]
             killLogger
     threadDelay 500000 -- avoiding address already in use
     return gcache
