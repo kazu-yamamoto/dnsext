@@ -25,6 +25,7 @@ import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import Network.HTTP2.TLS.Server (ServerIO (..))
 import qualified Network.HTTP2.TLS.Server as H2TLS
+import Network.Socket (SockAddr)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
@@ -62,14 +63,14 @@ http2cServer VcServerConfig{..} env toCacher port host = do
             }
 
 doHTTP
-    :: String -> (Bool -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
+    :: String -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
 doHTTP name incQuery env toCacher ServerIO{..} = do
     (toSender, fromX) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm
             einp <- getInput req
-            incQuery (sockAddrInet6 sioPeerSockAddr)
+            incQuery sioPeerSockAddr
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
                 Right bs -> do

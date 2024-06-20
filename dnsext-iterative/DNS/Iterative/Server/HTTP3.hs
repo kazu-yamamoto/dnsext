@@ -57,7 +57,7 @@ doHTTP env toCacher req aux sendResponse = do
         peerInfo = PeerInfoVC peersa
     (toSender, fromX) <- mkConnector
     einp <- getInput req
-    incStatsDoH3 (sockAddrInet6 peersa) (stats_ env)
+    incStatsDoH3 peersa (stats_ env)
     case einp of
         Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
         Right bs -> do

@@ -18,6 +18,8 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
+import Network.Socket (SockAddr (..))
+
 newtype StatsIx = StatsIx Int deriving (Eq, Ord, Enum, Ix)
 
 {- FOURMOLU_DISABLE -}
@@ -306,41 +308,33 @@ readStats (Stats stats) prefix = do
 ---
 
 {- FOURMOLU_DISABLE -}
-incOnIPv6 :: Bool -> Stats -> IO a -> IO a
-incOnIPv6 inet6 stats act
-    | inet6      = incStats stats QueryIPv6 *> act
-    | otherwise  = act
+incOnPeerAddr :: SockAddr -> Stats -> IO a -> IO a
+incOnPeerAddr sa stats act = case sa of
+    SockAddrInet{}   -> act
+    SockAddrInet6{}  -> incStats stats QueryIPv6 *> act
+    SockAddrUnix{}   -> act
 {- FOURMOLU_ENABLE -}
 
-incStatsUDP :: Bool -> Stats -> IO ()
-incStatsUDP inet6 stats = incOnIPv6 inet6 stats $ pure ()
+incStatsDoX :: [StatsIx] -> SockAddr -> Stats -> IO ()
+incStatsDoX ixs sa stats = incOnPeerAddr sa stats (mapM_ (incStats stats) ixs)
 
-incStatsTCP :: Bool -> Stats -> IO ()
-incStatsTCP inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP
+incStatsUDP53 :: SockAddr -> Stats -> IO ()
+incStatsUDP53 = incStatsDoX []
 
-{- FOURMOLU_DISABLE -}
-incStatsDoT :: Bool -> Stats -> IO ()
-incStatsDoT inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryTLS *> incStats stats QueryTCP
-{- FOURMOLU_ENABLE -}
+incStatsTCP53 :: SockAddr -> Stats -> IO ()
+incStatsTCP53 = incStatsDoX [QueryTCP]
 
-{- FOURMOLU_DISABLE -}
-incStatsDoH2 :: Bool -> Stats -> IO ()
-incStatsDoH2 inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryHTTPS *> incStats stats QueryTLS *> incStats stats QueryTCP
-{- FOURMOLU_ENABLE -}
+incStatsDoT :: SockAddr -> Stats -> IO ()
+incStatsDoT = incStatsDoX [QueryTLS, QueryTCP]
 
-incStatsDoH2C :: Bool -> Stats -> IO ()
-incStatsDoH2C inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryTCP
+incStatsDoH2 :: SockAddr -> Stats -> IO ()
+incStatsDoH2 = incStatsDoX [QueryHTTPS, QueryTLS, QueryTCP]
 
-incStatsDoQ :: Bool -> Stats -> IO ()
-incStatsDoQ inet6 stats = incOnIPv6 inet6 stats $ incStats stats QueryQUIC
+incStatsDoH2C :: SockAddr -> Stats -> IO ()
+incStatsDoH2C = incStatsDoX [QueryTCP]
 
-{- FOURMOLU_DISABLE -}
-incStatsDoH3 :: Bool -> Stats -> IO ()
-incStatsDoH3 inet6 stats =
-    incOnIPv6 inet6 stats $
-    incStats stats QueryHTTP3 *> incStats stats QueryQUIC
-{- FOURMOLU_ENABLE -}
+incStatsDoQ :: SockAddr -> Stats -> IO ()
+incStatsDoQ = incStatsDoX [QueryQUIC]
+
+incStatsDoH3 :: SockAddr -> Stats -> IO ()
+incStatsDoH3 = incStatsDoX [QueryHTTP3, QueryQUIC]

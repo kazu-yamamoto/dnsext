@@ -43,7 +43,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
         (toSender, fromX) <- mkConnector
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
-                incStatsDoT (sockAddrInet6 peersa) (stats_ env)
+                incStatsDoT peersa (stats_ env)
                 if siz == 0
                     then return ("", peerInfo)
                     else return (BS.concat bss, peerInfo)
