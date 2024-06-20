@@ -126,28 +126,40 @@ pattern RcodeServFail    = StatsIx 45
 pattern RcodeNoData     :: StatsIx
 pattern RcodeNoData      = StatsIx 46
 
+pattern QueriesAll      :: StatsIx
+pattern QueriesAll       = StatsIx 47
+
+pattern QueryIPv4       :: StatsIx
+pattern QueryIPv4        = StatsIx 48
+
 pattern QueryIPv6       :: StatsIx
-pattern QueryIPv6        = StatsIx 47
+pattern QueryIPv6        = StatsIx 49
 
 pattern QueryDO         :: StatsIx
-pattern QueryDO          = StatsIx 48
+pattern QueryDO          = StatsIx 50
 
 pattern QueryTCP        :: StatsIx
-pattern QueryTCP         = StatsIx 49
+pattern QueryTCP         = StatsIx 51
 pattern QueryTLS        :: StatsIx
-pattern QueryTLS         = StatsIx 50
+pattern QueryTLS         = StatsIx 52
 pattern QueryHTTPS      :: StatsIx
-pattern QueryHTTPS       = StatsIx 51
+pattern QueryHTTPS       = StatsIx 53
 pattern QueryQUIC       :: StatsIx
-pattern QueryQUIC        = StatsIx 52
+pattern QueryQUIC        = StatsIx 54
 pattern QueryHTTP3      :: StatsIx
-pattern QueryHTTP3       = StatsIx 53
+pattern QueryHTTP3       = StatsIx 55
 
-pattern QueriesAll      :: StatsIx
-pattern QueriesAll       = StatsIx 54
+pattern QueryTCP53      :: StatsIx
+pattern QueryTCP53       = StatsIx 56
+pattern QueryDoT        :: StatsIx
+pattern QueryDoT         = StatsIx 57
+pattern QueryDoH2C      :: StatsIx
+pattern QueryDoH2C       = StatsIx 58
+pattern QueryDoQ        :: StatsIx
+pattern QueryDoQ         = StatsIx 59
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 54
+pattern StatsIxMax       = StatsIx 59
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -200,14 +212,24 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (RcodeRefused,     "answer_rcodes_total{type=\"REFUSED\"}")
   , (RcodeServFail,    "answer_rcodes_total{type=\"SERVFAIL\"}")
   , (RcodeNoData,      "answer_rcodes_total{type=\"nodata\"}")
+  --
+  , (QueriesAll,       "queries_total")
+  --
+  , (QueryIPv4,        "query_ipv4_total")
   , (QueryIPv6,        "query_ipv6_total")
+  --
   , (QueryDO,          "query_edns_DO_total")
+  --
   , (QueryTCP,         "query_tcp_total")
   , (QueryTLS,         "query_tls_total")
   , (QueryHTTPS,       "query_https_total")
   , (QueryQUIC,        "query_quic_total")
   , (QueryHTTP3,       "query_http3_total")
-  , (QueriesAll,       "queries_total")
+  --
+  , (QueryTCP53,       "query_tcp53_total")
+  , (QueryDoT,         "query_dot_total")
+  , (QueryDoH2C,       "query_doh2c_total")
+  , (QueryDoQ,         "query_doq_total")
   ]
 {- FOURMOLU_ENABLE -}
 
