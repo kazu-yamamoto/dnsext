@@ -322,10 +322,16 @@ newStats = do
   where
     new n = sequence $ replicate n $ newArray (StatsIxMin, StatsIxMax) 0
 
-incStats :: Stats -> StatsIx -> IO ()
-incStats (Stats stats) ix = do
+modifyStats :: (Int -> Int) -> Stats -> StatsIx -> IO ()
+modifyStats modify (Stats stats) ix = do
     (i, _) <- myThreadId >>= threadCapability
-    void $ atomicModifyIntArray (stats ! i) ix (+ 1)
+    void $ atomicModifyIntArray (stats ! i) ix modify
+
+incStats :: Stats -> StatsIx -> IO ()
+incStats = modifyStats succ
+
+decStats :: Stats -> StatsIx -> IO ()
+decStats = modifyStats pred  {- thread may runs on the other capability, so negative Int value is possible -}
 
 incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
 incStatsM s m k mk = do
