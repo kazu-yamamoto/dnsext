@@ -6,6 +6,7 @@ module DNS.Iterative.Query.Cache (
     lookupValid,
     LookupResult,
     foldLookupResult,
+    lookupValidRR,
     lookupRRsetEither,
     lookupRR,
     lookupErrorRCODE,
@@ -55,6 +56,7 @@ import DNS.Iterative.Query.TestEnv
 -- $setup
 -- >>> :seti -XOverloadedStrings
 -- >>> :seti -XFlexibleContexts
+-- >>> import DNS.RRCache
 
 _newTestEnv :: IO Env
 _newTestEnv = newTestEnv (const $ pure ()) False 2048
@@ -145,6 +147,35 @@ guardValid m = do
 
 lookupValid :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe (RRset, Ranking))
 lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
+
+{- FOURMOLU_DISABLE -}
+-- | looking up NO Data or Valid RRset from cache
+-- Nothing       -- misshit
+-- Just []       -- No Data, no NSECx checks
+-- Just [_, ..]  -- Valid RRset
+--
+-- >>> env <- _newTestEnv
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
+-- >>> dsigs = [RD_RRSIG A RSASHA256 3 1800 "20240601090000" "20250101090000" 0xBEEF "example.com." ""] -- dummy RRSIG
+-- >>> cacheHit dom typ cls ttl hit = do {ins <- asks insert_; liftIO $ ins (Question dom typ cls) ttl hit RankAnswer}
+-- >>> cacheValid dom typ cls ttl rds sigs = valid rds sigs (pure ()) (cacheHit dom typ cls ttl)
+-- >>> pos1 = cacheValid "p1.example.com." A IN 7200 ards dsigs *> lookupValidRR "test" "p1.example.com." A
+-- >>> fmap (map rdata . fst) <$> runCxt pos1
+-- Just [10.0.0.3,10.0.0.4]
+-- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupValidRR "test" "nodata1.example.com." A
+-- >>> fmap fst <$> runCxt nodata1
+-- Just []
+lookupValidRR :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupValidRR logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) logMark dom typ
+  where
+    h _ _ = Cache.hitCases (\_ -> nodata) nsoa (\_ -> missHit) (\_ -> missHit) valid
+    nsoa NoErr = nodata
+    nsoa _     = missHit
+    nodata _ rank = Just ([], rank)
+    missHit _ _ = Nothing
+    valid rds _sigs ttl rank = Just (map (ResourceRecord dom typ DNS.IN ttl) rds, rank)
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 data LookupResult
