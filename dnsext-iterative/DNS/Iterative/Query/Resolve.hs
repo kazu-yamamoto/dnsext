@@ -162,7 +162,8 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             Just x
     --
     guardLookup reqCD = foldLookupResult (guardNegative reqCD) (guardNegativeNoSOA reqCD) (guardPositive reqCD)
-    guardNegative reqCD soa soaRank = guardReply soaRank *> guardMayVerified reqCD soa
+    {- {- authority section is cached as RankAdditional, so cannot check -} guardReply soaRank *> -}
+    guardNegative reqCD soa _soaRank = guardMayVerified reqCD soa
     guardNegativeNoSOA CheckDisabled   _rc = empty    {- query again for verification error -}
     guardNegativeNoSOA NoCheckDisabled _rc = pure ()
     guardPositive reqCD rrset = guardMayVerified reqCD rrset
