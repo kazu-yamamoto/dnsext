@@ -84,7 +84,7 @@ getQUICParams ResolveInfo{..} tag alpn0 =
         }
   where
     rinfo = case ractionResumptionInfo rinfoActions tag of
-        Nothing -> defaultResumptionInfo
-        Just r -> case deserialiseOrFail $ BL.fromStrict r of
+        [] -> defaultResumptionInfo
+        r : _ -> case deserialiseOrFail $ BL.fromStrict r of
             Left _ -> defaultResumptionInfo
             Right x -> x

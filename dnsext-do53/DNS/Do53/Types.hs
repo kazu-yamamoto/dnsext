@@ -264,7 +264,7 @@ data ResolveActions = ResolveActions
     -- ^ flag for short-log mode
     , ractionKeyLog :: String -> IO ()
     -- ^ Logging for TLS main secrets.
-    , ractionResumptionInfo :: NameTag -> Maybe ByteString
+    , ractionResumptionInfo :: NameTag -> [ByteString]
     -- ^ Resumption information for this connection.
     , ractionOnResumptionInfo :: NameTag -> ByteString -> IO ()
     -- ^ Action to store resumption information for next connection.
@@ -287,7 +287,7 @@ defaultResolveActions =
         , ractionLog = \_ _ ~_ -> return ()
         , ractionShortLog = False
         , ractionKeyLog = \ ~_ -> return ()
-        , ractionResumptionInfo = \_ -> Nothing
+        , ractionResumptionInfo = \_ -> []
         , ractionOnResumptionInfo = \_ _ -> return ()
         , ractionUseEarlyData = False
         , ractionOnConnectionInfo = \_ _ -> return ()

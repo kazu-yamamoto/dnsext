@@ -6,6 +6,7 @@ module DNS.DoX.TLS where
 import Codec.Serialise
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as BL
+import Data.Either (rights)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
 import Network.Socket.BufferPool (makeRecvN)
@@ -31,11 +32,8 @@ makeSettings ResolveInfo{..} tag =
         { H2.settingsValidateCert = False
         , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
         , H2.settingsKeyLogger = ractionKeyLog rinfoActions
-        , H2.settingsWantSessionResume = case ractionResumptionInfo rinfoActions tag of
-            Nothing -> Nothing
-            Just r -> case deserialiseOrFail $ BL.fromStrict r of
-                Left _ -> Nothing
-                Right x -> Just x
+        , H2.settingsWantSessionResumeList =
+            rights (deserialiseOrFail . BL.fromStrict <$> ractionResumptionInfo rinfoActions tag)
         , H2.settingsSessionManager =
             noSessionManager
                 { sessionEstablish = \sid sd -> do

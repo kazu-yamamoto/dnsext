@@ -81,7 +81,7 @@ resolv
     -> ResolveInfo
     -> SendRequest
     -> Resolver
-resolv tag ident ResolveInfo{..} sendRequest q qctl =
+resolv tag ident ResolveInfo{..} sendRequest q qctl = do
     sendRequest req $ \rsp -> do
         when (responseStatus rsp /= Just ok200) $ E.throwIO OperationRefused
         let recvHTTP = recvManyN $ getResponseBodyChunk rsp

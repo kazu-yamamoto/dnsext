@@ -81,15 +81,15 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
                 -- PersistentResolver
                 Just persitResolver -> do
                     mrs <- case optResumptionFile of
-                        Nothing -> return Nothing
+                        Nothing -> return []
                         Just file -> do
                             exist <- doesFileExist file
                             if exist
                                 then do
                                     ct <- loadResumption file
                                     removeFile file
-                                    return $ Just ct
-                                else return Nothing
+                                    return ct
+                                else return []
                     let ris = makeResolveInfo ractions tq aps mrs
                     -- [PipelineResolver]
                     return $ Just (persitResolver <$> ris)
@@ -163,9 +163,9 @@ makeResolveInfo
     :: ResolveActions
     -> TQueue (NameTag, String)
     -> [(IP, PortNumber)]
-    -> Maybe [(NameTag, ByteString)]
+    -> [(NameTag, ByteString)]
     -> [ResolveInfo]
-makeResolveInfo ractions tq aps mrs = mk <$> aps
+makeResolveInfo ractions tq aps ss = mk <$> aps
   where
     mk (ip, port) =
         defaultResolveInfo
@@ -179,7 +179,7 @@ makeResolveInfo ractions tq aps mrs = mk <$> aps
         ractions' =
             ractions
                 { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                , ractionResumptionInfo = \tag -> mrs >>= List.lookup tag
+                , ractionResumptionInfo = \tag -> map snd $ fst $ List.partition (\(t, _) -> t == tag) ss
                 }
 
 getCustomConf
