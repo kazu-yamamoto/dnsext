@@ -50,6 +50,7 @@ data VAnswerResult
     = VEmpty DNS.RCODE
     | VNotEmpty DNS.RCODE VerifyResult
     | VFailed
+    | VCached
     deriving (Eq, Show)
 
 newTestEnv :: Bool -> Log.PutLines -> IO Env
@@ -143,12 +144,14 @@ querySpec disableV6NS putLines = describe "query" $ do
                     ++ "authority:"
                     : map (("  " ++) . show) auth
 
-        checkAnswer msg
+    let checkAnswer msg
             | null (DNS.answer msg) = Empty rcode
             | otherwise = NotEmpty rcode
           where
             rcode = DNS.rcode msg
-        verified rrsets
+        checkResult = either (const Failed) (checkAnswer . fst)
+
+    let verified rrsets
             | all rrsetValid rrsets = Verified
             | otherwise = NotVerified
         checkVAnswer (msg, vans, _)
@@ -156,7 +159,8 @@ querySpec disableV6NS putLines = describe "query" $ do
             | otherwise = VNotEmpty rcode (verified vans)
           where
             rcode = DNS.rcode msg
-        checkResult = either (const Failed) (checkAnswer . fst)
+        cachedVAnswer (_rcode, _rrs, _) = VCached
+        checkVResult = either (const VFailed) (either cachedVAnswer checkVAnswer)
 
     it "root-priming" $ do
         result <- runDNSQuery rootPriming cxt $ queryContextIN (fromString ".") NS mempty
@@ -237,11 +241,7 @@ querySpec disableV6NS putLines = describe "query" $ do
     it "resolve - cname" $ do
         result <- getCXT >>= \cxtI -> runResolveCXT cxtI "porttest.dns-oarc.net." CNAME
         printQueryError result
-        let cached (rcode, rrs, _)
-                | null rrs = VEmpty rcode
-                | otherwise = VNotEmpty rcode NotVerified
-        either (const VFailed) (either cached checkVAnswer) result
-            `shouldBe` VNotEmpty DNS.NoErr Verified
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
 
     it "resolve - a via cname" $ do
         result <- runResolve_ "clients4.google.com." A
@@ -251,12 +251,7 @@ querySpec disableV6NS putLines = describe "query" $ do
     it "resolve - a with DNSSEC_OK" $ do
         result <- getCXT >>= \cxtI -> runResolveCXT cxtI "iij.ad.jp." A
         printQueryError result
-        isRight result `shouldBe` True
-        let cached (rcode, rrs, _)
-                | null rrs = VEmpty rcode
-                | otherwise = VNotEmpty rcode NotVerified
-        either (const VFailed) (either cached checkVAnswer) result
-            `shouldBe` VNotEmpty DNS.NoErr Verified
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
 
     it "get-reply - nx via cname" $ do
         result <- getReply "media.yahoo.com." A 0
