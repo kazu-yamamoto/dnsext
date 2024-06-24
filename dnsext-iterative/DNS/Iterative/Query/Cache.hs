@@ -404,13 +404,14 @@ cacheNoDelegation d zone dnskeys dom msg
 
 {- FOURMOLU_DISABLE -}
 wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery [RRset]
-wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
+wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion =<< asksQC requestCD_
   where
-    witnessWildcardExpansion
-        | noDS          = pure []
-        | otherwise     = Verify.getWildcardExpansion zone dnskeys rankedAuthority msg qname
-                          nullK invalidK (noWitnessK "WildcardExpansion")
-                          resultK resultK
+    witnessWildcardExpansion reqCD
+        | FilledDS [] <- delegationDS  = pure []
+        | CheckDisabled <- reqCD       = pure []
+        | otherwise  = Verify.getWildcardExpansion zone dnskeys rankedAuthority msg qname
+                       nullK invalidK (noWitnessK "WildcardExpansion")
+                       resultK resultK
     nullK = pure []
     invalidK s = failed $ "NSEC/NSEC3 WildcardExpansion: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
@@ -421,25 +422,25 @@ wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion
 
     zone = delegationZone
     dnskeys = delegationDNSKEY
-    noDS = case delegationDS of
-        FilledDS [] -> True
-        _           -> False
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 negativeWitnessActions :: DNSQuery [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (DNSQuery [RRset], DNSQuery [RRset])
-negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, witnessNameError)
+negativeWitnessActions nullK Delegation{..} qname qtype msg =
+    (witnessNoData =<< asksQC requestCD_, witnessNameError =<< asksQC requestCD_)
   where
-    witnessNoData
-        | noDS          = pure []
-        | otherwise     = Verify.getNoDatas   zone dnskeys rankedAuthority msg qname qtype
-                          nullK invalidK (noWitnessK "NoData")
-                          resultK resultK resultK3 resultK3
-    witnessNameError
-        | noDS          = pure []
-        | otherwise     = Verify.getNameError zone dnskeys rankedAuthority msg qname
-                          nullK invalidK (noWitnessK "NameError")
-                          resultK resultK3
+    witnessNoData reqCD
+        | FilledDS [] <- delegationDS  = pure []
+        | CheckDisabled <- reqCD       = pure []
+        | otherwise  = Verify.getNoDatas   zone dnskeys rankedAuthority msg qname qtype
+                       nullK invalidK (noWitnessK "NoData")
+                       resultK resultK resultK3 resultK3
+    witnessNameError reqCD
+        | FilledDS [] <- delegationDS  = pure []
+        | CheckDisabled <- reqCD       = pure []
+        | otherwise  = Verify.getNameError zone dnskeys rankedAuthority msg qname
+                       nullK invalidK (noWitnessK "NameError")
+                       resultK resultK3
     invalidK s = failed $ "NSEC/NSEC3 NameErr/NoData: " ++ qinfo ++ " :\n" ++ s
     noWitnessK wn s = failed $ "cannot find " ++ wn ++ " witness: " ++ qinfo ++ " : " ++ s
     resultK  w rrsets _ = success w *> winfo witnessInfoNSEC  w $> rrsets
@@ -451,9 +452,6 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg = (witnessNoData, wi
 
     zone = delegationZone
     dnskeys = delegationDNSKEY
-    noDS = case delegationDS of
-        FilledDS [] -> True
-        _           -> False
 {- FOURMOLU_ENABLE -}
 
 nsecFailed :: String -> DNSQuery a
