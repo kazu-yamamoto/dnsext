@@ -32,10 +32,8 @@ import DNS.Iterative.Internal (
     rootPriming,
     rrsetValid,
     runDNSQuery,
-    runIterative,
-    runResolve,
-    runResolveExact,
  )
+import qualified DNS.Iterative.Internal as I
 
 data AnswerResult
     = Empty DNS.RCODE
@@ -87,7 +85,7 @@ cacheStateSpec :: Bool -> Log.PutLines -> Spec
 cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let getResolveCache n ty = do
             cxt <- newTestEnv disableV6NS putLines
-            eresult <- fmap snd <$> runResolve cxt (Question (fromString n) ty DNS.IN) mempty
+            eresult <- fmap snd <$> I.runResolve cxt (Question (fromString n) ty DNS.IN) mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -123,10 +121,10 @@ querySpec disableV6NS putLines = describe "query" $ do
     let getCXT = newTestEnv disableV6NS putLines
     cxt <- runIO getCXT
     cxt4 <- runIO $ newTestEnv True putLines
-    let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
-        runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
+    let runIterative_ ns n = I.runIterative cxt ns (fromString n) mempty
+        runExactCXT cxt_ n ty = I.runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
-        runResolveCXT cxt_ n ty = fmap snd <$> runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
+        runResolveCXT cxt_ n ty = fmap snd <$> I.runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
         runResolve_ = runResolveCXT cxt
         getReply n0 ty ident = do
             let n = fromString n0
