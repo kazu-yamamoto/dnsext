@@ -149,17 +149,19 @@ pattern QueryQUIC        = StatsIx 54
 pattern QueryHTTP3      :: StatsIx
 pattern QueryHTTP3       = StatsIx 55
 
+pattern QueryUDP53      :: StatsIx
+pattern QueryUDP53       = StatsIx 56
 pattern QueryTCP53      :: StatsIx
-pattern QueryTCP53       = StatsIx 56
+pattern QueryTCP53       = StatsIx 57
 pattern QueryDoT        :: StatsIx
-pattern QueryDoT         = StatsIx 57
+pattern QueryDoT         = StatsIx 58
 pattern QueryDoH2C      :: StatsIx
-pattern QueryDoH2C       = StatsIx 58
+pattern QueryDoH2C       = StatsIx 59
 pattern QueryDoQ        :: StatsIx
-pattern QueryDoQ         = StatsIx 59
+pattern QueryDoQ         = StatsIx 60
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 59
+pattern StatsIxMax       = StatsIx 60
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -226,6 +228,7 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryQUIC,        "query_quic_total")
   , (QueryHTTP3,       "query_http3_total")
   --
+  , (QueryUDP53,       "query_udp53_total")
   , (QueryTCP53,       "query_tcp53_total")
   , (QueryDoT,         "query_dot_total")
   , (QueryDoH2C,       "query_doh2c_total")
@@ -341,7 +344,7 @@ incStatsDoX :: [StatsIx] -> SockAddr -> Stats -> IO ()
 incStatsDoX ixs sa stats = incOnPeerAddr sa stats (mapM_ (incStats stats) ixs)
 
 incStatsUDP53 :: SockAddr -> Stats -> IO ()
-incStatsUDP53 = incStatsDoX []
+incStatsUDP53 = incStatsDoX [QueryUDP53]
 
 incStatsTCP53 :: SockAddr -> Stats -> IO ()
 incStatsTCP53 = incStatsDoX [QueryTCP53, QueryTCP]
