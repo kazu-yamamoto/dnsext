@@ -178,8 +178,21 @@ pattern AcceptedDoQ      = StatsIx 67
 pattern AcceptedDoH3    :: StatsIx
 pattern AcceptedDoH3     = StatsIx 68
 
+pattern CurConnTCP53    :: StatsIx
+pattern CurConnTCP53     = StatsIx 69
+pattern CurConnDoT      :: StatsIx
+pattern CurConnDoT       = StatsIx 70
+pattern CurConnDoH2     :: StatsIx
+pattern CurConnDoH2      = StatsIx 71
+pattern CurConnDoH2C    :: StatsIx
+pattern CurConnDoH2C     = StatsIx 72
+pattern CurConnDoQ      :: StatsIx
+pattern CurConnDoQ       = StatsIx 73
+pattern CurConnDoH3     :: StatsIx
+pattern CurConnDoH3      = StatsIx 74
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 68
+pattern StatsIxMax       = StatsIx 74
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -260,6 +273,13 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (AcceptedDoH2C,    "accepted_doh2c_total")
   , (AcceptedDoQ,      "accepted_doq_total")
   , (AcceptedDoH3,     "accepted_doh3_total")
+  --
+  , (CurConnTCP53,     "connection_tcp53_current")
+  , (CurConnDoT,       "connection_dot_current")
+  , (CurConnDoH2,      "connection_doh2_current")
+  , (CurConnDoH2C,     "connection_doh2c_current")
+  , (CurConnDoQ,       "connection_doq_current")
+  , (CurConnDoH3,      "connection_doh3_current")
   ]
 {- FOURMOLU_ENABLE -}
 
