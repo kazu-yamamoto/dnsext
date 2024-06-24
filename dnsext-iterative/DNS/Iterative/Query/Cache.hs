@@ -348,7 +348,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
     verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
         nws <- witnessWildcardExpansion
         let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
-                {- TODO: add case for check-disabled -}
+                | CheckDisabled <- reqCD = ("no verification - check disabled, " ++ qinfo, Just Yellow, pure ())
                 | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
                 | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
                 | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())

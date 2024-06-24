@@ -32,10 +32,8 @@ import DNS.Iterative.Internal (
     rootPriming,
     rrsetValid,
     runDNSQuery,
-    runIterative,
-    runResolve,
-    runResolveExact,
  )
+import qualified DNS.Iterative.Internal as I
 
 data AnswerResult
     = Empty DNS.RCODE
@@ -52,6 +50,7 @@ data VAnswerResult
     = VEmpty DNS.RCODE
     | VNotEmpty DNS.RCODE VerifyResult
     | VFailed
+    | VCached
     deriving (Eq, Show)
 
 newTestEnv :: Bool -> Log.PutLines -> IO Env
@@ -87,7 +86,7 @@ cacheStateSpec :: Bool -> Log.PutLines -> Spec
 cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let getResolveCache n ty = do
             cxt <- newTestEnv disableV6NS putLines
-            eresult <- fmap snd <$> runResolve cxt (Question (fromString n) ty DNS.IN) mempty
+            eresult <- fmap snd <$> I.runResolve cxt (Question (fromString n) ty DNS.IN) mempty
             threadDelay $ 1 * 1000 * 1000
             let convert xs =
                     [ ((dom, typ), (crs, rank))
@@ -123,10 +122,10 @@ querySpec disableV6NS putLines = describe "query" $ do
     let getCXT = newTestEnv disableV6NS putLines
     cxt <- runIO getCXT
     cxt4 <- runIO $ newTestEnv True putLines
-    let runIterative_ ns n = runIterative cxt ns (fromString n) mempty
-        runExactCXT cxt_ n ty = runResolveExact cxt_ (fromString n) ty mempty
+    let runIterative_ ns n = I.runIterative cxt ns (fromString n) mempty
+        runExactCXT cxt_ n ty = I.runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
-        runResolveCXT cxt_ n ty = fmap snd <$> runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
+        runResolveCXT cxt_ n ty = fmap snd <$> I.runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
         runResolve_ = runResolveCXT cxt
         getReply n0 ty ident = do
             let n = fromString n0
@@ -145,12 +144,14 @@ querySpec disableV6NS putLines = describe "query" $ do
                     ++ "authority:"
                     : map (("  " ++) . show) auth
 
-        checkAnswer msg
+    let checkAnswer msg
             | null (DNS.answer msg) = Empty rcode
             | otherwise = NotEmpty rcode
           where
             rcode = DNS.rcode msg
-        verified rrsets
+        checkResult = either (const Failed) (checkAnswer . fst)
+
+    let verified rrsets
             | all rrsetValid rrsets = Verified
             | otherwise = NotVerified
         checkVAnswer (msg, vans, _)
@@ -158,7 +159,8 @@ querySpec disableV6NS putLines = describe "query" $ do
             | otherwise = VNotEmpty rcode (verified vans)
           where
             rcode = DNS.rcode msg
-        checkResult = either (const Failed) (checkAnswer . fst)
+        cachedVAnswer (_rcode, _rrs, _) = VCached
+        checkVResult = either (const VFailed) (either cachedVAnswer checkVAnswer)
 
     it "root-priming" $ do
         result <- runDNSQuery rootPriming cxt $ queryContextIN (fromString ".") NS mempty
@@ -239,11 +241,7 @@ querySpec disableV6NS putLines = describe "query" $ do
     it "resolve - cname" $ do
         result <- getCXT >>= \cxtI -> runResolveCXT cxtI "porttest.dns-oarc.net." CNAME
         printQueryError result
-        let cached (rcode, rrs, _)
-                | null rrs = VEmpty rcode
-                | otherwise = VNotEmpty rcode NotVerified
-        either (const VFailed) (either cached checkVAnswer) result
-            `shouldBe` VNotEmpty DNS.NoErr Verified
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
 
     it "resolve - a via cname" $ do
         result <- runResolve_ "clients4.google.com." A
@@ -253,12 +251,7 @@ querySpec disableV6NS putLines = describe "query" $ do
     it "resolve - a with DNSSEC_OK" $ do
         result <- getCXT >>= \cxtI -> runResolveCXT cxtI "iij.ad.jp." A
         printQueryError result
-        isRight result `shouldBe` True
-        let cached (rcode, rrs, _)
-                | null rrs = VEmpty rcode
-                | otherwise = VNotEmpty rcode NotVerified
-        either (const VFailed) (either cached checkVAnswer) result
-            `shouldBe` VNotEmpty DNS.NoErr Verified
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
 
     it "get-reply - nx via cname" $ do
         result <- getReply "media.yahoo.com." A 0
