@@ -3,7 +3,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Cache (
-    lookupValid,
     LookupResult,
     foldLookupResult,
     lookupValidRR,
@@ -16,6 +15,7 @@ module DNS.Iterative.Query.Cache (
     failWithCacheOrigName,
     cacheAnswer,
     cacheSection,
+    cacheSectionNegative,
     cacheNoRRSIG,
     cacheNoDelegation,
 ) where
@@ -119,34 +119,6 @@ lookupErrorRCODE :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe (RCODE,
 lookupErrorRCODE dom = lookupWithHandler h ((": " ++) . show . snd) "" dom Cache.ERR
   where
     h _ _ = handleHits1 (negativeCases (\_ _ -> Just . (,) NameErr) (\rc _ -> Just . (,) rc)) (\_ _ _ -> Nothing)
-
--- |
---
--- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
--- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
--- >>> pos1 = cacheNoRRSIG [ResourceRecord "p1.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRset "test" "p1.example.com." A
--- >>> fmap (rrsRDatas . fst) <$> runCxt pos1
--- Just [10.0.0.3,10.0.0.4]
--- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRset "test" "nodata1.example.com." A
--- >>> runCxt nodata1
--- Nothing
-lookupRRset :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupRRset logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) logMark dom typ
-  where
-    h _ _ = handleHits1 (\_ _ _ -> Nothing) (positiveCases noSig checkDisabled valid)
-    noSig rds ttl rank = Just (noSigRRset dom typ DNS.IN ttl rds, rank)
-    checkDisabled rds ttl rank = Just (checkDisabledRRset dom typ DNS.IN ttl rds, rank)
-    valid rds sigs ttl rank = Just (validRRset dom typ DNS.IN ttl rds sigs, rank)
-
-guardValid :: Maybe (RRset, Ranking) -> Maybe (RRset, Ranking)
-guardValid m = do
-    (rrset, _rank) <- m
-    guard $ rrsetValid rrset
-    m
-
-lookupValid :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe (RRset, Ranking))
-lookupValid dom typ = guardValid <$> lookupRRset "" dom typ
 
 {- FOURMOLU_DISABLE -}
 -- | looking up NO Data or Valid RRset from cache

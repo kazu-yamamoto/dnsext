@@ -316,12 +316,9 @@ fillDelegationDS src dest
             logLn Log.DEMO $ "require-ds: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
             maybe (list1 nullAddrs query =<< delegationIPs src) fill =<< lookupDS delegationZone
   where
-    dsNegative _soa _rank = Just []
-    dsNegativeNoSOA rc = guard (rc == NoErr) $> []
-    dsPositive rrset =  guard (rrsetValid rrset) $> [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
-    dsLookupResult (lkResult, _rank) = foldLookupResult dsNegative dsNegativeNoSOA dsPositive lkResult
+    dsRDs (rrs, _rank) = Just [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
-    lookupDS zone = lookupRRsetEither "" zone DS <&> (>>= dsLookupResult)
+    lookupDS zone = lookupValidRR "require-ds" zone DS <&> (>>= dsRDs)
     fill dss = pure dest{delegationDS = FilledDS dss}
     nullAddrs = logLn Log.WARN "require-ds: address list is null" $> dest
     verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure

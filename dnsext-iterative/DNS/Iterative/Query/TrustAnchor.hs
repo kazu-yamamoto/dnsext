@@ -134,10 +134,10 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
 fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
-    maybe (list1 nullIPs query =<< delegationIPs d) (fill . toDNSKEYs) =<< lookupValid zone DNSKEY
+    maybe (list1 nullIPs query =<< delegationIPs d) (fill . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
   where
     zone = delegationZone
-    toDNSKEYs (rrset, _rank) = [rd | rd0 <- rrsRDatas rrset, Just rd <- [DNS.fromRData rd0]]
+    toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
     nullIPs = logLn Log.WARN "require-dnskey: address list is null" $> d
     verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
@@ -181,7 +181,8 @@ cachedDNSKEY getSEPs sas zone = do
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
     verifyDNSKEY msg (s:|ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
-            nullDNSKEY = pure $ Left "cachedDNSKEY: null DNSKEYs" {- no DNSKEY case -}
+            {- no DNSKEY case -}
+            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         Verify.cases NoCheckDisabled zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
