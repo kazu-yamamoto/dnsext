@@ -26,7 +26,6 @@ import DNS.Do53.Internal (
     ResolveInfo (..),
     defaultResolveActions,
     defaultResolveInfo,
-    raceAny,
     resolve,
  )
 import DNS.DoX.Client
@@ -107,9 +106,9 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
             let len = length qcs
             refs <- replicateM len $ newTVarIO False
             let targets = zip qcs refs
-            -- racing with multiple connections.
-            -- Slow connections are killed by the fastest one.
-            raceAny $ map (resolver putLnSTM putLinesSTM targets) pipes
+            -- raceAny cannot be used to ensure that TLS sessino tickets
+            -- are certainly saved.
+            mapConcurrently_ (resolver putLnSTM putLinesSTM targets) pipes
 
 resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
 resolvePipeline conf = do
