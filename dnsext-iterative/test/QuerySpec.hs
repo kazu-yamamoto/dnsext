@@ -18,6 +18,7 @@ import System.Timeout (timeout)
 
 import qualified DNS.Log as Log
 
+import DNS.Do53.Client (FlagOp (..), cdFlag)
 import DNS.Iterative.Internal (
     Delegation (..),
     Env (..),
@@ -125,6 +126,7 @@ querySpec disableV6NS putLines = describe "query" $ do
     let runIterative_ ns n = I.runIterative cxt ns (fromString n) mempty
         runExactCXT cxt_ n ty = I.runResolveExact cxt_ (fromString n) ty mempty
         runJust = runExactCXT cxt
+        runResolveCXT_ cxt_ n ty flags = fmap snd <$> I.runResolve cxt_ (Question (fromString n) ty DNS.IN) flags
         runResolveCXT cxt_ n ty = fmap snd <$> I.runResolve cxt_ (Question (fromString n) ty DNS.IN) mempty
         runResolve_ = runResolveCXT cxt
         getReply n0 ty ident = do
@@ -252,6 +254,16 @@ querySpec disableV6NS putLines = describe "query" $ do
         result <- getCXT >>= \cxtI -> runResolveCXT cxtI "iij.ad.jp." A
         printQueryError result
         checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
+
+    it "resolve - a with check-disabled" $ do
+        result <- getCXT >>= \cxtI -> runResolveCXT_ cxtI "brokendnssec.net." A (cdFlag FlagSet)
+        printQueryError result
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr NotVerified
+
+    it "resolve - nodata with check-disabled" $ do
+        result <- getCXT >>= \cxtI -> runResolveCXT_ cxtI "fail.dnssec.jp." A (cdFlag FlagSet)
+        printQueryError result
+        checkVResult result `shouldBe` VEmpty DNS.NoErr
 
     it "get-reply - nx via cname" $ do
         result <- getReply "media.yahoo.com." A 0
