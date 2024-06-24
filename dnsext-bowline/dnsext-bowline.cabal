@@ -39,7 +39,7 @@ executable bowline
         parsec,
         split,
         stm,
-        tls,
+        tls >= 2.1,
         tls-session-manager,
         unliftio,
         wai,
@@ -84,7 +84,7 @@ executable dug
         random,
         serialise,
         stm,
-        tls,
+        tls >= 2.1,
         transformers,
         unix-time
 

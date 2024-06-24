@@ -72,9 +72,9 @@ getQUICParams ResolveInfo{..} tag alpn0 =
         , ccKeyLog = ractionKeyLog rinfoActions
         , ccHooks =
             defaultHooks
-                { onConnectionEstablished = \ConnectionInfo{..} -> do
-                    let ~ver = if version == Version1 then "v1" else "v2"
-                        ~mode = case handshakeMode of
+                { onConnectionEstablished = \i -> do
+                    let ~ver = if version i == Version1 then "v1" else "v2"
+                        ~mode = case handshakeMode i of
                             TLS.PreSharedKey -> "Resumption"
                             TLS.RTT0 -> "0-RTT"
                             x -> show x

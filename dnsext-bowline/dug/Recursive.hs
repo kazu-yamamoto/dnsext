@@ -251,8 +251,8 @@ saveResumption file tq name@(NameTag tag) bs = do
         | otherwise =
             case deserialiseOrFail $ BL.fromStrict bs of
                 Left _ -> Nothing
-                Right (_ :: TLS.SessionID, TLS.SessionData{..}) ->
-                    Just $ next True (sessionMaxEarlyDataSize /= 0)
+                Right (_ :: TLS.SessionID, sd :: TLS.SessionData) ->
+                    Just $ next True (TLS.is0RTTPossible sd)
     next res rtt0 = "Next(Resumption:" ++ ok res ++ ", 0-RTT:" ++ ok rtt0 ++ ")"
     ok True = "OK"
     ok False = "NG"

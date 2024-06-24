@@ -82,7 +82,7 @@ library
         recv,
         stm,
         time-manager,
-        tls,
+        tls >= 2.1,
         unliftio,
         word8
 

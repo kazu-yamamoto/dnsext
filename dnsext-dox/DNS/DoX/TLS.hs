@@ -41,10 +41,10 @@ makeSettings ResolveInfo{..} tag =
                     ractionOnResumptionInfo rinfoActions tag bs
                     return Nothing
                 }
-        , H2.settingsOnServerFinished = \Information{..} -> do
-            let ~ver = if infoVersion == TLS13 then "v1.3" else "v1.2"
-                ~mode = case infoTLS13HandshakeMode of
-                    Nothing -> if infoTLS12Resumption then "Resumption" else "FullHandshake"
+        , H2.settingsOnServerFinished = \i -> do
+            let ~ver = if infoVersion i == TLS13 then "v1.3" else "v1.2"
+                ~mode = case infoTLS13HandshakeMode i of
+                    Nothing -> if infoTLS12Resumption i then "Resumption" else "FullHandshake"
                     Just PreSharedKey -> "Resumption"
                     Just RTT0 -> "0-RTT"
                     Just x -> show x
