@@ -155,13 +155,17 @@ pattern QueryTCP53      :: StatsIx
 pattern QueryTCP53       = StatsIx 57
 pattern QueryDoT        :: StatsIx
 pattern QueryDoT         = StatsIx 58
+pattern QueryDoH2       :: StatsIx
+pattern QueryDoH2        = StatsIx 59
 pattern QueryDoH2C      :: StatsIx
-pattern QueryDoH2C       = StatsIx 59
+pattern QueryDoH2C       = StatsIx 60
 pattern QueryDoQ        :: StatsIx
-pattern QueryDoQ         = StatsIx 60
+pattern QueryDoQ         = StatsIx 61
+pattern QueryDoH3       :: StatsIx
+pattern QueryDoH3        = StatsIx 62
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 60
+pattern StatsIxMax       = StatsIx 62
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -231,8 +235,10 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryUDP53,       "query_udp53_total")
   , (QueryTCP53,       "query_tcp53_total")
   , (QueryDoT,         "query_dot_total")
+  , (QueryDoH2,        "query_doh2_total")
   , (QueryDoH2C,       "query_doh2c_total")
   , (QueryDoQ,         "query_doq_total")
+  , (QueryDoH3,        "query_doh3_total")
   ]
 {- FOURMOLU_ENABLE -}
 
@@ -353,7 +359,7 @@ incStatsDoT :: SockAddr -> Stats -> IO ()
 incStatsDoT = incStatsDoX [QueryDoT, QueryTLS, QueryTCP]
 
 incStatsDoH2 :: SockAddr -> Stats -> IO ()
-incStatsDoH2 = incStatsDoX [QueryHTTPS, QueryTLS, QueryTCP]
+incStatsDoH2 = incStatsDoX [QueryDoH2, QueryHTTPS, QueryTLS, QueryTCP]
 
 incStatsDoH2C :: SockAddr -> Stats -> IO ()
 incStatsDoH2C = incStatsDoX [QueryDoH2C, QueryTCP]
@@ -362,4 +368,4 @@ incStatsDoQ :: SockAddr -> Stats -> IO ()
 incStatsDoQ = incStatsDoX [QueryDoQ, QueryQUIC]
 
 incStatsDoH3 :: SockAddr -> Stats -> IO ()
-incStatsDoH3 = incStatsDoX [QueryHTTP3, QueryQUIC]
+incStatsDoH3 = incStatsDoX [QueryDoH3, QueryHTTP3, QueryQUIC]
