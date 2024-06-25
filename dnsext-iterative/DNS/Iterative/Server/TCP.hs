@@ -21,7 +21,7 @@ import qualified System.TimeManager as T
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
-import DNS.Iterative.Stats (incStatsTCP53)
+import DNS.Iterative.Stats (incStatsTCP53, sessionStatsTCP53)
 
 ----------------------------------------------------------------
 
@@ -33,7 +33,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/tcp")
     maxSize = fromIntegral vc_query_max_size
-    go mgr sock = do
+    go mgr sock = sessionStatsTCP53 (stats_ env) $ do
         mysa <- getSocketName sock
         peersa <- getPeerName sock
         let peerInfo = PeerInfoVC peersa
