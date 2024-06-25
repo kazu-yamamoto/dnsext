@@ -164,8 +164,21 @@ pattern QueryDoQ         = StatsIx 61
 pattern QueryDoH3       :: StatsIx
 pattern QueryDoH3        = StatsIx 62
 
+pattern AcceptedTCP53   :: StatsIx
+pattern AcceptedTCP53    = StatsIx 63
+pattern AcceptedDoT     :: StatsIx
+pattern AcceptedDoT      = StatsIx 64
+pattern AcceptedDoH2    :: StatsIx
+pattern AcceptedDoH2     = StatsIx 65
+pattern AcceptedDoH2C   :: StatsIx
+pattern AcceptedDoH2C    = StatsIx 66
+pattern AcceptedDoQ     :: StatsIx
+pattern AcceptedDoQ      = StatsIx 67
+pattern AcceptedDoH3    :: StatsIx
+pattern AcceptedDoH3     = StatsIx 68
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 62
+pattern StatsIxMax       = StatsIx 68
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -239,6 +252,13 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryDoH2C,       "query_doh2c_total")
   , (QueryDoQ,         "query_doq_total")
   , (QueryDoH3,        "query_doh3_total")
+  --
+  , (AcceptedTCP53,    "accepted_tcp53_total")
+  , (AcceptedDoT,      "accepted_dot_total")
+  , (AcceptedDoH2,     "accepted_doh2_total")
+  , (AcceptedDoH2C,    "accepted_doh2c_total")
+  , (AcceptedDoQ,      "accepted_doq_total")
+  , (AcceptedDoH3,     "accepted_doh3_total")
   ]
 {- FOURMOLU_ENABLE -}
 
