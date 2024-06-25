@@ -423,19 +423,19 @@ sessionStatsDoX :: [StatsIx] -> [StatsIx] -> Stats -> IO () -> IO ()
 sessionStatsDoX accepted curr stats = E.bracket_ (mapM_ (incStats stats) $ accepted ++ curr) (mapM_ (decStats stats) curr)
 
 sessionStatsTCP53 :: Stats -> IO () -> IO ()
-sessionStatsTCP53 = sessionStatsDoX [AcceptedTCP53] []
+sessionStatsTCP53 = sessionStatsDoX [AcceptedTCP53] [CurConnTCP53]
 
 sessionStatsDoT :: Stats -> IO () -> IO ()
-sessionStatsDoT = sessionStatsDoX [AcceptedDoT] []
+sessionStatsDoT = sessionStatsDoX [AcceptedDoT] [CurConnDoT]
 
 sessionStatsDoH2 :: Stats -> IO () -> IO ()
-sessionStatsDoH2 = sessionStatsDoX [AcceptedDoH2] []
+sessionStatsDoH2 = sessionStatsDoX [AcceptedDoH2] [CurConnDoH2]
 
 sessionStatsDoH2C :: Stats -> IO () -> IO ()
-sessionStatsDoH2C = sessionStatsDoX [AcceptedDoH2C] []
+sessionStatsDoH2C = sessionStatsDoX [AcceptedDoH2C] [CurConnDoH2C]
 
 sessionStatsDoQ :: Stats -> IO () -> IO ()
-sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] []
+sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] [CurConnDoQ]
 
 sessionStatsDoH3 :: Stats -> IO () -> IO ()
-sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] []
+sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] [CurConnDoH3]
