@@ -5,6 +5,7 @@
 module DNS.Iterative.Stats where
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import Control.Monad
 import DNS.Array
 import DNS.SEC
@@ -155,13 +156,30 @@ pattern QueryTCP53      :: StatsIx
 pattern QueryTCP53       = StatsIx 57
 pattern QueryDoT        :: StatsIx
 pattern QueryDoT         = StatsIx 58
+pattern QueryDoH2       :: StatsIx
+pattern QueryDoH2        = StatsIx 59
 pattern QueryDoH2C      :: StatsIx
-pattern QueryDoH2C       = StatsIx 59
+pattern QueryDoH2C       = StatsIx 60
 pattern QueryDoQ        :: StatsIx
-pattern QueryDoQ         = StatsIx 60
+pattern QueryDoQ         = StatsIx 61
+pattern QueryDoH3       :: StatsIx
+pattern QueryDoH3        = StatsIx 62
+
+pattern AcceptedTCP53   :: StatsIx
+pattern AcceptedTCP53    = StatsIx 63
+pattern AcceptedDoT     :: StatsIx
+pattern AcceptedDoT      = StatsIx 64
+pattern AcceptedDoH2    :: StatsIx
+pattern AcceptedDoH2     = StatsIx 65
+pattern AcceptedDoH2C   :: StatsIx
+pattern AcceptedDoH2C    = StatsIx 66
+pattern AcceptedDoQ     :: StatsIx
+pattern AcceptedDoQ      = StatsIx 67
+pattern AcceptedDoH3    :: StatsIx
+pattern AcceptedDoH3     = StatsIx 68
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 60
+pattern StatsIxMax       = StatsIx 68
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -231,8 +249,17 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (QueryUDP53,       "query_udp53_total")
   , (QueryTCP53,       "query_tcp53_total")
   , (QueryDoT,         "query_dot_total")
+  , (QueryDoH2,        "query_doh2_total")
   , (QueryDoH2C,       "query_doh2c_total")
   , (QueryDoQ,         "query_doq_total")
+  , (QueryDoH3,        "query_doh3_total")
+  --
+  , (AcceptedTCP53,    "accepted_tcp53_total")
+  , (AcceptedDoT,      "accepted_dot_total")
+  , (AcceptedDoH2,     "accepted_doh2_total")
+  , (AcceptedDoH2C,    "accepted_doh2c_total")
+  , (AcceptedDoQ,      "accepted_doq_total")
+  , (AcceptedDoH3,     "accepted_doh3_total")
   ]
 {- FOURMOLU_ENABLE -}
 
@@ -296,10 +323,16 @@ newStats = do
   where
     new n = sequence $ replicate n $ newArray (StatsIxMin, StatsIxMax) 0
 
-incStats :: Stats -> StatsIx -> IO ()
-incStats (Stats stats) ix = do
+modifyStats :: (Int -> Int) -> Stats -> StatsIx -> IO ()
+modifyStats modify (Stats stats) ix = do
     (i, _) <- myThreadId >>= threadCapability
-    void $ atomicModifyIntArray (stats ! i) ix (+ 1)
+    void $ atomicModifyIntArray (stats ! i) ix modify
+
+incStats :: Stats -> StatsIx -> IO ()
+incStats = modifyStats succ
+
+decStats :: Stats -> StatsIx -> IO ()
+decStats = modifyStats pred  {- thread may runs on the other capability, so negative Int value is possible -}
 
 incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
 incStatsM s m k mk = do
@@ -353,7 +386,7 @@ incStatsDoT :: SockAddr -> Stats -> IO ()
 incStatsDoT = incStatsDoX [QueryDoT, QueryTLS, QueryTCP]
 
 incStatsDoH2 :: SockAddr -> Stats -> IO ()
-incStatsDoH2 = incStatsDoX [QueryHTTPS, QueryTLS, QueryTCP]
+incStatsDoH2 = incStatsDoX [QueryDoH2, QueryHTTPS, QueryTLS, QueryTCP]
 
 incStatsDoH2C :: SockAddr -> Stats -> IO ()
 incStatsDoH2C = incStatsDoX [QueryDoH2C, QueryTCP]
@@ -362,4 +395,27 @@ incStatsDoQ :: SockAddr -> Stats -> IO ()
 incStatsDoQ = incStatsDoX [QueryDoQ, QueryQUIC]
 
 incStatsDoH3 :: SockAddr -> Stats -> IO ()
-incStatsDoH3 = incStatsDoX [QueryHTTP3, QueryQUIC]
+incStatsDoH3 = incStatsDoX [QueryDoH3, QueryHTTP3, QueryQUIC]
+
+---
+
+sessionStatsDoX :: [StatsIx] -> [StatsIx] -> Stats -> IO () -> IO ()
+sessionStatsDoX accepted curr stats = E.bracket_ (mapM_ (incStats stats) $ accepted ++ curr) (mapM_ (decStats stats) curr)
+
+sessionStatsTCP53 :: Stats -> IO () -> IO ()
+sessionStatsTCP53 = sessionStatsDoX [AcceptedTCP53] []
+
+sessionStatsDoT :: Stats -> IO () -> IO ()
+sessionStatsDoT = sessionStatsDoX [AcceptedDoT] []
+
+sessionStatsDoH2 :: Stats -> IO () -> IO ()
+sessionStatsDoH2 = sessionStatsDoX [AcceptedDoH2] []
+
+sessionStatsDoH2C :: Stats -> IO () -> IO ()
+sessionStatsDoH2C = sessionStatsDoX [AcceptedDoH2C] []
+
+sessionStatsDoQ :: Stats -> IO () -> IO ()
+sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] []
+
+sessionStatsDoH3 :: Stats -> IO () -> IO ()
+sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] []

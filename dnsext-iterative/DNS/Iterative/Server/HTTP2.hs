@@ -31,14 +31,15 @@ import Network.Socket (SockAddr)
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
-import DNS.Iterative.Stats (incStatsDoH2, incStatsDoH2C)
+import DNS.Iterative.Stats (incStatsDoH2, incStatsDoH2C, sessionStatsDoH2, sessionStatsDoH2C)
 
 http2Server :: VcServerConfig -> Server
 http2Server VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" incQuery env toCacher
+    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" sbracket incQuery env toCacher
     return [http2server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2")
+    sbracket = sessionStatsDoH2 (stats_ env)
     incQuery inet6 = incStatsDoH2 inet6 (stats_ env)
     settings =
         H2TLS.defaultSettings
@@ -50,10 +51,11 @@ http2Server VcServerConfig{..} env toCacher port host = do
 
 http2cServer :: VcServerConfig -> Server
 http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" incQuery env toCacher
+    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" sbracket incQuery env toCacher
     return [http2server]
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2c")
+    sbracket = sessionStatsDoH2C (stats_ env)
     incQuery inet6 = incStatsDoH2C inet6 (stats_ env)
     settings =
         H2TLS.defaultSettings
@@ -63,8 +65,8 @@ http2cServer VcServerConfig{..} env toCacher port host = do
             }
 
 doHTTP
-    :: String -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
-doHTTP name incQuery env toCacher ServerIO{..} = do
+    :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
+doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
     (toSender, fromX) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
@@ -81,7 +83,7 @@ doHTTP name incQuery env toCacher ServerIO{..} = do
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sioWriteResponse strm response
-    return $ TStat.concurrently_ (name ++ "-send") sender (name ++ "-recv") receiver
+    return $ sbracket $ TStat.concurrently_ (name ++ "-send") sender (name ++ "-recv") receiver
   where
     mkHeader bs =
         [ (HT.hContentType, "application/dns-message")

@@ -20,7 +20,7 @@ import Network.Socket.BufferPool (makeRecvN)
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
-import DNS.Iterative.Stats (incStatsDoT)
+import DNS.Iterative.Stats (incStatsDoT, sessionStatsDoT)
 
 tlsServer :: VcServerConfig -> Server
 tlsServer VcServerConfig{..} env toCacher port host = do
@@ -36,7 +36,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
             , H2.settingsSessionManager = vc_session_manager
             , H2.settingsEarlyDataSize = vc_early_data_size
             }
-    go _ backend = do
+    go _ backend = sessionStatsDoT (stats_ env) $ do
         let mysa = H2.mySockAddr backend
             peersa = H2.peerSockAddr backend
             peerInfo = PeerInfoVC peersa
