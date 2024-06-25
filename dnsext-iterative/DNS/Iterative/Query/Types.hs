@@ -94,6 +94,9 @@ data Env = Env
     , insert_ :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()
+    , removeCache_ :: Question -> IO ()
+    , filterCache_ :: (Question -> EpochTime -> Cache.Hit -> Ranking -> Bool) -> IO ()
+    , clearCache_ :: IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
     , currentSeconds_ :: IO EpochTime
     , timeString_ :: IO ShowS
