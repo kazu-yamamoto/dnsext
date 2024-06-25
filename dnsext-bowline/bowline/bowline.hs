@@ -12,8 +12,10 @@ import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
+import DNS.SVCB (TYPE (..))
 import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
+import DNS.Types.Internal (TYPE (..))
 import qualified DNS.Types as DNS
 import Data.ByteString.Builder
 import Data.Functor
@@ -237,10 +239,27 @@ getControl env wstats mng0 = do
             mng0
                 { getStats = getStats' env ucacheQSize
                 , getWStats = getWStats' wstats
+                , cacheControl = getCacheControl env
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
     return mng
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getCacheControl :: Env -> CacheControl
+getCacheControl Env{..} =
+    emptyCacheControl
+    { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache_ }
+  where
+    rmName name     = mapM_ (rmType name) types
+    rmType name ty  = removeCache_ (DNS.Question name ty DNS.IN)
+    types = [A, AAAA, NS, SOA, CNAME, DNAME, MX, PTR, SRV, TYPE 35, SVCB, HTTPS]
+    rmBogus = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> True) notBogus hit)
+    notBogus = Cache.positiveCases (\_ -> True) (\_ -> False) (\_ _ -> True)
+    rmNeg = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> False) (\_ -> True) hit)
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
