@@ -5,6 +5,7 @@
 module DNS.Iterative.Stats where
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import Control.Monad
 import DNS.Array
 import DNS.SEC
@@ -395,3 +396,26 @@ incStatsDoQ = incStatsDoX [QueryDoQ, QueryQUIC]
 
 incStatsDoH3 :: SockAddr -> Stats -> IO ()
 incStatsDoH3 = incStatsDoX [QueryDoH3, QueryHTTP3, QueryQUIC]
+
+---
+
+sessionStatsDoX :: [StatsIx] -> [StatsIx] -> Stats -> IO () -> IO ()
+sessionStatsDoX accepted curr stats = E.bracket_ (mapM_ (incStats stats) $ accepted ++ curr) (mapM_ (decStats stats) curr)
+
+sessionStatsTCP53 :: Stats -> IO () -> IO ()
+sessionStatsTCP53 = sessionStatsDoX [AcceptedTCP53] []
+
+sessionStatsDoT :: Stats -> IO () -> IO ()
+sessionStatsDoT = sessionStatsDoX [AcceptedDoT] []
+
+sessionStatsDoH2 :: Stats -> IO () -> IO ()
+sessionStatsDoH2 = sessionStatsDoX [AcceptedDoH2] []
+
+sessionStatsDoH2C :: Stats -> IO () -> IO ()
+sessionStatsDoH2C = sessionStatsDoX [AcceptedDoH2C] []
+
+sessionStatsDoQ :: Stats -> IO () -> IO ()
+sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] []
+
+sessionStatsDoH3 :: Stats -> IO () -> IO ()
+sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] []
