@@ -8,7 +8,10 @@ module DNS.RRCache.Types (
     insert,
     expires,
     insertWithExpires,
+    remove,
+    filters,
     size,
+    maxSize,
     stubLookup,
     stubInsert,
     Ranking (..),
@@ -433,6 +436,14 @@ insertWithExpires now k ttl crs rank = withExpire
     ins = insert now k ttl crs rank
     withExpire cache = maybe (ins cache) ins $ expires now cache {- expires before insert -}
 
+remove :: Question -> Cache -> Cache
+remove k (Cache psq xsz) = Cache (PSQ.delete k psq) xsz
+
+filters :: (Question -> EpochTime -> Hit -> Ranking -> Bool) -> Cache -> Cache
+filters p (Cache c xsz) =
+    let c' = PSQ.fromList [t | t@(k, eol, Val hit rank) <- PSQ.toAscList c, p k eol hit rank]
+    in  Cache c' xsz
+
 alive :: EpochTime -> EpochTime -> Maybe TTL
 alive now eol = do
     let ttl' = eol - now
@@ -446,6 +457,9 @@ alive now eol = do
 
 size :: Cache -> Int
 size (Cache c _) = PSQ.size c
+
+maxSize :: Cache -> Int
+maxSize (Cache _ xsz) = xsz
 
 -- | Key for error RCODE
 --   * Negative       - NameErr
