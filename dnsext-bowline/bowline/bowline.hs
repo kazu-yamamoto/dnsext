@@ -5,7 +5,7 @@
 module Main where
 
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
-import Control.Concurrent.Async (concurrently_, race_, wait)
+import Control.Concurrent.Async (mapConcurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard, when)
 import DNS.Iterative.Server as Server
@@ -157,7 +157,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_session_manager = sm
                 , vc_early_data_size = cnf_early_data_size
                 }
-    conc = foldr concurrently_ $ return ()
+    conc = mapConcurrently_ id
     udpconf = UdpServerConfig{}
 
 main :: IO ()
