@@ -204,7 +204,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
     it "resolve-just - cname" $ do
-        result <- runJust "porttest.dns-oarc.net." CNAME
+        result <- runJust "www.aol.com." CNAME
         printQueryError result
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
@@ -241,9 +241,9 @@ querySpec disableV6NS putLines = describe "query" $ do
         checkResult result `shouldBe` NotEmpty DNS.NoErr
 
     it "resolve - cname" $ do
-        result <- getCXT >>= \cxtI -> runResolveCXT cxtI "porttest.dns-oarc.net." CNAME
+        result <- getCXT >>= \cxtI -> runResolveCXT cxtI "www.aol.com." CNAME
         printQueryError result
-        checkVResult result `shouldBe` VNotEmpty DNS.NoErr Verified
+        checkVResult result `shouldBe` VNotEmpty DNS.NoErr NotVerified
 
     it "resolve - a via cname" $ do
         result <- runResolve_ "clients4.google.com." A
