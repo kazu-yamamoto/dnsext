@@ -5,6 +5,7 @@ module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
 import Control.Concurrent.STM
+import qualified Control.Exception as E
 import Control.Monad (guard, forever, replicateM, void, when)
 import Data.ByteString (ByteString)
 import qualified Data.IntSet as Set
@@ -218,6 +219,24 @@ senderLogic' :: Send -> FromX -> IO ()
 senderLogic' send fromX = do
     Output bs _ peerInfo <- fromX
     send bs peerInfo
+
+{- FOURMOLU_DISABLE -}
+senderLoopVC
+    :: String -> Env
+    -> VcEof -> VcPendings -> VcRespAvail
+    -> Send -> FromX -> IO ()
+senderLoopVC name env eof_ pendings_ avail_ send fromX = loop `E.catch` onError
+  where
+    -- logging async exception intentionally, for not expected `cancel`
+    onError se@(SomeException e) = warnOnError env name se *> throwIO e
+    loop = do
+        avail <- atomically (waitVcAvail eof_ pendings_ avail_)
+        when avail $ step *> loop
+    step = do
+        let body (Output bs _ peerInfo) = send bs peerInfo
+            finalize (Output _ i _) = atomically (delVcPending pendings_ i)
+        E.bracket fromX finalize body
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
