@@ -5,8 +5,9 @@ module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
 import Control.Concurrent.STM
-import Control.Monad (forever, replicateM, void, when)
+import Control.Monad (guard, forever, replicateM, void, when)
 import Data.ByteString (ByteString)
+import qualified Data.IntSet as Set
 
 -- libs
 import Network.Socket (SockAddr)
@@ -224,9 +225,46 @@ breakableLoop env tag body = forever body `catch` onError
 
 ----------------------------------------------------------------
 
+type VcEof = TVar Bool
+type VcPendings = TVar Set.IntSet
+type VcRespAvail = STM Bool
+
+mkVcState :: IO (VcEof, VcPendings)
+mkVcState = (,) <$> newTVarIO False <*> newTVarIO Set.empty
+
+enableVcEof :: VcEof -> STM ()
+enableVcEof eof = writeTVar eof True
+
+addVcPending :: VcPendings -> Int -> STM ()
+addVcPending pendings i = modifyTVar' pendings (Set.insert i)
+
+delVcPending :: VcPendings -> Int -> STM ()
+delVcPending pendings i = modifyTVar' pendings (Set.delete i)
+
 mkConnector :: IO (ToSender, FromX)
-mkConnector = do
+mkConnector = (\(t, f, _) -> (t, f)) <$> mkConnector'
+
+mkConnector' :: IO (ToSender, FromX, VcRespAvail)
+mkConnector' = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
-    return (toSender, fromX)
+    return (toSender, fromX, not <$> isEmptyTQueue qs)
+
+--   eof       pending     avail       sender-loop
+--
+--   eof       null        no-avail    break
+--   not-eof   null        no-avail    wait
+--   eof       not-null    no-avail    wait
+--   not-eof   not-null    no-avail    wait
+--   eof       null        avail       loop
+--   not-eof   null        avail       loop
+--   eof       not-null    avail       loop
+--   not-eof   not-null    avail       loop
+waitVcAvail :: VcEof -> VcPendings -> VcRespAvail -> STM Bool
+waitVcAvail eof_ pendings_ avail_ = do
+    noPendings <- Set.null <$> readTVar pendings_
+    eof <- readTVar eof_
+    avail <- avail_
+    guard $ avail || noPendings && eof
+    pure avail
