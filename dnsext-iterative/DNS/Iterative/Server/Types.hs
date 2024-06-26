@@ -17,16 +17,23 @@ module DNS.Iterative.Server.Types (
     withLocationIOE,
 ) where
 
-import DNS.Iterative.Query (Env)
-import DNS.TAP.Schema (SocketProtocol)
-import DNS.Types (DNSMessage)
+-- GHC
 import Data.ByteString (ByteString)
+import System.IO.Error (ioeSetLocation, tryIOError)
+
+-- libs
 import qualified Network.HTTP2.Server.Internal as H2I
 import qualified Network.QUIC as QUIC
 import Network.Socket
 import Network.TLS (Credentials (..), SessionManager)
 import qualified Network.UDP as UDP
-import System.IO.Error (ioeSetLocation, tryIOError)
+
+-- dnsext
+import DNS.TAP.Schema (SocketProtocol)
+import DNS.Types (DNSMessage)
+
+-- this package
+import DNS.Iterative.Query (Env)
 
 data PeerInfo
     = PeerInfoUDP UDP.ClientSockAddr
