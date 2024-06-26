@@ -75,6 +75,9 @@ newEmptyEnv = do
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
         , expireCache_ = \_ -> pure ()
+        , removeCache_ = \_ -> pure()
+        , filterCache_ = \_ -> pure()
+        , clearCache_ = pure ()
         , currentRoot_ = rootRef
         , currentSeconds_ = getTime
         , timeString_ = getTimeStr
@@ -92,6 +95,9 @@ setRRCacheOps RRCacheOps{..} env0 =
         { insert_ = insertCache
         , getCache_ = readCache
         , expireCache_ = expireCache
+        , removeCache_ = removeCache
+        , filterCache_ = filterCache
+        , clearCache_ = clearCache
         }
 
 setTimeCache :: TimeCache -> Env -> Env

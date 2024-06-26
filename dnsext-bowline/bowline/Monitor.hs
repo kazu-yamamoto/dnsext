@@ -36,6 +36,7 @@ import DNS.Iterative.Server (HostName, PortNumber, withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
+import DNS.Types (Domain, TYPE)
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
@@ -52,7 +53,7 @@ import UnliftIO.Exception (tryAny)
 -- this package
 import Config
 import SocketUtil (ainfosSkipError)
-import Types (Control (..))
+import Types (CacheControl (..), Control (..))
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError putStrLn Stream port
@@ -65,11 +66,16 @@ monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError 
 data Command
     = Param
     | Find String
-    | Lookup DNS.Domain DNS.TYPE
+    | Lookup Domain TYPE
     | Stats
     | WStats
     | TStats
     | Expire EpochTime
+    | Flush Domain
+    | FlushType Domain TYPE
+    | FlushBogus
+    | FlushNegative
+    | FlushAll
     | Noop
     | Exit
     | Quit
@@ -126,7 +132,7 @@ console
     -> Handle
     -> String
     -> IO ()
-console conf env Control{..} inH outH ainfo = do
+console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -171,6 +177,11 @@ console conf env Control{..} inH outH ainfo = do
         "expire" : args -> case args of
             [] -> Just $ Expire 0
             x : _ -> Expire <$> readMaybe x
+        "flush" : n : _ -> Just $ Flush $ DNS.fromRepresentation n
+        "flush_type" : n : ty : _ -> FlushType (DNS.fromRepresentation n) <$> readMaybe ty
+        "flush_bogus" : _     -> Just FlushBogus
+        "flush_negative" : _  -> Just FlushNegative
+        "flush_all" : _       -> Just FlushAll
         "exit" : _ -> Just Exit
         "quit-server" : _ -> Just Quit
         "help" : w : _ -> Just $ Help $ Just w
@@ -187,7 +198,7 @@ console conf env Control{..} inH outH ainfo = do
         dispatch Noop = return ()
         dispatch (Find s) =
             mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
-        dispatch (Lookup dom typ) = maybe (outLn "miss.") hit =<< lookupCache
+        dispatch lk@(Lookup dom typ) = print lk *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
                 cache <- getCache_ env
@@ -198,6 +209,11 @@ console conf env Control{..} inH outH ainfo = do
         dispatch TStats = unlines <$> TStat.dumpThreads >>= hPutStrLn outH
         dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
+        dispatch (Flush n) = ccRemove n *> hPutStrLn outH "done."
+        dispatch (FlushType n ty) = ccRemoveType n ty *> hPutStrLn outH "done."
+        dispatch  FlushBogus      = ccRemoveBogus *> hPutStrLn outH "done."
+        dispatch  FlushNegative   = ccRemoveNegative *> hPutStrLn outH "done."
+        dispatch  FlushAll        = ccClear *> hPutStrLn outH "done."
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
 

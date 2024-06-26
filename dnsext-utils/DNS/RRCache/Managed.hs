@@ -87,6 +87,15 @@ insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     let withExpire = Cache.insertWithExpires t k ttl crs rank
     reaperUpdate reaper $ \cache -> maybe cache id $ withExpire cache
 
+removeRRCache :: Question -> RRCache -> IO ()
+removeRRCache k (RRCache _ reaper) = reaperUpdate reaper (Cache.remove k)
+
+filterRRcache :: (Question -> EpochTime -> Hit -> Ranking -> Bool) -> RRCache -> IO ()
+filterRRcache p (RRCache _ reaper) = reaperUpdate reaper (Cache.filters p)
+
+clearRRCache :: RRCache -> IO ()
+clearRRCache (RRCache _ reaper) = reaperUpdate reaper (\c -> Cache.empty $ maxSize c)
+
 ---
 {- for stub. no alive check -}
 lookupRRCache :: Question -> RRCache -> IO (Maybe (EpochTime, Cache.Hit))
@@ -110,11 +119,14 @@ data RRCacheOps = RRCacheOps
     { insertCache :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
     , readCache :: IO Cache
     , expireCache :: EpochTime -> IO ()
+    , removeCache :: Question -> IO ()
+    , filterCache :: (Question -> EpochTime -> Hit -> Ranking -> Bool) -> IO ()
+    , clearCache :: IO ()
     , stopCache :: IO ()
     }
 
 noCacheOps :: RRCacheOps
-noCacheOps = RRCacheOps (\_ _ _ _ -> pure ()) (pure $ Cache.empty 0) (\_ -> pure ()) (pure ())
+noCacheOps = RRCacheOps (\_ _ _ _ -> pure ()) (pure $ Cache.empty 0) (\_ -> pure ()) (\_ -> pure ()) (\_ -> pure ()) (pure ()) (pure ())
 
 newRRCacheOps :: RRCacheConf -> IO RRCacheOps
 newRRCacheOps RRCacheConf{..} | maxCacheSize <= 0 = pure noCacheOps
@@ -123,8 +135,11 @@ newRRCacheOps cacheConf = do
     let insert_ k ttl crset rank = insertWithExpiresRRCache k ttl crset rank rrCache
         read_ = readRRCache rrCache
         expire_ now = expiresRRCache now rrCache
+        remove_ k = removeRRCache k rrCache
+        filter_ p = filterRRcache p rrCache
+        clear_ = clearRRCache rrCache
         stop_ = stopRRCache rrCache
-    pure $ RRCacheOps insert_ read_ expire_ stop_
+    pure $ RRCacheOps insert_ read_ expire_ remove_ filter_ clear_ stop_
 
 stopRRCache :: RRCache -> IO ()
 stopRRCache (RRCache _ reaper) = reaperKill reaper
