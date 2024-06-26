@@ -191,6 +191,21 @@ receiverLogic' mysa recv toCacher toSender proto = do
             toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
+{- FOURMOLU_DISABLE -}
+receiverLoopVC
+    :: Env
+    -> VcEof -> VcPendings
+    -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
+receiverLoopVC _env eof_ pendings_ mysa recv toCacher toSender proto = loop 1 *> atomically (enableVcEof eof_)
+  where
+    loop i = do
+        (bs, peerInfo) <- recv
+        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
+    step i bs peerInfo = do
+        atomically (addVcPending pendings_ i)
+        toCacher $ Input bs i mysa peerInfo proto toSender
+{- FOURMOLU_ENABLE -}
+
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
     handledLoop env "senderUDP" $ senderLogic' send fromX
