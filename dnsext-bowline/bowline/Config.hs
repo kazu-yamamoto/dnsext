@@ -18,14 +18,16 @@ import Data.String (fromString)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
-import DNS.Iterative.Internal (LocalZoneType (..), Address)
+import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 
 import Parser
 
 data Config = Config
-    { cnf_log :: Bool
+    { cnf_user :: String
+    , cnf_group :: String
+    , cnf_log :: Bool
     , cnf_log_output :: Log.Output
     , cnf_log_level :: Log.Level
     , cnf_short_log :: Bool
@@ -77,7 +79,9 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
     Config
-        { cnf_log = True
+        { cnf_user = "root"
+        , cnf_group = "wheel"
+        , cnf_log = True
         , cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
         , cnf_short_log = False
@@ -177,7 +181,9 @@ parseConfig file args = makeConfig defaultConfig <$> ((++) <$> mapM readArg args
 makeConfig :: Config -> [Conf] -> Config
 makeConfig def conf =
     Config
-        { cnf_log = get "log" cnf_log
+        { cnf_user = get "user" cnf_user
+        , cnf_group = get "group" cnf_group
+        , cnf_log = get "log" cnf_log
         , cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
         , cnf_short_log = get "short-log" cnf_short_log
