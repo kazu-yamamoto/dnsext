@@ -63,6 +63,7 @@ data Input a = Input
 
 data Output = Output
     { outputReplyBS :: ByteString
+    , outputRequestNum :: ReqNum
     , outputPeerInfo :: PeerInfo
     }
 

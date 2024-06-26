@@ -89,7 +89,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
                     mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
-                    inputToSender $ Output bs inputPeerInfo
+                    inputToSender $ Output bs inputRequestNum inputPeerInfo
                 CResultDenied _replyErr -> logicDenied env inp
 
 ----------------------------------------------------------------
@@ -108,7 +108,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
             mapM_ (incStats $ stats_ env) [CacheMiss, QueriesAll]
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
-            inputToSender $ Output bs inputPeerInfo
+            inputToSender $ Output bs inputRequestNum inputPeerInfo
         Left _e -> logicDenied env inp
 
 ----------------------------------------------------------------
@@ -201,7 +201,7 @@ senderLogicVC env send fromX =
 
 senderLogic' :: Send -> FromX -> IO ()
 senderLogic' send fromX = do
-    Output bs peerInfo <- fromX
+    Output bs _ peerInfo <- fromX
     send bs peerInfo
 
 ----------------------------------------------------------------

@@ -79,7 +79,7 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
                     incQuery sioPeerSockAddr
                     toCacher inp
         sender = forever $ do
-            Output bs' (PeerInfoH2 _ strm) <- fromX
+            Output bs' _ (PeerInfoH2 _ strm) <- fromX
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sioWriteResponse strm response

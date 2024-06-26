@@ -63,7 +63,7 @@ doHTTP env toCacher req aux sendResponse = do
             let inp = Input bs 0 mysa peerInfo DOH toSender
             incStatsDoH3 peersa (stats_ env)
             toCacher inp
-            Output bs' _ <- fromX
+            Output bs' _ _ <- fromX
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sendResponse response []
