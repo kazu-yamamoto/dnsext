@@ -117,6 +117,7 @@ monitor conf env mng@Control{..} = do
         loop
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 console
     :: Config
     -> Env
@@ -213,14 +214,12 @@ console conf env Control{..} inH outH ainfo = do
             , ("lookup", ("lookup DOMAIN TYPE", "lookup cache"))
             , ("stats", ("stats", "show current server stats"))
             , ("wstats", ("wstats", "show worker thread status"))
-            ,
-                ( "expire"
-                , ("expire [SECONDS]", "expire cache at the time SECONDS later")
-                )
+            , ("expire", ("expire [SECONDS]", "expire cache at the time SECONDS later"))
             , ("exit", ("exit", "exit this management session"))
             , ("quit-server", ("quit-server", "quit this server"))
             , ("help", ("help", "show this help"))
             ]
+{- FOURMOLU_ENABLE -}
 
 withWait :: STM a -> IO b -> IO (Either a b)
 withWait qstm blockAct =
