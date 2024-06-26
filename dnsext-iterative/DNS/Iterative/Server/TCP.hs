@@ -8,11 +8,12 @@ import Control.Monad (when)
 import qualified Data.ByteString as BS
 
 -- dnsext-* packages
+import qualified DNS.Do53.Internal as DNS
+import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.ThreadStats as TStat
 
 -- other packages
-import qualified DNS.Do53.Internal as DNS
 import Network.Run.TCP
 import Network.Socket (getPeerName, getSocketName)
 import qualified System.TimeManager as T
@@ -36,8 +37,10 @@ tcpServer VcServerConfig{..} env toCacher port host = do
     go mgr sock = sessionStatsTCP53 (stats_ env) $ do
         mysa <- getSocketName sock
         peersa <- getPeerName sock
+        logLn env Log.DEBUG $ "tcp-srv: accept: " ++ show peersa
         let peerInfo = PeerInfoVC peersa
-        (toSender, fromX, _) <- mkConnector
+        (toSender, fromX, availX) <- mkConnector
+        (vcEOF, vcPendings) <- mkVcState
         th <- T.registerKillThread mgr $ return ()
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
@@ -50,6 +53,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
             send bs _ = do
                 DNS.sendVC (DNS.sendTCP sock) bs
                 T.tickle th
-            receiver = receiverLogicVC env mysa recv toCacher toSender TCP
-            sender = senderLogicVC env send fromX
+            receiver = receiverLoopVC env vcEOF vcPendings mysa recv toCacher toSender TCP
+            sender = senderLoopVC "tcp-send" env vcEOF vcPendings availX send fromX
         TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
+        logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa
