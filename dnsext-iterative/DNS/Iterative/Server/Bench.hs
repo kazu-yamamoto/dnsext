@@ -54,7 +54,7 @@ benchServer bench_pipelines env _ = do
 
     let toSender = atomically . writeTQueue resQ
 
-        enqueueReq (bs, ()) = toCacher (Input bs myDummy (PeerInfoUDP clntDummy) UDP toSender)
+        enqueueReq (bs, ()) = toCacher (Input bs 0 myDummy (PeerInfoUDP clntDummy) UDP toSender)
         dequeueRes = (\(Output bs _) -> (bs, ())) <$> atomically (readTQueue resQ)
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where

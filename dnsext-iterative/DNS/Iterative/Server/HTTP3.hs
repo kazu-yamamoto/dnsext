@@ -60,7 +60,7 @@ doHTTP env toCacher req aux sendResponse = do
     case einp of
         Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
         Right bs -> do
-            let inp = Input bs mysa peerInfo DOH toSender
+            let inp = Input bs 0 mysa peerInfo DOH toSender
             incStatsDoH3 peersa (stats_ env)
             toCacher inp
             Output bs' _ <- fromX

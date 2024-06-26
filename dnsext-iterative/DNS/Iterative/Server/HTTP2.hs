@@ -75,7 +75,7 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
                 Right bs -> do
-                    let inp = Input bs sioMySockAddr peerInfo DOH toSender
+                    let inp = Input bs 0 sioMySockAddr peerInfo DOH toSender
                     incQuery sioPeerSockAddr
                     toCacher inp
         sender = forever $ do

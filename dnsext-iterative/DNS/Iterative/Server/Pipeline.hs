@@ -188,7 +188,7 @@ receiverLogic' mysa recv toCacher toSender proto = do
     if bs == ""
         then return False
         else do
-            toCacher $ Input bs mysa peerInfo proto toSender
+            toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
 senderLogic :: Env -> Send -> FromX -> IO ()
