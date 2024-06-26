@@ -4,12 +4,15 @@
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
-
 import Control.Concurrent.STM
 import Control.Monad (forever, replicateM, void, when)
 import Data.ByteString (ByteString)
 
--- dnsext-* packages
+-- libs
+import Network.Socket (SockAddr)
+import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
+
+-- dnsext packages
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
@@ -18,12 +21,7 @@ import qualified DNS.Types.Decode as DNS
 import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
 
--- other packages
-import Network.Socket (SockAddr)
-import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
-
 -- this package
-
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
 import DNS.Iterative.Server.Types
