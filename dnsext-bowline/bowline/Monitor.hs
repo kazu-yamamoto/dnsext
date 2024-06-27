@@ -226,15 +226,21 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
         showHelp (syn, msg) = syn ++ replicate (width - length syn) ' ' ++ " - " ++ msg
         width = 20
         helps =
-            [ ("param", ("param", "show server parameters"))
-            , ("find", ("find STRING", "find sub-string from dumped cache"))
-            , ("lookup", ("lookup DOMAIN TYPE", "lookup cache"))
-            , ("stats", ("stats", "show current server stats"))
-            , ("wstats", ("wstats", "show worker thread status"))
-            , ("expire", ("expire [SECONDS]", "expire cache at the time SECONDS later"))
-            , ("exit", ("exit", "exit this management session"))
-            , ("quit-server", ("quit-server", "quit this server"))
-            , ("help", ("help", "show this help"))
+            [ ("param",           ("param", "show server parameters"))
+            , ("find",            ("find [WORD]..", "find dumped cache including words"))
+            , ("lookup",          ("lookup DOMAIN TYPE", "lookup cache"))
+            , ("stats",           ("stats", "show current server stats"))
+            , ("tstats",          ("tstats [WORD]..", "show worker thread status including words"))
+            , ("wstats",          ("wstats", "show worker thread status"))
+            , ("expire",          ("expire [SECONDS]", "expire cache at the time SECONDS later"))
+            , ("flush",           ("flush DOMAIN", "remove DOMAIN rrsets with several types from cache"))
+            , ("flush_type",      ("flush DOMAIN TYPE", "remove rrset with DOMAIN and TYPE from cache"))
+            , ("flush_bogus",     ("flush_bogus", "remove all bogus cache"))
+            , ("flush_negative",  ("flush_negative", "remove all negative cache"))
+            , ("flush_all",       ("flush_all", "remove all cache"))
+            , ("exit",            ("exit", "exit this management session"))
+            , ("quit-server",     ("quit-server", "quit this server"))
+            , ("help",            ("help", "show this help"))
             ]
 {- FOURMOLU_ENABLE -}
 
