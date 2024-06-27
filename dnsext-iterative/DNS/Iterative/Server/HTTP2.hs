@@ -67,7 +67,7 @@ http2cServer VcServerConfig{..} env toCacher port host = do
 doHTTP
     :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
 doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
-    (toSender, fromX) <- mkConnector
+    (toSender, fromX, _) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm

@@ -55,7 +55,7 @@ doHTTP env toCacher req aux sendResponse = do
     let mysa = H2.auxMySockAddr aux
         peersa = H2.auxPeerSockAddr aux
         peerInfo = PeerInfoVC peersa
-    (toSender, fromX) <- mkConnector
+    (toSender, fromX, _) <- mkConnector
     einp <- getInput req
     case einp of
         Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg

@@ -37,7 +37,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
         mysa <- getSocketName sock
         peersa <- getPeerName sock
         let peerInfo = PeerInfoVC peersa
-        (toSender, fromX) <- mkConnector
+        (toSender, fromX, _) <- mkConnector
         th <- T.registerKillThread mgr $ return ()
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock

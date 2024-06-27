@@ -240,11 +240,8 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
-mkConnector :: IO (ToSender, FromX)
-mkConnector = (\(t, f, _) -> (t, f)) <$> mkConnector'
-
-mkConnector' :: IO (ToSender, FromX, VcRespAvail)
-mkConnector' = do
+mkConnector :: IO (ToSender, FromX, VcRespAvail)
+mkConnector = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs

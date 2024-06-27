@@ -41,7 +41,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
             peersa = H2.peerSockAddr backend
             peerInfo = PeerInfoVC peersa
         recvN <- makeRecvN "" $ H2.recv backend
-        (toSender, fromX) <- mkConnector
+        (toSender, fromX, _) <- mkConnector
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
                 if siz == 0
