@@ -43,15 +43,15 @@ library
         dnsext-utils,
         http-types,
         http2 >= 5.2 && < 5.3,
-        http2-tls >= 0.3 && < 0.4,
+        http2-tls >= 0.3.1 && < 0.4,
         http3,
         iproute,
         network >=2.3,
-        quic >= 0.1.18,
+        quic >= 0.1.24,
         recv >=0.1.0,
         serialise,
         time-manager,
-        tls >= 2.0.2,
+        tls >= 2.1,
         unliftio
 
     if impl(ghc >=8)

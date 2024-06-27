@@ -26,6 +26,7 @@ module DNS.Do53.Types (
     defaultResolveInfo,
     ResolveActions (..),
     defaultResolveActions,
+    NameTag (..),
     Reply (..),
     Resolver,
     OneshotResolver,
@@ -222,7 +223,7 @@ defaultResolveInfo =
         }
 
 data Reply = Reply
-    { replyTag :: String
+    { replyTag :: NameTag
     , replyDNSMessage :: DNSMessage
     , replyTxBytes :: Int
     , replyRxBytes :: Int
@@ -246,6 +247,8 @@ type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
 
+newtype NameTag = NameTag {unNameTag :: String} deriving (Eq, Ord, Show)
+
 data ResolveActions = ResolveActions
     { ractionTimeoutTime :: Int
     -- ^ Time of timeout in microseconds.
@@ -261,12 +264,14 @@ data ResolveActions = ResolveActions
     -- ^ flag for short-log mode
     , ractionKeyLog :: String -> IO ()
     -- ^ Logging for TLS main secrets.
-    , ractionSaveResumption :: ByteString -> IO ()
-    -- ^ Saving resumption information.
-    , ractionResumptionInfo :: Maybe ByteString
-    -- ^ Resumption information.
+    , ractionResumptionInfo :: NameTag -> [ByteString]
+    -- ^ Resumption information for this connection.
+    , ractionOnResumptionInfo :: NameTag -> ByteString -> IO ()
+    -- ^ Action to store resumption information for next connection.
     , ractionUseEarlyData :: Bool
     -- ^ Use 0-RTT or not.
+    , ractionOnConnectionInfo :: NameTag -> String -> IO ()
+    -- ^ Action for connection information
     }
 
 instance Show ResolveActions where
@@ -282,9 +287,10 @@ defaultResolveActions =
         , ractionLog = \_ _ ~_ -> return ()
         , ractionShortLog = False
         , ractionKeyLog = \ ~_ -> return ()
-        , ractionSaveResumption = \_ -> return ()
-        , ractionResumptionInfo = Nothing
+        , ractionResumptionInfo = \_ -> []
+        , ractionOnResumptionInfo = \_ _ -> return ()
         , ractionUseEarlyData = False
+        , ractionOnConnectionInfo = \_ _ -> return ()
         }
 
 rsso :: Socket -> IO ()

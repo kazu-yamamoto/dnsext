@@ -39,7 +39,7 @@ executable bowline
         parsec,
         split,
         stm,
-        tls,
+        tls >= 2.1,
         tls-session-manager,
         unliftio,
         wai,
@@ -65,8 +65,8 @@ executable dug
     ghc-options:      -Wall -threaded
     build-depends:
         base,
-        async,
         ansi-terminal,
+        async,
         base16-bytestring,
         bytestring,
         directory,
@@ -80,8 +80,11 @@ executable dug
         iproute,
         network,
         prettyprinter,
+        quic,
         random,
+        serialise,
         stm,
+        tls >= 2.1,
         transformers,
         unix-time
 

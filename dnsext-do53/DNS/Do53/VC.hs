@@ -35,20 +35,20 @@ tcpPersistentResolver :: PersistentResolver
 tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> do
     let send = sendVC $ sendTCP sock
         recv = recvVC rinfoVCLimit $ recvTCP sock
-    vcPersistentResolver "TCP" send recv ri body
+    vcPersistentResolver tag send recv ri body
   where
+    tag = nameTag ri "TCP"
     open = openTCP rinfoIP rinfoPort
 
 -- | Making a persistent resolver.
-vcPersistentResolver :: String -> Send -> RecvMany -> PersistentResolver
-vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
+vcPersistentResolver :: NameTag -> Send -> RecvMany -> PersistentResolver
+vcPersistentResolver tag send recv ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
     race_
         (concurrently_ (sender inpQ) (recver ref))
         (body $ resolve inpQ ref)
   where
-    name = nameTag ri proto
     emp = IM.empty :: IntMap RVar
     resolve inpQ ref q qctl = do
         ident <- ractionGenId rinfoActions
@@ -73,7 +73,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
     recver ref = forever $ do
         (rx, bss) <-
             recv `E.catch` \ne -> do
-                let e = fromIOException name ne
+                let e = fromIOException (unNameTag tag) ne
                 cleanup ref e
                 E.throwIO e
         now <- ractionGetTime rinfoActions
@@ -84,7 +84,7 @@ vcPersistentResolver proto send recv ri@ResolveInfo{..} body = do
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var $ Right $ Reply name msg 0 {- dummy -} rx
+                putMVar var $ Right $ Reply tag msg 0 {- dummy -} rx
 
     cleanup ref e = do
         vars <- IM.elems <$> readIORef ref

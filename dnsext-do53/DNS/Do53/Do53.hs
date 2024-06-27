@@ -69,11 +69,11 @@ fromIOException tag ioe = NetworkFailure aioe
   where
     aioe = annotateIOError ioe tag Nothing Nothing
 
-nameTag :: ResolveInfo -> String -> String
-nameTag ResolveInfo{..} proto = show rinfoIP ++ "#" ++ show rinfoPort ++ "/" ++ proto
+nameTag :: ResolveInfo -> String -> NameTag
+nameTag ResolveInfo{..} proto = NameTag $ show rinfoIP ++ "#" ++ show rinfoPort ++ "/" ++ proto
 
-queryTag :: Question -> String -> String
-queryTag Question{..} tag = tag'
+queryTag :: Question -> NameTag -> String
+queryTag Question{..} (NameTag tag) = tag'
   where
     ~tag' =
         "    query "
@@ -109,8 +109,8 @@ udpResolver ri@ResolveInfo{rinfoActions=ResolveActions{..},..} q _qctl = do
                 return $ Left $ fromIOException qtag e
             | otherwise -> return $ Left $ BadThing (show se)
   where
-    name = nameTag ri "UDP"
-    ~qtag = queryTag q name
+    tag = nameTag ri "UDP"
+    ~qtag = queryTag q tag
     -- Using only one socket and the same identifier.
     go qctl = bracket open UDP.close $ \sock -> do
         ractionSetSockOpt $ UDP.udpSocket sock
@@ -152,7 +152,7 @@ udpResolver ri@ResolveInfo{rinfoActions=ResolveActions{..},..} q _qctl = do
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
-                    return $ Reply name msg tx rx
+                    return $ Reply tag msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog Log.DEBUG Nothing $
@@ -188,8 +188,8 @@ vcResolver proto send recv ri@ResolveInfo{rinfoActions=ResolveActions{..}} q _qc
                 return $ Left $ fromIOException qtag e
             | otherwise -> return $ Left $ BadThing (show se)
   where
-    name = nameTag ri proto
-    ~qtag = queryTag q name
+    tag = nameTag ri proto
+    ~qtag = queryTag q tag
     go qctl0 = do
         erply <- sendQueryRecvAnswer qctl0
         case erply of
@@ -222,5 +222,5 @@ vcResolver proto send recv ri@ResolveInfo{rinfoActions=ResolveActions{..}} q _qc
         case decodeChunks now bss of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
-                Nothing -> return $ Reply name msg tx rx
+                Nothing -> return $ Reply tag msg tx rx
                 Just err -> E.throwIO err
