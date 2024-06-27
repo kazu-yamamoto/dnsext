@@ -194,20 +194,19 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch Param = showParam outLn conf
-        dispatch Noop = return ()
+        dispatch  Param = showParam outLn conf
+        dispatch  Noop = return ()
         dispatch (Find ws) =
             mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
-        dispatch lk@(Lookup dom typ) = print lk *> (maybe (outLn "miss.") hit =<< lookupCache)
+        dispatch (Lookup dom typ) = print cmd *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
-                cache <- getCache_ env
-                ts <- currentSeconds_ env
-                return $ Cache.lookup ts dom typ DNS.IN cache
+                let lk cache now = Cache.lookup now dom typ DNS.IN cache
+                lk <$> getCache_ env <*> currentSeconds_ env
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
+        dispatch  Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
         dispatch (TStats ws) = hPutStrLn outH . unlines . filter (ws `allInfixOf`) =<< TStat.dumpThreads
-        dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
+        dispatch  WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Flush n) = ccRemove n *> hPutStrLn outH "done."
         dispatch (FlushType n ty) = ccRemoveType n ty *> hPutStrLn outH "done."
@@ -215,7 +214,7 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
         dispatch  FlushNegative   = ccRemoveNegative *> hPutStrLn outH "done."
         dispatch  FlushAll        = ccClear *> hPutStrLn outH "done."
         dispatch (Help w) = printHelp w
-        dispatch x = outLn $ "command: unknown state: " ++ show x
+        dispatch  x = outLn $ "command: unknown state: " ++ show x
         allInfixOf ws = and . mapM isInfixOf ws
 
     printHelp mw = case mw of
