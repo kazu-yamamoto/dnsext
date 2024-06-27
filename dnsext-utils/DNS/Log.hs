@@ -1,7 +1,14 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module DNS.Log (
     new,
     new',
+    --
     Level (..),
+    pattern DEMO,
+    pattern WARN,
+    pattern SYSTEM,
+    --
     Output (..),
     Logger,
     PutLines,
@@ -28,12 +35,30 @@ import System.Console.ANSI.Types
 
 -- this package
 
+{- FOURMOLU_DISABLE -}
 data Level
     = DEBUG
-    | DEMO
-    | WARN
-    | SYSTEM
+    | INFO
+    | NOTICE
+    | WARNING
+    | ERR
+    | CRIT     {- not used, syslog compat -}
+    | ALERT    {- not used, syslog compat -}
+    | EMERG    {- not used, syslog compat -}
     deriving (Eq, Ord, Show, Read)
+{- FOURMOLU_ENABLE -}
+
+---
+
+{- FOURMOLU_DISABLE -}
+{- levels for backword compat  -}
+pattern DEMO     :: Level
+pattern DEMO     = INFO
+pattern WARN     :: Level
+pattern WARN     = WARNING
+pattern SYSTEM   :: Level
+pattern SYSTEM   = ERR
+{- FOURMOLU_ENABLE -}
 
 data Output
     = Stdout
