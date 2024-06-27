@@ -65,11 +65,11 @@ monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError 
 
 data Command
     = Param
-    | Find String
+    | Find [String]
     | Lookup Domain TYPE
     | Stats
     | WStats
-    | TStats
+    | TStats [String]
     | Expire EpochTime
     | Flush Domain
     | FlushType Domain TYPE
@@ -167,11 +167,11 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     parseCmd [] = Just Noop
     parseCmd ws = case ws of
         "param" : _ -> Just Param
-        "find" : s : _ -> Just $ Find s
+        "find" : as -> Just $ Find as
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
         "stats" : _ -> Just Stats
-        "t" : _ -> Just TStats
-        "tstats" : _ -> Just TStats
+        "t" : as -> Just $ TStats as
+        "tstats" : as -> Just $ TStats as
         "w" : _ -> Just WStats
         "wstats" : _ -> Just WStats
         "expire" : args -> case args of
@@ -196,8 +196,8 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
       where
         dispatch Param = showParam outLn conf
         dispatch Noop = return ()
-        dispatch (Find s) =
-            mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
+        dispatch (Find ws) =
+            mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
         dispatch lk@(Lookup dom typ) = print lk *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
@@ -206,7 +206,7 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
                 return $ Cache.lookup ts dom typ DNS.IN cache
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
         dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
-        dispatch TStats = unlines <$> TStat.dumpThreads >>= hPutStrLn outH
+        dispatch (TStats ws) = hPutStrLn outH . unlines . filter (ws `allInfixOf`) =<< TStat.dumpThreads
         dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Flush n) = ccRemove n *> hPutStrLn outH "done."
@@ -216,6 +216,7 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
         dispatch  FlushAll        = ccClear *> hPutStrLn outH "done."
         dispatch (Help w) = printHelp w
         dispatch x = outLn $ "command: unknown state: " ++ show x
+        allInfixOf ws = and . mapM isInfixOf ws
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]
