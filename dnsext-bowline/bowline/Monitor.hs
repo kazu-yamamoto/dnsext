@@ -65,11 +65,11 @@ monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError 
 
 data Command
     = Param
-    | Find String
+    | Find [String]
     | Lookup Domain TYPE
     | Stats
     | WStats
-    | TStats
+    | TStats [String]
     | Expire EpochTime
     | Flush Domain
     | FlushType Domain TYPE
@@ -167,11 +167,11 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     parseCmd [] = Just Noop
     parseCmd ws = case ws of
         "param" : _ -> Just Param
-        "find" : s : _ -> Just $ Find s
+        "find" : as -> Just $ Find as
         ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
         "stats" : _ -> Just Stats
-        "t" : _ -> Just TStats
-        "tstats" : _ -> Just TStats
+        "t" : as -> Just $ TStats as
+        "tstats" : as -> Just $ TStats as
         "w" : _ -> Just WStats
         "wstats" : _ -> Just WStats
         "expire" : args -> case args of
@@ -194,20 +194,19 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch Param = showParam outLn conf
-        dispatch Noop = return ()
-        dispatch (Find s) =
-            mapM_ outLn . filter (s `isInfixOf`) . map show . Cache.dump =<< getCache_ env
-        dispatch lk@(Lookup dom typ) = print lk *> (maybe (outLn "miss.") hit =<< lookupCache)
+        dispatch  Param = showParam outLn conf
+        dispatch  Noop = return ()
+        dispatch (Find ws) =
+            mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
+        dispatch (Lookup dom typ) = print cmd *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
-                cache <- getCache_ env
-                ts <- currentSeconds_ env
-                return $ Cache.lookup ts dom typ DNS.IN cache
+                let lk cache now = Cache.lookup now dom typ DNS.IN cache
+                lk <$> getCache_ env <*> currentSeconds_ env
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
-        dispatch TStats = unlines <$> TStat.dumpThreads >>= hPutStrLn outH
-        dispatch WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
+        dispatch  Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
+        dispatch (TStats ws) = hPutStrLn outH . unlines . filter (ws `allInfixOf`) =<< TStat.dumpThreads
+        dispatch  WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Flush n) = ccRemove n *> hPutStrLn outH "done."
         dispatch (FlushType n ty) = ccRemoveType n ty *> hPutStrLn outH "done."
@@ -215,7 +214,8 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
         dispatch  FlushNegative   = ccRemoveNegative *> hPutStrLn outH "done."
         dispatch  FlushAll        = ccClear *> hPutStrLn outH "done."
         dispatch (Help w) = printHelp w
-        dispatch x = outLn $ "command: unknown state: " ++ show x
+        dispatch  x = outLn $ "command: unknown state: " ++ show x
+        allInfixOf ws = and . mapM isInfixOf ws
 
     printHelp mw = case mw of
         Nothing -> hPutStr outH $ unlines [showHelp h | (_, h) <- helps]
@@ -225,15 +225,21 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
         showHelp (syn, msg) = syn ++ replicate (width - length syn) ' ' ++ " - " ++ msg
         width = 20
         helps =
-            [ ("param", ("param", "show server parameters"))
-            , ("find", ("find STRING", "find sub-string from dumped cache"))
-            , ("lookup", ("lookup DOMAIN TYPE", "lookup cache"))
-            , ("stats", ("stats", "show current server stats"))
-            , ("wstats", ("wstats", "show worker thread status"))
-            , ("expire", ("expire [SECONDS]", "expire cache at the time SECONDS later"))
-            , ("exit", ("exit", "exit this management session"))
-            , ("quit-server", ("quit-server", "quit this server"))
-            , ("help", ("help", "show this help"))
+            [ ("param",           ("param", "show server parameters"))
+            , ("find",            ("find [WORD]..", "find dumped cache including words"))
+            , ("lookup",          ("lookup DOMAIN TYPE", "lookup cache"))
+            , ("stats",           ("stats", "show current server stats"))
+            , ("tstats",          ("tstats [WORD]..", "show worker thread status including words"))
+            , ("wstats",          ("wstats", "show worker thread status"))
+            , ("expire",          ("expire [SECONDS]", "expire cache at the time SECONDS later"))
+            , ("flush",           ("flush DOMAIN", "remove DOMAIN rrsets with several types from cache"))
+            , ("flush_type",      ("flush DOMAIN TYPE", "remove rrset with DOMAIN and TYPE from cache"))
+            , ("flush_bogus",     ("flush_bogus", "remove all bogus cache"))
+            , ("flush_negative",  ("flush_negative", "remove all negative cache"))
+            , ("flush_all",       ("flush_all", "remove all cache"))
+            , ("exit",            ("exit", "exit this management session"))
+            , ("quit-server",     ("quit-server", "quit this server"))
+            , ("help",            ("help", "show this help"))
             ]
 {- FOURMOLU_ENABLE -}
 
