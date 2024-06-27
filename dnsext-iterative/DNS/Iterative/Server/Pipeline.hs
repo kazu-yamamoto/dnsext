@@ -212,16 +212,15 @@ logLn env level = logLines_ env level Nothing . (: [])
 ----------------------------------------------------------------
 
 handledLoop :: Env -> String -> IO () -> IO ()
-handledLoop env tag body = forever $ handle onError body
-  where
-    onError (SomeException e) = logLn env Log.WARN (tag ++ ": " ++ show e)
+handledLoop env tag body = forever $ handle (warnOnError env tag) body
 
 breakableLoop :: Env -> String -> IO () -> IO ()
 breakableLoop env tag body = forever body `catch` onError
   where
-    onError (SomeException e) = do
-        logLn env Log.WARN (tag ++ ": " ++ show e)
-        throwIO e
+    onError se@(SomeException e) = warnOnError env tag se *> throwIO e
+
+warnOnError :: Env -> String -> SomeException -> IO ()
+warnOnError env tag (SomeException e) = logLn env Log.WARN (tag ++ ": exception: " ++ show e)
 
 ----------------------------------------------------------------
 
