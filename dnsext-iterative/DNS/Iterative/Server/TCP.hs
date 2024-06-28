@@ -13,7 +13,7 @@ import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import qualified DNS.Do53.Internal as DNS
-import Network.Run.TCP
+import Network.Run.TCP.Timeout
 import Network.Socket (getPeerName, getSocketName)
 import qualified System.TimeManager as T
 
@@ -27,18 +27,16 @@ import DNS.Iterative.Stats (incStatsTCP53, sessionStatsTCP53)
 
 tcpServer :: VcServerConfig -> Server
 tcpServer VcServerConfig{..} env toCacher port host = do
-    let tcpserver = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
-            withLoc $ runTCPServer (Just host) (show port) $ go mgr
+    let tcpserver = withLoc $ runTCPServer vc_idle_timeout (Just host) (show port) go
     return ([tcpserver])
   where
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/tcp")
     maxSize = fromIntegral vc_query_max_size
-    go mgr sock = sessionStatsTCP53 (stats_ env) $ do
+    go _mgr th sock = sessionStatsTCP53 (stats_ env) $ do
         mysa <- getSocketName sock
         peersa <- getPeerName sock
         let peerInfo = PeerInfoVC peersa
         (toSender, fromX) <- mkConnector
-        th <- T.registerKillThread mgr $ return ()
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
                 if siz == 0
