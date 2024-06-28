@@ -160,7 +160,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
         , (cnf_h2, "h2-srv", http2Servers vcconf, Stream, cnf_h2_port)
         , --        , (cnf_h3, "h3-srv", http3Servers vcconf, Datagram, cnf_h3_port)
           (cnf_tls, "tls-srv", tlsServers vcconf, Stream, cnf_tls_port)
-          --        , (cnf_quic, "quic-srv", quicServers vcconf, Datagram, cnf_quic_port)
+        , (cnf_quic, "quic-srv", quicServers vcconf, Datagram, cnf_quic_port)
         ]
       where
         vcconf =

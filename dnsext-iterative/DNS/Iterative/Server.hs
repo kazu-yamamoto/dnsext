@@ -31,7 +31,6 @@ module DNS.Iterative.Server (
     http2cServers,
     http3Server,
     http3Servers,
-    quicServer,
     quicServers,
     tcpServer,
     tcpServers,
