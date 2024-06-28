@@ -29,14 +29,17 @@ import DNS.Iterative.Stats (incStatsDoQ)
 
 ----------------------------------------------------------------
 
-quicServer :: VcServerConfig -> Server
-quicServer VcServerConfig{..} env toCacher port host = do
+quicServers :: VcServerConfig -> ServerActions
+quicServers _conf _env _toCacher _ss = undefined -- xxx: don't use mapM
+
+quicServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+quicServer VcServerConfig{..} env toCacher s = do
+    name <- socketName s
     let quicserver = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
-            withLoc $ QUIC.run sconf $ go mgr
+            withLocationIOE name $ QUIC.run sconf $ go mgr
     return [quicserver]
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/quic")
-    sconf = getServerConfig vc_credentials vc_session_manager host port "doq"
+    sconf = getServerConfig vc_credentials vc_session_manager undefined undefined "doq"
     maxSize = fromIntegral vc_query_max_size
     go mgr conn = do
         info <- QUIC.getConnectionInfo conn

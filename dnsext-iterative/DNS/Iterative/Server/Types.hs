@@ -1,5 +1,5 @@
 module DNS.Iterative.Server.Types (
-    Server,
+    ServerActions,
     Env,
     HostName,
     PortNumber,
@@ -15,6 +15,8 @@ module DNS.Iterative.Server.Types (
     PeerInfo (..),
     peerSockAddr,
     withLocationIOE,
+    Socket,
+    socketName,
 ) where
 
 -- GHC
@@ -22,6 +24,7 @@ import Data.ByteString (ByteString)
 import System.IO.Error (ioeSetLocation, tryIOError)
 
 -- libs
+import Data.IP (fromSockAddr)
 import qualified Network.HTTP2.Server.Internal as H2I
 import qualified Network.QUIC as QUIC
 import Network.Socket
@@ -68,7 +71,7 @@ type FromCacher = IO (Input DNSMessage)
 type ToSender = Output -> IO ()
 type FromX = IO Output
 
-type Server = Env -> ToCacher -> PortNumber -> HostName -> IO ([IO ()])
+type ServerActions = Env -> ToCacher -> [Socket] -> IO ([IO ()])
 
 data VcServerConfig = VcServerConfig
     { vc_query_max_size :: Int
@@ -84,3 +87,10 @@ withLocationIOE loc action = do
     either left pure =<< tryIOError action
   where
     left ioe = ioError $ ioeSetLocation ioe loc
+
+socketName :: Socket -> IO String
+socketName s = do
+    sa <- getSocketName s
+    return $ case fromSockAddr sa of
+        Nothing -> "(no name)"
+        Just (ip, pn) -> show ip ++ "#" ++ show pn

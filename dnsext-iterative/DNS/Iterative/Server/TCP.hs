@@ -8,6 +8,7 @@ import Control.Monad (when)
 import qualified Data.ByteString as BS
 
 -- dnsext-* packages
+
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.ThreadStats as TStat
 
@@ -25,12 +26,18 @@ import DNS.Iterative.Stats (incStatsTCP53, sessionStatsTCP53)
 
 ----------------------------------------------------------------
 
-tcpServer :: VcServerConfig -> Server
-tcpServer VcServerConfig{..} env toCacher port host = do
-    let tcpserver = withLoc $ runTCPServer vc_idle_timeout (Just host) (show port) go
+tcpServers :: VcServerConfig -> ServerActions
+tcpServers conf env toCacher ss =
+    concat <$> mapM (tcpServer conf env toCacher) ss
+
+tcpServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+tcpServer VcServerConfig{..} env toCacher s = do
+    name <- socketName s
+    let tcpserver =
+            withLocationIOE name $
+                runTCPServerWithListenSocket vc_idle_timeout s go
     return ([tcpserver])
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/tcp")
     maxSize = fromIntegral vc_query_max_size
     go _mgr th sock = sessionStatsTCP53 (stats_ env) $ do
         mysa <- getSocketName sock

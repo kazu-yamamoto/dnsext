@@ -3,7 +3,7 @@
 -- | The server side of full resolver.
 module DNS.Iterative.Server (
     -- * Types
-    Server,
+    ServerActions,
     HostName,
     PortNumber,
     module DNS.Iterative.Query.Env,
@@ -21,15 +21,22 @@ module DNS.Iterative.Server (
     -- * UDP
     UdpServerConfig (..),
     udpServer,
+    udpServers,
 
     -- * Virtual circuit
     VcServerConfig (..),
-    tcpServer,
     http2Server,
+    http2Servers,
     http2cServer,
+    http2cServers,
     http3Server,
-    tlsServer,
+    http3Servers,
     quicServer,
+    quicServers,
+    tcpServer,
+    tcpServers,
+    tlsServer,
+    tlsServers,
 
     -- * Errors
     withLocationIOE,

@@ -56,7 +56,7 @@ import SocketUtil (ainfosSkipError)
 import Types (CacheControl (..), Control (..))
 
 monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
-monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError putStrLn Stream port
+monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
   where
     aiSocket ai =
         (,)

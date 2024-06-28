@@ -3,6 +3,7 @@
 
 module DNS.Iterative.Server.HTTP3 (
     http3Server,
+    http3Servers,
 ) where
 
 -- GHC packages
@@ -31,6 +32,13 @@ import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsDoH3)
 
 ----------------------------------------------------------------
+http3Servers :: VcServerConfig -> ServerActions
+http3Servers = undefined
+
+http3Server :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+http3Server = undefined
+
+{-
 http3Server :: VcServerConfig -> Server
 http3Server VcServerConfig{..} env toCacher port host = do
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
@@ -46,6 +54,7 @@ http3Server VcServerConfig{..} env toCacher port host = do
             , confTimeoutManager = mgr
             , confPositionReadMaker = H3.defaultPositionReadMaker
             }
+-}
 
 doHTTP
     :: Env

@@ -4,8 +4,9 @@
 module DNS.Iterative.Server.TLS where
 
 -- GHC packages
-import Data.Functor
+
 import qualified Data.ByteString as BS
+import Data.Functor
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
@@ -22,12 +23,16 @@ import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsDoT, sessionStatsDoT)
 
-tlsServer :: VcServerConfig -> Server
-tlsServer VcServerConfig{..} env toCacher port host = do
-    let tlsserver = withLoc $ H2.runTLS settings vc_credentials host port "dot" $ go
+tlsServers :: VcServerConfig -> ServerActions
+tlsServers conf env toCacher ss =
+    concat <$> mapM (tlsServer conf env toCacher) ss
+
+tlsServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+tlsServer VcServerConfig{..} env toCacher s = do
+    name <- socketName s
+    let tlsserver = withLocationIOE name $ H2.runTLSWithListenSocket settings vc_credentials s "dot" $ go
     return [tlsserver]
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/dot")
     maxSize = fromIntegral vc_query_max_size
     settings =
         H2.defaultSettings
