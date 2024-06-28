@@ -40,6 +40,7 @@ data PeerInfo
     | PeerInfoQUIC SockAddr QUIC.Stream
     | PeerInfoH2 SockAddr H2I.Stream
     | PeerInfoVC SockAddr
+    deriving Show
 
 peerSockAddr :: PeerInfo -> SockAddr
 peerSockAddr (PeerInfoUDP (UDP.ClientSockAddr sa _)) = sa
