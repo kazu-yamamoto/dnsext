@@ -55,15 +55,15 @@ doHTTP env toCacher req aux sendResponse = do
     let mysa = H2.auxMySockAddr aux
         peersa = H2.auxPeerSockAddr aux
         peerInfo = PeerInfoVC peersa
-    (toSender, fromX) <- mkConnector
+    (toSender, fromX, _) <- mkConnector
     einp <- getInput req
     case einp of
         Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
         Right bs -> do
-            let inp = Input bs mysa peerInfo DOH toSender
+            let inp = Input bs 0 mysa peerInfo DOH toSender
             incStatsDoH3 peersa (stats_ env)
             toCacher inp
-            Output bs' _ <- fromX
+            Output bs' _ _ <- fromX
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sendResponse response []

@@ -67,7 +67,7 @@ http2cServer VcServerConfig{..} env toCacher port host = do
 doHTTP
     :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
 doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
-    (toSender, fromX) <- mkConnector
+    (toSender, fromX, _) <- mkConnector
     let receiver = forever $ do
             (_, strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm
@@ -75,11 +75,11 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
                 Right bs -> do
-                    let inp = Input bs sioMySockAddr peerInfo DOH toSender
+                    let inp = Input bs 0 sioMySockAddr peerInfo DOH toSender
                     incQuery sioPeerSockAddr
                     toCacher inp
         sender = forever $ do
-            Output bs' (PeerInfoH2 _ strm) <- fromX
+            Output bs' _ (PeerInfoH2 _ strm) <- fromX
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
             sioWriteResponse strm response

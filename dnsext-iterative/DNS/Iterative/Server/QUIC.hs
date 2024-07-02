@@ -42,7 +42,7 @@ quicServer VcServerConfig{..} env toCacher port host = do
         info <- QUIC.getConnectionInfo conn
         let mysa = QUIC.localSockAddr info
             peersa = QUIC.remoteSockAddr info
-        (toSender, fromX) <- mkConnector
+        (toSender, fromX, _) <- mkConnector
         th <- T.registerKillThread mgr $ return ()
         let recv = do
                 strm <- QUIC.acceptStream conn

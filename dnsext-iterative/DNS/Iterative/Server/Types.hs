@@ -10,6 +10,7 @@ module DNS.Iterative.Server.Types (
     FromCacher,
     ToSender,
     FromX,
+    ReqNum,
     Input (..),
     Output (..),
     PeerInfo (..),
@@ -48,8 +49,12 @@ peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoH2 sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
 
+-- request identifier in one connection
+type ReqNum = Int
+
 data Input a = Input
     { inputQuery :: a
+    , inputRequestNum :: ReqNum
     , inputMysa :: SockAddr
     , inputPeerInfo :: PeerInfo
     , inputProto :: SocketProtocol
@@ -58,6 +63,7 @@ data Input a = Input
 
 data Output = Output
     { outputReplyBS :: ByteString
+    , outputRequestNum :: ReqNum
     , outputPeerInfo :: PeerInfo
     }
 

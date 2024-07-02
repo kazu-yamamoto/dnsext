@@ -9,6 +9,7 @@ import qualified Data.ByteString as BS
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
+import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.ThreadStats as TStat
 
@@ -40,14 +41,17 @@ tlsServer VcServerConfig{..} env toCacher port host = do
         let mysa = H2.mySockAddr backend
             peersa = H2.peerSockAddr backend
             peerInfo = PeerInfoVC peersa
+        logLn env Log.DEBUG $ "tls-srv: accept: " ++ show peersa
         recvN <- makeRecvN "" $ H2.recv backend
-        (toSender, fromX) <- mkConnector
+        (toSender, fromX, availX) <- mkConnector
+        (vcEOF, vcPendings) <- mkVcState
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
                 if siz == 0
                     then return ("", peerInfo)
                     else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
-            receiver = receiverLogicVC env mysa recv toCacher toSender DOT
-            sender = senderLogicVC env send fromX
+            receiver = receiverLoopVC env vcEOF vcPendings mysa recv toCacher toSender DOT
+            sender = senderLoopVC "tls-send" env vcEOF vcPendings availX send fromX
         TStat.concurrently_ "tls-send" sender "tls-recv" receiver
+        logLn env Log.DEBUG $ "tls-srv: close: " ++ show peersa

@@ -5,8 +5,10 @@ module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
 import Control.Concurrent.STM
-import Control.Monad (forever, replicateM, void, when)
+import qualified Control.Exception as E
+import Control.Monad (guard, forever, replicateM, void, when)
 import Data.ByteString (ByteString)
+import qualified Data.IntSet as Set
 
 -- libs
 import Network.Socket (SockAddr)
@@ -88,7 +90,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
                     mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
-                    inputToSender $ Output bs inputPeerInfo
+                    inputToSender $ Output bs inputRequestNum inputPeerInfo
                 CResultDenied _replyErr -> logicDenied env inp
 
 ----------------------------------------------------------------
@@ -107,7 +109,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
             mapM_ (incStats $ stats_ env) [CacheMiss, QueriesAll]
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
-            inputToSender $ Output bs inputPeerInfo
+            inputToSender $ Output bs inputRequestNum inputPeerInfo
         Left _e -> logicDenied env inp
 
 ----------------------------------------------------------------
@@ -187,8 +189,23 @@ receiverLogic' mysa recv toCacher toSender proto = do
     if bs == ""
         then return False
         else do
-            toCacher $ Input bs mysa peerInfo proto toSender
+            toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
+
+{- FOURMOLU_DISABLE -}
+receiverLoopVC
+    :: Env
+    -> VcEof -> VcPendings
+    -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
+receiverLoopVC _env eof_ pendings_ mysa recv toCacher toSender proto = loop 1 *> atomically (enableVcEof eof_)
+  where
+    loop i = do
+        (bs, peerInfo) <- recv
+        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
+    step i bs peerInfo = do
+        atomically (addVcPending pendings_ i)
+        toCacher $ Input bs i mysa peerInfo proto toSender
+{- FOURMOLU_ENABLE -}
 
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
@@ -200,8 +217,26 @@ senderLogicVC env send fromX =
 
 senderLogic' :: Send -> FromX -> IO ()
 senderLogic' send fromX = do
-    Output bs peerInfo <- fromX
+    Output bs _ peerInfo <- fromX
     send bs peerInfo
+
+{- FOURMOLU_DISABLE -}
+senderLoopVC
+    :: String -> Env
+    -> VcEof -> VcPendings -> VcRespAvail
+    -> Send -> FromX -> IO ()
+senderLoopVC name env eof_ pendings_ avail_ send fromX = loop `E.catch` onError
+  where
+    -- logging async exception intentionally, for not expected `cancel`
+    onError se@(SomeException e) = warnOnError env name se *> throwIO e
+    loop = do
+        avail <- atomically (waitVcAvail eof_ pendings_ avail_)
+        when avail $ step *> loop
+    step = do
+        let body (Output bs _ peerInfo) = send bs peerInfo
+            finalize (Output _ i _) = atomically (delVcPending pendings_ i)
+        E.bracket fromX finalize body
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -211,22 +246,55 @@ logLn env level = logLines_ env level Nothing . (: [])
 ----------------------------------------------------------------
 
 handledLoop :: Env -> String -> IO () -> IO ()
-handledLoop env tag body = forever $ handle onError body
-  where
-    onError (SomeException e) = logLn env Log.WARN (tag ++ ": " ++ show e)
+handledLoop env tag body = forever $ handle (warnOnError env tag) body
 
 breakableLoop :: Env -> String -> IO () -> IO ()
 breakableLoop env tag body = forever body `catch` onError
   where
-    onError (SomeException e) = do
-        logLn env Log.WARN (tag ++ ": " ++ show e)
-        throwIO e
+    onError se@(SomeException e) = warnOnError env tag se *> throwIO e
+
+warnOnError :: Env -> String -> SomeException -> IO ()
+warnOnError env tag (SomeException e) = logLn env Log.WARN (tag ++ ": exception: " ++ show e)
 
 ----------------------------------------------------------------
 
-mkConnector :: IO (ToSender, FromX)
+type VcEof = TVar Bool
+type VcPendings = TVar Set.IntSet
+type VcRespAvail = STM Bool
+
+mkVcState :: IO (VcEof, VcPendings)
+mkVcState = (,) <$> newTVarIO False <*> newTVarIO Set.empty
+
+enableVcEof :: VcEof -> STM ()
+enableVcEof eof = writeTVar eof True
+
+addVcPending :: VcPendings -> Int -> STM ()
+addVcPending pendings i = modifyTVar' pendings (Set.insert i)
+
+delVcPending :: VcPendings -> Int -> STM ()
+delVcPending pendings i = modifyTVar' pendings (Set.delete i)
+
+mkConnector :: IO (ToSender, FromX, VcRespAvail)
 mkConnector = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
-    return (toSender, fromX)
+    return (toSender, fromX, not <$> isEmptyTQueue qs)
+
+--   eof       pending     avail       sender-loop
+--
+--   eof       null        no-avail    break
+--   not-eof   null        no-avail    wait
+--   eof       not-null    no-avail    wait
+--   not-eof   not-null    no-avail    wait
+--   eof       null        avail       loop
+--   not-eof   null        avail       loop
+--   eof       not-null    avail       loop
+--   not-eof   not-null    avail       loop
+waitVcAvail :: VcEof -> VcPendings -> VcRespAvail -> STM Bool
+waitVcAvail eof_ pendings_ avail_ = do
+    noPendings <- Set.null <$> readTVar pendings_
+    eof <- readTVar eof_
+    avail <- avail_
+    guard $ avail || noPendings && eof
+    pure avail
