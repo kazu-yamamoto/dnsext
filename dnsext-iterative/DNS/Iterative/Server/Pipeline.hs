@@ -175,6 +175,20 @@ mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
 {- FOURMOLU_DISABLE -}
+receiverVC
+    :: Env -> VcSession
+    -> Recv -> ToCacher -> MkInput -> IO ()
+receiverVC _env VcSession{..} recv toCacher mkInput_ = loop 1 *> atomically (enableVcEof vcEof_)
+  where
+    loop i = do
+        (bs, peerInfo) <- recv
+        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
+    step i bs peerInfo = do
+        atomically (addVcPending vcPendings_ i)
+        toCacher $ mkInput_ bs peerInfo i
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 receiverLoopVC
     :: Env
     -> VcEof -> VcPendings
@@ -213,6 +227,23 @@ receiverLogic' mysa recv toCacher toSender proto = do
             return True
 
 {- FOURMOLU_DISABLE -}
+senderVC
+    :: String -> Env -> VcSession
+    -> Send -> FromX -> IO ()
+senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
+  where
+    -- logging async exception intentionally, for not expected `cancel`
+    onError se@(SomeException e) = warnOnError env name se *> throwIO e
+    loop = do
+        avail <- atomically (waitVcNext vcs)
+        when avail $ step *> loop
+    step = do
+        let body (Output bs _ peerInfo) = send bs peerInfo
+            finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
+        E.bracket fromX finalize body
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 senderLoopVC
     :: String -> Env
     -> VcEof -> VcPendings -> VcRespAvail
@@ -249,6 +280,26 @@ type VcEof = TVar Bool
 type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
 
+{- FOURMOLU_DISABLE -}
+data VcSession =
+    VcSession
+    { vcEof_       :: VcEof
+    , vcPendings_  :: VcPendings
+    , vcRespAvail_ :: VcRespAvail
+    }
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+initVcSession :: IO (VcSession, ToSender, FromX)
+initVcSession = do
+    vcEof       <- newTVarIO False
+    vcPendinfs  <- newTVarIO Set.empty
+    senderQ     <- newTQueueIO
+    let toSender = atomically . writeTQueue senderQ
+        fromX = atomically $ readTQueue senderQ
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ), toSender, fromX)
+{- FOURMOLU_ENABLE -}
+
 mkVcState :: IO (VcEof, VcPendings)
 mkVcState = (,) <$> newTVarIO False <*> newTVarIO Set.empty
 
@@ -260,6 +311,20 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
+
+--   eof       pending     avail       sender-loop
+--
+--   eof       null        no-avail    break
+--   not-eof   null        no-avail    wait
+--   eof       not-null    no-avail    wait
+--   not-eof   not-null    no-avail    wait
+--   -         -           avail       loop
+waitVcNext :: VcSession -> STM Bool
+waitVcNext VcSession{..} = do
+    eoVC <- (&&) <$> readTVar vcEof_ <*> (Set.null <$> readTVar vcPendings_)
+    avail <- vcRespAvail_
+    guard $ avail || eoVC
+    pure avail
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
 mkConnector = do
