@@ -51,7 +51,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
                     then return ("", peerInfo)
                     else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
-            receiver = receiverLoopVC env vcEOF vcPendings mysa recv toCacher toSender DOT
+            receiver = receiverLoopVC env vcEOF vcPendings recv toCacher $ mkInput mysa toSender DOT
             sender = senderLoopVC "tls-send" env vcEOF vcPendings availX send fromX
         TStat.concurrently_ "tls-send" sender "tls-recv" receiver
         logLn env Log.DEBUG $ "tls-srv: close: " ++ show peersa

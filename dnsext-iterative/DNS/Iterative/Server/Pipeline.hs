@@ -169,19 +169,24 @@ record env Input{..} reply rspWire = do
 type Recv = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
+type MkInput = ByteString -> PeerInfo -> Int -> Input ByteString
+
+mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
+mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
+
 {- FOURMOLU_DISABLE -}
 receiverLoopVC
     :: Env
     -> VcEof -> VcPendings
-    -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
-receiverLoopVC _env eof_ pendings_ mysa recv toCacher toSender proto = loop 1 *> atomically (enableVcEof eof_)
+    -> Recv -> ToCacher -> MkInput -> IO ()
+receiverLoopVC _env eof_ pendings_ recv toCacher mkInput_ = loop 1 *> atomically (enableVcEof eof_)
   where
     loop i = do
         (bs, peerInfo) <- recv
         when (bs /= "") $ step i bs peerInfo *> loop (succ i)
     step i bs peerInfo = do
         atomically (addVcPending pendings_ i)
-        toCacher $ Input bs i mysa peerInfo proto toSender
+        toCacher $ mkInput_ bs peerInfo i
 {- FOURMOLU_ENABLE -}
 
 receiverLogic
