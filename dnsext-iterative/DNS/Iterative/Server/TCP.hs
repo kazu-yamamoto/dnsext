@@ -53,7 +53,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
             send bs _ = do
                 DNS.sendVC (DNS.sendTCP sock) bs
                 T.tickle th
-            receiver = receiverLoopVC env vcEOF vcPendings mysa recv toCacher toSender TCP
+            receiver = receiverLoopVC env vcEOF vcPendings recv toCacher $ mkInput mysa toSender TCP
             sender = senderLoopVC "tcp-send" env vcEOF vcPendings availX send fromX
         TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa
