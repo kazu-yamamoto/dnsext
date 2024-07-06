@@ -3,20 +3,17 @@
 -- | The server side of full resolver.
 module DNS.Iterative.Server (
     -- * Types
-    Server,
-    HostName,
-    PortNumber,
     module DNS.Iterative.Query.Env,
+    module DNS.Iterative.Server.Types,
     RRCacheOps (..),
     newRRCacheOps,
     TimeCache (..),
     newTimeCache,
+    module Network.Socket,
 
     -- * Pipeline
     mkPipeline,
     getWorkerStats,
-    ToCacher,
-    Input,
 
     -- * UDP
     UdpServerConfig (..),
@@ -31,9 +28,6 @@ module DNS.Iterative.Server (
     tlsServer,
     quicServer,
 
-    -- * Errors
-    withLocationIOE,
-
     -- * WorkerStat
     WorkerStat (..),
     WorkerStatOP (..),
@@ -42,6 +36,18 @@ module DNS.Iterative.Server (
 
     -- * Stats
     getStats,
+
+    -- * Tests
+    Recv,
+    Send,
+    VcEof,
+    VcPendings,
+    VcRespAvail,
+    mkVcState,
+    mkConnector,
+    mkInput,
+    receiverLoopVC,
+    senderLoopVC,
 ) where
 
 import DNS.Iterative.Query.Env
@@ -62,6 +68,7 @@ import DNS.TimeCache (TimeCache (..), newTimeCache)
 import Control.Concurrent (getNumCapabilities)
 import Data.ByteString.Builder
 import Data.String (fromString)
+import Network.Socket
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =
