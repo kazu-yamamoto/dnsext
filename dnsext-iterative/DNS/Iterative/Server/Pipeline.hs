@@ -188,21 +188,6 @@ receiverVC _env VcSession{..} recv toCacher mkInput_ = loop 1 *> atomically (ena
         toCacher $ mkInput_ bs peerInfo i
 {- FOURMOLU_ENABLE -}
 
-{- FOURMOLU_DISABLE -}
-receiverLoopVC
-    :: Env
-    -> VcEof -> VcPendings
-    -> Recv -> ToCacher -> MkInput -> IO ()
-receiverLoopVC _env eof_ pendings_ recv toCacher mkInput_ = loop 1 *> atomically (enableVcEof eof_)
-  where
-    loop i = do
-        (bs, peerInfo) <- recv
-        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
-    step i bs peerInfo = do
-        atomically (addVcPending pendings_ i)
-        toCacher $ mkInput_ bs peerInfo i
-{- FOURMOLU_ENABLE -}
-
 receiverLogic
     :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
 receiverLogic env mysa recv toCacher toSender proto =
@@ -240,24 +225,6 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
     step = do
         let body (Output bs _ peerInfo) = send bs peerInfo
             finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
-        E.bracket fromX finalize body
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-senderLoopVC
-    :: String -> Env
-    -> VcEof -> VcPendings -> VcRespAvail
-    -> Send -> FromX -> IO ()
-senderLoopVC name env eof_ pendings_ avail_ send fromX = loop `E.catch` onError
-  where
-    -- logging async exception intentionally, for not expected `cancel`
-    onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop = do
-        avail <- atomically (waitVcAvail eof_ pendings_ avail_)
-        when avail $ step *> loop
-    step = do
-        let body (Output bs _ peerInfo) = send bs peerInfo
-            finalize (Output _ i _) = atomically (delVcPending pendings_ i)
         E.bracket fromX finalize body
 {- FOURMOLU_ENABLE -}
 
@@ -300,9 +267,6 @@ initVcSession = do
     pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ), toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
-mkVcState :: IO (VcEof, VcPendings)
-mkVcState = (,) <$> newTVarIO False <*> newTVarIO Set.empty
-
 enableVcEof :: VcEof -> STM ()
 enableVcEof eof = writeTVar eof True
 
@@ -332,24 +296,6 @@ mkConnector = do
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
     return (toSender, fromX, not <$> isEmptyTQueue qs)
-
---   eof       pending     avail       sender-loop
---
---   eof       null        no-avail    break
---   not-eof   null        no-avail    wait
---   eof       not-null    no-avail    wait
---   not-eof   not-null    no-avail    wait
---   eof       null        avail       loop
---   not-eof   null        avail       loop
---   eof       not-null    avail       loop
---   not-eof   not-null    avail       loop
-waitVcAvail :: VcEof -> VcPendings -> VcRespAvail -> STM Bool
-waitVcAvail eof_ pendings_ avail_ = do
-    noPendings <- Set.null <$> readTVar pendings_
-    eof <- readTVar eof_
-    avail <- avail_
-    guard $ avail || noPendings && eof
-    pure avail
 
 ----------------------------------------------------------------
 

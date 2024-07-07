@@ -48,10 +48,7 @@ module DNS.Iterative.Server (
     mkInput,
     receiverVC,
     senderVC,
-    mkVcState,
     mkConnector,
-    receiverLoopVC,
-    senderLoopVC,
 ) where
 
 import DNS.Iterative.Query.Env
