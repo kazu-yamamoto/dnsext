@@ -27,6 +27,12 @@ import DNS.Iterative.Server
 
 spec :: Spec
 spec = describe "server" $ do
+    it "VC session - 1 - finish" $ do
+        m <- timeout 3_000_000 $ vcSession ["6", "4", "2"]
+        m `shouldSatisfy` isJust
+    it "VC session - 2 - finish" $ do
+        m <- timeout 3_000_000 $ vcSession ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
+        m `shouldSatisfy` isJust
     it "session - 1 - finish" $ do
         m <- timeout 3_000_000 $ session ["6", "4", "2"]
         m `shouldSatisfy` isJust
@@ -35,6 +41,25 @@ spec = describe "server" $ do
         m `shouldSatisfy` isJust
 
 ---
+
+{- FOUMOLU_DISABLE -}
+vcSession :: [ByteString] -> IO String
+vcSession ws = do
+    env <- newEmptyEnv
+    (vcSess@VcSession{}, toSender, fromX) <- initVcSession
+    toCacher <- getToCacher
+    recv <- getRecv ws
+    let myaddr    = SockAddrInet 53 0x0100007f
+        receiver  = receiverVC env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        sender    = senderVC "test-send" env vcSess send fromX
+        debug     = False
+    when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
+        dump vcSess
+        threadDelay 500_000
+
+    TStat.concurrently_ "test-send" sender "test-recv" receiver
+    pure "finished"
+{- FOUMOLU_ENABLE -}
 
 {- FOUMOLU_DISABLE -}
 session :: [ByteString] -> IO String
@@ -49,15 +74,18 @@ session ws = do
         sender    = senderLoopVC "test-send" env vcEof vcPendings vcRespAvail send fromX
         debug     = False
     when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
-        dump vcEof vcPendings vcRespAvail
+        dump' vcEof vcPendings vcRespAvail
         threadDelay 500_000
 
     TStat.concurrently_ "test-send" sender "test-recv" receiver
     pure "finished"
 {- FOUMOLU_ENABLE -}
 
-dump :: VcEof -> VcPendings -> VcRespAvail -> IO ()
-dump vcEof vcPendings vcRespAvail = do
+dump :: VcSession -> IO ()
+dump VcSession{..} = dump' vcEof_ vcPendings_ vcRespAvail_
+
+dump' :: VcEof -> VcPendings -> VcRespAvail -> IO ()
+dump' vcEof vcPendings vcRespAvail = do
     (e, p, a) <- atomically $ (,,) <$> readTVar vcEof <*> readTVar vcPendings <*> vcRespAvail
     putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
 
