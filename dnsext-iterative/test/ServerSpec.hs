@@ -33,12 +33,6 @@ spec = describe "server" $ do
     it "VC session - 2 - finish" $ do
         m <- timeout 3_000_000 $ vcSession ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
         m `shouldSatisfy` isJust
-    it "session - 1 - finish" $ do
-        m <- timeout 3_000_000 $ session ["6", "4", "2"]
-        m `shouldSatisfy` isJust
-    it "session - 2 - finish" $ do
-        m <- timeout 3_000_000 $ session ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
-        m `shouldSatisfy` isJust
 
 ---
 
@@ -61,32 +55,9 @@ vcSession ws = do
     pure "finished"
 {- FOUMOLU_ENABLE -}
 
-{- FOUMOLU_DISABLE -}
-session :: [ByteString] -> IO String
-session ws = do
-    env <- newEmptyEnv
-    (vcEof, vcPendings) <- mkVcState
-    (toSender, fromX, vcRespAvail) <- mkConnector
-    toCacher <- getToCacher
-    recv <- getRecv ws
-    let myaddr    = SockAddrInet 53 0x0100007f
-        receiver  = receiverLoopVC env vcEof vcPendings recv toCacher (mkInput myaddr toSender UDP)
-        sender    = senderLoopVC "test-send" env vcEof vcPendings vcRespAvail send fromX
-        debug     = False
-    when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
-        dump' vcEof vcPendings vcRespAvail
-        threadDelay 500_000
-
-    TStat.concurrently_ "test-send" sender "test-recv" receiver
-    pure "finished"
-{- FOUMOLU_ENABLE -}
-
 dump :: VcSession -> IO ()
-dump VcSession{..} = dump' vcEof_ vcPendings_ vcRespAvail_
-
-dump' :: VcEof -> VcPendings -> VcRespAvail -> IO ()
-dump' vcEof vcPendings vcRespAvail = do
-    (e, p, a) <- atomically $ (,,) <$> readTVar vcEof <*> readTVar vcPendings <*> vcRespAvail
+dump VcSession{..} = do
+    (e, p, a) <- atomically $ (,,) <$> readTVar vcEof_ <*> readTVar vcPendings_ <*> vcRespAvail_
     putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
 
 {- FOUMOLU_DISABLE -}
