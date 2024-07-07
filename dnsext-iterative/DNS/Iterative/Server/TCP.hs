@@ -39,8 +39,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
         peersa <- getPeerName sock
         logLn env Log.DEBUG $ "tcp-srv: accept: " ++ show peersa
         let peerInfo = PeerInfoVC peersa
-        (toSender, fromX, availX) <- mkConnector
-        (vcEOF, vcPendings) <- mkVcState
+        (vcSess, toSender, fromX) <- initVcSession
         th <- T.registerKillThread mgr $ return ()
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
@@ -53,7 +52,7 @@ tcpServer VcServerConfig{..} env toCacher port host = do
             send bs _ = do
                 DNS.sendVC (DNS.sendTCP sock) bs
                 T.tickle th
-            receiver = receiverLoopVC env vcEOF vcPendings recv toCacher $ mkInput mysa toSender TCP
-            sender = senderLoopVC "tcp-send" env vcEOF vcPendings availX send fromX
+            receiver = receiverVC env vcSess recv toCacher $ mkInput mysa toSender TCP
+            sender = senderVC "tcp-send" env vcSess send fromX
         TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa
