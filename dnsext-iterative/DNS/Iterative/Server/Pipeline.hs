@@ -293,15 +293,15 @@ initVcTimeout micro = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO (VcSession, ToSender, FromX)
-initVcSession = do
+initVcSession :: IO VcWaitRead -> Int -> IO (VcSession, ToSender, FromX)
+initVcSession getWaitIn micro = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
     senderQ     <- newTQueueIO
-    vcTimeout   <- initVcTimeout 5000000
+    vcTimeout   <- initVcTimeout micro
     let toSender = atomically . writeTQueue senderQ
         fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) (pure $ pure ()) vcTimeout, toSender, fromX)
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()

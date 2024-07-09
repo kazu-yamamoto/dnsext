@@ -40,7 +40,7 @@ spec = describe "server" $ do
 vcSession :: [ByteString] -> IO String
 vcSession ws = do
     env <- newEmptyEnv
-    (vcSess@VcSession{}, toSender, fromX) <- initVcSession
+    (vcSess@VcSession{}, toSender, fromX) <- initVcSession (pure $ pure ()) 5_000_000
     toCacher <- getToCacher
     recv <- getRecv ws
     let myaddr    = SockAddrInet 53 0x0100007f
