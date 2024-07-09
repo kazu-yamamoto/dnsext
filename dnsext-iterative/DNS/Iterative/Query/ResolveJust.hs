@@ -225,12 +225,12 @@ servsChildZone nss dom msg =
         reqQC <- asksQC requestCD_
         case soaRRs of
             [] -> fallback
-            [_] -> getWorkaround >>= verifySOA reqQC
+            [_] -> getWorkaround "SOA" >>= verifySOA reqQC
             _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
         multipleSOA rank soaRRs = do
-            logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": multiple SOAs are found:"
+            logLn Log.WARN $ "servs-child: " ++ show dom ++ ": multiple SOAs are found:"
             logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
         verifySOA reqQC wd
@@ -248,17 +248,19 @@ servsChildZone nss dom msg =
         let arrsigRRs = rrListWith RRSIG (signedA <=< DNS.fromRData) dom (\_ rr -> rr) srrs
         case arrsigRRs of
             [] -> fallback
-            _ : _ -> hasDelegation <$> getWorkaround
+            _ : _ -> hasDelegation <$> getWorkaround "A-RRSIG"
       where
         {- Case when apex of cohabited child-zone has A record,
            * with DNSSEC, signed with child-zone apex.
            * without DNSSEC, indistinguishable from the A definition without sub-domain cohabitation -}
         signedA rd@RD_RRSIG{..} = guard (rrsig_type == A && rrsig_zone == dom) $> rd
     verificationError = do
-        logLn Log.WARN $ "servsChildZone: " ++ show dom ++ ": verification error. invalid SOA:"
+        logLn Log.WARN $ "servs-child: " ++ show dom ++ ": verification error. invalid SOA:"
         clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
         throwDnsError DNS.ServerFailure
-    getWorkaround = fillsDNSSEC nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
+    getWorkaround tag = do
+        logLn Log.DEMO $ "servs-child: workaround: " ++ tag ++ ": " ++ show dom ++ " may be provided with " ++ show (delegationZone nss)
+        fillsDNSSEC nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
 
 fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC nss d = do
