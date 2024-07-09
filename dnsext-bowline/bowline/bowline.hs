@@ -22,7 +22,6 @@ import Data.Functor
 import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
-import Network.Socket (SocketType (..))
 import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
 import System.Environment (getArgs)
