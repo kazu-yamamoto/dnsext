@@ -299,16 +299,17 @@ delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 updateVcTimeout :: Int -> VcTimeout -> IO ()
 updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
 
---   eof       pending     avail       sender-loop
+--   eof       pending     timeout   avail       sender-loop
 --
---   eof       null        no-avail    break
---   not-eof   null        no-avail    wait
---   eof       not-null    no-avail    wait
---   not-eof   not-null    no-avail    wait
---   -         -           avail       loop
+--   eof       null        to        no-avail    break
+--   not-eof   null        to        no-avail    break
+--   eof       null        not-to    no-avail    break
+--   not-eof   null        not-to    no-avail    wait
+--   -         not-null    -         no-avail    wait
+--   -         -                     avail       loop
 waitVcNext :: VcSession -> STM Bool
-waitVcNext VcSession{..} = do
-    eoVC <- (&&) <$> readTVar vcEof_ <*> (Set.null <$> readTVar vcPendings_)
+waitVcNext VcSession{vcTimeout_=VcTimeout{..},..} = do
+    eoVC <- (&&) <$> ((||) <$> readTVar vcEof_ <*> readTVar vtState_) <*> (Set.null <$> readTVar vcPendings_)
     avail <- vcRespAvail_
     guard $ avail || eoVC
     pure avail
