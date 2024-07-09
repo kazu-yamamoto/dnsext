@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Recursive (recursiveQuery) where
 
@@ -9,6 +10,7 @@ import Codec.Serialise
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
+import Data.Functor
 import DNS.Do53.Client (
     LookupConf (..),
     QueryControls,
@@ -60,7 +62,7 @@ recursiveQuery
     -> Options
     -> TQueue (NameTag, String)
     -> IO ()
-recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
+recursiveQuery mserver port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     let ractions =
             defaultResolveActions
                 { ractionLog = \a b c -> atomically $ putLinesSTM a b c
@@ -72,7 +74,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
                     Nothing -> \_ -> return ()
                     Just file -> \msg -> appendFile file (msg ++ "\n")
                 }
-    (conf, aps) <- getCustomConf mserver port mempty ractions
+    (conf, aps) <- getCustomConf mserver port mempty opt ractions
     mx <-
         if optDoX == "auto"
             then resolvePipeline conf
@@ -181,13 +183,15 @@ makeResolveInfo ractions tq aps ss = mk <$> aps
                 , ractionResumptionInfo = \tag -> map snd $ fst $ List.partition (\(t, _) -> t == tag) ss
                 }
 
+{- FOURMOLU_DISABLE -}
 getCustomConf
     :: [HostName]
     -> PortNumber
     -> QueryControls
+    -> Options
     -> ResolveActions
     -> IO (LookupConf, [(IP, PortNumber)])
-getCustomConf mserver port ctl ractions = case mserver of
+getCustomConf mserver port ctl Options{..} ractions = case mserver of
     [] -> return (conf, [])
     hs -> do
         as <- concat <$> mapM toNumeric hs
@@ -203,21 +207,17 @@ getCustomConf mserver port ctl ractions = case mserver of
             }
 
     toNumeric :: HostName -> IO [HostName]
-    toNumeric sname | isNumeric sname = return [sname]
+    toNumeric sname
+        | Just {} <- readMaybe @IPv4 sname  = pure [sname]
+        | Just {} <- readMaybe @IPv6 sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [sname]
     toNumeric sname = DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
         let dom = DNS.fromRepresentation sname
         eA <- fmap (fmap (show . DNS.a_ipv4)) <$> DNS.lookupA env dom
-        eAAAA <- fmap (fmap (show . DNS.aaaa_ipv6)) <$> DNS.lookupAAAA env dom
-        case rights [eA, eAAAA] of
+        eAAAA <- sequence [ fmap (fmap (show . DNS.aaaa_ipv6)) <$> DNS.lookupAAAA env dom | not optDisableV6NS ]
+        case rights $ eA : eAAAA of
             [] -> fail $ show eA
             hss -> return $ concat hss
-
-isNumeric :: HostName -> Bool
-isNumeric h = case readMaybe h :: Maybe IPv4 of
-    Just _ -> True
-    Nothing -> case readMaybe h :: Maybe IPv6 of
-        Just _ -> True
-        Nothing -> False
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
