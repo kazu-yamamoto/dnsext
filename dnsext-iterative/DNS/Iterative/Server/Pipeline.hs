@@ -4,6 +4,7 @@
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
+import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeout, updateTimeout)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Control.Monad (guard, forever, replicateM, void, when)
@@ -247,12 +248,31 @@ type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
 
 {- FOURMOLU_DISABLE -}
+data VcTimeout =
+    VcTimeout
+    { vtManager_ :: TimerManager
+    , vtKey_     :: TimeoutKey
+    , vtState_   :: TVar Bool
+    }
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 data VcSession =
     VcSession
     { vcEof_       :: VcEof
     , vcPendings_  :: VcPendings
     , vcRespAvail_ :: VcRespAvail
+    , vcTimeout_   :: VcTimeout
     }
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+initVcTimeout :: Int -> IO VcTimeout
+initVcTimeout micro = do
+    st  <- newTVarIO False
+    mgr <- getSystemTimerManager
+    key <- registerTimeout mgr micro (atomically $ writeTVar st True)
+    pure $ VcTimeout mgr key st
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -261,9 +281,10 @@ initVcSession = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
     senderQ     <- newTQueueIO
+    vcTimeout   <- initVcTimeout 5000000
     let toSender = atomically . writeTQueue senderQ
         fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ), toSender, fromX)
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) vcTimeout, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -274,6 +295,9 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
+
+updateVcTimeout :: Int -> VcTimeout -> IO ()
+updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
 
 --   eof       pending     avail       sender-loop
 --
