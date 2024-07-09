@@ -40,14 +40,15 @@ module DNS.Iterative.Server (
     -- * Tests
     Recv,
     Send,
+    VcSession (..),
     VcEof,
     VcPendings,
     VcRespAvail,
-    mkVcState,
-    mkConnector,
+    initVcSession,
     mkInput,
-    receiverLoopVC,
-    senderLoopVC,
+    receiverVC,
+    senderVC,
+    mkConnector,
 ) where
 
 import DNS.Iterative.Query.Env
