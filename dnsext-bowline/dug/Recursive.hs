@@ -60,7 +60,7 @@ recursiveQuery
     -> Options
     -> TQueue (NameTag, String)
     -> IO ()
-recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
+recursiveQuery mserver port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     let ractions =
             defaultResolveActions
                 { ractionLog = \a b c -> atomically $ putLinesSTM a b c
@@ -72,7 +72,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs Options{..} tq = do
                     Nothing -> \_ -> return ()
                     Just file -> \msg -> appendFile file (msg ++ "\n")
                 }
-    (conf, aps) <- getCustomConf mserver port mempty ractions
+    (conf, aps) <- getCustomConf mserver port mempty opt ractions
     mx <-
         if optDoX == "auto"
             then resolvePipeline conf
@@ -185,9 +185,10 @@ getCustomConf
     :: [HostName]
     -> PortNumber
     -> QueryControls
+    -> Options
     -> ResolveActions
     -> IO (LookupConf, [(IP, PortNumber)])
-getCustomConf mserver port ctl ractions = case mserver of
+getCustomConf mserver port ctl Options{..} ractions = case mserver of
     [] -> return (conf, [])
     hs -> do
         as <- concat <$> mapM toNumeric hs
