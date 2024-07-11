@@ -25,7 +25,6 @@ import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import Network.HTTP2.TLS.Server (ServerIO (..))
 import qualified Network.HTTP2.TLS.Server as H2TLS
-import Network.Socket (SockAddr)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
