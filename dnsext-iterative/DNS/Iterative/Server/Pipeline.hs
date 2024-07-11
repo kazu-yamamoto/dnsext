@@ -5,11 +5,14 @@ module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
 import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeout, updateTimeout)
+import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
-import Control.Monad (guard, forever, replicateM, void, when)
+import Control.Monad (guard, forever, replicateM, when)
 import Data.ByteString (ByteString)
+import Data.Functor
 import qualified Data.IntSet as Set
+import System.Posix.Types (Fd (..))
 
 -- libs
 import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
@@ -178,11 +181,23 @@ mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSen
 receiverVC
     :: Env -> VcSession
     -> Recv -> ToCacher -> MkInput -> IO ()
-receiverVC _env VcSession{..} recv toCacher mkInput_ = loop 1 *> atomically (enableVcEof vcEof_)
+receiverVC _env VcSession{vcTimeout_=VcTimeout{..},..} recv toCacher mkInput_ = loop 1
   where
-    loop i = do
-        (bs, peerInfo) <- recv
-        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
+    loop i = casesRecv (pure ()) (atomically $ enableVcEof vcEof_) $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
+      where
+        casesRecv caseTo caseEof caseNext = cases =<< waitTimeout =<< vcWaitRead_
+          where
+            cases timeout
+                | timeout     = caseTo
+                | otherwise   = do
+                      (bs, peerInfo) <- recv
+                      if bs == ""
+                          then  caseEof
+                          else  caseNext bs peerInfo
+        waitTimeout waitIn = atomically $ do
+            timeout <- readTVar vtState_
+            when (not timeout) waitIn $> timeout
+
     step i bs peerInfo = do
         atomically (addVcPending vcPendings_ i)
         toCacher $ mkInput_ bs peerInfo i
@@ -244,6 +259,7 @@ senderLogic' send fromX = do
 ----------------------------------------------------------------
 
 type VcEof = TVar Bool
+type VcWaitRead = STM ()
 type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
 
@@ -262,6 +278,7 @@ data VcSession =
     { vcEof_       :: VcEof
     , vcPendings_  :: VcPendings
     , vcRespAvail_ :: VcRespAvail
+    , vcWaitRead_  :: IO VcWaitRead
     , vcTimeout_   :: VcTimeout
     }
 {- FOURMOLU_ENABLE -}
@@ -284,7 +301,7 @@ initVcSession = do
     vcTimeout   <- initVcTimeout 5000000
     let toSender = atomically . writeTQueue senderQ
         fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) vcTimeout, toSender, fromX)
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) (pure $ pure ()) vcTimeout, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -320,6 +337,14 @@ mkConnector = do
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
     return (toSender, fromX, not <$> isEmptyTQueue qs)
+
+----------------------------------------------------------------
+
+waitReadSocketSTM' :: Socket -> IO (STM ())
+waitReadSocketSTM' s = fst <$> waitReadSocketSTM s
+
+waitReadSocketSTM :: Socket -> IO (STM (), IO ())
+waitReadSocketSTM s = withFdSocket s $ threadWaitReadSTM . Fd
 
 ----------------------------------------------------------------
 
