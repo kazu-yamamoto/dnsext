@@ -11,7 +11,6 @@ import Data.ByteString (ByteString)
 import qualified Data.IntSet as Set
 
 -- libs
-import Network.Socket (SockAddr)
 import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
 
 -- dnsext packages

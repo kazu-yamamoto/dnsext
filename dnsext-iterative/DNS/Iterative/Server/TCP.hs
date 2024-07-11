@@ -15,7 +15,6 @@ import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import Network.Run.TCP
-import Network.Socket (getPeerName, getSocketName)
 import qualified System.TimeManager as T
 
 -- this package

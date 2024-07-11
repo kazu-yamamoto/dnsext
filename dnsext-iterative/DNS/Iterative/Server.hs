@@ -9,7 +9,6 @@ module DNS.Iterative.Server (
     newRRCacheOps,
     TimeCache (..),
     newTimeCache,
-    module Network.Socket,
 
     -- * Pipeline
     mkPipeline,
@@ -69,7 +68,6 @@ import DNS.TimeCache (TimeCache (..), newTimeCache)
 import Control.Concurrent (getNumCapabilities)
 import Data.ByteString.Builder
 import Data.String (fromString)
-import Network.Socket
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =

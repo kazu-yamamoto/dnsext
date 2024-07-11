@@ -1,8 +1,6 @@
 module DNS.Iterative.Server.Types (
     Server,
     Env,
-    HostName,
-    PortNumber,
     VcServerConfig (..),
     ToCacher,
     FromReceiver,
@@ -16,6 +14,7 @@ module DNS.Iterative.Server.Types (
     PeerInfo (..),
     peerSockAddr,
     withLocationIOE,
+    module Network.Socket,
 ) where
 
 -- GHC
