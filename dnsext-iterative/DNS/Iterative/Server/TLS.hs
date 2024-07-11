@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -28,6 +29,7 @@ tlsServer VcServerConfig{..} env toCacher port host = do
     let tlsserver = withLoc $ H2.runTLS settings vc_credentials host port "dot" $ go
     return [tlsserver]
   where
+    tmicro = vc_idle_timeout * 1_000_000
     withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/dot")
     maxSize = fromIntegral vc_query_max_size
     settings =
@@ -43,13 +45,14 @@ tlsServer VcServerConfig{..} env toCacher port host = do
             peerInfo = PeerInfoVC peersa
         logLn env Log.DEBUG $ "tls-srv: accept: " ++ show peersa
         recvN <- makeRecvN "" $ H2.recv backend
-        (vcSess, toSender, fromX) <- initVcSession
+        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (pure $ pure ()) tmicro
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
+                updateVcTimeout tmicro vcTimeout_
                 if siz == 0
                     then return ("", peerInfo)
                     else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
-            send bs _ = DNS.sendVC (H2.sendMany backend) bs
+            send bs _ = DNS.sendVC (H2.sendMany backend) bs *> updateVcTimeout tmicro vcTimeout_
             receiver = receiverVC env vcSess recv toCacher $ mkInput mysa toSender DOT
             sender = senderVC "tls-send" env vcSess send fromX
         TStat.concurrently_ "tls-send" sender "tls-recv" receiver

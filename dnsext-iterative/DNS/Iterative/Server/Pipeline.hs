@@ -4,11 +4,15 @@
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
+import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeout, updateTimeout)
+import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
-import Control.Monad (guard, forever, replicateM, void, when)
+import Control.Monad (guard, forever, replicateM, when)
 import Data.ByteString (ByteString)
+import Data.Functor
 import qualified Data.IntSet as Set
+import System.Posix.Types (Fd (..))
 
 -- libs
 import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
@@ -177,11 +181,23 @@ mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSen
 receiverVC
     :: Env -> VcSession
     -> Recv -> ToCacher -> MkInput -> IO ()
-receiverVC _env VcSession{..} recv toCacher mkInput_ = loop 1 *> atomically (enableVcEof vcEof_)
+receiverVC _env VcSession{vcTimeout_=VcTimeout{..},..} recv toCacher mkInput_ = loop 1
   where
-    loop i = do
-        (bs, peerInfo) <- recv
-        when (bs /= "") $ step i bs peerInfo *> loop (succ i)
+    loop i = casesRecv (pure ()) (atomically $ enableVcEof vcEof_) $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
+      where
+        casesRecv caseTo caseEof caseNext = cases =<< waitTimeout =<< vcWaitRead_
+          where
+            cases timeout
+                | timeout     = caseTo
+                | otherwise   = do
+                      (bs, peerInfo) <- recv
+                      if bs == ""
+                          then  caseEof
+                          else  caseNext bs peerInfo
+        waitTimeout waitIn = atomically $ do
+            timeout <- readTVar vtState_
+            when (not timeout) waitIn $> timeout
+
     step i bs peerInfo = do
         atomically (addVcPending vcPendings_ i)
         toCacher $ mkInput_ bs peerInfo i
@@ -243,8 +259,18 @@ senderLogic' send fromX = do
 ----------------------------------------------------------------
 
 type VcEof = TVar Bool
+type VcWaitRead = STM ()
 type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
+
+{- FOURMOLU_DISABLE -}
+data VcTimeout =
+    VcTimeout
+    { vtManager_ :: TimerManager
+    , vtKey_     :: TimeoutKey
+    , vtState_   :: TVar Bool
+    }
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 data VcSession =
@@ -252,18 +278,30 @@ data VcSession =
     { vcEof_       :: VcEof
     , vcPendings_  :: VcPendings
     , vcRespAvail_ :: VcRespAvail
+    , vcWaitRead_  :: IO VcWaitRead
+    , vcTimeout_   :: VcTimeout
     }
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO (VcSession, ToSender, FromX)
-initVcSession = do
+initVcTimeout :: Int -> IO VcTimeout
+initVcTimeout micro = do
+    st  <- newTVarIO False
+    mgr <- getSystemTimerManager
+    key <- registerTimeout mgr micro (atomically $ writeTVar st True)
+    pure $ VcTimeout mgr key st
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+initVcSession :: IO VcWaitRead -> Int -> IO (VcSession, ToSender, FromX)
+initVcSession getWaitIn micro = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
     senderQ     <- newTQueueIO
+    vcTimeout   <- initVcTimeout micro
     let toSender = atomically . writeTQueue senderQ
         fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ), toSender, fromX)
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -275,16 +313,20 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
---   eof       pending     avail       sender-loop
+updateVcTimeout :: Int -> VcTimeout -> IO ()
+updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
+
+--   eof       pending     timeout   avail       sender-loop
 --
---   eof       null        no-avail    break
---   not-eof   null        no-avail    wait
---   eof       not-null    no-avail    wait
---   not-eof   not-null    no-avail    wait
---   -         -           avail       loop
+--   eof       null        to        no-avail    break
+--   not-eof   null        to        no-avail    break
+--   eof       null        not-to    no-avail    break
+--   not-eof   null        not-to    no-avail    wait
+--   -         not-null    -         no-avail    wait
+--   -         -                     avail       loop
 waitVcNext :: VcSession -> STM Bool
-waitVcNext VcSession{..} = do
-    eoVC <- (&&) <$> readTVar vcEof_ <*> (Set.null <$> readTVar vcPendings_)
+waitVcNext VcSession{vcTimeout_=VcTimeout{..},..} = do
+    eoVC <- (&&) <$> ((||) <$> readTVar vcEof_ <*> readTVar vtState_) <*> (Set.null <$> readTVar vcPendings_)
     avail <- vcRespAvail_
     guard $ avail || eoVC
     pure avail
@@ -295,6 +337,14 @@ mkConnector = do
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
     return (toSender, fromX, not <$> isEmptyTQueue qs)
+
+----------------------------------------------------------------
+
+waitReadSocketSTM' :: Socket -> IO (STM ())
+waitReadSocketSTM' s = fst <$> waitReadSocketSTM s
+
+waitReadSocketSTM :: Socket -> IO (STM (), IO ())
+waitReadSocketSTM s = withFdSocket s $ threadWaitReadSTM . Fd
 
 ----------------------------------------------------------------
 
