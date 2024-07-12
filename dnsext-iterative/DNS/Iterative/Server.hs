@@ -40,13 +40,14 @@ module DNS.Iterative.Server (
     Recv,
     Send,
     VcSession (..),
-    VcEof,
+    VcFinished (..),
     VcPendings,
-    VcRespAvail,
     initVcSession,
     mkInput,
     receiverVC,
+    receiverVC',
     senderVC,
+    senderVC',
     mkConnector,
 ) where
 
