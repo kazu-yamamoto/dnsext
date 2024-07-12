@@ -29,36 +29,35 @@ spec :: Spec
 spec = describe "server" $ do
     it "VC session - finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
-        m `shouldSatisfy` isJust
+        m `shouldBe` Just (VfEof, VfEof)
     it "VC session - finish 2" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
-        m `shouldSatisfy` isJust
+        m `shouldBe` Just (VfEof, VfEof)
     it "VC session - timeout" $ do
         m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 []
-        m `shouldSatisfy` isJust
+        m `shouldBe` Just (VfTimeout, VfTimeout)
     it "VC session - wait slow" $ do
-        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 1_000_000 ["20"]
-        m `shouldSatisfy` isJust
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 500_000 ["10"]
+        m `shouldBe` Just (VfEof, VfEof)
 
 ---
 
 {- FOUMOLU_DISABLE -}
-vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO String
+vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO (VcFinished, VcFinished)
 vcSession waitRead tmicro ws = do
     env <- newEmptyEnv
     (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro
     toCacher <- getToCacher
     recv <- getRecv ws
     let myaddr    = SockAddrInet 53 0x0100007f
-        receiver  = receiverVC env vcSess recv toCacher (mkInput myaddr toSender UDP)
-        sender    = senderVC "test-send" env vcSess send fromX
+        receiver  = receiverVC' env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        sender    = senderVC' "test-send" env vcSess send fromX
         debug     = False
     when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
         dump vcSess
         threadDelay 500_000
 
-    TStat.concurrently_ "test-send" sender "test-recv" receiver
-    pure "finished"
+    TStat.concurrently "test-send" sender "test-recv" receiver
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
