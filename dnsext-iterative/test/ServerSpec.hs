@@ -36,6 +36,9 @@ spec = describe "server" $ do
     it "VC session - timeout" $ do
         m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 []
         m `shouldSatisfy` isJust
+    it "VC session - wait slow" $ do
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 1_000_000 ["20"]
+        m `shouldSatisfy` isJust
 
 ---
 
