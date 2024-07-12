@@ -32,7 +32,7 @@ import Text.Read (readMaybe)
 
 -- dnsext-* packages
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Server (HostName, PortNumber, withLocationIOE)
+import DNS.Iterative.Server (withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
@@ -55,8 +55,8 @@ import Config
 import SocketUtil (ainfosSkipError)
 import Types (CacheControl (..), Control (..))
 
-monitorSockets :: PortNumber -> [HostName] -> IO [(Socket, SockAddr)]
-monitorSockets port = mapM (aiSocket . (\(ai, _, _) -> ai)) <=< ainfosSkipError putStrLn Stream port
+monitorSockets :: S.PortNumber -> [S.HostName] -> IO [(Socket, SockAddr)]
+monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
   where
     aiSocket ai =
         (,)

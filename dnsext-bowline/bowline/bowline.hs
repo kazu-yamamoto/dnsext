@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main where
 
@@ -15,13 +16,14 @@ import qualified DNS.SEC as DNS
 import DNS.SVCB (TYPE (..))
 import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
-import DNS.Types.Internal (TYPE (..))
 import qualified DNS.Types as DNS
+import DNS.Types.Internal (TYPE (..))
 import Data.ByteString.Builder
 import Data.Functor
 import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
+import Network.Socket
 import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
 import System.Environment (getArgs)
@@ -140,13 +142,13 @@ runConfig tcache mcache mng0 conf@Config{..} = do
   where
     maybeKill = maybe (return ()) killThread
     trans creds sm =
-        [ (cnf_udp, "udp-srv", udpServer udpconf, Datagram, cnf_udp_port)
-        , (cnf_tcp, "tcp-srv", tcpServer vcconf, Stream, cnf_tcp_port)
-        , (cnf_h2c, "h2c-srv", http2cServer vcconf, Stream, cnf_h2c_port)
-        , (cnf_h2, "h2-srv", http2Server vcconf, Stream, cnf_h2_port)
-        , (cnf_h3, "h3-srv", http3Server vcconf, Datagram, cnf_h3_port)
-        , (cnf_tls, "tls-srv", tlsServer vcconf, Stream, cnf_tls_port)
-        , (cnf_quic, "quic-srv", quicServer vcconf, Datagram, cnf_quic_port)
+        [ (cnf_udp, "udp-srv", udpServers udpconf, Datagram, cnf_udp_port)
+        , (cnf_tcp, "tcp-srv", tcpServers vcconf, Stream, cnf_tcp_port)
+        , (cnf_h2c, "h2c-srv", http2cServers vcconf, Stream, cnf_h2c_port)
+        , (cnf_h2, "h2-srv", http2Servers vcconf, Stream, cnf_h2_port)
+        , (cnf_h3, "h3-srv", http3Servers vcconf, Datagram, cnf_h3_port)
+        , (cnf_tls, "tls-srv", tlsServers vcconf, Stream, cnf_tls_port)
+        , (cnf_quic, "quic-srv", quicServers vcconf, Datagram, cnf_quic_port)
         ]
       where
         vcconf =
@@ -179,15 +181,22 @@ getServers
     :: Env
     -> [HostName]
     -> Server.ToCacher
-    -> (Bool, String, Server, SocketType, Int)
+    -> (Bool, String, ServerActions, SocketType, Int)
     -> IO [(String, IO ())]
 getServers _ _ _ (False, _, _, _, _) = return []
-getServers env hosts toCacher (True, name, server, socktype, port') = do
+getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
     as <- ainfosSkipError putStrLn socktype port hosts
-    let hosts' = [host | (_ai, host, _serv) <- as]
-    servs <- mapM (server env toCacher port) hosts'
-    pure [(name, s) | ss <- servs, s <- ss]
+    sockets <- mapM openBind as
+    map (name,) <$> mkServer env toCacher sockets
   where
+    openBind ai = do
+        s <- openSocket ai
+        setSocketOption s ReuseAddr 1
+        when (addrFamily ai == AF_INET6) $ setSocketOption s IPv6Only 1
+        withFdSocket s $ setCloseOnExecIfNeeded
+        bind s $ addrAddress ai
+        when (addrSocketType ai == Stream) $ listen s 1024
+        return s
     port = fromIntegral port'
 
 ----------------------------------------------------------------
