@@ -27,11 +27,14 @@ import DNS.Iterative.Server
 
 spec :: Spec
 spec = describe "server" $ do
-    it "VC session - 1 - finish" $ do
+    it "VC session - finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
         m `shouldSatisfy` isJust
-    it "VC session - 2 - finish" $ do
+    it "VC session - finish 2" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
+        m `shouldSatisfy` isJust
+    it "VC session - timeout" $ do
+        m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 []
         m `shouldSatisfy` isJust
 
 ---
