@@ -27,17 +27,17 @@ import qualified DNS.ThreadStats as TStat
 import DNS.Iterative.Server
 
 spec :: Spec
-spec = describe "server" $ do
-    it "VC session - finish 1" $ do
+spec = describe "server - VC session" $ do
+    it "finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
         m `shouldBe` Just ((VfEof, VfEof), True)
-    it "VC session - finish 2" $ do
+    it "finish 2" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
         m `shouldBe` Just ((VfEof, VfEof), True)
-    it "VC session - timeout" $ do
+    it "timeout" $ do
         m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 ["2"]
         m `shouldBe` Just ((VfTimeout, VfTimeout), False)
-    it "VC session - wait slow" $ do
+    it "wait slow" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 500_000 ["10"]
         m `shouldBe` Just ((VfEof, VfEof), True)
 
