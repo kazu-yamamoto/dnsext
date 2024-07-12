@@ -27,20 +27,23 @@ import DNS.Iterative.Server
 
 spec :: Spec
 spec = describe "server" $ do
-    it "VC session - 1 - finish" $ do
-        m <- timeout 3_000_000 $ vcSession ["6", "4", "2"]
+    it "VC session - finish 1" $ do
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
         m `shouldSatisfy` isJust
-    it "VC session - 2 - finish" $ do
-        m <- timeout 3_000_000 $ vcSession ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
+    it "VC session - finish 2" $ do
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
+        m `shouldSatisfy` isJust
+    it "VC session - timeout" $ do
+        m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 []
         m `shouldSatisfy` isJust
 
 ---
 
 {- FOUMOLU_DISABLE -}
-vcSession :: [ByteString] -> IO String
-vcSession ws = do
+vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO String
+vcSession waitRead tmicro ws = do
     env <- newEmptyEnv
-    (vcSess@VcSession{}, toSender, fromX) <- initVcSession (pure $ pure ()) 5_000_000
+    (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro
     toCacher <- getToCacher
     recv <- getRecv ws
     let myaddr    = SockAddrInet 53 0x0100007f
