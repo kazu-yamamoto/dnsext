@@ -13,6 +13,7 @@ import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import Data.Functor
+import Data.List
 import Data.Maybe
 import Data.IORef
 import System.Timeout (timeout)
@@ -26,36 +27,42 @@ import qualified DNS.ThreadStats as TStat
 import DNS.Iterative.Server
 
 spec :: Spec
-spec = describe "server" $ do
-    it "VC session - finish 1" $ do
+spec = describe "server - VC session" $ do
+    it "finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
-        m `shouldSatisfy` isJust
-    it "VC session - finish 2" $ do
+        m `shouldBe` Just ((VfEof, VfEof), True)
+    it "finish 2" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
-        m `shouldSatisfy` isJust
-    it "VC session - timeout" $ do
-        m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 []
-        m `shouldSatisfy` isJust
+        m `shouldBe` Just ((VfEof, VfEof), True)
+    it "timeout" $ do
+        m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 ["2"]
+        m `shouldBe` Just ((VfTimeout, VfTimeout), False)
+    it "wait slow" $ do
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 500_000 ["10"]
+        m `shouldBe` Just ((VfEof, VfEof), True)
 
 ---
 
 {- FOUMOLU_DISABLE -}
-vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO String
+vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
 vcSession waitRead tmicro ws = do
     env <- newEmptyEnv
     (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro
     toCacher <- getToCacher
     recv <- getRecv ws
+    (getResult, send) <- getSend
     let myaddr    = SockAddrInet 53 0x0100007f
-        receiver  = receiverVC env vcSess recv toCacher (mkInput myaddr toSender UDP)
-        sender    = senderVC "test-send" env vcSess send fromX
+        receiver  = receiverVC' env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        sender    = senderVC' "test-send" env vcSess send fromX
         debug     = False
     when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
         dump vcSess
         threadDelay 500_000
 
-    TStat.concurrently_ "test-send" sender "test-recv" receiver
-    pure "finished"
+    fstate <- TStat.concurrently "test-send" sender "test-recv" receiver
+    let expect = sort ws
+    result <- sort <$> getResult
+    pure (fstate, result == expect)
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
@@ -71,7 +78,7 @@ getToCacher = do
            Input{..} <- atomically (readTQueue mq)
            let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
            threadDelay $ intb * 100_000
-           inputToSender $ Output "" inputRequestNum inputPeerInfo
+           inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
    _ <- replicateM 4 (forkIO bodyLoop)
    pure (atomically . writeTQueue mq)
 {- FOUMOLU_ENABLE -}
@@ -89,5 +96,10 @@ getRecv ws = do
    peer :: PeerInfo
    peer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
 
-send :: Send
-send _ _ = pure ()
+getSend :: IO (IO [ByteString], Send)
+getSend = do
+    ref <- newIORef []
+    pure (readIORef ref, \x _ -> sstep ref x)
+  where
+    ins x s = (x:s, ())
+    sstep ref x = atomicModifyIORef' ref (ins x)
