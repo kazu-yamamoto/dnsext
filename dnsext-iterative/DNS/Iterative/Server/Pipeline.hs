@@ -8,9 +8,6 @@ import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeo
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
-import Control.Monad (guard, forever, replicateM, when)
-import Data.ByteString (ByteString)
-import Data.Functor
 import qualified Data.IntSet as Set
 import System.Posix.Types (Fd (..))
 
@@ -27,6 +24,7 @@ import qualified DNS.Types.Encode as DNS
 import DNS.Types.Time
 
 -- this package
+import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
 import DNS.Iterative.Server.Types
@@ -284,6 +282,13 @@ data VcSession =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+data VcFinished
+    = VfEof
+    | VfTimeout
+    deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 initVcTimeout :: Int -> IO VcTimeout
 initVcTimeout micro = do
     st  <- newTVarIO False
@@ -316,6 +321,14 @@ delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 updateVcTimeout :: Int -> VcTimeout -> IO ()
 updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
 
+waitVcInput :: VcSession -> IO Bool
+waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
+    waitIn <- vcWaitRead_
+    atomically $ do
+        timeout <- readTVar vtState_
+        when (not timeout) waitIn $> timeout
+
+{- FOURMOLU_DISABLE -}
 --   eof       pending     timeout   avail       sender-loop
 --
 --   eof       null        to        no-avail    break
@@ -324,6 +337,18 @@ updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
 --   not-eof   null        not-to    no-avail    wait
 --   -         not-null    -         no-avail    wait
 --   -         -                     avail       loop
+waitVcOutput :: VcSession -> IO (Maybe VcFinished)
+waitVcOutput VcSession{vcTimeout_=VcTimeout{..},..} = atomically $ do
+    mayEof  <- (VfEof     <$) . guard <$> readTVar vcEof_
+    mayTo   <- (VfTimeout <$) . guard <$> readTVar vtState_
+    avail <- vcRespAvail_
+    maybe (guard avail $> Nothing) (eoVC avail) $ mayEof <|> mayTo
+  where
+    eoVC avail fc
+        | avail      = pure Nothing
+        | otherwise  = (Just fc <$) . guard . Set.null =<< readTVar vcPendings_
+{- FOURMOLU_ENABLE -}
+
 waitVcNext :: VcSession -> STM Bool
 waitVcNext VcSession{vcTimeout_=VcTimeout{..},..} = do
     eoVC <- (&&) <$> ((||) <$> readTVar vcEof_ <*> readTVar vtState_) <*> (Set.null <$> readTVar vcPendings_)
