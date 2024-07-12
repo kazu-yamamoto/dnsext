@@ -175,26 +175,27 @@ type MkInput = ByteString -> PeerInfo -> Int -> Input ByteString
 mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
+receiverVC :: Env -> VcSession -> Recv -> ToCacher -> MkInput -> IO ()
+receiverVC env vcs recv toCacher mkInput_ = void $ receiverVC' env vcs recv toCacher mkInput_
+
 {- FOURMOLU_DISABLE -}
-receiverVC
+receiverVC'
     :: Env -> VcSession
-    -> Recv -> ToCacher -> MkInput -> IO ()
-receiverVC _env VcSession{vcTimeout_=VcTimeout{..},..} recv toCacher mkInput_ = loop 1
+    -> Recv -> ToCacher -> MkInput -> IO VcFinished
+receiverVC' _env vcs@VcSession{..} recv toCacher mkInput_ = loop 1
   where
-    loop i = casesRecv (pure ()) (atomically $ enableVcEof vcEof_) $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
+    loop i = casesRecv $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
       where
-        casesRecv caseTo caseEof caseNext = cases =<< waitTimeout =<< vcWaitRead_
+        caseEof = atomically (enableVcEof vcEof_) $> VfEof
+        casesRecv caseNext = cases =<< waitVcInput vcs
           where
             cases timeout
-                | timeout     = caseTo
+                | timeout     = pure VfTimeout
                 | otherwise   = do
                       (bs, peerInfo) <- recv
                       if bs == ""
                           then  caseEof
                           else  caseNext bs peerInfo
-        waitTimeout waitIn = atomically $ do
-            timeout <- readTVar vtState_
-            when (not timeout) waitIn $> timeout
 
     step i bs peerInfo = do
         atomically (addVcPending vcPendings_ i)
@@ -224,17 +225,18 @@ receiverLogic' mysa recv toCacher toSender proto = do
             toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
+senderVC :: String -> Env -> VcSession -> Send -> FromX -> IO ()
+senderVC name env vcs send fromX = void $ senderVC' name env vcs send fromX
+
 {- FOURMOLU_DISABLE -}
-senderVC
+senderVC'
     :: String -> Env -> VcSession
-    -> Send -> FromX -> IO ()
-senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
+    -> Send -> FromX -> IO VcFinished
+senderVC' name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
     onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop = do
-        avail <- atomically (waitVcNext vcs)
-        when avail $ step *> loop
+    loop = maybe (step *> loop) pure =<< waitVcOutput vcs
     step = do
         let body (Output bs _ peerInfo) = send bs peerInfo
             finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
@@ -348,13 +350,6 @@ waitVcOutput VcSession{vcTimeout_=VcTimeout{..},..} = atomically $ do
         | avail      = pure Nothing
         | otherwise  = (Just fc <$) . guard . Set.null =<< readTVar vcPendings_
 {- FOURMOLU_ENABLE -}
-
-waitVcNext :: VcSession -> STM Bool
-waitVcNext VcSession{vcTimeout_=VcTimeout{..},..} = do
-    eoVC <- (&&) <$> ((||) <$> readTVar vcEof_ <*> readTVar vtState_) <*> (Set.null <$> readTVar vcPendings_)
-    avail <- vcRespAvail_
-    guard $ avail || eoVC
-    pure avail
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
 mkConnector = do
