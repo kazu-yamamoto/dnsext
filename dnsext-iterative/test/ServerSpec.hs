@@ -52,7 +52,7 @@ vcSession waitRead tmicro ws = do
     recv <- getRecv ws
     (getResult, send) <- getSend
     let myaddr    = SockAddrInet 53 0x0100007f
-        receiver  = receiverVC env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        receiver  = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
         sender    = senderVC "test-send" env vcSess send fromX
         debug     = False
     when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}

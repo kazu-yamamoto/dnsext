@@ -177,10 +177,11 @@ mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSen
 
 {- FOURMOLU_DISABLE -}
 receiverVC
-    :: Env -> VcSession
+    :: String -> Env -> VcSession
     -> Recv -> ToCacher -> MkInput -> IO VcFinished
-receiverVC _env vcs@VcSession{..} recv toCacher mkInput_ = loop 1
+receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ = loop 1 `E.catch` onError
   where
+    onError se@(SomeException e) = warnOnError env name se *> throwIO e
     loop i = casesRecv $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
       where
         caseEof = atomically (enableVcEof vcEof_) $> VfEof

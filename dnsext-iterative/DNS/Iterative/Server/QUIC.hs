@@ -62,7 +62,7 @@ quicServer VcServerConfig{..} env toCacher port host = do
                         QUIC.closeStream strm
                         updateVcTimeout tmicro vcTimeout_
                     _ -> return ()
-            receiver = receiverVC env vcSess recv toCacher $ mkInput mysa toSender DOQ
+            receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
             sender = senderVC "quic-send" env vcSess send fromX
         TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
