@@ -45,9 +45,7 @@ module DNS.Iterative.Server (
     initVcSession,
     mkInput,
     receiverVC,
-    receiverVC',
     senderVC,
-    senderVC',
     mkConnector,
 ) where
 
