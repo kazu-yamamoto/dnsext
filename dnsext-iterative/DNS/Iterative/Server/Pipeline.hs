@@ -175,15 +175,13 @@ type MkInput = ByteString -> PeerInfo -> Int -> Input ByteString
 mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
-receiverVC :: Env -> VcSession -> Recv -> ToCacher -> MkInput -> IO ()
-receiverVC env vcs recv toCacher mkInput_ = void $ receiverVC' env vcs recv toCacher mkInput_
-
 {- FOURMOLU_DISABLE -}
-receiverVC'
-    :: Env -> VcSession
+receiverVC
+    :: String -> Env -> VcSession
     -> Recv -> ToCacher -> MkInput -> IO VcFinished
-receiverVC' _env vcs@VcSession{..} recv toCacher mkInput_ = loop 1
+receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ = loop 1 `E.catch` onError
   where
+    onError se@(SomeException e) = warnOnError env name se *> throwIO e
     loop i = casesRecv $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
       where
         caseEof = atomically (enableVcEof vcEof_) $> VfEof
@@ -207,14 +205,6 @@ receiverLogic
 receiverLogic env mysa recv toCacher toSender proto =
     handledLoop env "receiverUDP" $ void $ receiverLogic' mysa recv toCacher toSender proto
 
-receiverLogicVC
-    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
-receiverLogicVC _env mysa recv toCacher toSender proto = go
-  where
-    go = do
-        cont <- receiverLogic' mysa recv toCacher toSender proto
-        when cont go
-
 receiverLogic'
     :: SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO Bool
 receiverLogic' mysa recv toCacher toSender proto = do
@@ -225,14 +215,11 @@ receiverLogic' mysa recv toCacher toSender proto = do
             toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
-senderVC :: String -> Env -> VcSession -> Send -> FromX -> IO ()
-senderVC name env vcs send fromX = void $ senderVC' name env vcs send fromX
-
 {- FOURMOLU_DISABLE -}
-senderVC'
+senderVC
     :: String -> Env -> VcSession
     -> Send -> FromX -> IO VcFinished
-senderVC' name env vcs@VcSession{..} send fromX = loop `E.catch` onError
+senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
     onError se@(SomeException e) = warnOnError env name se *> throwIO e
@@ -246,10 +233,6 @@ senderVC' name env vcs@VcSession{..} send fromX = loop `E.catch` onError
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
     handledLoop env "senderUDP" $ senderLogic' send fromX
-
-senderLogicVC :: Env -> Send -> FromX -> IO ()
-senderLogicVC env send fromX =
-    breakableLoop env "senderVC" $ senderLogic' send fromX
 
 senderLogic' :: Send -> FromX -> IO ()
 senderLogic' send fromX = do
