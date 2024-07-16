@@ -205,14 +205,6 @@ receiverLogic
 receiverLogic env mysa recv toCacher toSender proto =
     handledLoop env "receiverUDP" $ void $ receiverLogic' mysa recv toCacher toSender proto
 
-receiverLogicVC
-    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
-receiverLogicVC _env mysa recv toCacher toSender proto = go
-  where
-    go = do
-        cont <- receiverLogic' mysa recv toCacher toSender proto
-        when cont go
-
 receiverLogic'
     :: SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO Bool
 receiverLogic' mysa recv toCacher toSender proto = do
@@ -241,10 +233,6 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
     handledLoop env "senderUDP" $ senderLogic' send fromX
-
-senderLogicVC :: Env -> Send -> FromX -> IO ()
-senderLogicVC env send fromX =
-    breakableLoop env "senderVC" $ senderLogic' send fromX
 
 senderLogic' :: Send -> FromX -> IO ()
 senderLogic' send fromX = do
