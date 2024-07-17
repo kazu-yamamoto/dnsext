@@ -2,8 +2,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Server.HTTP2 (
-    http2Server,
-    http2cServer,
+    http2Servers,
+    http2cServers,
     VcServerConfig (..),
     getInput,
 ) where
@@ -11,6 +11,7 @@ module DNS.Iterative.Server.HTTP2 (
 -- GHC packages
 import Control.Monad (forever)
 import Data.ByteString.Builder (byteString)
+import Data.Functor
 import qualified Data.ByteString.Char8 as C8
 
 -- dnsext-* packages
@@ -32,12 +33,16 @@ import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsDoH2, incStatsDoH2C, sessionStatsDoH2, sessionStatsDoH2C)
 
-http2Server :: VcServerConfig -> Server
-http2Server VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIO settings vc_credentials host port $ doHTTP "h2" sbracket incQuery env toCacher
+http2Servers :: VcServerConfig -> ServerActions
+http2Servers conf env toCacher ss =
+    concat <$> mapM (http2Server conf env toCacher) ss
+
+http2Server :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+http2Server VcServerConfig{..} env toCacher s = do
+    name <- socketName s <&> (++ "/h2")
+    let http2server = withLocationIOE name $ H2TLS.runIO settings vc_credentials s $ doHTTP "h2" sbracket incQuery env toCacher
     return [http2server]
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2")
     sbracket = sessionStatsDoH2 (stats_ env)
     incQuery inet6 = incStatsDoH2 inet6 (stats_ env)
     settings =
@@ -48,12 +53,16 @@ http2Server VcServerConfig{..} env toCacher port host = do
             , H2TLS.settingsEarlyDataSize = vc_early_data_size
             }
 
-http2cServer :: VcServerConfig -> Server
-http2cServer VcServerConfig{..} env toCacher port host = do
-    let http2server = withLoc $ H2TLS.runIOH2C settings host port $ doHTTP "h2c" sbracket incQuery env toCacher
+http2cServers :: VcServerConfig -> ServerActions
+http2cServers conf env toCacher ss =
+    concat <$> mapM (http2cServer conf env toCacher) ss
+
+http2cServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+http2cServer VcServerConfig{..} env toCacher s = do
+    name <- socketName s <&> (++ "/h2c")
+    let http2server = withLocationIOE name $ H2TLS.runIOH2C settings s $ doHTTP "h2c" sbracket incQuery env toCacher
     return [http2server]
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h2c")
     sbracket = sessionStatsDoH2C (stats_ env)
     incQuery inet6 = incStatsDoH2C inet6 (stats_ env)
     settings =

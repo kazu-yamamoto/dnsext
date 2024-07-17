@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Server.HTTP3 (
-    http3Server,
+    http3Servers,
 ) where
 
 -- GHC packages
@@ -31,15 +31,15 @@ import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsDoH3)
 
 ----------------------------------------------------------------
-http3Server :: VcServerConfig -> Server
-http3Server VcServerConfig{..} env toCacher port host = do
+http3Servers :: VcServerConfig -> ServerActions
+http3Servers VcServerConfig{..} env toCacher ss = do
+    -- fixme: withLocationIOE naming
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
-            withLoc $ QUIC.run sconf $ \conn ->
-                withLoc $ H3.run conn (conf mgr) $ doHTTP env toCacher
+            withLocationIOE "h3" $ QUIC.runWithSockets ss sconf $ \conn ->
+                H3.run conn (conf mgr) $ doHTTP env toCacher
     return [http3server]
   where
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/h3")
-    sconf = getServerConfig vc_credentials vc_session_manager host port "h3"
+    sconf = getServerConfig vc_credentials vc_session_manager "h3"
     conf mgr =
         H3.Config
             { confHooks = H3.defaultHooks

@@ -9,6 +9,7 @@ module SocketUtil (
 -- GHC internal packages
 import GHC.IO.Device (IODevice (ready))
 import GHC.IO.FD (mkFD)
+
 import Data.Functor
 import Data.List
 import Data.Maybe
@@ -20,13 +21,13 @@ import System.IO.Error (tryIOError)
 -- dns packages
 import Network.Socket (
     AddrInfo (..),
+    AddrInfoFlag (..),
     HostName,
-    NameInfoFlag (..),
     PortNumber,
-    ServiceName,
     SockAddr (..),
     Socket,
     SocketType (..),
+    defaultHints,
  )
 import qualified Network.Socket as S
 
@@ -36,7 +37,7 @@ addrInfo p hs@(_ : _) =
     concat <$> sequence [S.getAddrInfo Nothing (Just h) $ Just $ show p | h <- hs]
 
 {- FOURMOLU_DISABLE -}
-ainfosSkipError :: (String -> IO ()) -> SocketType -> PortNumber -> [HostName] -> IO [(AddrInfo, HostName, ServiceName)]
+ainfosSkipError :: (String -> IO ()) -> SocketType -> PortNumber -> [HostName] -> IO [AddrInfo]
 ainfosSkipError logLn sty p hs = case hs of
     []   -> ainfoSkip sty Nothing p
     _:_  -> concat <$> sequence [ainfoSkip sty (Just h) p | h <- hs]
@@ -48,23 +49,18 @@ ainfosSkipError logLn sty p hs = case hs of
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-foldAddrInfo :: (IOError -> IO a) -> ([(AddrInfo, HostName, ServiceName)] -> IO a) -> SocketType -> Maybe HostName -> PortNumber -> IO a
+foldAddrInfo :: (IOError -> IO a) -> ([AddrInfo] -> IO a) -> SocketType -> Maybe HostName -> PortNumber -> IO a
 foldAddrInfo left right socktype mhost port =
-    either left right1 =<< tryIOError (S.getAddrInfo Nothing mhost $ Just $ show port)
+    either left right1 =<< tryIOError (S.getAddrInfo (Just hints) mhost (Just $ show port))
   where
+    hints = defaultHints {
+                  addrFlags = [AI_PASSIVE]
+                , addrSocketType = socktype
+                }
     right1 as = right . catMaybes =<< mapM inet as
     inet ai
-        | addrSocketType ai == socktype  = ainfoInetAddr ai
+        | addrSocketType ai == socktype  = pure $ Just ai
         | otherwise                      = pure Nothing
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-ainfoInetAddr :: AddrInfo -> IO (Maybe (AddrInfo, HostName, ServiceName))
-ainfoInetAddr ai = do
-    (mhost, mport) <- S.getNameInfo [NI_NUMERICHOST, NI_NUMERICSERV] True True $ addrAddress ai
-    pure $ do host <- mhost
-              port <- mport
-              Just (ai, host, port)
 {- FOURMOLU_ENABLE -}
 
 {- make action to wait for socket-input from cached FD

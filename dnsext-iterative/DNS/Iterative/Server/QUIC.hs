@@ -29,14 +29,14 @@ import DNS.Iterative.Stats (incStatsDoQ)
 
 ----------------------------------------------------------------
 
-quicServer :: VcServerConfig -> Server
-quicServer VcServerConfig{..} env toCacher port host = do
-    let quicserver = withLoc $ QUIC.run sconf go
+quicServers :: VcServerConfig -> ServerActions
+quicServers VcServerConfig{..} env toCacher ss = do
+    -- fixme: withLocationIOE naming
+    let quicserver = withLocationIOE "QUIC" $ QUIC.runWithSockets ss sconf go
     return [quicserver]
   where
     tmicro = vc_idle_timeout * 1_000_000
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/quic")
-    sconf = getServerConfig vc_credentials vc_session_manager host port "doq"
+    sconf = getServerConfig vc_credentials vc_session_manager "doq"
     maxSize = fromIntegral vc_query_max_size
     go conn = do
         info <- QUIC.getConnectionInfo conn
@@ -66,11 +66,10 @@ quicServer VcServerConfig{..} env toCacher port host = do
             sender = senderVC "quic-send" env vcSess send fromX
         TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
-getServerConfig :: Credentials -> SessionManager -> String -> PortNumber -> ByteString -> ServerConfig
-getServerConfig creds sm host port alpn =
+getServerConfig :: Credentials -> SessionManager -> ByteString -> ServerConfig
+getServerConfig creds sm alpn =
     QUIC.defaultServerConfig
-        { scAddresses = [(read host, port)]
-        , scALPN = Just (\_ bss -> if alpn `elem` bss then return alpn else return "")
+        { scALPN = Just (\_ bss -> if alpn `elem` bss then return alpn else return "")
         , scCredentials = creds
         , scUse0RTT = True
         , scSessionManager = sm

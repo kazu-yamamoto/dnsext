@@ -16,16 +16,16 @@ module DNS.Iterative.Server (
 
     -- * UDP
     UdpServerConfig (..),
-    udpServer,
+    udpServers,
 
     -- * Virtual circuit
     VcServerConfig (..),
-    tcpServer,
-    http2Server,
-    http2cServer,
-    http3Server,
-    tlsServer,
-    quicServer,
+    http2Servers,
+    http2cServers,
+    http3Servers,
+    quicServers,
+    tcpServers,
+    tlsServers,
 
     -- * WorkerStat
     WorkerStat (..),

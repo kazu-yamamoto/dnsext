@@ -1,7 +1,11 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Iterative.Server.UDP where
+module DNS.Iterative.Server.UDP (
+    udpServers,
+    UdpServerConfig (..),
+)
+where
 
 -- GHC packages
 import Control.Concurrent.STM
@@ -11,6 +15,7 @@ import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.ThreadStats as TStat
 
 -- other packages
+import Network.Socket (getSocketName)
 import qualified Network.UDP as UDP
 
 -- this package
@@ -25,9 +30,14 @@ data UdpServerConfig = UdpServerConfig {}
 
 ----------------------------------------------------------------
 
-udpServer :: UdpServerConfig -> Server
-udpServer _conf env toCacher port addr = do
-    lsock <- withLocationIOE (show addr ++ ":" ++ show port ++ "/udp") $ UDP.serverSocket (read addr, port)
+udpServers :: UdpServerConfig -> ServerActions
+udpServers _conf env toCacher ss =
+    concat <$> mapM (udpServer _conf env toCacher) ss
+
+udpServer :: UdpServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+udpServer _conf env toCacher s = do
+    sa <- getSocketName s
+    let lsock = UDP.ListenSocket s sa False -- interface specific
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs

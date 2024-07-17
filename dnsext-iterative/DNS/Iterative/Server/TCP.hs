@@ -2,12 +2,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Iterative.Server.TCP where
+module DNS.Iterative.Server.TCP (
+    tcpServers,
+)
+where
 
 -- GHC packages
 import Control.Monad (when)
-import Data.Functor
 import qualified Data.ByteString as BS
+import Data.Functor
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
@@ -17,6 +20,7 @@ import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import Network.Run.TCP
+import Network.Socket (getPeerName, getSocketName)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
@@ -26,14 +30,20 @@ import DNS.Iterative.Stats (incStatsTCP53, sessionStatsTCP53)
 
 ----------------------------------------------------------------
 
-tcpServer :: VcServerConfig -> Server
-tcpServer VcServerConfig{..} env toCacher port host = do
-    let tcpserver = withLoc $ runTCPServer (Just host) (show port) $ go
+tcpServers :: VcServerConfig -> ServerActions
+tcpServers conf env toCacher ss =
+    concat <$> mapM (tcpServer conf env toCacher) ss
+
+tcpServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+tcpServer VcServerConfig{..} env toCacher s = do
+    name <- socketName s <&> (++ "/tcp")
+    let tcpserver =
+            withLocationIOE name $
+                runTCPServerWithSocket s go
     return ([tcpserver])
   where
-    tmicro = vc_idle_timeout * 1_000_000
-    withLoc = withLocationIOE (show host ++ ":" ++ show port ++ "/tcp")
     maxSize = fromIntegral vc_query_max_size
+    tmicro = vc_idle_timeout * 1_000_000
     go sock = sessionStatsTCP53 (stats_ env) $ do
         mysa <- getSocketName sock
         peersa <- getPeerName sock
