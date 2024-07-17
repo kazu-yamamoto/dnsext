@@ -35,7 +35,7 @@ tlsServers conf env toCacher ss =
 tlsServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
 tlsServer VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/tls")
-    let tlsserver = withLocationIOE name $ H2.runTLSWithSocket settings vc_credentials s "tls" $ go
+    let tlsserver = withLocationIOE name $ H2.runTLSWithSocket settings vc_credentials s "dot" $ go
     return [tlsserver]
   where
     tmicro = vc_idle_timeout * 1_000_000
