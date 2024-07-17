@@ -11,6 +11,7 @@ module DNS.Iterative.Server.HTTP2 (
 -- GHC packages
 import Control.Monad (forever)
 import Data.ByteString.Builder (byteString)
+import Data.Functor
 import qualified Data.ByteString.Char8 as C8
 
 -- dnsext-* packages
@@ -38,7 +39,7 @@ http2Servers conf env toCacher ss =
 
 http2Server :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
 http2Server VcServerConfig{..} env toCacher s = do
-    name <- socketName s
+    name <- socketName s <&> (++ "/h2")
     let http2server = withLocationIOE name $ H2TLS.runIO settings vc_credentials s $ doHTTP "h2" sbracket incQuery env toCacher
     return [http2server]
   where
@@ -58,7 +59,7 @@ http2cServers conf env toCacher ss =
 
 http2cServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
 http2cServer VcServerConfig{..} env toCacher s = do
-    name <- socketName s
+    name <- socketName s <&> (++ "/h2c")
     let http2server = withLocationIOE name $ H2TLS.runIOH2C settings s $ doHTTP "h2c" sbracket incQuery env toCacher
     return [http2server]
   where

@@ -35,7 +35,7 @@ http3Servers :: VcServerConfig -> ServerActions
 http3Servers VcServerConfig{..} env toCacher ss = do
     -- fixme: withLocationIOE naming
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
-            withLocationIOE "H3" $ QUIC.runWithSockets ss sconf $ \conn ->
+            withLocationIOE "h3" $ QUIC.runWithSockets ss sconf $ \conn ->
                 H3.run conn (conf mgr) $ doHTTP env toCacher
     return [http3server]
   where

@@ -36,7 +36,7 @@ tcpServers conf env toCacher ss =
 
 tcpServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
 tcpServer VcServerConfig{..} env toCacher s = do
-    name <- socketName s
+    name <- socketName s <&> (++ "/tcp")
     let tcpserver =
             withLocationIOE name $
                 runTCPServerWithSocket s go
