@@ -437,5 +437,6 @@ sessionStatsDoH2C = sessionStatsDoX [AcceptedDoH2C] [CurConnDoH2C]
 sessionStatsDoQ :: Stats -> IO () -> IO ()
 sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] [CurConnDoQ]
 
+{- NOTE: not applied to Server/HTTP3 modules that cannot handle connections. -}
 sessionStatsDoH3 :: Stats -> IO () -> IO ()
 sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] [CurConnDoH3]
