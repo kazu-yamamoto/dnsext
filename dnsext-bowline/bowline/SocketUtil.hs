@@ -60,7 +60,7 @@ foldAddrInfo left right socktype mhost port =
     either left right1 =<< tryIOError (S.getAddrInfo (Just hints) mhost (Just $ show port))
   where
     hints = defaultHints {
-                  addrFlags = [AI_PASSIVE]
+                  addrFlags = [AI_ADDRCONFIG, AI_PASSIVE]
                 , addrSocketType = socktype
                 }
     right1 as = right [ai | ai <- as, addrSocketType ai == socktype]
