@@ -49,9 +49,9 @@ _checks =
     [[], ["0.0.0.0", "::"], ["localhost"], ["127.0.0.1", "::1"]]
   where
     check ns =  do
+        putStrLn $ show ns ++ ":"
         as <- ainfosSkipError putStrLn S.Datagram 53 ns
-        putStr $ unlines $
-            (show ns ++ ":") : map (("  " ++) . show) as
+        putStr $ unlines $ map (("  " ++) . show) as
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
