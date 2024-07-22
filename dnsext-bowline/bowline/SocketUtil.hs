@@ -7,9 +7,11 @@ module SocketUtil (
 import Data.Functor
 import Data.List
 import Data.Maybe
+import Text.Read (readMaybe)
 import System.IO.Error (tryIOError)
 
 -- dns packages
+import Data.IP (IP)
 import Network.Socket (
     AddrInfo (..),
     AddrInfoFlag (..),
@@ -21,15 +23,23 @@ import Network.Socket (
 import qualified Network.Socket as S
 
 {- FOURMOLU_DISABLE -}
+-- expected behavior examples in a typical environments
+--
+--   53 []                      -->  0.0.0.0:53, [::]:53
+--   53 ["0.0.0.0", "::"]       -->  0.0.0.0:53, [::]:53
+--   53 ["localhost"]           -->  127.0.0.1:53, [::1]:53
+--   53 ["127.0.0.1", "::1"]    -->  127.0.0.1:53, [::1]:53
 ainfosSkipError :: (String -> IO ()) -> SocketType -> PortNumber -> [HostName] -> IO [AddrInfo]
 ainfosSkipError logLn sty p hs = case hs of
-    []   -> ainfoSkip sty Nothing p
-    _:_  -> concat <$> sequence [ainfoSkip sty (Just h) p | h <- hs]
+    []   -> foldAddrInfo' sty Nothing p
+    _:_  -> concat <$> sequence [ainfoSkip h p | h <- hs]
   where
-    ainfoSkip = foldAddrInfo left right
+    ainfoSkip host port = case (readMaybe host :: Maybe IP) of
+        Nothing  ->            foldAddrInfo' sty (Just host) port
+        Just {}  -> take 1 <$> foldAddrInfo' sty (Just host) port  {- assume the first is the best -}
+    foldAddrInfo' = foldAddrInfo left pure
     left e = logLn (estring $ show e) $> []
     estring s = "skipping : " ++ fromMaybe s (stripPrefix "Network.Socket." s)
-    right = pure . take 1  {- assume the first is the best -}
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
