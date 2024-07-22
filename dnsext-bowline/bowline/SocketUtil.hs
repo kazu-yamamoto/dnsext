@@ -41,8 +41,5 @@ foldAddrInfo left right socktype mhost port =
                   addrFlags = [AI_PASSIVE]
                 , addrSocketType = socktype
                 }
-    right1 as = right . catMaybes =<< mapM inet as
-    inet ai
-        | addrSocketType ai == socktype  = pure $ Just ai
-        | otherwise                      = pure Nothing
+    right1 as = right [ai | ai <- as, addrSocketType ai == socktype]
 {- FOURMOLU_ENABLE -}
