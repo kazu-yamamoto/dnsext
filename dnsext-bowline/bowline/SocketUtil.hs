@@ -43,6 +43,18 @@ ainfosSkipError logLn sty p hs = case hs of
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+_checks :: IO ()
+_checks =
+    mapM_ check
+    [[], ["0.0.0.0", "::"], ["localhost"], ["127.0.0.1", "::1"]]
+  where
+    check ns =  do
+        as <- ainfosSkipError putStrLn S.Datagram 53 ns
+        putStr $ unlines $
+            (show ns ++ ":") : map (("  " ++) . show) as
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 foldAddrInfo :: (IOError -> IO a) -> ([AddrInfo] -> IO a) -> SocketType -> Maybe HostName -> PortNumber -> IO a
 foldAddrInfo left right socktype mhost port =
     either left right1 =<< tryIOError (S.getAddrInfo (Just hints) mhost (Just $ show port))
