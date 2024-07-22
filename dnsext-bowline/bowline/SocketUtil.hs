@@ -55,6 +55,19 @@ _checks =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+-- |
+--   Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
+--   If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
+--       * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
+--           * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
+--       * POSIX, BSD: `[]`.
+--           * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
+--   So, specifying `AI_ADDRCONFIG` explicitly.
+--
+-- >>> getAI = S.getAddrInfo (Just defaultHints{addrFlags = [AI_ADDRCONFIG]}) (Just "::") (Just "0")
+-- >>> v6unsupported <- either (\_ -> True) (\_ -> False) <$> tryIOError getAI
+-- >>> (== v6unsupported) <$> foldAddrInfo (\_ -> pure True) (\_ -> pure False) Datagram (Just "::1") 53
+-- True
 foldAddrInfo :: (IOError -> IO a) -> ([AddrInfo] -> IO a) -> SocketType -> Maybe HostName -> PortNumber -> IO a
 foldAddrInfo left right socktype mhost port =
     either left right1 =<< tryIOError (S.getAddrInfo (Just hints) mhost (Just $ show port))
