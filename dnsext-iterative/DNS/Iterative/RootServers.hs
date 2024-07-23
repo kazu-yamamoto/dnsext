@@ -70,7 +70,7 @@ rootServers =
 -- |
 -- >>> (ns, ad) <- getRootServers "root.hints.test"
 -- >>> map ((,) <$> rrname <*> rdata) ns
--- [(".","M.ROOT-SERVERS.NET.")]
+-- [(".",M.ROOT-SERVERS.NET.)]
 -- >>> map ((,) <$> rrname <*> rdata) ad
 -- [("M.ROOT-SERVERS.NET.",202.12.27.33),("M.ROOT-SERVERS.NET.",2001:dc3::35)]
 getRootServers :: FilePath -> IO ([ResourceRecord], [ResourceRecord])

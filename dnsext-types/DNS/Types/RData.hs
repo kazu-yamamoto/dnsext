@@ -127,7 +127,7 @@ get_ns :: Int -> Parser RD_NS
 get_ns _ rbuf ref = RD_NS <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_NS where
-    show (RD_NS d) = show d
+    show (RD_NS d) = toRepresentation d
 
 -- | Smart constructor.
 rd_ns :: Domain -> RData
@@ -151,7 +151,7 @@ get_cname :: Int -> Parser RD_CNAME
 get_cname _ rbuf ref = RD_CNAME <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_CNAME where
-    show (RD_CNAME d) = show d
+    show (RD_CNAME d) = toRepresentation d
 
 -- | Smart constructor.
 rd_cname :: Domain -> RData
@@ -247,7 +247,7 @@ get_ptr :: Int -> Parser RD_PTR
 get_ptr _ rbuf ref = RD_PTR <$> getDomainRFC1035 rbuf ref
 
 instance Show RD_PTR where
-    show (RD_PTR d) = show d
+    show (RD_PTR d) = toRepresentation d
 
 -- | Smart constructor.
 rd_ptr :: Domain -> RData
@@ -427,7 +427,7 @@ get_dname :: Int -> Parser RD_DNAME
 get_dname _ rbuf ref = RD_DNAME <$> getDomain rbuf ref
 
 instance Show RD_DNAME where
-    show (RD_DNAME d) = show d
+    show (RD_DNAME d) = toRepresentation d
 
 -- | Smart constructor.
 rd_dname :: Domain -> RData

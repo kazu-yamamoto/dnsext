@@ -204,7 +204,7 @@ lookupXviaMX rlv dom func = do
 --   >>> import Data.List (sort)
 --   >>> ns <- withLookupConf defaultLookupConf $ \env -> lookupNS env "mew.org"
 --   >>> fmap sort ns
---   Right ["ns1.mew.org.","ns2.mew.org."]
+--   Right [ns1.mew.org.,ns2.mew.org.]
 lookupNS :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNS = lookupX NS
 
@@ -226,7 +226,7 @@ lookupNS = lookupX NS
 --   >>> let rc = defaultLookupConf { lconfSeeds = seeds }
 --   >>> ns <- withLookupConf rc $ \env -> lookupNSAuth env "example.com"
 --   >>> fmap sort ns
---   Right ["a.iana-servers.net.","b.iana-servers.net."]
+--   Right [a.iana-servers.net.,b.iana-servers.net.]
 lookupNSAuth :: LookupEnv -> Domain -> IO (Either DNSError [RD_NS])
 lookupNSAuth = lookupAuthX NS
 
@@ -274,7 +274,7 @@ lookupSOA = lookupX SOA
 --   210.130.137.80, i.e., 80.137.130.210.in-addr.arpa:
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupPTR env "180.2.232.202.in-addr.arpa"
---   Right ["www.iij.ad.jp."]
+--   Right [www.iij.ad.jp.]
 --
 --   The 'lookupRDNS' function is more suited to this particular task.
 lookupPTR :: LookupEnv -> Domain -> IO (Either DNSError [RD_PTR])
@@ -287,7 +287,7 @@ lookupPTR = lookupX PTR
 --   address directly:
 --
 --   >>> withLookupConf defaultLookupConf $ \env -> lookupRDNS env "202.232.2.180"
---   Right ["www.iij.ad.jp."]
+--   Right [www.iij.ad.jp.]
 lookupRDNS :: LookupEnv -> IPv4 -> IO (Either DNSError [RD_PTR])
 lookupRDNS rlv ip = lookupPTR rlv dom
   where
