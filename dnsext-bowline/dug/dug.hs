@@ -6,7 +6,7 @@ module Main (main) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM (STM, atomically, newTQueueIO, tryReadTQueue)
-import Control.Monad (void, when)
+import Control.Monad (when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
@@ -35,14 +35,17 @@ import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Char (toLower)
 import Data.Function (on)
+import Data.Functor
 import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
 import qualified Data.UnixTime as T
-import Network.Socket (PortNumber)
+import Network.Socket (AddrInfo (..), PortNumber)
+import qualified Network.Socket as S
 import System.Console.ANSI.Types
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
+import System.IO.Error (tryIOError)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -134,7 +137,7 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, opts@Options{..}) <- getArgs >>= getArgsOpts
+    (args, opts0@Options{..}) <- getArgs >>= getArgsOpts
     when optHelp $ do
         msg <- help
         putStr $ usageInfo msg options
@@ -144,6 +147,7 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2 | 3"
         exitSuccess
     ------------------------
+    opts <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
     let putLn = atomically . putLnSTM
         putLines a b c = atomically $ putLinesSTM a b c
@@ -177,6 +181,30 @@ main = do
                 Just x -> do
                     xs <- readQ
                     return (x : xs)
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+checkDisableV6 :: Options -> IO Options
+checkDisableV6 opt
+    | optDisableV6NS opt  = pure opt
+    | otherwise           =
+      either (\_ -> disabled) (\_ -> pure opt) =<< tryIOError checkSocketV6
+  where
+    disabled = putStrLn "disabling IPv6, because of not supported." $> opt{optDisableV6NS = True}
+    checkSocketV6 = do
+        {- Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
+           If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
+           * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
+               * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
+           * POSIX, BSD: `[]`.
+               * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
+           So, specifying `AI_ADDRCONFIG` explicitly. -}
+        as <- S.getAddrInfo (Just S.defaultHints{addrFlags = [S.AI_ADDRCONFIG]}) (Just "::") (Just "53")
+        case as of
+            []    -> disabled
+            _:_   -> pure opt
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
