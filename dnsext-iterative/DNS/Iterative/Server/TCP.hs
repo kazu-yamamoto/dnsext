@@ -8,7 +8,6 @@ module DNS.Iterative.Server.TCP (
 where
 
 -- GHC packages
-import Control.Monad (when)
 import qualified Data.ByteString as BS
 import Data.Functor
 
@@ -49,18 +48,13 @@ tcpServer VcServerConfig{..} env toCacher s = do
         peersa <- getPeerName sock
         logLn env Log.DEBUG $ "tcp-srv: accept: " ++ show peersa
         let peerInfo = PeerInfoVC peersa
-        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (waitReadSocketSTM' sock) tmicro vc_slowloris_size
+        (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM' sock) tmicro vc_slowloris_size
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
                 if siz == 0
-                    then updateVcTimeout tmicro vcTimeout_ $> ("", peerInfo)
-                    else do
-                        when (siz > vc_slowloris_size) $ updateVcTimeout tmicro vcTimeout_
-                        incStatsTCP53 peersa (stats_ env)
-                        return (BS.concat bss, peerInfo)
-            send bs _ = do
-                DNS.sendVC (DNS.sendTCP sock) bs
-                updateVcTimeout tmicro vcTimeout_
+                    then return ("", peerInfo)
+                    else incStatsTCP53 peersa (stats_ env) $> (BS.concat bss, peerInfo)
+            send bs _ = DNS.sendVC (DNS.sendTCP sock) bs
             receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
             sender = senderVC "tcp-send" env vcSess send fromX
         TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
