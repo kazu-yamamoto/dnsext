@@ -8,6 +8,7 @@ import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeo
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
+import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
 import System.Posix.Types (Fd (..))
 
@@ -191,9 +192,11 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ = loop 1 `E.catch` 
                 | timeout     = pure VfTimeout
                 | otherwise   = do
                       (bs, peerInfo) <- recv
-                      if bs == ""
-                          then  caseEof
-                          else  caseNext bs peerInfo
+                      casesSize (BS.length bs) bs peerInfo
+            casesSize sz bs peerInfo
+                | sz == 0                 = resetVcTimeout vcTimeout_ *> caseEof
+                | sz > vcSlowlorisSize_   = resetVcTimeout vcTimeout_ *> caseNext bs peerInfo
+                | otherwise               =                              caseNext bs peerInfo
 
     step i bs peerInfo = do
         atomically (addVcPending vcPendings_ i)
@@ -225,7 +228,7 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
     onError se@(SomeException e) = warnOnError env name se *> throwIO e
     loop = maybe (step *> loop) pure =<< waitVcOutput vcs
     step = do
-        let body (Output bs _ peerInfo) = send bs peerInfo
+        let body (Output bs _ peerInfo) = resetVcTimeout vcTimeout_ *> send bs peerInfo
             finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
         E.bracket fromX finalize body
 {- FOURMOLU_ENABLE -}
@@ -307,6 +310,9 @@ delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
 updateVcTimeout :: Int -> VcTimeout -> IO ()
 updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
+
+resetVcTimeout :: VcTimeout -> IO ()
+resetVcTimeout VcTimeout{..} = updateTimeout vtManager_ vtKey_ vtMicrosec_
 
 waitVcInput :: VcSession -> IO Bool
 waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
