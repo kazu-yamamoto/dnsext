@@ -43,7 +43,7 @@ quicServers VcServerConfig{..} env toCacher ss = do
         let mysa = QUIC.localSockAddr info
             peersa = QUIC.remoteSockAddr info
             waitInput = pure $ (guard . not =<<) . isEmptyTQueue $ QUIC.inputQ conn
-        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession waitInput tmicro
+        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
         let recv = do
                 strm <- QUIC.acceptStream conn
                 let peerInfo = PeerInfoQUIC peersa strm

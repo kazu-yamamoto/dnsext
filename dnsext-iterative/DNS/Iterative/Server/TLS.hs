@@ -53,7 +53,7 @@ tlsServer VcServerConfig{..} env toCacher s = do
             peerInfo = PeerInfoVC peersa
         logLn env Log.DEBUG $ "tls-srv: accept: " ++ show peersa
         recvN <- makeRecvN "" $ H2.recv backend
-        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (pure $ pure ()) tmicro
+        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (pure $ pure ()) tmicro vc_slowloris_size
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize recvN
                 updateVcTimeout tmicro vcTimeout_

@@ -259,11 +259,12 @@ data VcTimeout =
 {- FOURMOLU_DISABLE -}
 data VcSession =
     VcSession
-    { vcEof_       :: VcEof
-    , vcPendings_  :: VcPendings
-    , vcRespAvail_ :: VcRespAvail
-    , vcWaitRead_  :: IO VcWaitRead
-    , vcTimeout_   :: VcTimeout
+    { vcEof_            :: VcEof
+    , vcPendings_       :: VcPendings
+    , vcRespAvail_      :: VcRespAvail
+    , vcWaitRead_       :: IO VcWaitRead
+    , vcTimeout_        :: VcTimeout
+    , vcSlowlorisSize_  :: Int
     }
 {- FOURMOLU_ENABLE -}
 
@@ -284,15 +285,15 @@ initVcTimeout micro = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO VcWaitRead -> Int -> IO (VcSession, ToSender, FromX)
-initVcSession getWaitIn micro = do
+initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, ToSender, FromX)
+initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
     senderQ     <- newTQueueIO
     vcTimeout   <- initVcTimeout micro
     let toSender = atomically . writeTQueue senderQ
         fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout, toSender, fromX)
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout slsize, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()

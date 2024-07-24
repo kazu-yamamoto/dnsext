@@ -49,7 +49,7 @@ tcpServer VcServerConfig{..} env toCacher s = do
         peersa <- getPeerName sock
         logLn env Log.DEBUG $ "tcp-srv: accept: " ++ show peersa
         let peerInfo = PeerInfoVC peersa
-        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (waitReadSocketSTM' sock) tmicro
+        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession (waitReadSocketSTM' sock) tmicro vc_slowloris_size
         let recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
                 if siz == 0
