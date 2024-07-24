@@ -308,9 +308,6 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
-updateVcTimeout :: Int -> VcTimeout -> IO ()
-updateVcTimeout micro VcTimeout{..} = updateTimeout vtManager_ vtKey_ micro
-
 resetVcTimeout :: VcTimeout -> IO ()
 resetVcTimeout VcTimeout{..} = updateTimeout vtManager_ vtKey_ vtMicrosec_
 
