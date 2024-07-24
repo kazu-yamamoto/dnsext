@@ -249,9 +249,10 @@ type VcRespAvail = STM Bool
 {- FOURMOLU_DISABLE -}
 data VcTimeout =
     VcTimeout
-    { vtManager_ :: TimerManager
-    , vtKey_     :: TimeoutKey
-    , vtState_   :: TVar Bool
+    { vtManager_        :: TimerManager
+    , vtKey_            :: TimeoutKey
+    , vtState_          :: TVar Bool
+    , vtMicrosec_       :: Int
     }
 {- FOURMOLU_ENABLE -}
 
@@ -279,7 +280,7 @@ initVcTimeout micro = do
     st  <- newTVarIO False
     mgr <- getSystemTimerManager
     key <- registerTimeout mgr micro (atomically $ writeTVar st True)
-    pure $ VcTimeout mgr key st
+    pure $ VcTimeout mgr key st micro
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
