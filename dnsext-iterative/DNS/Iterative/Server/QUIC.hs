@@ -43,24 +43,18 @@ quicServers VcServerConfig{..} env toCacher ss = do
         let mysa = QUIC.localSockAddr info
             peersa = QUIC.remoteSockAddr info
             waitInput = pure $ (guard . not =<<) . isEmptyTQueue $ QUIC.inputQ conn
-        (vcSess@VcSession{..}, toSender, fromX) <- initVcSession waitInput tmicro
+        (vcSess, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
         let recv = do
                 strm <- QUIC.acceptStream conn
                 let peerInfo = PeerInfoQUIC peersa strm
                 -- Without a designated thread, recvStream would block.
                 (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
                 if siz == 0
-                    then updateVcTimeout tmicro vcTimeout_ $> ("", peerInfo)
-                    else do
-                        when (siz > vc_slowloris_size) $ updateVcTimeout tmicro vcTimeout_
-                        incStatsDoQ peersa (stats_ env)
-                        return (BS.concat bss, peerInfo)
+                    then return ("", peerInfo)
+                    else incStatsDoQ peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs peerInfo = do
                 case peerInfo of
-                    PeerInfoQUIC _ strm -> do
-                        DNS.sendVC (QUIC.sendStreamMany strm) bs
-                        QUIC.closeStream strm
-                        updateVcTimeout tmicro vcTimeout_
+                    PeerInfoQUIC _ strm -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                     _ -> return ()
             receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
             sender = senderVC "quic-send" env vcSess send fromX

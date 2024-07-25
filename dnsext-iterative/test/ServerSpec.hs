@@ -47,7 +47,7 @@ spec = describe "server - VC session" $ do
 vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
 vcSession waitRead tmicro ws = do
     env <- newEmptyEnv
-    (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro
+    (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro 0
     toCacher <- getToCacher
     recv <- getRecv ws
     (getResult, send) <- getSend
