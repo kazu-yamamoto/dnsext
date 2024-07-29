@@ -5,7 +5,6 @@ module Monitor (
 ) where
 
 -- GHC packages
-
 import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
 import Control.Concurrent.Async (waitSTM)
@@ -48,6 +47,7 @@ import Network.Socket (
     Socket,
     SocketType (Stream),
  )
+import System.Posix (getEffectiveUserID, getEffectiveGroupID)
 import UnliftIO.Exception (tryAny)
 
 -- this package
@@ -65,6 +65,7 @@ monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
 
 data Command
     = Param
+    | EParam
     | Find [String]
     | Lookup Domain TYPE
     | Stats
@@ -87,8 +88,9 @@ monitor
     :: Config
     -> Env
     -> Control
+    -> [String]
     -> IO [IO ()]
-monitor conf env mng@Control{..} = do
+monitor conf env mng@Control{..} srvInfo = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
     let ss = map fst ps
@@ -104,7 +106,7 @@ monitor conf env mng@Control{..} = do
     return $ map monitorServer ss
   where
     runStdConsole = do
-        let repl = console conf env mng stdin stdout "<std>"
+        let repl = console conf env mng srvInfo stdin stdout "<std>"
         void $ forkIO repl
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
@@ -113,7 +115,7 @@ monitor conf env mng@Control{..} = do
                 socketWaitRead s
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
-                let repl = console conf env mng sockh sockh $ show addr
+                let repl = console conf env mng srvInfo sockh sockh $ show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
                 either (const $ return ()) (const loop)
@@ -128,11 +130,12 @@ console
     :: Config
     -> Env
     -> Control
+    -> [String]
     -> Handle
     -> Handle
     -> String
     -> IO ()
-console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
+console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err =
@@ -152,7 +155,7 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
                 (\exit -> unless exit repl)
                 =<< withWait waitQuit (handle (($> False) . print) step)
 
-    showParam outLn conf
+    showParam outLn conf srvInfo
     repl
   where
     handle onError = either onError return <=< tryAny
@@ -194,7 +197,7 @@ console conf env Control{cacheControl=CacheControl{..},..} inH outH ainfo = do
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch  Param = showParam outLn conf
+        dispatch  Param = showParam outLn conf srvInfo
         dispatch  Noop = return ()
         dispatch (Find ws) =
             mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
@@ -253,8 +256,12 @@ withWait qstm blockAct =
 socketWaitRead :: Socket -> IO ()
 socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
 
-showParam :: (String -> IO ()) -> Config -> IO ()
-showParam outLn conf = do
+showParam :: (String -> IO ()) -> Config -> [String] -> IO ()
+showParam outLn conf srvInfo = do
+    outLn "---------- configs  ----------"
     mapM_ outLn $ showConfig conf
-    n <- getNumCapabilities
-    outLn $ "capabilities: " ++ show n
+    outLn "---------- runtime  ----------"
+    outLn . ("capabilities: " ++) . show =<< getNumCapabilities
+    mapM_ outLn  srvInfo
+    outLn . ("euid: " ++) . show =<< getEffectiveUserID
+    outLn . ("egid: " ++) . show =<< getEffectiveGroupID
