@@ -27,6 +27,15 @@ import Network.Socket
 import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
 import System.Environment (getArgs)
+import System.Posix (
+    getGroupEntryForName,
+    getRealUserID,
+    getUserEntryForName,
+    groupID,
+    setGroupID,
+    setUserID,
+    userID,
+ )
 import System.Timeout (timeout)
 import Text.Printf (printf)
 import UnliftIO.Exception (finally)
@@ -119,6 +128,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
     mng <- getControl env workerStats mng0
     monitor <- Mon.monitor conf env mng
+    --
+    void $ setGroupUser cnf_user cnf_group
     -- Run
     tidW <- runWriter
     _tidL <- runLogger
@@ -285,3 +296,26 @@ getStats' env _ucacheQSize = do
 
 getWStats' :: [WorkerStatOP] -> IO Builder
 getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
+
+----------------------------------------------------------------
+
+-- | Checking if this process has the root privilege.
+amIrootUser :: IO Bool
+amIrootUser = (== 0) <$> getRealUserID
+
+-- | Setting user and group.
+setGroupUser
+    :: String
+    -- ^ User
+    -> String
+    -- ^ Group
+    -> IO Bool
+setGroupUser user group = do
+    root <- amIrootUser
+    if root
+        then do
+            getGroupEntryForName group >>= setGroupID . groupID
+            getUserEntryForName user >>= setUserID . userID
+            return True
+        else
+            return False

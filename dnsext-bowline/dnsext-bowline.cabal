@@ -41,6 +41,7 @@ executable bowline
         stm,
         tls >= 2.1,
         tls-session-manager,
+        unix,
         unliftio,
         wai,
         warp
