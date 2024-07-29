@@ -127,7 +127,10 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
     mng <- getControl env workerStats mng0
-    monitor <- Mon.monitor conf env mng []
+    let srvinfo name sockets = do
+            sas <- mapM getSocketName sockets
+            pure $ unwords $ (name ++ ":") : map show sas
+    monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | svs <- servers, (n, sks, _as) <- svs]
     --
     void $ setGroupUser cnf_user cnf_group
     -- Run
@@ -140,7 +143,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 ( [TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper]
                     ++ [ TStat.concurrentlyList_ (withNum "cacher" cachers)
                        , TStat.concurrentlyList_ (withNum "worker" workers)
-                       , TStat.concurrentlyList_ (concat servers)
+                       , TStat.concurrentlyList_ [(n, as) | svs <- servers, (n, _sks, as) <- svs]
                        ]
                 )
     race_ concServer (conc monitor)
@@ -193,12 +196,12 @@ getServers
     -> [HostName]
     -> Server.ToCacher
     -> (Bool, String, ServerActions, SocketType, Int)
-    -> IO [(String, IO ())]
+    -> IO [(String, [Socket], IO ())]
 getServers _ _ _ (False, _, _, _, _) = return []
 getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
     as <- ainfosSkipError putStrLn socktype port hosts
     sockets <- mapM openBind as
-    map (name,) <$> mkServer env toCacher sockets
+    map (name,sockets,) <$> mkServer env toCacher sockets
   where
     openBind ai = do
         s <- openSocket ai
