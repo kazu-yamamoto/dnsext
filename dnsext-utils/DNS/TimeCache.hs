@@ -3,6 +3,7 @@
 module DNS.TimeCache (
     TimeCache (..),
     newTimeCache,
+    getTime,
     noneTimeCache,
 ) where
 
@@ -20,25 +21,30 @@ import Control.AutoUpdate (
 import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 
 -- dnsext packages
-import DNS.Types.Time
+import DNS.Types.Time (EpochTime)
 
 -- this package
 
+{- FOURMOLU_DISABLE -}
 data TimeCache = TimeCache
-    { getTime :: IO EpochTime
-    , getTimeStr :: IO ShowS
+    { getTimestamp  :: IO UnixTime
+    , getTimeStr    :: IO ShowS
     }
+{- FOURMOLU_ENABLE -}
 
 newTimeCache :: IO TimeCache
 newTimeCache = do
     getUTime <- mkAutoUnixTime
-    TimeCache <$> mkAutoSeconds getUTime <*> mkAutoTimeShowS getUTime
+    TimeCache <$> mkAutoTimestamp getUTime <*> mkAutoTimeShowS getUTime
+
+getTime :: TimeCache -> IO EpochTime
+getTime = fmap unixToEpoch . getTimestamp
 
 mkAutoUnixTime :: IO (IO UnixTime)
 mkAutoUnixTime = mostOncePerSecond getUnixTime
 
-mkAutoSeconds :: IO UnixTime -> IO (IO EpochTime)
-mkAutoSeconds getUTime = mostOncePerSecond $ unixToEpoch <$> getUTime
+mkAutoTimestamp :: IO UnixTime -> IO (IO UnixTime)
+mkAutoTimestamp getUTime = mostOncePerSecond getUTime
 
 mkAutoTimeShowS :: IO UnixTime -> IO (IO ShowS)
 mkAutoTimeShowS getUTime = mostOncePerSecond $ getTimeShowS =<< getUTime
@@ -54,7 +60,7 @@ mostOncePerSecond upd =
 noneTimeCache :: TimeCache
 noneTimeCache =
     TimeCache
-        { getTime = getCurrentTime
+        { getTimestamp = getUnixTime
         , getTimeStr = getTimeShowS =<< getUnixTime
         }
 
