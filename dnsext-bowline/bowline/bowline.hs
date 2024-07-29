@@ -127,7 +127,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
     mng <- getControl env workerStats mng0
-    monitor <- Mon.monitor conf env mng
+    monitor <- Mon.monitor conf env mng []
     --
     void $ setGroupUser cnf_user cnf_group
     -- Run
