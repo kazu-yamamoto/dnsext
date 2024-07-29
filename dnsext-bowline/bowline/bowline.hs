@@ -36,6 +36,7 @@ import qualified DNS.SEC as DNS
 import DNS.SVCB (TYPE (..))
 import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
+import DNS.TimeCache (getTime)
 import qualified DNS.Types as DNS
 import DNS.Types.Internal (TYPE (..))
 import Network.Socket
@@ -224,7 +225,7 @@ getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
 ----------------------------------------------------------------
 
 getCache :: TimeCache -> Config -> IO GlobalCache
-getCache TimeCache{..} Config{..} = do
+getCache tc@TimeCache{..} Config{..} = do
     ref <- I.newIORef Nothing
     let memoLogLn msg = do
             mx <- I.readIORef ref
@@ -233,7 +234,7 @@ getCache TimeCache{..} Config{..} = do
                 Just putLines -> do
                     tstr <- getTimeStr
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-        cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn getTime
+        cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn $ getTime tc
     cacheOps <- Cache.newRRCacheOps cacheConf
     let setLog = I.writeIORef ref . Just
     return $ GlobalCache cacheOps setLog
