@@ -27,7 +27,7 @@ import DNS.Iterative.Internal (Env (..), newEmptyEnv)
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
-import DNS.TimeCache (TimeCache (..), newTimeCache, getTime)
+import DNS.TimeCache (newTimeCache, getTime)
 
 data Config = Config
     { logOutput :: Log.Output
@@ -193,7 +193,7 @@ runBenchmark conf@Config{..} noop gplot size = do
 
 getEnv :: Config -> Log.PutLines -> IO Env
 getEnv Config{..} putLines = do
-    tcache <- newTimeCache
+    tcache <- newTimeCache 20
     let memoLogLn = putLines Log.WARN Nothing . (: [])
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn $ getTime tcache
     Cache.RRCacheOps{..} <- Cache.newRRCacheOps cacheConf
