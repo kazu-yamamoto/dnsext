@@ -1,3 +1,4 @@
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module DNS.TimeCache (
@@ -32,10 +33,10 @@ data TimeCache = TimeCache
     }
 {- FOURMOLU_ENABLE -}
 
-newTimeCache :: IO TimeCache
-newTimeCache = do
+newTimeCache :: Int -> IO TimeCache
+newTimeCache micros = do
     getUTime <- mkAutoUnixTime
-    TimeCache <$> mkAutoTimestamp getUTime <*> mkAutoTimeShowS getUTime
+    TimeCache <$> mkAutoTimestamp micros getUTime <*> mkAutoTimeShowS getUTime
 
 getTime :: TimeCache -> IO EpochTime
 getTime = fmap unixToEpoch . getTimestamp
@@ -43,19 +44,22 @@ getTime = fmap unixToEpoch . getTimestamp
 mkAutoUnixTime :: IO (IO UnixTime)
 mkAutoUnixTime = mostOncePerSecond getUnixTime
 
-mkAutoTimestamp :: IO UnixTime -> IO (IO UnixTime)
-mkAutoTimestamp getUTime = mostOncePerSecond getUTime
+mkAutoTimestamp :: Int -> IO UnixTime -> IO (IO UnixTime)
+mkAutoTimestamp micros getUTime = mostOncePerMicros micros getUTime
 
 mkAutoTimeShowS :: IO UnixTime -> IO (IO ShowS)
 mkAutoTimeShowS getUTime = mostOncePerSecond $ getTimeShowS =<< getUTime
 
-mostOncePerSecond :: IO a -> IO (IO a)
-mostOncePerSecond upd =
+mostOncePerMicros :: Int -> IO a -> IO (IO a)
+mostOncePerMicros interval upd =
     mkAutoUpdate
         defaultUpdateSettings
             { updateAction = upd
-            , updateFreq = 1000 * 1000
+            , updateFreq = interval
             }
+
+mostOncePerSecond :: IO a -> IO (IO a)
+mostOncePerSecond = mostOncePerMicros 1_000_000
 
 noneTimeCache :: TimeCache
 noneTimeCache =
