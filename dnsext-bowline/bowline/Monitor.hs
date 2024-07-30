@@ -100,7 +100,6 @@ monitor conf env mng@Control{..} srvInfo = do
             v6only sock a
             S.setSocketOption sock S.ReuseAddr 1
             S.bind sock a
-            S.listen sock 5
     mapM_ servSock ps
     when (cnf_monitor_stdio conf) runStdConsole
     return $ map monitorServer ss
@@ -122,6 +121,7 @@ monitor conf env mng@Control{..} srvInfo = do
                     =<< withWait
                         waitQuit
                         (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
+        S.listen s 5
         loop
 {- FOURMOLU_ENABLE -}
 
