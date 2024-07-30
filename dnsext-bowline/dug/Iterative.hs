@@ -29,7 +29,7 @@ iterativeQuery putLn putLines qq opts = do
 
 setup :: Log.PutLines -> Options -> IO Env
 setup putLines Options{..} = do
-    tcache <- newTimeCache
+    tcache <- newTimeCache 1000000
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 $ getTime tcache
     cacheOps <- Cache.newRRCacheOps cacheConf
     let tmout = timeout 3000000
