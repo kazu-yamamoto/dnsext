@@ -6,10 +6,10 @@ module Monitor (
 
 -- GHC packages
 import Control.Applicative ((<|>))
-import Control.Concurrent (forkFinally, forkIO, getNumCapabilities, threadWaitRead)
+import Control.Concurrent (forkFinally, getNumCapabilities, threadWaitRead)
 import Control.Concurrent.Async (waitSTM)
 import Control.Concurrent.STM (STM, atomically)
-import Control.Monad (unless, void, when, (<=<))
+import Control.Monad
 import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Char (toUpper)
@@ -100,14 +100,13 @@ monitor conf env mng@Control{..} srvInfo = do
             v6only sock a
             S.setSocketOption sock S.ReuseAddr 1
             S.bind sock a
-            S.listen sock 5
+        addStdio as
+            | cnf_monitor_stdio conf = runStdConsole : as
+            | otherwise              = as
     mapM_ servSock ps
-    when (cnf_monitor_stdio conf) runStdConsole
-    return $ map monitorServer ss
+    return $ addStdio $ map monitorServer ss
   where
-    runStdConsole = do
-        let repl = console conf env mng srvInfo stdin stdout "<std>"
-        void $ forkIO repl
+    runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle onError = either onError return <=< tryAny
     monitorServer s = do
@@ -122,6 +121,7 @@ monitor conf env mng@Control{..} srvInfo = do
                     =<< withWait
                         waitQuit
                         (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
+        S.listen s 5
         loop
 {- FOURMOLU_ENABLE -}
 
