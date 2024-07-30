@@ -71,7 +71,7 @@ run :: IO Config -> IO ()
 run readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
-    tcache <- newTimeCache
+    tcache <- newTimeCache 1000000
     newControl >>= go tcache Nothing
   where
     go tcache mcache mng = do
