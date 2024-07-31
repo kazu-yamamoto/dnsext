@@ -39,14 +39,14 @@ import DNS.Types (DNSMessage)
 import DNS.Iterative.Query (Env)
 
 data PeerInfo
-    = PeerInfoUDP SockAddr
+    = PeerInfoUDP SockAddr [Cmsg]
     | PeerInfoQUIC SockAddr QUIC.Stream
     | PeerInfoH2 SockAddr H2I.Stream
     | PeerInfoVC SockAddr
     deriving (Show)
 
 peerSockAddr :: PeerInfo -> SockAddr
-peerSockAddr (PeerInfoUDP sa) = sa
+peerSockAddr (PeerInfoUDP sa _) = sa
 peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoH2 sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
