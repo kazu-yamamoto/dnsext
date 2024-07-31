@@ -58,7 +58,7 @@ benchServer bench_pipelines env _ = do
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where
     getSockAddr host port = do
-        as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram}) (Just host) (Just port)
+        as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram, addrFlags = [AI_ADDRCONFIG]}) (Just host) (Just port)
         case as of
             a : _ -> pure $ addrAddress a
             [] -> fail $ "benchServer: fail to get addr for " ++ host ++ ":" ++ port

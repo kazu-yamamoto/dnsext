@@ -162,7 +162,7 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
     open = do
         let host = show rinfoIP
             port = show rinfoPort
-            hints = defaultHints{addrSocketType = Datagram}
+            hints = defaultHints{addrSocketType = Datagram, addrFlags = [AI_ADDRCONFIG]}
         addr <- head <$> getAddrInfo (Just hints) (Just host) (Just port)
         E.bracketOnError (openSocket addr) close $ \s -> do
             let sa = addrAddress addr
