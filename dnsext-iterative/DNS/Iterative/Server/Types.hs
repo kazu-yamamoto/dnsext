@@ -30,7 +30,6 @@ import qualified Network.HTTP2.Server.Internal as H2I
 import qualified Network.QUIC as QUIC
 import Network.Socket
 import Network.TLS (Credentials (..), SessionManager)
-import qualified Network.UDP as UDP
 
 -- dnsext
 import DNS.TAP.Schema (SocketProtocol)
@@ -40,14 +39,14 @@ import DNS.Types (DNSMessage)
 import DNS.Iterative.Query (Env)
 
 data PeerInfo
-    = PeerInfoUDP UDP.ClientSockAddr
+    = PeerInfoUDP SockAddr
     | PeerInfoQUIC SockAddr QUIC.Stream
     | PeerInfoH2 SockAddr H2I.Stream
     | PeerInfoVC SockAddr
     deriving (Show)
 
 peerSockAddr :: PeerInfo -> SockAddr
-peerSockAddr (PeerInfoUDP (UDP.ClientSockAddr sa _)) = sa
+peerSockAddr (PeerInfoUDP sa) = sa
 peerSockAddr (PeerInfoQUIC sa _) = sa
 peerSockAddr (PeerInfoH2 sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa

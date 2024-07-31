@@ -74,7 +74,6 @@ library
         iproute,
         network,
         network-run,
-        network-udp,
         mtl,
         psqueues,
         quic >= 0.2 && < 0.3,
