@@ -175,7 +175,10 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_early_data_size = cnf_early_data_size
                 }
     conc = mapConcurrently_ id
-    udpconf = UdpServerConfig{}
+    udpconf =
+        UdpServerConfig
+            { udpAutomaticInterface = cnf_interface_automatic
+            }
 
 main :: IO ()
 main = do
