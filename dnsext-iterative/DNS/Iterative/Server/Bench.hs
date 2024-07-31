@@ -16,7 +16,6 @@ import DNS.TAP.Schema (SocketProtocol (..))
 
 -- other packages
 import Network.Socket
-import qualified Network.UDP as UDP
 
 -- this package
 
@@ -43,7 +42,7 @@ benchServer bench_pipelines _ True = do
     return (concat pipelines, atomically . writeTQueue reqQ, atomically (readTQueue resQ))
 benchServer bench_pipelines env _ = do
     myDummy <- getSockAddr "127.1.1.1" "53"
-    clntDummy <- UDP.ClientSockAddr <$> getSockAddr "127.2.1.1" "53" <*> pure []
+    clntDummy <- getSockAddr "127.2.1.1" "53"
 
     let pipelines_per_socket = bench_pipelines
         workers_per_pipeline = 8 {- only used initial setup, benchmark runs on cached state -}

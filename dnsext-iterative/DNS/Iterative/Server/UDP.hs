@@ -9,6 +9,7 @@ where
 
 -- GHC packages
 import Control.Concurrent.STM
+import Control.Monad (void)
 
 -- dnsext-* packages
 import DNS.TAP.Schema (SocketProtocol (..))
@@ -16,7 +17,7 @@ import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import Network.Socket (getSocketName)
-import qualified Network.UDP as UDP
+import qualified Network.Socket.ByteString as NSB
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
@@ -36,19 +37,17 @@ udpServers _conf env toCacher ss =
 
 udpServer :: UdpServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
 udpServer _conf env toCacher s = do
-    sa <- getSocketName s
-    let lsock = UDP.ListenSocket s sa False -- interface specific
+    mysa <- getSocketName s
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
-        mysa = UDP.mySockAddr lsock
         recv = do
-            (bs, csa@(UDP.ClientSockAddr csa' _)) <- UDP.recvFrom lsock
-            incStatsUDP53 csa' (stats_ env)
-            return (bs, PeerInfoUDP csa)
+            (bs, peersa) <- NSB.recvFrom s 2048
+            incStatsUDP53 peersa (stats_ env)
+            return (bs, PeerInfoUDP peersa)
         send bs peerInfo = do
             case peerInfo of
-                PeerInfoUDP csa -> UDP.sendTo lsock bs csa
+                PeerInfoUDP peersa -> void $ NSB.sendTo s bs peersa
                 _ -> return ()
         receiver = receiverLogic env mysa recv toCacher toSender UDP
         sender = senderLogic env send fromX
