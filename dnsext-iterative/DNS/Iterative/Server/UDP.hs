@@ -49,19 +49,12 @@ udpServer UdpServerConfig{..} env toCacher s = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs
         fromX = atomically $ readTQueue qs
-        recv
-            | udp_interface_automatic = do
-                (peersa, bs, cmsgs, _) <- NSB.recvMsg s 2048 2048 0
-                incStatsUDP53 peersa (stats_ env)
-                return (bs, PeerInfoUDP peersa cmsgs)
-            | otherwise = do
-                (bs, peersa) <- NSB.recvFrom s 2048
-                incStatsUDP53 peersa (stats_ env)
-                return (bs, PeerInfoUDP peersa [])
-        send bs (PeerInfoUDP peersa cmsgs)
-            | udp_interface_automatic =
-                void $ NSB.sendMsg s peersa [bs] cmsgs 0
-            | otherwise = void $ NSB.sendTo s bs peersa
+        recv = do
+            (peersa, bs, cmsgs, _) <- NSB.recvMsg s 2048 2048 0
+            incStatsUDP53 peersa (stats_ env)
+            return (bs, PeerInfoUDP peersa cmsgs)
+        send bs (PeerInfoUDP peersa cmsgs) =
+            void $ NSB.sendMsg s peersa [bs] cmsgs 0
         send _ _ = return ()
         receiver = receiverLogic env mysa recv toCacher toSender UDP
         sender = senderLogic env send fromX
