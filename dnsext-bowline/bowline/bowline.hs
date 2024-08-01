@@ -173,11 +173,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , vc_credentials = creds
                 , vc_session_manager = sm
                 , vc_early_data_size = cnf_early_data_size
+                , vc_interface_automatic = cnf_interface_automatic
                 }
     conc = mapConcurrently_ id
     udpconf =
         UdpServerConfig
-            { udpAutomaticInterface = cnf_interface_automatic
+            { udp_interface_automatic = cnf_interface_automatic
             }
 
 main :: IO ()

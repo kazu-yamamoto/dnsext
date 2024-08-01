@@ -6,7 +6,7 @@ module DNS.Iterative.Server.HTTP3 (
 ) where
 
 -- GHC packages
-
+import Control.Monad (when)
 import Data.ByteString.Builder (byteString)
 import qualified Data.ByteString.Char8 as C8
 
@@ -28,12 +28,14 @@ import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.Types
+import DNS.Iterative.Server.UDP
 import DNS.Iterative.Stats (incStatsDoH3)
 
 ----------------------------------------------------------------
 http3Servers :: VcServerConfig -> ServerActions
 http3Servers VcServerConfig{..} env toCacher ss = do
     -- fixme: withLocationIOE naming
+    when vc_interface_automatic $ mapM_ setPktInfo ss
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             withLocationIOE "h3" $ QUIC.runWithSockets ss sconf $ \conn ->
                 H3.run conn (conf mgr) $ doHTTP env toCacher
