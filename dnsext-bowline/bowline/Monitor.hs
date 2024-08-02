@@ -100,11 +100,9 @@ monitor conf env mng@Control{..} srvInfo = do
             v6only sock a
             S.setSocketOption sock S.ReuseAddr 1
             S.bind sock a
-        addStdio as
-            | cnf_monitor_stdio conf = runStdConsole : as
-            | otherwise              = as
+        stdio = [ runStdConsole | cnf_monitor_stdio conf ]
     mapM_ servSock ps
-    return $ addStdio $ map monitorServer ss
+    return $ stdio ++ map monitorServer ss
   where
     runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])

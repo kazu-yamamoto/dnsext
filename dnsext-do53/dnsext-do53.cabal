@@ -48,7 +48,6 @@ library
     build-depends:
         array,
         async,
-        auto-update,
         base >=4 && <5,
         bytestring,
         containers,

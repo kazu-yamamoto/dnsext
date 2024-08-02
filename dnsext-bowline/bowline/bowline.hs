@@ -5,27 +5,16 @@
 
 module Main where
 
+-- GHC
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard, when)
-import DNS.Iterative.Server as Server
-import qualified DNS.Log as Log
-import qualified DNS.RRCache as Cache
-import qualified DNS.SEC as DNS
-import DNS.SVCB (TYPE (..))
-import qualified DNS.SVCB as DNS
-import qualified DNS.ThreadStats as TStat
-import qualified DNS.Types as DNS
-import DNS.Types.Internal (TYPE (..))
 import Data.ByteString.Builder
 import Data.Functor
 import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
-import Network.Socket
-import Network.TLS (Credentials (..), credentialLoadX509)
-import qualified Network.TLS.SessionTicket as ST
 import System.Environment (getArgs)
 import System.Posix (
     getGroupEntryForName,
@@ -38,8 +27,23 @@ import System.Posix (
  )
 import System.Timeout (timeout)
 import Text.Printf (printf)
+
+-- dnsext-* deps
+import DNS.Iterative.Server as Server
+import qualified DNS.Log as Log
+import qualified DNS.RRCache as Cache
+import qualified DNS.SEC as DNS
+import DNS.SVCB (TYPE (..))
+import qualified DNS.SVCB as DNS
+import qualified DNS.ThreadStats as TStat
+import qualified DNS.Types as DNS
+import DNS.Types.Internal (TYPE (..))
+import Network.Socket
+import Network.TLS (Credentials (..), credentialLoadX509)
+import qualified Network.TLS.SessionTicket as ST
 import UnliftIO.Exception (finally)
 
+-- this package
 import Config
 import qualified DNSTAP as TAP
 import qualified Monitor as Mon
