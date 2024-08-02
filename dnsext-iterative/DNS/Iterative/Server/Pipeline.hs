@@ -228,20 +228,26 @@ receiverLogic' mysa recv toCacher toSender proto = do
             toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
-{- FOURMOLU_DISABLE -}
 senderVC
-    :: String -> Env -> VcSession
-    -> Send -> FromX -> IO VcFinished
+    :: String
+    -> Env
+    -> VcSession
+    -> Send
+    -> FromX
+    -> IO VcFinished
 senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
-    onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop = maybe (step *> loop) pure =<< waitVcOutput vcs
-    step = do
-        let body (Output bs _ peerInfo) = resetVcTimeout vcTimeout_ *> send bs peerInfo
-            finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
-        E.bracket fromX finalize body
-{- FOURMOLU_ENABLE -}
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop = do
+        mx <- waitVcOutput vcs
+        case mx of
+            Just x -> return x
+            Nothing -> step >> loop
+    step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
+        resetVcTimeout vcTimeout_
+        send bs peerInfo
+    finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
 
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
