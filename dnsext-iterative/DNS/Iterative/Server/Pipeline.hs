@@ -4,12 +4,13 @@
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
-import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeout, updateTimeout)
+
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
+import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout)
 import System.Posix.Types (Fd (..))
 
 -- libs
@@ -312,7 +313,7 @@ resetVcTimeout :: VcTimeout -> IO ()
 resetVcTimeout VcTimeout{..} = updateTimeout vtManager_ vtKey_ vtMicrosec_
 
 waitVcInput :: VcSession -> IO Bool
-waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
+waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
     waitIn <- vcWaitRead_
     atomically $ do
         timeout <- readTVar vtState_
@@ -328,15 +329,22 @@ waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
 --   -         not-null    -         no-avail    wait
 --   -         -                     avail       loop
 waitVcOutput :: VcSession -> IO (Maybe VcFinished)
-waitVcOutput VcSession{vcTimeout_=VcTimeout{..},..} = atomically $ do
-    mayEof  <- (VfEof     <$) . guard <$> readTVar vcEof_
-    mayTo   <- (VfTimeout <$) . guard <$> readTVar vtState_
-    avail <- vcRespAvail_
-    maybe (guard avail $> Nothing) (eoVC avail) $ mayEof <|> mayTo
+waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
+    mayEof <- toMaybe VfEof     <$> readTVar vcEof_
+    mayTo  <- toMaybe VfTimeout <$> readTVar vtState_
+    avail  <- vcRespAvail_
+    case mayEof <|> mayTo of
+        Nothing -> retryUntil avail >> return Nothing
+        Just fc
+            | avail -> return Nothing
+            | otherwise -> do
+                retryUntil =<< (Set.null <$> readTVar vcPendings_)
+                return $ Just fc
   where
-    eoVC avail fc
-        | avail      = pure Nothing
-        | otherwise  = (Just fc <$) . guard . Set.null =<< readTVar vcPendings_
+    toMaybe x True  = Just x
+    toMaybe _ False = Nothing
+    retryUntil :: Bool -> STM ()
+    retryUntil = guard
 {- FOURMOLU_ENABLE -}
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
