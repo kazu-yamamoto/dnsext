@@ -177,32 +177,41 @@ type MkInput = ByteString -> PeerInfo -> Int -> Input ByteString
 mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
-{- FOURMOLU_DISABLE -}
 receiverVC
-    :: String -> Env -> VcSession
-    -> Recv -> ToCacher -> MkInput -> IO VcFinished
-receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ = loop 1 `E.catch` onError
+    :: String
+    -> Env
+    -> VcSession
+    -> Recv
+    -> ToCacher
+    -> MkInput
+    -> IO VcFinished
+receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
+    loop 1 `E.catch` onError
   where
-    onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop i = casesRecv $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop i = cases =<< waitVcInput vcs
       where
-        caseEof = atomically (enableVcEof vcEof_) $> VfEof
-        casesRecv caseNext = cases =<< waitVcInput vcs
-          where
-            cases timeout
-                | timeout     = pure VfTimeout
-                | otherwise   = do
-                      (bs, peerInfo) <- recv
-                      casesSize (BS.length bs) bs peerInfo
-            casesSize sz bs peerInfo
-                | sz == 0                 = resetVcTimeout vcTimeout_ *> caseEof
-                | sz > vcSlowlorisSize_   = resetVcTimeout vcTimeout_ *> caseNext bs peerInfo
-                | otherwise               =                              caseNext bs peerInfo
+        cases timeout
+            | timeout = pure VfTimeout
+            | otherwise = do
+                (bs, peerInfo) <- recv
+                casesSize (BS.length bs) bs peerInfo
+        casesSize sz bs peerInfo
+            | sz == 0 = do
+                resetVcTimeout vcTimeout_
+                caseEof
+            | sz > vcSlowlorisSize_ = do
+                resetVcTimeout vcTimeout_
+                step bs peerInfo
+                loop (i + 1)
+            | otherwise = do
+                step bs peerInfo
+                loop (i + 1)
 
-    step i bs peerInfo = do
-        atomically (addVcPending vcPendings_ i)
-        toCacher $ mkInput_ bs peerInfo i
-{- FOURMOLU_ENABLE -}
+        caseEof = atomically (enableVcEof vcEof_) >> return VfEof
+        step bs peerInfo = do
+            atomically $ addVcPending vcPendings_ i
+            toCacher $ mkInput_ bs peerInfo i
 
 receiverLogic
     :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
