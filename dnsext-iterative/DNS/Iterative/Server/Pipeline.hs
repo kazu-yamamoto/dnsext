@@ -4,12 +4,13 @@
 module DNS.Iterative.Server.Pipeline where
 
 -- GHC packages
-import GHC.Event (TimerManager, TimeoutKey, getSystemTimerManager, registerTimeout, updateTimeout)
+
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
+import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout)
 import System.Posix.Types (Fd (..))
 
 -- libs
@@ -176,32 +177,41 @@ type MkInput = ByteString -> PeerInfo -> Int -> Input ByteString
 mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
-{- FOURMOLU_DISABLE -}
 receiverVC
-    :: String -> Env -> VcSession
-    -> Recv -> ToCacher -> MkInput -> IO VcFinished
-receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ = loop 1 `E.catch` onError
+    :: String
+    -> Env
+    -> VcSession
+    -> Recv
+    -> ToCacher
+    -> MkInput
+    -> IO VcFinished
+receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
+    loop 1 `E.catch` onError
   where
-    onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop i = casesRecv $ \bs peerInfo -> step i bs peerInfo *> loop (succ i)
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop i = cases =<< waitVcInput vcs
       where
-        caseEof = atomically (enableVcEof vcEof_) $> VfEof
-        casesRecv caseNext = cases =<< waitVcInput vcs
-          where
-            cases timeout
-                | timeout     = pure VfTimeout
-                | otherwise   = do
-                      (bs, peerInfo) <- recv
-                      casesSize (BS.length bs) bs peerInfo
-            casesSize sz bs peerInfo
-                | sz == 0                 = resetVcTimeout vcTimeout_ *> caseEof
-                | sz > vcSlowlorisSize_   = resetVcTimeout vcTimeout_ *> caseNext bs peerInfo
-                | otherwise               =                              caseNext bs peerInfo
+        cases timeout
+            | timeout = pure VfTimeout
+            | otherwise = do
+                (bs, peerInfo) <- recv
+                casesSize (BS.length bs) bs peerInfo
+        casesSize sz bs peerInfo
+            | sz == 0 = do
+                resetVcTimeout vcTimeout_
+                caseEof
+            | sz > vcSlowlorisSize_ = do
+                resetVcTimeout vcTimeout_
+                step bs peerInfo
+                loop (i + 1)
+            | otherwise = do
+                step bs peerInfo
+                loop (i + 1)
 
-    step i bs peerInfo = do
-        atomically (addVcPending vcPendings_ i)
-        toCacher $ mkInput_ bs peerInfo i
-{- FOURMOLU_ENABLE -}
+        caseEof = atomically (enableVcEof vcEof_) >> return VfEof
+        step bs peerInfo = do
+            atomically $ addVcPending vcPendings_ i
+            toCacher $ mkInput_ bs peerInfo i
 
 receiverLogic
     :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
@@ -218,20 +228,26 @@ receiverLogic' mysa recv toCacher toSender proto = do
             toCacher $ Input bs 0 mysa peerInfo proto toSender
             return True
 
-{- FOURMOLU_DISABLE -}
 senderVC
-    :: String -> Env -> VcSession
-    -> Send -> FromX -> IO VcFinished
+    :: String
+    -> Env
+    -> VcSession
+    -> Send
+    -> FromX
+    -> IO VcFinished
 senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
-    onError se@(SomeException e) = warnOnError env name se *> throwIO e
-    loop = maybe (step *> loop) pure =<< waitVcOutput vcs
-    step = do
-        let body (Output bs _ peerInfo) = resetVcTimeout vcTimeout_ *> send bs peerInfo
-            finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
-        E.bracket fromX finalize body
-{- FOURMOLU_ENABLE -}
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop = do
+        mx <- waitVcOutput vcs
+        case mx of
+            Just x -> return x
+            Nothing -> step >> loop
+    step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
+        resetVcTimeout vcTimeout_
+        send bs peerInfo
+    finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
 
 senderLogic :: Env -> Send -> FromX -> IO ()
 senderLogic env send fromX =
@@ -312,7 +328,7 @@ resetVcTimeout :: VcTimeout -> IO ()
 resetVcTimeout VcTimeout{..} = updateTimeout vtManager_ vtKey_ vtMicrosec_
 
 waitVcInput :: VcSession -> IO Bool
-waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
+waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
     waitIn <- vcWaitRead_
     atomically $ do
         timeout <- readTVar vtState_
@@ -328,15 +344,22 @@ waitVcInput VcSession{vcTimeout_=VcTimeout{..},..} = do
 --   -         not-null    -         no-avail    wait
 --   -         -                     avail       loop
 waitVcOutput :: VcSession -> IO (Maybe VcFinished)
-waitVcOutput VcSession{vcTimeout_=VcTimeout{..},..} = atomically $ do
-    mayEof  <- (VfEof     <$) . guard <$> readTVar vcEof_
-    mayTo   <- (VfTimeout <$) . guard <$> readTVar vtState_
-    avail <- vcRespAvail_
-    maybe (guard avail $> Nothing) (eoVC avail) $ mayEof <|> mayTo
+waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
+    mayEof <- toMaybe VfEof     <$> readTVar vcEof_
+    mayTo  <- toMaybe VfTimeout <$> readTVar vtState_
+    avail  <- vcRespAvail_
+    case mayEof <|> mayTo of
+        Nothing -> retryUntil avail >> return Nothing
+        Just fc
+            | avail -> return Nothing
+            | otherwise -> do
+                retryUntil . Set.null =<< readTVar vcPendings_
+                return $ Just fc
   where
-    eoVC avail fc
-        | avail      = pure Nothing
-        | otherwise  = (Just fc <$) . guard . Set.null =<< readTVar vcPendings_
+    toMaybe x True  = Just x
+    toMaybe _ False = Nothing
+    retryUntil :: Bool -> STM ()
+    retryUntil = guard
 {- FOURMOLU_ENABLE -}
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
