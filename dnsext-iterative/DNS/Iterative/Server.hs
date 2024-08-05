@@ -47,6 +47,11 @@ module DNS.Iterative.Server (
     receiverVC,
     senderVC,
     mkConnector,
+    waitVcInput,
+    waitVcOutput,
+    enableVcEof,
+    addVcPending,
+    delVcPending,
 ) where
 
 import DNS.Iterative.Query.Env
