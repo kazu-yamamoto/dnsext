@@ -91,10 +91,8 @@ getRecv ws = do
    rstep ref = do
        s <- readIORef ref
        case s of
-         []   -> pure (mempty, peer)
-         c:cs -> writeIORef ref cs $> (c, peer)
-   peer :: PeerInfo
-   peer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
+         []   -> pure (mempty, dummyPeer)
+         c:cs -> writeIORef ref cs $> (c, dummyPeer)
 
 getSend :: IO (IO [ByteString], Send)
 getSend = do
@@ -103,3 +101,6 @@ getSend = do
   where
     ins x s = (x:s, ())
     sstep ref x = atomicModifyIORef' ref (ins x)
+
+dummyPeer :: PeerInfo
+dummyPeer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
