@@ -34,7 +34,7 @@ import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
 import DNS.SEC
-import DNS.TimeCache (TimeCache (..), noneTimeCache)
+import DNS.TimeCache (TimeCache (..), noneTimeCache, getTime)
 import DNS.Types
 import DNS.ZoneFile (Record (R_RR))
 import qualified DNS.ZoneFile as Zone
@@ -60,7 +60,7 @@ newEmptyEnv = do
     genId    <- newConcurrentGenId
     rootRef  <- newIORef Nothing
     stats <- newStats
-    let TimeCache {..} = noneTimeCache
+    let tc@TimeCache {..} = noneTimeCache
     pure $
         Env
         { shortLog_ = False
@@ -79,7 +79,7 @@ newEmptyEnv = do
         , filterCache_ = \_ -> pure()
         , clearCache_ = pure ()
         , currentRoot_ = rootRef
-        , currentSeconds_ = getTime
+        , currentSeconds_ = getTime tc
         , timeString_ = getTimeStr
         , idGen_ = genId
         , stats_ = stats
@@ -101,9 +101,9 @@ setRRCacheOps RRCacheOps{..} env0 =
         }
 
 setTimeCache :: TimeCache -> Env -> Env
-setTimeCache TimeCache{..} env0 =
+setTimeCache tc@TimeCache{..} env0 =
     env0
-        { currentSeconds_ = getTime
+        { currentSeconds_ = getTime tc
         , timeString_ = getTimeStr
         }
 
