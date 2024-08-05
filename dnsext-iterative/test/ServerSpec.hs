@@ -27,7 +27,69 @@ import qualified DNS.ThreadStats as TStat
 import DNS.Iterative.Server
 
 spec :: Spec
-spec = describe "server - VC session" $ do
+spec = do
+    waitInputSpec
+    waitOutputSpec
+    sessionSpec
+
+waitInputSpec :: Spec
+waitInputSpec = describe "server - wait VC input" $ do
+    it "now" $ do
+        let readableNow = pure (pure ())
+        (vcs, _, _) <- initVcSession readableNow 100_000 50
+        result <- timeout 3_000_000 $ waitVcInput vcs
+        result `shouldBe` Just False
+    it "wait" $ do
+        let waitRead = do
+                hasInput <- newTVarIO False
+                let toReadable = writeTVar hasInput True
+                toReadable `afterUSec` 100_000
+                pure $ guard =<< readTVar hasInput
+        (vcs, _, _) <- initVcSession waitRead 1_000_000 50
+        result <- timeout 3_000_000 $ waitVcInput vcs
+        result `shouldBe` Just False
+    it "timeout" $ do
+        let noReadable = pure retry
+        (vcs, _, _) <- initVcSession noReadable 100_000 50
+        result <- timeout 3_000_000 $ waitVcInput vcs
+        result `shouldBe` Just True
+
+waitOutputSpec :: Spec
+waitOutputSpec = describe "server - wait VC output" $ do
+    let noReadable = pure retry
+    it "finish - timeout" $ do
+        (vcs, _, _) <- initVcSession noReadable 100_000 50
+        result <- timeout 3_000_000 $ waitVcOutput vcs
+        result `shouldBe` Just (Just VfTimeout)
+    it "finish - eof" $ do
+        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 1_000_000 50
+        enableVcEof vcEof_ `afterUSec` 100_000
+        result <- timeout 3_000_000 $ waitVcOutput vcs
+        result `shouldBe` Just (Just VfEof)
+    it "finish - eof supersede timeout" $ do
+        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
+        atomically $ enableVcEof vcEof_
+        result <- timeout 3_000_000 $ waitVcOutput vcs
+        result `shouldBe` Just (Just VfEof)
+    it "wait pendings" $ do
+        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
+        let uid = 1
+        atomically $ addVcPending vcPendings_ uid
+        result <- timeout 100_000 $ waitVcOutput vcs
+        result `shouldBe` Nothing {- expect outside timeout-}
+    it "next" $ do
+        (vcs, toSender, _) <- initVcSession noReadable 1_000_000 50
+        _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" 1 {- dummy -} dummyPeer)
+        result <- timeout 3_000_000 $ waitVcOutput vcs
+        result `shouldBe` Just Nothing
+
+afterUSec :: STM () -> Int -> IO ()
+afterUSec stm delay = void $ forkIO $ do
+    threadDelay delay
+    atomically stm
+
+sessionSpec :: Spec
+sessionSpec = describe "server - VC session" $ do
     it "finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
         m `shouldBe` Just ((VfEof, VfEof), True)
