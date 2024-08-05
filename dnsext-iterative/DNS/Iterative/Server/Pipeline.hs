@@ -353,7 +353,7 @@ waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
         Just fc
             | avail -> return Nothing
             | otherwise -> do
-                retryUntil =<< (Set.null <$> readTVar vcPendings_)
+                retryUntil . Set.null =<< readTVar vcPendings_
                 return $ Just fc
   where
     toMaybe x True  = Just x
