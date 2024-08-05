@@ -35,10 +35,10 @@ spec = describe "server - VC session" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
         m `shouldBe` Just ((VfEof, VfEof), True)
     it "timeout" $ do
-        m <- timeout 3_000_000 $ vcSession (pure retry) 1_000_000 ["2"]
+        m <- timeout 3_000_000 $ vcSession (pure retry) 100_000 ["2"]
         m `shouldBe` Just ((VfTimeout, VfTimeout), False)
     it "wait slow" $ do
-        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 500_000 ["10"]
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 50_000 ["10"]
         m `shouldBe` Just ((VfEof, VfEof), True)
 
 ---
@@ -77,7 +77,7 @@ getToCacher = do
    let bodyLoop = forever $ do
            Input{..} <- atomically (readTQueue mq)
            let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
-           threadDelay $ intb * 100_000
+           threadDelay $ intb * 10_000
            inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
    _ <- replicateM 4 (forkIO bodyLoop)
    pure (atomically . writeTQueue mq)
