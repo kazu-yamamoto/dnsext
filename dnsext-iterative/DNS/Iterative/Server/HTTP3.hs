@@ -41,7 +41,7 @@ http3Servers VcServerConfig{..} env toCacher ss = do
                 H3.run conn (conf mgr) $ doHTTP env toCacher
     return [http3server]
   where
-    sconf = getServerConfig vc_credentials vc_session_manager "h3"
+    sconf = getServerConfig vc_credentials vc_session_manager "h3" (vc_idle_timeout * 1000)
     conf mgr =
         H3.Config
             { confHooks = H3.defaultHooks
