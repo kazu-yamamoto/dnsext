@@ -1,8 +1,13 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Utils.AutoUpdate (
+    -- * interfaces
     mkAutoUpdate,
     mkClosableAutoUpdate,
+
+    -- * dubugging
+    mkClosableAutoUpdate',
+    UpdateState,
 )
 where
 
@@ -31,9 +36,16 @@ mkAutoUpdate micro uaction = fst <$> mkClosableAutoUpdate micro uaction
 -- 2
 -- >>> closeState
 mkClosableAutoUpdate :: Int -> IO a -> IO (IO a, IO ())
-mkClosableAutoUpdate micro uaction = do
+mkClosableAutoUpdate = mkAutoUpdateThings $ \g c _ -> (g, c)
+
+-- | provide `UpdateState` for debugging
+mkClosableAutoUpdate' :: Int -> IO a -> IO (IO a, IO (), UpdateState a)
+mkClosableAutoUpdate' = mkAutoUpdateThings (,,)
+
+mkAutoUpdateThings :: (IO a -> IO () -> UpdateState a -> b) -> Int -> IO a -> IO b
+mkAutoUpdateThings mk micro uaction = do
     us <- openUpdateState micro uaction
-    pure (getUpdateResult us, closeUpdateState us)
+    pure $ mk (getUpdateResult us) (closeUpdateState us) us
 
 --------------------------------------------------------------------------------
 
