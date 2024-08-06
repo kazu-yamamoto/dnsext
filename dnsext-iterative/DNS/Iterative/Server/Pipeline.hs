@@ -358,9 +358,10 @@ waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
   where
     toMaybe x True  = Just x
     toMaybe _ False = Nothing
-    retryUntil :: Bool -> STM ()
-    retryUntil = guard
 {- FOURMOLU_ENABLE -}
+
+retryUntil :: Bool -> STM ()
+retryUntil = guard
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
 mkConnector = do

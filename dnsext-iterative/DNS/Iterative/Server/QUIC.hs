@@ -45,7 +45,9 @@ quicServers VcServerConfig{..} env toCacher ss = do
         info <- QUIC.getConnectionInfo conn
         let mysa = QUIC.localSockAddr info
             peersa = QUIC.remoteSockAddr info
-            waitInput = pure $ (guard . not =<<) . isEmptyTQueue $ QUIC.inputQ conn
+            waitInput = return $ do
+                isEmpty <- isEmptyTQueue $ QUIC.inputQ conn
+                retryUntil $ not isEmpty
         (vcSess, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
         let recv = do
                 strm <- QUIC.acceptStream conn
