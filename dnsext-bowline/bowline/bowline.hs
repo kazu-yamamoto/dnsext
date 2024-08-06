@@ -36,7 +36,6 @@ import qualified DNS.SEC as DNS
 import DNS.SVCB (TYPE (..))
 import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
-import DNS.TimeCache (getTime)
 import qualified DNS.Types as DNS
 import DNS.Types.Internal (TYPE (..))
 import Network.Socket
@@ -56,7 +55,7 @@ import qualified WebAPI as API
 ----------------------------------------------------------------
 
 data GlobalCache = GlobalCache
-    { gcacheRRCacheOps :: Cache.RRCacheOps
+    { gcacheRRCacheOps :: RRCacheOps
     , gcacheSetLogLn :: Log.PutLines -> IO ()
     }
 
@@ -234,8 +233,8 @@ getCache tc@TimeCache{..} Config{..} = do
                 Just putLines -> do
                     tstr <- getTimeStr
                     putLines Log.WARN Nothing [tstr $ ": " ++ msg]
-        cacheConf = Cache.RRCacheConf cnf_cache_size 1800 memoLogLn $ getTime tc
-    cacheOps <- Cache.newRRCacheOps cacheConf
+        cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
+    cacheOps <- newRRCacheOps cacheConf
     let setLog = I.writeIORef ref . Just
     return $ GlobalCache cacheOps setLog
 
