@@ -35,14 +35,11 @@ data TimeCache = TimeCache
 
 newTimeCache :: Int -> IO TimeCache
 newTimeCache micros = do
-    getUTime <- mkAutoUnixTime
-    TimeCache <$> mkAutoTimestamp micros getUTime <*> mkAutoTimeShowS getUTime
+    getUTime <- mkAutoTimestamp micros getUnixTime
+    TimeCache getUTime <$> mkAutoTimeShowS getUTime
 
 getTime :: TimeCache -> IO EpochTime
 getTime = fmap unixToEpoch . getTimestamp
-
-mkAutoUnixTime :: IO (IO UnixTime)
-mkAutoUnixTime = mostOncePerSecond getUnixTime
 
 mkAutoTimestamp :: Int -> IO UnixTime -> IO (IO UnixTime)
 mkAutoTimestamp micros getUTime = mostOncePerMicros micros getUTime
