@@ -11,8 +11,8 @@ module DNS.Iterative.Server.HTTP2 (
 -- GHC packages
 import Control.Monad (forever)
 import Data.ByteString.Builder (byteString)
-import Data.Functor
 import qualified Data.ByteString.Char8 as C8
+import Data.Functor
 
 -- dnsext-* packages
 import DNS.Do53.Internal
@@ -24,7 +24,7 @@ import qualified DNS.ThreadStats as TStat
 import Data.ByteString.Base64.URL
 import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
-import Network.HTTP2.TLS.Server (ServerIO (..))
+import Network.HTTP2.TLS.Server (ServerIO (..), Stream)
 import qualified Network.HTTP2.TLS.Server as H2TLS
 
 -- this package
@@ -73,11 +73,11 @@ http2cServer VcServerConfig{..} env toCacher s = do
             }
 
 doHTTP
-    :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO -> IO (IO ())
+    :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO Stream -> IO (IO ())
 doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
     (toSender, fromX, _) <- mkConnector
     let receiver = forever $ do
-            (_, strm, req) <- sioReadRequest
+            (strm, req) <- sioReadRequest
             let peerInfo = PeerInfoH2 sioPeerSockAddr strm
             einp <- getInput req
             case einp of
