@@ -12,6 +12,7 @@ module DNS.Iterative.Server.Types (
     Input (..),
     Output (..),
     PeerInfo (..),
+    EpochTimeUsec,
     peerSockAddr,
     withLocationIOE,
     Socket,
@@ -35,6 +36,7 @@ import Network.TLS (Credentials (..), SessionManager)
 -- dnsext
 import DNS.TAP.Schema (SocketProtocol)
 import DNS.Types (DNSMessage)
+import DNS.Types.Time (EpochTimeUsec)
 
 -- this package
 import DNS.Iterative.Query (Env)
@@ -62,6 +64,7 @@ data Input a = Input
     , inputPeerInfo :: PeerInfo
     , inputProto :: SocketProtocol
     , inputToSender :: ToSender
+    , inputRecvTime :: EpochTimeUsec
     }
 
 data Output = Output
