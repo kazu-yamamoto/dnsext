@@ -5,10 +5,8 @@ module DNS.Iterative.Server (
     -- * Types
     module DNS.Iterative.Query.Env,
     module DNS.Iterative.Server.Types,
-    RRCacheOps (..),
-    newRRCacheOps,
-    TimeCache (..),
-    newTimeCache,
+    module DNS.RRCache,
+    module DNS.TimeCache,
 
     -- * Pipeline
     mkPipeline,
@@ -65,9 +63,9 @@ import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.UDP
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
-import DNS.RRCache (RRCacheOps (..), newRRCacheOps)
+import DNS.RRCache (RRCache, newRRCache,  RRCacheOps (..), newRRCacheOps,  RRCacheConf (..))
 import qualified DNS.RRCache as RRCache
-import DNS.TimeCache (TimeCache (..), newTimeCache)
+import DNS.TimeCache
 
 import Control.Concurrent (getNumCapabilities)
 import Data.ByteString.Builder
