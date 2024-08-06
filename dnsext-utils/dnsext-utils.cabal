@@ -23,6 +23,7 @@ library
         DNS.RRCache.Managed
         DNS.RRCache.ReaperReduced
         DNS.RRCache.Types
+        DNS.Utils.AutoUpdate
         DNS.ZoneFile.Types
         DNS.ZoneFile.Lexer
         DNS.ZoneFile.Parser
