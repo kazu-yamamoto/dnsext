@@ -5,7 +5,7 @@ module DNS.Iterative.Server.HTTP2 (
     http2Servers,
     http2cServers,
     VcServerConfig (..),
-    getInput,
+    doHTTP,
 ) where
 
 -- GHC packages
@@ -26,6 +26,7 @@ import qualified Network.HTTP.Types as HT
 import qualified Network.HTTP2.Server as H2
 import Network.HTTP2.TLS.Server (ServerIO (..), Stream)
 import qualified Network.HTTP2.TLS.Server as H2TLS
+import qualified Network.QUIC as QUIC
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
@@ -72,13 +73,34 @@ http2cServer VcServerConfig{..} env toCacher s = do
             , H2TLS.settingsSessionManager = vc_session_manager -- not used
             }
 
+class IsStream a where
+    fromSuperStream :: SuperStream -> a
+    toSuperStream :: a -> SuperStream
+
+instance IsStream Stream where
+    fromSuperStream (StreamH2 a) = a
+    fromSuperStream _ = error ""
+    toSuperStream = StreamH2
+
+instance IsStream QUIC.Stream where
+    fromSuperStream (StreamQUIC a) = a
+    fromSuperStream _ = error ""
+    toSuperStream = StreamQUIC
+
 doHTTP
-    :: String -> (IO () -> IO ()) -> (SockAddr -> IO ()) -> Env -> ToCacher -> ServerIO Stream -> IO (IO ())
+    :: IsStream a
+    => String
+    -> (IO () -> IO ())
+    -> (SockAddr -> IO ())
+    -> Env
+    -> ToCacher
+    -> ServerIO a
+    -> IO (IO ())
 doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
     (toSender, fromX, _) <- mkConnector
     let receiver = forever $ do
-            (strm, req) <- sioReadRequest
-            let peerInfo = PeerInfoH2 sioPeerSockAddr strm
+            (sprstrm, req) <- sioReadRequest
+            let peerInfo = PeerInfoStream sioPeerSockAddr (toSuperStream sprstrm)
             einp <- getInput req
             case einp of
                 Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
@@ -87,10 +109,10 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
                     incQuery sioPeerSockAddr
                     toCacher inp
         sender = forever $ do
-            Output bs' _ (PeerInfoH2 _ strm) <- fromX
+            Output bs' _ (PeerInfoStream _ sprstrm) <- fromX
             let header = mkHeader bs'
                 response = H2.responseBuilder HT.ok200 header $ byteString bs'
-            sioWriteResponse strm response
+            sioWriteResponse (fromSuperStream sprstrm) response
     return $ sbracket $ TStat.concurrently_ (name ++ "-send") sender (name ++ "-recv") receiver
   where
     mkHeader bs =
