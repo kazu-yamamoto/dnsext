@@ -119,8 +119,47 @@ cabal v2-update
 strip /opt/bowline/bin/*
 EOF
 
+RUN <<EOF
+set -e -x
+[ ! -r ~/builder-path ] || . ~/builder-path
+cat <<META > /opt/bowline/etc/builder-info
+BUILDER_IMAGE=${BUILDER_IMAGE}
+GHC_VERSION=$(ghc --numeric-version)
+CABAL_VERSION=$(cabal --numeric-version)
+CLONE_URL=${CLONE_URL}
+DNSEXT_REV=${DNSEXT_REV}
+PRIVKEY_ALG=${PRIVKEY_ALG}
+PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
+CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}
+GHC_OPTIMIZE=${GHC_OPTIMIZE}
+META
+EOF
+
 
 FROM debian:${DEBIAN_TAG}
+
+ARG BUILDER_IMAGE
+ARG GHC_VERSION
+#ARG CABAL_VERSION
+
+ARG CLONE_URL
+ARG DNSEXT_REV
+
+ARG PRIVKEY_ALG
+ARG PRIVKEY_ALGOPT
+ARG CHAIN_SUBJ_CN
+
+ARG GHC_OPTIMIZE
+
+LABEL build-arg.BUILDER_IMAGE=${BUILDER_IMAGE}
+LABEL build-arg.GHC_VERSION=${GHC_VERSION}
+#LABEL build-arg.CABAL_VERSION=${CABAL_VERSION}
+LABEL build-arg.CLONE_URL=${CLONE_URL}
+LABEL build-arg.DNSEXT_REV=${DNSEXT_REV}
+LABEL build-arg.PRIVKEY_ALG=${PRIVKEY_ALG}
+LABEL build-arg.PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
+LABEL build-arg.CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}
+LABEL build-arg.GHC_OPTIMIZE=${GHC_OPTIMIZE}
 
 COPY --from=builder /opt/bowline /opt/bowline
 COPY --from=builder /usr/bin/tini /usr/bin/tini
