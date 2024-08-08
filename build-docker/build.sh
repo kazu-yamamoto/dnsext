@@ -71,7 +71,6 @@ build_with_haskell() {
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
            \
-           --build-arg HAKELL_TAG=${HAKELL_TAG} \
            --build-arg BUILDER_IMAGE=${BUILDER_IMAGE} \
            --build-arg DEBIAN_TAG=${DEBIAN_TAG} \
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
@@ -153,7 +152,6 @@ EOF
         [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.4.8
         #--
         set -x
-        HAKELL_TAG=${GHC_VERSION}-slim-buster
         BUILDER_IMAGE=haskell:${GHC_VERSION}-slim-buster
         DEBIAN_TAG=buster-slim
         ghc_version=${GHC_VERSION}
