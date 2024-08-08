@@ -1,7 +1,32 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module DNS.Iterative.Server.Pipeline where
+module DNS.Iterative.Server.Pipeline (
+    mkPipeline,
+    mkConnector,
+    mkInput,
+    getWorkerStats,
+    VcFinished (..),
+    VcPendings,
+    VcSession (..),
+    initVcSession,
+    waitVcInput,
+    waitVcOutput,
+    enableVcEof,
+    addVcPending,
+    delVcPending,
+    waitReadSocketSTM,
+    waitReadSocketSTM',
+    receiverVC,
+    senderVC,
+    senderLogic,
+    receiverLogic,
+    receiverLogic',
+    logLn,
+    retryUntil,
+    Send,
+    Recv,
+) where
 
 -- GHC packages
 
@@ -14,7 +39,7 @@ import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeo
 import System.Posix.Types (Fd (..))
 
 -- libs
-import UnliftIO.Exception (SomeException (..), catch, handle, throwIO)
+import UnliftIO.Exception (SomeException (..), handle, throwIO)
 
 -- dnsext packages
 import qualified DNS.Log as Log
@@ -358,9 +383,10 @@ waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
   where
     toMaybe x True  = Just x
     toMaybe _ False = Nothing
-    retryUntil :: Bool -> STM ()
-    retryUntil = guard
 {- FOURMOLU_ENABLE -}
+
+retryUntil :: Bool -> STM ()
+retryUntil = guard
 
 mkConnector :: IO (ToSender, FromX, VcRespAvail)
 mkConnector = do
@@ -381,11 +407,6 @@ waitReadSocketSTM s = withFdSocket s $ threadWaitReadSTM . Fd
 
 handledLoop :: Env -> String -> IO () -> IO ()
 handledLoop env tag body = forever $ handle (warnOnError env tag) body
-
-breakableLoop :: Env -> String -> IO () -> IO ()
-breakableLoop env tag body = forever body `catch` onError
-  where
-    onError se@(SomeException e) = warnOnError env tag se *> throwIO e
 
 warnOnError :: Env -> String -> SomeException -> IO ()
 warnOnError env tag (SomeException e) = logLn env Log.WARN (tag ++ ": exception: " ++ show e)

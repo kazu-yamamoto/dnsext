@@ -44,7 +44,6 @@ library
         DNS.Iterative.Server.HTTP3
         DNS.Iterative.Server.Pipeline
         DNS.Iterative.Server.QUIC
-        DNS.Iterative.Server.Queue
         DNS.Iterative.Server.TCP
         DNS.Iterative.Server.TLS
         DNS.Iterative.Server.Types
