@@ -1,8 +1,12 @@
 
-ARG HAKELL_TAG
+ARG BUILDER_IMAGE
 ARG DEBIAN_TAG
 
-FROM haskell:${HAKELL_TAG} as builder
+FROM ${BUILDER_IMAGE} as builder
+
+ARG BUILDER_IMAGE
+ARG GHC_VERSION
+ARG CABAL_VERSION
 
 ARG CLONE_URL
 ARG DNSEXT_REV
@@ -18,10 +22,47 @@ ARG CABAL_PARALLEL
 ## Install tools
 RUN <<EOF
 set -e -x
+case ${BUILDER_IMAGE} in
+  debian:*)
+    ghcup_extra_pkgs='libgmp-dev libz-dev'
+    setup_cmd=setup_ghcup
+    ;;
+
+  haskell:*)
+    setup_cmd=:
+    ;;
+
+  *)
+    echo "unknown builder image: ${BUILDER_IMAGE}"
+    exit 1
+    ;;
+esac
+
+setup_ghcup() {
+  curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
+    BOOTSTRAP_HASKELL_NONINTERACTIVE=1                  \
+    BOOTSTRAP_HASKELL_NO_UPGRADE=1                      \
+    BOOTSTRAP_HASKELL_VERBOSE=0                         \
+    BOOTSTRAP_HASKELL_GHC_VERSION="${GHC_VERSION}"      \
+    BOOTSTRAP_HASKELL_CABAL_VERSION="${CABAL_VERSION}"  \
+    BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1                \
+    sh
+
+  ~/.ghcup/bin/ghcup set ghc "${GHC_VERSION}"
+  ~/.ghcup/bin/ghcup set cabal "${CABAL_VERSION}"
+  ls -l ~/.ghcup/bin/ghc
+  ls -l ~/.ghcup/bin/cabal
+
+  echo "PATH=~/.ghcup/bin:$PATH" > ~/builder-path
+}
+
 apt-get update
 DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends \
-  build-essential binutils ca-certificates curl git openssl tini
+  build-essential binutils ca-certificates curl git openssl tini \
+  ${ghcup_extra_pkgs}
+
+$setup_cmd
 EOF
 
 WORKDIR /tmp/src
@@ -65,6 +106,7 @@ EOF
 ## Build and Install
 RUN <<EOF
 set -e -x
+[ ! -r ~/builder-path ] || . ~/builder-path
 cabal v2-update
 ( cd dnsext
   cabal v2-configure ${GHC_OPTIMIZE} \
@@ -77,8 +119,47 @@ cabal v2-update
 strip /opt/bowline/bin/*
 EOF
 
+RUN <<EOF
+set -e -x
+[ ! -r ~/builder-path ] || . ~/builder-path
+cat <<META > /opt/bowline/etc/builder-info
+BUILDER_IMAGE=${BUILDER_IMAGE}
+GHC_VERSION=$(ghc --numeric-version)
+CABAL_VERSION=$(cabal --numeric-version)
+CLONE_URL=${CLONE_URL}
+DNSEXT_REV=${DNSEXT_REV}
+PRIVKEY_ALG=${PRIVKEY_ALG}
+PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
+CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}
+GHC_OPTIMIZE=${GHC_OPTIMIZE}
+META
+EOF
+
 
 FROM debian:${DEBIAN_TAG}
+
+ARG BUILDER_IMAGE
+ARG GHC_VERSION
+#ARG CABAL_VERSION
+
+ARG CLONE_URL
+ARG DNSEXT_REV
+
+ARG PRIVKEY_ALG
+ARG PRIVKEY_ALGOPT
+ARG CHAIN_SUBJ_CN
+
+ARG GHC_OPTIMIZE
+
+LABEL build-arg.BUILDER_IMAGE=${BUILDER_IMAGE}
+LABEL build-arg.GHC_VERSION=${GHC_VERSION}
+#LABEL build-arg.CABAL_VERSION=${CABAL_VERSION}
+LABEL build-arg.CLONE_URL=${CLONE_URL}
+LABEL build-arg.DNSEXT_REV=${DNSEXT_REV}
+LABEL build-arg.PRIVKEY_ALG=${PRIVKEY_ALG}
+LABEL build-arg.PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
+LABEL build-arg.CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}
+LABEL build-arg.GHC_OPTIMIZE=${GHC_OPTIMIZE}
 
 COPY --from=builder /opt/bowline /opt/bowline
 COPY --from=builder /usr/bin/tini /usr/bin/tini

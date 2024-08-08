@@ -44,13 +44,14 @@ build_with_ghcup() {
            \
            --build-arg GHC_VERSION=${GHC_VERSION} \
            --build-arg CABAL_VERSION=${CABAL_VERSION} \
+           --build-arg BUILDER_IMAGE=${BUILDER_IMAGE} \
            --build-arg DEBIAN_TAG=${DEBIAN_TAG} \
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
-           -f Dockerfile.ghcup \
+           -f Dockerfile \
            .
 
     tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
@@ -70,14 +71,14 @@ build_with_haskell() {
            --build-arg GHC_PARALLEL=${GHC_PARALLEL} \
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
            \
-           --build-arg HAKELL_TAG=${HAKELL_TAG} \
+           --build-arg BUILDER_IMAGE=${BUILDER_IMAGE} \
            --build-arg DEBIAN_TAG=${DEBIAN_TAG} \
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
-           -f Dockerfile.haskell \
+           -f Dockerfile \
            .
 }
 
@@ -141,6 +142,7 @@ EOF
                 ;;
         esac
         DEBIAN_TAG=${debian_rev}-slim
+        BUILDER_IMAGE=debian:${DEBIAN_TAG}
         result_tag_debian=${debian_rev}
 
         build_with_ghcup
@@ -150,7 +152,7 @@ EOF
         [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.4.8
         #--
         set -x
-        HAKELL_TAG=${GHC_VERSION}-slim-buster
+        BUILDER_IMAGE=haskell:${GHC_VERSION}-slim-buster
         DEBIAN_TAG=buster-slim
         ghc_version=${GHC_VERSION}
         result_tag_debian=buster
