@@ -56,7 +56,7 @@ build_with_ghcup() {
 
     tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
     $N docker image tag ${tag_bowline} ${tag_ghcup}
-    if [ "${ghc_version}" = 9.6.4 ]; then
+    if [ "${ghc_version}" = 9.6.6 ]; then
         $N docker image tag ${tag_ghcup} bowline:${result_tag_debian}
         if [ "${result_tag_debian}" = bookworm ]; then
             $N docker image tag bowline:${result_tag_debian} bowline:latest
@@ -121,7 +121,7 @@ set +x
 
 case "$BOWLINE_BUILD_METHOD" in
     ghcup)
-        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.6.4
+        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.6.6
         [ x"$DEBIAN_REVISON" != x ] || DEBIAN_REVISON=bookworm
         #--
         set -x
@@ -149,7 +149,7 @@ EOF
         ;;
 
     haskell)
-        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.4.8
+        [ x"$GHC_VERSION" != x ] || GHC_VERSION=9.6.5  ## 2024.08.08 haskell official does not provide image of ghc-9.6.6
         #--
         set -x
         BUILDER_IMAGE=haskell:${GHC_VERSION}-slim-buster
