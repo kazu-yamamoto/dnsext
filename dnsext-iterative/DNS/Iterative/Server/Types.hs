@@ -18,6 +18,7 @@ module DNS.Iterative.Server.Types (
     SockAddr (..),
     withFdSocket,
     socketName,
+    SuperStream (..),
 ) where
 
 -- GHC
@@ -38,17 +39,17 @@ import DNS.Types (DNSMessage)
 -- this package
 import DNS.Iterative.Query (Env)
 
+data SuperStream = StreamH2 H2I.Stream | StreamQUIC QUIC.Stream deriving (Show)
+
 data PeerInfo
     = PeerInfoUDP SockAddr [Cmsg]
-    | PeerInfoQUIC SockAddr QUIC.Stream
-    | PeerInfoH2 SockAddr H2I.Stream
+    | PeerInfoStream SockAddr SuperStream
     | PeerInfoVC SockAddr
     deriving (Show)
 
 peerSockAddr :: PeerInfo -> SockAddr
 peerSockAddr (PeerInfoUDP sa _) = sa
-peerSockAddr (PeerInfoQUIC sa _) = sa
-peerSockAddr (PeerInfoH2 sa _) = sa
+peerSockAddr (PeerInfoStream sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
 
 -- request identifier in one connection
