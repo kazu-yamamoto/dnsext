@@ -4,6 +4,7 @@ ARG DEBIAN_TAG
 
 FROM ${BUILDER_IMAGE} as builder
 
+ARG BUILDER_IMAGE
 ARG GHC_VERSION
 ARG CABAL_VERSION
 
@@ -21,7 +22,21 @@ ARG CABAL_PARALLEL
 ## Install tools
 RUN <<EOF
 set -e -x
-ghcup_extra_pkgs='libgmp-dev libz-dev'
+case ${BUILDER_IMAGE} in
+  debian:*)
+    ghcup_extra_pkgs='libgmp-dev libz-dev'
+    setup_cmd=setup_ghcup
+    ;;
+
+  haskell:*)
+    setup_cmd=:
+    ;;
+
+  *)
+    echo "unknown builder image: ${BUILDER_IMAGE}"
+    exit 1
+    ;;
+esac
 
 setup_ghcup() {
   curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | \
@@ -47,7 +62,7 @@ DEBIAN_FRONTEND=noninteractive \
   build-essential binutils ca-certificates curl git openssl tini \
   ${ghcup_extra_pkgs}
 
-setup_ghcup
+$setup_cmd
 EOF
 
 WORKDIR /tmp/src

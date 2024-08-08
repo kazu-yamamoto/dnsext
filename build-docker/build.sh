@@ -51,7 +51,7 @@ build_with_ghcup() {
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
-           -f Dockerfile.ghcup \
+           -f Dockerfile \
            .
 
     tag_ghcup=bowline:${ghc_version}-${result_tag_debian}-ghcup
@@ -78,7 +78,7 @@ build_with_haskell() {
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
-           -f Dockerfile.haskell \
+           -f Dockerfile \
            .
 }
 
