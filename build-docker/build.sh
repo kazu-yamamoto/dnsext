@@ -44,6 +44,7 @@ build_with_ghcup() {
            \
            --build-arg GHC_VERSION=${GHC_VERSION} \
            --build-arg CABAL_VERSION=${CABAL_VERSION} \
+           --build-arg BUILDER_IMAGE=${BUILDER_IMAGE} \
            --build-arg DEBIAN_TAG=${DEBIAN_TAG} \
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
@@ -71,6 +72,7 @@ build_with_haskell() {
            --build-arg CABAL_PARALLEL=${CABAL_PARALLEL} \
            \
            --build-arg HAKELL_TAG=${HAKELL_TAG} \
+           --build-arg BUILDER_IMAGE=${BUILDER_IMAGE} \
            --build-arg DEBIAN_TAG=${DEBIAN_TAG} \
            --build-arg PRIVKEY_ALG=${PRIVKEY_ALG} \
            --build-arg PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT} \
@@ -141,6 +143,7 @@ EOF
                 ;;
         esac
         DEBIAN_TAG=${debian_rev}-slim
+        BUILDER_IMAGE=debian:${DEBIAN_TAG}
         result_tag_debian=${debian_rev}
 
         build_with_ghcup
@@ -151,6 +154,7 @@ EOF
         #--
         set -x
         HAKELL_TAG=${GHC_VERSION}-slim-buster
+        BUILDER_IMAGE=haskell:${GHC_VERSION}-slim-buster
         DEBIAN_TAG=buster-slim
         ghc_version=${GHC_VERSION}
         result_tag_debian=buster
