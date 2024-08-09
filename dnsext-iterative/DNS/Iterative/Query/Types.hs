@@ -99,6 +99,7 @@ data Env = Env
     , clearCache_ :: IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
     , currentSeconds_ :: IO EpochTime
+    , currentTimeUsec_ :: IO EpochTimeUsec
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
     , stats_ :: Stats

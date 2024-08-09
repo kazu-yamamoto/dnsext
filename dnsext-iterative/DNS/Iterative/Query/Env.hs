@@ -36,6 +36,7 @@ import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.TimeCache (TimeCache (..), noneTimeCache, getTime)
 import DNS.Types
+import DNS.Types.Time (getCurrentTimeUsec)
 import DNS.ZoneFile (Record (R_RR))
 import qualified DNS.ZoneFile as Zone
 
@@ -80,6 +81,7 @@ newEmptyEnv = do
         , clearCache_ = pure ()
         , currentRoot_ = rootRef
         , currentSeconds_ = getTime
+        , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
         , idGen_ = genId
         , stats_ = stats
