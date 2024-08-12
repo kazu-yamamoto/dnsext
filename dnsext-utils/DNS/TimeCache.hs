@@ -29,8 +29,8 @@ data TimeCache = TimeCache
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-newTimeCache :: Int -> IO TimeCache
-newTimeCache _micros = do
+newTimeCache :: IO TimeCache
+newTimeCache = do
     let interval = 1_000_000
     (onceGetTime  , close1) <- mkClosableAutoUpdate interval  getUnixTime
     (onceGetString, close2) <- mkClosableAutoUpdate interval (getTimeShowS =<< onceGetTime)
