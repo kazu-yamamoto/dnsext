@@ -193,7 +193,7 @@ runBenchmark conf@Config{..} noop gplot size = do
 
 getEnv :: Config -> Log.PutLines -> IO Env
 getEnv Config{..} putLines = do
-    tcache <- newTimeCache 20
+    tcache <- newTimeCache
     let memoLogLn = putLines Log.WARN Nothing . (: [])
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn $ getTime tcache
     Cache.RRCacheOps{..} <- Cache.newRRCacheOps cacheConf

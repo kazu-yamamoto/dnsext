@@ -4,7 +4,6 @@
 module DNS.TimeCache (
     TimeCache (..),
     newTimeCache,
-    getTime,
     noneTimeCache,
 ) where
 
@@ -23,27 +22,25 @@ import DNS.Utils.AutoUpdate (mkClosableAutoUpdate)
 
 {- FOURMOLU_DISABLE -}
 data TimeCache = TimeCache
-    { getTimestamp    :: IO UnixTime
+    { getTime         :: IO EpochTime
     , getTimeStr      :: IO ShowS
     , closeTimeCache  :: IO ()
     }
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-newTimeCache :: Int -> IO TimeCache
-newTimeCache micros = do
-    (onceGetTime  , close1) <- mkClosableAutoUpdate micros     getUnixTime
-    (onceGetString, close2) <- mkClosableAutoUpdate 1_000_000 (getTimeShowS =<< onceGetTime)
-    return $ TimeCache onceGetTime onceGetString (close2 >> close1)
+newTimeCache :: IO TimeCache
+newTimeCache = do
+    let interval = 1_000_000
+    (onceGetTime  , close1) <- mkClosableAutoUpdate interval  getUnixTime
+    (onceGetString, close2) <- mkClosableAutoUpdate interval (getTimeShowS =<< onceGetTime)
+    return $ TimeCache (unixToEpoch <$> onceGetTime) onceGetString (close2 >> close1)
 {- FOURMOLU_ENABLE -}
-
-getTime :: TimeCache -> IO EpochTime
-getTime = fmap unixToEpoch . getTimestamp
 
 noneTimeCache :: TimeCache
 noneTimeCache =
     TimeCache
-        { getTimestamp = getUnixTime
+        { getTime = unixToEpoch <$> getUnixTime
         , getTimeStr = getTimeShowS =<< getUnixTime
         , closeTimeCache = pure ()
         }
