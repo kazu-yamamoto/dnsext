@@ -60,7 +60,7 @@ newEmptyEnv = do
     genId    <- newConcurrentGenId
     rootRef  <- newIORef Nothing
     stats <- newStats
-    let tc@TimeCache {..} = noneTimeCache
+    let TimeCache {..} = noneTimeCache
     pure $
         Env
         { shortLog_ = False
@@ -79,7 +79,7 @@ newEmptyEnv = do
         , filterCache_ = \_ -> pure()
         , clearCache_ = pure ()
         , currentRoot_ = rootRef
-        , currentSeconds_ = getTime tc
+        , currentSeconds_ = getTime
         , timeString_ = getTimeStr
         , idGen_ = genId
         , stats_ = stats
@@ -101,9 +101,9 @@ setRRCacheOps RRCacheOps{..} env0 =
         }
 
 setTimeCache :: TimeCache -> Env -> Env
-setTimeCache tc@TimeCache{..} env0 =
+setTimeCache TimeCache{..} env0 =
     env0
-        { currentSeconds_ = getTime tc
+        { currentSeconds_ = getTime
         , timeString_ = getTimeStr
         }
 
