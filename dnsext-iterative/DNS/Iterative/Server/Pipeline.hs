@@ -115,11 +115,16 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
             case mx of
                 CResultMissHit -> toWorker inp
                 CResultHit replyMsg -> do
+                    duration <- diffMicroSec <$> currentTimeUsec_ env <*> pure inputRecvTime
+                    incHistogramUsec duration (stats_ env)
                     mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
                     inputToSender $ Output bs inputRequestNum inputPeerInfo
-                CResultDenied _replyErr -> logicDenied env inp
+                CResultDenied _replyErr -> do
+                    duration <- diffMicroSec <$> currentTimeUsec_ env <*> pure inputRecvTime
+                    incHistogramUsec duration (stats_ env)
+                    logicDenied env inp
 
 ----------------------------------------------------------------
 
