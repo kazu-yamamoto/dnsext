@@ -131,6 +131,8 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
         q : _ -> setWorkerStat (WRun q)
         [] -> pure ()
     ex <- getResponseIterative env inputQuery
+    duration <- diffMicroSec <$> currentTimeUsec_ env <*> pure inputRecvTime
+    incHistogramUsec duration (stats_ env)
     setWorkerStat WWaitEnqueue
     case ex of
         Right replyMsg -> do
