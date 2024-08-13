@@ -191,8 +191,16 @@ pattern CurConnDoQ       = StatsIx 73
 pattern CurConnDoH3     :: StatsIx
 pattern CurConnDoH3      = StatsIx 74
 
+pattern IxLabledMax     :: StatsIx
+pattern IxLabledMax      = StatsIx 74
+
+pattern HistogramMin    :: StatsIx
+pattern HistogramMin     = StatsIx 75
+pattern HistogramMax    :: StatsIx
+pattern HistogramMax     = StatsIx 114
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 74
+pattern StatsIxMax       = StatsIx 114
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -371,7 +379,7 @@ readStats (Stats stats) prefix = do
     toB = lazyByteString . BL.pack . show
     go :: Int -> StatsIx -> Builder -> IO Builder
     go n ix b
-        | ix > StatsIxMax = return b
+        | ix > IxLabledMax = return b
         | otherwise = do
             v <- sumup 0 n ix 0
             let b' = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
