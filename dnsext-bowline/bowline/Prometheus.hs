@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -34,14 +35,12 @@ fromRTSStats RTSStats{..} =
  <> "ghc_gc_elapsed_ns " <> toB gc_elapsed_ns <> "\n"
  <> "ghc_cpu_ns " <> toB cpu_ns <> "\n"
  <> "ghc_elapsed_ns " <> toB elapsed_ns <> "\n"
-{-
  <> "ghc_nonmoving_gc_sync_cpu_ns " <> toB nonmoving_gc_sync_cpu_ns <> "\n"
  <> "ghc_nonmoving_gc_sync_elapsed_ns " <> toB nonmoving_gc_sync_elapsed_ns <> "\n"
  <> "ghc_nonmoving_gc_sync_max_elapsed_ns " <> toB nonmoving_gc_sync_max_elapsed_ns <> "\n"
  <> "ghc_nonmoving_gc_cpu_ns " <> toB nonmoving_gc_cpu_ns <> "\n"
  <> "ghc_nonmoving_gc_elapsed_ns " <> toB nonmoving_gc_elapsed_ns <> "\n"
  <> "ghc_nonmoving_gc_max_elapsed_ns " <> toB nonmoving_gc_max_elapsed_ns <> "\n"
--}
  <> "ghc_gcdetails_gen " <> toB gcdetails_gen <> "\n"
  <> "ghc_gcdetails_threads " <> toB gcdetails_threads <> "\n"
  <> "ghc_gcdetails_allocated_bytes " <> toB gcdetails_allocated_bytes <> "\n"
@@ -53,9 +52,9 @@ fromRTSStats RTSStats{..} =
  <> "ghc_gcdetails_copied_bytes " <> toB gcdetails_copied_bytes <> "\n"
  <> "ghc_gcdetails_par_max_copied_bytes " <> toB gcdetails_par_max_copied_bytes <> "\n"
  <> "ghc_gcdetails_par_balanced_copied_bytes " <> toB gcdetails_par_balanced_copied_bytes <> "\n"
-{-
+#if __GLASGOW_HASKELL__ >= 906
  <> "ghc_gcdetails_block_fragmentation_bytes " <> toB gcdetails_block_fragmentation_bytes <> "\n"
--}
+#endif
  <> "ghc_gcdetails_sync_elapsed_ns " <> toB gcdetails_sync_elapsed_ns <> "\n"
  <> "ghc_gcdetails_cpu_ns " <> toB gcdetails_cpu_ns <> "\n"
  <> "ghc_gcdetails_elapsed_ns " <> toB gcdetails_elapsed_ns <> "\n"
