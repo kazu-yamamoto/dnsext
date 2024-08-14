@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -12,10 +13,12 @@ import DNS.SEC
 import DNS.SVCB
 import DNS.Types
 import DNS.Types.Internal hiding (Builder)
-import Data.Array
+import Data.Array.IArray
 import Data.Array.IO
+import Data.Array.Unboxed
 import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Int
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
@@ -191,8 +194,16 @@ pattern CurConnDoQ       = StatsIx 73
 pattern CurConnDoH3     :: StatsIx
 pattern CurConnDoH3      = StatsIx 74
 
+pattern IxLabledMax     :: StatsIx
+pattern IxLabledMax      = StatsIx 74
+
+pattern HistogramMin    :: StatsIx
+pattern HistogramMin     = StatsIx 75
+pattern HistogramMax    :: StatsIx
+pattern HistogramMax     = StatsIx 114
+
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 74
+pattern StatsIxMax       = StatsIx 114
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -371,11 +382,29 @@ readStats (Stats stats) prefix = do
     toB = lazyByteString . BL.pack . show
     go :: Int -> StatsIx -> Builder -> IO Builder
     go n ix b
-        | ix > StatsIxMax = return b
+        | ix > IxLabledMax = return b
         | otherwise = do
             v <- sumup 0 n ix 0
             let b' = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
             go n (succ ix) b'
+    sumup :: Int -> Int -> StatsIx -> Int -> IO Int
+    sumup i n ix acc
+        | i < n = do
+            v <- readArray (stats ! i) ix
+            sumup (i + 1) n ix (acc + v)
+        | otherwise = return acc
+
+readHistogram :: Stats -> IO [Int]
+readHistogram (Stats stats) = do
+    n <- getNumCapabilities
+    go n HistogramMin id
+  where
+    go :: Int -> StatsIx -> ([Int] -> [Int]) -> IO [Int]
+    go n ix vs
+        | ix > HistogramMax = return (vs [])
+        | otherwise = do
+              v <- sumup 0 n ix 0
+              go n (succ ix) (vs . (v:))
     sumup :: Int -> Int -> StatsIx -> Int -> IO Int
     sumup i n ix acc
         | i < n = do
@@ -440,3 +469,28 @@ sessionStatsDoQ = sessionStatsDoX [AcceptedDoQ] [CurConnDoQ]
 {- NOTE: not applied to Server/HTTP3 modules that cannot handle connections. -}
 sessionStatsDoH3 :: Stats -> IO () -> IO ()
 sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] [CurConnDoH3]
+
+---
+
+bucketUpperBounds :: [(Int64, Int64)]
+bucketUpperBounds =
+      [ (0, u) | u <- pow19s ] ++ [ (s, 0) | s <- pow19s ]
+    where
+      pow19s = [ 2^n | n <- [ 0 :: Int .. 19 ] ]
+
+bucketUpperArray :: UArray StatsIx Int64
+bucketUpperArray =
+    listArray (HistogramMin, HistogramMax) micros
+  where
+    micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds ]
+
+runBucketUsec :: Int64 -> a -> (StatsIx -> a) -> a
+runBucketUsec duration nothing just = go HistogramMin
+    where
+      go ix
+          | ix > HistogramMax  = nothing
+          | ub <- bucketUpperArray ! ix, duration <= ub = just ix
+          | otherwise          = go (succ ix)
+
+incHistogramUsec :: Int64 -> Stats -> IO ()
+incHistogramUsec duration stats = runBucketUsec duration (pure ()) (incStats stats)

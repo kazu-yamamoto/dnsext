@@ -61,6 +61,7 @@ import DNS.Iterative.Server.TCP
 import DNS.Iterative.Server.TLS
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.UDP
+import DNS.Iterative.Server.PrometheusHisto (getHistogramBucktes)
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
 import DNS.RRCache (RRCache, newRRCache,  RRCacheOps (..), newRRCacheOps,  RRCacheConf (..))
@@ -73,7 +74,7 @@ import Data.String (fromString)
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =
-    (<>) <$> readStats stats_ prefix <*> getGlobalStats
+    mconcat <$> sequence [readStats stats_ prefix, getHistogramBucktes stats_ prefix, getGlobalStats]
   where
     getGlobalStats = (<>) <$> (cacheCount <$> getCache_) <*> (info <$> getNumCapabilities)
     cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")

@@ -21,7 +21,7 @@ module DNS.Iterative.Imports (
     module Data.Typeable,
     module Data.Word,
     module Numeric,
-    EpochTime,
+    module DNS.Types.Time,
 )
 where
 
@@ -48,4 +48,4 @@ import Data.Word
 import Numeric
 
 -- dns packages
-import DNS.Types.Time (EpochTime)
+import DNS.Types.Time (EpochTime, EpochTimeUsec)

@@ -18,7 +18,7 @@ import DNS.TAP.Schema (SocketProtocol (..))
 import Network.Socket
 
 -- this package
-
+import DNS.Iterative.Internal
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 
@@ -43,6 +43,7 @@ benchServer bench_pipelines _ True = do
 benchServer bench_pipelines env _ = do
     myDummy <- getSockAddr "127.1.1.1" "53"
     clntDummy <- getSockAddr "127.2.1.1" "53"
+    usecDummy <- currentTimeUsec_ env
 
     let pipelines_per_socket = bench_pipelines
         workers_per_pipeline = 8 {- only used initial setup, benchmark runs on cached state -}
@@ -53,7 +54,7 @@ benchServer bench_pipelines env _ = do
 
     let toSender = atomically . writeTQueue resQ
 
-        enqueueReq (bs, ()) = toCacher (Input bs 0 myDummy (PeerInfoUDP clntDummy []) UDP toSender)
+        enqueueReq (bs, ()) = toCacher (Input bs 0 myDummy (PeerInfoUDP clntDummy []) UDP toSender usecDummy)
         dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> atomically (readTQueue resQ)
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where

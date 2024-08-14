@@ -49,6 +49,7 @@ library
         DNS.Iterative.Server.Types
         DNS.Iterative.Server.UDP
         DNS.Iterative.Server.WorkerStats
+        DNS.Iterative.Server.PrometheusHisto
         DNS.Iterative.Stats
 
     default-language: Haskell2010
