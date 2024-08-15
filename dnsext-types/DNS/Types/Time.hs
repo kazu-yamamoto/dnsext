@@ -7,7 +7,7 @@ module DNS.Types.Time (
     getCurrentTimeUsec,
     getCurrentTimeNsec,
     epochUsecToSeconds,
-    diffMicroSec,
+    diffUsec,
 ) where
 
 import Data.Int (Int64)
@@ -29,8 +29,8 @@ getCurrentTimeUsec = getUnixTime
 epochUsecToSeconds :: EpochTimeUsec -> EpochTime
 epochUsecToSeconds (UnixTime (CTime tim) _) =  tim
 
-diffMicroSec :: EpochTimeUsec -> EpochTimeUsec -> Integer
-diffMicroSec x y = toMicro $ diffUnixTime x y
+diffUsec :: EpochTimeUsec -> EpochTimeUsec -> Integer
+diffUsec x y = toMicro $ diffUnixTime x y
   where
     toMicro (UnixDiffTime (CTime sec) u) = fromIntegral sec * 1_000_000 + fromIntegral u
 
