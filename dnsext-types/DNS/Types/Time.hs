@@ -5,12 +5,13 @@ module DNS.Types.Time (
     EpochTimeUsec,
     getCurrentTime,
     getCurrentTimeUsec,
-    getCurrentTimeNsec,
+    runEpochTimeUsec,
     epochUsecToSeconds,
     diffUsec,
+    getCurrentTimeNsec,
 ) where
 
-import Data.Int (Int64)
+import Data.Int (Int32, Int64)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 
@@ -25,6 +26,9 @@ type EpochTimeUsec = UnixTime
 
 getCurrentTimeUsec :: IO EpochTimeUsec
 getCurrentTimeUsec = getUnixTime
+
+runEpochTimeUsec :: EpochTimeUsec -> (Int64 -> Int32 -> a) -> a
+runEpochTimeUsec (UnixTime (CTime sec) usec) f = f sec usec
 
 epochUsecToSeconds :: EpochTimeUsec -> EpochTime
 epochUsecToSeconds (UnixTime (CTime tim) _) =  tim
