@@ -1,14 +1,15 @@
+{-# LANGUAGE NumericUnderscores #-}
+
 module DNS.Iterative.Server.WorkerStats where
 
 -- GHC packages
-import Data.Int (Int64)
 import Data.IORef
 import Data.List (sortBy, intercalate)
 import Data.Ord (comparing)
 
 -- dnsext-* packages
 import qualified DNS.Types as DNS
-import DNS.Types.Time (EpochTime, getCurrentTimeNsec)
+import DNS.Types.Time (EpochTimeUsec, getCurrentTimeUsec, runEpochTimeUsec, diffUsec)
 
 pprWorkerStats :: Int -> [WorkerStatOP] -> IO [String]
 pprWorkerStats pn ops = do
@@ -79,27 +80,28 @@ getWorkerStatOP = do
 
 ------------------------------------------------------------
 
-data TimeStamp = TS EpochTime Int64
+type TimeStamp = EpochTimeUsec
 newtype DiffTime = DiffT Integer
 
 getTimeStamp :: IO TimeStamp
-getTimeStamp = uncurry TS <$> getCurrentTimeNsec
+getTimeStamp = getCurrentTimeUsec
 
-toNanosec :: TimeStamp -> Integer
-toNanosec (TS e n) = fromIntegral e * nanof + fromIntegral n
+toMicrosec :: TimeStamp -> Integer
+toMicrosec eus = runEpochTimeUsec eus toMicro
   where
-    nanof = 1000 * 1000 * 1000
+    toMicro sec micro = fromIntegral sec * microf + fromIntegral micro
+    microf = 1_000_000
 
 diffTimeStamp :: TimeStamp -> TimeStamp -> DiffTime
-diffTimeStamp t1 t2 = DiffT $ toNanosec t1 - toNanosec t2
+diffTimeStamp t1 t2 = DiffT (diffUsec t1 t2)
 
 showDiffSec1 :: DiffTime -> String
-showDiffSec1 (DiffT snsec)
-    | snsec < 0  = '-' : str ++ "s"
+showDiffSec1 (DiffT susec)
+    | susec < 0  = '-' : str ++ "s"
     | otherwise  = str ++ "s"
   where
-    nsec = abs snsec
-    df = 100 * 1000 * 1000
-    dsec = nsec `quot` df
+    usec = abs susec
+    df = 100_000
+    dsec = usec `quot` df
     (sec, d) = dsec `quotRem` 10
     str = show sec ++ "." ++ show d
