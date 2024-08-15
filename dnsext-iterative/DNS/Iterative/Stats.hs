@@ -484,13 +484,19 @@ bucketUpperArray =
   where
     micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds ]
 
-runBucketUsec :: Int64 -> a -> (StatsIx -> a) -> a
-runBucketUsec duration nothing just = go HistogramMin
-    where
-      go ix
-          | ix > HistogramMax  = nothing
-          | ub <- bucketUpperArray ! ix, duration <= ub = just ix
-          | otherwise          = go (succ ix)
+{- FOURMOLU_DISABLE -}
+runBucketUsec :: Integer -> a -> (StatsIx -> a) -> a
+runBucketUsec duration nothing just
+      | duration < 0                    = nothing
+      | duration > maxI64               = nothing
+      | otherwise                       = go (fromIntegral duration) HistogramMin
+  where
+    maxI64 = fromIntegral (maxBound :: Int64)
+    go d64 ix
+        | ix > HistogramMax             = nothing
+        | d64 <= bucketUpperArray ! ix  = just ix
+        | otherwise                     = go d64 (succ ix)
+{- FOURMOLU_ENABLE -}
 
-incHistogramUsec :: Int64 -> Stats -> IO ()
+incHistogramUsec :: Integer -> Stats -> IO ()
 incHistogramUsec duration stats = runBucketUsec duration (pure ()) (incStats stats)
