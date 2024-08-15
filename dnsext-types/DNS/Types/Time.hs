@@ -29,10 +29,10 @@ getCurrentTimeUsec = getUnixTime
 epochUsecToSeconds :: EpochTimeUsec -> EpochTime
 epochUsecToSeconds (UnixTime (CTime tim) _) =  tim
 
-diffMicroSec :: EpochTimeUsec -> EpochTimeUsec -> Int64
+diffMicroSec :: EpochTimeUsec -> EpochTimeUsec -> Integer
 diffMicroSec x y = toMicro $ diffUnixTime x y
   where
-    toMicro (UnixDiffTime (CTime sec) u) = sec * 1_000_000 + fromIntegral u
+    toMicro (UnixDiffTime (CTime sec) u) = fromIntegral sec * 1_000_000 + fromIntegral u
 
 getCurrentTimeNsec :: IO (EpochTime, Int64)
 getCurrentTimeNsec = do
