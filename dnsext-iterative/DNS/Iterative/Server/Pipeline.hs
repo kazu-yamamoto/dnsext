@@ -173,9 +173,9 @@ record
     -> ByteString
     -> IO ()
 record env Input{..} reply rspWire = do
-    (s, ns) <- getCurrentTimeNsec
     let peersa = peerSockAddr inputPeerInfo
-    logDNSTAP_ env $ DNSTAP.composeMessage inputProto inputMysa peersa s ns rspWire
+    logDNSTAP_ env $ runEpochTimeUsec inputRecvTime $
+        \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
     let st = stats_ env
         Question{..} = head $ question inputQuery
         DNSFlags{..} = flags reply
