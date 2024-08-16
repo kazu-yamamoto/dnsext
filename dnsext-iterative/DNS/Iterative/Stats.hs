@@ -480,21 +480,27 @@ bucketUpperArray =
     micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds ]
 
 {- FOURMOLU_DISABLE -}
-runBucketUsec :: Integer -> a -> (StatsIx -> a) -> a
-runBucketUsec duration nothing just
-      | duration < 0                    = nothing
-      | duration > maxI64               = nothing
-      | otherwise                       = go (fromIntegral duration) HistogramMin
+withPositiveInt64Usec :: Integer -> a -> (Int64 -> a) -> a
+withPositiveInt64Usec int nothing just
+    | int < 0       = nothing
+    | int > maxI64  = nothing
+    | otherwise     = just (fromIntegral int)
   where
     maxI64 = fromIntegral (maxBound :: Int64)
-    go d64 ix
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+runBucketUsec :: Int64 -> a -> (StatsIx -> a) -> a
+runBucketUsec d64 nothing just = go HistogramMin
+  where
+    go ix
         | ix > HistogramMax             = nothing
         | d64 <= bucketUpperArray ! ix  = just ix
-        | otherwise                     = go d64 (succ ix)
+        | otherwise                     = go (succ ix)
 {- FOURMOLU_ENABLE -}
 
 incHistogramUsec :: Integer -> Stats -> IO ()
-incHistogramUsec duration stats = runBucketUsec duration (pure ()) (incStats stats)
+incHistogramUsec duration stats = withPositiveInt64Usec duration (pure ()) $ \d64 -> runBucketUsec d64 (pure ()) (incStats stats)
 
 addQueryTimeSumUsec :: Int64 -> Stats -> IO ()
 addQueryTimeSumUsec d64 stats = modifyStats (fromIntegral d64 +) stats QTimeSumUsec
