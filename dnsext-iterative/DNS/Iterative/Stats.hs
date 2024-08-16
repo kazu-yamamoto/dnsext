@@ -18,6 +18,7 @@ import Data.Array.IO
 import Data.Array.Unboxed
 import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Functor
 import Data.Int
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -373,19 +374,16 @@ incStatsM s m k mk = do
             Just dx -> incStats s dx
         Just ix -> incStats s ix
 
-readStats :: Stats -> Builder -> IO Builder
-readStats (Stats stats) prefix = do
+foldStats :: StatsIx -> StatsIx -> Stats -> (b -> StatsIx -> Int -> b) -> b -> IO b
+foldStats lower upper (Stats stats) cons nil = do
     n <- getNumCapabilities
-    go n StatsIxMin mempty
+    go n lower nil
   where
-    toB :: Int -> Builder
-    toB = lazyByteString . BL.pack . show
-    go :: Int -> StatsIx -> Builder -> IO Builder
     go n ix b
-        | ix > IxLabledMax = return b
+        | ix > upper = return b
         | otherwise = do
             v <- sumup 0 n ix 0
-            let b' = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
+            let b' = cons b ix v
             go n (succ ix) b'
     sumup :: Int -> Int -> StatsIx -> Int -> IO Int
     sumup i n ix acc
@@ -394,23 +392,15 @@ readStats (Stats stats) prefix = do
             sumup (i + 1) n ix (acc + v)
         | otherwise = return acc
 
-readHistogram :: Stats -> IO [Int]
-readHistogram (Stats stats) = do
-    n <- getNumCapabilities
-    go n HistogramMin id
+readStats :: Stats -> Builder -> IO Builder
+readStats stats prefix = foldStats StatsIxMin IxLabledMax stats step mempty
   where
-    go :: Int -> StatsIx -> ([Int] -> [Int]) -> IO [Int]
-    go n ix vs
-        | ix > HistogramMax = return (vs [])
-        | otherwise = do
-              v <- sumup 0 n ix 0
-              go n (succ ix) (vs . (v:))
-    sumup :: Int -> Int -> StatsIx -> Int -> IO Int
-    sumup i n ix acc
-        | i < n = do
-            v <- readArray (stats ! i) ix
-            sumup (i + 1) n ix (acc + v)
-        | otherwise = return acc
+    toB :: Int -> Builder
+    toB = lazyByteString . BL.pack . show
+    step b ix v = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
+
+readHistogram :: Stats -> IO [Int]
+readHistogram stats = foldStats HistogramMin HistogramMax stats (\hs _ix v -> hs . (v:)) id <&> ($ [])
 
 ---
 
