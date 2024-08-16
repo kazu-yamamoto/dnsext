@@ -202,9 +202,11 @@ pattern HistogramMin    :: StatsIx
 pattern HistogramMin     = StatsIx 75
 pattern HistogramMax    :: StatsIx
 pattern HistogramMax     = StatsIx 114
+pattern QTimeSumUsec    :: StatsIx
+pattern QTimeSumUsec     = StatsIx 115
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 114
+pattern StatsIxMax       = StatsIx 115
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -402,6 +404,9 @@ readStats stats prefix = foldStats StatsIxMin IxLabledMax stats step mempty
 readHistogram :: Stats -> IO [Int]
 readHistogram stats = foldStats HistogramMin HistogramMax stats (\hs _ix v -> hs . (v:)) id <&> ($ [])
 
+readQueryTimeSumUsec :: Stats -> IO Int
+readQueryTimeSumUsec stats = foldStats QTimeSumUsec QTimeSumUsec stats (\_ _ix v -> v) 0
+
 ---
 
 {- FOURMOLU_DISABLE -}
@@ -490,3 +495,6 @@ runBucketUsec duration nothing just
 
 incHistogramUsec :: Integer -> Stats -> IO ()
 incHistogramUsec duration stats = runBucketUsec duration (pure ()) (incStats stats)
+
+addQueryTimeSumUsec :: Int64 -> Stats -> IO ()
+addQueryTimeSumUsec d64 stats = modifyStats (fromIntegral d64 +) stats QTimeSumUsec
