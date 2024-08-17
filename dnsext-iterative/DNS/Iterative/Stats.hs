@@ -202,9 +202,11 @@ pattern HistogramMin    :: StatsIx
 pattern HistogramMin     = StatsIx 75
 pattern HistogramMax    :: StatsIx
 pattern HistogramMax     = StatsIx 114
+pattern QTimeSumUsec    :: StatsIx
+pattern QTimeSumUsec     = StatsIx 115
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 114
+pattern StatsIxMax       = StatsIx 115
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -402,6 +404,9 @@ readStats stats prefix = foldStats StatsIxMin IxLabledMax stats step mempty
 readHistogram :: Stats -> IO [Int]
 readHistogram stats = foldStats HistogramMin HistogramMax stats (\hs _ix v -> hs . (v:)) id <&> ($ [])
 
+readQueryTimeSumUsec :: Stats -> IO Int
+readQueryTimeSumUsec stats = foldStats QTimeSumUsec QTimeSumUsec stats (\_ _ix v -> v) 0
+
 ---
 
 {- FOURMOLU_DISABLE -}
@@ -475,18 +480,39 @@ bucketUpperArray =
     micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds ]
 
 {- FOURMOLU_DISABLE -}
-runBucketUsec :: Integer -> a -> (StatsIx -> a) -> a
-runBucketUsec duration nothing just
-      | duration < 0                    = nothing
-      | duration > maxI64               = nothing
-      | otherwise                       = go (fromIntegral duration) HistogramMin
+withPositiveInt64Usec :: Integer -> a -> (Int64 -> a) -> a
+withPositiveInt64Usec int nothing just
+    | int < 0       = nothing
+    | int > maxI64  = nothing
+    | otherwise     = just (fromIntegral int)
   where
     maxI64 = fromIntegral (maxBound :: Int64)
-    go d64 ix
-        | ix > HistogramMax             = nothing
-        | d64 <= bucketUpperArray ! ix  = just ix
-        | otherwise                     = go d64 (succ ix)
 {- FOURMOLU_ENABLE -}
 
-incHistogramUsec :: Integer -> Stats -> IO ()
-incHistogramUsec duration stats = runBucketUsec duration (pure ()) (incStats stats)
+{- FOURMOLU_DISABLE -}
+runBucketUsec :: Int64 -> a -> (StatsIx -> a) -> a
+runBucketUsec d64 nothing just = go HistogramMin
+  where
+    go ix
+        | ix > HistogramMax             = nothing
+        | d64 <= bucketUpperArray ! ix  = just ix
+        | otherwise                     = go (succ ix)
+{- FOURMOLU_ENABLE -}
+
+addQueryTimeSumUsec :: Int64 -> Stats -> IO ()
+addQueryTimeSumUsec d64 stats = modifyStats (fromIntegral d64 +) stats QTimeSumUsec
+
+{- FOURMOLU_DISABLE -}
+getUpdateHistogram :: IO () -> IO (Integer -> Stats -> IO ())
+getUpdateHistogram notSupportLog = do
+    addQueryTimeSum <- getAddSumAction
+    pure $ \duration stats -> withPositiveInt64Usec duration (pure ()) $ \d64 -> do
+        runBucketUsec d64 (pure ()) (incStats stats)
+        addQueryTimeSum d64 stats
+  where
+    getAddSumAction {- only support for Int64 -}
+        | intMax >= int64Max  = pure addQueryTimeSumUsec
+        | otherwise           = notSupportLog $> \_ _ -> pure ()
+    intMax    = fromIntegral (maxBound :: Int) :: Integer
+    int64Max  = fromIntegral (maxBound :: Int64) :: Integer
+{- FOURMOLU_ENABLE -}

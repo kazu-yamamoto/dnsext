@@ -8,14 +8,14 @@ import Data.String
 
 import Data.ByteString.Builder (Builder)
 
-import DNS.Iterative.Stats (Stats, bucketUpperBounds, readHistogram)
+import DNS.Iterative.Stats (Stats, bucketUpperBounds, readHistogram, readQueryTimeSumUsec)
 
 getHistogramBucktes :: Stats -> Builder -> IO Builder
-getHistogramBucktes stats_ prefix = formatBuckets prefix <$> readHistogram stats_
+getHistogramBucktes stats_ prefix = formatBuckets prefix <$> readHistogram stats_ <*> readQueryTimeSumUsec stats_
 
 {- FOURMOLU_DISABLE -}
-formatBuckets :: Builder -> [Int] -> Builder
-formatBuckets prefix hvs = mconcat $ zipWith bformat bucketUpperBounds pbackets ++ [inf_, sum_, count_]
+formatBuckets :: Builder -> [Int] -> Int -> Builder
+formatBuckets prefix hvs sumVal = mconcat $ zipWith bformat bucketUpperBounds pbackets ++ [inf_, sum_, count_]
   where
     pbackets = tail $ scanl (+) 0 hvs
     countVal
@@ -23,7 +23,10 @@ formatBuckets prefix hvs = mconcat $ zipWith bformat bucketUpperBounds pbackets 
         | otherwise      = last pbackets
     bformat ub bv = prefix <> fromString ("response_time_seconds_bucket" ++ "{" ++ bucketKey ub ++ "}" ++ " " ++ show bv ++ "\n")
     inf_    = prefix <> fromString ("response_time_seconds_bucket" ++ "{\"+Inf\"}" ++ " " ++ show countVal ++ "\n")
-    sum_    = fromString "## TODO: # " <> prefix <> fromString ("response_time_seconds_sum" ++ " " ++ "-1" ++ "\n") {- TODO: response_time_seconds_sum -}
+    sum_    = prefix <> fromString ("response_time_seconds_sum" ++ " " ++ show sec ++ '.' : replicate (6 - length uss) '0' ++ uss ++ "\n")
+      where
+        uss = show usec
+        (sec, usec) = sumVal `quotRem `1_000_000
     count_  = prefix <> fromString ("response_time_seconds_count" ++ " " ++ show countVal ++ "\n")
 {- FOURMOLU_ENABLE -}
 

@@ -113,6 +113,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
         localZones = getLocalZones cnf_local_zones
     stubZones <- getStubZones cnf_stub_zones trustAnchors
+    updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
     env <-
         newEnv <&> \env0 ->
             (setOps env0)
@@ -123,6 +124,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , localZones_ = localZones
                 , stubZones_ = stubZones
                 , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
+                , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
     creds <- getCreds conf
