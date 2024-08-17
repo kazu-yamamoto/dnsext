@@ -499,9 +499,6 @@ runBucketUsec d64 nothing just = go HistogramMin
         | otherwise                     = go (succ ix)
 {- FOURMOLU_ENABLE -}
 
-incHistogramUsec :: Integer -> Stats -> IO ()
-incHistogramUsec duration stats = withPositiveInt64Usec duration (pure ()) $ \d64 -> runBucketUsec d64 (pure ()) (incStats stats)
-
 addQueryTimeSumUsec :: Int64 -> Stats -> IO ()
 addQueryTimeSumUsec d64 stats = modifyStats (fromIntegral d64 +) stats QTimeSumUsec
 
