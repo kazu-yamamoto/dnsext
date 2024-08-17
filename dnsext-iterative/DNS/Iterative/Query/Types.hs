@@ -103,6 +103,7 @@ data Env = Env
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
     , stats_ :: Stats
+    , updateHistogram_ :: Integer -> Stats -> IO ()
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
 

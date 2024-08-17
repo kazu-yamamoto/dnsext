@@ -18,6 +18,8 @@ module DNS.Iterative.Query.Env (
     getLocalZones,
     --
     getStubZones,
+    --
+    getUpdateHistogram,
 ) where
 
 -- GHC packages
@@ -85,6 +87,7 @@ newEmptyEnv = do
         , timeString_ = getTimeStr
         , idGen_ = genId
         , stats_ = stats
+        , updateHistogram_ = \_ _ -> pure ()
         , timeout_ = timeout 5000000
         }
 {- FOURMOLU_ENABLE -}
