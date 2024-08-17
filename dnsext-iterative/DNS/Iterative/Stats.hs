@@ -504,3 +504,18 @@ incHistogramUsec duration stats = withPositiveInt64Usec duration (pure ()) $ \d6
 
 addQueryTimeSumUsec :: Int64 -> Stats -> IO ()
 addQueryTimeSumUsec d64 stats = modifyStats (fromIntegral d64 +) stats QTimeSumUsec
+
+{- FOURMOLU_DISABLE -}
+getUpdateHistogram :: IO () -> IO (Integer -> Stats -> IO ())
+getUpdateHistogram notSupportLog = do
+    addQueryTimeSum <- getAddSumAction
+    pure $ \duration stats -> withPositiveInt64Usec duration (pure ()) $ \d64 -> do
+        runBucketUsec d64 (pure ()) (incStats stats)
+        addQueryTimeSum d64 stats
+  where
+    getAddSumAction {- only support for Int64 -}
+        | intMax >= int64Max  = pure addQueryTimeSumUsec
+        | otherwise           = notSupportLog $> \_ _ -> pure ()
+    intMax    = fromIntegral (maxBound :: Int) :: Integer
+    int64Max  = fromIntegral (maxBound :: Int64) :: Integer
+{- FOURMOLU_ENABLE -}
