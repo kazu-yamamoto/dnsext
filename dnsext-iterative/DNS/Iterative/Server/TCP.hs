@@ -33,7 +33,7 @@ tcpServers :: VcServerConfig -> ServerActions
 tcpServers conf env toCacher ss =
     concat <$> mapM (tcpServer conf env toCacher) ss
 
-tcpServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+tcpServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
 tcpServer VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/tcp")
     let tcpserver =

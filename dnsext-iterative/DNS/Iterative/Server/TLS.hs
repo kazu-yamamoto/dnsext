@@ -32,7 +32,7 @@ tlsServers :: VcServerConfig -> ServerActions
 tlsServers conf env toCacher ss =
     concat <$> mapM (tlsServer conf env toCacher) ss
 
-tlsServer :: VcServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+tlsServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
 tlsServer VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/tls")
     let tlsserver = withLocationIOE name $ H2.runTLSWithSocket settings vc_credentials s "dot" $ go
