@@ -88,7 +88,7 @@ mkPipeline
     -> Int
     -- ^ The number of workers
     -> [WorkerStatOP]
-    -> IO ([IO ()], [IO ()], ToCacher)
+    -> IO ([IO ()], [IO ()], ToCacher -> IO ())
     -- ^ (worker actions, cacher actions, input to cacher)
 mkPipeline env cachersN _workersN workerStats = do
     qr <- newTQueueIO
@@ -103,7 +103,7 @@ mkPipeline env cachersN _workersN workerStats = do
 
 ----------------------------------------------------------------
 
-cacherLogic :: Env -> FromReceiver -> ToWorker -> IO ()
+cacherLogic :: Env -> IO FromReceiver -> (ToWorker -> IO ()) -> IO ()
 cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
     inpBS@Input{..} <- fromReceiver
     case DNS.decode inputQuery of
@@ -128,7 +128,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
 
 ----------------------------------------------------------------
 
-workerLogic :: Env -> WorkerStatOP -> FromCacher -> IO ()
+workerLogic :: Env -> WorkerStatOP -> IO FromCacher -> IO ()
 workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
     setWorkerStat WWaitDequeue
     inp@Input{..} <- fromCacher
@@ -206,7 +206,7 @@ type Send = ByteString -> PeerInfo -> IO ()
 
 type MkInput = ByteString -> PeerInfo -> Int -> EpochTimeUsec -> Input ByteString
 
-mkInput :: SockAddr -> ToSender -> SocketProtocol -> MkInput
+mkInput :: SockAddr -> (ToSender -> IO ())-> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
 receiverVC
@@ -214,7 +214,7 @@ receiverVC
     -> Env
     -> VcSession
     -> Recv
-    -> ToCacher
+    -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
 receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
@@ -247,12 +247,12 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
             toCacher $ mkInput_ bs peerInfo i ts
 
 receiverLogic
-    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO ()
+    :: Env -> SockAddr -> Recv -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
 receiverLogic env mysa recv toCacher toSender proto =
     handledLoop env "receiverUDP" $ void $ receiverLogic' env mysa recv toCacher toSender proto
 
 receiverLogic'
-    :: Env -> SockAddr -> Recv -> ToCacher -> ToSender -> SocketProtocol -> IO Bool
+    :: Env -> SockAddr -> Recv -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO Bool
 receiverLogic' env mysa recv toCacher toSender proto = do
     (bs, peerInfo) <- recv
     ts <- currentTimeUsec_ env
@@ -267,7 +267,7 @@ senderVC
     -> Env
     -> VcSession
     -> Send
-    -> FromX
+    -> IO FromX
     -> IO VcFinished
 senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
@@ -283,11 +283,11 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
         send bs peerInfo
     finalize (Output _ i _ ) = atomically (delVcPending vcPendings_ i)
 
-senderLogic :: Env -> Send -> FromX -> IO ()
+senderLogic :: Env -> Send -> IO FromX -> IO ()
 senderLogic env send fromX =
     handledLoop env "senderUDP" $ senderLogic' send fromX
 
-senderLogic' :: Send -> FromX -> IO ()
+senderLogic' :: Send -> IO FromX -> IO ()
 senderLogic' send fromX = do
     Output bs _ peerInfo <- fromX
     send bs peerInfo
@@ -338,7 +338,7 @@ initVcTimeout micro = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, ToSender, FromX)
+initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
@@ -397,7 +397,7 @@ waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
 retryUntil :: Bool -> STM ()
 retryUntil = guard
 
-mkConnector :: IO (ToSender, FromX, VcRespAvail)
+mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail)
 mkConnector = do
     qs <- newTQueueIO
     let toSender = atomically . writeTQueue qs

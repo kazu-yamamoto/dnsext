@@ -63,7 +63,7 @@ data Input a = Input
     , inputMysa :: SockAddr
     , inputPeerInfo :: PeerInfo
     , inputProto :: SocketProtocol
-    , inputToSender :: ToSender
+    , inputToSender :: ToSender -> IO ()
     , inputRecvTime :: EpochTimeUsec
     }
 
@@ -73,14 +73,18 @@ data Output = Output
     , outputPeerInfo :: PeerInfo
     }
 
-type ToCacher = Input ByteString -> IO ()
-type FromReceiver = IO (Input ByteString)
-type ToWorker = Input DNSMessage -> IO ()
-type FromCacher = IO (Input DNSMessage)
-type ToSender = Output -> IO ()
-type FromX = IO Output
+-- Type of the action reveals its arguments and the context of the monad,
+--   eg.
+--   - toCacher :: ToCacher -> IO ()
+--   - toSender :: IO ToSender
+type ToCacher = Input ByteString
+type FromReceiver = Input ByteString
+type ToWorker = Input DNSMessage
+type FromCacher = Input DNSMessage
+type ToSender = Output
+type FromX = Output
 
-type ServerActions = Env -> ToCacher -> [Socket] -> IO ([IO ()])
+type ServerActions = Env -> (ToCacher -> IO ()) -> [Socket] -> IO ([IO ()])
 
 data VcServerConfig = VcServerConfig
     { vc_query_max_size :: Int
