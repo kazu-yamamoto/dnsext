@@ -204,7 +204,7 @@ main = do
 getServers
     :: Env
     -> [HostName]
-    -> Server.ToCacher
+    -> (Server.ToCacher -> IO ())
     -> (Bool, String, ServerActions, SocketType, Int)
     -> IO [(String, [Socket], IO ())]
 getServers _ _ _ (False, _, _, _, _) = return []
