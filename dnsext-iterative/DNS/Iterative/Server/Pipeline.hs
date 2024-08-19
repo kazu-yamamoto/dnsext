@@ -400,7 +400,7 @@ retryUntil = guard
 
 mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail)
 mkConnector = do
-    let queueBound = 8 {- queue bound per session -}
+    let queueBound = 8 {- limit waiting area per session to constant size -}
     qs <- newTBQueueIO queueBound
     let toSender = atomically . writeTBQueue qs
         fromX = atomically $ readTBQueue qs
