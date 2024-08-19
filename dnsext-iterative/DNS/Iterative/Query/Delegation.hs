@@ -257,7 +257,10 @@ unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = nsec
 
     putLog color s = clogLn Log.DEMO color s
 
-    witnessInfo w = SEC.witnessName w ++ ": " ++ SEC.witnessDelegation w traceInfo qinfo
+    witnessInfo w = SEC.witnessName w ++ ": " ++ witnessTypeInfo w
+    witnessTypeInfo w = case SEC.witnessType w of
+        SEC.NwUnsignedDelegation  -> traceInfo
+        _                         -> qinfo
     traceInfo = show zone ++ " -> " ++ show qname_
     qinfo = show qname_ ++ " " ++ show qtype_
 {- FOURMOLU_ENABLE -}

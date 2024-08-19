@@ -135,50 +135,58 @@ data NSEC_Result
 
 ---
 
+data NSECxWitnessType
+    = NwNameError
+    | NwNoData
+    | NwUnsignedDelegation
+    | NwWildcardExpantion
+    | NwWildcardNoData
+    deriving (Eq, Show)
+
 class NSECxWitness w where
     witnessName :: w -> String
-    witnessDelegation :: w -> a -> a -> a
+    witnessType :: w -> NSECxWitnessType
 
 ---
 
 instance NSECxWitness NSEC3_NameError where
     witnessName _ = "NSEC3 NameError"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwNameError
 
 instance NSECxWitness NSEC3_NoData where
     witnessName _ = "NSEC3 NoData"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwNoData
 
 instance NSECxWitness NSEC3_UnsignedDelegation where
     witnessName _ = "NSEC3 UnsignedDelegation"
-    witnessDelegation _ t _ = t
+    witnessType _ = NwUnsignedDelegation
 
 instance NSECxWitness NSEC3_WildcardExpansion where
     witnessName _ = "NSEC3 WildcardExpansion"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwWildcardExpantion
 
 instance NSECxWitness NSEC3_WildcardNoData where
     witnessName _ = "NSEC3 WildcardNoData"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwWildcardNoData
 
 ---
 
 instance NSECxWitness NSEC_NameError where
     witnessName _ = "NSEC NameError"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwNameError
 
 instance NSECxWitness NSEC_NoData where
     witnessName _ = "NSEC NoData"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwNoData
 
 instance NSECxWitness NSEC_UnsignedDelegation where
     witnessName _ = "NSEC UnsignedDelegation"
-    witnessDelegation _ t _ = t
+    witnessType _ = NwUnsignedDelegation
 
 instance NSECxWitness NSEC_WildcardExpansion where
     witnessName _ = "NSEC WildcardExpansion"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwWildcardExpantion
 
 instance NSECxWitness NSEC_WildcardNoData where
     witnessName _ = "NSEC WildcardNoData"
-    witnessDelegation _ _ e = e
+    witnessType _ = NwWildcardNoData
