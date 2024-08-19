@@ -91,12 +91,14 @@ mkPipeline
     -> IO ([IO ()], [IO ()], ToCacher -> IO ())
     -- ^ (worker actions, cacher actions, input to cacher)
 mkPipeline env cachersN _workersN workerStats = do
-    qr <- newTQueueIO
-    let toCacher = atomically . writeTQueue qr
-        fromReceiver = atomically $ readTQueue qr
-    qw <- newTQueueIO
-    let toWorker = atomically . writeTQueue qw
-        fromCacher = atomically $ readTQueue qw
+    {- limit waiting area on server to constant size -}
+    let queueBound = 64
+    qr <- newTBQueueIO queueBound
+    let toCacher = atomically . writeTBQueue qr
+        fromReceiver = atomically $ readTBQueue qr
+    qw <- newTBQueueIO queueBound
+    let toWorker = atomically . writeTBQueue qw
+        fromCacher = atomically $ readTBQueue qw
     let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
     let workers = [workerLogic env wstat fromCacher | wstat <- workerStats]
     return (cachers, workers, toCacher)
