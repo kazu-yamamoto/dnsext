@@ -46,9 +46,11 @@ udpServer :: UdpServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO 
 udpServer UdpServerConfig{..} env toCacher s = do
     mysa <- getSocketName s
     when udp_interface_automatic $ setPktInfo s
-    qs <- newTQueueIO
-    let toSender = atomically . writeTQueue qs
-        fromX = atomically $ readTQueue qs
+    {- limit waiting area on server to constant size -}
+    let queueBound = 64
+    qs <- newTBQueueIO queueBound
+    let toSender = atomically . writeTBQueue qs
+        fromX = atomically $ readTBQueue qs
         recv = do
             (peersa, bs, cmsgs, _) <- NSB.recvMsg s 2048 2048 0
             incStatsUDP53 peersa (stats_ env)
