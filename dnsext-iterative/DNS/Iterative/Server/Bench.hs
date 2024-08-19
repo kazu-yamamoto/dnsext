@@ -7,7 +7,7 @@ module DNS.Iterative.Server.Bench (
 ) where
 
 -- GHC packages
-import Control.Concurrent.STM
+import Control.Concurrent
 import Control.Monad (forever)
 import Data.ByteString (ByteString)
 
@@ -35,11 +35,11 @@ benchServer
     -> Bool
     -> IO ([IO ()], Request () -> IO (), IO (Response ()))
 benchServer bench_pipelines _ True = do
-    reqQ <- newTQueueIO
-    resQ <- newTQueueIO
+    reqQ <- newChan
+    resQ <- newChan
     let pipelines_per_socket = bench_pipelines
-    let pipelines = replicate pipelines_per_socket [forever $ atomically $ writeTQueue resQ =<< readTQueue reqQ]
-    return (concat pipelines, atomically . writeTQueue reqQ, atomically (readTQueue resQ))
+    let pipelines = replicate pipelines_per_socket [forever $ writeChan resQ =<< readChan reqQ]
+    return (concat pipelines, writeChan reqQ, readChan resQ)
 benchServer bench_pipelines env _ = do
     myDummy <- getSockAddr "127.1.1.1" "53"
     clntDummy <- getSockAddr "127.2.1.1" "53"
@@ -50,12 +50,12 @@ benchServer bench_pipelines env _ = do
     workerStats <- getWorkerStats workers_per_pipeline
     (cachers, workers, toCacher) <- mkPipeline env pipelines_per_socket workers_per_pipeline workerStats
 
-    resQ <- newTQueueIO
+    resQ <- newChan
 
-    let toSender = atomically . writeTQueue resQ
+    let toSender = writeChan resQ
 
         enqueueReq (bs, ()) = toCacher (Input bs 0 myDummy (PeerInfoUDP clntDummy []) UDP toSender usecDummy)
-        dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> atomically (readTQueue resQ)
+        dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> readChan resQ
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where
     getSockAddr host port = do
