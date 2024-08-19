@@ -97,7 +97,7 @@ doHTTP
     -> ServerIO a
     -> IO (IO ())
 doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
-    (toSender, fromX, _) <- mkConnector
+    (toSender, fromX, _, _) <- mkConnector
     let receiver = forever $ do
             (sprstrm, req) <- sioReadRequest
             ts <- currentTimeUsec_ env
