@@ -342,11 +342,12 @@ initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO (
 initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
-    senderQ     <- newTQueueIO
+    let queueBound = 8 {- limit waiting area per session to constant size -}
+    senderQ     <- newTBQueueIO queueBound
     vcTimeout   <- initVcTimeout micro
-    let toSender = atomically . writeTQueue senderQ
-        fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout slsize, toSender, fromX)
+    let toSender = atomically . writeTBQueue senderQ
+        fromX = atomically $ readTBQueue senderQ
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTBQueue senderQ) getWaitIn vcTimeout slsize, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -399,10 +400,11 @@ retryUntil = guard
 
 mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail)
 mkConnector = do
-    qs <- newTQueueIO
-    let toSender = atomically . writeTQueue qs
-        fromX = atomically $ readTQueue qs
-    return (toSender, fromX, not <$> isEmptyTQueue qs)
+    let queueBound = 8 {- queue bound per session -}
+    qs <- newTBQueueIO queueBound
+    let toSender = atomically . writeTBQueue qs
+        fromX = atomically $ readTBQueue qs
+    return (toSender, fromX, not <$> isEmptyTBQueue qs)
 
 ----------------------------------------------------------------
 
