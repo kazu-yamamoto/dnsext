@@ -26,16 +26,20 @@ new conf@Config{..}
         let put ~_ = return ()
         return (return Nothing, put)
 
-newtype DnstapQ = DnstapQ (TQueue Message)
+newtype DnstapQ = DnstapQ (TBQueue Message)
 
 newDnstapQ :: IO DnstapQ
-newDnstapQ = DnstapQ <$> newTQueueIO
+newDnstapQ = DnstapQ <$> newTBQueueIO queueBound
+  where
+    {- limit waiting area on server to constant size -}
+    {- transactions per 1 millisecond. When under load, assume GC runs about every 1 millisecond and the thread switches -}
+    queueBound = 64
 
 writeDnstapQ :: DnstapQ -> Message -> IO ()
-writeDnstapQ (DnstapQ q) ~msg = atomically $ writeTQueue q msg
+writeDnstapQ (DnstapQ q) ~msg = atomically $ writeTBQueue q msg
 
 readDnsTapQ :: DnstapQ -> IO Message
-readDnsTapQ (DnstapQ q) = atomically $ readTQueue q
+readDnsTapQ (DnstapQ q) = atomically $ readTBQueue q
 
 newDnstapWriter :: Config -> IO (IO (), Message -> IO ())
 newDnstapWriter conf = do
