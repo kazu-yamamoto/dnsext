@@ -54,7 +54,7 @@ data VAnswerResult
     | VCached
     deriving (Eq, Show)
 
-newTestEnv :: Bool -> Log.PutLines -> IO Env
+newTestEnv :: Bool -> Log.PutLines IO -> IO Env
 newTestEnv disableV6NS putLines = do
     env <- newEmptyEnv
     (getCache, insert) <- newTestCache (currentSeconds_ env) $ 2 * 1024 * 1024
@@ -83,7 +83,7 @@ envSpec = describe "env" $ do
         let sp p = case p of Delegation{} -> True -- check not error
         rootHint `shouldSatisfy` sp
 
-cacheStateSpec :: Bool -> Log.PutLines -> Spec
+cacheStateSpec :: Bool -> Log.PutLines IO -> Spec
 cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
     let getResolveCache n ty = do
             cxt <- newTestEnv disableV6NS putLines
@@ -118,7 +118,7 @@ cacheStateSpec disableV6NS putLines = describe "cache-state" $ do
         (_, cs) <- getResolveCache "www.cloudflare.com." MX
         check cs "www.cloudflare.com." MX `shouldSatisfy` isJust
 
-querySpec :: Bool -> Log.PutLines -> Spec
+querySpec :: Bool -> Log.PutLines IO -> Spec
 querySpec disableV6NS putLines = describe "query" $ do
     let getCXT = newTestEnv disableV6NS putLines
     cxt <- runIO getCXT

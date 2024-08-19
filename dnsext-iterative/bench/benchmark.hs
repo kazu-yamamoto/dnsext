@@ -191,7 +191,7 @@ runBenchmark conf@Config{..} noop gplot size = do
     killThread tid
     flush
 
-getEnv :: Config -> Log.PutLines -> IO Env
+getEnv :: Config -> Log.PutLines IO -> IO Env
 getEnv Config{..} putLines = do
     tcache <- newTimeCache
     let memoLogLn = putLines Log.WARN Nothing . (: [])
