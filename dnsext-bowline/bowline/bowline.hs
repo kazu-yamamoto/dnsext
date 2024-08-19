@@ -56,7 +56,7 @@ import qualified WebAPI as API
 
 data GlobalCache = GlobalCache
     { gcacheRRCacheOps :: RRCacheOps
-    , gcacheSetLogLn :: Log.PutLines -> IO ()
+    , gcacheSetLogLn :: Log.PutLines IO -> IO ()
     }
 
 ----------------------------------------------------------------
@@ -242,7 +242,7 @@ getCache tc@TimeCache{..} Config{..} = do
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines, IO ())
+getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO ())
 getLogger Config{..}
     | cnf_log = do
         (r, p, f) <- Log.new cnf_log_output cnf_log_level

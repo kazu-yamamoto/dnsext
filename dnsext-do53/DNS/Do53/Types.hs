@@ -258,7 +258,7 @@ data ResolveActions = ResolveActions
     -- ^ Getting time.
     , ractionSetSockOpt :: Socket -> IO ()
     -- ^ Setting socket options.
-    , ractionLog :: PutLines
+    , ractionLog :: PutLines IO
     -- ^ Logging.
     , ractionShortLog :: Bool
     -- ^ flag for short-log mode
