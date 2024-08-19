@@ -57,7 +57,7 @@ recursiveQuery
     :: [HostName]
     -> PortNumber
     -> (DNS.DNSMessage -> STM ())
-    -> Log.PutLinesSTM
+    -> Log.PutLines STM
     -> [(Question, QueryControls)]
     -> Options
     -> TQueue (NameTag, String)
@@ -133,7 +133,7 @@ resolvePipeline conf = do
 
 resolver
     :: (DNS.DNSMessage -> STM ())
-    -> Log.PutLinesSTM
+    -> Log.PutLines STM
     -> [((Question, QueryControls), TVar Bool)]
     -> PipelineResolver
     -> IO ()
@@ -151,7 +151,7 @@ resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
 
 printReplySTM
     :: (DNS.DNSMessage -> STM ())
-    -> Log.PutLinesSTM
+    -> Log.PutLines STM
     -> Either DNS.DNSError Reply
     -> STM ()
 printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]

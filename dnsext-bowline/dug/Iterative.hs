@@ -16,7 +16,7 @@ import Types (Options (..))
 
 iterativeQuery
     :: (DNSMessage -> IO ())
-    -> Log.PutLines
+    -> Log.PutLines IO
     -> (Question, QueryControls)
     -> Options
     -> IO ()
@@ -27,7 +27,7 @@ iterativeQuery putLn putLines qq opts = do
         Left e -> print e
         Right msg -> putLn msg
 
-setup :: Log.PutLines -> Options -> IO Env
+setup :: Log.PutLines IO -> Options -> IO Env
 setup putLines Options{..} = do
     tcache <- newTimeCache
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 $ getTime tcache

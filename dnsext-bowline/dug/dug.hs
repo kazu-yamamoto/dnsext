@@ -217,7 +217,7 @@ cookOpts
         , [(Question, QueryControls)]
         , IO ()
         , DNSMessage -> STM ()
-        , Log.PutLinesSTM
+        , Log.PutLines STM
         , IO ()
         )
 cookOpts args Options{..} = do
