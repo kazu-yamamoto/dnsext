@@ -42,7 +42,7 @@ udpServers :: UdpServerConfig -> ServerActions
 udpServers _conf env toCacher ss =
     concat <$> mapM (udpServer _conf env toCacher) ss
 
-udpServer :: UdpServerConfig -> Env -> ToCacher -> Socket -> IO ([IO ()])
+udpServer :: UdpServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
 udpServer UdpServerConfig{..} env toCacher s = do
     mysa <- getSocketName s
     when udp_interface_automatic $ setPktInfo s
