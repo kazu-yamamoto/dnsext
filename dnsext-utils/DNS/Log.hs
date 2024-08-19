@@ -12,7 +12,6 @@ module DNS.Log (
     Output (..),
     Logger,
     PutLines,
-    PutLinesSTM,
     KillLogger,
 ) where
 
@@ -69,31 +68,30 @@ instance Show Output where
     show Stderr = "Stderr"
 
 type Logger = IO ()
-type PutLines = Level -> Maybe Color -> [String] -> IO ()
-type PutLinesSTM = Level -> Maybe Color -> [String] -> STM ()
+type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
 
-new :: Output -> Level -> IO (Logger, PutLines, KillLogger)
+new :: Output -> Level -> IO (Logger, PutLines IO, KillLogger)
 new Stdout l = toIO $ newHandleLogger stdout l
 new Stderr l = toIO $ newHandleLogger stderr l
 
-new' :: Output -> Level -> IO (Logger, PutLinesSTM, KillLogger)
+new' :: Output -> Level -> IO (Logger, PutLines STM, KillLogger)
 new' Stdout = newHandleLogger stdout
 new' Stderr = newHandleLogger stderr
 
 toIO
-    :: IO (Logger, PutLinesSTM, KillLogger)
-    -> IO (Logger, PutLines, KillLogger)
+    :: IO (Logger, PutLines STM, KillLogger)
+    -> IO (Logger, PutLines IO, KillLogger)
 toIO action = do
     (x, y, z) <- action
     return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
 newHandleLogger
-    :: Handle -> Level -> IO (Logger, PutLinesSTM, KillLogger)
+    :: Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
 newHandleLogger outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     colorize <- hSupportsANSIColor outFh
-    inQ <- newTQueueIO
+    inQ <- newTBQueueIO 16
     mvar <- newEmptyMVar
     let logger = loggerLoop inQ mvar
         put = putLines colorize inQ
@@ -101,7 +99,7 @@ newHandleLogger outFh loggerLevel = do
     return (logger, put, kill)
   where
     killLogger inQ mvar = do
-        atomically $ writeTQueue inQ Nothing
+        atomically $ writeTBQueue inQ Nothing
         takeMVar mvar
 
     putLines colorize inQ lv color ~xs
@@ -110,13 +108,13 @@ newHandleLogger outFh loggerLevel = do
       where
         withColor c =
             when (loggerLevel <= lv) $
-                writeTQueue inQ $
+                writeTBQueue inQ $
                     Just (c, xs)
 
     loggerLoop inQ mvar = loop
       where
         loop = do
-            me <- atomically (readTQueue inQ)
+            me <- atomically (readTBQueue inQ)
             case me of
                 Nothing -> putMVar mvar ()
                 Just e -> do
