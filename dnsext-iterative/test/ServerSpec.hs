@@ -133,7 +133,7 @@ dump VcSession{..} = do
     putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
 
 {- FOUMOLU_DISABLE -}
-getToCacher :: IO ToCacher
+getToCacher :: IO (ToCacher -> IO ())
 getToCacher = do
    mq <- newTQueueIO
    let bodyLoop = forever $ do
