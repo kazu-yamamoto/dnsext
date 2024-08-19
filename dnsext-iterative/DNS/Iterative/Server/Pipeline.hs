@@ -91,12 +91,14 @@ mkPipeline
     -> IO ([IO ()], [IO ()], ToCacher -> IO ())
     -- ^ (worker actions, cacher actions, input to cacher)
 mkPipeline env cachersN _workersN workerStats = do
-    qr <- newTQueueIO
-    let toCacher = atomically . writeTQueue qr
-        fromReceiver = atomically $ readTQueue qr
-    qw <- newTQueueIO
-    let toWorker = atomically . writeTQueue qw
-        fromCacher = atomically $ readTQueue qw
+    {- limit waiting area on server to constant size -}
+    let queueBound = 64
+    qr <- newTBQueueIO queueBound
+    let toCacher = atomically . writeTBQueue qr
+        fromReceiver = atomically $ readTBQueue qr
+    qw <- newTBQueueIO queueBound
+    let toWorker = atomically . writeTBQueue qw
+        fromCacher = atomically $ readTBQueue qw
     let cachers = replicate cachersN $ cacherLogic env fromReceiver toWorker
     let workers = [workerLogic env wstat fromCacher | wstat <- workerStats]
     return (cachers, workers, toCacher)
@@ -298,6 +300,7 @@ type VcEof = TVar Bool
 type VcWaitRead = STM ()
 type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
+type VcAllowInput = STM Bool
 
 {- FOURMOLU_DISABLE -}
 data VcTimeout =
@@ -315,6 +318,7 @@ data VcSession =
     { vcEof_            :: VcEof
     , vcPendings_       :: VcPendings
     , vcRespAvail_      :: VcRespAvail
+    , vcAllowInput_     :: VcAllowInput
     , vcWaitRead_       :: IO VcWaitRead
     , vcTimeout_        :: VcTimeout
     , vcSlowlorisSize_  :: Int
@@ -342,11 +346,15 @@ initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO (
 initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
     vcPendinfs  <- newTVarIO Set.empty
-    senderQ     <- newTQueueIO
+    let queueBound = 8 {- limit waiting area per session to constant size -}
+    senderQ     <- newTBQueueIO queueBound
     vcTimeout   <- initVcTimeout micro
-    let toSender = atomically . writeTQueue senderQ
-        fromX = atomically $ readTQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTQueue senderQ) getWaitIn vcTimeout slsize, toSender, fromX)
+    let toSender = atomically . writeTBQueue senderQ
+        fromX = atomically $ readTBQueue senderQ
+        inputThreshold = succ queueBound `quot` 2
+        {- allow room for cacher loops and worker loops to write -}
+        allowInput = (<= inputThreshold) <$> lengthTBQueue senderQ
+    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTBQueue senderQ) allowInput getWaitIn vcTimeout slsize, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -366,7 +374,7 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
     waitIn <- vcWaitRead_
     atomically $ do
         timeout <- readTVar vtState_
-        when (not timeout) waitIn $> timeout
+        when (not timeout) (vcAllowInput_ >>= retryUntil >> waitIn) $> timeout
 
 {- FOURMOLU_DISABLE -}
 --   eof       pending     timeout   avail       sender-loop
@@ -397,12 +405,14 @@ waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
 retryUntil :: Bool -> STM ()
 retryUntil = guard
 
-mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail)
+mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail, VcAllowInput)
 mkConnector = do
-    qs <- newTQueueIO
-    let toSender = atomically . writeTQueue qs
-        fromX = atomically $ readTQueue qs
-    return (toSender, fromX, not <$> isEmptyTQueue qs)
+    let queueBound = 8 {- limit waiting area per session to constant size -}
+        inputThreshold = succ queueBound `quot` 2
+    qs <- newTBQueueIO queueBound
+    let toSender = atomically . writeTBQueue qs
+        fromX = atomically $ readTBQueue qs
+    return (toSender, fromX, not <$> isEmptyTBQueue qs, (<= inputThreshold) <$> lengthTBQueue qs)
 
 ----------------------------------------------------------------
 

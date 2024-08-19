@@ -19,6 +19,7 @@ module DNS.Log (
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (when)
+import Numeric.Natural
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
@@ -72,12 +73,16 @@ type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
 
 new :: Output -> Level -> IO (Logger, PutLines IO, KillLogger)
-new Stdout l = toIO $ newHandleLogger stdout l
-new Stderr l = toIO $ newHandleLogger stderr l
+new Stdout l = toIO $ newHandleLogger queueBound stdout l
+new Stderr l = toIO $ newHandleLogger queueBound stderr l
 
 new' :: Output -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' Stdout = newHandleLogger stdout
-new' Stderr = newHandleLogger stderr
+new' Stdout = newHandleLogger queueBound stdout
+new' Stderr = newHandleLogger queueBound stderr
+
+{- limit waiting area on server to constant size -}
+queueBound :: Natural
+queueBound = 8
 
 toIO
     :: IO (Logger, PutLines STM, KillLogger)
@@ -87,11 +92,11 @@ toIO action = do
     return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
 newHandleLogger
-    :: Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
-newHandleLogger outFh loggerLevel = do
+    :: Natural -> Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
+newHandleLogger qsize outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
     colorize <- hSupportsANSIColor outFh
-    inQ <- newTBQueueIO 16
+    inQ <- newTBQueueIO qsize
     mvar <- newEmptyMVar
     let logger = loggerLoop inQ mvar
         put = putLines colorize inQ
