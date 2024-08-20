@@ -139,14 +139,15 @@ showConfig conf = showConfig1 conf ++ showConfig2 conf
 {- FOURMOLU_DISABLE -}
 showConfig1 :: Config -> [String]
 showConfig1 Config{..} =
-    [ showAddrPort "Mointor" True     cnf_monitor_addrs cnf_monitor_port
-    , showAddrPort "UDP"     cnf_udp  cnf_dns_addrs     cnf_udp_port
-    , showAddrPort "TCP"     cnf_tcp  cnf_dns_addrs     cnf_tcp_port
-    , showAddrPort "TLS"     cnf_tls  cnf_dns_addrs     cnf_tls_port
-    , showAddrPort "QUIC"    cnf_quic cnf_dns_addrs     cnf_quic_port
-    , showAddrPort "H2C"     cnf_h2c  cnf_dns_addrs     cnf_h2c_port
-    , showAddrPort "H2"      cnf_h2   cnf_dns_addrs     cnf_h2_port
-    , showAddrPort "H3"      cnf_h3   cnf_dns_addrs     cnf_h3_port
+    [ showAddrPort "Mointor" True        cnf_monitor_addrs  cnf_monitor_port
+    , showAddrPort "WebAPI"  cnf_webapi  [cnf_webapi_addr]  cnf_webapi_port
+    , showAddrPort "UDP"     cnf_udp     cnf_dns_addrs      cnf_udp_port
+    , showAddrPort "TCP"     cnf_tcp     cnf_dns_addrs      cnf_tcp_port
+    , showAddrPort "TLS"     cnf_tls     cnf_dns_addrs      cnf_tls_port
+    , showAddrPort "QUIC"    cnf_quic    cnf_dns_addrs      cnf_quic_port
+    , showAddrPort "H2C"     cnf_h2c     cnf_dns_addrs      cnf_h2c_port
+    , showAddrPort "H2"      cnf_h2      cnf_dns_addrs      cnf_h2_port
+    , showAddrPort "H3"      cnf_h3      cnf_dns_addrs      cnf_h3_port
     ]
   where
     showAddrPort tag enable addrs port
