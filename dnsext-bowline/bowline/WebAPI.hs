@@ -40,33 +40,35 @@ doHelp = return $ responseBuilder HTTP.ok200 [] txt
   where
     txt = fromString $ unlines $ "WebAPI help:" : "" : map (uncurry hline) helps
     helps =
-        [ ("/metrics", "returns metrics info")
-        , ("/wstats", "returns worker thread info")
-        , ("/reload", "reload bowline without keeping cache")
-        , ("/keep-cache", "reload bowline with keeping cache")
-        , ("/quit", "quit bowline")
-        , ("/help", "show this help texts")
+        [ ("/metrics"     , "returns metrics info")
+        , ("/wstats"      , "returns worker thread info")
+        , ("/reload"      , "reload bowline without keeping cache")
+        , ("/keep-cache"  , "reload bowline with keeping cache")
+        , ("/quit"        , "quit bowline")
+        , ("/help"        , "show this help texts")
         ]
     hline name note = name ++ replicate (width - length name) ' ' ++ note
     width = maximum (0 : map (length . fst) helps) + margin
     margin = 3
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 app :: Control -> Application
 app mng req sendResp = getResp >>= sendResp
   where
     getResp
         | requestMethod req == HTTP.methodGet = case rawPathInfo req of
-            "/metrics" -> doStats mng
-            "/stats" -> doStats mng
-            "/wstats" -> doWStats mng
-            "/reload" -> doReload mng Reload
-            "/keep-cache" -> doReload mng KeepCache
-            "/quit" -> doQuit mng
-            "/help" -> doHelp
-            "/" -> doHelp
+            "/metrics"     -> doStats mng
+            "/stats"       -> doStats mng
+            "/wstats"      -> doWStats mng
+            "/reload"      -> doReload mng Reload
+            "/keep-cache"  -> doReload mng KeepCache
+            "/quit"        -> doQuit mng
+            "/help"        -> doHelp
+            "/"            -> doHelp
             _ -> return $ ng HTTP.badRequest400
         | otherwise = return $ ng HTTP.methodNotAllowed405
+{- FOURMOLU_ENABLE -}
 
 ok :: Response
 ok = responseLBS HTTP.ok200 [] "OK\n"
