@@ -5,8 +5,7 @@
 
 module DNS.Iterative.Query.WitnessInfo where
 
---
-
+-- dnsext-*
 import DNS.SEC
 import DNS.SEC.Verify.Types
 import DNS.Types

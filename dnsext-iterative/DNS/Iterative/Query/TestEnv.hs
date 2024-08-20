@@ -6,7 +6,6 @@ module DNS.Iterative.Query.TestEnv where
 import Data.IORef (newIORef, readIORef, writeIORef)
 
 -- dnsext-* packages
-
 import qualified DNS.RRCache as Cache
 import DNS.Types
 import DNS.Types.Time

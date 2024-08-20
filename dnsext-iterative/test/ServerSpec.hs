@@ -126,7 +126,6 @@ vcSession waitRead tmicro ws = do
     let expect = sort ws
     result <- sort <$> getResult
     pure (fstate, result == expect)
-
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
@@ -145,7 +144,6 @@ getToCacher = do
             inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
     _ <- replicateM 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
-
 {- FOUMOLU_ENABLE -}
 
 getRecv :: [ByteString] -> IO Recv
