@@ -15,7 +15,6 @@ import Data.Functor
 import Data.Word
 
 -- dnsext-* packages
-
 import DNS.SEC
 import DNS.Types hiding (rrclass, rrname, rrttl, rrtype)
 import qualified DNS.Types.Opaque as Opaque
@@ -275,25 +274,27 @@ rdataDNSKEY = do
 
 ---
 
+{- FOURMOLU_DISABLE -}
 {-- $ORIGIN <domain-name> [<comment>]
       --(normalized)-->
       $ORIGIN <blank> <domain-name>  -}
-
 -- |
 -- >>> runParser zoneOrigin cx [Directive D_Origin,Blank,CS "example",Dot,CS "net",Dot]
 -- Right (("example.net.",Context "example.net." "." 3600 IN),[])
 zoneOrigin :: Parser Domain
 zoneOrigin = lift (this (Directive D_Origin) *> this Blank) *> adomain >>= setZone
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 {-- $TTL <ttl> [<comment>]
       --(normalized)-->
       $TTL <blank> <ttl>  -}
-
 -- |
 -- >>> runParser zoneTTL cx [Directive D_TTL,Blank,CS "7200"]
 -- Right ((7200(2 hours),Context "." "." 7200 IN),[])
 zoneTTL :: Parser TTL
 zoneTTL = lift (this (Directive D_TTL) *> this Blank) *> ttl >>= setTTL
+{- FOURMOLU_ENABLE -}
 
 {- NOT SUPPORT --- $INCLUDE <file-name> [<domain-name>] [<comment>] -}
 
