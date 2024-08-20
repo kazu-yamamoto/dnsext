@@ -78,18 +78,20 @@ checkKeyTag dnskey@RD_DNSKEY{..} tag = do
                 ++ " =/= "
                 ++ show tag
 
+{- FOURMOLU_DISABLE -}
 pubkeyDicts :: Map PubAlg RRSIGImpl
 pubkeyDicts =
     Map.fromList
-        [ (RSASHA1, rsaSHA1)
-        , (RSASHA1_NSEC3_SHA1, rsaSHA1 {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -})
-        , (RSASHA256, rsaSHA256)
-        , (RSASHA512, rsaSHA512)
-        , (ECDSAP256SHA256, ecdsaP256SHA)
-        , (ECDSAP384SHA384, ecdsaP384SHA)
-        , (ED25519, ed25519)
-        , (ED448, ed448)
+        [ (RSASHA1,             rsaSHA1)
+        , (RSASHA1_NSEC3_SHA1,  rsaSHA1)  {- https://datatracker.ietf.org/doc/html/rfc5155#section-2 -}
+        , (RSASHA256,           rsaSHA256)
+        , (RSASHA512,           rsaSHA512)
+        , (ECDSAP256SHA256,     ecdsaP256SHA)
+        , (ECDSAP384SHA384,     ecdsaP384SHA)
+        , (ED25519,             ed25519)
+        , (ED448,               ed448)
         ]
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 supportedDNSKEY :: RD_DNSKEY -> Bool
