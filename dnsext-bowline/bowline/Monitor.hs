@@ -136,10 +136,7 @@ console
 console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainfo = do
     let input = do
             s <- hGetLine inH
-            let err =
-                    hPutStrLn
-                        outH
-                        ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
+            let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
             maybe (err $> False) runCmd $ parseCmd $ words s
 
         step = do
@@ -148,10 +145,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
 
         repl = do
             hPutStr outH "monitor> " *> hFlush outH
-            either
-                (const $ return ())
-                (\exit -> unless exit repl)
-                =<< withWait waitQuit (handle (($> False) . print) step)
+            either (const $ return ()) (\exit -> unless exit repl) =<< withWait waitQuit (handle (($> False) . print) step)
 
     showParam outLn conf srvInfo
     repl
@@ -197,8 +191,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
       where
         dispatch  Param = showParam outLn conf srvInfo
         dispatch  Noop = return ()
-        dispatch (Find ws) =
-            mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
+        dispatch (Find ws) = mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
         dispatch (Lookup dom typ) = print cmd *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
