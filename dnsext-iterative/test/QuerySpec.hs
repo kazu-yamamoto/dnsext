@@ -8,7 +8,7 @@ import Control.Concurrent (forkIO, threadDelay)
 import Control.Monad (void)
 import qualified DNS.RRCache as Cache
 import qualified DNS.SEC as DNS
-import DNS.Types (TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA), Question (..))
+import DNS.Types (Question (..), TYPE (A, AAAA, CNAME, MX, NS, PTR, SOA))
 import qualified DNS.Types as DNS
 import Data.Either (isRight)
 import Data.Maybe (isJust, isNothing)
@@ -22,14 +22,14 @@ import DNS.Do53.Client (FlagOp (..), cdFlag)
 import DNS.Iterative.Internal (
     Delegation (..),
     Env (..),
-    queryContext,
     getResultIterative,
     newEmptyEnv,
-    rootHint,
     newTestCache,
+    queryContext,
     queryContextIN,
     refreshRoot,
     replyMessage,
+    rootHint,
     rootPriming,
     rrsetValid,
     runDNSQuery,

@@ -15,11 +15,12 @@ import Data.Functor
 import Data.Word
 
 -- dnsext-* packages
+
+import DNS.SEC
+import DNS.Types hiding (rrclass, rrname, rrttl, rrtype)
+import qualified DNS.Types.Opaque as Opaque
 import Data.IP (IPv4, IPv6)
 import qualified Data.Vector as V
-import DNS.Types hiding (rrname, rrclass, rrttl, rrtype)
-import qualified DNS.Types.Opaque as Opaque
-import DNS.SEC
 
 -- this package
 import DNS.ZoneFile.Types hiding (Parser, runParser)
@@ -51,16 +52,16 @@ setCx :: (a -> Context -> Context) -> a -> Parser a
 setCx set_ x = modify (set_ x) $> x
 
 setZone :: Domain -> Parser Domain
-setZone = setCx (\x s -> s {cx_zone = x})
+setZone = setCx (\x s -> s{cx_zone = x})
 
 setName :: Domain -> Parser Domain
-setName = setCx (\x s -> s {cx_name = x})
+setName = setCx (\x s -> s{cx_name = x})
 
 setTTL :: TTL -> Parser TTL
-setTTL = setCx (\x s -> s {cx_ttl = x})
+setTTL = setCx (\x s -> s{cx_ttl = x})
 
 setClass :: CLASS -> Parser CLASS
-setClass = setCx (\x s -> s {cx_class = x})
+setClass = setCx (\x s -> s{cx_class = x})
 
 ---
 
@@ -110,14 +111,14 @@ type Labels = [CString]
 
 -- | not empty relative domain labels
 rlabels' :: Parser (Labels -> Labels)
-rlabels' = (++) <$> ( (:) <$> cstring <*> many (dot *> cstring) )
+rlabels' = (++) <$> ((:) <$> cstring <*> many (dot *> cstring))
 
 -- | absolute domain labels
 alabels :: Parser Labels
 alabels = (rlabels' <|> pure id {- root case -}) <*> (dot $> [])
 
 rlabels :: Parser Labels
-rlabels = rlabels' <*> ( toLabels <$> gets cx_zone )
+rlabels = rlabels' <*> (toLabels <$> gets cx_zone)
 
 toLabels :: IsRepresentation a CString => a -> Labels
 toLabels = V.toList . toWireLabels
@@ -208,7 +209,7 @@ rdataPTR :: Parser RData
 rdataPTR = rd_ptr <$> domain
 
 rdataTXT :: Parser RData
-rdataTXT = rd_txt . txt <$> ( (:) <$> nbstring <*> many (blank *> nbstring) )
+rdataTXT = rd_txt . txt <$> ((:) <$> nbstring <*> many (blank *> nbstring))
   where
     txt = Opaque.concat . map txtCString
     nbstring = mconcat <$> some (cstring <|> dot $> ".")
@@ -277,6 +278,7 @@ rdataDNSKEY = do
 {-- $ORIGIN <domain-name> [<comment>]
       --(normalized)-->
       $ORIGIN <blank> <domain-name>  -}
+
 -- |
 -- >>> runParser zoneOrigin cx [Directive D_Origin,Blank,CS "example",Dot,CS "net",Dot]
 -- Right (("example.net.",Context "example.net." "." 3600 IN),[])
@@ -286,6 +288,7 @@ zoneOrigin = lift (this (Directive D_Origin) *> this Blank) *> adomain >>= setZo
 {-- $TTL <ttl> [<comment>]
       --(normalized)-->
       $TTL <blank> <ttl>  -}
+
 -- |
 -- >>> runParser zoneTTL cx [Directive D_TTL,Blank,CS "7200"]
 -- Right ((7200(2 hours),Context "." "." 7200 IN),[])

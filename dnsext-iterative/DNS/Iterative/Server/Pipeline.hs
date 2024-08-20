@@ -176,8 +176,9 @@ record
     -> IO ()
 record env Input{..} reply rspWire = do
     let peersa = peerSockAddr inputPeerInfo
-    logDNSTAP_ env $ runEpochTimeUsec inputRecvTime $
-        \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
+    logDNSTAP_ env $
+        runEpochTimeUsec inputRecvTime $
+            \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
     let st = stats_ env
         Question{..} = head $ question inputQuery
         DNSFlags{..} = flags reply
@@ -208,7 +209,7 @@ type Send = ByteString -> PeerInfo -> IO ()
 
 type MkInput = ByteString -> PeerInfo -> Int -> EpochTimeUsec -> Input ByteString
 
-mkInput :: SockAddr -> (ToSender -> IO ())-> SocketProtocol -> MkInput
+mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
 
 receiverVC
@@ -283,7 +284,7 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
     step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
         resetVcTimeout vcTimeout_
         send bs peerInfo
-    finalize (Output _ i _ ) = atomically (delVcPending vcPendings_ i)
+    finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
 
 senderLogic :: Env -> Send -> IO FromX -> IO ()
 senderLogic env send fromX =

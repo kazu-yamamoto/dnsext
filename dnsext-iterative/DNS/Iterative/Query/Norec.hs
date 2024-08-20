@@ -7,8 +7,8 @@ module DNS.Iterative.Query.Norec (norec') where
 -- dnsext packages
 import DNS.Do53.Client (
     FlagOp (..),
-    defaultResolveActions,
     ResolveActions (..),
+    defaultResolveActions,
  )
 import qualified DNS.Do53.Client as DNS
 import DNS.Do53.Internal (

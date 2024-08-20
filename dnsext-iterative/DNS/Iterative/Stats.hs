@@ -366,7 +366,7 @@ incStats :: Stats -> StatsIx -> IO ()
 incStats = modifyStats succ
 
 decStats :: Stats -> StatsIx -> IO ()
-decStats = modifyStats pred  {- thread may runs on the other capability, so negative Int value is possible -}
+decStats = modifyStats pred {- thread may runs on the other capability, so negative Int value is possible -}
 
 incStatsM :: Ord a => Stats -> Map a StatsIx -> a -> Maybe StatsIx -> IO ()
 incStatsM s m k mk = do
@@ -402,7 +402,7 @@ readStats stats prefix = foldStats StatsIxMin IxLabledMax stats step mempty
     step b ix v = b <> prefix <> (labels ! ix) <> " " <> toB v <> "\n"
 
 readHistogram :: Stats -> IO [Int]
-readHistogram stats = foldStats HistogramMin HistogramMax stats (\hs _ix v -> hs . (v:)) id <&> ($ [])
+readHistogram stats = foldStats HistogramMin HistogramMax stats (\hs _ix v -> hs . (v :)) id <&> ($ [])
 
 readQueryTimeSumUsec :: Stats -> IO Int
 readQueryTimeSumUsec stats = foldStats QTimeSumUsec QTimeSumUsec stats (\_ _ix v -> v) 0
@@ -469,15 +469,15 @@ sessionStatsDoH3 = sessionStatsDoX [AcceptedDoH3] [CurConnDoH3]
 
 bucketUpperBounds :: [(Int64, Int64)]
 bucketUpperBounds =
-      [ (0, u) | u <- pow19s ] ++ [ (s, 0) | s <- pow19s ]
-    where
-      pow19s = [ 2^n | n <- [ 0 :: Int .. 19 ] ]
+    [(0, u) | u <- pow19s] ++ [(s, 0) | s <- pow19s]
+  where
+    pow19s = [2 ^ n | n <- [0 :: Int .. 19]]
 
 bucketUpperArray :: UArray StatsIx Int64
 bucketUpperArray =
     listArray (HistogramMin, HistogramMax) micros
   where
-    micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds ]
+    micros = [s * 1_000_000 + u | (s, u) <- bucketUpperBounds]
 
 {- FOURMOLU_DISABLE -}
 withPositiveInt64Usec :: Integer -> a -> (Int64 -> a) -> a

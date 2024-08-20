@@ -140,7 +140,7 @@ parseV6RevDomain dom = do
 -- show IPv4 reverse-lookup domain from 8bit-parts
 showV4RevDomain :: [Int] -> Domain
 showV4RevDomain parts =
-   fromString $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
+    fromString $ intercalate "." (map show $ reverse parts) ++ ".in-addr.arpa."
 
 -- parse IPv6 reverse-lookup domain from 4bit-parts
 showV6RevDomain :: [Int] -> Domain

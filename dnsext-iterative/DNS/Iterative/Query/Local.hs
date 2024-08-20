@@ -7,9 +7,9 @@ import DNS.Types
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.LocalZone (lookupApex, lookupName)
 import DNS.Iterative.Query.Rev
+import DNS.Iterative.Query.Types
 
 {- FOURMOLU_DISABLE -}
 takeLocalResult :: Env -> Question -> DNSQuery (Maybe ResultRRS)

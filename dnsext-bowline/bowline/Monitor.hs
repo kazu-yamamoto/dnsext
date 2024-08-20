@@ -47,7 +47,7 @@ import Network.Socket (
     Socket,
     SocketType (Stream),
  )
-import System.Posix (getEffectiveUserID, getEffectiveGroupID)
+import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 import UnliftIO.Exception (tryAny)
 
 -- this package
@@ -260,6 +260,6 @@ showParam outLn conf srvInfo = do
     mapM_ outLn $ showConfig conf
     outLn "---------- runtime  ----------"
     outLn . ("capabilities: " ++) . show =<< getNumCapabilities
-    mapM_ outLn  srvInfo
+    mapM_ outLn srvInfo
     outLn . ("euid: " ++) . show =<< getEffectiveUserID
     outLn . ("egid: " ++) . show =<< getEffectiveGroupID

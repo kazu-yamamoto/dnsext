@@ -102,7 +102,7 @@ lookupCacheSection
 lookupCacheSection env@LookupEnv{..} q@Question{..} = do
     err <- lookupRRCache (keyForERR q) c
     case err of
-        Just (_, Negative (NegSOA {})) -> return $ Left NameError
+        Just (_, Negative (NegSOA{})) -> return $ Left NameError
         Just (_, Negative (NegNoSOA rc)) -> return $ Left $ case rc of
             FormatErr -> FormatError
             ServFail -> ServerFailure

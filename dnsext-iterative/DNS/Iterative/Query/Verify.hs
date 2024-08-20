@@ -1,14 +1,16 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Verify (
     -- * case split for RRSIG verification
     cases,
     cases',
+
     -- * RRSIG, sep DNSKEY verification, for tests
     rrWithRRSIG,
     sepDNSKEY,
+
     -- * NSEC / NSEC3 verification
     NResultK,
     GetNE,
@@ -17,6 +19,7 @@ module DNS.Iterative.Query.Verify (
     getUnsignedDelegation,
     getWildcardExpansion,
     getNoDatas,
+
     -- * low-level, NSEC / NSEC3 verification
     GetResult,
     runHandlers,

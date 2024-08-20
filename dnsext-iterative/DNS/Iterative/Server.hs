@@ -56,15 +56,15 @@ import DNS.Iterative.Query.Env
 import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.HTTP3
 import DNS.Iterative.Server.Pipeline
+import DNS.Iterative.Server.PrometheusHisto (getHistogramBucktes)
 import DNS.Iterative.Server.QUIC
 import DNS.Iterative.Server.TCP
 import DNS.Iterative.Server.TLS
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.UDP
-import DNS.Iterative.Server.PrometheusHisto (getHistogramBucktes)
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
-import DNS.RRCache (RRCache, newRRCache,  RRCacheOps (..), newRRCacheOps,  RRCacheConf (..))
+import DNS.RRCache (RRCache, RRCacheConf (..), RRCacheOps (..), newRRCache, newRRCacheOps)
 import qualified DNS.RRCache as RRCache
 import DNS.TimeCache
 

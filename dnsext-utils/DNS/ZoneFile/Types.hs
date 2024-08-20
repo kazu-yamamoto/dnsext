@@ -185,4 +185,4 @@ data Record
     = R_Origin Domain
     | R_TTL TTL
     | R_RR ResourceRecord
-    deriving Show
+    deriving (Show)

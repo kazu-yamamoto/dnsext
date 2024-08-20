@@ -29,9 +29,9 @@ where
 import Control.Applicative
 import Control.Arrow (first, second, (&&&), (***), (<<<), (>>>))
 import Control.Monad
-import Control.Monad.Trans
 import Control.Monad.Except
 import Control.Monad.Reader
+import Control.Monad.Trans
 import Data.Bits
 import Data.Bool (bool)
 import Data.ByteString (ByteString)

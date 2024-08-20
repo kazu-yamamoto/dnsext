@@ -12,10 +12,11 @@ module DNS.Utils.AutoUpdate (
 where
 
 -- GHC packages
-import GHC.Event (getSystemTimerManager, registerTimeout, unregisterTimeout)
+
 import Control.Concurrent.STM
 import Control.Monad
 import Data.IORef
+import GHC.Event (getSystemTimerManager, registerTimeout, unregisterTimeout)
 
 mkAutoUpdate :: Int -> IO a -> IO (IO a)
 mkAutoUpdate micro uaction = fst <$> mkClosableAutoUpdate micro uaction
@@ -61,7 +62,7 @@ data UpdateState a =
 {- FOURMOLU_ENABLE -}
 
 mkDeleteTimeout :: TVar Bool -> Int -> IO (IO ())
-mkDeleteTimeout thc micro =  do
+mkDeleteTimeout thc micro = do
     mgr <- getSystemTimerManager
     key <- registerTimeout mgr micro (atomically $ writeTVar thc True)
     pure $ unregisterTimeout mgr key

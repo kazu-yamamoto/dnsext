@@ -1,15 +1,16 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.WitnessInfo where
 
 --
-import DNS.Types
-import qualified DNS.Types.Opaque as Opaque
+
 import DNS.SEC
 import DNS.SEC.Verify.Types
+import DNS.Types
+import qualified DNS.Types.Opaque as Opaque
 
 witnessInfoNSEC3 :: NSECxWitnessInfo NSEC3_Witness n => n -> [String]
 witnessInfoNSEC3 = witnessInfo showMatchNSEC3 showCoverNSEC3
@@ -37,7 +38,7 @@ showMatch showN getU getT ((lower, rd), name) =
 
 showCover :: (Domain -> String) -> (rd -> Domain) -> (rd -> [TYPE]) -> ((Domain, rd), Domain) -> String
 showCover showN getU getT ((lower, rd), name) =
-    "cover: " ++ showN name ++" covered by (" ++ show lower ++ ", " ++ show (getU rd) ++ ") " ++ show (getT rd)
+    "cover: " ++ showN name ++ " covered by (" ++ show lower ++ ", " ++ show (getU rd) ++ ") " ++ show (getT rd)
 
 showN3 :: Domain -> String
 showN3 name = "H(" ++ show name ++ ")"

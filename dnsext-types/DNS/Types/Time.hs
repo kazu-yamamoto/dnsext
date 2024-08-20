@@ -31,7 +31,7 @@ runEpochTimeUsec :: EpochTimeUsec -> (Int64 -> Int32 -> a) -> a
 runEpochTimeUsec (UnixTime (CTime sec) usec) f = f sec usec
 
 epochUsecToSeconds :: EpochTimeUsec -> EpochTime
-epochUsecToSeconds (UnixTime (CTime tim) _) =  tim
+epochUsecToSeconds (UnixTime (CTime tim) _) = tim
 
 diffUsec :: EpochTimeUsec -> EpochTimeUsec -> Integer
 diffUsec x y = toMicro $ diffUnixTime x y

@@ -1,4 +1,3 @@
-
 module DNS.ZoneFile.IO where
 
 -- ghc packages
@@ -9,10 +8,11 @@ import qualified Data.ByteString.Lazy.Char8 as L8
 import DNS.Types (ResourceRecord)
 
 -- this package
-import DNS.ZoneFile.Types as T
+
 import DNS.ZoneFile.Lexer (lexLine)
 import DNS.ZoneFile.Parser (Context)
-import qualified  DNS.ZoneFile.Parser as P
+import qualified DNS.ZoneFile.Parser as P
+import DNS.ZoneFile.Types as T
 
 parseLineRR :: L8.ByteString -> Context -> Either String (ResourceRecord, Context)
 parseLineRR s cxt = do

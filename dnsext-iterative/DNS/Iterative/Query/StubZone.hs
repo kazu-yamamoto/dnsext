@@ -1,4 +1,3 @@
-
 module DNS.Iterative.Query.StubZone where
 
 -- GHC packages

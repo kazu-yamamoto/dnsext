@@ -7,8 +7,8 @@ module SocketUtil (
 import Data.Functor
 import Data.List
 import Data.Maybe
-import Text.Read (readMaybe)
 import System.IO.Error (tryIOError)
+import Text.Read (readMaybe)
 
 -- dns packages
 import Data.IP (IP)

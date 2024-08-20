@@ -4,12 +4,12 @@ module DNS.Iterative.Server.WorkerStats where
 
 -- GHC packages
 import Data.IORef
-import Data.List (sortBy, intercalate)
+import Data.List (intercalate, sortBy)
 import Data.Ord (comparing)
 
 -- dnsext-* packages
 import qualified DNS.Types as DNS
-import DNS.Types.Time (EpochTimeUsec, getCurrentTimeUsec, runEpochTimeUsec, diffUsec)
+import DNS.Types.Time (EpochTimeUsec, diffUsec, getCurrentTimeUsec, runEpochTimeUsec)
 
 pprWorkerStats :: Int -> [WorkerStatOP] -> IO [String]
 pprWorkerStats pn ops = do
@@ -22,7 +22,7 @@ pprWorkerStats pn ops = do
         enqs = filter (isStat (== WWaitEnqueue)) stats
 
         pprq (wn, st) = showDec3 wn ++ ": " ++ pprWorkerStat st
-        workers []      = "no workers"
+        workers [] = "no workers"
         workers triples = intercalate " " (map (\(wn, (_st, ds)) -> show wn ++ ":" ++ showDiffSec1 ds) triples)
         pprdeq = " waiting dequeues: " ++ show (length deqs) ++ " workers"
         pprenq = " waiting enqueues: " ++ workers enqs
@@ -30,9 +30,9 @@ pprWorkerStats pn ops = do
     return $ map (("  " ++ show pn ++ ":") ++) $ map pprq sorted ++ [pprdeq, pprenq]
   where
     showDec3 n
-        | 100 <= n    =  show n
-        | 10  <= n    =  ' ' : show n
-        | otherwise   =  "  " ++ show n
+        | 100 <= n = show n
+        | 10 <= n = ' ' : show n
+        | otherwise = "  " ++ show n
 
 pprWorkerStat :: (WorkerStat, DiffTime) -> String
 pprWorkerStat (stat, diff) = pad ++ diffStr ++ ": " ++ show stat
@@ -97,8 +97,8 @@ diffTimeStamp t1 t2 = DiffT (diffUsec t1 t2)
 
 showDiffSec1 :: DiffTime -> String
 showDiffSec1 (DiffT susec)
-    | susec < 0  = '-' : str ++ "s"
-    | otherwise  = str ++ "s"
+    | susec < 0 = '-' : str ++ "s"
+    | otherwise = str ++ "s"
   where
     usec = abs susec
     df = 100_000

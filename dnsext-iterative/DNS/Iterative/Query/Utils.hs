@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Utils where
@@ -128,7 +128,7 @@ ppDelegations :: NonEmpty DEntry -> [(String, Int)]
 ppDelegations des =
     map (pp . bundle) $ groupBy ((==) `on` fst) $ map toT $ toList des
   where
-    withP toIP is p = [ (toIP i, p) | i <- toList is]
+    withP toIP is p = [(toIP i, p) | i <- toList is]
     toT (DEwithAx d i4s i6s) = (d, withP IPv4 i4s 53 ++ withP IPv6 i6s 53)
     toT (DEwithA4 d i4s) = (d, withP IPv4 i4s 53)
     toT (DEwithA6 d i6s) = (d, withP IPv6 i6s 53)

@@ -10,7 +10,6 @@ import Codec.Serialise
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
-import Data.Functor
 import DNS.Do53.Client (
     LookupConf (..),
     QueryControls,
@@ -40,6 +39,7 @@ import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import Data.Either
+import Data.Functor
 import Data.IP (IP, IPv4, IPv6)
 import qualified Data.List as List
 import Data.String

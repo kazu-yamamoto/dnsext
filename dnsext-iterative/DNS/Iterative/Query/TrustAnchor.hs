@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.TrustAnchor (
@@ -45,7 +45,7 @@ refreshRoot = do
     curRef <- asks currentRoot_
     let refresh = do
             n <- getRoot
-            liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
+            liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD {- got from IORef as cached -}}
             return n
         keep = do
             current <- liftIO $ readIORef curRef
@@ -165,7 +165,8 @@ steps to get verified and cached DNSKEY RRset
 3. verify DNSKEY RRset of delegatee with RRSIG
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
-cachedDNSKEY :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY
+    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
 cachedDNSKEY getSEPs sas zone = do
     short <- asks shortLog_
     logLn Log.DEMO $ unwords (["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
@@ -179,12 +180,12 @@ cachedDNSKEY getSEPs sas zone = do
     cachedResult krds dnskeyRRset cacheDNSKEY
         | rrsetValid dnskeyRRset = cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
         | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
-    verifyDNSKEY msg (s:|ss) = do
+    verifyDNSKEY msg (s :| ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             {- no DNSKEY case -}
             nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
-        Verify.cases NoCheckDisabled zone (s:ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+        Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnssecOK aservers name typ = ExceptT $ do

@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.ResolveJust (
@@ -284,7 +284,7 @@ getCheckEnabled :: MonadReaderQC m => m Bool
 getCheckEnabled = noCD <$> asksQC requestCD_
   where
     noCD NoCheckDisabled = True
-    noCD CheckDisabled   = False
+    noCD CheckDisabled = False
 
 -- | Fill DS for delegation info. The result must be `FilledDS` for success query.
 --
@@ -312,7 +312,7 @@ fillDelegationDS src dest
         return dest
     | FilledDS [] <- delegationDS src = fill [] {- no src DS, not chained -}
     | Delegation{..} <- dest = case delegationDS of
-        AnchorSEP {} -> pure dest {- specified trust-anchor dnskey case -}
+        AnchorSEP{} -> pure dest {- specified trust-anchor dnskey case -}
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             logLn Log.DEMO $ "require-ds: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone

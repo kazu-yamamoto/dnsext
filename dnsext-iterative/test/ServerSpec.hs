@@ -13,9 +13,9 @@ import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as B8
 import Data.Functor
+import Data.IORef
 import Data.List
 import Data.Maybe
-import Data.IORef
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 
@@ -113,11 +113,12 @@ vcSession waitRead tmicro ws = do
     toCacher <- getToCacher
     recv <- getRecv ws
     (getResult, send) <- getSend
-    let myaddr    = SockAddrInet 53 0x0100007f
-        receiver  = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
-        sender    = senderVC "test-send" env vcSess send fromX
-        debug     = False
-    when debug $ void $ forkIO $ replicateM_ 10 $ do {- dumper to debug -}
+    let myaddr = SockAddrInet 53 0x0100007f
+        receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        sender = senderVC "test-send" env vcSess send fromX
+        debug = False
+    when debug $ void $ forkIO $ replicateM_ 10 $ do
+        {- dumper to debug -}
         dump vcSess
         threadDelay 500_000
 
@@ -125,6 +126,7 @@ vcSession waitRead tmicro ws = do
     let expect = sort ws
     result <- sort <$> getResult
     pure (fstate, result == expect)
+
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
@@ -135,33 +137,34 @@ dump VcSession{..} = do
 {- FOUMOLU_DISABLE -}
 getToCacher :: IO (ToCacher -> IO ())
 getToCacher = do
-   mq <- newTQueueIO
-   let bodyLoop = forever $ do
-           Input{..} <- atomically (readTQueue mq)
-           let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
-           threadDelay $ intb * 10_000
-           inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
-   _ <- replicateM 4 (forkIO bodyLoop)
-   pure (atomically . writeTQueue mq)
+    mq <- newTQueueIO
+    let bodyLoop = forever $ do
+            Input{..} <- atomically (readTQueue mq)
+            let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
+            threadDelay $ intb * 10_000
+            inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
+    _ <- replicateM 4 (forkIO bodyLoop)
+    pure (atomically . writeTQueue mq)
+
 {- FOUMOLU_ENABLE -}
 
 getRecv :: [ByteString] -> IO Recv
 getRecv ws = do
     ref <- newIORef ws
     pure $ rstep ref
- where
-   rstep ref = do
-       s <- readIORef ref
-       case s of
-         []   -> pure (mempty, dummyPeer)
-         c:cs -> writeIORef ref cs $> (c, dummyPeer)
+  where
+    rstep ref = do
+        s <- readIORef ref
+        case s of
+            [] -> pure (mempty, dummyPeer)
+            c : cs -> writeIORef ref cs $> (c, dummyPeer)
 
 getSend :: IO (IO [ByteString], Send)
 getSend = do
     ref <- newIORef []
     pure (readIORef ref, \x _ -> sstep ref x)
   where
-    ins x s = (x:s, ())
+    ins x s = (x : s, ())
     sstep ref x = atomicModifyIORef' ref (ins x)
 
 dummyPeer :: PeerInfo

@@ -6,7 +6,7 @@ import DNS.Do53.Client (QueryControls)
 import DNS.Iterative.Query (Env (..), newEnv, resolveResponseIterative, setRRCacheOps, setTimeCache)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
-import DNS.TimeCache (newTimeCache, getTime)
+import DNS.TimeCache (getTime, newTimeCache)
 import Data.Functor
 import System.Timeout (timeout)
 

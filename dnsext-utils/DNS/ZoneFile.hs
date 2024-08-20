@@ -7,18 +7,19 @@ module DNS.ZoneFile (
     module DNS.ZoneFile.Lexer,
     module DNS.ZoneFile.Parser,
     module DNS.ZoneFile.IO,
-    ) where
+) where
 
 -- ghc packages
 import qualified Data.ByteString.Lazy as LB
 
 -- this package
-import DNS.ZoneFile.Types
+
+import DNS.ZoneFile.IO
 import DNS.ZoneFile.Lexer hiding (Parser)
 import qualified DNS.ZoneFile.Lexer as L
-import DNS.ZoneFile.Parser hiding (Parser, runParser, parseLineRR, parseFile)
+import DNS.ZoneFile.Parser hiding (Parser, parseFile, parseLineRR, runParser)
 import qualified DNS.ZoneFile.Parser as P
-import DNS.ZoneFile.IO
+import DNS.ZoneFile.Types
 
 type LexParser a = L.Parser a
 

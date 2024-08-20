@@ -17,9 +17,9 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6)
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.RootServers (rootServers)
 import DNS.Iterative.Query.Random
 import DNS.Iterative.Query.Types
+import DNS.Iterative.RootServers (rootServers)
 
 -- $setup
 -- >>> :set -XOverloadedStrings

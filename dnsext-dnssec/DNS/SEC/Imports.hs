@@ -36,7 +36,7 @@ import Data.Typeable
 import Data.Word
 import Numeric
 
-import DNS.Types (Domain, unconsDomain, labelsCount)
+import DNS.Types (Domain, labelsCount, unconsDomain)
 import DNS.Types.Internal (Label)
 import DNS.Types.Time (EpochTime)
 

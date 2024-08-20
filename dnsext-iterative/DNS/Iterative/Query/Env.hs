@@ -36,7 +36,7 @@ import DNS.Do53.Internal (newConcurrentGenId)
 import DNS.RRCache (RRCacheOps (..))
 import qualified DNS.RRCache as Cache
 import DNS.SEC
-import DNS.TimeCache (TimeCache (..), noneTimeCache, getTime)
+import DNS.TimeCache (TimeCache (..), getTime, noneTimeCache)
 import DNS.Types
 import DNS.Types.Time (getCurrentTimeUsec)
 import DNS.ZoneFile (Record (R_RR))
@@ -118,7 +118,7 @@ readRootHint :: FilePath -> IO Delegation
 readRootHint = withRootDelegation fail pure <=< getRootServers
 
 setRootHint :: Maybe Delegation -> Env -> Env
-setRootHint md env0 = maybe env0 (\d -> env0 {rootHint_ = d}) md
+setRootHint md env0 = maybe env0 (\d -> env0{rootHint_ = d}) md
 
 ---
 
@@ -161,7 +161,7 @@ readAnchor path = do
 {- FOURMOLU_ENABLE -}
 
 setRootAnchor :: TrustAnchors -> Env -> Env
-setRootAnchor as env0 = maybe env0 (\v -> env0 {rootAnchor_ = v }) $ Map.lookup (fromString ".") as
+setRootAnchor as env0 = maybe env0 (\v -> env0{rootAnchor_ = v}) $ Map.lookup (fromString ".") as
 
 ---
 

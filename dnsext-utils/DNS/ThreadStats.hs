@@ -73,7 +73,7 @@ dumper _ = forever $ threadDelay interval
 
 async :: String -> IO a -> IO (Async a)
 withAsync :: String -> IO a -> (Async a -> IO b) -> IO b
-withAsyncs ::  [(String, IO a)] -> ([Async a] -> IO b) -> IO b
+withAsyncs :: [(String, IO a)] -> ([Async a] -> IO b) -> IO b
 concurrently :: String -> IO a -> String -> IO b -> IO (a, b)
 concurrently_ :: String -> IO a -> String -> IO b -> IO ()
 race :: String -> IO a -> String -> IO b -> IO (Either a b)

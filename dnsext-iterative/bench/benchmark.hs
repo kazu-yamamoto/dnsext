@@ -27,7 +27,7 @@ import DNS.Iterative.Internal (Env (..), newEmptyEnv)
 import DNS.Iterative.Server.Bench
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
-import DNS.TimeCache (newTimeCache, getTime)
+import DNS.TimeCache (getTime, newTimeCache)
 
 data Config = Config
     { logOutput :: Log.Output
@@ -198,8 +198,16 @@ getEnv Config{..} putLines = do
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn $ getTime tcache
     Cache.RRCacheOps{..} <- Cache.newRRCacheOps cacheConf
     env <- newEmptyEnv
-    pure env{ disableV6NS_ = False, logLines_ = putLines, currentSeconds_ = getTime tcache
-            , insert_ = insertCache, getCache_ = readCache, expireCache_ = expireCache, timeout_ = timeout 3000000}
+    pure
+        env
+            { disableV6NS_ = False
+            , logLines_ = putLines
+            , currentSeconds_ = getTime tcache
+            , insert_ = insertCache
+            , getCache_ = readCache
+            , expireCache_ = expireCache
+            , timeout_ = timeout 3000000
+            }
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

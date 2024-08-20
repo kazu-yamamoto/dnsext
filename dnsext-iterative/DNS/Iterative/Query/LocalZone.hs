@@ -7,8 +7,9 @@ import qualified Data.Map.Strict as Map
 -- other packages
 
 -- dnsext packages
-import DNS.Types
+
 import DNS.SEC.Verify (canonicalRRset)
+import DNS.Types
 
 -- this package
 import DNS.Iterative.Imports
@@ -55,7 +56,7 @@ lzDomain (d, _, _) = d
 apexMap :: Map Domain [RRset] -> [(Domain, LocalZoneType, [ResourceRecord])] -> Map Domain [(Domain, LocalZoneType, [RRset])]
 apexMap nMap lzones = Map.fromList $ subdomainSemilatticeOn lzDomain withSOA
   where
-    withSOA = [ (d, t, lookupName' nMap (Question d SOA IN) [] id) | (d, t, _) <- lzones ]
+    withSOA = [(d, t, lookupName' nMap (Question d SOA IN) [] id) | (d, t, _) <- lzones]
 
 lookupApex :: Map Domain [(Domain, LocalZoneType, [RRset])] -> Domain -> Maybe (Domain, LocalZoneType, [RRset])
 lookupApex = lookupApexOn lzDomain

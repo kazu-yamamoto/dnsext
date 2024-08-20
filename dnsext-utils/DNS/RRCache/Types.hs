@@ -230,12 +230,16 @@ getRankK authRank noauthRank _ msg = if DNS.authAnswer (DNS.flags msg) then auth
 getRankedSectionK :: RankedSectionK (DNSMessage -> ([ResourceRecord], Ranking))
 getRankedSectionK authRank noauthRank section msg = (section msg, getRankK authRank noauthRank section msg)
 
-getRank :: RankedSectionCPS (DNSMessage -> Ranking)
-           -> DNSMessage -> Ranking
+getRank
+    :: RankedSectionCPS (DNSMessage -> Ranking)
+    -> DNSMessage
+    -> Ranking
 getRank cps = cps getRankK
 
-getRanked :: RankedSectionCPS (DNSMessage -> ([ResourceRecord], Ranking))
-          -> DNSMessage -> ([ResourceRecord], Ranking)
+getRanked
+    :: RankedSectionCPS (DNSMessage -> ([ResourceRecord], Ranking))
+    -> DNSMessage
+    -> ([ResourceRecord], Ranking)
 getRanked cps = cps getRankedSectionK
 
 rkAnswer :: RankedSectionCPS a
@@ -442,7 +446,7 @@ remove k (Cache psq xsz) = Cache (PSQ.delete k psq) xsz
 filters :: (Question -> EpochTime -> Hit -> Ranking -> Bool) -> Cache -> Cache
 filters p (Cache c xsz) =
     let c' = PSQ.fromList [t | t@(k, eol, Val hit rank) <- PSQ.toAscList c, p k eol hit rank]
-    in  Cache c' xsz
+     in Cache c' xsz
 
 alive :: EpochTime -> EpochTime -> Maybe TTL
 alive now eol = do
@@ -471,6 +475,7 @@ pattern ERR :: TYPE
 pattern ERR = TYPE 0xff00
 
 {-# DEPRECATED NX "use ERR instead of this" #-}
+
 -- | same as `ERR`, backword compat
 pattern NX :: TYPE
 pattern NX = ERR

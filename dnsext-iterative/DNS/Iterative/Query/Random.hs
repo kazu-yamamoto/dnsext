@@ -51,7 +51,7 @@ randomizedSelect
 randomizedChoice :: MonadIO m => a -> a -> m a
 randomizedChoice x y
     | randomSelect = bool x y <$> getStdRandom (randomR (False, True))
-    | otherwise    = pure x
+    | otherwise = pure x
 
 randomizedSelects :: MonadIO m => Int -> [a] -> m [a]
 randomizedSelects num xs
