@@ -4,6 +4,7 @@
 module WebAPI (new) where
 
 import Control.Concurrent
+import Data.String
 import Data.ByteString ()
 import qualified Network.HTTP.Types as HTTP
 import Network.Socket
@@ -33,6 +34,24 @@ doQuit Control{..} = do
     quitServer
     return ok
 
+{- FOURMOLU_DISABLE -}
+doHelp :: IO Response
+doHelp = return $ responseBuilder HTTP.ok200 [] txt
+  where
+    txt = fromString $ unlines $ "WebAPI help:" : "" : map (uncurry hline) helps
+    helps =
+        [ ("/metrics", "returns metrics info")
+        , ("/wstats", "returns worker thread info")
+        , ("/reload", "reload bowline without keeping cache")
+        , ("/keep-cache", "reload bowline with keeping cache")
+        , ("/quit", "quit bowline")
+        , ("/help", "show this help texts")
+        ]
+    hline name note = name ++ replicate (width - length name) ' ' ++ note
+    width = maximum (0 : map (length . fst) helps) + margin
+    margin = 3
+{- FOURMOLU_ENABLE -}
+
 app :: Control -> Application
 app mng req sendResp = getResp >>= sendResp
   where
@@ -44,6 +63,8 @@ app mng req sendResp = getResp >>= sendResp
             "/reload" -> doReload mng Reload
             "/keep-cache" -> doReload mng KeepCache
             "/quit" -> doQuit mng
+            "/help" -> doHelp
+            "/" -> doHelp
             _ -> return $ ng HTTP.badRequest400
         | otherwise = return $ ng HTTP.methodNotAllowed405
 
