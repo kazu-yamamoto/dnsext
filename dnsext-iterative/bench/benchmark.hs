@@ -191,6 +191,7 @@ runBenchmark conf@Config{..} noop gplot size = do
     killThread tid
     flush
 
+{- FOURMOLU_DISABLE -}
 getEnv :: Config -> Log.PutLines IO -> IO Env
 getEnv Config{..} putLines = do
     tcache <- newTimeCache
@@ -198,16 +199,9 @@ getEnv Config{..} putLines = do
         cacheConf = Cache.RRCacheConf maxCacheSize 1800 memoLogLn $ getTime tcache
     Cache.RRCacheOps{..} <- Cache.newRRCacheOps cacheConf
     env <- newEmptyEnv
-    pure
-        env
-            { disableV6NS_ = False
-            , logLines_ = putLines
-            , currentSeconds_ = getTime tcache
-            , insert_ = insertCache
-            , getCache_ = readCache
-            , expireCache_ = expireCache
-            , timeout_ = timeout 3000000
-            }
+    pure env{ disableV6NS_ = False, logLines_ = putLines, currentSeconds_ = getTime tcache
+            , insert_ = insertCache, getCache_ = readCache, expireCache_ = expireCache, timeout_ = timeout 3000000}
+{- FOURMOLU_ENABLE -}
 
 runQueries :: [a1] -> ((a1, ()) -> IO a2) -> IO a3 -> IO [a3]
 runQueries qs enqueueReq dequeueResp = do

@@ -7,7 +7,6 @@ import qualified Data.Map.Strict as Map
 -- other packages
 
 -- dnsext packages
-
 import DNS.SEC.Verify (canonicalRRset)
 import DNS.Types
 

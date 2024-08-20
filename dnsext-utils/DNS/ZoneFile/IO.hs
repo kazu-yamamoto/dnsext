@@ -8,7 +8,6 @@ import qualified Data.ByteString.Lazy.Char8 as L8
 import DNS.Types (ResourceRecord)
 
 -- this package
-
 import DNS.ZoneFile.Lexer (lexLine)
 import DNS.ZoneFile.Parser (Context)
 import qualified DNS.ZoneFile.Parser as P

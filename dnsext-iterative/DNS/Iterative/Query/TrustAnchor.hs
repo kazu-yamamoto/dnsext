@@ -40,12 +40,13 @@ import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
 
+{- FOURMOLU_DISABLE -}
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do
     curRef <- asks currentRoot_
     let refresh = do
             n <- getRoot
-            liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD {- got from IORef as cached -}}
+            liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
             return n
         keep = do
             current <- liftIO $ readIORef curRef
@@ -61,6 +62,7 @@ refreshRoot = do
                 logLn Log.WARN $ "refreshRoot: " ++ s
                 asks rootHint_
         either fallback return =<< rootPriming
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 {-

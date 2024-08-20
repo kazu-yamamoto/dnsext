@@ -474,11 +474,12 @@ maxSize (Cache _ xsz) = xsz
 pattern ERR :: TYPE
 pattern ERR = TYPE 0xff00
 
+{- FOURMOLU_DISABLE -}
 {-# DEPRECATED NX "use ERR instead of this" #-}
-
 -- | same as `ERR`, backword compat
 pattern NX :: TYPE
 pattern NX = ERR
+{- FOURMOLU_ENABLE -}
 
 ---
 {- debug interfaces -}

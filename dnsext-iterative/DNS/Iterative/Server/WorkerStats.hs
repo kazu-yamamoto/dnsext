@@ -11,6 +11,7 @@ import Data.Ord (comparing)
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTimeUsec, diffUsec, getCurrentTimeUsec, runEpochTimeUsec)
 
+{- FOURMOLU_DISABLE -}
 pprWorkerStats :: Int -> [WorkerStatOP] -> IO [String]
 pprWorkerStats pn ops = do
     stats <- zip [1 :: Int ..] <$> mapM getWorkerStat ops
@@ -22,7 +23,7 @@ pprWorkerStats pn ops = do
         enqs = filter (isStat (== WWaitEnqueue)) stats
 
         pprq (wn, st) = showDec3 wn ++ ": " ++ pprWorkerStat st
-        workers [] = "no workers"
+        workers []      = "no workers"
         workers triples = intercalate " " (map (\(wn, (_st, ds)) -> show wn ++ ":" ++ showDiffSec1 ds) triples)
         pprdeq = " waiting dequeues: " ++ show (length deqs) ++ " workers"
         pprenq = " waiting enqueues: " ++ workers enqs
@@ -30,9 +31,10 @@ pprWorkerStats pn ops = do
     return $ map (("  " ++ show pn ++ ":") ++) $ map pprq sorted ++ [pprdeq, pprenq]
   where
     showDec3 n
-        | 100 <= n = show n
-        | 10 <= n = ' ' : show n
-        | otherwise = "  " ++ show n
+        | 100 <= n   = show n
+        | 10  <= n   = ' ' : show n
+        | otherwise  = "  " ++ show n
+{- FOURMOLU_ENABLE -}
 
 pprWorkerStat :: (WorkerStat, DiffTime) -> String
 pprWorkerStat (stat, diff) = pad ++ diffStr ++ ": " ++ show stat
@@ -95,13 +97,15 @@ toMicrosec eus = runEpochTimeUsec eus toMicro
 diffTimeStamp :: TimeStamp -> TimeStamp -> DiffTime
 diffTimeStamp t1 t2 = DiffT (diffUsec t1 t2)
 
+{- FOURMOLU_DISABLE -}
 showDiffSec1 :: DiffTime -> String
 showDiffSec1 (DiffT susec)
-    | susec < 0 = '-' : str ++ "s"
-    | otherwise = str ++ "s"
+    | susec < 0  = '-' : str ++ "s"
+    | otherwise  = str ++ "s"
   where
     usec = abs susec
     df = 100_000
     dsec = usec `quot` df
     (sec, d) = dsec `quotRem` 10
     str = show sec ++ "." ++ show d
+{- FOURMOLU_ENABLE -}

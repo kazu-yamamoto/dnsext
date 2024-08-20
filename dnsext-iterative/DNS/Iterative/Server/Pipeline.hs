@@ -29,7 +29,6 @@ module DNS.Iterative.Server.Pipeline (
 ) where
 
 -- GHC packages
-
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import qualified Control.Exception as E
@@ -168,6 +167,7 @@ inputToSender $ Output bs inputPeerInfo
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 record
     :: Env
     -> Input DNSMessage
@@ -176,9 +176,8 @@ record
     -> IO ()
 record env Input{..} reply rspWire = do
     let peersa = peerSockAddr inputPeerInfo
-    logDNSTAP_ env $
-        runEpochTimeUsec inputRecvTime $
-            \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
+    logDNSTAP_ env $ runEpochTimeUsec inputRecvTime $
+        \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
     let st = stats_ env
         Question{..} = head $ question inputQuery
         DNSFlags{..} = flags reply
@@ -201,6 +200,7 @@ record env Input{..} reply rspWire = do
     when recAvailable $ incStats st FlagRA
     when recDesired $ incStats st FlagRD
     when trunCation $ incStats st FlagTC
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
