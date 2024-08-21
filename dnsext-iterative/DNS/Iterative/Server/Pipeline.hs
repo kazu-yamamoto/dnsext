@@ -346,7 +346,7 @@ initVcTimeout micro = do
 initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
-    vcPendinfs  <- newTVarIO Set.empty
+    vcPendings  <- newTVarIO Set.empty
     let queueBound = 8 {- limit waiting area per session to constant size -}
     senderQ     <- newTBQueueIO queueBound
     vcTimeout   <- initVcTimeout micro
@@ -355,7 +355,17 @@ initVcSession getWaitIn micro slsize = do
         inputThreshold = succ queueBound `quot` 2
         {- allow room for cacher loops and worker loops to write -}
         allowInput = (<= inputThreshold) <$> lengthTBQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTBQueue senderQ) allowInput getWaitIn vcTimeout slsize, toSender, fromX)
+        result =
+            VcSession
+            { vcEof_            = vcEof
+            , vcPendings_       = vcPendings
+            , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
+            , vcAllowInput_     = allowInput
+            , vcWaitRead_       = getWaitIn
+            , vcTimeout_        = vcTimeout
+            , vcSlowlorisSize_  = slsize
+            }
+    pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
@@ -378,14 +388,14 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
         when (not timeout) (vcAllowInput_ >>= retryUntil >> waitIn) $> timeout
 
 {- FOURMOLU_DISABLE -}
---   eof       pending     timeout   avail       sender-loop
+--   eof       timeout   pending     avail       sender-loop
 --
---   eof       null        to        no-avail    break
---   not-eof   null        to        no-avail    break
---   eof       null        not-to    no-avail    break
---   not-eof   null        not-to    no-avail    wait
---   -         not-null    -         no-avail    wait
---   -         -                     avail       loop
+--   eof       to        null        no-avail    break
+--   not-eof   to        null        no-avail    break
+--   eof       not-to    null        no-avail    break
+--   not-eof   not-to    null        no-avail    wait
+--   -         -         not-null    no-avail    wait
+--   -         -         -           avail       loop
 waitVcOutput :: VcSession -> IO (Maybe VcFinished)
 waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
     mayEof <- toMaybe VfEof     <$> readTVar vcEof_
