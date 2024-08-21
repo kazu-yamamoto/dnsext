@@ -388,14 +388,14 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
         when (not timeout) (vcAllowInput_ >>= retryUntil >> waitIn) $> timeout
 
 {- FOURMOLU_DISABLE -}
---   eof       pending     timeout   avail       sender-loop
+--   eof       timeout   pending     avail       sender-loop
 --
---   eof       null        to        no-avail    break
---   not-eof   null        to        no-avail    break
---   eof       null        not-to    no-avail    break
---   not-eof   null        not-to    no-avail    wait
---   -         not-null    -         no-avail    wait
---   -         -                     avail       loop
+--   eof       to        null        no-avail    break
+--   not-eof   to        null        no-avail    break
+--   eof       not-to    null        no-avail    break
+--   not-eof   not-to    null        no-avail    wait
+--   -         -         not-null    no-avail    wait
+--   -         -         -           avail       loop
 waitVcOutput :: VcSession -> IO (Maybe VcFinished)
 waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
     mayEof <- toMaybe VfEof     <$> readTVar vcEof_
