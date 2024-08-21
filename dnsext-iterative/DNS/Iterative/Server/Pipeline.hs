@@ -355,7 +355,17 @@ initVcSession getWaitIn micro slsize = do
         inputThreshold = succ queueBound `quot` 2
         {- allow room for cacher loops and worker loops to write -}
         allowInput = (<= inputThreshold) <$> lengthTBQueue senderQ
-    pure (VcSession vcEof vcPendings (not <$> isEmptyTBQueue senderQ) allowInput getWaitIn vcTimeout slsize, toSender, fromX)
+        result =
+            VcSession
+            { vcEof_            = vcEof
+            , vcPendings_       = vcPendings
+            , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
+            , vcAllowInput_     = allowInput
+            , vcWaitRead_       = getWaitIn
+            , vcTimeout_        = vcTimeout
+            , vcSlowlorisSize_  = slsize
+            }
+    pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
