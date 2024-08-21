@@ -16,6 +16,7 @@ import Data.Functor
 import Data.IORef
 import Data.List
 import Data.Maybe
+import System.Environment (lookupEnv)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 
@@ -113,10 +114,10 @@ vcSession waitRead tmicro ws = do
     toCacher <- getToCacher
     recv <- getRecv ws
     (getResult, send) <- getSend
+    debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"
     let myaddr = SockAddrInet 53 0x0100007f
         receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
         sender = senderVC "test-send" env vcSess send fromX
-        debug = False
     when debug $ void $ forkIO $ replicateM_ 10 $ do
         {- dumper to debug -}
         dump vcSess
