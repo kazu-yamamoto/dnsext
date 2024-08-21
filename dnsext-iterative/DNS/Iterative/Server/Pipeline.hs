@@ -346,7 +346,7 @@ initVcTimeout micro = do
 initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn micro slsize = do
     vcEof       <- newTVarIO False
-    vcPendinfs  <- newTVarIO Set.empty
+    vcPendings  <- newTVarIO Set.empty
     let queueBound = 8 {- limit waiting area per session to constant size -}
     senderQ     <- newTBQueueIO queueBound
     vcTimeout   <- initVcTimeout micro
@@ -355,7 +355,7 @@ initVcSession getWaitIn micro slsize = do
         inputThreshold = succ queueBound `quot` 2
         {- allow room for cacher loops and worker loops to write -}
         allowInput = (<= inputThreshold) <$> lengthTBQueue senderQ
-    pure (VcSession vcEof vcPendinfs (not <$> isEmptyTBQueue senderQ) allowInput getWaitIn vcTimeout slsize, toSender, fromX)
+    pure (VcSession vcEof vcPendings (not <$> isEmptyTBQueue senderQ) allowInput getWaitIn vcTimeout slsize, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
 enableVcEof :: VcEof -> STM ()
