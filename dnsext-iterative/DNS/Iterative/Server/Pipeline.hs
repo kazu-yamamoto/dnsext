@@ -193,13 +193,13 @@ record env Input{..} reply rspWire = do
         if answer reply == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
-    when authAnswer $ incStats st FlagAA
-    when authenData $ incStats st FlagAD
-    when chkDisable $ incStats st FlagCD
-    when isResponse $ incStats st FlagQR
+    when authAnswer   $ incStats st FlagAA
+    when authenData   $ incStats st FlagAD
+    when chkDisable   $ incStats st FlagCD
+    when isResponse   $ incStats st FlagQR
     when recAvailable $ incStats st FlagRA
-    when recDesired $ incStats st FlagRD
-    when trunCation $ incStats st FlagTC
+    when recDesired   $ incStats st FlagRD
+    when trunCation   $ incStats st FlagTC
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
