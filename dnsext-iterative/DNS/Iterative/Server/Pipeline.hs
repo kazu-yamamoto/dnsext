@@ -385,7 +385,10 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
     waitIn <- vcWaitRead_
     atomically $ do
         timeout <- readTVar vtState_
-        when (not timeout) (vcAllowInput_ >>= retryUntil >> waitIn) $> timeout
+        unless timeout $ do
+            retryUntil =<< vcAllowInput_
+            waitIn
+        return timeout
 
 {- FOURMOLU_DISABLE -}
 --   eof       timeout   pending     avail       sender-loop
