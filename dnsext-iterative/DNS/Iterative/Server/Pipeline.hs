@@ -193,13 +193,13 @@ record env Input{..} reply rspWire = do
         if answer reply == []
             then incStats st RcodeNoData
             else incStats st RcodeNoError
-    when authAnswer $ incStats st FlagAA
-    when authenData $ incStats st FlagAD
-    when chkDisable $ incStats st FlagCD
-    when isResponse $ incStats st FlagQR
+    when authAnswer   $ incStats st FlagAA
+    when authenData   $ incStats st FlagAD
+    when chkDisable   $ incStats st FlagCD
+    when isResponse   $ incStats st FlagQR
     when recAvailable $ incStats st FlagRA
-    when recDesired $ incStats st FlagRD
-    when trunCation $ incStats st FlagTC
+    when recDesired   $ incStats st FlagRD
+    when trunCation   $ incStats st FlagTC
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -385,7 +385,10 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
     waitIn <- vcWaitRead_
     atomically $ do
         timeout <- readTVar vtState_
-        when (not timeout) (vcAllowInput_ >>= retryUntil >> waitIn) $> timeout
+        unless timeout $ do
+            retryUntil =<< vcAllowInput_
+            waitIn
+        return timeout
 
 {- FOURMOLU_DISABLE -}
 --   eof       timeout   pending     avail       sender-loop
