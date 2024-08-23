@@ -39,7 +39,7 @@ waitInputSpec = describe "server - wait VC input" $ do
         let readableNow = pure (pure ())
         (vcs, _, _) <- initVcSession readableNow 100_000 50
         result <- timeout 3_000_000 $ waitVcInput vcs
-        result `shouldBe` Just False
+        result `shouldBe` Just RxOpen
     it "wait" $ do
         let waitRead = do
                 hasInput <- newTVarIO False
@@ -48,12 +48,12 @@ waitInputSpec = describe "server - wait VC input" $ do
                 pure $ guard =<< readTVar hasInput
         (vcs, _, _) <- initVcSession waitRead 1_000_000 50
         result <- timeout 3_000_000 $ waitVcInput vcs
-        result `shouldBe` Just False
+        result `shouldBe` Just RxOpen
     it "timeout" $ do
         let noReadable = pure retry
         (vcs, _, _) <- initVcSession noReadable 100_000 50
         result <- timeout 3_000_000 $ waitVcInput vcs
-        result `shouldBe` Just True
+        result `shouldBe` Just RxTimeout
 
 waitOutputSpec :: Spec
 waitOutputSpec = describe "server - wait VC output" $ do
@@ -61,17 +61,17 @@ waitOutputSpec = describe "server - wait VC output" $ do
     it "finish - timeout" $ do
         (vcs, _, _) <- initVcSession noReadable 100_000 50
         result <- timeout 3_000_000 $ waitVcOutput vcs
-        result `shouldBe` Just (Just VfTimeout)
+        result `shouldBe` Just RxTimeout
     it "finish - eof" $ do
         (vcs@VcSession{..}, _, _) <- initVcSession noReadable 1_000_000 50
-        enableVcEof vcEof_ `afterUSec` 100_000
+        setRxState vcRxState_ RxClosed `afterUSec` 100_000
         result <- timeout 3_000_000 $ waitVcOutput vcs
-        result `shouldBe` Just (Just VfEof)
+        result `shouldBe` Just RxClosed
     it "finish - eof supersede timeout" $ do
         (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
-        atomically $ enableVcEof vcEof_
+        atomically $ setRxState vcRxState_ RxClosed
         result <- timeout 3_000_000 $ waitVcOutput vcs
-        result `shouldBe` Just (Just VfEof)
+        result `shouldBe` Just RxClosed
     it "wait pendings" $ do
         (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
         let uid = 1
@@ -82,7 +82,7 @@ waitOutputSpec = describe "server - wait VC output" $ do
         (vcs, toSender, _) <- initVcSession noReadable 1_000_000 50
         _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" 1 {- dummy -} dummyPeer)
         result <- timeout 3_000_000 $ waitVcOutput vcs
-        result `shouldBe` Just Nothing
+        result `shouldBe` Just RxOpen
 
 afterUSec :: STM () -> Int -> IO ()
 afterUSec stm delay = void $ forkIO $ do
@@ -93,21 +93,21 @@ sessionSpec :: Spec
 sessionSpec = describe "server - VC session" $ do
     it "finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
-        m `shouldBe` Just ((VfEof, VfEof), True)
+        m `shouldBe` Just ((RxClosed, RxClosed), True)
     it "finish 2" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
-        m `shouldBe` Just ((VfEof, VfEof), True)
+        m `shouldBe` Just ((RxClosed, RxClosed), True)
     it "timeout" $ do
         m <- timeout 3_000_000 $ vcSession (pure retry) 100_000 ["2"]
-        m `shouldBe` Just ((VfTimeout, VfTimeout), False)
+        m `shouldBe` Just ((RxTimeout, RxTimeout), False)
     it "wait slow" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 50_000 ["10"]
-        m `shouldBe` Just ((VfEof, VfEof), True)
+        m `shouldBe` Just ((RxClosed, RxClosed), True)
 
 ---
 
 {- FOUMOLU_DISABLE -}
-vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
+vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((RxState, RxState), Bool)
 vcSession waitRead tmicro ws = do
     env <- newEmptyEnv
     (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro 0
@@ -127,12 +127,13 @@ vcSession waitRead tmicro ws = do
     let expect = sort ws
     result <- sort <$> getResult
     pure (fstate, result == expect)
+
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
 dump VcSession{..} = do
-    (e, p, a) <- atomically $ (,,) <$> readTVar vcEof_ <*> readTVar vcPendings_ <*> vcRespAvail_
-    putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
+    (s, a) <- atomically $ (,) <$> getRxState vcRxState_ <*> vcRespAvail_
+    putStrLn $ unwords ["rx state:", show s, "avail:", show a]
 
 {- FOUMOLU_DISABLE -}
 getToCacher :: IO (ToCacher -> IO ())
@@ -145,6 +146,7 @@ getToCacher = do
             inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
     _ <- replicateM 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
+
 {- FOUMOLU_ENABLE -}
 
 getRecv :: [ByteString] -> IO Recv

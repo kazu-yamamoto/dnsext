@@ -38,7 +38,6 @@ module DNS.Iterative.Server (
     Recv,
     Send,
     VcSession (..),
-    VcFinished (..),
     VcPendings,
     initVcSession,
     mkInput,
@@ -47,7 +46,9 @@ module DNS.Iterative.Server (
     mkConnector,
     waitVcInput,
     waitVcOutput,
-    enableVcEof,
+    RxState (..),
+    getRxState,
+    setRxState,
     addVcPending,
     delVcPending,
 ) where

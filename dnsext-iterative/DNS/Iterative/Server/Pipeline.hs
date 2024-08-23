@@ -6,13 +6,14 @@ module DNS.Iterative.Server.Pipeline (
     mkConnector,
     mkInput,
     getWorkerStats,
-    VcFinished (..),
     VcPendings,
     VcSession (..),
     initVcSession,
     waitVcInput,
     waitVcOutput,
-    enableVcEof,
+    RxState (..),
+    getRxState,
+    setRxState,
     addVcPending,
     delVcPending,
     waitReadSocketSTM,
@@ -219,32 +220,31 @@ receiverVC
     -> Recv
     -> (ToCacher -> IO ())
     -> MkInput
-    -> IO VcFinished
+    -> IO RxState
 receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
     loop 1 `E.catch` onError
   where
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
     loop i = cases =<< waitVcInput vcs
       where
-        cases timeout
-            | timeout = pure VfTimeout
-            | otherwise = do
-                (bs, peerInfo) <- recv
-                ts <- currentTimeUsec_ env
-                casesSize (BS.length bs) bs peerInfo ts
+        cases RxOpen = do
+            (bs, peerInfo) <- recv
+            ts <- currentTimeUsec_ env
+            casesSize (BS.length bs) bs peerInfo ts
+        cases st = pure st
         casesSize sz bs peerInfo ts
             | sz == 0 = do
-                resetVcTimeout vcTimeout_
+                resetVcTimeout vcRxState_
                 caseEof
             | sz > vcSlowlorisSize_ = do
-                resetVcTimeout vcTimeout_
+                resetVcTimeout vcRxState_
                 step bs peerInfo ts
                 loop (i + 1)
             | otherwise = do
                 step bs peerInfo ts
                 loop (i + 1)
 
-        caseEof = atomically (enableVcEof vcEof_) >> return VfEof
+        caseEof = atomically (setRxState vcRxState_ RxClosed) >> return RxClosed
         step bs peerInfo ts = do
             atomically $ addVcPending vcPendings_ i
             toCacher $ mkInput_ bs peerInfo i ts
@@ -271,18 +271,20 @@ senderVC
     -> VcSession
     -> Send
     -> IO FromX
-    -> IO VcFinished
+    -> IO RxState
 senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
     loop = do
-        mx <- waitVcOutput vcs
-        case mx of
-            Just x -> return x
-            Nothing -> step >> loop
+        x <- waitVcOutput vcs
+        if x == RxOpen
+            then do
+                step
+                loop
+            else return x
     step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
-        resetVcTimeout vcTimeout_
+        resetVcTimeout vcRxState_
         send bs peerInfo
     finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
 
@@ -297,59 +299,57 @@ senderLogic' send fromX = do
 
 ----------------------------------------------------------------
 
-type VcEof = TVar Bool
+data RxState = RxOpen | RxClosed | RxTimeout deriving (Eq, Show)
+
+{- FOURMOLU_DISABLE -}
+data VcRxState
+    = VcRxState
+    { vrManager_  :: TimerManager
+    , vrKey_      :: TimeoutKey
+    , vrState_    :: TVar RxState
+    , vrMicrosec_ :: Int
+    }
+{- FOURMOLU_ENABLE -}
+
 type VcWaitRead = STM ()
 type VcPendings = TVar Set.IntSet
 type VcRespAvail = STM Bool
 type VcAllowInput = STM Bool
 
 {- FOURMOLU_DISABLE -}
-data VcTimeout =
-    VcTimeout
-    { vtManager_        :: TimerManager
-    , vtKey_            :: TimeoutKey
-    , vtState_          :: TVar Bool
-    , vtMicrosec_       :: Int
-    }
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 data VcSession =
     VcSession
-    { vcEof_            :: VcEof
+    { vcRxState_        :: VcRxState
     , vcPendings_       :: VcPendings
     , vcRespAvail_      :: VcRespAvail
     , vcAllowInput_     :: VcAllowInput
     , vcWaitRead_       :: IO VcWaitRead
-    , vcTimeout_        :: VcTimeout
     , vcSlowlorisSize_  :: Int
     }
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-data VcFinished
-    = VfEof
-    | VfTimeout
-    deriving (Eq, Show)
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-initVcTimeout :: Int -> IO VcTimeout
-initVcTimeout micro = do
-    st  <- newTVarIO False
+initVcRxState :: Int -> IO VcRxState
+initVcRxState micro = do
+    st  <- newTVarIO RxOpen
     mgr <- getSystemTimerManager
-    key <- registerTimeout mgr micro (atomically $ writeTVar st True)
-    pure $ VcTimeout mgr key st micro
+    key <- registerTimeout mgr micro (atomically $ writeTVar st RxTimeout)
+    pure $
+        VcRxState
+            { vrManager_ = mgr
+            , vrKey_ = key
+            , vrState_ = st
+            , vrMicrosec_ = micro
+            }
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn micro slsize = do
-    vcEof       <- newTVarIO False
+    vcRxState   <- initVcRxState micro
     vcPendings  <- newTVarIO Set.empty
     let queueBound = 8 {- limit waiting area per session to constant size -}
     senderQ     <- newTBQueueIO queueBound
-    vcTimeout   <- initVcTimeout micro
     let toSender = atomically . writeTBQueue senderQ
         fromX = atomically $ readTBQueue senderQ
         inputThreshold = succ queueBound `quot` 2
@@ -357,19 +357,21 @@ initVcSession getWaitIn micro slsize = do
         allowInput = (<= inputThreshold) <$> lengthTBQueue senderQ
         result =
             VcSession
-            { vcEof_            = vcEof
+            { vcRxState_        = vcRxState
             , vcPendings_       = vcPendings
             , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
             , vcAllowInput_     = allowInput
             , vcWaitRead_       = getWaitIn
-            , vcTimeout_        = vcTimeout
             , vcSlowlorisSize_  = slsize
             }
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
-enableVcEof :: VcEof -> STM ()
-enableVcEof eof = writeTVar eof True
+getRxState :: VcRxState -> STM RxState
+getRxState VcRxState{..} = readTVar vrState_
+
+setRxState :: VcRxState -> RxState -> STM ()
+setRxState VcRxState{..} = writeTVar vrState_
 
 addVcPending :: VcPendings -> Int -> STM ()
 addVcPending pendings i = modifyTVar' pendings (Set.insert i)
@@ -377,18 +379,18 @@ addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 delVcPending :: VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
-resetVcTimeout :: VcTimeout -> IO ()
-resetVcTimeout VcTimeout{..} = updateTimeout vtManager_ vtKey_ vtMicrosec_
+resetVcTimeout :: VcRxState -> IO ()
+resetVcTimeout VcRxState{..} = updateTimeout vrManager_ vrKey_ vrMicrosec_
 
-waitVcInput :: VcSession -> IO Bool
-waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
+waitVcInput :: VcSession -> IO RxState
+waitVcInput VcSession{..} = do
     waitIn <- vcWaitRead_
     atomically $ do
-        timeout <- readTVar vtState_
-        unless timeout $ do
+        st <- getRxState vcRxState_
+        when (st == RxOpen) $ do
             retryUntil =<< vcAllowInput_
             waitIn
-        return timeout
+        return st
 
 {- FOURMOLU_DISABLE -}
 --   eof       timeout   pending     avail       sender-loop
@@ -399,21 +401,17 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
 --   not-eof   not-to    null        no-avail    wait
 --   -         -         not-null    no-avail    wait
 --   -         -         -           avail       loop
-waitVcOutput :: VcSession -> IO (Maybe VcFinished)
-waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
-    mayEof <- toMaybe VfEof     <$> readTVar vcEof_
-    mayTo  <- toMaybe VfTimeout <$> readTVar vtState_
+waitVcOutput :: VcSession -> IO RxState
+waitVcOutput VcSession{..} = atomically $ do
+    st <- getRxState vcRxState_
     avail  <- vcRespAvail_
-    case mayEof <|> mayTo of
-        Nothing -> retryUntil avail >> return Nothing
-        Just fc
-            | avail -> return Nothing
+    case st of
+        RxOpen -> retryUntil avail >> return RxOpen
+        _
+            | avail -> return RxOpen -- fixme
             | otherwise -> do
                 retryUntil . Set.null =<< readTVar vcPendings_
-                return $ Just fc
-  where
-    toMaybe x True  = Just x
-    toMaybe _ False = Nothing
+                return st
 {- FOURMOLU_ENABLE -}
 
 retryUntil :: Bool -> STM ()
