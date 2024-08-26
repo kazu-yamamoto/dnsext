@@ -317,11 +317,22 @@ data VcTimeout =
 data VcSession =
     VcSession
     { vcEof_            :: VcEof
+    -- ^ EOF is received. This is an RX evet.
+    , vcTimeout_        :: VcTimeout
+    -- ^ TimerManager tells timed-out. This is another RX event
+    --   but defined independently on EOF to make the event handling
+    --   simpler.
     , vcPendings_       :: VcPendings
+    -- ^ A set of jobs. A job is that a request is received but
+    --   a response is not sent. This design can take the pipeline
+    --   as a blackbox since the sender increases it and the receiver
+    --   decreases it.
     , vcRespAvail_      :: VcRespAvail
+    -- ^ Jobs are available to the sender. This is necessary to
+    --   tell whether or not the queue to the sender is empty or not
+    --   WITHOUT IO.
     , vcAllowInput_     :: VcAllowInput
     , vcWaitRead_       :: IO VcWaitRead
-    , vcTimeout_        :: VcTimeout
     , vcSlowlorisSize_  :: Int
     }
 {- FOURMOLU_ENABLE -}
@@ -358,11 +369,11 @@ initVcSession getWaitIn micro slsize = do
         result =
             VcSession
             { vcEof_            = vcEof
+            , vcTimeout_        = vcTimeout
             , vcPendings_       = vcPendings
             , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
             , vcAllowInput_     = allowInput
             , vcWaitRead_       = getWaitIn
-            , vcTimeout_        = vcTimeout
             , vcSlowlorisSize_  = slsize
             }
     pure (result, toSender, fromX)
@@ -399,13 +410,31 @@ waitVcInput VcSession{vcTimeout_ = VcTimeout{..}, ..} = do
 --   not-eof   not-to    null        no-avail    wait
 --   -         -         not-null    no-avail    wait
 --   -         -         -           avail       loop
+--
+-- If we consider to merge eof and timeout to rx state including
+-- open|closed|timed-out, the table could be:
+--
+--   state     pending     avail       sender-loop
+--
+--   open      null        no-avail    wait
+--   _         null        no-avail    break
+--   -         not-null    no-avail    wait
+--   -         -           avail       loop
 waitVcOutput :: VcSession -> IO (Maybe VcFinished)
 waitVcOutput VcSession{vcTimeout_ = VcTimeout{..}, ..} = atomically $ do
     mayEof <- toMaybe VfEof     <$> readTVar vcEof_
     mayTo  <- toMaybe VfTimeout <$> readTVar vtState_
     avail  <- vcRespAvail_
     case mayEof <|> mayTo of
+        -- Rx is open. Waiting for jobs for the sender without IO.
+        -- When a job is available, Nothing is returned.
         Nothing -> retryUntil avail >> return Nothing
+        -- Rx is closed.
+        -- If jobs are available, just returns Nothing.
+        -- Otherwise, the pipeline are processing jobs which
+        -- are eventually passed to the sender if we "retry".
+        -- After several retries AND available is false
+        -- AND pending is null, the sender can finish.
         Just fc
             | avail -> return Nothing
             | otherwise -> do
