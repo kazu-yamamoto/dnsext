@@ -331,14 +331,16 @@ data VcSession =
 {- FOURMOLU_DISABLE -}
 initVcRxState :: Int -> IO VcRxState
 initVcRxState micro = do
-    st  <- newTVarIO RxOpen
+    var <- newTVarIO RxOpen
     mgr <- getSystemTimerManager
-    key <- registerTimeout mgr micro (atomically $ writeTVar st RxTimeout)
+    key <- registerTimeout mgr micro $ atomically $ do
+        rxst <- readTVar var
+        when (rxst == RxOpen) $ writeTVar var RxTimeout
     pure $
         VcRxState
-            { vrManager_ = mgr
-            , vrKey_ = key
-            , vrState_ = st
+            { vrManager_  = mgr
+            , vrKey_      = key
+            , vrState_    = var
             , vrMicrosec_ = micro
             }
 {- FOURMOLU_ENABLE -}
