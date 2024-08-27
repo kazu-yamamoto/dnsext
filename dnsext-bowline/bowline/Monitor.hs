@@ -9,6 +9,7 @@ import Control.Applicative ((<|>))
 import Control.Concurrent (forkFinally, getNumCapabilities, threadWaitRead)
 import Control.Concurrent.Async (waitSTM)
 import Control.Concurrent.STM (STM, atomically)
+import Control.Exception (SomeException, try)
 import Control.Monad
 import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -48,7 +49,6 @@ import Network.Socket (
     SocketType (Stream),
  )
 import System.Posix (getEffectiveGroupID, getEffectiveUserID)
-import UnliftIO.Exception (tryAny)
 
 -- this package
 import Config
@@ -106,7 +106,8 @@ monitor conf env mng@Control{..} srvInfo = do
   where
     runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
-    handle onError = either onError return <=< tryAny
+    handle :: (SomeException -> IO a) -> IO a -> IO a
+    handle onError = either onError return <=< try
     monitorServer s = do
         let step = do
                 socketWaitRead s
@@ -150,7 +151,8 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
     showParam outLn conf srvInfo
     repl
   where
-    handle onError = either onError return <=< tryAny
+    handle :: (SomeException -> IO a) -> IO a -> IO a
+    handle onError = either onError return <=< try
 
     parseTYPE s =
         find match types

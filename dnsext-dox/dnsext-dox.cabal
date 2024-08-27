@@ -51,8 +51,7 @@ library
         recv >=0.1.0,
         serialise,
         time-manager,
-        tls >= 2.1,
-        unliftio
+        tls >= 2.1
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

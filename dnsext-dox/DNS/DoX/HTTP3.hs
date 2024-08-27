@@ -3,11 +3,11 @@
 
 module DNS.DoX.HTTP3 where
 
+import qualified Control.Exception as E
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import Network.HTTP3.Client
 import qualified Network.QUIC.Client as QUIC
-import qualified UnliftIO.Exception as E
 
 import DNS.DoX.HTTP2
 import DNS.DoX.QUIC

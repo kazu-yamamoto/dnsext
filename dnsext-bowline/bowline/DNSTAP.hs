@@ -8,12 +8,12 @@ module DNSTAP (
 
 import Control.Concurrent
 import Control.Concurrent.STM
+import qualified Control.Exception as E
 import Control.Monad (when)
 import qualified DNS.TAP.FastStream as FSTRM
 import DNS.TAP.Schema
 import Data.IORef
 import Network.Socket
-import qualified UnliftIO.Exception as E
 
 import Config
 
