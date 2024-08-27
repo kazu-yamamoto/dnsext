@@ -92,22 +92,22 @@ afterUSec stm delay = void $ forkIO $ do
 sessionSpec :: Spec
 sessionSpec = describe "server - VC session" $ do
     it "finish 1" $ do
-        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2"]
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["60", "40", "20"]
         m `shouldBe` Just ((VfEof, VfEof), True)
     it "finish 2" $ do
-        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["6", "4", "2", "6", "4", "2", "6", "4", "2"]
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["60", "40", "20", "60", "40", "20", "60", "40", "20"]
         m `shouldBe` Just ((VfEof, VfEof), True)
     it "timeout" $ do
-        m <- timeout 3_000_000 $ vcSession (pure retry) 100_000 ["2"]
+        m <- timeout 3_000_000 $ vcSession (pure retry) 100_000 ["20"]
         m `shouldBe` Just ((VfTimeout, VfTimeout), False)
     it "wait slow" $ do
-        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 50_000 ["10"]
+        m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 50_000 ["100"]
         m `shouldBe` Just ((VfEof, VfEof), True)
 
 vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
 vcSession waitRead tmicro ws = do
     recv <- getRecv ws
-    (fstate, result) <- runSession 10_000 recv waitRead tmicro
+    (fstate, result) <- runSession 1000 recv waitRead tmicro
     let expect = sort ws
     pure (fstate, result == expect)
 
