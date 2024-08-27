@@ -4,13 +4,13 @@
 module WebAPI (new) where
 
 import Control.Concurrent
-import Data.String
+import qualified Control.Exception as E
 import Data.ByteString ()
+import Data.String
 import qualified Network.HTTP.Types as HTTP
 import Network.Socket
 import Network.Wai
 import Network.Wai.Handler.Warp
-import qualified UnliftIO.Exception as E
 
 import DNS.Iterative.Server (withLocationIOE)
 

@@ -14,6 +14,7 @@ module DNS.DoX.HTTP2 (
 )
 where
 
+import qualified Control.Exception as E
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import qualified DNS.Log as Log
@@ -29,7 +30,6 @@ import Network.HTTP.Types
 import Network.HTTP2.Client (Client, SendRequest, getResponseBodyChunk, requestBuilder, responseStatus)
 import qualified Network.HTTP2.TLS.Client as H2
 import System.Timeout (timeout)
-import qualified UnliftIO.Exception as E
 
 import DNS.DoX.Imports
 import DNS.DoX.TLS

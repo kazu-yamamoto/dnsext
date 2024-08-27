@@ -31,6 +31,7 @@ module DNS.Iterative.Server.Pipeline (
 -- GHC packages
 import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
+import Control.Exception (SomeException (..), handle, throwIO)
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
@@ -38,7 +39,6 @@ import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeo
 import System.Posix.Types (Fd (..))
 
 -- libs
-import UnliftIO.Exception (SomeException (..), handle, throwIO)
 
 -- dnsext packages
 import qualified DNS.Log as Log

@@ -29,6 +29,8 @@ import System.Timeout (timeout)
 import Text.Printf (printf)
 
 -- dnsext-* deps
+
+import Control.Exception (finally)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -41,7 +43,6 @@ import DNS.Types.Internal (TYPE (..))
 import Network.Socket
 import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
-import UnliftIO.Exception (finally)
 
 -- this package
 import Config

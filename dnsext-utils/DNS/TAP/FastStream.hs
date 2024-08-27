@@ -24,14 +24,15 @@ module DNS.TAP.FastStream (
     bye,
 ) where
 
+import Control.Exception as E
 import Control.Monad
 import qualified Data.ByteString.Char8 as C8
+import Data.Typeable (Typeable)
 import Data.Word
 import Network.ByteOrder
 import Network.Socket
 import qualified Network.Socket.BufferPool as P
 import qualified Network.Socket.ByteString as NSB
-import UnliftIO.Exception as E
 
 ----------------------------------------------------------------
 
