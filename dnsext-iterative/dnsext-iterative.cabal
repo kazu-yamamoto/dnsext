@@ -121,13 +121,17 @@ test-suite spec
     ghc-options:        -Wall -threaded
     build-depends:
         base,
+        array,
+        async,
         bytestring,
+        containers,
         stm,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-iterative,
         dnsext-types,
         dnsext-utils,
+        QuickCheck,
         hspec
 
     if (os(windows) && impl(ghc >=9.0))
