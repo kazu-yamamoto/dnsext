@@ -104,15 +104,21 @@ sessionSpec = describe "server - VC session" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 50_000 ["10"]
         m `shouldBe` Just ((VfEof, VfEof), True)
 
+vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
+vcSession waitRead tmicro ws = do
+    recv <- getRecv ws
+    (fstate, result) <- runSession 10_000 recv waitRead tmicro
+    let expect = sort ws
+    pure (fstate, result == expect)
+
 ---
 
 {- FOUMOLU_DISABLE -}
-vcSession :: IO (STM ()) -> Int -> [ByteString] -> IO ((VcFinished, VcFinished), Bool)
-vcSession waitRead tmicro ws = do
+runSession :: Int -> IO (ByteString, PeerInfo) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
+runSession factor recv waitRead tmicro = do
     env <- newEmptyEnv
     (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro 0
-    toCacher <- getToCacher
-    recv <- getRecv ws
+    toCacher <- getToCacher factor
     (getResult, send) <- getSend
     debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"
     let myaddr = SockAddrInet 53 0x0100007f
@@ -124,9 +130,8 @@ vcSession waitRead tmicro ws = do
         threadDelay 500_000
 
     fstate <- TStat.concurrently "test-send" sender "test-recv" receiver
-    let expect = sort ws
     result <- sort <$> getResult
-    pure (fstate, result == expect)
+    pure (fstate, result)
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
@@ -135,13 +140,13 @@ dump VcSession{..} = do
     putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
 
 {- FOUMOLU_DISABLE -}
-getToCacher :: IO (ToCacher -> IO ())
-getToCacher = do
+getToCacher :: Int -> IO (ToCacher -> IO ())
+getToCacher factor = do
     mq <- newTQueueIO
     let bodyLoop = forever $ do
             Input{..} <- atomically (readTQueue mq)
             let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
-            threadDelay $ intb * 10_000
+            threadDelay $ intb * factor
             inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
     _ <- replicateM 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
