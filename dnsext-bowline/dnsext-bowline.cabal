@@ -35,7 +35,7 @@ executable bowline
         dnsext-utils,
         http-types,
         iproute,
-        network,
+        network >= 3.2.2 && < 3.3,
         parsec,
         split,
         stm,

@@ -45,7 +45,7 @@ library
         fast-logger,
         ghc-prim,
         iproute,
-        network,
+        network >= 3.2.2 && < 3.3,
         network-byte-order,
         primitive,
         psqueues,

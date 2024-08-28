@@ -15,8 +15,6 @@ module DNS.Iterative.Server.Pipeline (
     enableVcEof,
     addVcPending,
     delVcPending,
-    waitReadSocketSTM,
-    waitReadSocketSTM',
     receiverVC,
     senderVC,
     senderLogic,
@@ -29,14 +27,12 @@ module DNS.Iterative.Server.Pipeline (
 ) where
 
 -- GHC packages
-import Control.Concurrent (threadWaitReadSTM)
 import Control.Concurrent.STM
 import Control.Exception (SomeException (..), handle, throwIO)
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
 import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout)
-import System.Posix.Types (Fd (..))
 
 -- libs
 
@@ -456,14 +452,6 @@ mkConnector = do
     let toSender = atomically . writeTBQueue qs
         fromX = atomically $ readTBQueue qs
     return (toSender, fromX, not <$> isEmptyTBQueue qs, (<= inputThreshold) <$> lengthTBQueue qs)
-
-----------------------------------------------------------------
-
-waitReadSocketSTM' :: Socket -> IO (STM ())
-waitReadSocketSTM' s = fst <$> waitReadSocketSTM s
-
-waitReadSocketSTM :: Socket -> IO (STM (), IO ())
-waitReadSocketSTM s = withFdSocket s $ threadWaitReadSTM . Fd
 
 ----------------------------------------------------------------
 

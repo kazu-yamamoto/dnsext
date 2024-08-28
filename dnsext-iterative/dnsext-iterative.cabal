@@ -72,7 +72,7 @@ library
         http2-tls >= 0.4.2 && < 0.5,
         http3 >= 0.0.17,
         iproute,
-        network,
+        network >= 3.2.2 && < 3.3,
         network-run,
         mtl,
         psqueues,

@@ -39,7 +39,7 @@ library
         containers,
         dnsext-types,
         iproute,
-        network
+        network >= 3.2.2 && < 3.3
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData
