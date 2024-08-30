@@ -94,8 +94,9 @@ uniqueSorted_ lower upper ranges = case reverse ranges of
         --
         {- checking ranges is not overlapped -}
         nexts
-            | rotated = tail ranges ++ [head ranges]
-            | otherwise = tail ranges
+            | rotated = us ++ u
+            | otherwise = us
+        (u, us) = splitAt 1 ranges
         overlaps = [(upper r > lower n, (r, n)) | (r, n) <- zip ranges nexts]
         overlap = or $ map fst overlaps
         overlapped = map snd $ filter fst overlaps
