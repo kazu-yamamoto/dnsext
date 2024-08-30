@@ -169,7 +169,7 @@ main = do
   where
     sentinel tq = do
         xs <- readQ
-        let summary = map unzip $ groupBy ((==) `on` fst) $ nub $ sort xs
+        let summary = map Prelude.unzip $ groupBy ((==) `on` fst) $ nub $ sort xs
         mapM_ printIt summary
       where
         printIt (NameTag tag : _, ds) = putStrLn $ tag ++ ": " ++ intercalate ", " (reverse ds)
