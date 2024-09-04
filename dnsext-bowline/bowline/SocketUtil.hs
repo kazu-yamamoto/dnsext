@@ -64,7 +64,7 @@ _checks =
 --           * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
 --   So, specifying `AI_ADDRCONFIG` explicitly.
 --
--- >>> getAI = S.getAddrInfo (Just defaultHints{addrFlags = [AI_ADDRCONFIG]}) (Just "::") (Just "0")
+-- >>> getAI = S.getAddrInfo (Just defaultHints{addrFlags = [AI_ADDRCONFIG]}) (Just "::") (Just "0") :: IO [AddrInfo]
 -- >>> v6unsupported <- either (\_ -> True) (\_ -> False) <$> tryIOError getAI
 -- >>> (== v6unsupported) <$> foldAddrInfo (\_ -> pure True) (\_ -> pure False) Datagram (Just "::1") 53
 -- True
