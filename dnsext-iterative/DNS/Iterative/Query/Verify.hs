@@ -29,6 +29,7 @@ module DNS.Iterative.Query.Verify (
 ) where
 
 -- GHC packages
+import qualified Data.List.NonEmpty as NE
 
 -- other packages
 
@@ -49,6 +50,9 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
+
+-- $setup
+-- >>> :seti -XOverloadedLists
 
 {- FOURMOLU_DISABLE -}
 -- |
@@ -214,9 +218,12 @@ sepDNSKEY dss0 dom dnskeys0 = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-limitSortedGroupBy :: Ord b => Int -> (a -> b) -> [a] -> [[a]]
-limitSortedGroupBy colLimit sortKey = map (take colLimit) . groupBy ((==) `on` sortKey) . sortOn sortKey
+limitSortedGroupBy :: Ord b => Int -> (a -> b) -> [a] -> [NonEmpty a]
+limitSortedGroupBy colLimit sortKey = map (takeNE colLimit) . NE.groupBy ((==) `on` sortKey) . sortOn sortKey
 {- FOURMOLU_ENABLE -}
+
+takeNE :: Int -> NonEmpty a -> NonEmpty a
+takeNE n (x :| xs) = (x :| take n xs)
 
 {- FOURMOLU_DISABLE -}
 data Match a b
@@ -232,12 +239,12 @@ data Match a b
 -- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7]),MLeft [9]]
 -- >>> matchSortedGroup id id [[1], [2], [4], [6], [7]] [[1], [3], [4], [5], [7], [8]] :: [Match [Int] [Int]]
 -- [Match ([1],[1]),MLeft [2],MRight [3],Match ([4],[4]),MRight [5],MLeft [6],Match ([7],[7]),MRight [8]]
-matchSortedGroup :: Ord a => (k -> a) -> (s -> a) -> [[k]] -> [[s]] -> [Match [k] [s]]
-matchSortedGroup kx ky = merge (kx . head) (ky . head) left right pair
+matchSortedGroup :: Ord a => (k -> a) -> (s -> a) -> [NonEmpty k] -> [NonEmpty s] -> [Match [k] [s]]
+matchSortedGroup kx ky = merge (kx . NE.head) (ky . NE.head) left right pair
   where
-    left  x    = (MLeft x     :)
-    right y    = (MRight y    :)
-    pair  x y  = (Match (x,y) :)
+    left  x    = (MLeft  (NE.toList x) :)
+    right y    = (MRight (NE.toList y) :)
+    pair  x y  = (Match  (NE.toList x, NE.toList y) :)
 {- FOURMOLU_ENABLE -}
 
 rejectLimit :: Int
