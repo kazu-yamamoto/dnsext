@@ -8,6 +8,7 @@ module DNS.Iterative.Query.Rev (
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as Short
 import qualified Data.List as L
+import qualified Data.List.NonEmpty as NE
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -188,14 +189,12 @@ specialV4Blocks =
         , ("255.255.255.255/32", EmbedInAddr {- Limited Broadcast          -})
         ]
   where
-    groupByFst f = groupBy ((==) `on` f . fst) . sortOn (f . fst)
-    groupMap rs =
+    groupByFst f = NE.groupBy ((==) `on` f . fst) . sortOn (f . fst)
+    groupMap (e@(r, _) :| es) =
         ( IP.mlen r
         , IP.mask r
-        , Map.fromList [(IP.addr range, res) | (range, res) <- rs]
+        , Map.fromList [(IP.addr range, res) | (range, res) <- e : es]
         )
-      where
-        r = fst $ head rs
 
 {- IPv6 Special-Purpose Address Registry Entries
    https://datatracker.ietf.org/doc/html/rfc6890.html#section-2.2.3 -}
@@ -217,11 +216,9 @@ specialV6Blocks =
         , ("fe80::/10", EmbedIp6 {- Linked-Scoped Unicast      -})
         ]
   where
-    groupByFst f = groupBy ((==) `on` f . fst) . sortOn (f . fst)
-    groupMap rs =
+    groupByFst f = NE.groupBy ((==) `on` f . fst) . sortOn (f . fst)
+    groupMap (e@(r, _) :| es) =
         ( IP.mlen r
         , IP.mask r
-        , Map.fromList [(IP.addr range, res) | (range, res) <- rs]
+        , Map.fromList [(IP.addr range, res) | (range, res) <- e : es]
         )
-      where
-        r = fst $ head rs
