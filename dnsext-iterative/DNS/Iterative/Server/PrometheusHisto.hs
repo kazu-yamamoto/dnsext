@@ -17,7 +17,7 @@ getHistogramBucktes stats_ prefix = formatBuckets prefix <$> readHistogram stats
 formatBuckets :: Builder -> [Int] -> Int -> Builder
 formatBuckets prefix hvs sumVal = mconcat $ zipWith bformat bucketUpperBounds pbackets ++ [inf_, sum_, count_]
   where
-    pbackets = tail $ scanl (+) 0 hvs
+    pbackets = drop 1 $ scanl (+) 0 hvs
     countVal
         | null pbackets  = 0
         | otherwise      = last pbackets
