@@ -23,6 +23,7 @@ import DNS.Iterative.RootServers (rootServers)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -Wno-incomplete-patterns
 -- >>> import DNS.Types
 
 rrListWith
@@ -116,7 +117,7 @@ findDelegation' k nsps adds = do
     {- only data from delegation source zone. get DNSKEY from destination zone -}
     Just $ k (rrname rr) ents
   where
-    addgroups = groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
+    addgroups = NE.groupBy ((==) `on` rrname) $ sortOn ((,) <$> rrname <*> rrtype) adds
     dentry d as = foldIPList' (DEonlyNS d) (DEwithA4 d) (DEwithA6 d) (DEwithAx d) ip4s ip6s
       where
         {- -----  -----  - domains are filtered by rrnamePairs, here does not check them -}
@@ -126,19 +127,21 @@ findDelegation' k nsps adds = do
 
 -- | pairing correspond rrname domain data
 --
+-- >>> let neList (x:xs) = x:|xs
 -- >>> let agroup n = [ ResourceRecord { rrname = n, rrtype = A, rrclass = IN, rrttl = 60, rdata = DNS.rd_a a } | a <- ["10.0.0.1", "10.0.0.2"] ]
--- >>> rrnamePairs ["s", "t", "u"] [agroup "s", agroup "t", agroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
+-- >>> let nagroup = neList . agroup
+-- >>> rrnamePairs ["s", "t", "u"] [nagroup "s", nagroup "t", nagroup "u"] == [("s", agroup "s"), ("t", agroup "t"), ("u", agroup "u")]
 -- True
--- >>> rrnamePairs ["t"] [agroup "s", agroup "t", agroup "u"] == [("t", agroup "t")]
+-- >>> rrnamePairs ["t"] [nagroup "s", nagroup "t", nagroup "u"] == [("t", agroup "t")]
 -- True
--- >>> rrnamePairs ["s", "t", "u"] [agroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
+-- >>> rrnamePairs ["s", "t", "u"] [nagroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
 -- True
-rrnamePairs :: [Domain] -> [[ResourceRecord]] -> [(Domain, [ResourceRecord])]
-rrnamePairs = merge id (rrname . head) nullRR noName pair
+rrnamePairs :: [Domain] -> [NonEmpty ResourceRecord] -> [(Domain, [ResourceRecord])]
+rrnamePairs = merge id (rrname . NE.head) nullRR noName pair
   where
     nullRR n = ((n, []) :)
     noName _ = id
-    pair n g = ((n, g) :)
+    pair n g = ((n, NE.toList g) :)
 
 {- FOURMOLU_DISABLE -}
 foldDNSErrorToRCODE :: a -> (RCODE -> a) -> DNSError -> a
