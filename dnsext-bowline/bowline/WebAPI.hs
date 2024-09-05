@@ -6,6 +6,7 @@ module WebAPI (new) where
 import Control.Concurrent
 import qualified Control.Exception as E
 import Data.ByteString ()
+import qualified Data.List.NonEmpty as NE
 import Data.String
 import qualified Network.HTTP.Types as HTTP
 import Network.Socket
@@ -94,7 +95,7 @@ runAPI addr port mng = withSocketsDo $ do
                     { addrFlags = [AI_PASSIVE, AI_NUMERICHOST, AI_NUMERICSERV]
                     , addrSocketType = Stream
                     }
-        head <$> getAddrInfo (Just hints) (Just addr) (Just $ show port)
+        NE.head <$> getAddrInfo (Just hints) (Just addr) (Just $ show port)
     open ai = E.bracketOnError (openSocket ai) close $ \sock -> do
         setSocketOption sock ReuseAddr 1
         withFdSocket sock setCloseOnExecIfNeeded

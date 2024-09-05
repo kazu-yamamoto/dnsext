@@ -17,6 +17,7 @@ where
 
 import Control.Exception as E
 import qualified Data.ByteString as BS
+import qualified Data.List.NonEmpty as NE
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.IO.Error (annotateIOError)
@@ -163,7 +164,7 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
         let host = show rinfoIP
             port = show rinfoPort
             hints = defaultHints{addrSocketType = Datagram, addrFlags = [AI_ADDRCONFIG]}
-        addr <- head <$> getAddrInfo (Just hints) (Just host) (Just port)
+        addr <- NE.head <$> getAddrInfo (Just hints) (Just host) (Just port)
         E.bracketOnError (openSocket addr) close $ \s -> do
             let sa = addrAddress addr
             connect s sa
