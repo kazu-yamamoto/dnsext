@@ -175,7 +175,9 @@ record env Input{..} reply rspWire = do
     logDNSTAP_ env $ runEpochTimeUsec inputRecvTime $
         \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
     let st = stats_ env
-        Question{..} = head $ question inputQuery
+        Question{..} = case question inputQuery of
+          [] -> error "record"
+          q:_ -> q
         DNSFlags{..} = flags reply
     case ednsHeader inputQuery of
         EDNSheader (EDNS{..})
