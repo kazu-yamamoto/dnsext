@@ -139,8 +139,8 @@ readTrustAnchors ps = do
     pure $ Map.fromList [(n, r) | (n, Right r) <- results]
   where
     ngroup :: [(Domain, a)] -> [(Domain, [a])]
-    ngroup = map repn . groupBy ((==) `on` fst) . sortOn fst
-    repn xs = (fst $ head xs, map snd xs)
+    ngroup = map repn . NE.groupBy ((==) `on` fst) . sortOn fst
+    repn (x :| xs) = (fst x, map snd (x : xs))
     --
     nullKEY (n,d) = ((n, pure $ FilledDS d) :)
     nullDS  (n,k) xs = list xs (\s ss -> (n, pure $ AnchorSEP [] $ s:|ss) : xs) k

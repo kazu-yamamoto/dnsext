@@ -82,9 +82,11 @@ lookupRawDoX lenv@LookupEnv{..} q = do
     er <- lookupSVCBInfo lenv
     case er of
         Left err -> return $ Left err
-        Right addss -> do
-            let renv = head $ head $ toResolveEnvs <$> addss
-            resolve renv q lenvQueryControls
+        Right addss -> case toResolveEnvs <$> addss of
+            [] -> return $ Left FormatError
+            adds : _ -> case adds of
+                [] -> return $ Left FormatError
+                add : _ -> resolve add q lenvQueryControls
 
 ----------------------------------------------------------------
 

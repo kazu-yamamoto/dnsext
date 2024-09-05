@@ -121,7 +121,7 @@ n3GetNonExistence neStep getPropSet props = {- longest result -} msum $ map step
   where
     step = neStep getPropSet
     {- reuse computed range-props for closest-name and next-closer-name -}
-    pps = zip props (tail props)
+    pps = zip props (drop 1 props)
 
 step_nameError :: (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_NameError)
 step_nameError getPropSet =
