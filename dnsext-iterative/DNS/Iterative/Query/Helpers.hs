@@ -22,6 +22,7 @@ import DNS.Iterative.Query.Types
 import DNS.Iterative.RootServers (rootServers)
 
 -- $setup
+-- >>> :set -XNoOverloadedLists
 -- >>> :set -XOverloadedStrings
 -- >>> :set -Wno-incomplete-patterns
 -- >>> import DNS.Types
