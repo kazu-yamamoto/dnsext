@@ -45,6 +45,7 @@ import qualified DNS.ZoneFile as Zone
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
+import DNS.Iterative.Query.DefaultLocal (defaultLocal)
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
 import DNS.Iterative.Query.Types
@@ -166,9 +167,10 @@ setRootAnchor as env0 = maybe env0 (\v -> env0{rootAnchor_ = v}) $ Map.lookup (f
 ---
 
 getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
-getLocalZones lzones = (Local.apexMap localName lzones, localName)
+getLocalZones lzones0 = (Local.apexMap localName lzones, localName)
   where
     localName = Local.nameMap lzones
+    lzones = Local.unionZones defaultLocal lzones0
 
 ---
 
