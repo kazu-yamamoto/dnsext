@@ -28,13 +28,14 @@ module DNS.Iterative.Server.Pipeline (
 
 -- GHC packages
 import Control.Concurrent.STM
-import Control.Exception (SomeException (..), handle, throwIO)
+import Control.Exception (Exception (..), SomeException (..), AsyncException, handle, throwIO)
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
 import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout)
 
 -- libs
+import Control.Concurrent.Async (AsyncCancelled)
 
 -- dnsext packages
 import qualified DNS.Log as Log
@@ -457,8 +458,16 @@ mkConnector = do
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 handledLoop :: Env -> String -> IO () -> IO ()
-handledLoop env tag body = forever $ handle (warnOnError env tag) body
+handledLoop env tag body = forever $ handle (\e -> warnOnError env tag e >> takeEx e) body
+  where
+    takeEx :: SomeException -> IO ()
+    takeEx e
+        | Just ae <- fromException e :: Maybe AsyncCancelled  = throwIO ae
+        | Just ae <- fromException e :: Maybe AsyncException  = throwIO ae
+        | otherwise                                           = pure ()
+{- FOURMOLU_ENABLE -}
 
 warnOnError :: Env -> String -> SomeException -> IO ()
 warnOnError env tag (SomeException e) = logLn env Log.WARN (tag ++ ": exception: " ++ show e)
