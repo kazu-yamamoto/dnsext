@@ -6,7 +6,7 @@
 module Main where
 
 -- GHC
-import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
+import Control.Concurrent (ThreadId, killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_, wait)
 import Control.Concurrent.STM
 import Control.Monad (guard, when)
@@ -247,7 +247,7 @@ getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO ())
 getLogger Config{..}
     | cnf_log = do
         (r, p, f) <- Log.new cnf_log_output cnf_log_level
-        return (Just <$> forkIO r, p, f)
+        return (Just <$> TStat.forkIO "logger" r, p, f)
     | otherwise = do
         let p _ _ ~_ = return ()
             f = return ()
