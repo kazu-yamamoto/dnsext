@@ -7,7 +7,7 @@ module Main where
 
 -- GHC
 import Control.Concurrent (ThreadId, killThread, threadDelay)
-import Control.Concurrent.Async (mapConcurrently_, race_, wait)
+import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Concurrent.STM
 import Control.Monad (guard, when)
 import Data.ByteString.Builder
@@ -147,12 +147,16 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
             conc
-                ( [TStat.withAsync "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) wait | cnf_threads_dumper]
-                    ++ [ TStat.concurrentlyList_ (withNum "cacher" cachers)
-                       , TStat.concurrentlyList_ (withNum "worker" workers)
-                       , TStat.concurrentlyList_ [(n, as) | svs <- servers, (n, _sks, as) <- svs]
-                       ]
-                )
+                [ TStat.concurrentlyList_ (withNum "cacher" cachers)
+                , TStat.concurrentlyList_ (withNum "worker" workers)
+                , TStat.concurrentlyList_ [(n, as) | svs <- servers, (n, _sks, as) <- svs]
+                ]
+    {- Advisedly separating 'dumper' thread from Async thread-tree
+       - Keep the 'dumper' thread alive until the end for debugging purposes
+       - Not to be affected by issued `cancel` to thread-tree
+       The 'dumper' thread separated by forkIO automatically terminates
+       when the 'main' thread ends, so there's no need for cleanup.          -}
+    sequence_ [TStat.forkIO "dumper" (TStat.dumper $ putLines Log.SYSTEM Nothing) | cnf_threads_dumper]
     race_ concServer (conc monitor)
         -- Teardown
         `finally` do
