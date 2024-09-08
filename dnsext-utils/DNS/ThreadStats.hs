@@ -5,7 +5,8 @@ module DNS.ThreadStats where
 #if __GLASGOW_HASKELL__ >= 906
 
 import GHC.Conc.Sync (listThreads, labelThread, threadLabel, threadStatus)
-import Control.Concurrent
+import Control.Concurrent (ThreadId, myThreadId, threadDelay)
+import qualified Control.Concurrent as Concurrent
 import Control.Concurrent.Async (Async, asyncThreadId)
 import qualified Control.Concurrent.Async as Async
 import Control.Monad
@@ -15,7 +16,8 @@ import Data.Maybe
 
 #else
 
-import Control.Concurrent
+import Control.Concurrent (ThreadId, threadDelay)
+import qualified Control.Concurrent as Concurrent
 import Control.Concurrent.Async (Async)
 import qualified Control.Concurrent.Async as Async
 import Control.Monad
@@ -71,6 +73,7 @@ dumper _ = forever $ threadDelay interval
 
 ---
 
+forkIO :: String -> IO () -> IO ThreadId
 async :: String -> IO a -> IO (Async a)
 withAsync :: String -> IO a -> (Async a -> IO b) -> IO b
 withAsyncs :: [(String, IO a)] -> ([Async a] -> IO b) -> IO b
@@ -84,6 +87,10 @@ raceList :: [(String, IO a)] -> IO (Async a, a)
 raceList_ :: [(String, IO a)] -> IO ()
 
 #if __GLASGOW_HASKELL__ >= 906
+forkIO name action = do
+    tid <- Concurrent.forkIO action
+    labelThread tid name
+    pure tid
 
 async name io = do
     a <- Async.async io
@@ -131,6 +138,8 @@ raceList ps = withAsyncs ps $ Async.waitAny
 raceList_ = void . raceList
 
 #else
+
+forkIO _ action = Concurrent.forkIO action
 
 async _ io = Async.async io
 
