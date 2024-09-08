@@ -13,6 +13,7 @@ import Network.Wai
 import Network.Wai.Handler.Warp
 
 import DNS.Iterative.Server (withLocationIOE)
+import qualified DNS.ThreadStats as TStat
 
 import Config
 import Types
@@ -78,7 +79,7 @@ ng st = responseLBS st [] "NG\n"
 
 new :: Config -> Control -> IO (Maybe ThreadId)
 new Config{..} mng
-    | cnf_webapi = Just <$> forkIO (runAPI cnf_webapi_addr cnf_webapi_port mng)
+    | cnf_webapi = Just <$> TStat.forkIO "webapi-srv" (runAPI cnf_webapi_addr cnf_webapi_port mng)
     | otherwise = return Nothing
 
 runAPI :: String -> Int -> Control -> IO ()
