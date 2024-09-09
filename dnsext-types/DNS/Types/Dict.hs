@@ -98,10 +98,9 @@ defaultODataDict :: ODataDict
 defaultODataDict =
     M.insert (toKeyO NSID) (\len rbuf ref -> toOData <$> get_nsid len rbuf ref) $
         M.insert (toKeyO ClientSubnet) (\len rbuf ref -> toOData <$> get_clientSubnet len rbuf ref) $
-            M.insert
-                (toKeyO Padding)
-                (\len rbuf ref -> toOData <$> get_padding len rbuf ref)
-                M.empty
+            M.insert (toKeyO Padding) (\len rbuf ref -> toOData <$> get_padding len rbuf ref) $
+                M.insert (toKeyO EDNSError) (\len rbuf ref -> toOData <$> get_ednsError len rbuf ref) $
+                    M.empty
 
 ----------------------------------------------------------------
 
