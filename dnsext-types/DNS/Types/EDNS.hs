@@ -8,7 +8,8 @@ module DNS.Types.EDNS (
         OptCode,
         NSID,
         ClientSubnet,
-        Padding
+        Padding,
+        EDNSError
     ),
     fromOptCode,
     toOptCode,
@@ -25,10 +26,12 @@ module DNS.Types.EDNS (
     get_nsid,
     get_clientSubnet,
     get_padding,
+    get_ednsError,
     od_nsid,
     od_clientSubnet,
     od_ecsGeneric,
     od_padding,
+    od_ednsError,
     od_unknown,
     addOpt,
 ) where
@@ -121,6 +124,9 @@ pattern ClientSubnet = OptCode 8
 -- | Padding (RFC7830)
 pattern Padding :: OptCode
 pattern Padding = OptCode 12
+
+pattern EDNSError :: OptCode
+pattern EDNSError = OptCode 15
 
 ----------------------------------------------------------------
 
@@ -383,6 +389,41 @@ get_padding len rbuf _ = OD_Padding . Opaque.fromShortByteString <$> getNShortBy
 
 od_padding :: Opaque -> OData
 od_padding = toOData . OD_Padding
+
+---------------------------------------------------------------
+
+-- | Extended DNS Errors (RFC8914)
+data OD_EDNSError = OD_EDNSError Word16 Opaque deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+instance Show OD_EDNSError where
+    show (OD_EDNSError infoc txt) =
+        "EDNSError{" ++
+        " info-code=" ++ show infoc ++
+        " extra-text=" ++ show (Opaque.toString txt) ++ " [" ++ show txt ++ "]" ++
+        " }"
+{- FOURMOLU_ENABLE -}
+
+instance OptData OD_EDNSError where
+    optDataCode _ = EDNSError
+    optDataSize = datasize_ednsError
+    putOptData = put_ednsError
+
+datasize_ednsError :: OD_EDNSError -> Int
+datasize_ednsError (OD_EDNSError _ txt) = 2 + Opaque.length txt
+
+put_ednsError :: OD_EDNSError -> Builder ()
+put_ednsError od@(OD_EDNSError infoc txt) wbuf ref = do
+    put16 wbuf (fromOptCode EDNSError)
+    putInt16 wbuf $ datasize_ednsError od
+    put16 wbuf infoc
+    putOpaque txt wbuf ref
+
+get_ednsError :: Int -> Parser OD_EDNSError
+get_ednsError len rbuf ref = OD_EDNSError <$> get16 rbuf <*> getOpaque (len - 2) rbuf ref
+
+od_ednsError :: Word16 -> Opaque -> OData
+od_ednsError infoc txt = toOData $ OD_EDNSError infoc txt
 
 ---------------------------------------------------------------
 
