@@ -12,6 +12,7 @@ import qualified Control.Exception as E
 import Control.Monad (when)
 import qualified DNS.TAP.FastStream as FSTRM
 import DNS.TAP.Schema
+import qualified DNS.ThreadStats as TStat
 import Data.IORef
 import Network.Socket
 
@@ -21,7 +22,7 @@ new :: Config -> IO (IO (Maybe ThreadId), Message -> IO ())
 new conf@Config{..}
     | cnf_dnstap = do
         (writer, put) <- newDnstapWriter conf
-        return (Just <$> forkIO writer, put)
+        return (Just <$> TStat.forkIO "dnstap-writer" writer, put)
     | otherwise = do
         let put ~_ = return ()
         return (return Nothing, put)

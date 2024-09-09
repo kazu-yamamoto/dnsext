@@ -26,9 +26,11 @@ module DNS.RRCache.ReaperReduced (
 )
 where
 
-import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
+import Control.Concurrent (ThreadId, killThread, threadDelay)
 import Control.Exception (mask_)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef, writeIORef)
+
+import qualified DNS.ThreadStats as TStat
 
 data ReaperSettings workload = ReaperSettings
     { reaperAction :: IO (workload -> Maybe workload)
@@ -127,7 +129,7 @@ spawn
     -> IORef (Maybe ThreadId)
     -> IO ()
 spawn settings stateRef lookupRef tidRef = do
-    tid <- forkIO $ reaper settings stateRef lookupRef tidRef
+    tid <- TStat.forkIO "reaper-red-spawn" $ reaper settings stateRef lookupRef tidRef
     writeIORef tidRef $ Just tid
 
 reaper
