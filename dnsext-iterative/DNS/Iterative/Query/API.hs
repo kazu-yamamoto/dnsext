@@ -125,8 +125,8 @@ ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adF
 guardRequestHeader :: DNSFlags -> EDNSheader -> DNSQuery ()
 guardRequestHeader reqF reqEH
     | reqEH == DNS.InvalidEDNS =
-        throwError $ InvalidEDNS DNS.InvalidEDNS DNS.defaultResponse
-    | not rd = throwError $ HasError DNS.Refused DNS.defaultResponse
+        throwError $ InvalidEDNS [] DNS.InvalidEDNS DNS.defaultResponse
+    | not rd = throwError $ HasError [] DNS.Refused DNS.defaultResponse
     | otherwise = pure ()
   where
     rd = DNS.recDesired reqF
@@ -147,7 +147,7 @@ replyMessage eas ident rqs =
         DnsError e _ -> dnsError e
         NotResponse{} -> Right $ message (DNS.ServFail, [], [])
         InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
-        HasError rc _m -> Right $ message (rc, [], [])
+        HasError _as rc _m -> Right $ message (rc, [], [])
         QueryDenied -> Left "QueryDenied"
 
     message (rcode, rrs, auth) =
