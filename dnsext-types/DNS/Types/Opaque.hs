@@ -11,6 +11,7 @@ module DNS.Types.Opaque (
     fromByteString,
     toShortByteString,
     fromShortByteString,
+    toString,
     toBase16,
     fromBase16,
     toBase32Hex,
