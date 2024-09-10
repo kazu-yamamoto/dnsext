@@ -125,6 +125,7 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
                     duration <- diffUsec <$> currentTimeUsec_ env <*> pure inputRecvTime
                     updateHistogram_ env duration (stats_ env)
                     logicDenied env inp
+                    vpDelete inputPendingOp
 
 ----------------------------------------------------------------
 
