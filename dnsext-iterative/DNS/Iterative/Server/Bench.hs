@@ -54,7 +54,7 @@ benchServer bench_pipelines env _ = do
 
     let toSender = writeChan resQ
 
-        enqueueReq (bs, ()) = toCacher (Input bs 0 myDummy (PeerInfoUDP clntDummy []) UDP toSender usecDummy)
+        enqueueReq (bs, ()) = toCacher (Input bs noPendingOp myDummy (PeerInfoUDP clntDummy []) UDP toSender usecDummy)
         dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> readChan resQ
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where

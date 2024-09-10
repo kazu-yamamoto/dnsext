@@ -73,7 +73,7 @@ waitOutputSpec = describe "server - wait VC output" $ do
         result <- timeout 100_000 $ waitVcOutput vcs
         result `shouldBe` Nothing {- expect outside timeout-}
     it "next" $ withVcSession noReadable 1_000_000 50 $ \(vcs, toSender, _) -> do
-        _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" 1 {- dummy -} dummyPeer)
+        _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" noPendingOp {- dummy -} dummyPeer)
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just Nothing
 
@@ -139,7 +139,7 @@ getToCacher factor = do
             Input{..} <- atomically (readTQueue mq)
             let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
             threadDelay $ intb * factor
-            inputToSender $ Output inputQuery inputRequestNum inputPeerInfo
+            inputToSender $ Output inputQuery inputPendingOp inputPeerInfo
     _ <- replicateM 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
 {- FOUMOLU_ENABLE -}

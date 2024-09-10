@@ -5,6 +5,7 @@ module DNS.Iterative.Server.Pipeline (
     mkPipeline,
     mkConnector,
     mkInput,
+    noPendingOp,
     getWorkerStats,
     VcFinished (..),
     VcPendings,
@@ -119,11 +120,12 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
                     mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
-                    inputToSender $ Output bs inputRequestNum inputPeerInfo
+                    inputToSender $ Output bs inputPendingOp inputPeerInfo
                 CResultDenied _replyErr -> do
                     duration <- diffUsec <$> currentTimeUsec_ env <*> pure inputRecvTime
                     updateHistogram_ env duration (stats_ env)
                     logicDenied env inp
+                    vpDelete inputPendingOp
 
 ----------------------------------------------------------------
 
@@ -143,7 +145,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
             mapM_ (incStats $ stats_ env) [CacheMiss, QueriesAll]
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
-            inputToSender $ Output bs inputRequestNum inputPeerInfo
+            inputToSender $ Output bs inputPendingOp inputPeerInfo
         Left _e -> logicDenied env inp
 
 ----------------------------------------------------------------
@@ -207,10 +209,10 @@ record env Input{..} reply rspWire = do
 type Recv = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
-type MkInput = ByteString -> PeerInfo -> Int -> EpochTimeUsec -> Input ByteString
+type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input ByteString
 
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
-mkInput mysa toSender proto bs peerInfo i = Input bs i mysa peerInfo proto toSender
+mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
 
 receiverVC
     :: String
@@ -247,7 +249,8 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
         caseEof = atomically (enableVcEof vcEof_) >> return VfEof
         step bs peerInfo ts = do
             atomically $ addVcPending vcPendings_ i
-            toCacher $ mkInput_ bs peerInfo i ts
+            let delPending = atomically $ delVcPending vcPendings_ i
+            toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
 
 receiverLogic
     :: Env -> SockAddr -> Recv -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
@@ -262,8 +265,11 @@ receiverLogic' env mysa recv toCacher toSender proto = do
     if bs == ""
         then return False
         else do
-            toCacher $ Input bs 0 mysa peerInfo proto toSender ts
+            toCacher $ Input bs noPendingOp mysa peerInfo proto toSender ts
             return True
+
+noPendingOp :: VcPendingOp
+noPendingOp = VcPendingOp{vpReqNum = 0, vpDelete = pure ()}
 
 senderVC
     :: String
@@ -284,7 +290,7 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
     step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
         resetVcTimeout vcTimeout_
         send bs peerInfo
-    finalize (Output _ i _) = atomically (delVcPending vcPendings_ i)
+    finalize (Output _ VcPendingOp{..} _) = vpDelete
 
 senderLogic :: Env -> Send -> IO FromX -> IO ()
 senderLogic env send fromX =
