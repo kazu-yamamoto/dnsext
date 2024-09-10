@@ -48,14 +48,14 @@ tcpServer VcServerConfig{..} env toCacher s = do
         peersa <- getPeerName sock
         logLn env Log.DEBUG $ "tcp-srv: accept: " ++ show peersa
         let peerInfo = PeerInfoVC peersa
-        (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock) tmicro vc_slowloris_size
-        let recv = do
+            recv = do
                 (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
                 if siz == 0
                     then return ("", peerInfo)
                     else incStatsTCP53 peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (DNS.sendTCP sock) bs
-            receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
-            sender = senderVC "tcp-send" env vcSess send fromX
-        TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
+        withVcSession (waitReadSocketSTM sock) tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
+            let receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
+                sender = senderVC "tcp-send" env vcSess send fromX
+            TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa
