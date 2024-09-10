@@ -49,7 +49,7 @@ lookupName' nMap (Question dom typ cls) nothing just = maybe nothing (just . res
     result rss = [ rs | rs <- rss, rrsType rs == typ, rrsClass rs == cls ]
 {- FOURMOLU_ENABLE -}
 
-lzDomain :: (Domain, LocalZoneType, [RRset]) -> Domain
+lzDomain :: (Domain, LocalZoneType, a) -> Domain
 lzDomain (d, _, _) = d
 
 apexMap :: Map Domain [RRset] -> [(Domain, LocalZoneType, [ResourceRecord])] -> Map Domain [(Domain, LocalZoneType, [RRset])]
@@ -100,4 +100,36 @@ lookupName nMap (apex, zt, soa) q = result zt
     redirect rrss
         | null rrss  = (NoErr, [], soa)
         | otherwise  = (NoErr, [ rrs {rrsName = qname q} | rrs <- rrss ], [])
+{- FOURMOLU_ENABLE -}
+
+---
+
+type Zone = (Domain, LocalZoneType, [ResourceRecord])
+
+{- FOURMOLU_DISABLE -}
+-- | right biased union, zone defs list
+-- >>> let rr n ty rd = ResourceRecord {rrname = n, rrtype = ty, rrclass = IN, rrttl = 300, rdata = rd}
+-- >>> unionZones [("a.", LZ_Static, [])] []
+-- [("a.",LZ_Static,[])]
+-- >>> unionZones [] [("a.", LZ_Static, [])]
+-- [("a.",LZ_Static,[])]
+-- >>> unionZones [("a.", LZ_Static, [])] [("b.", LZ_Refuse, [])]
+-- [("a.",LZ_Static,[]),("b.",LZ_Refuse,[])]
+-- >>> unionZones [("a.", LZ_Static, [rr "a." A (rd_a "203.113.8")]), ("b.", LZ_Refuse, [])] [("a.", LZ_Static, [])]
+-- [("a.",LZ_Static,[]),("b.",LZ_Refuse,[])]
+-- >>> unionZones [("a.", LZ_Static, []), ("b.", LZ_Static, [rr "a." A (rd_a "203.113.8")])] [("b.", LZ_Refuse, [])]
+-- [("a.",LZ_Static,[]),("b.",LZ_Refuse,[])]
+-- >>> unionZones [("a.", LZ_Static, []), ("b.", LZ_Static, [])] [("b.", LZ_Refuse, []), ("c.", LZ_Refuse, [])]
+-- [("a.",LZ_Static,[]),("b.",LZ_Refuse,[]),("c.",LZ_Refuse,[])]
+-- >>> unionZones [("a.", LZ_Static, []), ("b.", LZ_Static, []), ("c.", LZ_Static, [])] [("b.", LZ_Refuse, []), ("c.", LZ_Refuse, []), ("d.", LZ_Refuse, [])]
+-- [("a.",LZ_Static,[]),("b.",LZ_Refuse,[]),("c.",LZ_Refuse,[]),("d.",LZ_Refuse,[])]
+unionZones :: [Zone] -> [Zone] -> [Zone]
+unionZones xs0 ys0 = merge (sortOn lzDomain xs0) (sortOn lzDomain ys0)
+  where
+    merge      []         ys     = ys
+    merge xxs@(_:_)       []     = xxs
+    merge xxs@(x:xs) yys@(y:ys)  = case comparing lzDomain x y of
+        LT                      -> x : merge xs  yys
+        EQ                      ->     merge xs  yys
+        GT                      -> y : merge xxs ys
 {- FOURMOLU_ENABLE -}

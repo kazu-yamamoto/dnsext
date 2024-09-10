@@ -171,8 +171,6 @@ WORKDIR /opt/bowline/
 RUN <<EOF
 set -e -x
 sed \
-    -e '\@^include: .*$@d' \
-    -e '1i include: etc/default-local.conf' \
     -e 's@^group: .*$@group: nogroup@' \
     -e 's@^disable-v6-ns: .*$@disable-v6-ns: yes@' \
     -e 's@^dns-addrs: .*$@dns-addrs: 0.0.0.0,::@' \

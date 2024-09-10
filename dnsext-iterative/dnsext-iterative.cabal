@@ -24,6 +24,7 @@ library
         DNS.Iterative.Query.Env
         DNS.Iterative.Query.Helpers
         DNS.Iterative.Query.Local
+        DNS.Iterative.Query.DefaultLocal
         DNS.Iterative.Query.LocalZone
         DNS.Iterative.Query.ZoneMap
         DNS.Iterative.Query.Norec
