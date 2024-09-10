@@ -41,6 +41,7 @@ module DNS.Iterative.Server (
     VcFinished (..),
     VcPendings,
     initVcSession,
+    withVcSession,
     mkInput,
     receiverVC,
     senderVC,
