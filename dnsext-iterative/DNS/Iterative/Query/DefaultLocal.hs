@@ -16,6 +16,7 @@ import qualified Data.IP as IP
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
 
+{- FOURMOLU_DISABLE -}
 defaultLocal :: [(Domain, LocalZoneType, [ResourceRecord])]
 defaultLocal =
     [ localhost
@@ -23,7 +24,10 @@ defaultLocal =
     , test
     , onion
     , invalid
-    ]
+    ] ++
+    ipv4RevZones ++
+    ipv6RevZones
+{- FOURMOLU_ENABLE -}
 
 ---
 
