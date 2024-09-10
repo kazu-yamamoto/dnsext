@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 
 module DNS.Iterative.Query.DefaultLocal (
     defaultLocal,
@@ -8,8 +9,11 @@ import Data.String
 
 -- dnsext-* packages
 import DNS.Types
+import Data.IP (IPv6, AddrRange, fromIPv4)
+import qualified Data.IP as IP
 
 -- this package
+import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
 
 defaultLocal :: [(Domain, LocalZoneType, [ResourceRecord])]
@@ -101,6 +105,89 @@ invalid =
 
 ---
 
+{- FOURMOLU_DISABLE -}
+ipv4RevZones :: [(Domain, LocalZoneType, [ResourceRecord])]
+ipv4RevZones = [defineV4RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv4CIDR cidr]
+  where
+    cidrs =
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.1 - RFC 1918 Zones
+        "10.0.0.0/8"          :
+        "172.16.0.0/12"       :
+        "192.168.0.0/16"      :
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.2 - RFC 5735 and RFC 5737 Zones
+        "0.0.0.0/8"           :
+        "127.0.0.0/8"         :
+        "169.254.0.0/16"      :
+        "192.0.2.0/24"        :
+        "198.51.100.0/24"     :
+        "203.0.113.0/24"      :
+        "255.255.255.255/32"  :
+        -- https://datatracker.ietf.org/doc/html/rfc6598#section-4 - Use of Shared CGN Space
+        "100.64.0.0/10"       :
+        --
+        []
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+ipv6RevZones :: [(Domain, LocalZoneType, [ResourceRecord])]
+ipv6RevZones = [defineV6RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv6CIDR cidr]
+  where
+    cidrs =
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.3 - Local IPv6 Unicast Addresses
+        "::1/128"             :
+        "::/128"              :
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.4 - IPv6 Locally Assigned Local Addresses
+        "fd00::/8"            :
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.5 - IPv6 Link-Local Addresses
+        "fe80::/10"           :
+        -- https://datatracker.ietf.org/doc/html/rfc6303#section-4.6 - IPv6 Example Prefix
+        "2001:db8::/32"       :
+        --
+        []
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+defineV4RevZone :: [Int] -> (Domain, LocalZoneType, [ResourceRecord])
+defineV4RevZone prefix =
+    defineZone name LZ_Static
+    [ mkRR name       10800 IN SOA         localSOA
+    ]
+  where
+    name = fromString $ foldr poctet "in-addr.arpa." $ reverse prefix
+    poctet o tl  = show o ++ "." ++ tl
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+defineV6RevZone :: [Int] -> (Domain, LocalZoneType, [ResourceRecord])
+defineV6RevZone prefix =
+    defineZone name LZ_Static
+    [ mkRR name       10800 IN SOA         localSOA
+    ]
+  where
+    name = fromString $ foldr phex "ip6.arpa." $ reverse prefix
+    phex h tl  = showHex h ("." ++ tl)
+{- FOURMOLU_ENABLE -}
+
+prefixFromIPv4CIDR :: String -> [[Int]]
+prefixFromIPv4CIDR cidr = prefixFromRange 8 fromIPv4 (read_ "fail to parse AddrRange from CIDR" cidr)
+
+prefixFromIPv6CIDR :: String -> [[Int]]
+prefixFromIPv6CIDR cidr = prefixFromRange 4 fromIPv6h (read_ "fail to parse AddrRange from CIDR" cidr)
+
+{- FOURMOLU_DISABLE -}
+prefixFromRange :: Int -> (a -> [Int]) -> AddrRange a -> [[Int]]
+prefixFromRange pwidth partList range
+    | wrem == 0  = [prefix]
+    | otherwise  = [prefix ++ [next + lp] | lp <- [0 .. 2^(pwidth - wrem) - 1]]
+  where
+    (prefix, next) = case splitAt pc $ partList $ IP.addr range of
+        (p, [])   -> (p, 0)
+        (p, x:_)  -> (p, x)
+    (pc, wrem) = IP.mlen range `quotRem` pwidth
+{- FOURMOLU_ENABLE -}
+
+---
+
 defineZone :: String -> LocalZoneType -> [ResourceRecord] -> (Domain, LocalZoneType, [ResourceRecord])
 defineZone name ztype rrs = (domain name, ztype, rrs)
 
@@ -115,6 +202,9 @@ localSOA = rd_soa (domain "localhost.") (fromString "nobody@invalid.") 1 3600 12
 
 domain :: String -> Domain
 domain = fromString
+
+fromIPv6h :: IPv6 -> [Int]
+fromIPv6h ip6 = [h | b <- IP.fromIPv6b ip6, h <- [b `unsafeShiftR` 4, b .&. 0xf]]
 
 read_ :: Read a => String -> String -> a
 read_ msg s = case [x | (x, "") <- reads s] of
