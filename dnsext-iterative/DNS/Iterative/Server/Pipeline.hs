@@ -10,6 +10,7 @@ module DNS.Iterative.Server.Pipeline (
     VcPendings,
     VcSession (..),
     initVcSession,
+    withVcSession,
     waitVcInput,
     waitVcOutput,
     enableVcEof,
@@ -28,11 +29,11 @@ module DNS.Iterative.Server.Pipeline (
 
 -- GHC packages
 import Control.Concurrent.STM
-import Control.Exception (Exception (..), SomeException (..), AsyncException, handle, throwIO)
+import Control.Exception (Exception (..), SomeException (..), AsyncException, bracket, handle, throwIO)
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
-import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout)
+import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout, unregisterTimeout)
 
 -- libs
 import Control.Concurrent.Async (AsyncCancelled)
@@ -377,6 +378,16 @@ initVcSession getWaitIn micro slsize = do
             }
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
+
+finalizeVcSession :: VcSession -> IO ()
+finalizeVcSession VcSession{vcTimeout_ = VcTimeout{..}} = unregisterTimeout vtManager_ vtKey_
+
+withVcSession
+    :: IO VcWaitRead -> Int -> Int
+    -> ((VcSession, ToSender -> IO (), IO FromX) -> IO a)
+    -> IO a
+withVcSession getWaitIn micro slsize =
+    bracket (initVcSession getWaitIn micro slsize) (\(sess, _, _) -> finalizeVcSession sess)
 
 enableVcEof :: VcEof -> STM ()
 enableVcEof eof = writeTVar eof True

@@ -35,51 +35,44 @@ spec = do
 
 waitInputSpec :: Spec
 waitInputSpec = describe "server - wait VC input" $ do
-    it "now" $ do
-        let readableNow = pure (pure ())
-        (vcs, _, _) <- initVcSession readableNow 100_000 50
+    it "now" $ withVcSession readableNow 100_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just False
-    it "wait" $ do
-        let waitRead = do
-                hasInput <- newTVarIO False
-                let toReadable = writeTVar hasInput True
-                toReadable `afterUSec` 100_000
-                pure $ guard =<< readTVar hasInput
-        (vcs, _, _) <- initVcSession waitRead 1_000_000 50
+    it "wait" $ withVcSession waitRead 1_000_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just False
-    it "timeout" $ do
-        let noReadable = pure retry
-        (vcs, _, _) <- initVcSession noReadable 100_000 50
+    it "timeout" $ withVcSession noReadable 100_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just True
+  where
+    readableNow = pure (pure ())
+    waitRead = do
+        hasInput <- newTVarIO False
+        let toReadable = writeTVar hasInput True
+        toReadable `afterUSec` 100_000
+        pure $ guard =<< readTVar hasInput
+    noReadable = pure retry
 
 waitOutputSpec :: Spec
 waitOutputSpec = describe "server - wait VC output" $ do
     let noReadable = pure retry
-    it "finish - timeout" $ do
-        (vcs, _, _) <- initVcSession noReadable 100_000 50
+    it "finish - timeout" $ withVcSession noReadable 100_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfTimeout)
-    it "finish - eof" $ do
-        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 1_000_000 50
+    it "finish - eof" $ withVcSession noReadable 1_000_000 50 $ \(vcs@VcSession{..}, _, _) -> do
         enableVcEof vcEof_ `afterUSec` 100_000
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfEof)
-    it "finish - eof supersede timeout" $ do
-        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
+    it "finish - eof supersede timeout" $ withVcSession noReadable 0 50 $ \(vcs@VcSession{..}, _, _) -> do
         atomically $ enableVcEof vcEof_
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfEof)
-    it "wait pendings" $ do
-        (vcs@VcSession{..}, _, _) <- initVcSession noReadable 0 50
+    it "wait pendings" $ withVcSession noReadable 0 50 $ \(vcs@VcSession{..}, _, _) -> do
         let uid = 1
         atomically $ addVcPending vcPendings_ uid
         result <- timeout 100_000 $ waitVcOutput vcs
         result `shouldBe` Nothing {- expect outside timeout-}
-    it "next" $ do
-        (vcs, toSender, _) <- initVcSession noReadable 1_000_000 50
+    it "next" $ withVcSession noReadable 1_000_000 50 $ \(vcs, toSender, _) -> do
         _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" 1 {- dummy -} dummyPeer)
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just Nothing
@@ -115,9 +108,8 @@ vcSession waitRead tmicro ws = do
 
 {- FOUMOLU_DISABLE -}
 runSession :: Int -> IO (ByteString, PeerInfo) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
-runSession factor recv waitRead tmicro = do
+runSession factor recv waitRead tmicro = withVcSession waitRead tmicro 0 $ \(vcSess@VcSession{}, toSender, fromX) -> do
     env <- newEmptyEnv
-    (vcSess@VcSession{}, toSender, fromX) <- initVcSession waitRead tmicro 0
     toCacher <- getToCacher factor
     (getResult, send) <- getSend
     debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"

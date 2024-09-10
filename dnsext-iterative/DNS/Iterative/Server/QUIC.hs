@@ -48,8 +48,7 @@ quicServers VcServerConfig{..} env toCacher ss = do
             waitInput = return $ do
                 isEmpty <- isEmptyTQueue $ QUIC.inputQ conn
                 retryUntil $ not isEmpty
-        (vcSess, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
-        let recv = do
+            recv = do
                 strm <- QUIC.acceptStream conn
                 let peerInfo = PeerInfoStream peersa $ StreamQUIC strm
                 -- Without a designated thread, recvStream would block.
@@ -61,9 +60,10 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 case peerInfo of
                     PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                     _ -> return ()
-            receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
-            sender = senderVC "quic-send" env vcSess send fromX
-        TStat.concurrently_ "quic-send" sender "quic-recv" receiver
+        withVcSession waitInput tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
+            let receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
+                sender = senderVC "quic-send" env vcSess send fromX
+            TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
 getServerConfig :: Credentials -> SessionManager -> ByteString -> Int -> ServerConfig
 getServerConfig creds sm alpn tmills =
