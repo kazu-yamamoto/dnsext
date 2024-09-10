@@ -31,7 +31,6 @@ library
         DNS.Iterative.Query.Random
         DNS.Iterative.Query.Resolve
         DNS.Iterative.Query.ResolveJust
-        DNS.Iterative.Query.Rev
         DNS.Iterative.Query.StubZone
         DNS.Iterative.Query.TestEnv
         DNS.Iterative.Query.TrustAnchor
