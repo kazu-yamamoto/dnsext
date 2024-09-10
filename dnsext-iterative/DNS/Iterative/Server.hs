@@ -43,6 +43,7 @@ module DNS.Iterative.Server (
     initVcSession,
     withVcSession,
     mkInput,
+    noPendingOp,
     receiverVC,
     senderVC,
     mkConnector,
