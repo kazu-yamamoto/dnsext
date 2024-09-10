@@ -160,9 +160,9 @@ toRequestAD qctl = case adBit $ qctlHeader qctl of
 
 data QueryError
     = DnsError DNSError [String]
-    | NotResponse Bool DNSMessage
-    | InvalidEDNS DNS.EDNSheader DNSMessage
-    | HasError DNS.RCODE DNSMessage
+    | NotResponse [Address] Bool DNSMessage
+    | InvalidEDNS [Address] DNS.EDNSheader DNSMessage
+    | HasError [Address] DNS.RCODE DNSMessage
     | QueryDenied
     deriving (Show)
 
@@ -196,14 +196,14 @@ handleDnsError left right q = either left right =<< lift (runExceptT q)
 -- example instances
 -- - responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- - responseErrDNSQuery = handleResponseError throwError pure  :: DNSMessage -> DNSQuery DNSMessage
-handleResponseError :: (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
-handleResponseError e f msg
-    | not (DNS.isResponse flags_) = e $ NotResponse (DNS.isResponse flags_) msg
+handleResponseError :: [Address] -> (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
+handleResponseError addrs e f msg
+    | not (DNS.isResponse flags_) = e $ NotResponse addrs (DNS.isResponse flags_) msg
     | DNS.ednsHeader msg == DNS.InvalidEDNS =
-        e $ InvalidEDNS (DNS.ednsHeader msg) msg
+        e $ InvalidEDNS addrs (DNS.ednsHeader msg) msg
     | DNS.rcode msg
         `notElem` [DNS.NoErr, DNS.NameErr] =
-        e $ HasError (DNS.rcode msg) msg
+        e $ HasError addrs (DNS.rcode msg) msg
     | otherwise = f msg
   where
     flags_ = DNS.flags msg

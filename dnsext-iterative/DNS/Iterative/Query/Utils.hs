@@ -56,9 +56,9 @@ logQueryErrors prefix q = do
           throwError qe
       logQueryError qe = case qe of
           DnsError de ss        -> logDnsError de ss
-          NotResponse resp msg  -> logNotResponse resp msg
-          InvalidEDNS eh msg    -> logInvalidEDNS eh msg
-          HasError rcode msg    -> logHasError rcode msg
+          NotResponse addrs resp msg  -> logNotResponse addrs resp msg
+          InvalidEDNS addrs eh msg    -> logInvalidEDNS addrs eh msg
+          HasError addrs rcode msg    -> logHasError addrs rcode msg
           QueryDenied           -> logQueryDenied
       logDnsError de ss = case de of
           NetworkFailure {}   -> putLog detail
@@ -67,12 +67,13 @@ logQueryErrors prefix q = do
           UnknownDNSError {}  -> putLog detail
           _                   -> pure ()
         where detail = show de ++ ": " ++ intercalate ", " ss
-      logNotResponse False  msg  = putLog $ pprMessage "not response:" msg
-      logNotResponse True  _msg  = pure ()
-      logInvalidEDNS DNS.InvalidEDNS  msg = putLog $ pprMessage "invalid EDNS:" msg
-      logInvalidEDNS _               _msg = pure ()
-      logHasError _rcode _msg = pure ()
+      logNotResponse  addrs False  msg  = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "not response:" msg
+      logNotResponse _addrs True  _msg  = pure ()
+      logInvalidEDNS  addrs DNS.InvalidEDNS  msg = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "invalid EDNS:" msg
+      logInvalidEDNS  _     _               _msg = pure ()
+      logHasError _addrs _rcode _msg = pure ()
       logQueryDenied = pure ()
+      pprAddrs = unwords . map show
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
 
