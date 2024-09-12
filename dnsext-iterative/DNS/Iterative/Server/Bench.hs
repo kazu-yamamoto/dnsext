@@ -10,6 +10,7 @@ module DNS.Iterative.Server.Bench (
 import Control.Concurrent
 import Control.Monad (forever)
 import Data.ByteString (ByteString)
+import qualified Data.List.NonEmpty as NE
 
 -- dnsext-* packages
 import DNS.TAP.Schema (SocketProtocol (..))
@@ -58,8 +59,6 @@ benchServer bench_pipelines env _ = do
         dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> readChan resQ
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where
-    getSockAddr host port = do
-        as <- getAddrInfo (Just $ defaultHints{addrSocketType = Datagram, addrFlags = [AI_ADDRCONFIG]}) (Just host) (Just port)
-        case as of
-            a : _ -> pure $ addrAddress a
-            [] -> fail $ "benchServer: fail to get addr for " ++ host ++ ":" ++ port
+    getSockAddr host port =
+        addrAddress . NE.head
+            <$> getAddrInfo (Just $ defaultHints{addrSocketType = Datagram, addrFlags = [AI_ADDRCONFIG]}) (Just host) (Just port)
