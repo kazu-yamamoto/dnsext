@@ -50,7 +50,6 @@ library
         quic >= 0.2.1 && < 0.3,
         recv >=0.1.0,
         serialise,
-        time-manager,
         tls >= 2.1
 
     if impl(ghc >=8)
