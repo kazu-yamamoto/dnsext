@@ -9,6 +9,7 @@ module DNS.Iterative.Server.Pipeline (
     getWorkerStats,
     VcFinished (..),
     VcPendings,
+    VcTimeout (..),
     VcSession (..),
     initVcSession,
     withVcSession,
