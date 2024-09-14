@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module ServerSpec where
+module SessionSpec where
 
 import Test.Hspec
 
@@ -34,7 +34,7 @@ spec = do
     sessionSpec
 
 waitInputSpec :: Spec
-waitInputSpec = describe "server - wait VC input" $ do
+waitInputSpec = describe "session - wait VC input" $ do
     it "now" $ withVcSession readableNow 100_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just False
@@ -54,7 +54,7 @@ waitInputSpec = describe "server - wait VC input" $ do
     noReadable = pure retry
 
 waitOutputSpec :: Spec
-waitOutputSpec = describe "server - wait VC output" $ do
+waitOutputSpec = describe "session - wait VC output" $ do
     let noReadable = pure retry
     it "finish - timeout" $ withVcSession noReadable 100_000 50 $ \(vcs, _, _) -> do
         result <- timeout 3_000_000 $ waitVcOutput vcs
@@ -83,7 +83,7 @@ afterUSec stm delay = void $ forkIO $ do
     atomically stm
 
 sessionSpec :: Spec
-sessionSpec = describe "server - VC session" $ do
+sessionSpec = describe "session - run VC" $ do
     it "finish 1" $ do
         m <- timeout 3_000_000 $ vcSession (pure $ pure ()) 5_000_000 ["60", "40", "20"]
         m `shouldBe` Just ((VfEof, VfEof), True)
