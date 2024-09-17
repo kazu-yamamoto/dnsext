@@ -148,7 +148,8 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
         maybe (pure Nothing) (foldLookupResult soah (\rc -> pure $ Just (rc, [])) inconsistent)
             =<< lookupType name Cache.ERR
       where
-        soah soa rank = pure $ Just (NameErr, [soa | rank > RankAdditional])
+        {- authority section is cached as RankAdditional, so not applying guardReply -}
+        soah soa _rank = pure $ Just (NameErr, [soa])
         inconsistent rrs = do
             logLn_ Log.WARN $ "inconsistent ERR cache found: dom=" ++ show name ++ ", " ++ show rrs
             return Nothing
@@ -162,7 +163,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             Just x
     --
     guardLookup reqCD = foldLookupResult (guardNegative reqCD) (guardNegativeNoSOA reqCD) (guardPositive reqCD)
-    {- {- authority section is cached as RankAdditional, so cannot check -} guardReply soaRank *> -}
+    {- {- authority section is cached as RankAdditional, so not applying guard -} guardReply soaRank *> -}
     guardNegative reqCD soa _soaRank = guardMayVerified reqCD soa
     guardNegativeNoSOA CheckDisabled   _rc = empty    {- query again for verification error -}
     guardNegativeNoSOA NoCheckDisabled _rc = pure ()
