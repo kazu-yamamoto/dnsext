@@ -122,6 +122,11 @@ data DNSMessage = DNSMessage
 --   generates any kind of query.
 type Identifier = Word16
 
+arCountEDNS :: DNSMessage -> Int
+arCountEDNS DNSMessage{..} = ifEDNS ednsHeader (arCount0 + 1) arCount0
+  where
+    arCount0 = length additional
+
 putDNSMessage :: DNSMessage -> Builder ()
 putDNSMessage DNSMessage{..} wbuf ref = do
     putIdentifier wbuf identifier
