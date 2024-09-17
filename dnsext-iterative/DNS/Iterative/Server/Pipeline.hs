@@ -11,11 +11,13 @@ module DNS.Iterative.Server.Pipeline (
     VcPendings,
     VcTimer (..),
     VcSession (..),
+    withVcTimer,
     initVcSession,
     withVcSession,
     waitVcInput,
     waitVcOutput,
     enableVcEof,
+    enableVcTimeout,
     addVcPending,
     delVcPending,
     receiverVC,
@@ -358,6 +360,15 @@ initVcTimer micro actionTO = do
     pure $ VcTimer mgr key micro
 {- FOURMOLU_ENABLE -}
 
+finalizeVcTimer :: VcTimer -> IO ()
+finalizeVcTimer VcTimer{..} = unregisterTimeout vtManager_ vtKey_
+
+withVcTimer
+    :: Int -> IO ()
+    -> (VcTimer -> IO a)
+    -> IO a
+withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer
+
 {- FOURMOLU_DISABLE -}
 initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn micro slsize = do
@@ -386,18 +397,20 @@ initVcSession getWaitIn micro slsize = do
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
-finalizeVcSession :: VcSession -> IO ()
-finalizeVcSession VcSession{vcTimer_ = VcTimer{..}} = unregisterTimeout vtManager_ vtKey_
-
 withVcSession
     :: IO VcWaitRead -> Int -> Int
     -> ((VcSession, ToSender -> IO (), IO FromX) -> IO a)
     -> IO a
-withVcSession getWaitIn micro slsize =
-    bracket (initVcSession getWaitIn micro slsize) (\(sess, _, _) -> finalizeVcSession sess)
+withVcSession getWaitIn micro slsize action = do
+    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn micro slsize
+    withVcTimer micro (atomically $ enableVcTimeout vcTimeout_) $
+        \timer -> action (vcSess{vcTimer_=timer}, toSender, fromX)
 
 enableVcEof :: VcEof -> STM ()
 enableVcEof eof = writeTVar eof True
+
+enableVcTimeout :: TVar Bool -> STM ()
+enableVcTimeout timeout = writeTVar timeout True
 
 addVcPending :: VcPendings -> Int -> STM ()
 addVcPending pendings i = modifyTVar' pendings (Set.insert i)
