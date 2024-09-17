@@ -51,6 +51,7 @@ module DNS.RRCache.Types (
     --
     Positive (..),
     positiveCases,
+    NSECx,
     Negative (..),
     negativeCases,
     Hit (..),
@@ -127,14 +128,16 @@ positiveCases notVerified_ checkDisabled_ valid_ pos = case pos of
     PosCheckDisabled rds  -> checkDisabled_ $ NE.toList rds
     PosValid rds ss       -> valid_ (NE.toList rds) (NE.toList ss)
 
+type NSECx = (ResourceRecord, RRSIGs)
+
 data Negative
-    = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
+    = NegSOA Domain [NSECx]        {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from and NSEC/NSEC3 RRs -}
     | NegNoSOA RCODE               {- without SOA -}
     deriving (Eq, Show)
 
 negativeCases :: (Domain -> a) -> (RCODE -> a) -> Negative -> a
 negativeCases withSOA_ withoutSOA_ neg = case neg of
-    NegSOA zone  -> withSOA_ zone
+    NegSOA zone _nrrs  -> withSOA_ zone
     NegNoSOA rc  -> withoutSOA_ rc
 
 -- cache hit cases
@@ -176,7 +179,7 @@ valid rds sigs nothing just = cons1 rds nothing withRds
         withSigs s ss = just $ mkValid d ds s ss
 
 negWithSOA :: Domain -> Hit
-negWithSOA = Negative . NegSOA
+negWithSOA zone = Negative $ NegSOA zone []
 
 negNoSOA :: RCODE -> Hit
 negNoSOA = Negative . NegNoSOA
