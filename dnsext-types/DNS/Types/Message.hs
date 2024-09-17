@@ -122,6 +122,11 @@ data DNSMessage = DNSMessage
 --   generates any kind of query.
 type Identifier = Word16
 
+arCountEDNS :: DNSMessage -> Int
+arCountEDNS DNSMessage{..} = ifEDNS ednsHeader (arCount0 + 1) arCount0
+  where
+    arCount0 = length additional
+
 putDNSMessage :: DNSMessage -> Builder ()
 putDNSMessage DNSMessage{..} wbuf ref = do
     putIdentifier wbuf identifier
@@ -150,20 +155,21 @@ putDNSMessage DNSMessage{..} wbuf ref = do
             | otherwise = FormatErr
     ad = prependOpt additional
       where
-        prependOpt ads = mapEDNS ednsHeader (fromEDNS ads $ fromRCODE rcode') ads
+        {- An EDNS header encoded into an OPT RR extends the additional section by exactly one.
+           The following implementation clarifies the rule. -}
+        prependOpt ads = mapEDNS ednsHeader (\edns -> fromEDNS (fromRCODE rcode') edns : ads) ads
+        fromEDNS :: Word16 -> EDNS -> ResourceRecord
+        fromEDNS rc' edns = ResourceRecord name' type' class' ttl' rdata'
           where
-            fromEDNS :: AdditionalRecords -> Word16 -> EDNS -> AdditionalRecords
-            fromEDNS rrs rc' edns = ResourceRecord name' type' class' ttl' rdata' : rrs
-              where
-                name' = "."
-                type' = OPT
-                class' = CLASS (maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns))
-                ttl0' = fromIntegral (rc' .&. 0xff0) `shiftL` 20
-                vers' = fromIntegral (ednsVersion edns) `shiftL` 16
-                ttl'
-                    | ednsDnssecOk edns = ttl0' `setBit` 15 .|. vers'
-                    | otherwise = ttl0' .|. vers'
-                rdata' = RData $ RD_OPT $ ednsOptions edns
+            name' = "."
+            type' = OPT
+            class' = CLASS (maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns))
+            ttl0' = fromIntegral (rc' .&. 0xff0) `shiftL` 20
+            vers' = fromIntegral (ednsVersion edns) `shiftL` 16
+            ttl'
+                | ednsDnssecOk edns = ttl0' `setBit` 15 .|. vers'
+                | otherwise = ttl0' .|. vers'
+            rdata' = RData $ RD_OPT $ ednsOptions edns
 
 getDNSMessage :: Parser DNSMessage
 getDNSMessage rbuf ref = do
@@ -185,23 +191,21 @@ getDNSMessage rbuf ref = do
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
     getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
     getEDNS rc rrs = case rrs of
-        [rr]
-            | Just (edns, erc) <- optEDNS rr ->
-                (EDNSheader edns, toRCODE erc)
+        -- The OPT Pseudo-RR / Basic Elements - https://datatracker.ietf.org/doc/html/rfc6891#section-6.1.1
+        -- "When an OPT RR is included within any DNS message, it MUST be the only OPT RR in that message."
+        [ResourceRecord "." OPT (CLASS udpsiz) ttl' rd]
+            | Just (RD_OPT opts) <- fromRData rd -> mkEDNS udpsiz ttl' opts
         [] -> (NoEDNS, toRCODE rc)
         _ -> (InvalidEDNS, BadRCODE)
       where
         -- \| Extract EDNS information from an OPT RR.
-        optEDNS :: ResourceRecord -> Maybe (EDNS, Word16)
-        optEDNS (ResourceRecord "." OPT (CLASS udpsiz) ttl' rd) = case fromRData rd of
-            Just (RD_OPT opts) ->
-                let hrc = fromIntegral rc .&. 0x0f
-                    erc = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
-                    secok = ttl' `testBit` 15
-                    vers = fromIntegral $ shiftR (ttl' .&. 0x00ff0000) 16
-                 in Just (EDNS vers udpsiz secok opts, fromIntegral erc)
-            _ -> Nothing
-        optEDNS _ = Nothing
+        mkEDNS udpsiz ttl' opts =
+            (EDNSheader $ EDNS vers udpsiz secok opts, toRCODE $ fromIntegral erc)
+          where
+            hrc = fromIntegral rc .&. 0x0f
+            erc = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
+            secok = ttl' `testBit` 15
+            vers = fromIntegral $ shiftR (ttl' .&. 0x00ff0000) 16
 
 ----------------------------------------------------------------
 

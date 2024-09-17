@@ -13,6 +13,7 @@ module DNS.Types (
     Identifier,
     DNSFlags (..),
     defaultDNSFlags,
+    arCountEDNS,
 
     -- ** EDNS header
     EDNSheader (..),
