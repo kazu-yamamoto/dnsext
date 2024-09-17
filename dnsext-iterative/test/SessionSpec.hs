@@ -38,7 +38,7 @@ withVc
     -> ((VcSession, ToSender -> IO (), IO FromX) -> VcTimer -> IO a)
     -> IO a
 withVc getWaitIn micro slsize action = do
-    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn micro slsize
+    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn slsize
     withVcTimer micro (atomically $ enableVcTimeout vcTimeout_) $ action (vcSess, toSender, fromX)
 
 waitInputSpec :: Spec

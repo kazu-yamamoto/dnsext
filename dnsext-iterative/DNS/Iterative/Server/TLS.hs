@@ -59,7 +59,7 @@ tlsServer VcServerConfig{..} env toCacher s = do
                     then return ("", peerInfo)
                     else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
-        (vcSess, toSender, fromX) <- initVcSession (pure $ pure ()) tmicro vc_slowloris_size
+        (vcSess, toSender, fromX) <- initVcSession (pure $ pure ()) vc_slowloris_size
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
             let receiver = receiverVC "tls-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOT
                 sender = senderVC "tls-send" env vcSess vcTimer send fromX

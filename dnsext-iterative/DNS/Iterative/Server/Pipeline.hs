@@ -13,7 +13,6 @@ module DNS.Iterative.Server.Pipeline (
     VcSession (..),
     withVcTimer,
     initVcSession,
-    withVcSession,
     waitVcInput,
     waitVcOutput,
     enableVcEof,
@@ -342,7 +341,6 @@ data VcSession =
     --   WITHOUT IO.
     , vcAllowInput_     :: VcAllowInput
     , vcWaitRead_       :: IO VcWaitRead
-    , vcTimer_          :: VcTimer
     , vcSlowlorisSize_  :: Int
     }
 {- FOURMOLU_ENABLE -}
@@ -372,14 +370,13 @@ withVcTimer
 withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO VcWaitRead -> Int -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
-initVcSession getWaitIn micro slsize = do
+initVcSession :: IO VcWaitRead -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
+initVcSession getWaitIn slsize = do
     vcEof       <- newTVarIO False
     vcTimeout   <- newTVarIO False
     vcPendings  <- newTVarIO Set.empty
     let queueBound = 8 {- limit waiting area per session to constant size -}
     senderQ     <- newTBQueueIO queueBound
-    vcTimer     <- initVcTimer micro (atomically $ writeTVar vcTimeout True)
     let toSender = atomically . writeTBQueue senderQ
         fromX = atomically $ readTBQueue senderQ
         inputThreshold = succ queueBound `quot` 2
@@ -389,7 +386,6 @@ initVcSession getWaitIn micro slsize = do
             VcSession
             { vcEof_            = vcEof
             , vcTimeout_        = vcTimeout
-            , vcTimer_          = vcTimer
             , vcPendings_       = vcPendings
             , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
             , vcAllowInput_     = allowInput
@@ -398,15 +394,6 @@ initVcSession getWaitIn micro slsize = do
             }
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
-
-withVcSession
-    :: IO VcWaitRead -> Int -> Int
-    -> ((VcSession, ToSender -> IO (), IO FromX) -> IO a)
-    -> IO a
-withVcSession getWaitIn micro slsize action = do
-    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn micro slsize
-    withVcTimer micro (atomically $ enableVcTimeout vcTimeout_) $
-        \timer -> action (vcSess{vcTimer_=timer}, toSender, fromX)
 
 enableVcEof :: VcEof -> STM ()
 enableVcEof eof = writeTVar eof True

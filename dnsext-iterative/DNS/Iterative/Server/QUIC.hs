@@ -60,7 +60,7 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 case peerInfo of
                     PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                     _ -> return ()
-        (vcSess, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
+        (vcSess, toSender, fromX) <- initVcSession waitInput vc_slowloris_size
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
             let receiver = receiverVC "quic-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOQ
                 sender = senderVC "quic-send" env vcSess vcTimer send fromX

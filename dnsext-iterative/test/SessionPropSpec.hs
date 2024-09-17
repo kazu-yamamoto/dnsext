@@ -138,7 +138,7 @@ runWithEvent tmicro = do
     refWait <- newIORef (pure ())
     let myaddr = SockAddrInet 53 0x0100007f
         withVc action =
-            initVcSession (readIORef refWait) tmicro 0 >>=
+            initVcSession (readIORef refWait) 0 >>=
             \(vcSess@VcSession{..}, toSender, fromX) -> withVcTimer tmicro (atomically $ enableVcTimeout vcTimeout_) $
             action vcSess toSender fromX
     withVc $ \vcSess@VcSession{..} toSender fromX timer -> do
