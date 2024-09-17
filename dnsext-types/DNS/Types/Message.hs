@@ -150,20 +150,21 @@ putDNSMessage DNSMessage{..} wbuf ref = do
             | otherwise = FormatErr
     ad = prependOpt additional
       where
-        prependOpt ads = mapEDNS ednsHeader (fromEDNS ads $ fromRCODE rcode') ads
+        {- An EDNS header encoded into an OPT RR extends the additional section by exactly one.
+           The following implementation clarifies the rule. -}
+        prependOpt ads = mapEDNS ednsHeader (\edns -> fromEDNS (fromRCODE rcode') edns : ads) ads
+        fromEDNS :: Word16 -> EDNS -> ResourceRecord
+        fromEDNS rc' edns = ResourceRecord name' type' class' ttl' rdata'
           where
-            fromEDNS :: AdditionalRecords -> Word16 -> EDNS -> AdditionalRecords
-            fromEDNS rrs rc' edns = ResourceRecord name' type' class' ttl' rdata' : rrs
-              where
-                name' = "."
-                type' = OPT
-                class' = CLASS (maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns))
-                ttl0' = fromIntegral (rc' .&. 0xff0) `shiftL` 20
-                vers' = fromIntegral (ednsVersion edns) `shiftL` 16
-                ttl'
-                    | ednsDnssecOk edns = ttl0' `setBit` 15 .|. vers'
-                    | otherwise = ttl0' .|. vers'
-                rdata' = RData $ RD_OPT $ ednsOptions edns
+            name' = "."
+            type' = OPT
+            class' = CLASS (maxUdpSize `min` (minUdpSize `max` ednsUdpSize edns))
+            ttl0' = fromIntegral (rc' .&. 0xff0) `shiftL` 20
+            vers' = fromIntegral (ednsVersion edns) `shiftL` 16
+            ttl'
+                | ednsDnssecOk edns = ttl0' `setBit` 15 .|. vers'
+                | otherwise = ttl0' .|. vers'
+            rdata' = RData $ RD_OPT $ ednsOptions edns
 
 getDNSMessage :: Parser DNSMessage
 getDNSMessage rbuf ref = do
