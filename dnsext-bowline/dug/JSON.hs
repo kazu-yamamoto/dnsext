@@ -12,7 +12,7 @@ import Prettyprinter
 import Prettyprinter.Render.String
 
 showJSON :: DNSMessage -> String
-showJSON DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
+showJSON msg@DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
   where
     DNSFlags{..} = flags
     hd =
@@ -31,7 +31,7 @@ showJSON DNSMessage{..} = toString $ object (hd ++ q ++ [an, au, ad])
         , ("QDCOUNT", pretty $ length question)
         , ("ANCOUNT", pretty $ length answer)
         , ("NSCOUNT", pretty $ length authority)
-        , ("ARCOUNT", pretty $ length additional)
+        , ("ARCOUNT", pretty $ arCountEDNS msg)
         ]
     q = case question of
         [] -> []
