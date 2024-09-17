@@ -5,7 +5,7 @@
 module DNS.Iterative.Server.QUIC where
 
 -- GHC packages
-import Control.Concurrent.STM (isEmptyTQueue)
+import Control.Concurrent.STM (atomically, isEmptyTQueue)
 import qualified Data.ByteString as BS
 
 -- dnsext-* packages
@@ -60,9 +60,10 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 case peerInfo of
                     PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                     _ -> return ()
-        withVcSession waitInput tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
-            let receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
-                sender = senderVC "quic-send" env vcSess send fromX
+        (vcSess, toSender, fromX) <- initVcSession waitInput tmicro vc_slowloris_size
+        withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
+            let receiver = receiverVC "quic-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOQ
+                sender = senderVC "quic-send" env vcSess vcTimer send fromX
             TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
 getServerConfig :: Credentials -> SessionManager -> ByteString -> Int -> ServerConfig

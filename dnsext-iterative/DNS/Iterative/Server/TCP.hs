@@ -8,6 +8,7 @@ module DNS.Iterative.Server.TCP (
 where
 
 -- GHC packages
+import Control.Concurrent.STM (atomically)
 import qualified Data.ByteString as BS
 import Data.Functor
 
@@ -54,8 +55,9 @@ tcpServer VcServerConfig{..} env toCacher s = do
                     then return ("", peerInfo)
                     else incStatsTCP53 peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (DNS.sendTCP sock) bs
-        withVcSession (waitReadSocketSTM sock) tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
-            let receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
-                sender = senderVC "tcp-send" env vcSess send fromX
+        (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock) tmicro vc_slowloris_size
+        withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
+            let receiver = receiverVC "tcp-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender TCP
+                sender = senderVC "tcp-send" env vcSess vcTimer send fromX
             TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa

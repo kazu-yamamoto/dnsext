@@ -8,7 +8,7 @@ module DNS.Iterative.Server.TLS (
 where
 
 -- GHC packages
-
+import Control.Concurrent.STM (atomically)
 import qualified Data.ByteString as BS
 import Data.Functor
 
@@ -59,8 +59,9 @@ tlsServer VcServerConfig{..} env toCacher s = do
                     then return ("", peerInfo)
                     else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
             send bs _ = DNS.sendVC (H2.sendMany backend) bs
-        withVcSession (pure $ pure ()) tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
-            let receiver = receiverVC "tls-recv" env vcSess recv toCacher $ mkInput mysa toSender DOT
-                sender = senderVC "tls-send" env vcSess send fromX
+        (vcSess, toSender, fromX) <- initVcSession (pure $ pure ()) tmicro vc_slowloris_size
+        withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
+            let receiver = receiverVC "tls-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOT
+                sender = senderVC "tls-send" env vcSess vcTimer send fromX
             TStat.concurrently_ "tls-send" sender "tls-recv" receiver
         logLn env Log.DEBUG $ "tls-srv: close: " ++ show peersa

@@ -137,12 +137,16 @@ runWithEvent tmicro = do
     (toCacher, kickSender) <- pseudoPipeline readMaybe
     refWait <- newIORef (pure ())
     let myaddr = SockAddrInet 53 0x0100007f
-    withVcSession (readIORef refWait) tmicro 0 $ \(vcSess@VcSession{..}, toSender, fromX) -> do
+        withVc action =
+            initVcSession (readIORef refWait) tmicro 0 >>=
+            \(vcSess@VcSession{..}, toSender, fromX) -> withVcTimer tmicro (atomically $ enableVcTimeout vcTimeout_) $
+            action vcSess toSender fromX
+    withVc $ \vcSess@VcSession{..} toSender fromX timer -> do
         let enableTimeout = atomically $ writeTVar vcTimeout_ True {- force enable timeout-state, along with pushed events -}
         (loop, pushEvent, waitRecv, recv) <- eventsRunner show kickSender enableTimeout
         writeIORef refWait waitRecv {- fill action to ref, to avoid mutual reference of withVcSession and eventsRunner -}
-        let receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
-            sender = senderVC "test-send" env vcSess send fromX
+        let receiver = receiverVC "test-recv" env vcSess timer recv toCacher (mkInput myaddr toSender UDP)
+            sender = senderVC "test-send" env vcSess timer send fromX
             run = TStat.concurrently "test-send" sender "test-recv" receiver
             getResult = sort <$> getResult0
         _ <- forkIO loop

@@ -221,11 +221,12 @@ receiverVC
     :: String
     -> Env
     -> VcSession
+    -> VcTimer
     -> Recv
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
-receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
+receiverVC name env vcs@VcSession{..} timer recv toCacher mkInput_ =
     loop 1 `E.catch` onError
   where
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
@@ -239,10 +240,10 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
                 casesSize (BS.length bs) bs peerInfo ts
         casesSize sz bs peerInfo ts
             | sz == 0 = do
-                resetVcTimer vcTimer_
+                resetVcTimer timer
                 caseEof
             | sz > vcSlowlorisSize_ = do
-                resetVcTimer vcTimer_
+                resetVcTimer timer
                 step bs peerInfo ts
                 loop (i + 1)
             | otherwise = do
@@ -278,10 +279,11 @@ senderVC
     :: String
     -> Env
     -> VcSession
+    -> VcTimer
     -> Send
     -> IO FromX
     -> IO VcFinished
-senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
+senderVC name env vcs timer send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
@@ -291,7 +293,7 @@ senderVC name env vcs@VcSession{..} send fromX = loop `E.catch` onError
             Just x -> return x
             Nothing -> step >> loop
     step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
-        resetVcTimer vcTimer_
+        resetVcTimer timer
         send bs peerInfo
     finalize (Output _ VcPendingOp{..} _) = vpDelete
 
