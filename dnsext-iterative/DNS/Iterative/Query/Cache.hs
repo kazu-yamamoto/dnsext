@@ -151,16 +151,16 @@ lookupValidRR logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) log
 
 {- FOURMOLU_DISABLE -}
 data LookupResult
-    = LKNegative RRset Ranking
+    = LKNegative RRset [RRset] Ranking
     | LKNegativeNoSOA RCODE
     | LKPositive RRset
     deriving Show
 
 foldLookupResult :: (RRset -> Ranking -> a) -> (RCODE -> a) -> (RRset -> a) -> LookupResult -> a
 foldLookupResult negative nsoa positive lkre = case lkre of
-    LKNegative rrset rank  -> negative rrset rank
-    LKNegativeNoSOA rcode  -> nsoa rcode
-    LKPositive rrset       -> positive rrset
+    LKNegative rrset _nrrs rank -> negative rrset rank
+    LKNegativeNoSOA rcode -> nsoa rcode
+    LKPositive rrset      -> positive rrset
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -203,7 +203,7 @@ lookupRRsetEither logMark dom typ = lookupWithHandler h ((": " ++) . show . snd)
         checkDisabled rds ttl rank = Just (LKPositive $ checkDisabledRRset dom typ DNS.IN ttl rds, rank)
         valid rds sigs ttl rank = Just (LKPositive $ validRRset dom typ DNS.IN ttl rds sigs, rank)
 
-    soaResult ettl srcDom sttl hit rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) hit <*> pure rank
+    soaResult ettl srcDom sttl hit rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) hit <*> pure [] <*> pure rank
       where
         positive = positiveCases noSig checkDisabled valid
         noSig rds = noSigRRset srcDom SOA DNS.IN ttl rds
