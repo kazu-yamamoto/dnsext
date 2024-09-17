@@ -185,23 +185,22 @@ getDNSMessage rbuf ref = do
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
     getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
     getEDNS rc rrs = case rrs of
-        [rr]
-            | Just (edns, erc) <- optEDNS rr ->
-                (EDNSheader edns, toRCODE erc)
+        [rr] -> optEDNS rr
         [] -> (NoEDNS, toRCODE rc)
-        _ -> (InvalidEDNS, BadRCODE)
+        _ -> invalidEDNS
       where
         -- \| Extract EDNS information from an OPT RR.
-        optEDNS :: ResourceRecord -> Maybe (EDNS, Word16)
+        optEDNS :: ResourceRecord -> (EDNSheader, RCODE)
         optEDNS (ResourceRecord "." OPT (CLASS udpsiz) ttl' rd) = case fromRData rd of
             Just (RD_OPT opts) ->
                 let hrc = fromIntegral rc .&. 0x0f
                     erc = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
                     secok = ttl' `testBit` 15
                     vers = fromIntegral $ shiftR (ttl' .&. 0x00ff0000) 16
-                 in Just (EDNS vers udpsiz secok opts, fromIntegral erc)
-            _ -> Nothing
-        optEDNS _ = Nothing
+                 in (EDNSheader $ EDNS vers udpsiz secok opts, toRCODE $ fromIntegral erc)
+            _ -> invalidEDNS
+        optEDNS _ = invalidEDNS
+        invalidEDNS = (InvalidEDNS, BadRCODE)
 
 ----------------------------------------------------------------
 
