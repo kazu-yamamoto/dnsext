@@ -185,6 +185,8 @@ getDNSMessage rbuf ref = do
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
     getEDNS :: Word16 -> AdditionalRecords -> (EDNSheader, RCODE)
     getEDNS rc rrs = case rrs of
+        -- The OPT Pseudo-RR / Basic Elements - https://datatracker.ietf.org/doc/html/rfc6891#section-6.1.1
+        -- "When an OPT RR is included within any DNS message, it MUST be the only OPT RR in that message."
         [ResourceRecord "." OPT (CLASS udpsiz) ttl' rd]
             | Just (RD_OPT opts) <- fromRData rd -> mkEDNS udpsiz ttl' opts
         [] -> (NoEDNS, toRCODE rc)
