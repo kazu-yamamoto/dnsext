@@ -57,6 +57,9 @@ import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQuery)
 import Types
 
+version :: String
+version = "20240918"
+
 ----------------------------------------------------------------
 
 options :: [OptDescr (Options -> Options)]
@@ -411,7 +414,8 @@ help = do
     return $
         intercalate
             "\n"
-            [ "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
+            [ "Version: " ++ version
+            , "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
             , ""
             , "query-type: " ++ types
             , ""
