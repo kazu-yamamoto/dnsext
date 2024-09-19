@@ -307,11 +307,12 @@ senderLogic' send fromX = do
 
 ----------------------------------------------------------------
 
-type VcEof = TVar Bool
-type VcWaitRead = STM ()
-type VcPendings = TVar Set.IntSet
-type VcRespAvail = STM Bool
-type VcAllowInput = STM Bool
+type VcEof = Bool
+type VcTimeout = Bool
+type VcWaitRead = ()
+type VcPendings = Set.IntSet
+type VcRespAvail = Bool
+type VcAllowInput = Bool
 
 {- FOURMOLU_DISABLE -}
 data VcTimer =
@@ -328,22 +329,22 @@ data VcTimer =
 -- place only what is directly necessary for STM calculations in `VcSession`.
 data VcSession =
     VcSession
-    { vcEof_            :: VcEof
+    { vcEof_            :: TVar VcEof
     -- ^ EOF is received. This is an RX evet.
-    , vcTimeout_        :: TVar Bool
+    , vcTimeout_        :: TVar VcTimeout
     -- ^ TimerManager tells timed-out. This is another RX event
     --   but defined independently on EOF to make recording event simpler.
-    , vcPendings_       :: VcPendings
+    , vcPendings_       :: TVar VcPendings
     -- ^ A set of jobs. A job is that a request is received but
     --   a response is not sent. This design can take the pipeline
     --   as a blackbox since the sender increases it and the receiver
     --   decreases it.
-    , vcRespAvail_      :: VcRespAvail
+    , vcRespAvail_      :: STM VcRespAvail
     -- ^ Jobs are available to the sender. This is necessary to
     --   tell whether or not the queue to the sender is empty or not
     --   WITHOUT IO.
-    , vcAllowInput_     :: VcAllowInput
-    , vcWaitRead_       :: IO VcWaitRead
+    , vcAllowInput_     :: STM VcAllowInput
+    , vcWaitRead_       :: IO (STM VcWaitRead)
     }
 {- FOURMOLU_ENABLE -}
 
@@ -372,7 +373,7 @@ withVcTimer
 withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO VcWaitRead -> IO (VcSession, (ToSender -> IO ()), IO FromX)
+initVcSession :: IO (STM VcWaitRead) -> IO (VcSession, (ToSender -> IO ()), IO FromX)
 initVcSession getWaitIn = do
     vcEof       <- newTVarIO False
     vcTimeout   <- newTVarIO False
@@ -396,16 +397,16 @@ initVcSession getWaitIn = do
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}
 
-enableVcEof :: VcEof -> STM ()
+enableVcEof :: TVar VcEof -> STM ()
 enableVcEof eof = writeTVar eof True
 
-enableVcTimeout :: TVar Bool -> STM ()
+enableVcTimeout :: TVar VcTimeout -> STM ()
 enableVcTimeout timeout = writeTVar timeout True
 
-addVcPending :: VcPendings -> Int -> STM ()
+addVcPending :: TVar VcPendings -> Int -> STM ()
 addVcPending pendings i = modifyTVar' pendings (Set.insert i)
 
-delVcPending :: VcPendings -> Int -> STM ()
+delVcPending :: TVar VcPendings -> Int -> STM ()
 delVcPending pendings i = modifyTVar' pendings (Set.delete i)
 
 resetVcTimer :: VcTimer -> IO ()
@@ -468,7 +469,7 @@ waitVcOutput VcSession{..} = atomically $ do
 retryUntil :: Bool -> STM ()
 retryUntil = guard
 
-mkConnector :: IO (ToSender -> IO (), IO FromX, VcRespAvail, VcAllowInput)
+mkConnector :: IO (ToSender -> IO (), IO FromX, STM VcRespAvail, STM VcAllowInput)
 mkConnector = do
     let queueBound = 8 {- limit waiting area per session to constant size -}
         inputThreshold = succ queueBound `quot` 2
