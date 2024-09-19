@@ -19,7 +19,9 @@ module DNS.Iterative.Server.Pipeline (
     enableVcTimeout,
     addVcPending,
     delVcPending,
+    getRecvVC,
     receiverVC,
+    getSendVC,
     senderVC,
     senderLogic,
     receiverLogic,
@@ -216,6 +218,13 @@ type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input B
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
 
+getRecvVC :: Int -> VcTimer -> Recv -> Recv
+getRecvVC slsize timer recv = do
+    (bs, peerInfo) <- recv
+    let sz = BS.length bs
+    when (sz > slsize || sz == 0) $ resetVcTimer timer
+    return (bs, peerInfo)
+
 receiverVC
     :: String
     -> Env
@@ -273,6 +282,9 @@ receiverLogic' env mysa recv toCacher toSender proto = do
 
 noPendingOp :: VcPendingOp
 noPendingOp = VcPendingOp{vpReqNum = 0, vpDelete = pure ()}
+
+getSendVC :: VcTimer -> Send -> Send
+getSendVC timer send bs peerInfo = resetVcTimer timer >> send bs peerInfo
 
 senderVC
     :: String

@@ -116,12 +116,14 @@ vcSession waitRead tmicro ws = do
 
 {- FOUMOLU_DISABLE -}
 runSession :: Int -> IO (ByteString, PeerInfo) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
-runSession factor recv waitRead tmicro = withVc waitRead tmicro 0 $ \(vcSess, toSender, fromX) timer -> do
+runSession factor recv0 waitRead tmicro = withVc waitRead tmicro 0 $ \(vcSess, toSender, fromX) timer -> do
     env <- newEmptyEnv
     toCacher <- getToCacher factor
-    (getResult, send) <- getSend
+    (getResult, send0) <- getSend
     debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"
     let myaddr = SockAddrInet 53 0x0100007f
+        recv = getRecvVC 0 timer recv0
+        send = getSendVC timer send0
         receiver = receiverVC "test-recv" env vcSess timer recv toCacher (mkInput myaddr toSender UDP)
         sender = senderVC "test-send" env vcSess timer send fromX
     when debug $ void $ forkIO $ replicateM_ 10 $ do

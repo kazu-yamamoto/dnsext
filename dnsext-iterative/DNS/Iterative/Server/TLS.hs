@@ -53,15 +53,15 @@ tlsServer VcServerConfig{..} env toCacher s = do
             peerInfo = PeerInfoVC peersa
         logLn env Log.DEBUG $ "tls-srv: accept: " ++ show peersa
         recvN <- makeRecvN "" $ H2.recv backend
-        let recv = do
-                (siz, bss) <- DNS.recvVC maxSize recvN
-                if siz == 0
-                    then return ("", peerInfo)
-                    else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
-            send bs _ = DNS.sendVC (H2.sendMany backend) bs
         (vcSess, toSender, fromX) <- initVcSession (pure $ pure ()) vc_slowloris_size
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            let receiver = receiverVC "tls-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOT
+            let recv = getRecvVC vc_slowloris_size vcTimer $ do
+                    (siz, bss) <- DNS.recvVC maxSize recvN
+                    if siz == 0
+                        then return ("", peerInfo)
+                        else incStatsDoT peersa (stats_ env) $> (BS.concat bss, peerInfo)
+                send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (H2.sendMany backend) bs
+                receiver = receiverVC "tls-recv" env vcSess vcTimer recv toCacher $ mkInput mysa toSender DOT
                 sender = senderVC "tls-send" env vcSess vcTimer send fromX
             TStat.concurrently_ "tls-send" sender "tls-recv" receiver
         logLn env Log.DEBUG $ "tls-srv: close: " ++ show peersa
