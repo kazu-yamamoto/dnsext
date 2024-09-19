@@ -95,10 +95,10 @@ type MilliSec = Int
 intervaledEvents :: Int -> [Event] -> IO ((VcFinished, VcFinished), [ByteString])
 intervaledEvents micro evs = do
     debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"
-    pushEvents 500_000_000 debug (threadDelay micro) evs
+    pushEvents debug (threadDelay micro) evs
 
 interactiveEvents :: [Event] -> IO ((VcFinished, VcFinished), [ByteString])
-interactiveEvents = pushEvents 500_000_000 True (void getLine)
+interactiveEvents = pushEvents True (void getLine)
 
 _size1ex :: [Event]
 _size1ex = [EvRecv 1, EvSend 1, EvEof, EvTimeout]
@@ -115,9 +115,9 @@ _run10ex = interactiveEvents _size10ex
 ------------------------------------------------------------
 -- trigger events along with list order
 
-pushEvents :: Int -> Bool -> IO () -> [Event] -> IO ((VcFinished, VcFinished), [ByteString])
-pushEvents tooLong debug interval evs = do
-    (push, dump, run, getResult) <- runWithEvent tooLong
+pushEvents :: Bool -> IO () -> [Event] -> IO ((VcFinished, VcFinished), [ByteString])
+pushEvents debug interval evs = do
+    (push, dump, run, getResult) <- runWithEvent
     rh <- TStat.async "test" run
     let iloop  []     = pure ()
         iloop (e:es)  = do
@@ -130,23 +130,19 @@ pushEvents tooLong debug interval evs = do
     iloop evs
     (,) <$> wait rh <*> getResult
 
-runWithEvent :: Int -> IO (Event -> IO (), IO (), IO (VcFinished, VcFinished), IO [ByteString])
-runWithEvent tmicro = do
+runWithEvent :: IO (Event -> IO (), IO (), IO (VcFinished, VcFinished), IO [ByteString])
+runWithEvent = do
     env <- newEmptyEnv
     (getResult0, send) <- getSend
     (toCacher, kickSender) <- pseudoPipeline readMaybe
     refWait <- newIORef (pure ())
     let myaddr = SockAddrInet 53 0x0100007f
-        withVc action =
-            initVcSession (readIORef refWait) 0 >>=
-            \(vcSess@VcSession{..}, toSender, fromX) -> withVcTimer tmicro (atomically $ enableVcTimeout vcTimeout_) $
-            action vcSess toSender fromX
-    withVc $ \vcSess@VcSession{..} toSender fromX timer -> do
+    initVcSession (readIORef refWait) >>= \(vcSess@VcSession{..}, toSender, fromX) -> do
         let enableTimeout = atomically $ writeTVar vcTimeout_ True {- force enable timeout-state, along with pushed events -}
         (loop, pushEvent, waitRecv, recv) <- eventsRunner show kickSender enableTimeout
         writeIORef refWait waitRecv {- fill action to ref, to avoid mutual reference of withVcSession and eventsRunner -}
-        let receiver = receiverVC "test-recv" env vcSess timer recv toCacher (mkInput myaddr toSender UDP)
-            sender = senderVC "test-send" env vcSess timer send fromX
+        let receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
+            sender = senderVC "test-send" env vcSess send fromX
             run = TStat.concurrently "test-send" sender "test-recv" receiver
             getResult = sort <$> getResult0
         _ <- forkIO loop

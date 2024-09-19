@@ -229,12 +229,11 @@ receiverVC
     :: String
     -> Env
     -> VcSession
-    -> VcTimer
     -> Recv
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
-receiverVC name env vcs@VcSession{..} timer recv toCacher mkInput_ =
+receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
     loop 1 `E.catch` onError
   where
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
@@ -245,18 +244,10 @@ receiverVC name env vcs@VcSession{..} timer recv toCacher mkInput_ =
             | otherwise = do
                 (bs, peerInfo) <- recv
                 ts <- currentTimeUsec_ env
-                casesSize (BS.length bs) bs peerInfo ts
-        casesSize sz bs peerInfo ts
-            | sz == 0 = do
-                resetVcTimer timer
-                caseEof
-            | sz > vcSlowlorisSize_ = do
-                resetVcTimer timer
-                step bs peerInfo ts
-                loop (i + 1)
-            | otherwise = do
-                step bs peerInfo ts
-                loop (i + 1)
+                casesSize bs peerInfo ts
+        casesSize bs peerInfo ts
+            | BS.null bs = caseEof
+            | otherwise = step bs peerInfo ts >> loop (i + 1)
 
         caseEof = atomically (enableVcEof vcEof_) >> return VfEof
         step bs peerInfo ts = do
@@ -290,11 +281,10 @@ senderVC
     :: String
     -> Env
     -> VcSession
-    -> VcTimer
     -> Send
     -> IO FromX
     -> IO VcFinished
-senderVC name env vcs timer send fromX = loop `E.catch` onError
+senderVC name env vcs send fromX = loop `E.catch` onError
   where
     -- logging async exception intentionally, for not expected `cancel`
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
@@ -303,9 +293,7 @@ senderVC name env vcs timer send fromX = loop `E.catch` onError
         case mx of
             Just x -> return x
             Nothing -> step >> loop
-    step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> do
-        resetVcTimer timer
-        send bs peerInfo
+    step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> send bs peerInfo
     finalize (Output _ VcPendingOp{..} _) = vpDelete
 
 senderLogic :: Env -> Send -> IO FromX -> IO ()
@@ -353,7 +341,6 @@ data VcSession =
     --   WITHOUT IO.
     , vcAllowInput_     :: VcAllowInput
     , vcWaitRead_       :: IO VcWaitRead
-    , vcSlowlorisSize_  :: Int
     }
 {- FOURMOLU_ENABLE -}
 
@@ -382,8 +369,8 @@ withVcTimer
 withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO VcWaitRead -> Int -> IO (VcSession, (ToSender -> IO ()), IO FromX)
-initVcSession getWaitIn slsize = do
+initVcSession :: IO VcWaitRead -> IO (VcSession, (ToSender -> IO ()), IO FromX)
+initVcSession getWaitIn = do
     vcEof       <- newTVarIO False
     vcTimeout   <- newTVarIO False
     vcPendings  <- newTVarIO Set.empty
@@ -402,7 +389,6 @@ initVcSession getWaitIn slsize = do
             , vcRespAvail_      = not <$> isEmptyTBQueue senderQ
             , vcAllowInput_     = allowInput
             , vcWaitRead_       = getWaitIn
-            , vcSlowlorisSize_  = slsize
             }
     pure (result, toSender, fromX)
 {- FOURMOLU_ENABLE -}

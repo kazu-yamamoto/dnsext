@@ -34,22 +34,22 @@ spec = do
     sessionSpec
 
 withVc
-    :: IO (STM ()) -> Int -> Int
+    :: IO (STM ()) -> Int
     -> ((VcSession, ToSender -> IO (), IO FromX) -> VcTimer -> IO a)
     -> IO a
-withVc getWaitIn micro slsize action = do
-    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn slsize
+withVc getWaitIn micro action = do
+    (vcSess@VcSession{..}, toSender, fromX) <- initVcSession getWaitIn
     withVcTimer micro (atomically $ enableVcTimeout vcTimeout_) $ action (vcSess, toSender, fromX)
 
 waitInputSpec :: Spec
 waitInputSpec = describe "session - wait VC input" $ do
-    it "now" $ withVc readableNow 100_000 50 $ \(vcs, _, _) _ -> do
+    it "now" $ withVc readableNow 100_000 $ \(vcs, _, _) _ -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just False
-    it "wait" $ withVc waitRead 1_000_000 50 $ \(vcs, _, _) _ -> do
+    it "wait" $ withVc waitRead 1_000_000 $ \(vcs, _, _) _ -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just False
-    it "timeout" $ withVc noReadable 100_000 50 $ \(vcs, _, _) _ -> do
+    it "timeout" $ withVc noReadable 100_000 $ \(vcs, _, _) _ -> do
         result <- timeout 3_000_000 $ waitVcInput vcs
         result `shouldBe` Just True
   where
@@ -64,23 +64,23 @@ waitInputSpec = describe "session - wait VC input" $ do
 waitOutputSpec :: Spec
 waitOutputSpec = describe "session - wait VC output" $ do
     let noReadable = pure retry
-    it "finish - timeout" $ withVc noReadable 100_000 50 $ \(vcs, _, _) _ -> do
+    it "finish - timeout" $ withVc noReadable 100_000 $ \(vcs, _, _) _ -> do
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfTimeout)
-    it "finish - eof" $ withVc noReadable 1_000_000 50 $ \(vcs@VcSession{..}, _, _) _ -> do
+    it "finish - eof" $ withVc noReadable 1_000_000 $ \(vcs@VcSession{..}, _, _) _ -> do
         enableVcEof vcEof_ `afterUSec` 100_000
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfEof)
-    it "finish - eof supersede timeout" $ withVc noReadable 0 50 $ \(vcs@VcSession{..}, _, _) _ -> do
+    it "finish - eof supersede timeout" $ withVc noReadable 0 $ \(vcs@VcSession{..}, _, _) _ -> do
         atomically $ enableVcEof vcEof_
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just (Just VfEof)
-    it "wait pendings" $ withVc noReadable 0 50 $ \(vcs@VcSession{..}, _, _) _ -> do
+    it "wait pendings" $ withVc noReadable 0 $ \(vcs@VcSession{..}, _, _) _ -> do
         let uid = 1
         atomically $ addVcPending vcPendings_ uid
         result <- timeout 100_000 $ waitVcOutput vcs
         result `shouldBe` Nothing {- expect outside timeout-}
-    it "next" $ withVc noReadable 1_000_000 50 $ \(vcs, toSender, _) _ -> do
+    it "next" $ withVc noReadable 1_000_000 $ \(vcs, toSender, _) _ -> do
         _ <- forkIO $ threadDelay 100_000 >> toSender (Output "hello" noPendingOp {- dummy -} dummyPeer)
         result <- timeout 3_000_000 $ waitVcOutput vcs
         result `shouldBe` Just Nothing
@@ -116,7 +116,7 @@ vcSession waitRead tmicro ws = do
 
 {- FOUMOLU_DISABLE -}
 runSession :: Int -> IO (ByteString, PeerInfo) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
-runSession factor recv0 waitRead tmicro = withVc waitRead tmicro 0 $ \(vcSess, toSender, fromX) timer -> do
+runSession factor recv0 waitRead tmicro = withVc waitRead tmicro $ \(vcSess, toSender, fromX) timer -> do
     env <- newEmptyEnv
     toCacher <- getToCacher factor
     (getResult, send0) <- getSend
@@ -124,8 +124,8 @@ runSession factor recv0 waitRead tmicro = withVc waitRead tmicro 0 $ \(vcSess, t
     let myaddr = SockAddrInet 53 0x0100007f
         recv = getRecvVC 0 timer recv0
         send = getSendVC timer send0
-        receiver = receiverVC "test-recv" env vcSess timer recv toCacher (mkInput myaddr toSender UDP)
-        sender = senderVC "test-send" env vcSess timer send fromX
+        receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
+        sender = senderVC "test-send" env vcSess send fromX
     when debug $ void $ forkIO $ replicateM_ 10 $ do
         {- dumper to debug -}
         dump vcSess
