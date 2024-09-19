@@ -323,6 +323,9 @@ data VcTimer =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+-- separate the STM computations that determine event states from
+-- the conditions and parameters that cause these events to occur.
+-- place only what is directly necessary for STM calculations in `VcSession`.
 data VcSession =
     VcSession
     { vcEof_            :: VcEof
