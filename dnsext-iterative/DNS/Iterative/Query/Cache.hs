@@ -156,9 +156,9 @@ data LookupResult
     | LKPositive RRset
     deriving Show
 
-foldLookupResult :: (RRset -> Ranking -> a) -> (RCODE -> a) -> (RRset -> a) -> LookupResult -> a
+foldLookupResult :: (RRset -> [RRset] -> Ranking -> a) -> (RCODE -> a) -> (RRset -> a) -> LookupResult -> a
 foldLookupResult negative nsoa positive lkre = case lkre of
-    LKNegative rrset _nrrs rank -> negative rrset rank
+    LKNegative rrset nrrs rank -> negative rrset nrrs rank
     LKNegativeNoSOA rcode -> nsoa rcode
     LKPositive rrset      -> positive rrset
 {- FOURMOLU_ENABLE -}
@@ -170,11 +170,11 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 -- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
 -- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p0.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRsetEither "test" "p0.example.com." A
--- >>> fmap (foldLookupResult (\_ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
+-- >>> fmap (foldLookupResult (\_ _ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
 -- Just "[10.0.0.3,10.0.0.4]"
 -- >>> soa = cacheNoRRSIG [ResourceRecord "example.com." SOA IN 7200 $ rd_soa "ns1.example.com." "root@example.com." 2024061601 3600 900 604800 900] Cache.RankAuthAnswer
--- >>> getSOA = foldLookupResult (\rrset _ -> show $ rrsType rrset) (\_ -> "neg-no-soa") (\_ -> "pos-rrset")
--- >>> getRC = foldLookupResult (\_ _ -> "neg-soa") (\rc -> show rc) (\_ -> "pos-rrset")
+-- >>> getSOA = foldLookupResult (\rrset _ _ -> show $ rrsType rrset) (\_ -> "neg-no-soa") (\_ -> "pos-rrset")
+-- >>> getRC = foldLookupResult (\_ _ _ -> "neg-soa") (\rc -> show rc) (\_ -> "pos-rrset")
 -- >>> nodata1 = cacheNegative "example.com." "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupRRsetEither "test" "nodata1.example.com." A
 -- >>> fmap (getSOA . fst) <$> runCxt (soa *> nodata1)
 -- Just "SOA"
@@ -197,14 +197,15 @@ lookupRRsetEither logMark dom typ = lookupWithHandler h ((": " ++) . show . snd)
     h now cache = handleHits1 (negativeCases negSOA negNoSOA) (positiveCases noSig checkDisabled valid)
       where
         {- negative hit. ranking for empty-data and SOA result. -}
-        negSOA soaDom _nrrs ttl rank = (,) <$> Cache.lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache <*> pure rank
+        negSOA soaDom nrrs ttl rank = (,) <$> Cache.lookupAlive now (soaResult ttl soaDom nrrs) soaDom SOA DNS.IN cache <*> pure rank
         negNoSOA rc _ttl rank = Just (LKNegativeNoSOA rc, rank)
         noSig rds ttl rank = Just (LKPositive $ noSigRRset dom typ DNS.IN ttl rds, rank)
         checkDisabled rds ttl rank = Just (LKPositive $ checkDisabledRRset dom typ DNS.IN ttl rds, rank)
         valid rds sigs ttl rank = Just (LKPositive $ validRRset dom typ DNS.IN ttl rds sigs, rank)
 
-    soaResult ettl srcDom sttl hit rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) hit <*> pure [] <*> pure rank
+    soaResult ettl srcDom nrrs sttl hit rank = LKNegative <$> Cache.hitCases1 (const Nothing) (Just . positive) hit <*> pure nrrset <*> pure rank
       where
+        nrrset = [validRRset nname nty cls nttl [rd] (s:ss) | (ResourceRecord nname nty cls nttl rd, s:|ss) <- nrrs]
         positive = positiveCases noSig checkDisabled valid
         noSig rds = noSigRRset srcDom SOA DNS.IN ttl rds
         checkDisabled = checkDisabledRRset dom typ DNS.IN ttl
