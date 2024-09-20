@@ -16,6 +16,8 @@ module DNS.Do53.IO (
     -- * Making recv
     recvManyN,
     recvManyNN,
+
+    -- * Misc
     makeAddrInfo,
 )
 where
@@ -33,6 +35,7 @@ import Network.Socket (
     defaultProtocol,
     openSocket,
  )
+import Network.Socket.BufferPool (recvManyN, recvManyNN)
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
 
@@ -93,45 +96,6 @@ decodeVCLength :: ByteString -> Int
 decodeVCLength bs = case BS.unpack bs of
     [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
     _ -> 0 -- never reached
-
--- Used only in DoH.
--- Recv is getResponseBodyChunk.
--- "lim" is a really limitation
-recvManyN :: Recv -> RecvManyN
-recvManyN rcv lim = loop id 0
-  where
-    loop build total = do
-        bs <- rcv
-        let len = BS.length bs
-        if len == 0
-            then return (total, build [])
-            else do
-                let total' = total + len
-                    build' = build . (bs :)
-                if total' >= lim
-                    then do
-                        return (total', build' [])
-                    else loop build' total'
-
--- Used only in recvVC.
--- "lim" is the size to be received.
-recvManyNN :: RecvN -> RecvManyN
-recvManyNN rcv lim = loop id 0
-  where
-    loop build total = do
-        let left = lim - total
-            siz = min left 2048
-        bs <- rcv siz
-        let len = BS.length bs
-        if len == 0
-            then return (total, build [])
-            else do
-                let total' = total + len
-                    build' = build . (bs :)
-                if total' >= lim
-                    then do
-                        return (total', build' [])
-                    else loop build' total'
 
 -- | Receiving data from a TCP socket.
 recvTCP :: Socket -> RecvN

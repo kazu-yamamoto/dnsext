@@ -57,6 +57,7 @@ library
         mtl,
         network >= 3.2.3 && < 3.3,
         random >=1.2,
+        recv,
         stm,
         unix-time
 
