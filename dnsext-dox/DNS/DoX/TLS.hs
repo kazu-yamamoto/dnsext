@@ -9,7 +9,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Either (rights)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
-import Network.Socket.BufferPool (makeRecvN)
 import Network.TLS
 
 import DNS.Do53.Internal
@@ -18,9 +17,8 @@ tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body =
     -- Using a fresh connection
     H2.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do
-        recvN <- makeRecvN "" $ H2.recvTLS ctx
         let sendDoT = sendVC $ H2.sendManyTLS ctx
-            recvDoT = recvVC rinfoVCLimit recvN
+            recvDoT = recvVC rinfoVCLimit $ H2.recvTLS ctx
         vcPersistentResolver tag sendDoT recvDoT ri body
   where
     tag = nameTag ri "TLS"
@@ -56,9 +54,8 @@ tlsResolver :: OneshotResolver
 tlsResolver ri@ResolveInfo{..} q qctl =
     -- Using a fresh connection
     H2.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do
-        recvN <- makeRecvN "" $ H2.recvTLS ctx
         let sendDoT = sendVC $ H2.sendManyTLS ctx
-            recvDoT = recvVC rinfoVCLimit recvN
+            recvDoT = recvVC rinfoVCLimit $ H2.recvTLS ctx
         vcResolver "TLS" sendDoT recvDoT ri q qctl
   where
     settings =

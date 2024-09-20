@@ -41,7 +41,7 @@ tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> 
     open = openTCP rinfoIP rinfoPort
 
 -- | Making a persistent resolver.
-vcPersistentResolver :: NameTag -> Send -> RecvMany -> PersistentResolver
+vcPersistentResolver :: NameTag -> Send -> Recv -> PersistentResolver
 vcPersistentResolver tag send recv ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp
@@ -71,20 +71,20 @@ vcPersistentResolver tag send recv ResolveInfo{..} body = do
     del idnt m = swap $ IM.updateLookupWithKey (\_ _ -> Nothing) idnt m
 
     recver ref = forever $ do
-        (rx, bss) <-
+        bs <-
             recv `E.catch` \ne -> do
                 let e = fromIOException (unNameTag tag) ne
                 cleanup ref e
                 E.throwIO e
         now <- ractionGetTime rinfoActions
-        case decodeChunks now bss of
+        case decodeAt now bs of
             Left e -> do
                 cleanup ref e
                 E.throwIO e
             Right msg -> do
                 let key = fromIntegral $ identifier msg
                 Just var <- atomicModifyIORef' ref $ del key
-                putMVar var $ Right $ Reply tag msg 0 {- dummy -} rx
+                putMVar var $ Right $ Reply tag msg 0 {- dummy -} $ BS.length bs
 
     cleanup ref e = do
         vars <- IM.elems <$> readIORef ref
