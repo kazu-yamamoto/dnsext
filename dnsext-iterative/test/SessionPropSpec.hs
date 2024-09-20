@@ -138,7 +138,7 @@ runWithEvent = do
     refWait <- newIORef (pure ())
     let myaddr = SockAddrInet 53 0x0100007f
     initVcSession (readIORef refWait) >>= \(vcSess@VcSession{..}, toSender, fromX) -> do
-        let enableTimeout = atomically $ writeTVar vcTimeout_ True {- force enable timeout-state, along with pushed events -}
+        let enableTimeout = atomically (enableVcTimeout vcTimeout_) {- enable timeout with pushed events -}
         (loop, pushEvent, waitRecv, recv) <- eventsRunner show kickSender enableTimeout
         writeIORef refWait waitRecv {- fill action to ref, to avoid mutual reference of withVcSession and eventsRunner -}
         let receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
