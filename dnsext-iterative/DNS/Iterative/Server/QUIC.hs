@@ -5,7 +5,7 @@
 module DNS.Iterative.Server.QUIC where
 
 -- GHC packages
-import Control.Concurrent.STM (isEmptyTQueue)
+import Control.Concurrent.STM (atomically, isEmptyTQueue)
 import qualified Data.ByteString as BS
 
 -- dnsext-* packages
@@ -48,20 +48,21 @@ quicServers VcServerConfig{..} env toCacher ss = do
             waitInput = return $ do
                 isEmpty <- isEmptyTQueue $ QUIC.inputQ conn
                 retryUntil $ not isEmpty
-            recv = do
-                strm <- QUIC.acceptStream conn
-                let peerInfo = PeerInfoStream peersa $ StreamQUIC strm
-                -- Without a designated thread, recvStream would block.
-                (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
-                if siz == 0
-                    then return ("", peerInfo)
-                    else incStatsDoQ peersa (stats_ env) $> (BS.concat bss, peerInfo)
-            send bs peerInfo = do
-                case peerInfo of
-                    PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
-                    _ -> return ()
-        withVcSession waitInput tmicro vc_slowloris_size $ \(vcSess, toSender, fromX) -> do
-            let receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
+        (vcSess, toSender, fromX) <- initVcSession waitInput
+        withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
+            let recv = getRecvVC vc_slowloris_size vcTimer $ do
+                    strm <- QUIC.acceptStream conn
+                    let peerInfo = PeerInfoStream peersa $ StreamQUIC strm
+                    -- Without a designated thread, recvStream would block.
+                    (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
+                    if siz == 0
+                        then return ("", peerInfo)
+                        else incStatsDoQ peersa (stats_ env) $> (BS.concat bss, peerInfo)
+                send = getSendVC vcTimer $ \bs peerInfo -> do
+                    case peerInfo of
+                        PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
+                        _ -> return ()
+                receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
                 sender = senderVC "quic-send" env vcSess send fromX
             TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
