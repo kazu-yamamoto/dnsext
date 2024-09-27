@@ -20,7 +20,7 @@ import qualified DNS.ThreadStats as TStat
 
 -- other packages
 import qualified Network.HTTP2.TLS.Server as H2
-import Network.Socket.BufferPool (makeRecvN)
+import Network.Socket.Recv (makeRecvN)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))

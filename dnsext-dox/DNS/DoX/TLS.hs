@@ -9,7 +9,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Either (rights)
 import qualified Network.HTTP2.TLS.Client as H2
 import qualified Network.HTTP2.TLS.Internal as H2
-import Network.Socket.BufferPool (makeRecvN)
+import Network.Socket.Recv (makeRecvN)
 import Network.TLS
 
 import DNS.Do53.Internal

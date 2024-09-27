@@ -47,7 +47,7 @@ import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
-import Network.Socket.BufferPool (Recv, RecvMany, RecvManyN, RecvN)
+import Network.Socket.Recv (Recv, RecvMany, RecvManyN, RecvN)
 import Prelude
 
 import DNS.Do53.Id

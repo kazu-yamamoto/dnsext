@@ -35,9 +35,9 @@ import Network.Socket (
     defaultProtocol,
     openSocket,
  )
-import Network.Socket.BufferPool (recvManyN, recvManyNN)
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
+import Network.Socket.Recv (recvManyN, recvManyNN)
 
 ----------------------------------------------------------------
 
