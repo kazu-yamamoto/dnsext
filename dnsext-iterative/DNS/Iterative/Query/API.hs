@@ -138,19 +138,19 @@ replyMessage
     -> [DNS.Question]
     -> Either String DNSMessage
 replyMessage eas ident rqs =
-    either queryError (Right . message) eas
+    either queryError (\(rcode, rrs, auth) -> Right $ message rcode rrs auth) eas
   where
-    dnsError de = fmap message $ (,,) <$> rcodeOfDNSError de <*> pure [] <*> pure []
+    dnsError de = message <$> rcodeOfDNSError de <*> pure [] <*> pure []
     rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
 
     queryError qe = case qe of
         DnsError e _ -> dnsError e
-        NotResponse{} -> Right $ message (DNS.ServFail, [], [])
-        InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
-        HasError _as rc _m -> Right $ message (rc, [], [])
+        NotResponse{} -> Right $ message DNS.ServFail [] []
+        InvalidEDNS{} -> Right $ message DNS.ServFail [] []
+        HasError _as rc _m -> Right $ message rc [] []
         QueryDenied -> Left "QueryDenied"
 
-    message (rcode, rrs, auth) =
+    message rcode rrs auth =
         res
             { DNS.identifier = ident
             , DNS.rcode = rcode
