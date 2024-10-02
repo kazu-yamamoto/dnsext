@@ -138,19 +138,19 @@ replyMessage
     -> [DNS.Question]
     -> Either String DNSMessage
 replyMessage eas ident rqs =
-    either queryError (Right . message) eas
+    either queryError (\(rcode, rrs, auth) -> Right $ message rcode rrs auth) eas
   where
-    dnsError de = fmap message $ (,,) <$> rcodeOfDNSError de <*> pure [] <*> pure []
+    dnsError de = message <$> rcodeOfDNSError de <*> pure [] <*> pure []
     rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
 
     queryError qe = case qe of
         DnsError e _ -> dnsError e
-        NotResponse{} -> Right $ message (DNS.ServFail, [], [])
-        InvalidEDNS{} -> Right $ message (DNS.ServFail, [], [])
-        HasError _as rc _m -> Right $ message (rc, [], [])
+        NotResponse{} -> Right $ message DNS.ServFail [] []
+        InvalidEDNS{} -> Right $ message DNS.ServFail [] []
+        HasError _as rc _m -> Right $ message rc [] []
         QueryDenied -> Left "QueryDenied"
 
-    message (rcode, rrs, auth) =
+    message rcode rrs auth =
         res
             { DNS.identifier = ident
             , DNS.rcode = rcode
@@ -171,11 +171,6 @@ getResultIterative q = do
     let fromRRsets = concatMap $ rrListFromRRset reqDO
         fromMessage (msg, vans, vauth) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
-
-resultFromRRS :: RequestDO -> ResultRRS -> Result
-resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
-  where
-    fromRRsets = concatMap $ rrListFromRRset reqDO
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
 getResultCached :: Question -> DNSQuery (Maybe Result)
@@ -210,6 +205,11 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
             | otherwise = xs
 
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
+
+resultFromRRS :: RequestDO -> ResultRRS -> Result
+resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
+  where
+    fromRRsets = concatMap $ rrListFromRRset reqDO
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO rs@RRset{..} = case reqDO of
