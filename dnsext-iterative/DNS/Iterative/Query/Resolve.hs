@@ -94,8 +94,8 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             withERRC (rc, soa)          = pure (([], bn), Left (rc, [], soa))
             cachedCNAME (rc, rrs, soa)  = pure (([], bn), Left (rc, rrs, soa))
 
-            negative soa _rank  = (DNS.NoErr, [], [soa])
-            noSOA rc            = (rc, [], [])
+            negative soa nsecs _rank  = (DNS.NoErr, [], soa : nsecs)
+            noSOA rc                  = (rc, [], [])
 
         maybe
             (maybe noCache withERRC =<< lookupERR bn)
@@ -122,7 +122,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
                         =<< (withCN =<<) . joinLKR <$> lookupType bn CNAME
                   where
                     {- when CNAME has NODATA, do not loop with CNAME domain -}
-                    joinLKR = (foldLookupResult (\_ _ -> Nothing) (\_ -> Nothing) Just =<<)
+                    joinLKR = (foldLookupResult (\_ _ _ -> Nothing) (\_ -> Nothing) Just =<<)
                     withCN cnRRset = do
                         (cn, _) <- uncons cns
                         Just (cn, cnRRset)
@@ -135,7 +135,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
                 noTypeCache
                 ( cachedType
                     . foldLookupResult
-                        (\soa _rank -> (DNS.NoErr, [], [soa]))
+                        (\soa nsecs _rank -> (DNS.NoErr, [], soa : nsecs))
                         (\rc -> (rc, [], []))
                         (\xrrs -> (DNS.NoErr, [xrrs], [] {- return cached result with target typ -}))
                 )
@@ -149,7 +149,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
             =<< lookupType name Cache.ERR
       where
         {- authority section is cached as RankAdditional, so not applying guardReply -}
-        soah soa _rank = pure $ Just (NameErr, [soa])
+        soah soa nsecs _rank = pure $ Just (NameErr, soa : nsecs)
         inconsistent rrs = do
             logLn_ Log.WARN $ "inconsistent ERR cache found: dom=" ++ show name ++ ", " ++ show rrs
             return Nothing
@@ -164,7 +164,7 @@ resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
     --
     guardLookup reqCD = foldLookupResult (guardNegative reqCD) (guardNegativeNoSOA reqCD) (guardPositive reqCD)
     {- {- authority section is cached as RankAdditional, so not applying guard -} guardReply soaRank *> -}
-    guardNegative reqCD soa _soaRank = guardMayVerified reqCD soa
+    guardNegative reqCD soa _nsecs _soaRank = guardMayVerified reqCD soa
     guardNegativeNoSOA CheckDisabled   _rc = empty    {- query again for verification error -}
     guardNegativeNoSOA NoCheckDisabled _rc = pure ()
     guardPositive reqCD rrset = guardMayVerified reqCD rrset

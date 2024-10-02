@@ -161,7 +161,7 @@ insertPositive CacheConf{..} c k now v ttl = when (ttl /= 0) $ do
 cacheNegative :: CacheConf -> RRCache -> Question -> EpochTime -> DNSMessage -> IO ()
 cacheNegative cconf c k now ans = case soas of
     [] -> return () -- does not cache anything
-    soa : _ -> insertNegative cconf c k now (Cache.negWithSOA $ rrname soa) $ rrttl soa
+    soa : _ -> insertNegative cconf c k now (Cache.negWithSOA (rrname soa) []) $ rrttl soa
   where
     soas = filter (SOA `isTypeOf`) $ authority ans
 

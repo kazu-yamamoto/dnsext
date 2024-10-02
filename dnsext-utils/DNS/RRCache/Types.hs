@@ -51,6 +51,7 @@ module DNS.RRCache.Types (
     --
     Positive (..),
     positiveCases,
+    NSECx,
     Negative (..),
     negativeCases,
     Hit (..),
@@ -127,15 +128,17 @@ positiveCases notVerified_ checkDisabled_ valid_ pos = case pos of
     PosCheckDisabled rds  -> checkDisabled_ $ NE.toList rds
     PosValid rds ss       -> valid_ (NE.toList rds) (NE.toList ss)
 
+type NSECx = (ResourceRecord, RRSIGs)
+
 data Negative
-    = NegSOA Domain                {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from -}
+    = NegSOA Domain [NSECx]        {- NXDOMAIN or NODATA with SOA, hold zone-domain delegation from and NSEC/NSEC3 RRs -}
     | NegNoSOA RCODE               {- without SOA -}
     deriving (Eq, Show)
 
-negativeCases :: (Domain -> a) -> (RCODE -> a) -> Negative -> a
+negativeCases :: (Domain -> [NSECx] -> a) -> (RCODE -> a) -> Negative -> a
 negativeCases withSOA_ withoutSOA_ neg = case neg of
-    NegSOA zone  -> withSOA_ zone
-    NegNoSOA rc  -> withoutSOA_ rc
+    NegSOA zone nrrs  -> withSOA_ zone nrrs
+    NegNoSOA rc       -> withoutSOA_ rc
 
 -- cache hit cases
 data Hit
@@ -148,7 +151,7 @@ hitCases1 negative_ posivtive_ hit = case hit of
     Negative neg  -> negative_ neg
     Positive pos  -> posivtive_ pos
 
-hitCases :: (Domain -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
+hitCases :: (Domain -> [NSECx] -> a) -> (RCODE -> a) -> ([RData] -> a) -> ([RData] -> a) -> ([RData] -> [RD_RRSIG] -> a) -> Hit -> a
 hitCases soa_ nsoa_ notVerified_ checkDisabled_ valid_ =
     hitCases1 (negativeCases soa_ nsoa_) (positiveCases notVerified_ checkDisabled_ valid_)
 {- FOURMOLU_ENABLE -}
@@ -175,8 +178,8 @@ valid rds sigs nothing just = cons1 rds nothing withRds
       where
         withSigs s ss = just $ mkValid d ds s ss
 
-negWithSOA :: Domain -> Hit
-negWithSOA = Negative . NegSOA
+negWithSOA :: Domain -> [NSECx] -> Hit
+negWithSOA zone nrrs = Negative $ NegSOA zone nrrs
 
 negNoSOA :: RCODE -> Hit
 negNoSOA = Negative . NegNoSOA
@@ -301,9 +304,9 @@ lookupEither now dom typ cls cache = lookupAlive now result dom typ cls cache
     result ttl crs rank = case crs of
         Negative neg  -> negativeCases (wsoa_ ttl rank) (nsoa_ rank) neg
         Positive {}   -> Just (Right $ extractRRSet dom typ DNS.IN ttl crs, rank)
-    wsoa_ ttl rank soaDom = do
-        sp <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache {- EMPTY hit. empty ranking and SOA result. -}
-        Just (Left sp, rank)
+    wsoa_ ttl rank soaDom nrrs = do
+        (soa, srank) <- lookupAlive now (soaResult ttl soaDom) soaDom SOA DNS.IN cache {- EMPTY hit. empty ranking and SOA result. -}
+        Just (Left (soa ++ [nrr | (nrr, _) <- nrrs], srank), rank)
     nsoa_ rank _rc = Just (Left ([], RankAdditional {- FIXME, dummy rank value for no-SOA -}), rank)
     soaResult ettl srcDom ttl crs rank =
         Just (extractRRSet srcDom SOA DNS.IN (ettl `min` ttl {- treated as TTL of empty data -}) crs, rank)
@@ -507,7 +510,7 @@ now <+ ttl = now + fromIntegral ttl
 infixl 6 <+
 
 toRDatas :: Hit -> ([RData], [RD_RRSIG])
-toRDatas = hitCases (const ([], [])) (const ([], [])) (\rs -> (rs, [])) (\rs -> (rs, [])) (,)
+toRDatas = hitCases (\_ _ -> ([], [])) (const ([], [])) (\rs -> (rs, [])) (\rs -> (rs, [])) (,)
 
 fromRDatas :: [RData] -> Maybe Hit
 fromRDatas rds = rds `listseq` noSig rds Nothing Just
@@ -555,10 +558,10 @@ cpsInsertSection rs0 r0 = (errRS, iset rrss r0)
 
 {- FOURMOLU_DISABLE -}
 cpsInsertNegative
-    :: Domain
+    :: Domain -> [NSECx]
     -> Domain -> TYPE -> TTL -> Ranking
     -> ((Question -> TTL -> Hit -> Ranking -> a) -> a)
-cpsInsertNegative soaDom dom typ ttl rank h = soaDom `seq` h key ttl (negWithSOA soaDom) rank
+cpsInsertNegative soaDom nsecxs dom typ ttl rank h = soaDom `seq` h key ttl (negWithSOA soaDom nsecxs) rank
   where
     key = Question dom typ DNS.IN
 
