@@ -172,11 +172,6 @@ getResultIterative q = do
         fromMessage (msg, vans, vauth) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
-resultFromRRS :: RequestDO -> ResultRRS -> Result
-resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
-  where
-    fromRRsets = concatMap $ rrListFromRRset reqDO
-
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
 getResultCached :: Question -> DNSQuery (Maybe Result)
 getResultCached q = do
@@ -210,6 +205,11 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
             | otherwise = xs
 
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
+
+resultFromRRS :: RequestDO -> ResultRRS -> Result
+resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
+  where
+    fromRRsets = concatMap $ rrListFromRRset reqDO
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO rs@RRset{..} = case reqDO of
