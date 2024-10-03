@@ -9,7 +9,6 @@ where
 
 -- GHC packages
 import Control.Concurrent.STM (atomically)
-import qualified Data.ByteString as BS
 import Data.Functor
 
 -- dnsext-* packages
@@ -52,10 +51,9 @@ tcpServer VcServerConfig{..} env toCacher s = do
         (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock)
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
             let recv = getRecvVC vc_slowloris_size vcTimer $ do
-                    (siz, bss) <- DNS.recvVC maxSize $ DNS.recvTCP sock
-                    if siz == 0
-                        then return ("", peerInfo)
-                        else incStatsTCP53 peersa (stats_ env) $> (BS.concat bss, peerInfo)
+                    bs <- DNS.recvVC maxSize $ DNS.recvTCP sock
+                    incStatsTCP53 peersa (stats_ env)
+                    return (bs, peerInfo)
                 send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (DNS.sendTCP sock) bs
                 receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
                 sender = senderVC "tcp-send" env vcSess send fromX

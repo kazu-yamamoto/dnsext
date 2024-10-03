@@ -36,8 +36,6 @@ module DNS.Do53.Types (
     -- * IO
     Recv,
     RecvN,
-    RecvMany,
-    RecvManyN,
     Send,
     SendMany,
 )
@@ -47,7 +45,7 @@ import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
-import Network.Socket.Recv (Recv, RecvMany, RecvManyN, RecvN)
+import Network.Socket.Recv (Recv, RecvN)
 import Prelude
 
 import DNS.Do53.Id

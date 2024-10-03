@@ -41,12 +41,12 @@ resolv conn ri@ResolveInfo{..} q qctl = do
         tx = BS.length qry
     sendVC (sendStreamMany strm) qry
     shutdownStream strm
-    (rx, bss) <- recvVC rinfoVCLimit $ recvStream strm
+    bs <- recvVC rinfoVCLimit $ recvStream strm 2048
     now <- getTime
-    case decodeChunks now bss of
+    case decodeAt now bs of
         Left e -> return $ Left e
         Right msg -> case checkRespM q ident msg of -- fixme
-            Nothing -> return $ Right $ Reply tag msg tx rx
+            Nothing -> return $ Right $ Reply tag msg tx $ BS.length bs
             Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions

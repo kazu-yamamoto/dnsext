@@ -10,9 +10,6 @@ module DNS.Types.Decode (
     decodeAt,
     decode,
 
-    -- * Generic decoder
-    decodeChunks,
-
     -- * Decoders for parts
     decodeDNSFlags,
     decodeQuestion,
@@ -63,14 +60,6 @@ decode
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
 decode bs = runParser getDNSMessage bs
-
-----------------------------------------------------------------
-
-decodeChunks
-    :: EpochTime
-    -> [ByteString]
-    -> Either DNSError DNSMessage
-decodeChunks t bss = decodeAt t $ BS.concat bss
 
 ----------------------------------------------------------------
 
