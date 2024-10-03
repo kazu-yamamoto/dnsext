@@ -34,7 +34,8 @@ spec = do
     sessionSpec
 
 withVc
-    :: IO (STM ()) -> Int
+    :: IO (STM ())
+    -> Int
     -> ((VcSession, ToSender -> IO (), IO FromX) -> VcTimer -> IO a)
     -> IO a
 withVc getWaitIn micro action = do
@@ -134,6 +135,7 @@ runSession factor recv0 waitRead tmicro = withVc waitRead tmicro $ \(vcSess, toS
     fstate <- TStat.concurrently "test-send" sender "test-recv" receiver
     result <- sort <$> getResult
     pure (fstate, result)
+
 {- FOUMOLU_ENABLE -}
 
 dump :: VcSession -> IO ()
@@ -152,9 +154,10 @@ getToCacher factor = do
             inputToSender $ Output inputQuery inputPendingOp inputPeerInfo
     _ <- replicateM 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
+
 {- FOUMOLU_ENABLE -}
 
-getRecv :: [ByteString] -> IO Recv
+getRecv :: [ByteString] -> IO RecvPI
 getRecv ws = do
     ref <- newIORef ws
     pure $ rstep ref
