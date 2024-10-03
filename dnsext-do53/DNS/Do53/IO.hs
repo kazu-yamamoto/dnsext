@@ -6,6 +6,7 @@ module DNS.Do53.IO (
     -- * Receiving DNS messages
     recvTCP,
     recvVC,
+    makeNBRecvVC,
     decodeVCLength,
 
     -- * Sending pre-encoded messages
@@ -23,6 +24,7 @@ import DNS.Do53.Imports
 import DNS.Do53.Types
 import DNS.Types hiding (Seconds)
 import qualified Data.ByteString as BS
+import Data.IORef
 import Network.Socket (
     AddrInfo (..),
     Family (..),
@@ -33,7 +35,7 @@ import Network.Socket (
  )
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
-import Network.Socket.Recv (makeRecvN)
+import Network.Socket.Recv (NBRecvR (..), makeNBRecvN, makeRecvN)
 
 ----------------------------------------------------------------
 
@@ -85,6 +87,34 @@ recvVC lim rcv = do
     if BS.null bs
         then E.throwIO $ DecodeError "message length is not enough"
         else return bs
+
+makeNBRecvVC :: VCLimit -> Recv -> IO (IO NBRecvR)
+makeNBRecvVC lim rcv = do
+    ref <- newIORef Nothing
+    nbRecvN <- makeNBRecvN rcv ""
+    return $ nbRecvVC lim ref nbRecvN
+
+nbRecvVC :: VCLimit -> IORef (Maybe Int) -> (Int -> IO NBRecvR) -> IO NBRecvR
+nbRecvVC lim ref nbRecvN = do
+    mi <- readIORef ref
+    case mi of
+        Nothing -> do
+            x <- nbRecvN 2
+            case x of
+                NBytes bs -> do
+                    let len = decodeVCLength bs
+                    when (fromIntegral len > lim) $
+                        E.throwIO $
+                            DecodeError $
+                                "length is over the limit: should be len <= lim, but (len: "
+                                    ++ show len
+                                    ++ ") > (lim: "
+                                    ++ show lim
+                                    ++ ") "
+                    writeIORef ref $ Just len
+                    return NotEnough
+                _ -> return x
+        Just len -> nbRecvN len
 
 -- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int
