@@ -53,9 +53,9 @@ tcpServer VcServerConfig{..} env toCacher s = do
             let recv = getRecvVC vc_slowloris_size vcTimer $ do
                     bs <- DNS.recvVC maxSize $ DNS.recvTCP sock
                     incStatsTCP53 peersa (stats_ env)
-                    return (bs, peerInfo)
+                    return bs
                 send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (DNS.sendTCP sock) bs
-                receiver = receiverVC "tcp-recv" env vcSess recv toCacher $ mkInput mysa toSender TCP
+                receiver = receiverVC "tcp-recv" env vcSess peerInfo recv toCacher $ mkInput mysa toSender TCP
                 sender = senderVC "tcp-send" env vcSess send fromX
             TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa

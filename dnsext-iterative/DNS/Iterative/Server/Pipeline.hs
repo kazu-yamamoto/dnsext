@@ -210,6 +210,7 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
+type Recv = IO ByteString
 type RecvPI = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
@@ -218,22 +219,23 @@ type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input B
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
 
-getRecvVC :: Int -> VcTimer -> RecvPI -> RecvPI
+getRecvVC :: Int -> VcTimer -> Recv -> Recv
 getRecvVC slsize timer recv = do
-    (bs, peerInfo) <- recv
+    bs <- recv
     let sz = BS.length bs
     when (sz > slsize || sz == 0) $ resetVcTimer timer
-    return (bs, peerInfo)
+    return bs
 
 receiverVC
     :: String
     -> Env
     -> VcSession
-    -> RecvPI
+    -> PeerInfo
+    -> Recv
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
-receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
+receiverVC name env vcs@VcSession{..} peerInfo recv toCacher mkInput_ =
     loop 1 `E.catch` onError
   where
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
@@ -242,15 +244,15 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
         cases timeout
             | timeout = pure VfTimeout
             | otherwise = do
-                (bs, peerInfo) <- recv
+                bs <- recv
                 ts <- currentTimeUsec_ env
-                casesSize bs peerInfo ts
-        casesSize bs peerInfo ts
+                casesSize bs ts
+        casesSize bs ts
             | BS.null bs = caseEof
-            | otherwise = step bs peerInfo ts >> loop (i + 1)
+            | otherwise = step bs ts >> loop (i + 1)
 
         caseEof = atomically (enableVcEof vcEof_) >> return VfEof
-        step bs peerInfo ts = do
+        step bs ts = do
             atomically $ addVcPending vcPendings_ i
             let delPending = atomically $ delVcPending vcPendings_ i
             toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts

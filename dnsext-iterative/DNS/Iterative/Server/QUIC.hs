@@ -55,12 +55,13 @@ quicServers VcServerConfig{..} env toCacher ss = do
                     -- Without a designated thread, recvStream would block.
                     bs <- DNS.recvVC maxSize $ QUIC.recvStream strm 2048
                     incStatsDoQ peersa (stats_ env)
-                    return (bs, peerInfo)
+                    return bs
                 send = getSendVC vcTimer $ \bs peerInfo -> do
                     case peerInfo of
                         PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                         _ -> return ()
-                receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
+                -- FIXME
+                receiver = receiverVC "quic-recv" env vcSess undefined recv toCacher $ mkInput mysa toSender DOQ
                 sender = senderVC "quic-send" env vcSess send fromX
             TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
