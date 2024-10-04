@@ -45,7 +45,6 @@ import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
-import Network.Socket.Recv (Recv, RecvN)
 import Prelude
 
 import DNS.Do53.Id
@@ -300,6 +299,10 @@ rsso _ = return ()
 #endif
 
 ----------------------------------------------------------------
+
+type Recv = IO ByteString
+
+type RecvN = Int -> IO ByteString
 
 type Send = ByteString -> IO ()
 
