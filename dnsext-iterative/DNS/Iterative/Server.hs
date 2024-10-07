@@ -45,7 +45,7 @@ module DNS.Iterative.Server (
     initVcSession,
     mkInput,
     noPendingOp,
-    getRecvVC,
+    checkReceived,
     receiverVC,
     getSendVC,
     senderVC,

@@ -49,11 +49,12 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 retryUntil $ not isEmpty
         (vcSess, toSender, fromX) <- initVcSession waitInput
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            let recv = getRecvVC vc_slowloris_size vcTimer $ do
+            let recv = do
                     strm <- QUIC.acceptStream conn
                     let peerInfo = PeerInfoStream peersa $ StreamQUIC strm
                     -- Without a designated thread, recvStream would block.
                     bs <- DNS.recvVC maxSize $ QUIC.recvStream strm 2048
+                    checkReceived vc_slowloris_size vcTimer bs
                     incStatsDoQ peersa (stats_ env)
                     return (bs, peerInfo)
                 send = getSendVC vcTimer $ \bs peerInfo -> do

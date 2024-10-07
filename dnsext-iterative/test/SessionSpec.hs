@@ -123,7 +123,10 @@ runSession factor recv0 waitRead tmicro = withVc waitRead tmicro $ \(vcSess, toS
     (getResult, send0) <- getSend
     debug <- maybe False ((== "1") . take 1) <$> lookupEnv "VCTEST_DEBUG"
     let myaddr = SockAddrInet 53 0x0100007f
-        recv = getRecvVC 0 timer recv0
+        recv = do
+            bp@(bs, _) <- recv0
+            checkReceived 0 timer bs
+            return bp
         send = getSendVC timer send0
         receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
         sender = senderVC "test-send" env vcSess send fromX
