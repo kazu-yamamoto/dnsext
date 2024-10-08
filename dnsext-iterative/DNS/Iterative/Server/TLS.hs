@@ -22,6 +22,7 @@ import qualified Network.HTTP2.TLS.Server as H2
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
+import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsDoT, sessionStatsDoT)
@@ -52,13 +53,12 @@ tlsServer VcServerConfig{..} env toCacher s = do
         logLn env Log.DEBUG $ "tls-srv: accept: " ++ show peersa
         (vcSess, toSender, fromX) <- initVcSession (pure $ pure ())
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            let recv = do
-                    bs <- DNS.recvVC maxSize $ H2.recv backend
+            recv <- makeNBRecvVC maxSize $ H2.recv backend
+            let onRecv bs = do
                     checkReceived vc_slowloris_size vcTimer bs
                     incStatsDoT peersa (stats_ env)
-                    return bs
-                send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (H2.sendMany backend) bs
-                receiver = receiverVCnonBlocking "tls-recv" env vcSess peerInfo recv toCacher $ mkInput mysa toSender DOT
+            let send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (H2.sendMany backend) bs
+                receiver = receiverVCnonBlocking "tls-recv" env vcSess peerInfo recv onRecv toCacher $ mkInput mysa toSender DOT
                 sender = senderVC "tls-send" env vcSess send fromX
             TStat.concurrently_ "tls-send" sender "tls-recv" receiver
         logLn env Log.DEBUG $ "tls-srv: close: " ++ show peersa

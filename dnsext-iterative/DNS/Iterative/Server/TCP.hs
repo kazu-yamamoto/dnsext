@@ -23,6 +23,7 @@ import Network.Socket (getPeerName, getSocketName, waitReadSocketSTM)
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
+import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Stats (incStatsTCP53, sessionStatsTCP53)
@@ -50,13 +51,12 @@ tcpServer VcServerConfig{..} env toCacher s = do
         let peerInfo = PeerInfoVC peersa
         (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock)
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            let recv = do
-                    bs <- DNS.recvVC maxSize $ DNS.recvTCP sock
+            recv <- makeNBRecvVC maxSize $ DNS.recvTCP sock
+            let onRecv bs = do
                     checkReceived vc_slowloris_size vcTimer bs
                     incStatsTCP53 peersa (stats_ env)
-                    return bs
-                send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (DNS.sendTCP sock) bs
-                receiver = receiverVCnonBlocking "tcp-recv" env vcSess peerInfo recv toCacher $ mkInput mysa toSender TCP
+            let send = getSendVC vcTimer $ \bs _ -> DNS.sendVC (DNS.sendTCP sock) bs
+                receiver = receiverVCnonBlocking "tcp-recv" env vcSess peerInfo recv onRecv toCacher $ mkInput mysa toSender TCP
                 sender = senderVC "tcp-send" env vcSess send fromX
             TStat.concurrently_ "tcp-send" sender "tcp-recv" receiver
         logLn env Log.DEBUG $ "tcp-srv: close: " ++ show peersa

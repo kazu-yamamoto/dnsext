@@ -57,6 +57,7 @@ import DNS.Types.Time
 import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
@@ -211,7 +212,6 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
-type Recv = IO ByteString
 type RecvPI = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
@@ -260,26 +260,30 @@ receiverVCnonBlocking
     -> Env
     -> VcSession
     -> PeerInfo
-    -> Recv
+    -> NBRecv
+    -> (ByteString -> IO ())
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
-receiverVCnonBlocking name env vcs@VcSession{..} peerInfo recv toCacher mkInput_ =
+receiverVCnonBlocking name env vcs@VcSession{..} peerInfo recv onRecv toCacher mkInput_ =
     loop 1 `E.catch` onError
   where
     onError se@(SomeException e) = warnOnError env name se >> throwIO e
-    loop i = cases =<< waitVcInput vcs
+    loop i = do
+        timeout <- waitVcInput vcs
+        if timeout
+            then return VfTimeout
+            else do
+                r <- recv
+                case r of
+                    EOF _bs -> caseEof
+                    NotEnough -> loop i
+                    NBytes bs -> do
+                        onRecv bs
+                        ts <- currentTimeUsec_ env
+                        step bs ts
+                        loop (i + 1)
       where
-        cases timeout
-            | timeout = pure VfTimeout
-            | otherwise = do
-                bs <- recv
-                ts <- currentTimeUsec_ env
-                casesSize bs ts
-        casesSize bs ts
-            | BS.null bs = caseEof
-            | otherwise = step bs ts >> loop (i + 1)
-
         caseEof = atomically (enableVcEof vcEof_) >> return VfEof
         step bs ts = do
             atomically $ addVcPending vcPendings_ i
