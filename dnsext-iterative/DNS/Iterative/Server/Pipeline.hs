@@ -21,6 +21,7 @@ module DNS.Iterative.Server.Pipeline (
     delVcPending,
     checkReceived,
     receiverVC,
+    receiverVCnonBlocking,
     getSendVC,
     senderVC,
     senderLogic,
@@ -210,6 +211,7 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
+type Recv = IO ByteString
 type RecvPI = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
@@ -249,6 +251,37 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
 
         caseEof = atomically (enableVcEof vcEof_) >> return VfEof
         step bs peerInfo ts = do
+            atomically $ addVcPending vcPendings_ i
+            let delPending = atomically $ delVcPending vcPendings_ i
+            toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
+
+receiverVCnonBlocking
+    :: String
+    -> Env
+    -> VcSession
+    -> PeerInfo
+    -> Recv
+    -> (ToCacher -> IO ())
+    -> MkInput
+    -> IO VcFinished
+receiverVCnonBlocking name env vcs@VcSession{..} peerInfo recv toCacher mkInput_ =
+    loop 1 `E.catch` onError
+  where
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop i = cases =<< waitVcInput vcs
+      where
+        cases timeout
+            | timeout = pure VfTimeout
+            | otherwise = do
+                bs <- recv
+                ts <- currentTimeUsec_ env
+                casesSize bs ts
+        casesSize bs ts
+            | BS.null bs = caseEof
+            | otherwise = step bs ts >> loop (i + 1)
+
+        caseEof = atomically (enableVcEof vcEof_) >> return VfEof
+        step bs ts = do
             atomically $ addVcPending vcPendings_ i
             let delPending = atomically $ delVcPending vcPendings_ i
             toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
