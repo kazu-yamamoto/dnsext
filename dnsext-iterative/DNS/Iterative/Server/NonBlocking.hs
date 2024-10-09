@@ -7,6 +7,9 @@ module DNS.Iterative.Server.NonBlocking (
     NBRecvN,
     NBRecvR (..),
     makeNBRecvVC,
+
+    -- * for testing
+    makeNBRecvN,
 )
 where
 

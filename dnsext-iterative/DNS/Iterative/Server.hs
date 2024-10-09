@@ -56,11 +56,13 @@ module DNS.Iterative.Server (
     enableVcTimeout,
     addVcPending,
     delVcPending,
+    module DNS.Iterative.Server.NonBlocking,
 ) where
 
 import DNS.Iterative.Query.Env
 import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.HTTP3
+import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Pipeline
 import DNS.Iterative.Server.PrometheusHisto (getHistogramBucktes)
 import DNS.Iterative.Server.QUIC

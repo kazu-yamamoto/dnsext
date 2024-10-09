@@ -115,9 +115,10 @@ test-suite spec
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
     other-modules:
+                        NonBlockingSpec
                         QuerySpec
-                        SessionSpec
                         SessionPropSpec
+                        SessionSpec
     default-language:   Haskell2010
     ghc-options:        -Wall -threaded
     build-depends:
