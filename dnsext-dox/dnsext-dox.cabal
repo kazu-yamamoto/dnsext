@@ -48,7 +48,6 @@ library
         iproute,
         network >= 3.2.2 && < 3.3,
         quic >= 0.2.1 && < 0.3,
-        recv >=0.1.0,
         serialise,
         tls >= 2.1
 

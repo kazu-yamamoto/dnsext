@@ -15,7 +15,6 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Functor
 
 -- dnsext-* packages
-import DNS.Do53.Internal
 import qualified DNS.Log as Log
 import DNS.TAP.Schema (SocketProtocol (..))
 import qualified DNS.ThreadStats as TStat
@@ -127,8 +126,19 @@ getInput req
         Just path | "/dns-query?dns=" `C8.isPrefixOf` path -> return $ Right $ decodeBase64Lenient $ C8.drop 15 path
         _ -> return $ Left "illegal URL"
     | method == Just "POST" = do
-        (_rx, rqs) <- recvManyN (H2.getRequestBodyChunk req) 2048
-        return $ Right $ C8.concat rqs
+        bs <- recvHTTP2 req
+        return $ Right bs
     | otherwise = return $ Left "illegal method"
   where
     method = H2.requestMethod req
+
+recvHTTP2 :: H2.Request -> IO C8.ByteString
+recvHTTP2 req = go id
+  where
+    go build = do
+        bs <- H2.getRequestBodyChunk req
+        if C8.null bs
+            then
+                return $ C8.concat $ build []
+            else
+                go (build . (bs :))

@@ -36,8 +36,6 @@ module DNS.Do53.Types (
     -- * IO
     Recv,
     RecvN,
-    RecvMany,
-    RecvManyN,
     Send,
     SendMany,
 )
@@ -305,10 +303,6 @@ rsso _ = return ()
 type Recv = IO ByteString
 
 type RecvN = Int -> IO ByteString
-
-type RecvMany = IO (Int, [ByteString])
-
-type RecvManyN = Int -> IO (Int, [ByteString])
 
 type Send = ByteString -> IO ()
 

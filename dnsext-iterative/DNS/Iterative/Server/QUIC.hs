@@ -6,7 +6,6 @@ module DNS.Iterative.Server.QUIC where
 
 -- GHC packages
 import Control.Concurrent.STM (atomically, isEmptyTQueue)
-import qualified Data.ByteString as BS
 
 -- dnsext-* packages
 import qualified DNS.Do53.Internal as DNS
@@ -50,18 +49,19 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 retryUntil $ not isEmpty
         (vcSess, toSender, fromX) <- initVcSession waitInput
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            let recv = getRecvVC vc_slowloris_size vcTimer $ do
+            let recv = do
                     strm <- QUIC.acceptStream conn
                     let peerInfo = PeerInfoStream peersa $ StreamQUIC strm
                     -- Without a designated thread, recvStream would block.
-                    (siz, bss) <- DNS.recvVC maxSize $ QUIC.recvStream strm
-                    if siz == 0
-                        then return ("", peerInfo)
-                        else incStatsDoQ peersa (stats_ env) $> (BS.concat bss, peerInfo)
+                    bs <- DNS.recvVC maxSize $ QUIC.recvStream strm 2048
+                    checkReceived vc_slowloris_size vcTimer bs
+                    incStatsDoQ peersa (stats_ env)
+                    return (bs, peerInfo)
                 send = getSendVC vcTimer $ \bs peerInfo -> do
                     case peerInfo of
                         PeerInfoStream _ (StreamQUIC strm) -> DNS.sendVC (QUIC.sendStreamMany strm) bs >> QUIC.closeStream strm
                         _ -> return ()
+                -- FIXME
                 receiver = receiverVC "quic-recv" env vcSess recv toCacher $ mkInput mysa toSender DOQ
                 sender = senderVC "quic-send" env vcSess send fromX
             TStat.concurrently_ "quic-send" sender "quic-recv" receiver

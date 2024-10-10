@@ -1,24 +1,14 @@
 -- | DNS message decoders.
 --
--- When in doubt, use the 'decodeAt' or 'decodeManyAt' functions, which
--- correctly handle /circle-arithmetic/ DNS timestamps, e.g., in @RRSIG@
--- resource records.  The 'decode', and 'decodeMany' functions are only
--- appropriate in pure contexts when the current time is not available, and
--- @RRSIG@ records are not expected or desired.
---
--- The 'decodeMany' and 'decodeManyAt' functions decode a buffer holding one or
--- more messages, each preceded by 16-bit length in network byte order.  This
--- encoding is generally only appropriate for DNS TCP, and because TCP does not
--- preserve message boundaries, the decode is prepared to return a trailing
--- message fragment to be completed and retried when more input arrives from
--- network.
+-- When in doubt, use the 'decodeAt' function, which correctly handle
+-- /circle-arithmetic/ DNS timestamps, e.g., in @RRSIG@ resource
+-- records.  The 'decode' functionsare only appropriate in pure
+-- contexts when the current time is not available, and @RRSIG@
+-- records are not expected or desired.
 module DNS.Types.Decode (
     -- * Decoding a single DNS message
     decodeAt,
     decode,
-
-    -- * Generic decoder
-    decodeChunks,
 
     -- * Decoders for parts
     decodeDNSFlags,
@@ -70,14 +60,6 @@ decode
     -> Either DNSError DNSMessage
     -- ^ decoded message or error
 decode bs = runParser getDNSMessage bs
-
-----------------------------------------------------------------
-
-decodeChunks
-    :: EpochTime
-    -> [ByteString]
-    -> Either DNSError DNSMessage
-decodeChunks t bss = decodeAt t $ BS.concat bss
 
 ----------------------------------------------------------------
 

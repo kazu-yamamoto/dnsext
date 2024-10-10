@@ -76,15 +76,15 @@ instance Show Event where
 {- FOURMOLU_ENABLE -}
 
 instance Read Event where
-    readsPrec _ s  = case s of
-        'R' : ns  -> applyReads EvRecv ns
-        'S' : ns  -> applyReads EvSend ns
-        _         -> matchPrefix "Eof" EvEof ++ matchPrefix "Timeout" EvTimeout
+    readsPrec _ s = case s of
+        'R' : ns -> applyReads EvRecv ns
+        'S' : ns -> applyReads EvSend ns
+        _ -> matchPrefix "Eof" EvEof ++ matchPrefix "Timeout" EvTimeout
       where
         applyReads f ns = [(f n, x) | (n, x) <- reads ns]
         matchPrefix pre x
-            | hd == pre  = [(x, tl)]
-            | otherwise  = []
+            | hd == pre = [(x, tl)]
+            | otherwise = []
           where
             (hd, tl) = splitAt (length pre) s
 
@@ -119,8 +119,8 @@ pushEvents :: Bool -> IO () -> [Event] -> IO ((VcFinished, VcFinished), [ByteStr
 pushEvents debug interval evs = do
     (push, dump, run, getResult) <- runWithEvent
     rh <- TStat.async "test" run
-    let iloop  []     = pure ()
-        iloop (e:es)  = do
+    let iloop [] = pure ()
+        iloop (e : es) = do
             interval
             when debug $ do
                 dump
@@ -138,7 +138,7 @@ runWithEvent = do
     refWait <- newIORef (pure ())
     let myaddr = SockAddrInet 53 0x0100007f
     initVcSession (readIORef refWait) >>= \(vcSess@VcSession{..}, toSender, fromX) -> do
-        let enableTimeout = atomically (enableVcTimeout vcTimeout_) {- enable timeout with pushed events -}
+        let enableTimeout = atomically (enableVcTimeout vcTimeout_ {- enable timeout with pushed events -})
         (loop, pushEvent, waitRecv, recv) <- eventsRunner show kickSender enableTimeout
         writeIORef refWait waitRecv {- fill action to ref, to avoid mutual reference of withVcSession and eventsRunner -}
         let receiver = receiverVC "test-recv" env vcSess recv toCacher (mkInput myaddr toSender UDP)
@@ -170,7 +170,7 @@ dummyPeer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
 {- FOURMOLU_DISABLE -}
 eventsRunner
     :: (TaskNum -> String) -> (TaskNum -> IO ()) -> IO ()
-    -> IO (IO a, Event -> IO (), STM (), Recv)
+    -> IO (IO a, Event -> IO (), STM (), RecvPI)
 eventsRunner showTaskNum kickSender enableTimeout = do
     evQ   <- newTQueueIO
     recvQ <- newTQueueIO
@@ -199,7 +199,8 @@ pseudoPipeline readTaskNum = do
             toSender <- atomically $ do
                 let getAct tasks =
                         maybe (pure (), tasks) found $ Map.lookup taskNum tasks
-                      where found x = (x, Map.delete taskNum tasks)
+                      where
+                        found x = (x, Map.delete taskNum tasks)
                 stateTVar tasksRef getAct
             toSender
 
@@ -326,9 +327,9 @@ _checkRecvSendGenerated n = replicateM_ 10 $ do
 
 genNarrowerIxs :: Int -> Gen [Int]
 genNarrowerIxs n
-    | n == 0     = return []
-    | n == 1     = return [1]
-    | otherwise  = do
+    | n == 0 = return []
+    | n == 1 = return [1]
+    | otherwise = do
         v <- chooseInt (1, n)
         (v :) <$> genNarrowerIxs (pred n)
 
@@ -347,8 +348,8 @@ permFromIxs_ vs last0 is0 = go last0 is0
 
 permFromIxs :: Int -> [Int] -> [Int]
 permFromIxs n ixs = runST $ do
-  vs <- newListArray (1, n) [1..n]
-  permFromIxs_ vs n ixs
+    vs <- newListArray (1, n) [1 .. n]
+    permFromIxs_ vs n ixs
 
 genPermutation :: Int -> Gen [Int]
 genPermutation n = permFromIxs n <$> genNarrowerIxs n

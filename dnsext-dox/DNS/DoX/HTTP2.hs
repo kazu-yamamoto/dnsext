@@ -27,7 +27,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (fromShort)
 import qualified Data.ByteString.Short as Short
 import Network.HTTP.Types
-import Network.HTTP2.Client (Client, SendRequest, getResponseBodyChunk, requestBuilder, responseStatus)
+import Network.HTTP2.Client (Client, Response, SendRequest, getResponseBodyChunk, requestBuilder, responseStatus)
 import qualified Network.HTTP2.TLS.Client as H2
 import System.Timeout (timeout)
 
@@ -84,13 +84,12 @@ resolv
 resolv tag ident ResolveInfo{..} sendRequest q qctl = do
     sendRequest req $ \rsp -> do
         when (responseStatus rsp /= Just ok200) $ E.throwIO OperationRefused
-        let recvHTTP = recvManyN $ getResponseBodyChunk rsp
-        (rx, bss) <- recvHTTP $ unVCLimit rinfoVCLimit
+        bs <- recvHTTP2 rsp
         now <- getTime
-        case decodeChunks now bss of
+        case decodeAt now bs of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of -- fixme
-                Nothing -> return $ Right $ Reply tag msg tx rx
+                Nothing -> return $ Right $ Reply tag msg tx $ BS.length bs
                 Just err -> return $ Left err
   where
     getTime = ractionGetTime rinfoActions
@@ -101,6 +100,17 @@ resolv tag ident ResolveInfo{..} sendRequest q qctl = do
         Nothing -> "/dns-query"
         Just p -> fromShort $ Short.takeWhile (/= 0x7b) p -- '{'
     req = requestBuilder methodPost path hdr $ BB.byteString wire
+
+recvHTTP2 :: Response -> IO ByteString
+recvHTTP2 rsp = go id
+  where
+    go build = do
+        bs <- getResponseBodyChunk rsp
+        if BS.null bs
+            then
+                return $ BS.concat $ build []
+            else
+                go (build . (bs :))
 
 doHTTP
     :: NameTag

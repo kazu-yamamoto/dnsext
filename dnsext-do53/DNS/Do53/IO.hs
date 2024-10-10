@@ -13,9 +13,7 @@ module DNS.Do53.IO (
     sendVC,
     encodeVCLength,
 
-    -- * Making recv
-    recvManyN,
-    recvManyNN,
+    -- * Misc
     makeAddrInfo,
 )
 where
@@ -33,6 +31,7 @@ import Network.Socket (
     defaultProtocol,
     openSocket,
  )
+import Network.Socket.BufferPool (makeRecvN)
 import Network.Socket.ByteString (recv)
 import qualified Network.Socket.ByteString as NSB
 
@@ -67,26 +66,25 @@ makeAddrInfo a p =
 -- obtaining the length of the message!
 
 -- | Receiving data from a virtual circuit.
-recvVC :: VCLimit -> RecvN -> RecvMany
-recvVC lim recvN = do
-    (l2, b2) <- recvManyNN recvN 2
-    if l2 /= 2
-        then return (0, [])
-        else do
-            let len = decodeVCLength $ BS.concat b2
-            when (fromIntegral len > lim) $
-                E.throwIO $
-                    DecodeError $
-                        "length is over the limit: should be len <= lim, but (len: "
-                            ++ show len
-                            ++ ") > (lim: "
-                            ++ show lim
-                            ++ ") "
-            (len', bss) <- recvManyNN recvN len
-            case compare len' len of
-                LT -> E.throwIO $ DecodeError "message length is not enough"
-                EQ -> return (len, bss)
-                GT -> E.throwIO $ DecodeError "message length is too large"
+-- This function returns exactly-necessary-length data.
+-- If necessary-length data is not received, an exception is thrown.
+recvVC :: VCLimit -> Recv -> Recv
+recvVC lim rcv = do
+    recvN <- makeRecvN "" rcv
+    b2 <- recvN 2
+    let len = decodeVCLength b2
+    when (fromIntegral len > lim) $
+        E.throwIO $
+            DecodeError $
+                "length is over the limit: should be len <= lim, but (len: "
+                    ++ show len
+                    ++ ") > (lim: "
+                    ++ show lim
+                    ++ ") "
+    bs <- recvN len
+    if BS.null bs
+        then E.throwIO $ DecodeError "message length is not enough"
+        else return bs
 
 -- | Decoding the length from the first two bytes.
 decodeVCLength :: ByteString -> Int
@@ -94,48 +92,9 @@ decodeVCLength bs = case BS.unpack bs of
     [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
     _ -> 0 -- never reached
 
--- Used only in DoH.
--- Recv is getResponseBodyChunk.
--- "lim" is a really limitation
-recvManyN :: Recv -> RecvManyN
-recvManyN rcv lim = loop id 0
-  where
-    loop build total = do
-        bs <- rcv
-        let len = BS.length bs
-        if len == 0
-            then return (total, build [])
-            else do
-                let total' = total + len
-                    build' = build . (bs :)
-                if total' >= lim
-                    then do
-                        return (total', build' [])
-                    else loop build' total'
-
--- Used only in recvVC.
--- "lim" is the size to be received.
-recvManyNN :: RecvN -> RecvManyN
-recvManyNN rcv lim = loop id 0
-  where
-    loop build total = do
-        let left = lim - total
-            siz = min left 2048
-        bs <- rcv siz
-        let len = BS.length bs
-        if len == 0
-            then return (total, build [])
-            else do
-                let total' = total + len
-                    build' = build . (bs :)
-                if total' >= lim
-                    then do
-                        return (total', build' [])
-                    else loop build' total'
-
 -- | Receiving data from a TCP socket.
-recvTCP :: Socket -> RecvN
-recvTCP sock = recv sock
+recvTCP :: Socket -> Recv
+recvTCP sock = recv sock 2048
 
 ----------------------------------------------------------------
 
