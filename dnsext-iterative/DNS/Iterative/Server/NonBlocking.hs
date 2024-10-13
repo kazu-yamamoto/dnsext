@@ -32,7 +32,7 @@ data State = E | S ByteString | M ([ByteString] -> [ByteString])
 
 makeNBRecvVC :: VCLimit -> Recv -> IO NBRecv
 makeNBRecvVC lim rcv = do
-    ref <- newIORef Nothing
+    ref <- newIORef LNone
     nbrecvN <- makeNBRecvN rcv ""
     return $ nbRecvVC lim ref nbrecvN
 
@@ -42,27 +42,35 @@ makeNBRecvN rcv bs0 = nbRecvN rcv <$> newIORef (len, S bs0)
   where
     len = BS.length bs0
 
-nbRecvVC :: VCLimit -> IORef (Maybe Int) -> NBRecvN -> NBRecv
+data FillLen = LNone | LHigh | LFilled Int
+
+nbRecvVC :: VCLimit -> IORef FillLen -> NBRecvN -> NBRecv
 nbRecvVC lim ref nbrecvN = do
     mi <- readIORef ref
     case mi of
-        Nothing -> do
-            x <- nbrecvN 2
-            case x of
-                NBytes bs -> do
-                    let len = decodeVCLength bs
-                    when (fromIntegral len > lim) $
-                        E.throwIO $
-                            DecodeError $
-                                "length is over the limit: should be len <= lim, but (len: "
-                                    ++ show len
-                                    ++ ") > (lim: "
-                                    ++ show lim
-                                    ++ ") "
-                    writeIORef ref $ Just len
-                    return NotEnough
-                _ -> return x
-        Just len -> nbrecvN len
+        LNone -> getLen >>= caseFillLen
+        LHigh -> getLen >>= caseFillLen
+        LFilled len -> nbrecvN len
+  where
+    getLen = nbrecvN 2
+    caseFillLen x = case x of
+        NBytes bs -> nbytes bs
+        NotEnough -> do
+            writeIORef ref LHigh
+            return NotEnough
+        e@(EOF _bs) -> return e  {- got EOF when getting length -}
+    nbytes bs = do
+        let len = decodeVCLength bs
+        when (fromIntegral len > lim) $
+            E.throwIO $
+                DecodeError $
+                    "length is over the limit: should be len <= lim, but (len: "
+                    ++ show len
+                    ++ ") > (lim: "
+                    ++ show lim
+                    ++ ") "
+        writeIORef ref $ LFilled len
+        return NotEnough
 
 nbRecvN
     :: Recv
