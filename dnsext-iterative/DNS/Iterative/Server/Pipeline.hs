@@ -19,8 +19,9 @@ module DNS.Iterative.Server.Pipeline (
     enableVcTimeout,
     addVcPending,
     delVcPending,
-    getRecvVC,
+    checkReceived,
     receiverVC,
+    receiverVCnonBlocking,
     getSendVC,
     senderVC,
     senderLogic,
@@ -29,16 +30,16 @@ module DNS.Iterative.Server.Pipeline (
     logLn,
     retryUntil,
     Send,
-    Recv,
+    RecvPI,
 ) where
 
 -- GHC packages
 import Control.Concurrent.STM
-import Control.Exception (Exception (..), SomeException (..), AsyncException, bracket, handle, throwIO)
+import Control.Exception (AsyncException, Exception (..), SomeException (..), bracket, handle, throwIO)
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.IntSet as Set
-import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, updateTimeout, unregisterTimeout)
+import GHC.Event (TimeoutKey, TimerManager, getSystemTimerManager, registerTimeout, unregisterTimeout, updateTimeout)
 
 -- libs
 import Control.Concurrent.Async (AsyncCancelled)
@@ -56,6 +57,7 @@ import DNS.Types.Time
 import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
 import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.WorkerStats
 import DNS.Iterative.Stats
@@ -210,7 +212,7 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
-type Recv = IO (ByteString, PeerInfo)
+type RecvPI = IO (ByteString, PeerInfo)
 type Send = ByteString -> PeerInfo -> IO ()
 
 type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input ByteString
@@ -218,18 +220,16 @@ type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input B
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
 
-getRecvVC :: Int -> VcTimer -> Recv -> Recv
-getRecvVC slsize timer recv = do
-    (bs, peerInfo) <- recv
+checkReceived :: Int -> VcTimer -> ByteString -> IO ()
+checkReceived slsize timer bs = do
     let sz = BS.length bs
     when (sz > slsize || sz == 0) $ resetVcTimer timer
-    return (bs, peerInfo)
 
 receiverVC
     :: String
     -> Env
     -> VcSession
-    -> Recv
+    -> RecvPI
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
@@ -255,13 +255,48 @@ receiverVC name env vcs@VcSession{..} recv toCacher mkInput_ =
             let delPending = atomically $ delVcPending vcPendings_ i
             toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
 
+receiverVCnonBlocking
+    :: String
+    -> Env
+    -> VcSession
+    -> PeerInfo
+    -> NBRecv
+    -> (ByteString -> IO ())
+    -> (ToCacher -> IO ())
+    -> MkInput
+    -> IO VcFinished
+receiverVCnonBlocking name env vcs@VcSession{..} peerInfo recv onRecv toCacher mkInput_ =
+    loop 1 `E.catch` onError
+  where
+    onError se@(SomeException e) = warnOnError env name se >> throwIO e
+    loop i = do
+        timeout <- waitVcInput vcs
+        if timeout
+            then return VfTimeout
+            else do
+                r <- recv
+                case r of
+                    EOF _bs -> caseEof
+                    NotEnough -> loop i
+                    NBytes bs -> do
+                        onRecv bs
+                        ts <- currentTimeUsec_ env
+                        step bs ts
+                        loop (i + 1)
+      where
+        caseEof = atomically (enableVcEof vcEof_) >> return VfEof
+        step bs ts = do
+            atomically $ addVcPending vcPendings_ i
+            let delPending = atomically $ delVcPending vcPendings_ i
+            toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
+
 receiverLogic
-    :: Env -> SockAddr -> Recv -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
+    :: Env -> SockAddr -> RecvPI -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
 receiverLogic env mysa recv toCacher toSender proto =
     handledLoop env "receiverUDP" $ void $ receiverLogic' env mysa recv toCacher toSender proto
 
 receiverLogic'
-    :: Env -> SockAddr -> Recv -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO Bool
+    :: Env -> SockAddr -> RecvPI -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO Bool
 receiverLogic' env mysa recv toCacher toSender proto = do
     (bs, peerInfo) <- recv
     ts <- currentTimeUsec_ env
@@ -367,7 +402,8 @@ finalizeVcTimer :: VcTimer -> IO ()
 finalizeVcTimer VcTimer{..} = unregisterTimeout vtManager_ vtKey_
 
 withVcTimer
-    :: Int -> IO ()
+    :: Int
+    -> IO ()
     -> (VcTimer -> IO a)
     -> IO a
 withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer

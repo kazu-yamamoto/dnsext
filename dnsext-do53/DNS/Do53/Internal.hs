@@ -2,8 +2,6 @@ module DNS.Do53.Internal (
     -- * IO types
     Recv,
     RecvN,
-    RecvMany,
-    RecvManyN,
     Send,
     SendMany,
 
@@ -17,10 +15,6 @@ module DNS.Do53.Internal (
     recvVC,
     encodeVCLength,
     decodeVCLength,
-
-    -- * Making recvMany
-    recvManyN,
-    recvManyNN,
 
     -- * Resolver
     Resolver,
