@@ -78,7 +78,7 @@ testNBRecvN
     :: ByteString -> [ByteString] -> Int -> [NBRecvR] -> IO ()
 testNBRecvN ini xs n ress = do
     rcv <- makeRecv xs
-    nbRecvN <- makeNBRecvN rcv ini
+    nbRecvN <- makeNBRecvN ini rcv
     mapM_ (nbRecvN n `shouldReturn`) ress
 
 makeRecv :: [ByteString] -> IO (IO ByteString)

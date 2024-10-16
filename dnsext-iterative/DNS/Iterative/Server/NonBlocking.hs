@@ -33,12 +33,12 @@ type Buffer = [ByteString] -> [ByteString]
 makeNBRecvVC :: VCLimit -> Recv -> IO NBRecv
 makeNBRecvVC lim rcv = do
     ref <- newIORef LNone
-    nbrecvN <- makeNBRecvN rcv ""
+    nbrecvN <- makeNBRecvN "" rcv
     return $ nbRecvVC lim ref nbrecvN
 
-makeNBRecvN :: Recv -> ByteString -> IO NBRecvN
-makeNBRecvN rcv "" = nbRecvN rcv <$> newIORef (0, id)
-makeNBRecvN rcv bs0 = nbRecvN rcv <$> newIORef (len, (bs0 :))
+makeNBRecvN :: ByteString -> Recv -> IO NBRecvN
+makeNBRecvN "" rcv = nbRecvN rcv <$> newIORef (0, id)
+makeNBRecvN bs0 rcv = nbRecvN rcv <$> newIORef (len, (bs0 :))
   where
     len = BS.length bs0
 
@@ -58,17 +58,17 @@ nbRecvVC lim ref nbrecvN = do
         NotEnough -> do
             writeIORef ref LHigh
             return NotEnough
-        e@(EOF _bs) -> return e  {- got EOF when getting length -}
+        e@(EOF _bs) -> return e {- got EOF when getting length -}
     nbytes bs = do
         let len = decodeVCLength bs
         when (fromIntegral len > lim) $
             E.throwIO $
                 DecodeError $
                     "length is over the limit: should be len <= lim, but (len: "
-                    ++ show len
-                    ++ ") > (lim: "
-                    ++ show lim
-                    ++ ") "
+                        ++ show len
+                        ++ ") > (lim: "
+                        ++ show lim
+                        ++ ") "
         writeIORef ref $ LFilled len
         return NotEnough
 
