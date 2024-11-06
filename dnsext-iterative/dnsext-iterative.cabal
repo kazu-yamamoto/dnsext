@@ -70,7 +70,7 @@ library
         dnsext-utils,
         http-types,
         http2 >= 5.3.2 && < 5.4,
-        http2-tls >= 0.4.2 && < 0.5,
+        http2-tls >= 0.4.4 && < 0.5,
         http3 >= 0.0.17,
         iproute,
         network >= 3.2.3 && < 3.3,
@@ -81,7 +81,7 @@ library
         random,
         stm,
         time-manager,
-        tls >= 2.1,
+        tls >= 2.1.4,
         word8
 
     if impl(ghc >=8)
