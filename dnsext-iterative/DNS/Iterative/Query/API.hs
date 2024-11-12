@@ -152,6 +152,22 @@ replyMessage eas ident rqs =
 
     message = replyDNSMessage ident rqs
 
+resultReply :: Identifier -> [Question] -> Result -> DNSMessage
+resultReply ident rqs (rcode, rrs, auth) = replyDNSMessage ident rqs rcode rrs auth
+
+{- FOURMOLU_DISABLE -}
+queryErrorReply :: Identifier -> [Question] -> (String -> a) -> (DNSMessage -> a) -> QueryError -> a
+queryErrorReply ident rqs left right qe = case qe of
+    DnsError e _        -> dnsError e
+    NotResponse{}       -> right $ message DNS.ServFail
+    InvalidEDNS{}       -> right $ message DNS.ServFail
+    HasError _as rc _m  -> right $ message rc
+    QueryDenied         -> left "QueryDenied"
+  where
+    dnsError e = foldDNSErrorToRCODE (left $ "DNSError: " ++ show e) (right . message) e
+    message rc = replyDNSMessage ident rqs rc [] []
+{- FOURMOLU_ENABLE -}
+
 replyDNSMessage :: Identifier -> [Question] -> RCODE -> Answers -> AuthorityRecords -> DNSMessage
 replyDNSMessage ident rqs rcode rrs auth =
     res
