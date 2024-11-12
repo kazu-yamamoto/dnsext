@@ -85,14 +85,14 @@ getResponseCached env reqM = case DNS.question reqM of
     [] -> return $ CResultDenied "empty question"
     qs@(q : _) -> getResponseCached' env reqM q qs
 
-getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
-getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
-    ex <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
-    case ex of
-        Right Nothing -> return CResultMissHit
-        Right (Just r) -> return $ CResultHit $ resultReply ident qs r
-        Left l -> return $ queryErrorReply ident qs CResultDenied CResultHit l
+{- FOURMOLU_DISABLE -}
+getResponseCached' :: Env -> DNSMessage -> Question -> [Question] -> IO CacheResult
+getResponseCached' env reqM q@(DNS.Question bn typ cls) qs =
+    dispatch <$> runDNSQuery getResult env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
   where
+    dispatch (Right Nothing)   = CResultMissHit
+    dispatch (Right (Just r))  = CResultHit $ resultReply ident qs r
+    dispatch (Left l)          = queryErrorReply ident qs CResultDenied CResultHit l
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
     ident = DNS.identifier reqM
@@ -100,6 +100,7 @@ getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
     getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
         getResultCached q
+{- FOURMOLU_ENABLE -}
 
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
