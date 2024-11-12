@@ -52,12 +52,13 @@ getResponseIterative env reqM = case DNS.question reqM of
     qs@(q : _) -> getResponseIterative' env reqM q qs
 
 getResponseIterative' :: Env -> DNSMessage -> Question -> [Question] -> IO (Either String DNSMessage)
-getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
-    ers <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
-    return $ replyMessage ers (DNS.identifier reqM) qs
+getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs =
+    reply <$> runDNSQuery getResult env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
   where
+    reply ers = replyMessage ers ident qs
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
+    ident = DNS.identifier reqM
     prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
