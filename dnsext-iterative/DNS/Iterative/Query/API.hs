@@ -132,25 +132,8 @@ guardRequestHeader reqF reqEH
     rd = DNS.recDesired reqF
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
-replyMessage
-    :: Either QueryError Result
-    -> DNS.Identifier
-    -> [DNS.Question]
-    -> Either String DNSMessage
-replyMessage eas ident rqs =
-    either queryError (\(rcode, rrs, auth) -> Right $ message rcode rrs auth) eas
-  where
-    dnsError de = message <$> rcodeOfDNSError de <*> pure [] <*> pure []
-    rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
-
-    queryError qe = case qe of
-        DnsError e _ -> dnsError e
-        NotResponse{} -> Right $ message DNS.ServFail [] []
-        InvalidEDNS{} -> Right $ message DNS.ServFail [] []
-        HasError _as rc _m -> Right $ message rc [] []
-        QueryDenied -> Left "QueryDenied"
-
-    message = replyDNSMessage ident rqs
+replyMessage :: Either QueryError Result -> Identifier -> [Question] -> Either String DNSMessage
+replyMessage eas ident rqs = either (queryErrorReply ident rqs Left Right) (Right . resultReply ident rqs) eas
 
 resultReply :: Identifier -> [Question] -> Result -> DNSMessage
 resultReply ident rqs (rcode, rrs, auth) = replyDNSMessage ident rqs rcode rrs auth
