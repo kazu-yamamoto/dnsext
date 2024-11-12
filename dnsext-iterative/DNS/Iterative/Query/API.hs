@@ -76,10 +76,6 @@ data CacheResult
     | CResultHit DNSMessage
     | CResultDenied String
 
-toCacheResult :: Either String DNSMessage -> CacheResult
-toCacheResult (Left x) = CResultDenied x
-toCacheResult (Right x) = CResultHit x
-
 -- | Getting a response corresponding to a query from the cache.
 getResponseCached
     :: Env
@@ -94,16 +90,16 @@ getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
     ex <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
     case ex of
         Right Nothing -> return CResultMissHit
-        Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
-        Left l -> return $ toCacheResult $ mkResponse $ Left l
+        Right (Just r) -> return $ CResultHit $ resultReply ident qs r
+        Left l -> return $ queryErrorReply ident qs CResultDenied CResultHit l
   where
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
+    ident = DNS.identifier reqM
     prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     getResult = logQueryErrors prefix $ do
         guardRequestHeader reqF reqEH
         getResultCached q
-    mkResponse ers = replyMessage ers (DNS.identifier reqM) qs
 
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
