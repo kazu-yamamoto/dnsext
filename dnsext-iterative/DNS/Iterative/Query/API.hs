@@ -46,20 +46,12 @@ additional セクションにその名前に対するアドレス (A および A
 
 -- | Getting a response corresponding to a query.
 --   The cache is maybe updated.
-getResponseIterative
-    :: Env
-    -> DNSMessage
-    -> IO (Either String DNSMessage)
+getResponseIterative :: Env -> DNSMessage -> IO (Either String DNSMessage)
 getResponseIterative env reqM = case DNS.question reqM of
     [] -> return $ Left "empty question"
     qs@(q : _) -> getResponseIterative' env reqM q qs
 
-getResponseIterative'
-    :: Env
-    -> DNSMessage
-    -> DNS.Question
-    -> [DNS.Question]
-    -> IO (Either String DNSMessage)
+getResponseIterative' :: Env -> DNSMessage -> Question -> [Question] -> IO (Either String DNSMessage)
 getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
     ers <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
     return $ replyMessage ers (DNS.identifier reqM) qs
@@ -77,10 +69,7 @@ data CacheResult
     | CResultDenied String
 
 -- | Getting a response corresponding to a query from the cache.
-getResponseCached
-    :: Env
-    -> DNSMessage
-    -> IO CacheResult
+getResponseCached :: Env -> DNSMessage -> IO CacheResult
 getResponseCached env reqM = case DNS.question reqM of
     [] -> return $ CResultDenied "empty question"
     qs@(q : _) -> getResponseCached' env reqM q qs
