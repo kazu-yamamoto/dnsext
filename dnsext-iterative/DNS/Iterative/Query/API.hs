@@ -150,15 +150,19 @@ replyMessage eas ident rqs =
         HasError _as rc _m -> Right $ message rc [] []
         QueryDenied -> Left "QueryDenied"
 
-    message rcode rrs auth =
-        res
-            { DNS.identifier = ident
-            , DNS.rcode = rcode
-            , DNS.flags = f{DNS.authAnswer = False}
-            , DNS.answer = rrs
-            , DNS.authority = auth
-            , DNS.question = rqs
-            }
+    message = replyDNSMessage ident rqs
+
+replyDNSMessage :: Identifier -> [Question] -> RCODE -> Answers -> AuthorityRecords -> DNSMessage
+replyDNSMessage ident rqs rcode rrs auth =
+    res
+        { DNS.identifier = ident
+        , DNS.rcode = rcode
+        , DNS.flags = f{DNS.authAnswer = False}
+        , DNS.answer = rrs
+        , DNS.authority = auth
+        , DNS.question = rqs
+        }
+  where
     res = DNS.defaultResponse
     f = DNS.flags res
 
