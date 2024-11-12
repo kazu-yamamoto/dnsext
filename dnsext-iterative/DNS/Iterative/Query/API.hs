@@ -20,6 +20,7 @@ import DNS.Do53.Client (
     QueryControls (..),
  )
 import qualified DNS.Do53.Client as DNS
+import qualified DNS.Log as Log
 import DNS.SEC (TYPE (..))
 import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
@@ -101,6 +102,9 @@ ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adF
         DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> True
         _ -> False
 
+requestError :: Env -> String -> (RCODE -> IO a) -> RCODE -> String -> IO a
+requestError env prefix h rc err = logLines_ env Log.WARN Nothing [prefix ++ err] >> h rc
+
 guardRequestHeader :: DNSFlags -> EDNSheader -> DNSQuery ()
 guardRequestHeader reqF reqEH
     | reqEH == DNS.InvalidEDNS =
@@ -109,6 +113,16 @@ guardRequestHeader reqF reqEH
     | otherwise = pure ()
   where
     rd = DNS.recDesired reqF
+
+{- FOURMOLU_DISABLE -}
+handleRequestHeader :: DNSFlags -> EDNSheader -> (RCODE -> String -> a) -> a -> a
+handleRequestHeader reqF reqEH eh h
+    | reqEH == DNS.InvalidEDNS  = eh DNS.ServFail "request error: InvalidEDNS"
+    | not rd                    = eh DNS.Refused "request error: RD flag required"
+    | otherwise                 = h
+  where
+    rd = DNS.recDesired reqF
+{- FOURMOLU_ENABLE -}
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
 replyMessage :: Either QueryError Result -> Identifier -> [Question] -> Either String DNSMessage
