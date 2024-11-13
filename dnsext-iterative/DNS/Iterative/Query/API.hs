@@ -92,6 +92,32 @@ getResponseCached' env reqM q@(DNS.Question bn typ cls) qs =
         getResultCached q
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
+getResponse
+    :: String -> (Question -> DNSQuery a) -> ((Result -> IO b) -> a -> IO b)
+    -> (String -> b) -> (DNSMessage -> b)
+    -> Env -> DNSMessage -> IO b
+getResponse name qaction liftR denied replied env reqM = case DNS.question reqM of
+    []          -> pure . denied $ name ++ ": empty question"
+    qs@(q : _)  -> getResponse' name (qaction q) liftR denied replied env reqM q qs
+
+getResponse'
+    :: String -> DNSQuery a -> ((Result -> IO b) -> a -> IO b)
+    -> (String -> b) -> (DNSMessage -> b)
+    -> Env -> DNSMessage -> Question -> [Question] -> IO b
+getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) qs =
+    either eresult (liftR qresult) =<< runDNSQuery qaction' env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
+  where
+    eresult = queryErrorReply ident qs (pure . denied) (pure . replied)
+    qresult = pure . replied . resultReply ident qs
+    qaction' = logQueryErrors prefix $ (guardRequestHeader reqF reqEH >> qaction)
+    prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
+    --
+    ident = DNS.identifier reqM
+    reqF = DNS.flags reqM
+    reqEH = DNS.ednsHeader reqM
+{- FOURMOLU_ENABLE -}
+
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
   where
