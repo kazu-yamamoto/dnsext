@@ -27,6 +27,7 @@ import qualified DNS.Types as DNS
 
 -- this package
 import DNS.Iterative.Query.Helpers
+import DNS.Iterative.Query.Local (takeLocalResult)
 import DNS.Iterative.Query.Resolve
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils (logQueryErrors)
@@ -72,13 +73,16 @@ getResponse'
     -> (String -> b) -> (DNSMessage -> b)
     -> Env -> DNSMessage -> Question -> [Question] -> IO b
 getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) qs =
-    handleRequestHeader reqF reqEH reqerr queried
+    handleRequestHeader reqF reqEH reqerr result
   where
     reqerr = requestError env prefix $ \rc -> pure $ replied $ resultReply ident qs (rc, [], [])
-    queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
+    result = takeLocalResult env q (pure $ denied "local-zone: query-denied") queried (pure . local)
+    queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env qcontext
     eresult = queryErrorReply ident qs (pure . denied) (pure . replied)
     qresult = pure . replied . resultReply ident qs
     qaction' = logQueryErrors prefix qaction
+    local = replied . resultReply ident qs . resultFromRRS (requestDO_ qcontext)
+    qcontext = queryContext q $ ctrlFromRequestHeader reqF reqEH
     prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     --
     ident = DNS.identifier reqM
