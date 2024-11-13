@@ -47,22 +47,7 @@ additional セクションにその名前に対するアドレス (A および A
 -- | Getting a response corresponding to a query.
 --   The cache is maybe updated.
 getResponseIterative :: Env -> DNSMessage -> IO (Either String DNSMessage)
-getResponseIterative env reqM = case DNS.question reqM of
-    [] -> return $ Left "empty question"
-    qs@(q : _) -> getResponseIterative' env reqM q qs
-
-getResponseIterative' :: Env -> DNSMessage -> Question -> [Question] -> IO (Either String DNSMessage)
-getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs =
-    reply <$> runDNSQuery getResult env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
-  where
-    reply ers = replyMessage ers ident qs
-    reqF = DNS.flags reqM
-    reqEH = DNS.ednsHeader reqM
-    ident = DNS.identifier reqM
-    prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
-    getResult = logQueryErrors prefix $ do
-        guardRequestHeader reqF reqEH
-        getResultIterative q
+getResponseIterative = getResponse "resp-iterative" getResultIterative id Left Right
 
 data CacheResult
     = CResultMissHit
@@ -71,26 +56,7 @@ data CacheResult
 
 -- | Getting a response corresponding to a query from the cache.
 getResponseCached :: Env -> DNSMessage -> IO CacheResult
-getResponseCached env reqM = case DNS.question reqM of
-    [] -> return $ CResultDenied "empty question"
-    qs@(q : _) -> getResponseCached' env reqM q qs
-
-{- FOURMOLU_DISABLE -}
-getResponseCached' :: Env -> DNSMessage -> Question -> [Question] -> IO CacheResult
-getResponseCached' env reqM q@(DNS.Question bn typ cls) qs =
-    dispatch <$> runDNSQuery getResult env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
-  where
-    dispatch (Right Nothing)   = CResultMissHit
-    dispatch (Right (Just r))  = CResultHit $ resultReply ident qs r
-    dispatch (Left l)          = queryErrorReply ident qs CResultDenied CResultHit l
-    reqF = DNS.flags reqM
-    reqEH = DNS.ednsHeader reqM
-    ident = DNS.identifier reqM
-    prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
-    getResult = logQueryErrors prefix $ do
-        guardRequestHeader reqF reqEH
-        getResultCached q
-{- FOURMOLU_ENABLE -}
+getResponseCached = getResponse "resp-cached" getResultCached (maybe $ pure CResultMissHit) CResultDenied CResultHit
 
 {- FOURMOLU_DISABLE -}
 getResponse
