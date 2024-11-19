@@ -46,64 +46,43 @@ additional セクションにその名前に対するアドレス (A および A
 
 -- | Getting a response corresponding to a query.
 --   The cache is maybe updated.
-getResponseIterative
-    :: Env
-    -> DNSMessage
-    -> IO (Either String DNSMessage)
-getResponseIterative env reqM = case DNS.question reqM of
-    [] -> return $ Left "empty question"
-    qs@(q : _) -> getResponseIterative' env reqM q qs
-
-getResponseIterative'
-    :: Env
-    -> DNSMessage
-    -> DNS.Question
-    -> [DNS.Question]
-    -> IO (Either String DNSMessage)
-getResponseIterative' env reqM q@(DNS.Question bn typ cls) qs = do
-    ers <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
-    return $ replyMessage ers (DNS.identifier reqM) qs
-  where
-    reqF = DNS.flags reqM
-    reqEH = DNS.ednsHeader reqM
-    prefix = "resp-iterative: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
-    getResult = logQueryErrors prefix $ do
-        guardRequestHeader reqF reqEH
-        getResultIterative q
+getResponseIterative :: Env -> DNSMessage -> IO (Either String DNSMessage)
+getResponseIterative = getResponse "resp-iterative" getResultIterative id Left Right
 
 data CacheResult
     = CResultMissHit
     | CResultHit DNSMessage
     | CResultDenied String
 
-toCacheResult :: Either String DNSMessage -> CacheResult
-toCacheResult (Left x) = CResultDenied x
-toCacheResult (Right x) = CResultHit x
-
 -- | Getting a response corresponding to a query from the cache.
-getResponseCached
-    :: Env
-    -> DNSMessage
-    -> IO CacheResult
-getResponseCached env reqM = case DNS.question reqM of
-    [] -> return $ CResultDenied "empty question"
-    qs@(q : _) -> getResponseCached' env reqM q qs
+getResponseCached :: Env -> DNSMessage -> IO CacheResult
+getResponseCached = getResponse "resp-cached" getResultCached (maybe $ pure CResultMissHit) CResultDenied CResultHit
 
-getResponseCached' :: Env -> DNSMessage -> DNS.Question -> [DNS.Question] -> IO CacheResult
-getResponseCached' env reqM q@(DNS.Question bn typ cls) qs = do
-    ex <- runDNSQuery getResult env $ queryContext q (ctrlFromRequestHeader reqF reqEH)
-    case ex of
-        Right Nothing -> return CResultMissHit
-        Right (Just r) -> return $ toCacheResult $ mkResponse $ Right r
-        Left l -> return $ toCacheResult $ mkResponse $ Left l
+{- FOURMOLU_DISABLE -}
+getResponse
+    :: String -> (Question -> DNSQuery a) -> ((Result -> IO b) -> a -> IO b)
+    -> (String -> b) -> (DNSMessage -> b)
+    -> Env -> DNSMessage -> IO b
+getResponse name qaction liftR denied replied env reqM = case DNS.question reqM of
+    []          -> pure . denied $ name ++ ": empty question"
+    qs@(q : _)  -> getResponse' name (qaction q) liftR denied replied env reqM q qs
+
+getResponse'
+    :: String -> DNSQuery a -> ((Result -> IO b) -> a -> IO b)
+    -> (String -> b) -> (DNSMessage -> b)
+    -> Env -> DNSMessage -> Question -> [Question] -> IO b
+getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) qs =
+    either eresult (liftR qresult) =<< runDNSQuery qaction' env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
   where
+    eresult = queryErrorReply ident qs (pure . denied) (pure . replied)
+    qresult = pure . replied . resultReply ident qs
+    qaction' = logQueryErrors prefix $ (guardRequestHeader reqF reqEH >> qaction)
+    prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
+    --
+    ident = DNS.identifier reqM
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
-    prefix = "resp-cached: orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
-    getResult = logQueryErrors prefix $ do
-        guardRequestHeader reqF reqEH
-        getResultCached q
-    mkResponse ers = replyMessage ers (DNS.identifier reqM) qs
+{- FOURMOLU_ENABLE -}
 
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
 ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
@@ -132,33 +111,36 @@ guardRequestHeader reqF reqEH
     rd = DNS.recDesired reqF
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
-replyMessage
-    :: Either QueryError Result
-    -> DNS.Identifier
-    -> [DNS.Question]
-    -> Either String DNSMessage
-replyMessage eas ident rqs =
-    either queryError (\(rcode, rrs, auth) -> Right $ message rcode rrs auth) eas
+replyMessage :: Either QueryError Result -> Identifier -> [Question] -> Either String DNSMessage
+replyMessage eas ident rqs = either (queryErrorReply ident rqs Left Right) (Right . resultReply ident rqs) eas
+
+resultReply :: Identifier -> [Question] -> Result -> DNSMessage
+resultReply ident rqs (rcode, rrs, auth) = replyDNSMessage ident rqs rcode rrs auth
+
+{- FOURMOLU_DISABLE -}
+queryErrorReply :: Identifier -> [Question] -> (String -> a) -> (DNSMessage -> a) -> QueryError -> a
+queryErrorReply ident rqs left right qe = case qe of
+    DnsError e _        -> dnsError e
+    NotResponse{}       -> right $ message DNS.ServFail
+    InvalidEDNS{}       -> right $ message DNS.ServFail
+    HasError _as rc _m  -> right $ message rc
+    QueryDenied         -> left "QueryDenied"
   where
-    dnsError de = message <$> rcodeOfDNSError de <*> pure [] <*> pure []
-    rcodeOfDNSError e = foldDNSErrorToRCODE (Left $ "DNSError: " ++ show e) Right e
+    dnsError e = foldDNSErrorToRCODE (left $ "DNSError: " ++ show e) (right . message) e
+    message rc = replyDNSMessage ident rqs rc [] []
+{- FOURMOLU_ENABLE -}
 
-    queryError qe = case qe of
-        DnsError e _ -> dnsError e
-        NotResponse{} -> Right $ message DNS.ServFail [] []
-        InvalidEDNS{} -> Right $ message DNS.ServFail [] []
-        HasError _as rc _m -> Right $ message rc [] []
-        QueryDenied -> Left "QueryDenied"
-
-    message rcode rrs auth =
-        res
-            { DNS.identifier = ident
-            , DNS.rcode = rcode
-            , DNS.flags = f{DNS.authAnswer = False}
-            , DNS.answer = rrs
-            , DNS.authority = auth
-            , DNS.question = rqs
-            }
+replyDNSMessage :: Identifier -> [Question] -> RCODE -> Answers -> AuthorityRecords -> DNSMessage
+replyDNSMessage ident rqs rcode rrs auth =
+    res
+        { DNS.identifier = ident
+        , DNS.rcode = rcode
+        , DNS.flags = f{DNS.authAnswer = False}
+        , DNS.answer = rrs
+        , DNS.authority = auth
+        , DNS.question = rqs
+        }
+  where
     res = DNS.defaultResponse
     f = DNS.flags res
 
@@ -168,8 +150,7 @@ getResultIterative :: Question -> DNSQuery Result
 getResultIterative q = do
     ((cnrrs, _rn), etm) <- resolve q
     reqDO <- asksQC requestDO_
-    let fromRRsets = concatMap $ rrListFromRRset reqDO
-        fromMessage (msg, vans, vauth) = (DNS.rcode msg, fromRRsets vans, fromRRsets vauth)
+    let fromMessage (msg, vans, vauth) = resultFromRRS' reqDO (DNS.rcode msg) vans vauth (,,)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
@@ -207,7 +188,10 @@ makeResult reqDO cnRRset (rcode, ans, auth) =
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
 
 resultFromRRS :: RequestDO -> ResultRRS -> Result
-resultFromRRS reqDO (rcode, cans, cauth) = (rcode, fromRRsets cans, fromRRsets cauth)
+resultFromRRS reqDO (rcode, cans, cauth) = resultFromRRS' reqDO rcode cans cauth (,,)
+
+resultFromRRS' :: RequestDO -> RCODE -> [RRset] -> [RRset] -> (RCODE -> Answers -> AuthorityRecords -> a) -> a
+resultFromRRS' reqDO rcode cans cauth h = h rcode (fromRRsets cans) (fromRRsets cauth)
   where
     fromRRsets = concatMap $ rrListFromRRset reqDO
 
