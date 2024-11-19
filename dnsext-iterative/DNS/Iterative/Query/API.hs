@@ -26,6 +26,7 @@ import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
 
 -- this package
+import DNS.Iterative.Imports hiding (local)
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Local (takeLocalResult)
 import DNS.Iterative.Query.Resolve
@@ -78,8 +79,10 @@ getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) 
     reqerr = requestError env prefix $ \rc -> pure $ replied $ resultReply ident qs (rc, [], [])
     result = takeLocalResult env q (pure $ denied "local-zone: query-denied") queried (pure . local)
     queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env qcontext
-    eresult = queryErrorReply ident qs (pure . denied) (pure . replied)
-    qresult = pure . replied . resultReply ident qs
+    eresult = queryErrorReply ident qs (pure . denied) (fmap replied . replace "query-error")
+    qresult = fmap replied . replace "query" . resultReply ident qs
+    {- replace response-code only when query, not replace for request-error or local-result -}
+    replace = replaceResponseCode env
     qaction' = logQueryErrors prefix qaction
     local = replied . resultReply ident qs . resultFromRRS (requestDO_ qcontext)
     qcontext = queryContext q $ ctrlFromRequestHeader reqF reqEH
@@ -118,6 +121,20 @@ handleRequestHeader reqF reqEH eh h
     | otherwise                 = h
   where
     rd = DNS.recDesired reqF
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+replaceResponseCode :: Env -> String -> DNSMessage -> IO DNSMessage
+replaceResponseCode env tag respM = do
+    let rc0 = DNS.rcode respM
+        rc1 = replace rc0
+    unless (rc0 == rc1) $
+        logLines_ env Log.INFO Nothing [tag ++ ": replace response-code for query: " ++ show rc0 ++ " -> " ++ show rc1]
+    pure $ respM {rcode = rc1}
+  where
+    replace rc = case rc of
+        DNS.Refused  ->  DNS.ServFail
+        x            ->  x
 {- FOURMOLU_ENABLE -}
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
