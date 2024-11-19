@@ -20,13 +20,14 @@ import DNS.Do53.Client (
     QueryControls (..),
  )
 import qualified DNS.Do53.Client as DNS
+import qualified DNS.Log as Log
 import DNS.SEC (TYPE (..))
 import DNS.Types hiding (InvalidEDNS)
 import qualified DNS.Types as DNS
 
 -- this package
-import DNS.Iterative.Imports
 import DNS.Iterative.Query.Helpers
+import DNS.Iterative.Query.Local (takeLocalResult)
 import DNS.Iterative.Query.Resolve
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils (logQueryErrors)
@@ -72,11 +73,16 @@ getResponse'
     -> (String -> b) -> (DNSMessage -> b)
     -> Env -> DNSMessage -> Question -> [Question] -> IO b
 getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) qs =
-    either eresult (liftR qresult) =<< runDNSQuery qaction' env (queryContext q $ ctrlFromRequestHeader reqF reqEH)
+    handleRequestHeader reqF reqEH reqerr result
   where
+    reqerr = requestError env prefix $ \rc -> pure $ replied $ resultReply ident qs (rc, [], [])
+    result = takeLocalResult env q (pure $ denied "local-zone: query-denied") queried (pure . local)
+    queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env qcontext
     eresult = queryErrorReply ident qs (pure . denied) (pure . replied)
     qresult = pure . replied . resultReply ident qs
-    qaction' = logQueryErrors prefix $ (guardRequestHeader reqF reqEH >> qaction)
+    qaction' = logQueryErrors prefix qaction
+    local = replied . resultReply ident qs . resultFromRRS (requestDO_ qcontext)
+    qcontext = queryContext q $ ctrlFromRequestHeader reqF reqEH
     prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     --
     ident = DNS.identifier reqM
@@ -101,14 +107,18 @@ ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adF
         DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> True
         _ -> False
 
-guardRequestHeader :: DNSFlags -> EDNSheader -> DNSQuery ()
-guardRequestHeader reqF reqEH
-    | reqEH == DNS.InvalidEDNS =
-        throwError $ InvalidEDNS [] DNS.InvalidEDNS DNS.defaultResponse
-    | not rd = throwError $ HasError [] DNS.Refused DNS.defaultResponse
-    | otherwise = pure ()
+requestError :: Env -> String -> (RCODE -> IO a) -> RCODE -> String -> IO a
+requestError env prefix h rc err = logLines_ env Log.WARN Nothing [prefix ++ err] >> h rc
+
+{- FOURMOLU_DISABLE -}
+handleRequestHeader :: DNSFlags -> EDNSheader -> (RCODE -> String -> a) -> a -> a
+handleRequestHeader reqF reqEH eh h
+    | reqEH == DNS.InvalidEDNS  = eh DNS.ServFail "request error: InvalidEDNS"
+    | not rd                    = eh DNS.Refused "request error: RD flag required"
+    | otherwise                 = h
   where
     rd = DNS.recDesired reqF
+{- FOURMOLU_ENABLE -}
 
 -- | Converting 'QueryError' and 'Result' to 'DNSMessage'.
 replyMessage :: Either QueryError Result -> Identifier -> [Question] -> Either String DNSMessage

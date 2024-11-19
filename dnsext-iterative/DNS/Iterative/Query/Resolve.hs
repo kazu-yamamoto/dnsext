@@ -23,7 +23,6 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
-import DNS.Iterative.Query.Local
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
@@ -67,11 +66,9 @@ resolveLogic
     -> (Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' a)))
     -> Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
-resolveLogic logMark cnameHandler typeHandler q@(Question n0 typ cls) = do
-    env <- ask
-    maybe (called *> notLocal) local' =<< takeLocalResult env q
+resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
+    called >> notLocal
   where
-    local' result = pure (([], n0), Left result)
     notLocal
         | cls /= IN        = pure (([], n0), Left (DNS.NoErr, [], []))  {- not support other than IN -}
         | typ == Cache.ERR = pure (([], n0), Left (DNS.NoErr, [], []))
