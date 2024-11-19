@@ -218,8 +218,10 @@ resultFromRRS :: RequestDO -> ResultRRS -> Result
 resultFromRRS reqDO (rcode, cans, cauth) = resultFromRRS' reqDO rcode cans cauth (,,,)
 
 resultFromRRS' :: RequestDO -> RCODE -> [RRset] -> [RRset] -> (RCODE -> DNSFlags -> Answers -> AuthorityRecords -> a) -> a
-resultFromRRS' reqDO rcode cans cauth h = h rcode resFlags (fromRRsets cans) (fromRRsets cauth)
+resultFromRRS' reqDO rcode cans cauth h = h rcode resFlags{authenData = allValid} (fromRRsets cans) (fromRRsets cauth)
   where
+    rrsets = cans ++ cauth
+    allValid = not (null rrsets) && all rrsetValid rrsets
     fromRRsets = concatMap $ rrListFromRRset reqDO
 
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
