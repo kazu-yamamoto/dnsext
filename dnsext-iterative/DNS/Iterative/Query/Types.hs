@@ -315,6 +315,6 @@ data RRset = RRset
 -- results
 
 {- response code, answer section, authority section -}
-type Result = (RCODE, [ResourceRecord], [ResourceRecord])
+type Result = (RCODE, DNSFlags, [ResourceRecord], [ResourceRecord])
 type ResultRRS' a = (a, [RRset], [RRset])
 type ResultRRS = ResultRRS' RCODE
