@@ -152,7 +152,7 @@ putDNSMessage DNSMessage{..} wbuf ref = do
       where
         nonEDNSrcode code
             | fromRCODE code < 16 = code
-            | otherwise = FormatErr
+            | otherwise = FormatErr -- `BadRCODE` case is also handled
     ad = prependOpt additional
       where
         {- An EDNS header encoded into an OPT RR extends the additional section by exactly one.
