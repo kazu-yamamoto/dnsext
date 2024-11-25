@@ -7,8 +7,8 @@ module DNS.SEC.Verify.Verify where
 
 -- GHC packages
 import qualified Data.ByteString.Internal as BS
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Foreign.ForeignPtr (withForeignPtr)
 import GHC.Exts hiding (TYPE)
 import GHC.ST (ST (..), runST)

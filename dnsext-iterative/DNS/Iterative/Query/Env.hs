@@ -28,8 +28,8 @@ module DNS.Iterative.Query.Env (
 -- GHC packages
 import Data.IORef (newIORef)
 import qualified Data.List.NonEmpty as NE
-import Data.Map (Map)
-import qualified Data.Map as Map
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import System.Timeout (timeout)
 
 -- other packages
@@ -47,8 +47,8 @@ import qualified DNS.ZoneFile as Zone
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.DefaultLocal (defaultLocal)
+import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
 import DNS.Iterative.Query.Types

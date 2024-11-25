@@ -1,7 +1,7 @@
 module DNS.Iterative.Query.StubZone where
 
 -- GHC packages
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 -- other packages

@@ -44,8 +44,8 @@ import Data.IP (IP (..), fromIPv4, fromIPv6b, makeAddrRange, toIPv4, toIPv6b)
 import qualified Data.IP (addr)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Read
 
