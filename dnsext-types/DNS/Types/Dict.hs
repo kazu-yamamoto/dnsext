@@ -11,7 +11,7 @@ module DNS.Types.Dict (
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import qualified Data.IntMap as M
+import qualified Data.IntMap.Strict as M
 import System.IO.Unsafe (unsafePerformIO)
 
 import DNS.Types.EDNS

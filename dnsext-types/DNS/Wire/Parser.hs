@@ -37,8 +37,8 @@ import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Short as Short
 import Data.IORef
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO)
 

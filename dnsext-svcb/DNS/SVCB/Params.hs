@@ -3,8 +3,8 @@ module DNS.SVCB.Params where
 import DNS.SVCB.Imports
 import DNS.SVCB.Key
 import DNS.SVCB.Value
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as M
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as M
 
 newtype SvcParams = SvcParams (IntMap SvcParamValue) deriving (Eq, Ord)
 

@@ -11,8 +11,8 @@ import Control.Concurrent.STM
 import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import Data.IORef
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Tuple (swap)
 import Network.Socket
 import System.Timeout (timeout)

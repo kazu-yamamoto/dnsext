@@ -32,8 +32,8 @@ module DNS.Types.Type (
 
 import Data.Char (toUpper)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
 import qualified Data.Map as M
 import System.IO.Unsafe (unsafePerformIO)

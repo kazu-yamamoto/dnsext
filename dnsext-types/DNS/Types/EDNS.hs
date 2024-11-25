@@ -42,8 +42,8 @@ import Data.Char (toUpper)
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.IP (IP (..), fromIPv4, fromIPv6b, makeAddrRange, toIPv4, toIPv6b)
 import qualified Data.IP (addr)
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import System.IO.Unsafe (unsafePerformIO)
