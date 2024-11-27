@@ -49,7 +49,7 @@ pprAddr (ip, port) = show ip ++ "#" ++ show port
 {- FOURMOLU_DISABLE -}
 logQueryErrors :: String -> DNSQuery a -> DNSQuery a
 logQueryErrors prefix q = do
-      handleDnsError left return q
+      handleQueryError left return q
     where
       left qe = do
           logQueryError qe

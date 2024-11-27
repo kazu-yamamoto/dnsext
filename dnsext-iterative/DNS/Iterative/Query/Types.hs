@@ -35,7 +35,7 @@ module DNS.Iterative.Query.Types (
     DFreshState (..),
     runDNSQuery,
     throwDnsError,
-    handleDnsError,
+    handleQueryError,
     handleResponseError,
 ) where
 
@@ -187,12 +187,12 @@ runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwError . (`DnsError` [])
 
-handleDnsError
+handleQueryError
     :: (QueryError -> DNSQuery a)
     -> (a -> DNSQuery a)
     -> DNSQuery a
     -> DNSQuery a
-handleDnsError left right q = either left right =<< lift (runExceptT q)
+handleQueryError left right q = either left right =<< lift (runExceptT q)
 
 -- example instances
 -- - responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
