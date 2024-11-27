@@ -31,7 +31,7 @@ import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Local (takeLocalResult)
 import DNS.Iterative.Query.Resolve
 import DNS.Iterative.Query.Types
-import DNS.Iterative.Query.Utils (logQueryErrors)
+import DNS.Iterative.Query.Utils (logLn, pprMessage)
 
 -----
 
@@ -91,6 +91,35 @@ getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) 
     ident = DNS.identifier reqM
     reqF = DNS.flags reqM
     reqEH = DNS.ednsHeader reqM
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+logQueryErrors :: String -> DNSQuery a -> DNSQuery a
+logQueryErrors prefix q = do
+      handleQueryError left return q
+    where
+      left qe = do
+          logQueryError qe
+          throwError qe
+      logQueryError qe = case qe of
+          DnsError de ss        -> logDnsError de ss
+          NotResponse addrs resp msg  -> logNotResponse addrs resp msg
+          InvalidEDNS addrs eh msg    -> logInvalidEDNS addrs eh msg
+          HasError addrs rcode msg    -> logHasError addrs rcode msg
+      logDnsError de ss = case de of
+          NetworkFailure {}   -> putLog detail
+          DecodeError {}      -> putLog detail
+          RetryLimitExceeded  -> putLog detail
+          UnknownDNSError {}  -> putLog detail
+          _                   -> pure ()
+        where detail = show de ++ ": " ++ intercalate ", " ss
+      logNotResponse  addrs False  msg  = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "not response:" msg
+      logNotResponse _addrs True  _msg  = pure ()
+      logInvalidEDNS  addrs DNS.InvalidEDNS  msg = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "invalid EDNS:" msg
+      logInvalidEDNS  _     _               _msg = pure ()
+      logHasError _addrs _rcode _msg = pure ()
+      pprAddrs = unwords . map show
+      putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
 
 ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls

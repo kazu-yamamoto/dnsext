@@ -11,8 +11,7 @@ import Data.List.NonEmpty (toList)
 
 -- dnsext packages
 import qualified DNS.Log as Log
-import DNS.Types (DNSError (..), DNSMessage (..))
-import qualified DNS.Types as DNS
+import DNS.Types (DNSMessage (..))
 import Data.IP (IP (IPv4, IPv6))
 import System.Console.ANSI.Types
 
@@ -45,35 +44,6 @@ pindents  prefix (x:xs)  = (prefix ++ ": " ++ x) : map indent xs
 
 pprAddr :: Address -> String
 pprAddr (ip, port) = show ip ++ "#" ++ show port
-
-{- FOURMOLU_DISABLE -}
-logQueryErrors :: String -> DNSQuery a -> DNSQuery a
-logQueryErrors prefix q = do
-      handleQueryError left return q
-    where
-      left qe = do
-          logQueryError qe
-          throwError qe
-      logQueryError qe = case qe of
-          DnsError de ss        -> logDnsError de ss
-          NotResponse addrs resp msg  -> logNotResponse addrs resp msg
-          InvalidEDNS addrs eh msg    -> logInvalidEDNS addrs eh msg
-          HasError addrs rcode msg    -> logHasError addrs rcode msg
-      logDnsError de ss = case de of
-          NetworkFailure {}   -> putLog detail
-          DecodeError {}      -> putLog detail
-          RetryLimitExceeded  -> putLog detail
-          UnknownDNSError {}  -> putLog detail
-          _                   -> pure ()
-        where detail = show de ++ ": " ++ intercalate ", " ss
-      logNotResponse  addrs False  msg  = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "not response:" msg
-      logNotResponse _addrs True  _msg  = pure ()
-      logInvalidEDNS  addrs DNS.InvalidEDNS  msg = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "invalid EDNS:" msg
-      logInvalidEDNS  _     _               _msg = pure ()
-      logHasError _addrs _rcode _msg = pure ()
-      pprAddrs = unwords . map show
-      putLog = logLn Log.WARN . (prefix ++)
-{- FOURMOLU_ENABLE -}
 
 printResult :: Either QueryError DNSMessage -> IO ()
 printResult = either print (putStr . pprMessage "result")
