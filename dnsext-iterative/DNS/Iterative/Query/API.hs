@@ -151,7 +151,6 @@ queryErrorReply ident rqs left right qe = case qe of
     NotResponse{}       -> right $ message DNS.ServFail
     InvalidEDNS{}       -> right $ message DNS.ServFail
     HasError _as rc _m  -> right $ message rc
-    QueryDenied         -> left "QueryDenied"
   where
     dnsError e = foldDNSErrorToRCODE (left $ "DNSError: " ++ show e) (right . message) e
     message rc = replyDNSMessage ident rqs rc resFlags [] []
