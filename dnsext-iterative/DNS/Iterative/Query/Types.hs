@@ -91,6 +91,7 @@ data Env = Env
     , localZones_ :: LocalZones
     , stubZones_ :: StubZones
     , maxNegativeTTL_ :: TTL
+    , failureRcodeTTL_ :: TTL
     , insert_ :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
     , getCache_ :: IO Cache
     , expireCache_ :: EpochTime -> IO ()

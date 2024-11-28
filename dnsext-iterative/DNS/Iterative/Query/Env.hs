@@ -76,6 +76,7 @@ newEmptyEnv = do
         , localZones_ = mempty
         , stubZones_ = mempty
         , maxNegativeTTL_ = 3600
+        , failureRcodeTTL_ = 180
         , insert_ = \_ _ _ _ -> pure ()
         , getCache_ = pure $ Cache.empty 0
         , expireCache_ = \_ -> pure ()
