@@ -124,7 +124,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , disableV6NS_ = disable_v6_ns
                 , localZones_ = localZones
                 , stubZones_ = stubZones
-                , maxNegativeTTL_ = fromIntegral cnf_cache_max_negative_ttl
+                , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
