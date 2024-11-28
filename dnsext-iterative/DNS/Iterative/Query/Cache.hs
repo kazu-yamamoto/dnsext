@@ -310,22 +310,22 @@ failWithCache dom typ cls rank e = do
     when (cls == IN) $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
     throwDnsError e
   where
-    cacheRCODE_ = cacheRCODE dom typ
+    cacheRCODE_ = cacheFailedRCODE dom typ
 {- FOURMOLU_ENABLE -}
 
 cacheDNSError :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> DNSError -> m ()
 cacheDNSError dom typ rank e =
     foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
   where
-    cacheRCODE_ = cacheRCODE dom typ
+    cacheRCODE_ = cacheFailedRCODE dom typ
+
+cacheFailedRCODE :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> RCODE -> Ranking -> m ()
+cacheFailedRCODE dom typ rcode rank = do
+    fttl <- asks failureRcodeTTL_
+    cacheNegativeNoSOA rcode dom typ fttl rank
 
 cacheNoData :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> Ranking -> m ()
-cacheNoData dom typ rank = cacheRCODE dom typ NoErr rank
-
-cacheRCODE :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> RCODE -> Ranking -> m ()
-cacheRCODE dom typ rcode rank = do
-    maxNegativeTTL <- asks maxNegativeTTL_
-    cacheNegativeNoSOA rcode dom typ maxNegativeTTL rank
+cacheNoData dom typ rank = asks maxNegativeTTL_ >>= \nttl -> cacheNegativeNoSOA NoErr dom typ nttl rank
 
 cacheNegative :: (MonadIO m, MonadReader Env m) => Domain -> [RRset] -> Domain -> TYPE -> TTL -> Ranking -> m ()
 cacheNegative zone nrrs dom typ ttl rank = do
