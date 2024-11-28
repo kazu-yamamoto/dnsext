@@ -5,6 +5,9 @@ module DNS.Iterative.Query.Env (
     newEnv,
     newEmptyEnv,
     --
+    cropMaxNegativeTTL,
+    cropFailureRcodeTTL,
+    --
     setRRCacheOps,
     setTimeCache,
     --
@@ -95,6 +98,29 @@ newEmptyEnv = do
 {- FOURMOLU_ENABLE -}
 
 ---
+
+{- FOURMOLU_DISABLE -}
+cropMaxNegativeTTL :: Integral a => a -> TTL
+cropMaxNegativeTTL nttl
+    | nttl > 21600  = 21600
+    | nttl <    30  =    30
+    | otherwise     = fromIntegral nttl
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+cropFailureRcodeTTL :: Integral a => a -> TTL
+cropFailureRcodeTTL fttl
+    {- RFC 9520 - 3.2 Caching
+       https://datatracker.ietf.org/doc/html/rfc9520#name-caching
+       "Consistent with [RFC2308], resolution failures MUST NOT be cached for longer than 5 minutes."  -}
+    | fttl > 300  = 300
+    {- RFC 8767 - 5. Example Method
+       https://datatracker.ietf.org/doc/html/rfc8767#name-example-method
+       "Attempts to refresh from non-responsive or otherwise failing authoritative nameservers
+        are recommended to be done no more frequently than every 30 seconds."                          -}
+    | fttl <  30  =  30
+    | otherwise   = fromIntegral fttl
+{- FOURMOLU_ENABLE -}
 
 setRRCacheOps :: RRCacheOps -> Env -> Env
 setRRCacheOps RRCacheOps{..} env0 =
