@@ -36,7 +36,7 @@ import DNS.Iterative.Server (withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
-import DNS.Types (Domain, TYPE)
+import DNS.Types (Domain, TYPE, Question (..), toRepresentation)
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
@@ -193,7 +193,11 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
       where
         dispatch  Param = showParam outLn conf srvInfo
         dispatch  Noop = return ()
-        dispatch (Find ws) = mapM_ outLn . filter (ws `allInfixOf`) . map show . Cache.dump =<< getCache_ env
+        dispatch (Find ws) = do
+            now <- currentSeconds_ env
+            let showDump1 (Question{..}, (ts, Cache.Val rd rk)) =
+                    unwords [toRepresentation qname, show qtype, show qclass, show (ts - now), show (rd, rk)]
+            mapM_ outLn . filter (ws `allInfixOf`) . map showDump1 . Cache.dump =<< getCache_ env
         dispatch (Lookup dom typ) = print cmd *> (maybe (outLn "miss.") hit =<< lookupCache)
           where
             lookupCache = do
