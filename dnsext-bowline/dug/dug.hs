@@ -140,7 +140,8 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, opts0) <- getArgs >>= getArgsOpts
+    (deprecated, compatH, args0) <-  getArgs <&> handleDeprecatedVerbose
+    (args, opts0) <-  getArgsOpts args0 <&> fmap compatH
     when (optHelp opts0) $ do
         msg <- help
         putStr $ usageInfo msg options
@@ -150,6 +151,7 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2 | 3"
         exitSuccess
     ------------------------
+    deprecated
     opts@Options{..} <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
     let putLn = atomically . putLnSTM
@@ -169,6 +171,7 @@ main = do
     putTime t0 putLines
     killLogger
     sentinel tq
+    deprecated
   where
     sentinel tq = do
         xs <- readQ
