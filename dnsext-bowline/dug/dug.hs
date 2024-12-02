@@ -374,6 +374,48 @@ convOutputFlag "json"  = JSONstyle
 convOutputFlag "multi" = Multiline
 convOutputFlag _       = Singleline
 
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+handleDeprecatedVerbose :: [String] -> (IO (), Options -> Options, [String])
+handleDeprecatedVerbose args0 = case reverse cs of
+    []    -> (pure (),      id, args0)
+    ca:_  -> (banner , handler, args1)
+      where
+        (n, handler) = maybe (-1 {- never reach-}, id) id $ lk ca
+        banner = deprecatedVerboseBanner n ca
+  where
+    lk = (`lookup` deprecatedVerboseTable)
+    (cs, args1) = partition (maybe False (const True) . lk) args0
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+deprecatedVerboseBanner :: Int -> String -> IO ()
+deprecatedVerboseBanner n ca =
+    putStr $ unlines $ ["", border] ++ ftexts ++ [border, ""]
+  where
+    texts =
+        [ ""
+        , "WARNING: DEPRECATED-STYLE switch '" ++ ca ++"' WILL BE REMOVED in a future release!!" ]
+        ++
+        [ "         use '" ++ "-" ++ replicate n 'v' ++ "' instead of this!" | n > 0 ]
+        ++
+        [ "" ]
+    wtexts = [(length t, t) | t <- texts]
+    twidth = maximum [w | (w, _) <- wtexts]
+    bg = "**  "
+    ed = "  **"
+    ftexts = [ bg ++ t ++ replicate (twidth - w) ' '  ++ ed | (w, t) <- wtexts]
+    border = replicate (length bg + twidth + length ed) '*'
+{- FOURMOLU_ENABLE -}
+
+deprecatedVerboseTable :: [(String, (Int, Options -> Options))]
+deprecatedVerboseTable =
+    [ ("-v" ++ n, (nn, \opts -> opts{optLogLevel = convLogLevel n, optShortLog = convShortLog n}))
+    | nn <- [0..3]
+    , let n = show nn
+    ]
+
 convShortLog :: String -> Bool
 convShortLog "1" = True
 convShortLog _ = False
