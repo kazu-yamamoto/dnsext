@@ -140,8 +140,8 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, opts0@Options{..}) <- getArgs >>= getArgsOpts
-    when optHelp $ do
+    (args, opts0) <- getArgs >>= getArgsOpts
+    when (optHelp opts0) $ do
         msg <- help
         putStr $ usageInfo msg options
         putStr "\n"
@@ -150,7 +150,7 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2 | 3"
         exitSuccess
     ------------------------
-    opts <- checkDisableV6 opts0
+    opts@Options{..} <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
     let putLn = atomically . putLnSTM
         putLines a b c = atomically $ putLinesSTM a b c
