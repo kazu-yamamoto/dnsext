@@ -39,3 +39,17 @@ defaultOptions =
         , optResumptionFile = Nothing
         , opt0RTT = False
         }
+
+shortLog :: Options -> Bool
+shortLog opt = optVerboseLevel opt == 1
+
+{- FOURMOLU_DISABLE -}
+logLevel :: Options -> Log.Level
+logLevel opt
+    | verbose <= 0  = Log.WARN
+    | verbose == 1  = Log.DEMO  {- for short-log mode with DEMO log-level -}
+    | verbose == 2  = Log.DEMO
+    | otherwise     = Log.DEBUG
+  where
+    verbose = optVerboseLevel opt
+{- FOURMOLU_ENABLE -}
