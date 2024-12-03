@@ -14,6 +14,7 @@ data Options = Options
     , optPort :: Maybe String
     , optDoX :: ShortByteString
     , optFormat :: OutputFlag
+    , optVerboseLevel :: Int
     , optLogLevel :: Log.Level
     , optShortLog :: Bool
     , optKeyLogFile :: Maybe FilePath
@@ -31,6 +32,7 @@ defaultOptions =
         , optPort = Nothing
         , optDoX = "do53"
         , optFormat = Singleline
+        , optVerboseLevel = 0
         , optLogLevel = Log.WARN
         , optShortLog = False
         , optKeyLogFile = Nothing
