@@ -103,11 +103,8 @@ options =
     , Option
         ['v']
         ["verbose"]
-        ( ReqArg
-            (\n opts -> opts{optLogLevel = convLogLevel n, optShortLog = convShortLog n})
-            "<verbosity>"
-        )
-        "set the verbosity"
+        ( NoArg (\opts -> opts{optVerboseLevel = succ $ optVerboseLevel opts}))
+        "cumulatively increase the verbosity"
     , Option
         ['R']
         ["resumption-file"]
@@ -414,20 +411,10 @@ deprecatedVerboseBanner n ca =
 
 deprecatedVerboseTable :: [(String, (Int, Options -> Options))]
 deprecatedVerboseTable =
-    [ ("-v" ++ n, (nn, \opts -> opts{optLogLevel = convLogLevel n, optShortLog = convShortLog n}))
+    [ ("-v" ++ n, (nn, \opts -> opts{optVerboseLevel = nn}))
     | nn <- [0..3]
     , let n = show nn
     ]
-
-convShortLog :: String -> Bool
-convShortLog "1" = True
-convShortLog _ = False
-
-convLogLevel :: String -> Log.Level
-convLogLevel "0" = Log.WARN
-convLogLevel "1" = Log.DEMO  {- for short-log mode with DEMO log-level -}
-convLogLevel "2" = Log.DEMO
-convLogLevel _ = Log.DEBUG
 
 ----------------------------------------------------------------
 
