@@ -41,7 +41,7 @@ module DNS.Iterative.Query.Types (
 
 -- GHC packages
 import Data.IORef (IORef)
-import Data.Map (Map)
+import Data.Map.Strict (Map)
 
 -- other packages
 

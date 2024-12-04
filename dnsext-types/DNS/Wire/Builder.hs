@@ -28,8 +28,8 @@ module DNS.Wire.Builder (
 
 import qualified Data.ByteString.Short as Short
 import Data.IORef
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 import Network.ByteOrder
 import System.IO.Unsafe (unsafeDupablePerformIO)
 

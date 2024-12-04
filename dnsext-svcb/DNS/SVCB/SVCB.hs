@@ -10,7 +10,7 @@ import DNS.SVCB.Value
 import DNS.Types
 import DNS.Types.Internal
 import qualified DNS.Types.Opaque as Opaque
-import qualified Data.IntMap as M
+import qualified Data.IntMap.Strict as M
 
 ----------------------------------------------------------------
 
