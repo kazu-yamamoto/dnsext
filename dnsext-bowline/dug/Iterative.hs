@@ -12,7 +12,7 @@ import System.Timeout (timeout)
 
 import DNS.Types
 
-import Types (Options (..))
+import Types (Options (..), shortLog)
 
 iterativeQuery
     :: (DNSMessage -> IO ())
@@ -28,7 +28,7 @@ iterativeQuery putLn putLines qq opts = do
         Right msg -> putLn msg
 
 setup :: Log.PutLines IO -> Options -> IO Env
-setup putLines Options{..} = do
+setup putLines opt@Options{..} = do
     tcache <- newTimeCache
     let cacheConf = Cache.getDefaultStubConf (4 * 1024) 600 $ getTime tcache
     cacheOps <- Cache.newRRCacheOps cacheConf
@@ -36,7 +36,7 @@ setup putLines Options{..} = do
         setOps = setRRCacheOps cacheOps . setTimeCache tcache
     newEnv <&> \env0 ->
         (setOps env0)
-            { shortLog_ = optShortLog
+            { shortLog_ = shortLog opt
             , logLines_ = putLines
             , disableV6NS_ = optDisableV6NS
             , timeout_ = tmout

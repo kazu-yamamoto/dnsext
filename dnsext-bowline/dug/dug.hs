@@ -103,11 +103,8 @@ options =
     , Option
         ['v']
         ["verbose"]
-        ( ReqArg
-            (\n opts -> opts{optLogLevel = convLogLevel n, optShortLog = convShortLog n})
-            "<verbosity>"
-        )
-        "set the verbosity"
+        ( NoArg (\opts -> opts{optVerboseLevel = succ $ optVerboseLevel opts}))
+        "cumulatively increase the verbosity"
     , Option
         ['R']
         ["resumption-file"]
@@ -140,7 +137,8 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (args, opts0) <- getArgs >>= getArgsOpts
+    (deprecated, compatH, args0) <-  getArgs <&> handleDeprecatedVerbose
+    (args, opts0) <-  getArgsOpts args0 <&> fmap compatH
     when (optHelp opts0) $ do
         msg <- help
         putStr $ usageInfo msg options
@@ -150,6 +148,7 @@ main = do
         putStrLn "  <verbosity> = 0 | 1 | 2 | 3"
         exitSuccess
     ------------------------
+    deprecated
     opts@Options{..} <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
     let putLn = atomically . putLnSTM
@@ -169,6 +168,7 @@ main = do
     putTime t0 putLines
     killLogger
     sentinel tq
+    deprecated
   where
     sentinel tq = do
         xs <- readQ
@@ -223,11 +223,11 @@ cookOpts
         , Log.PutLines STM
         , IO ()
         )
-cookOpts args Options{..} = do
+cookOpts args opt@Options{..} = do
     let (at, dtq) = partition ("@" `isPrefixOf`) args
     qs <- getQueries dtq
     port <- getPort optPort optDoX
-    (runLogger, putLines, killLogger) <- Log.new' Log.Stdout optLogLevel
+    (runLogger, putLines, killLogger) <- Log.new' Log.Stdout (logLevel opt)
     let putLn = mkPutline optFormat putLines
     return (at, port, qs, runLogger, putLn, putLines, killLogger)
 
@@ -374,15 +374,47 @@ convOutputFlag "json"  = JSONstyle
 convOutputFlag "multi" = Multiline
 convOutputFlag _       = Singleline
 
-convShortLog :: String -> Bool
-convShortLog "1" = True
-convShortLog _ = False
+----------------------------------------------------------------
 
-convLogLevel :: String -> Log.Level
-convLogLevel "0" = Log.WARN
-convLogLevel "1" = Log.DEMO  {- for short-log mode with DEMO log-level -}
-convLogLevel "2" = Log.DEMO
-convLogLevel _ = Log.DEBUG
+{- FOURMOLU_DISABLE -}
+handleDeprecatedVerbose :: [String] -> (IO (), Options -> Options, [String])
+handleDeprecatedVerbose args0 = case reverse cs of
+    []    -> (pure (),      id, args0)
+    ca:_  -> (banner , handler, args1)
+      where
+        (n, handler) = maybe (-1 {- never reach-}, id) id $ lk ca
+        banner = deprecatedVerboseBanner n ca
+  where
+    lk = (`lookup` deprecatedVerboseTable)
+    (cs, args1) = partition (maybe False (const True) . lk) args0
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+deprecatedVerboseBanner :: Int -> String -> IO ()
+deprecatedVerboseBanner n ca =
+    putStr $ unlines $ ["", border] ++ ftexts ++ [border, ""]
+  where
+    texts =
+        [ ""
+        , "WARNING: DEPRECATED-STYLE switch '" ++ ca ++"' WILL BE REMOVED in a future release!!" ]
+        ++
+        [ "         use '" ++ "-" ++ replicate n 'v' ++ "' instead of this!" | n > 0 ]
+        ++
+        [ "" ]
+    wtexts = [(length t, t) | t <- texts]
+    twidth = maximum [w | (w, _) <- wtexts]
+    bg = "**  "
+    ed = "  **"
+    ftexts = [ bg ++ t ++ replicate (twidth - w) ' '  ++ ed | (w, t) <- wtexts]
+    border = replicate (length bg + twidth + length ed) '*'
+{- FOURMOLU_ENABLE -}
+
+deprecatedVerboseTable :: [(String, (Int, Options -> Options))]
+deprecatedVerboseTable =
+    [ ("-v" ++ n, (nn, \opts -> opts{optVerboseLevel = nn}))
+    | nn <- [0..3]
+    , let n = show nn
+    ]
 
 ----------------------------------------------------------------
 

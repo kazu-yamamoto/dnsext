@@ -14,8 +14,7 @@ data Options = Options
     , optPort :: Maybe String
     , optDoX :: ShortByteString
     , optFormat :: OutputFlag
-    , optLogLevel :: Log.Level
-    , optShortLog :: Bool
+    , optVerboseLevel :: Int
     , optKeyLogFile :: Maybe FilePath
     , optResumptionFile :: Maybe FilePath
     , opt0RTT :: Bool
@@ -31,9 +30,22 @@ defaultOptions =
         , optPort = Nothing
         , optDoX = "do53"
         , optFormat = Singleline
-        , optLogLevel = Log.WARN
-        , optShortLog = False
+        , optVerboseLevel = 0
         , optKeyLogFile = Nothing
         , optResumptionFile = Nothing
         , opt0RTT = False
         }
+
+shortLog :: Options -> Bool
+shortLog opt = optVerboseLevel opt == 1
+
+{- FOURMOLU_DISABLE -}
+logLevel :: Options -> Log.Level
+logLevel opt
+    | verbose <= 0  = Log.WARN
+    | verbose == 1  = Log.DEMO  {- for short-log mode with DEMO log-level -}
+    | verbose == 2  = Log.DEMO
+    | otherwise     = Log.DEBUG
+  where
+    verbose = optVerboseLevel opt
+{- FOURMOLU_ENABLE -}
