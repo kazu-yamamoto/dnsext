@@ -86,7 +86,7 @@ runResolveExact
     -> TYPE
     -> QueryControls
     -> IO (Either QueryError (DNSMessage, Delegation))
-runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt $ queryContextIN n typ cd
+runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt $ queryParamIN n typ cd
 
 {-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
 resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
@@ -135,16 +135,16 @@ runIterative
     -> Domain
     -> QueryControls
     -> IO (Either QueryError Delegation)
-runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryContextIN n A cd
+runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryParamIN n A cd
 
 -- | 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 --
 -- >>> testIterative dom = do { root <- refreshRoot; iterative root dom }
 -- >>> env <- _newTestEnv _findConsumed
--- >>> runDNSQuery (testIterative "mew.org.") env (queryContextIN "mew.org." A mempty) $> ()  {- fill-action is not called -}
+-- >>> runDNSQuery (testIterative "mew.org.") env (queryParamIN "mew.org." A mempty) $> ()  {- fill-action is not called -}
 --
--- >>> runDNSQuery (testIterative "arpa.") env (queryContextIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
+-- >>> runDNSQuery (testIterative "arpa.") env (queryParamIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
 iterative :: Delegation -> Domain -> DNSQuery (Maybe DNSMessage, Delegation)
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
@@ -297,7 +297,7 @@ getCheckEnabled = noCD <$> asksQC requestCD_
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
 -- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; AnchorSEP {} -> True }
 -- >>> env <- _newTestEnv _noLogging
--- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryContextIN "ns1.mew.org." A mempty)
+-- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryParamIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS ServsChildZone)

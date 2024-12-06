@@ -25,8 +25,8 @@ import DNS.Iterative.Internal (
     getResultIterative,
     newEmptyEnv,
     newTestCache,
-    queryContext,
-    queryContextIN,
+    queryParam,
+    queryParamIN,
     refreshRoot,
     replyMessage,
     rootHint,
@@ -132,7 +132,7 @@ querySpec disableV6NS putLines = describe "query" $ do
         getReply n0 ty ident = do
             let n = fromString n0
                 q = Question n ty DNS.IN
-            e <- runDNSQuery (getResultIterative q) cxt $ queryContext q mempty
+            e <- runDNSQuery (getResultIterative q) cxt $ queryParam q mempty
             return $ replyMessage e ident [DNS.Question n ty DNS.IN]
 
     let failLeft p = either (fail . ((p ++ ": ") ++) . show) pure
@@ -165,13 +165,13 @@ querySpec disableV6NS putLines = describe "query" $ do
         checkVResult = either (const VFailed) (either cachedVAnswer checkVAnswer)
 
     it "root-priming" $ do
-        result <- runDNSQuery rootPriming cxt $ queryContextIN (fromString ".") NS mempty
+        result <- runDNSQuery rootPriming cxt $ queryParamIN (fromString ".") NS mempty
         printQueryError result
         either (expectationFailure . show) (`shouldSatisfy` isRight) result
 
     root <- runIO $ do
         icxt <- newTestEnv disableV6NS (\_ _ _ -> pure ())
-        failLeft "refresh-root error" =<< runDNSQuery refreshRoot icxt (queryContextIN (fromString ".") NS mempty)
+        failLeft "refresh-root error" =<< runDNSQuery refreshRoot icxt (queryParamIN (fromString ".") NS mempty)
 
     it "iterative" $ do
         result <- runIterative_ root "iij.ad.jp."

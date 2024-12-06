@@ -64,5 +64,5 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
         (Right . DNS.replyDNSMessage)
         <$> DNS.resolve renv q qctl
 
-contextT :: Monad m => (Env -> QueryContext -> m a) -> ContextT m a
+contextT :: Monad m => (Env -> QueryParam -> m a) -> ContextT m a
 contextT k = ReaderT $ ReaderT . k

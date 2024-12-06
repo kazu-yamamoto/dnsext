@@ -78,14 +78,14 @@ getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) 
   where
     reqerr = requestError env prefix $ \rc -> pure $ replied $ resultReply ident qs (rc, resFlags, [], [])
     result = takeLocalResult env q (pure $ denied "local-zone: query-denied") queried (pure . local)
-    queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env qcontext
+    queried = either eresult (liftR qresult) =<< runDNSQuery qaction' env qparam
     eresult = queryErrorReply ident qs (pure . denied) (fmap replied . replace "query-error")
     qresult = fmap replied . replace "query" . resultReply ident qs
     {- replace response-code only when query, not replace for request-error or local-result -}
     replace = replaceResponseCode env
     qaction' = logQueryErrors prefix qaction
-    local = replied . resultReply ident qs . resultFromRRS (requestDO_ qcontext)
-    qcontext = queryContext q $ ctrlFromRequestHeader reqF reqEH
+    local = replied . resultReply ident qs . resultFromRRS (requestDO_ qparam)
+    qparam = queryParam q $ ctrlFromRequestHeader reqF reqEH
     prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     --
     ident = DNS.identifier reqM

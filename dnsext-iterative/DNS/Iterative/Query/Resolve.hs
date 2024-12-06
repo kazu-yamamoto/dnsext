@@ -34,7 +34,7 @@ runResolve
     -> Question
     -> QueryControls
     -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage)))
-runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryContext q qctl
+runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryParam q qctl
 
 resolveByCache
     :: Question
