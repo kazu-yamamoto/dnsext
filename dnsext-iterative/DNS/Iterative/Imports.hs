@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-}
 
 module DNS.Iterative.Imports (
@@ -22,6 +23,7 @@ module DNS.Iterative.Imports (
     module Data.Word,
     module Numeric,
     module DNS.Types.Time,
+    unzipNE,
 )
 where
 
@@ -49,3 +51,15 @@ import Numeric
 
 -- dns packages
 import DNS.Types.Time (EpochTime, EpochTimeUsec)
+
+#if __GLASGOW_HASKELL__ >= 910
+import qualified Data.Functor as F
+
+unzipNE :: NonEmpty (a, b) -> (NonEmpty a, NonEmpty b)
+unzipNE = F.unzip
+#else
+import qualified Data.List.NonEmpty as NE
+
+unzipNE :: NonEmpty (a, b) -> (NonEmpty a, NonEmpty b)
+unzipNE = NE.unzip
+#endif

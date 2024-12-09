@@ -26,6 +26,7 @@ module DNS.Iterative.Query.Env (
 ) where
 
 -- GHC packages
+
 import Data.IORef (newIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
@@ -175,7 +176,7 @@ readTrustAnchors ps = do
     cons (n,d) (_,k) xs = either mismatch match $ Verify.sepDNSKEY d n k
       where
         mismatch e = (n, Left $ e : map show d ++ map show k) : xs
-        match vs = case NE.unzip vs of (sep, ds:|dss) -> (n, pure $ AnchorSEP (ds:dss) sep) : xs
+        match vs = case unzipNE vs of (sep, ds:|dss) -> (n, pure $ AnchorSEP (ds:dss) sep) : xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
