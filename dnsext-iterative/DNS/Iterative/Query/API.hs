@@ -203,7 +203,7 @@ replyDNSMessage ident rqs rcode flags rrs auth =
 getResultIterative :: Question -> DNSQuery Result
 getResultIterative q = do
     ((cnrrs, _rn), etm) <- resolve q
-    reqDO <- asksQC requestDO_
+    reqDO <- asksQP requestDO_
     let fromMessage (msg, vans, vauth) = resultFromRRS' reqDO (DNS.rcode msg) vans vauth (,,,)
     return $ makeResult reqDO cnrrs $ either (resultFromRRS reqDO) fromMessage etm
 
@@ -211,7 +211,7 @@ getResultIterative q = do
 getResultCached :: Question -> DNSQuery (Maybe Result)
 getResultCached q = do
     ((cnrrs, _rn), e) <- resolveByCache q
-    reqDO <- asksQC requestDO_
+    reqDO <- asksQP requestDO_
     return $ either (Just . makeResult reqDO cnrrs . resultFromRRS reqDO) (const Nothing) e
 
 makeResult :: RequestDO -> [RRset] -> Result -> Result

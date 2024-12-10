@@ -25,7 +25,7 @@ module DNS.Iterative.Query.Types (
     chainedStateDS,
     QueryError (..),
     DNSQuery,
-    MonadReaderQC (..),
+    MonadReaderQP (..),
     CasesNotValid (..),
     notValidNoSig,
     notValidCheckDisabled,
@@ -169,16 +169,16 @@ data QueryError
 type ContextT m = ReaderT Env (ReaderT QueryParam m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-class Monad m => MonadReaderQC m where
-    asksQC :: (QueryParam -> a) -> m a
+class Monad m => MonadReaderQP m where
+    asksQP :: (QueryParam -> a) -> m a
 
-instance Monad m => MonadReaderQC (ContextT m) where
-    asksQC = lift . asks
-    {-# INLINEABLE asksQC #-}
+instance Monad m => MonadReaderQP (ContextT m) where
+    asksQP = lift . asks
+    {-# INLINEABLE asksQP #-}
 
-instance MonadReaderQC DNSQuery where
-    asksQC = lift . asksQC
-    {-# INLINEABLE asksQC #-}
+instance MonadReaderQP DNSQuery where
+    asksQP = lift . asksQP
+    {-# INLINEABLE asksQP #-}
 
 runDNSQuery :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)

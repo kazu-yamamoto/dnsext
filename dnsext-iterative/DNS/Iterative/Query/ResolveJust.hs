@@ -222,7 +222,7 @@ servsChildZone nss dom msg =
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
-        reqQC <- asksQC requestCD_
+        reqQC <- asksQP requestCD_
         case soaRRs of
             [] -> fallback
             [_] -> getWorkaround "SOA" >>= verifySOA reqQC
@@ -264,7 +264,7 @@ servsChildZone nss dom msg =
 
 fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC nss d = do
-    reqCD <- asksQC requestCD_
+    reqCD <- asksQP requestCD_
     fillsDNSSEC' reqCD nss d
 
 {- FOURMOLU_DISABLE -}
@@ -280,8 +280,8 @@ fillsDNSSEC' NoCheckDisabled  nss d = do
     return filled
 {- FOURMOLU_ENABLE -}
 
-getCheckEnabled :: MonadReaderQC m => m Bool
-getCheckEnabled = noCD <$> asksQC requestCD_
+getCheckEnabled :: MonadReaderQP m => m Bool
+getCheckEnabled = noCD <$> asksQP requestCD_
   where
     noCD NoCheckDisabled = True
     noCD CheckDisabled = False
@@ -365,7 +365,7 @@ fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
 fillDelegationOnNull dc disableV6NS d0@Delegation{..}
     | dentryIPnull disableV6NS dentry  = case nonEmpty names of
         Nothing      -> do
-            Question qn qty _ <- asksQC origQuestion_
+            Question qn qty _ <- asksQP origQuestion_
             logLines Log.DEMO
                 [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
                 , "  zone: " ++ show zone
@@ -434,7 +434,7 @@ resolveNS zone disableV6NS dc ns = do
                 | disableV6NS  = "empty A: disable-v6ns: "
                 | otherwise    = "empty A|AAAA: "
             showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-        orig <- showOrig <$> asksQC origQuestion_
+        orig <- showOrig <$> asksQP origQuestion_
         logLn Log.WARN $
             "resolveNS: serv-fail, "
             ++ emptyInfo
