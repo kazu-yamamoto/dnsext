@@ -119,7 +119,7 @@ monitor conf env mng@Control{..} srvInfo = do
                 either (const $ return ()) (const loop)
                     =<< withWait
                         waitQuit
-                        (handle (logLn Log.WARN . ("monitor io-error: " ++) . show) step)
+                        (handle (logLn Log.DEBUG . ("monitor io-error: " ++) . show) step)
         S.listen s 5
         loop
 {- FOURMOLU_ENABLE -}
