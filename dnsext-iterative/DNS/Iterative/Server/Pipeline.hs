@@ -518,7 +518,7 @@ mkConnector = do
 
 {- FOURMOLU_DISABLE -}
 handledLoop :: Env -> String -> IO () -> IO ()
-handledLoop env tag body = forever $ handle (\e -> warnOnError env tag e >> takeEx e) body
+handledLoop env tag body = forever $ handle (\e -> loggingExp env Log.DEBUG tag e >> takeEx e) body
   where
     takeEx :: SomeException -> IO ()
     takeEx e
@@ -528,7 +528,10 @@ handledLoop env tag body = forever $ handle (\e -> warnOnError env tag e >> take
 {- FOURMOLU_ENABLE -}
 
 warnOnError :: Env -> String -> SomeException -> IO ()
-warnOnError env tag (SomeException e) = logLn env Log.WARN (tag ++ ": exception: " ++ show e)
+warnOnError env tag e = loggingExp env Log.WARN tag e
+
+loggingExp :: Env -> Log.Level -> String -> SomeException -> IO ()
+loggingExp env lv tag (SomeException e) = logLn env lv (tag ++ ": exception: " ++ show e)
 
 ----------------------------------------------------------------
 
