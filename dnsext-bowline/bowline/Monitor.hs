@@ -45,6 +45,7 @@ import qualified Network.Socket as S
 import Network.Socket (
     AddrInfo (..),
     SockAddr,
+    SocketOption (SockOpt, KeepAlive),
     Socket,
     SocketType (Stream),
  )
@@ -52,6 +53,7 @@ import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 
 -- this package
 import Config
+import SockOpt
 import SocketUtil (ainfosSkipError)
 import Types (CacheControl (..), Control (..))
 
@@ -105,6 +107,7 @@ monitor conf env mng@Control{..} srvInfo = do
     servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
         v6only sock a
         S.setSocketOption sock S.ReuseAddr 1
+        keepAliveAvail (pure ()) (setSocketKeepAlive sock $ cnf_monitor_keep_interval conf)
         S.bind sock a
     monitorServer s = do
         let step = do
@@ -120,6 +123,28 @@ monitor conf env mng@Control{..} srvInfo = do
                         (handle (logLn Log.DEBUG . ("monitor io-error: " ++) . show) step)
         S.listen s 5
         loop
+{- FOURMOLU_ENABLE -}
+
+setSocketKeepAlive :: Socket -> Int -> IO ()
+setSocketKeepAlive sock interval = do
+    S.setSocketOption sock TcpKeepIdle interval
+    S.setSocketOption sock TcpKeepInterval interval
+    S.setSocketOption sock KeepAlive 1
+
+keepAliveAvail :: a -> a -> a
+keepAliveAvail na av
+    | not avail = na
+    | otherwise = av
+  where
+    avail = null keepNotAvails
+
+{- FOURMOLU_DISABLE -}
+keepNotAvails :: [SocketOption]
+keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
+  where
+    addAvail so@(SockOpt lv nm) us
+        | lv >= 0 && nm >= 0  = us
+        | otherwise           = so : us
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
