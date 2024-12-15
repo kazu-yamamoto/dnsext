@@ -93,21 +93,19 @@ monitor
 monitor conf env mng@Control{..} srvInfo = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
-    let ss = map fst ps
-        v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
-        v6only _sock  _                  = pure ()
-        servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
-            v6only sock a
-            S.setSocketOption sock S.ReuseAddr 1
-            S.bind sock a
-        stdio = [ runStdConsole | cnf_monitor_stdio conf ]
     mapM_ servSock ps
-    return $ stdio ++ map monitorServer ss
+    return $ [runStdConsole | cnf_monitor_stdio conf] ++ [monitorServer s | (s, _) <- ps]
   where
     runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle :: (SomeException -> IO a) -> IO a -> IO a
     handle onError = either onError return <=< try
+    v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
+    v6only _sock  _                  = pure ()
+    servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
+        v6only sock a
+        S.setSocketOption sock S.ReuseAddr 1
+        S.bind sock a
     monitorServer s = do
         let step = do
                 socketWaitRead s
