@@ -34,7 +34,7 @@ runResolve
     -> Question
     -> QueryControls
     -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage)))
-runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryContext q qctl
+runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryParam q qctl
 
 resolveByCache
     :: Question
@@ -78,7 +78,7 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
     logLines_ lv = logLines lv . pindents ("resolve-with-cname: " ++ logMark)
     logLn_ lv s = logLines_ lv [s]
     called = do
-        let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQC sel
+        let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQP sel
         do_ <- qbitstr "DnssecOK"           requestDO_  [(DnssecOK,           "1"), (NoDnssecOK,           "0")]
         cd_ <- qbitstr "CheckDisabled"      requestCD_  [(CheckDisabled,      "1"), (NoCheckDisabled,      "0")]
         ad_ <- qbitstr "AuthenticatedData"  requestAD_  [(AuthenticatedData,  "1"), (NoAuthenticatedData,  "0")]
@@ -153,7 +153,7 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
 
     lookupType bn t = maybe (pure empty) filterLookup =<< lookupRRsetEither logMark bn t
     filterLookup (x, rank) = do
-        reqCD <- asksQC requestCD_
+        reqCD <- asksQP requestCD_
         pure $ do
             guardReply rank
             guardLookup reqCD x
@@ -196,7 +196,7 @@ resolveTYPE bn typ = do
             let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
             when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
             cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
-    reqCD <- asksQC requestCD_
+    reqCD <- asksQP requestCD_
     Verify.cases reqCD delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
 
 maxCNameChain :: Int

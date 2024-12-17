@@ -93,21 +93,19 @@ monitor
 monitor conf env mng@Control{..} srvInfo = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
-    let ss = map fst ps
-        v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
-        v6only _sock  _                  = pure ()
-        servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
-            v6only sock a
-            S.setSocketOption sock S.ReuseAddr 1
-            S.bind sock a
-        stdio = [ runStdConsole | cnf_monitor_stdio conf ]
     mapM_ servSock ps
-    return $ stdio ++ map monitorServer ss
+    return $ [runStdConsole | cnf_monitor_stdio conf] ++ [monitorServer s | (s, _) <- ps]
   where
     runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle :: (SomeException -> IO a) -> IO a -> IO a
     handle onError = either onError return <=< try
+    v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
+    v6only _sock  _                  = pure ()
+    servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
+        v6only sock a
+        S.setSocketOption sock S.ReuseAddr 1
+        S.bind sock a
     monitorServer s = do
         let step = do
                 socketWaitRead s
@@ -148,7 +146,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
             hPutStr outH "monitor> " *> hFlush outH
             either (const $ return ()) (\exit -> unless exit repl) =<< withWait waitQuit (handle (($> False) . print) step)
 
-    showParam outLn conf srvInfo
+    mapM_ outLn =<< getShowParam'
     repl
   where
     handle :: (SomeException -> IO a) -> IO a -> IO a
@@ -185,13 +183,14 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
         "help" : [] -> Just $ Help Nothing
         _ -> Nothing
 
+    getShowParam' = getShowParam conf srvInfo
     outLn = hPutStrLn outH
 
     runCmd Quit = quitServer $> True
     runCmd Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
-        dispatch  Param = showParam outLn conf srvInfo
+        dispatch  Param = mapM_ outLn =<< getShowParam'
         dispatch  Noop = return ()
         dispatch (Find ws) = do
             now <- currentSeconds_ env
@@ -253,12 +252,19 @@ withWait qstm blockAct =
 socketWaitRead :: Socket -> IO ()
 socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
 
-showParam :: (String -> IO ()) -> Config -> [String] -> IO ()
-showParam outLn conf srvInfo = do
-    outLn "---------- configs  ----------"
-    mapM_ outLn $ showConfig conf
-    outLn "---------- runtime  ----------"
-    outLn . ("capabilities: " ++) . show =<< getNumCapabilities
-    mapM_ outLn srvInfo
-    outLn . ("euid: " ++) . show =<< getEffectiveUserID
-    outLn . ("egid: " ++) . show =<< getEffectiveGroupID
+{- FOURMOLU_DISABLE -}
+getShowParam :: Config -> [String] -> IO [String]
+getShowParam conf srvInfo =
+    format <$> sequence
+        [ ("capabilities: " ++) . show <$> getNumCapabilities
+        , ("euid: " ++) . show <$> getEffectiveUserID
+        , ("egid: " ++) . show <$> getEffectiveGroupID
+        ]
+  where
+    format rtInfo =
+        [ "---------- configs  ----------" ] ++
+        showConfig conf                      ++
+        [ "---------- runtime  ----------" ] ++
+        srvInfo                              ++
+        rtInfo
+{- FOURMOLU_ENABLE -}

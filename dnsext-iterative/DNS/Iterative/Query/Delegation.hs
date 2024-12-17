@@ -97,7 +97,7 @@ noV4DEntry (DEstubA6  (_:|_))     = True
 -- Caching while retrieving delegation information from the authoritative server's reply
 delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
 delegationWithCache zone dnskeys dom msg = do
-    reqCD <- asksQC requestCD_
+    reqCD <- asksQP requestCD_
     {- There is delegation information only when there is a selectable NS -}
     maybe (notFound $> noDelegation) (found reqCD >>> (<&> hasDelegation)) $ findDelegation nsps adds
   where

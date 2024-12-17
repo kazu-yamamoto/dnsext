@@ -9,9 +9,9 @@ module DNS.Iterative.Query.Types (
     LocalZones,
     StubZones,
     Env (..),
-    QueryContext (..),
-    queryContext,
-    queryContextIN,
+    QueryParam (..),
+    queryParam,
+    queryParamIN,
     RequestDO (..),
     RequestCD (..),
     RequestAD (..),
@@ -25,7 +25,7 @@ module DNS.Iterative.Query.Types (
     chainedStateDS,
     QueryError (..),
     DNSQuery,
-    MonadReaderQC (..),
+    MonadReaderQP (..),
     CasesNotValid (..),
     notValidNoSig,
     notValidCheckDisabled,
@@ -108,18 +108,18 @@ data Env = Env
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
 
-data QueryContext = QueryContext
+data QueryParam = QueryParam
     { origQuestion_ :: Question
     , requestDO_ :: RequestDO
     , requestCD_ :: RequestCD
     , requestAD_ :: RequestAD
     }
 
-queryContext :: Question -> QueryControls -> QueryContext
-queryContext q qctl = QueryContext q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
+queryParam :: Question -> QueryControls -> QueryParam
+queryParam q qctl = QueryParam q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
 
-queryContextIN :: Domain -> TYPE -> QueryControls -> QueryContext
-queryContextIN dom typ qctl = queryContext (Question dom typ IN) qctl
+queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
+queryParamIN dom typ qctl = queryParam (Question dom typ IN) qctl
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
@@ -166,21 +166,21 @@ data QueryError
     | HasError [Address] DNS.RCODE DNSMessage
     deriving (Show)
 
-type ContextT m = ReaderT Env (ReaderT QueryContext m)
+type ContextT m = ReaderT Env (ReaderT QueryParam m)
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
-class Monad m => MonadReaderQC m where
-    asksQC :: (QueryContext -> a) -> m a
+class Monad m => MonadReaderQP m where
+    asksQP :: (QueryParam -> a) -> m a
 
-instance Monad m => MonadReaderQC (ContextT m) where
-    asksQC = lift . asks
-    {-# INLINEABLE asksQC #-}
+instance Monad m => MonadReaderQP (ContextT m) where
+    asksQP = lift . asks
+    {-# INLINEABLE asksQP #-}
 
-instance MonadReaderQC DNSQuery where
-    asksQC = lift . asksQC
-    {-# INLINEABLE asksQC #-}
+instance MonadReaderQP DNSQuery where
+    asksQP = lift . asksQP
+    {-# INLINEABLE asksQP #-}
 
-runDNSQuery :: DNSQuery a -> Env -> QueryContext -> IO (Either QueryError a)
+runDNSQuery :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a)
 runDNSQuery q = runReaderT . runReaderT (runExceptT q)
 
 throwDnsError :: DNSError -> DNSQuery a

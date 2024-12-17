@@ -90,7 +90,7 @@ handleHits1 = Cache.hitCases1
 -- | lookup RRs without sigs. empty RR list result for negative case.
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupRR "p2.example.com." A
 -- >>> fmap (map rdata . fst) <$> runCxt pos1
 -- Just [10.0.0.3]
@@ -127,7 +127,7 @@ lookupErrorRCODE dom = lookupWithHandler h ((": " ++) . show . snd) "" dom Cache
 -- Just [_, ..]  -- Valid RRset
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
 -- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
 -- >>> dsigs = [RD_RRSIG A RSASHA256 3 1800 "20240601090000" "20250101090000" 0xBEEF "example.com." ""] -- dummy RRSIG
 -- >>> cacheHit dom typ cls ttl hit = do {ins <- asks insert_; liftIO $ ins (Question dom typ cls) ttl hit RankAnswer}
@@ -167,7 +167,7 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryContextIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
 -- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p0.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRsetEither "test" "p0.example.com." A
 -- >>> fmap (foldLookupResult (\_ _ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
@@ -251,7 +251,7 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: (MonadIO m, MonadReader Env m, MonadReaderQC m)
+    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
     => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([ResourceRecord], Ranking)) -> DNSMessage
@@ -260,7 +260,7 @@ cacheSectionNegative
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
-    reqCD <- asksQC requestCD_
+    reqCD <- asksQP requestCD_
     let {- the minimum of the SOA.MINIMUM field and SOA's TTL
            https://datatracker.ietf.org/doc/html/rfc2308#section-3
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
@@ -294,14 +294,14 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         plogLines lv xs = do
             let key = [showQ' "key" dom typ]
                 query = showQ "query" (question msg)
-            orig <- (\q -> showQ "orig-query" [q]) <$> asksQC origQuestion_
+            orig <- (\q -> showQ "orig-query" [q]) <$> asksQP origQuestion_
             logLines lv $ ("cacheSectionNegative: " ++ unwords (withCtx $ key ++ query ++ orig)) : xs
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
 failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
 failWithCacheOrigName rank e = do
-    Question dom _typ cls <- asksQC origQuestion_
+    Question dom _typ cls <- asksQP origQuestion_
     failWithCache dom Cache.ERR cls rank e
 
 {- FOURMOLU_DISABLE -}
@@ -346,7 +346,7 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    (result, cacheX) <- verify =<< asksQC requestCD_
+    (result, cacheX) <- verify =<< asksQP requestCD_
     cacheX
     return result
   where
@@ -391,7 +391,7 @@ cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NameErr = nameErrors $> ()
     | otherwise = pure ()
   where
-    nameErrors = asksQC requestCD_ >>=
+    nameErrors = asksQP requestCD_ >>=
         \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
         \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
@@ -410,7 +410,7 @@ cacheNoDelegation d zone dnskeys dom msg
 
 {- FOURMOLU_DISABLE -}
 wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery [RRset]
-wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion =<< asksQC requestCD_
+wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion =<< asksQP requestCD_
   where
     witnessWildcardExpansion reqCD
         | FilledDS [] <- delegationDS  = pure []
@@ -433,7 +433,7 @@ wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion 
 {- FOURMOLU_DISABLE -}
 negativeWitnessActions :: DNSQuery [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (DNSQuery [RRset], DNSQuery [RRset])
 negativeWitnessActions nullK Delegation{..} qname qtype msg =
-    (witnessNoData =<< asksQC requestCD_, witnessNameError =<< asksQC requestCD_)
+    (witnessNoData =<< asksQP requestCD_, witnessNameError =<< asksQP requestCD_)
   where
     witnessNoData reqCD
         | FilledDS [] <- delegationDS  = pure []
