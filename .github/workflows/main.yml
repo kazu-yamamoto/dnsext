@@ -2,7 +2,7 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ 'main', 'ci' ]
+    branches: [ 'main', 'ci', 'ci-uc' ]
   pull_request:
     branches: [ 'main' ]
 
@@ -43,7 +43,7 @@ jobs:
       id: inst-dep
       run: |
         cabal update
-        if cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
+        if [ $GITHUB_REF_NAME != 'ci-uc' ] && cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
