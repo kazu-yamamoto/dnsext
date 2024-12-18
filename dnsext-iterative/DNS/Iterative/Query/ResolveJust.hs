@@ -365,11 +365,11 @@ fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
 fillDelegationOnNull dc disableV6NS d0@Delegation{..}
     | dentryIPnull disableV6NS dentry  = case nonEmpty names of
         Nothing      -> do
-            Question qn qty _ <- asksQP origQuestion_
+            orig <- showQ "orig-query:" <$> asksQP origQuestion_
             logLines Log.DEMO
                 [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
                 , "  zone: " ++ show zone
-                , "  orig-query: " ++ show qn ++ " " ++ show qty
+                , "  " ++ orig
                 , "  disable-v6-ns: " ++ show disableV6NS
                 , "  without-glue sub-domains:" ++ show subNames
                 ]
@@ -431,17 +431,9 @@ resolveNS zone disableV6NS dc ns = do
 
     failEmptyAx rank = do
         let emptyInfo
-                | disableV6NS  = "empty A: disable-v6ns: "
+                | disableV6NS  = "empty A (disable-v6ns): "
                 | otherwise    = "empty A|AAAA: "
-            showOrig (Question name ty _) = "orig-query " ++ show name ++ " " ++ show ty
-        orig <- showOrig <$> asksQP origQuestion_
-        logLn Log.WARN $
-            "resolveNS: serv-fail, "
-            ++ emptyInfo
-            ++ orig
-            ++ ", zone: "
-            ++ show zone
-            ++ " NS: "
-            ++ show ns
+        orig <- showQ "orig-query:" <$> asksQP origQuestion_
+        logLn Log.WARN $ unwords [ "resolveNS: serv-fail,", (emptyInfo ++ show ns ++ ","), ("zone: " ++ show zone ++ ","), orig ]
         failWithCache zone Cache.ERR IN rank DNS.ServerFailure
 {- FOURMOLU_ENABLE -}
