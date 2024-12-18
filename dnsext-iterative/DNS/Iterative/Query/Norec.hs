@@ -30,7 +30,7 @@ import DNS.Iterative.Query.Types
   * RD (Recursion Desired) must be 0 for request to authoritative server
   * EDNS must be enable for DNSSEC OK request -}
 norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
-norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
+norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
     let ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
@@ -64,5 +64,5 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl -> do
         (Right . DNS.replyDNSMessage)
         <$> DNS.resolve renv q qctl
 
-contextT :: Monad m => (Env -> QueryParam -> m a) -> ContextT m a
-contextT k = ReaderT $ ReaderT . k
+contextT :: Monad m => (Env -> QueryParam -> QueryState -> m a) -> ContextT m a
+contextT k = ReaderT $ ReaderT . (ReaderT .) . k

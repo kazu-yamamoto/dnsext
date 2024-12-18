@@ -15,6 +15,7 @@ module DNS.Iterative.Query.Types (
     RequestDO (..),
     RequestCD (..),
     RequestAD (..),
+    QueryState (..),
     RRset (..),
     Address,
     DEntry (..),
@@ -26,6 +27,7 @@ module DNS.Iterative.Query.Types (
     QueryError (..),
     DNSQuery,
     MonadReaderQP (..),
+    MonadReaderQS (..),
     CasesNotValid (..),
     notValidNoSig,
     notValidCheckDisabled,
@@ -40,7 +42,7 @@ module DNS.Iterative.Query.Types (
 ) where
 
 -- GHC packages
-import Data.IORef (IORef)
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 import Data.Map.Strict (Map)
 
 -- other packages
@@ -159,6 +161,17 @@ toRequestAD qctl = case adBit $ qctlHeader qctl of
     FlagSet -> AuthenticatedData
     _ -> NoAuthenticatedData
 
+data QueryState = QueryState
+    { setQueryCount_ :: Int -> IO ()
+    , getQueryCount_ :: IO Int
+    }
+
+newQueryState :: IO QueryState
+newQueryState = do
+    cref <- newIORef 0
+    let set x = atomicModifyIORef' cref (\_ -> (x, ()))
+    pure $ QueryState set $ readIORef cref
+
 data QueryError
     = DnsError DNSError [String]
     | NotResponse [Address] Bool DNSMessage
@@ -166,7 +179,7 @@ data QueryError
     | HasError [Address] DNS.RCODE DNSMessage
     deriving (Show)
 
-type ContextT m = ReaderT Env (ReaderT QueryParam m)
+type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
 type DNSQuery = ExceptT QueryError (ContextT IO)
 
 class Monad m => MonadReaderQP m where
@@ -180,8 +193,24 @@ instance MonadReaderQP DNSQuery where
     asksQP = lift . asksQP
     {-# INLINEABLE asksQP #-}
 
+class Monad m => MonadReaderQS m where
+    asksQS :: (QueryState -> a) -> m a
+
+instance Monad m => MonadReaderQS (ContextT m) where
+    asksQS = lift . lift . asks
+    {-# INLINEABLE asksQS #-}
+
+instance MonadReaderQS DNSQuery where
+    asksQS = lift . asksQS
+    {-# INLINEABLE asksQS #-}
+
+runDNSQuery' :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a, QueryState)
+runDNSQuery' q e p = do
+    s <- newQueryState
+    (,) <$> runReaderT (runReaderT (runReaderT (runExceptT q) e) p) s <*> pure s
+
 runDNSQuery :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a)
-runDNSQuery q = runReaderT . runReaderT (runExceptT q)
+runDNSQuery q e p = fst <$> runDNSQuery' q e p
 
 throwDnsError :: DNSError -> DNSQuery a
 throwDnsError = throwError . (`DnsError` [])
