@@ -40,18 +40,20 @@ jobs:
           ${{ runner.os }}-
 
     - name: Install dependencies
+      id: inst-dep
       run: |
         cabal update
         if cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
         then
-          true
+          echo "installed=false" >> "$GITHUB_OUTPUT"
         else
           cabal build --only-dependencies --enable-tests --disable-benchmarks all
+          echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Save Cache
       uses: actions/cache/save@v4
-      if: always()
+      if: ${{ steps.inst-dep.outputs.installed == 'true' }}
       with:
         path: ~/.cabal
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
