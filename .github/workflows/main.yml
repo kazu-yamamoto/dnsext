@@ -42,7 +42,12 @@ jobs:
     - name: Install dependencies
       run: |
         cabal update
-        cabal build --only-dependencies --enable-tests --disable-benchmarks all
+        if cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
+        then
+          true
+        else
+          cabal build --only-dependencies --enable-tests --disable-benchmarks all
+        fi
 
     - name: Save Cache
       uses: actions/cache/save@v4
