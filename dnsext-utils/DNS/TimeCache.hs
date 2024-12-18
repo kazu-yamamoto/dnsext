@@ -18,7 +18,8 @@ import Data.UnixTime (UnixTime (..), formatUnixTime, getUnixTime)
 import DNS.Types.Time (EpochTime)
 
 -- this package
-import DNS.Utils.AutoUpdate (mkClosableAutoUpdate)
+import Control.AutoUpdate
+import Control.AutoUpdate.Internal (mkClosableAutoUpdate)
 
 {- FOURMOLU_DISABLE -}
 data TimeCache = TimeCache
@@ -28,14 +29,23 @@ data TimeCache = TimeCache
     }
 {- FOURMOLU_ENABLE -}
 
-{- FOURMOLU_DISABLE -}
 newTimeCache :: IO TimeCache
 newTimeCache = do
-    let interval = 1_000_000
-    (onceGetTime  , close1) <- mkClosableAutoUpdate interval  getUnixTime
-    (onceGetString, close2) <- mkClosableAutoUpdate interval (getTimeShowS =<< onceGetTime)
+    let settings0 =
+            defaultUpdateSettings
+                { updateFreq = 1_000_000
+                , updateAction = getUnixTime
+                , updateThreadName = "dnsext-utils: AutoUpdate for getUnixTime"
+                }
+    (onceGetTime, close1) <- mkClosableAutoUpdate settings0
+    let settings1 =
+            defaultUpdateSettings
+                { updateFreq = 1_000_000
+                , updateAction = getTimeShowS =<< onceGetTime
+                , updateThreadName = "dnsext-utils: AutoUpdate for onceGetTime"
+                }
+    (onceGetString, close2) <- mkClosableAutoUpdate settings1
     return $ TimeCache (unixToEpoch <$> onceGetTime) onceGetString (close2 >> close1)
-{- FOURMOLU_ENABLE -}
 
 noneTimeCache :: TimeCache
 noneTimeCache =
