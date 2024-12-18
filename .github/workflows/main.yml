@@ -2,7 +2,7 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ 'main', 'ci' ]
+    branches: [ 'main', 'ci', 'ci-uc' ]
   pull_request:
     branches: [ 'main' ]
 
@@ -16,6 +16,9 @@ jobs:
         os:  [ 'ubuntu-latest', 'macOS-latest' ]
         ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10' ]
 
+    env:
+      cache-name: cache-cabal-ghc-${{ matrix.ghc }}
+
     steps:
     - run: git config --global core.autocrlf false
 
@@ -26,10 +29,8 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: latest
 
-    - name: Cache
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-cabal-ghc-${{ matrix.ghc }}
+    - name: Restore Cache
+      uses: actions/cache/restore@v4
       with:
         path: ~/.cabal
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
@@ -39,9 +40,23 @@ jobs:
           ${{ runner.os }}-
 
     - name: Install dependencies
+      id: inst-dep
       run: |
         cabal update
-        cabal build --only-dependencies --enable-tests --disable-benchmarks all
+        if [ $GITHUB_REF_NAME != 'ci-uc' ] && cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
+        then
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        else
+          cabal build --only-dependencies --enable-tests --disable-benchmarks all
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Save Cache
+      uses: actions/cache/save@v4
+      if: ${{ steps.inst-dep.outputs.installed == 'true' }}
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
 
     - name: Build
       run: cabal build --enable-tests --disable-benchmarks all
