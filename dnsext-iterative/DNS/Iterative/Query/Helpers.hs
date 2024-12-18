@@ -27,6 +27,12 @@ import DNS.Iterative.RootServers (rootServers)
 -- >>> :set -Wno-incomplete-patterns
 -- >>> import DNS.Types
 
+showQ' :: String -> Domain -> TYPE -> String
+showQ' tag name typ = unwords [tag, show name, show typ]
+
+showQ :: String -> Question -> String
+showQ tag (Question name typ _) = showQ' tag name typ
+
 rrListWith
     :: TYPE
     -> (DNS.RData -> Maybe rd)
