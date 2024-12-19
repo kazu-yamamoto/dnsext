@@ -3,7 +3,6 @@ module DNS.Iterative.Query.Random (
     randomizedSelectN,
     randomizedChoice,
     randomizedSelects,
-    selectIPs,
 ) where
 
 -- GHC packages
@@ -12,7 +11,6 @@ module DNS.Iterative.Query.Random (
 import System.Random (getStdRandom, randomR)
 
 -- dnsext packages
-import Data.IP (IP)
 
 -- this package
 import DNS.Iterative.Imports
@@ -63,6 +61,3 @@ randomizedSelects num xs
         return $ take num $ drop ix $ xs ++ xs
   where
     len = length xs
-
-selectIPs :: MonadIO m => Int -> [IP] -> m [IP]
-selectIPs = randomizedSelects
