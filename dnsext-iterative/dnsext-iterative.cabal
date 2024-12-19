@@ -78,6 +78,7 @@ library
         psqueues,
         quic >= 0.2.1 && < 0.3,
         random,
+        split,
         stm,
         time-manager,
         tls >= 2.1.4,
