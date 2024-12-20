@@ -506,15 +506,18 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
 fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
-    maybe (list1 nullIPs query =<< delegationIPs d) (fill . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
+    maybe query (fill . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
   where
     zone = delegationZone
     toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
-    nullIPs = logLn Log.WARN "require-dnskey: address list is null" $> d
     verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
-    query sas = either verifyFailed fill =<< cachedDNSKEY getSEP sas zone
+    query = either verifyFailed fill =<< cachedDNSKEY getSEP tempDelegationCountDNSKEY d
 {- FOURMOLU_ENABLE -}
+
+{-# WARNING tempDelegationCountDNSKEY "need to fix, add argument to fillDelegationDNSKEY for delecation count" #-}
+tempDelegationCountDNSKEY :: Int
+tempDelegationCountDNSKEY = 0
 
 {-
 steps to get verified and cached DNSKEY RRset
@@ -524,11 +527,11 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> [Address] -> Domain -> DNSQuery (Either String [RD_DNSKEY])
-cachedDNSKEY getSEPs sas zone = do
+    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String [RD_DNSKEY])
+cachedDNSKEY getSEPs dc d@Delegation{..} = do
     short <- asks shortLog_
-    logLn Log.DEMO $ unwords (["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
-    msg <- norec True sas zone DNSKEY
+    let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
+    (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) d zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
@@ -544,6 +547,7 @@ cachedDNSKEY getSEPs sas zone = do
             nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
             ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
         Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+    zone = delegationZone
 
 ---
 
