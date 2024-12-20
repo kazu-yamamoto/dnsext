@@ -505,13 +505,13 @@ fillDelegationDNSKEY  dc d@Delegation{..} = fillDelegationDNSKEY' getSEP dc d
 fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      _dc d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
-    maybe query (fill . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
+    maybe query (fill d . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
   where
     zone = delegationZone
     toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
-    fill dnskeys = pure d{delegationDNSKEY = dnskeys}
+    fill d' dnskeys = pure d'{delegationDNSKEY = dnskeys}
     verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
-    query = either verifyFailed fill =<< cachedDNSKEY getSEP dc d
+    query = either verifyFailed (\(ks, d') -> fill d' ks) =<< cachedDNSKEY getSEP dc d
 {- FOURMOLU_ENABLE -}
 
 {-
@@ -522,15 +522,15 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String [RD_DNSKEY])
+    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String ([RD_DNSKEY], Delegation))
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
     short <- asks shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
-    (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) d zone DNSKEY
+    (msg, d') <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) d zone DNSKEY
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
-            either (pure . Left) (verifyDNSKEY msg) $ getSEPs srrs
+            either (pure . Left) (fmap (fmap (\ks -> (ks, d'))) . verifyDNSKEY msg) $ getSEPs srrs
         _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
   where
     cachedResult krds dnskeyRRset cacheDNSKEY
