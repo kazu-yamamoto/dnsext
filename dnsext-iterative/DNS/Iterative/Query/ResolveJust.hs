@@ -632,20 +632,6 @@ resolveNS zone disableV6NS dc ns = do
 
 ---
 
-{- FOURMOLU_DISABLE -}
--- Get authoritative server addresses from the delegation information.
-delegationIPs :: Delegation -> DNSQuery [Address]
-delegationIPs Delegation{..} = do
-    disableV6NS <- asks disableV6NS_
-    ips <- dentryToRandomIP entryNum addrNum disableV6NS dentry
-    when (null ips) $ throwDnsError DNS.UnknownDNSError  {- assume filled IPs by fillDelegation -}
-    pure ips
-  where
-    dentry = NE.toList delegationNS
-    entryNum = 2
-    addrNum = 2
-{- FOURMOLU_ENABLE -}
-
 maxQueryCount :: Int
 maxQueryCount = 64
 
