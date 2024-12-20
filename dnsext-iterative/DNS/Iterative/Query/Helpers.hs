@@ -198,6 +198,16 @@ foldIPList n v4 v6 both ips = foldIPList' n v4 v6 both v4list v6list
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+foldIPnonEmpty
+    :: (NonEmpty IPv4 -> a) -> (NonEmpty IPv6 -> a)
+    -> (NonEmpty IPv4 -> NonEmpty IPv6 -> a)
+    -> NonEmpty IP -> a
+foldIPnonEmpty v4 v6 both (x :| xs) = case x of
+    IPv4 i4 -> foldIPList (v4 $ i4 :| []) (v4 . NE.cons i4) v6 (\i4s i6s -> both (NE.cons i4 i4s) i6s) xs
+    IPv6 i6 -> foldIPList (v6 $ i6 :| []) v4 (v6 . NE.cons i6) (\i4s i6s -> both i4s (NE.cons i6 i6s)) xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [Address]
 dentryToRandomIP entries addrs disableV6NS des = do
     acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
