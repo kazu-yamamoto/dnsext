@@ -182,7 +182,7 @@ iterative_ dc nss0 (x : xs)  = do
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
         (msg, _) <- delegationFallbacks dc withDO (logLn Log.DEMO . unwords . ainfo) nss name requestDelegationTYPE
         let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
-            sharedHandler = servsChildZone nss name msg
+            sharedHandler = servsChildZone dc nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg
             logDelegation' d = logDelegation d $> d
             handlers md =
@@ -212,7 +212,7 @@ iterative_ dc nss0 (x : xs)  = do
             stepQuery' = notDelegatedMsg <$> stepQuery checkEnabled nss
             getDelegation FreshD  = stepQuery' {- refresh for fresh parent -}
             getDelegation CachedD = lookupERR >>= maybe (lookupDelegation name >>= maybe stepQuery' withoutMsg) withERRC
-            fills md = mapM (fillsDNSSEC nss) =<< mapM (fillDelegation dc) md
+            fills md = mapM (fillsDNSSEC dc nss) =<< mapM (fillDelegation dc) md
             --                                    {- fill for no A / AAAA cases aginst NS -}
         mapM fills =<< getDelegation delegationFresh
 {- FOURMOLU_ENABLE -}
@@ -221,8 +221,8 @@ requestDelegationTYPE :: TYPE
 requestDelegationTYPE = A
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-servsChildZone :: Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
-servsChildZone nss dom msg =
+servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+servsChildZone dc nss dom msg =
     handleSOA (handleASIG $ pure noDelegation)
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
@@ -265,18 +265,18 @@ servsChildZone nss dom msg =
         throwDnsError DNS.ServerFailure
     getWorkaround tag = do
         logLn Log.DEMO $ "servs-child: workaround: " ++ tag ++ ": " ++ show dom ++ " may be provided with " ++ show (delegationZone nss)
-        fillsDNSSEC nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
+        fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
 
-fillsDNSSEC :: Delegation -> Delegation -> DNSQuery Delegation
-fillsDNSSEC nss d = do
+fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC dc nss d = do
     reqCD <- asksQP requestCD_
-    fillsDNSSEC' reqCD nss d
+    fillsDNSSEC' reqCD dc nss d
 
 {- FOURMOLU_DISABLE -}
-fillsDNSSEC' :: RequestCD -> Delegation -> Delegation -> DNSQuery Delegation
-fillsDNSSEC' CheckDisabled   _nss d = pure d
-fillsDNSSEC' NoCheckDisabled  nss d = do
-    filled@Delegation{..} <- fillDelegationDNSKEY =<< fillDelegationDS nss d
+fillsDNSSEC' :: RequestCD -> Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC' CheckDisabled   _dc _nss d = pure d
+fillsDNSSEC' NoCheckDisabled  dc  nss d = do
+    filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
         logLn Log.WARN $ "require-ds-and-dnskey: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
@@ -443,7 +443,7 @@ steps of root priming
  -}
 rootPriming :: DNSQuery (Either String Delegation)
 rootPriming =
-    priming =<< fillDelegationDNSKEY =<< getHint
+    priming =<< fillDelegationDNSKEY 0 =<< getHint
   where
     left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
@@ -487,13 +487,13 @@ rootPriming =
 ---
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY :: Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
+fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY _dc d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
     logLn Log.WARN $ "require-dnskey: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
     pure d
-fillDelegationDNSKEY d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
-fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
+fillDelegationDNSKEY _dc d@Delegation{delegationDS = FilledDS []} = pure d {- DS(Delegation Signer) does not exist -}
+fillDelegationDNSKEY  dc d@Delegation{..} = fillDelegationDNSKEY' getSEP dc d
   where
     zone = delegationZone
     getSEP = case delegationDS of
@@ -502,21 +502,17 @@ fillDelegationDNSKEY d@Delegation{..} = fillDelegationDNSKEY' getSEP d
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Delegation -> DNSQuery Delegation
-fillDelegationDNSKEY' _      d@Delegation{delegationDNSKEY = _:_}     = pure d
-fillDelegationDNSKEY' getSEP d@Delegation{delegationDNSKEY = [] , ..} =
+fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY' _      _dc d@Delegation{delegationDNSKEY = _:_}     = pure d
+fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
     maybe query (fill . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
   where
     zone = delegationZone
     toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     fill dnskeys = pure d{delegationDNSKEY = dnskeys}
     verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
-    query = either verifyFailed fill =<< cachedDNSKEY getSEP tempDelegationCountDNSKEY d
+    query = either verifyFailed fill =<< cachedDNSKEY getSEP dc d
 {- FOURMOLU_ENABLE -}
-
-{-# WARNING tempDelegationCountDNSKEY "need to fix, add argument to fillDelegationDNSKEY for delecation count" #-}
-tempDelegationCountDNSKEY :: Int
-tempDelegationCountDNSKEY = 0
 
 {-
 steps to get verified and cached DNSKEY RRset
