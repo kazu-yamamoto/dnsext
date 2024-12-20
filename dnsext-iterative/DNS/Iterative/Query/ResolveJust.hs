@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -547,6 +548,57 @@ cachedDNSKEY getSEPs sas zone = do
         Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
 
 ---
+
+{- FOURMOLU_DISABLE -}
+delegationFallbacks
+    :: Int -> Bool -> ([Address] -> DNSQuery b)
+    -> Delegation -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+delegationFallbacks dc dnssecOK ah d0 name typ = do
+    disableV6NS <- asks disableV6NS_
+    delegationFallbacks_ handled failed qparallel disableV6NS dc dnssecOK ah d0 name typ
+  where
+    handled = logLn Log.DEMO
+    failed ass = logLines Log.DEMO ("delegationFallbacks: failed:" : ["  " ++ unwords (ns : map pprAddr as) | (ns, as) <- ass])
+    qparallel = 2
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+delegationFallbacks_
+    :: (String -> DNSQuery c)
+    -> ([(String, [Address])] -> DNSQuery a)
+    -> Int -> Bool -> Int -> Bool -> ([Address] -> DNSQuery b)
+    -> Delegation -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..} name typ = do
+    paxs1  <- dentryToPermAx disableV6NS dentry
+    pnss   <- dentryToPermNS zone dentry
+    fallbacks id d0 ("<cached>", \d n j -> list (n d) (\a as -> j d $ a :| as) paxs1) [(show ns, resolveNS' ns) | ns <- pnss]
+  where
+    dentry = NE.toList delegationNS
+    fallbacks aa d (tag, runAxs) runsAxs = runAxs d emp ne
+      where
+        emp d' = list (fh (aa []) >> throwDnsError ServerFailure) (fallbacks (aa . ((tag, []):)) d') runsAxs
+        ne d' paxs = list step (\g gs -> step `catchError` \e -> hlog e >> fallbacks (aa . ((tag, paxs'):)) d' g gs) runsAxs
+          where
+            step = case [(ah axc >> norec dnssecOK axc name typ) | axc <- chunksOfN qparallel paxs] of
+                f:|fs -> (,) <$> catches f fs <*> pure d'
+            paxs' = NE.toList paxs
+            hlog e = eh' $ unwords $ show e : "for" : map show paxs'
+    catches x  []     = x
+    catches x (y:xs)  = x `catchError` \_e -> catches y xs
+
+    resolveNS' ns d emp ne = do
+        {- tryError idiom, before mtl 2.3 -}
+        e <- (Right <$> resolveNS zone disableV6NS dc ns) `catchError` (pure . Left)
+        d' <- fillCachedDelegation d
+        either left (either rleft rright) e d'
+      where
+        left e d' = eh' (show e ++ " for resolving " ++ show ns) >> emp d'
+        rleft (_rc, ei) d' = eh' ei >> emp d'
+        rright axs d' = ne d' =<< randomizedPermN [(ip, 53) | (ip, _) <- axs]
+    eh' = eh . ("delegationFallbacks: " ++)
+
+    zone = delegationZone
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (Either (RCODE, String) (NonEmpty (IP, ResourceRecord)))
