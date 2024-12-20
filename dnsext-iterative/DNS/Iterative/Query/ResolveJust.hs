@@ -212,7 +212,7 @@ iterative_ dc nss0 (x : xs)  = do
             stepQuery' = notDelegatedMsg <$> stepQuery checkEnabled nss
             getDelegation FreshD  = stepQuery' {- refresh for fresh parent -}
             getDelegation CachedD = lookupERR >>= maybe (lookupDelegation name >>= maybe stepQuery' withoutMsg) withERRC
-            fills md = mapM (fillsDNSSEC dc nss) =<< mapM (fillDelegation dc) md
+            fills = mapM (fillsDNSSEC dc nss)
             --                                    {- fill for no A / AAAA cases aginst NS -}
         mapM fills =<< getDelegation delegationFresh
 {- FOURMOLU_ENABLE -}
@@ -353,59 +353,6 @@ queryDS dc src@Delegation{..} dom = do
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
     zone = delegationZone
     dnskeys = delegationDNSKEY
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-fillDelegation :: Int -> Delegation -> DNSQuery Delegation
-fillDelegation dc d0 = do
-    disableV6NS <- asks disableV6NS_
-    fillCachedDelegation =<< fillDelegationOnNull dc disableV6NS d0
-    {- lookup again for updated cache with resolveNS -}
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
--- Fill delegation with resolved IPs
--- If no available NS is found, ServerFailure is returned.
-fillDelegationOnNull :: Int -> Bool -> Delegation -> DNSQuery Delegation
-fillDelegationOnNull dc disableV6NS d0@Delegation{..}
-    | dentryIPnull disableV6NS dentry  = case nonEmpty names of
-        Nothing      -> do
-            orig <- showQ "orig-query:" <$> asksQP origQuestion_
-            logLines Log.DEMO
-                [ "fillDelegationOnNullIP: serv-fail: delegation is empty."
-                , "  zone: " ++ show zone
-                , "  " ++ orig
-                , "  disable-v6-ns: " ++ show disableV6NS
-                , "  without-glue sub-domains:" ++ show subNames
-                ]
-            throwDnsError DNS.ServerFailure
-        Just names1  -> do
-            name <- randomizedSelectN names1
-            let right = foldIPnonEmpty (DEwithA4 name) (DEwithA6 name) (DEwithAx name) . fmap fst
-                left (rc, ei) = logLn Log.WARN $ unwords ["resolveNS failed,", "rcode: " ++ show rc ++ ",", ei]
-            filled <- either ((>> throwDnsError ServerFailure) . left) (pure . right) =<< resolveNS zone disableV6NS dc name
-            pure $ d0{delegationNS = replaceTo name filled delegationNS}
-    | otherwise       = pure d0
-  where
-    zone = delegationZone
-    dentry = NE.toList delegationNS
-
-    names = foldr takeNames [] delegationNS
-    takeNames (DEonlyNS name) xs
-        | not (name `DNS.isSubDomainOf` zone)  = name : xs
-    --    {- skip sub-domain without glue to avoid loop -}
-    takeNames  _              xs               =        xs
-
-    replaceTo n alt des = NE.map replace des
-      where
-        replace (DEonlyNS name)
-            | name == n     = alt
-        replace  de         = de
-
-    subNames = foldr takeSubNames [] delegationNS
-    takeSubNames (DEonlyNS name) xs
-        | name `DNS.isSubDomainOf` zone  = name : xs {- sub-domain name without glue -}
-    takeSubNames _ xs                    =        xs
 {- FOURMOLU_ENABLE -}
 
 ---
