@@ -33,7 +33,6 @@ library
         DNS.Iterative.Query.ResolveJust
         DNS.Iterative.Query.StubZone
         DNS.Iterative.Query.TestEnv
-        DNS.Iterative.Query.TrustAnchor
         DNS.Iterative.Query.Types
         DNS.Iterative.Query.Utils
         DNS.Iterative.Query.Verify
