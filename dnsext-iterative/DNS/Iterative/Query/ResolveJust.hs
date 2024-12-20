@@ -276,7 +276,7 @@ fillsDNSSEC dc nss d = do
 fillsDNSSEC' :: RequestCD -> Int -> Delegation -> Delegation -> DNSQuery Delegation
 fillsDNSSEC' CheckDisabled   _dc _nss d = pure d
 fillsDNSSEC' NoCheckDisabled  dc  nss d = do
-    filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS nss d
+    filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
     when (chainedStateDS filled && null delegationDNSKEY) $ do
         let zone = show delegationZone
         logLn Log.WARN $ "require-ds-and-dnskey: " ++ zone ++ ": DS is 'chained'-state, and DNSKEY is null"
@@ -302,15 +302,15 @@ getCheckEnabled = noCD <$> asksQP requestCD_
 -- >>> mkChild ds = withNS2 "mew.org." "ns1.mew.org." "202.238.220.92" "ns2.mew.org." "210.155.141.200" ds
 -- >>> isFilled d = case (delegationDS d) of { NotFilledDS {} -> False; FilledDS {} -> True; AnchorSEP {} -> True }
 -- >>> env <- _newTestEnv _noLogging
--- >>> runChild child = runDNSQuery (fillDelegationDS parent child) env (queryParamIN "ns1.mew.org." A mempty)
+-- >>> runChild child = runDNSQuery (fillDelegationDS 0 parent child) env (queryParamIN "ns1.mew.org." A mempty)
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS CachedDelegation)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ NotFilledDS ServsChildZone)
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ FilledDS [])
 -- Right True
-fillDelegationDS :: Delegation -> Delegation -> DNSQuery Delegation
-fillDelegationDS src dest
+fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillDelegationDS dc src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
     | NotFilledDS o <- delegationDS src = do
         logLn Log.WARN $ "require-ds: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show (delegationZone src)
@@ -321,32 +321,29 @@ fillDelegationDS src dest
         FilledDS _ -> pure dest {- no DS or exist DS, anyway filled DS -}
         NotFilledDS o -> do
             logLn Log.DEMO $ "require-ds: consumes not-filled DS: case=" ++ show o ++ " zone: " ++ show delegationZone
-            maybe (list1 nullAddrs query =<< delegationIPs src) fill =<< lookupDS delegationZone
+            maybe query fill =<< lookupDS delegationZone
   where
     dsRDs (rrs, _rank) = Just [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
     lookupDS zone = lookupValidRR "require-ds" zone DS <&> (>>= dsRDs)
     fill dss = pure dest{delegationDS = FilledDS dss}
-    nullAddrs = logLn Log.WARN "require-ds: address list is null" $> dest
     verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure
-    query sas = do
+    query = do
         let zone = delegationZone dest
             result (e, ~verifyColor, ~verifyMsg) = do
                 let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
                 clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                either verifyFailed fill e
-        short <- asks shortLog_
-        logLn Log.DEMO $ unwords (["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
-        result =<< queryDS (delegationZone src) (delegationDNSKEY src) sas zone
+                either verifyFailed (fillCachedDelegation {- fill-cached on queryDS fallbacks -} <=< fill) e
+        result =<< queryDS dc src zone
 
+{- FOURMOLU_DISABLE -}
 queryDS
-    :: Domain
-    -> [RD_DNSKEY]
-    -> [Address]
-    -> Domain
-    -> DNSQuery (Either String [RD_DS], Color, String)
-queryDS zone dnskeys ips dom = do
-    msg <- norec True ips dom DS
+    :: Int -> Delegation
+    -> Domain -> DNSQuery (Either String [RD_DS], Color, String)
+queryDS dc src@Delegation{..} dom = do
+    short <- asks shortLog_
+    let ainfo sas = ["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
+    (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) src dom DS
     Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
   where
     nullDS = pure (Right [], Yellow, "no DS, so no verify")
@@ -354,6 +351,9 @@ queryDS zone dnskeys ips dom = do
     verifyResult dsrds dsRRset cacheDS
         | rrsetValid dsRRset = cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
         | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
+    zone = delegationZone
+    dnskeys = delegationDNSKEY
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 fillDelegation :: Int -> Delegation -> DNSQuery Delegation
