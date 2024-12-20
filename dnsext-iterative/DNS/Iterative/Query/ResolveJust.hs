@@ -115,9 +115,9 @@ resolveExactDC dc n typ
         let reuseMsg msg
                 | typ == requestDelegationTYPE  = do
                       logLn Log.DEMO $ unwords ["resolve-exact: skip exact query", show n, show typ, "for last no-delegation"]
-                      pure msg
+                      pure (msg, nss)
                 | otherwise                     = request nss
-        (,) <$> maybe (request nss) reuseMsg mmsg <*> pure nss
+        maybe (request nss) reuseMsg mmsg
   where
     mdc = maxNotSublevelDelegation
     getAnchor = do
@@ -125,11 +125,10 @@ resolveExactDC dc n typ
         maybe refreshRoot pure $ Stub.lookupStub stub n
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
-        sas <- delegationIPs nss
         short <- asks shortLog_
-        logLn Log.DEMO $ unwords (["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
-        norec withDO sas n typ
+            ainfo sas = ["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
+        delegationFallbacks dc withDO (logLn Log.DEMO . unwords . ainfo) nss n typ
 {- FOURMOLU_ENABLE -}
 
 maxNotSublevelDelegation :: Int
