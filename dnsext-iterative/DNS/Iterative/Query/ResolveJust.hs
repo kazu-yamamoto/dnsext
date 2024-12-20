@@ -175,14 +175,13 @@ iterative_ dc nss0 (x : xs)  = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        sas <- delegationIPs nss
         short <- asks shortLog_
-        logLn Log.DEMO $ unwords (["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
+            ainfo sas = ["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
            See the following document:
            QNAME Minimisation Examples: https://datatracker.ietf.org/doc/html/rfc9156#section-4 -}
-        msg <- norec withDO sas name requestDelegationTYPE
+        (msg, _) <- delegationFallbacks dc withDO (logLn Log.DEMO . unwords . ainfo) nss name requestDelegationTYPE
         let withNoDelegation handler = mayDelegation handler (pure . hasDelegation)
             sharedHandler = servsChildZone nss name msg
             cacheHandler = cacheNoDelegation nss zone dnskeys name msg
