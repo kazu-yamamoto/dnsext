@@ -477,11 +477,10 @@ rootPriming =
         anchor <- asks rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
-        sas <- delegationIPs hint
-        let zone = "."
         let short = False
-        logLn Log.DEMO $ unwords (["root-priming: query", show zone, show NS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]])
-        msgNS <- norec True sas zone NS
+        let zone = "."
+            ainfo sas = ["root-priming: query", show zone, show NS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
+        (msgNS, _) <- delegationFallbacks 0 True (logLn Log.DEMO . unwords . ainfo) hint zone NS
         verify hint msgNS
 {- FOURMOLU_ENABLE -}
 
