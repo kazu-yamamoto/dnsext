@@ -197,13 +197,13 @@ norec dnssecOK aservers name typ = do
     qcount <- (length aservers +) <$> (liftIO =<< asksQS getQueryCount_)
     logLn Log.DEBUG ("query count: " ++ show qcount)
     orig <- showQ "orig-query" <$> asksQP origQuestion_
-    m <- ExceptT $ dispatch qcount orig
+    m <- dispatch qcount orig
     asksQS setQueryCount_ >>= \setCount -> liftIO $ setCount qcount
     pure m
   where
     dispatch qcount orig
         | qcount > maxQueryCount = logLn Log.WARN (exceeded orig) >> left ServerFailure
-        | otherwise = Norec.norec' dnssecOK aservers name typ >>= either left (pure . handleResponseError aservers Left Right)
+        | otherwise = lift (Norec.norec' dnssecOK aservers name typ) >>= either left (handleResponseError aservers throwError pure)
     exceeded orig = "max-query-count (==" ++ show maxQueryCount ++ ") exceeded: " ++ showQ' "query" name typ ++ ", " ++ orig
-    left e = cacheDNSError name typ Cache.RankAnswer e $> dnsError e
-    dnsError e = Left $ uncurry DnsError $ unwrapDNSErrorInfo e
+    left e = cacheDNSError name typ Cache.RankAnswer e >> dnsError e
+    dnsError e = throwError $ uncurry DnsError $ unwrapDNSErrorInfo e
