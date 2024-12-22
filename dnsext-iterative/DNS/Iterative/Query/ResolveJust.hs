@@ -376,8 +376,9 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
             throwDnsError DNS.ServerFailure
         Just names1  -> do
             name <- randomizedSelectN names1
-            let axsDE = foldIPnonEmpty (DEwithA4 name) (DEwithA6 name) (DEwithAx name)
-            filled <- axsDE . fmap fst <$> resolveNS zone disableV6NS dc name
+            let right = foldIPnonEmpty (DEwithA4 name) (DEwithA6 name) (DEwithAx name) . fmap fst
+                left (rc, ei) = logLn Log.WARN $ unwords ["resolveNS failed,", "rcode: " ++ show rc ++ ",", ei]
+            filled <- either ((>> throwDnsError ServerFailure) . left) (pure . right) =<< resolveNS zone disableV6NS dc name
             pure $ d0{delegationNS = replaceTo name filled delegationNS}
     | otherwise       = pure d0
   where
@@ -403,10 +404,10 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (NonEmpty (IP, ResourceRecord))
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (Either (RCODE, String) (NonEmpty (IP, ResourceRecord)))
 resolveNS zone disableV6NS dc ns = do
-    (_rc, axs) <- query1Ax
-    list failEmptyAx (\a as -> pure $ a :| as) axs
+    (rc, axs) <- query1Ax
+    list (failEmptyAx rc) (\a as -> pure $ Right $ a :| as) axs
   where
     axPairs = axList disableV6NS (== ns) (,)
 
@@ -428,11 +429,9 @@ resolveNS zone disableV6NS dc ns = do
             cacheAnswer d ns typ msg $> ()
             pure $ (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
 
-    failEmptyAx = do
-        let emptyInfo
-                | disableV6NS  = "empty A (disable-v6ns): "
-                | otherwise    = "empty A|AAAA: "
+    failEmptyAx rc = do
+        let emptyInfo = if disableV6NS then "empty A (disable-v6ns)" else "empty A|AAAA"
         orig <- showQ "orig-query:" <$> asksQP origQuestion_
-        logLn Log.WARN $ unwords [ "resolveNS: serv-fail,", (emptyInfo ++ show ns ++ ","), ("zone: " ++ show zone ++ ","), orig ]
-        throwDnsError ServerFailure
+        let errorInfo = (if rc == NoErr then emptyInfo else show rc) ++ " for NS,"
+        pure $ Left (rc, unwords $ errorInfo : ["ns: " ++ show ns ++ ",", "zone: " ++ show zone ++ ",", orig])
 {- FOURMOLU_ENABLE -}
