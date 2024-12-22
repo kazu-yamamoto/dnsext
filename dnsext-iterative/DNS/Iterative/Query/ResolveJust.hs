@@ -405,8 +405,8 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
 {- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (NonEmpty (IP, ResourceRecord))
 resolveNS zone disableV6NS dc ns = do
-    (axs, rank) <- query1Ax
-    list (failEmptyAx rank) (\a as -> pure $ a :| as) axs
+    (axs, _rank) <- query1Ax
+    list failEmptyAx (\a as -> pure $ a :| as) axs
   where
     axPairs = axList disableV6NS (== ns) (,)
 
@@ -427,11 +427,11 @@ resolveNS zone disableV6NS dc ns = do
             cacheAnswer d ns typ msg $> ()
             pure $ withSection rankedAnswer msg $ \rrs rank -> (axPairs rrs, rank)
 
-    failEmptyAx rank = do
+    failEmptyAx = do
         let emptyInfo
                 | disableV6NS  = "empty A (disable-v6ns): "
                 | otherwise    = "empty A|AAAA: "
         orig <- showQ "orig-query:" <$> asksQP origQuestion_
         logLn Log.WARN $ unwords [ "resolveNS: serv-fail,", (emptyInfo ++ show ns ++ ","), ("zone: " ++ show zone ++ ","), orig ]
-        failWithCache zone Cache.ERR IN rank DNS.ServerFailure
+        throwDnsError ServerFailure
 {- FOURMOLU_ENABLE -}
