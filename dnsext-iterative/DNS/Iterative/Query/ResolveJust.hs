@@ -405,7 +405,7 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
 {- FOURMOLU_DISABLE -}
 resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (NonEmpty (IP, ResourceRecord))
 resolveNS zone disableV6NS dc ns = do
-    axs <- query1Ax
+    (_rc, axs) <- query1Ax
     list failEmptyAx (\a as -> pure $ a :| as) axs
   where
     axPairs = axList disableV6NS (== ns) (,)
@@ -417,15 +417,16 @@ resolveNS zone disableV6NS dc ns = do
         q46 = A +!? AAAA
         q64 = AAAA +!? A
         tx +!? ty = do
-            xs <- querySection tx
-            if null xs then querySection ty else pure xs
+            x@(rc, xs) <- querySection tx
+            {- not fallback for NameErr case -}
+            if rc == NoErr && null xs then querySection ty else pure x
         querySection typ = do
             logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
             {- resolve for not sub-level delegation. increase dc (delegation count) -}
             cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
         cacheAnswerAx typ (msg, d) = do
             cacheAnswer d ns typ msg $> ()
-            pure $ withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs
+            pure $ (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
 
     failEmptyAx = do
         let emptyInfo
