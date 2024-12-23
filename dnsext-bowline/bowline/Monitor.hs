@@ -45,6 +45,7 @@ import qualified Network.Socket as S
 import Network.Socket (
     AddrInfo (..),
     SockAddr,
+    SocketOption (SockOpt, KeepAlive),
     Socket,
     SocketType (Stream),
  )
@@ -52,6 +53,7 @@ import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 
 -- this package
 import Config
+import SockOpt
 import SocketUtil (ainfosSkipError)
 import Types (CacheControl (..), Control (..))
 
@@ -93,10 +95,13 @@ monitor
 monitor conf env mng@Control{..} srvInfo = do
     let monPort' = fromIntegral $ cnf_monitor_port conf
     ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
+    let monInfo = ["monitor: " ++ show a ++ kaInfo | (_, a) <- ps]
     mapM_ servSock ps
-    return $ [runStdConsole | cnf_monitor_stdio conf] ++ [monitorServer s | (s, _) <- ps]
+    return $ [runStdConsole monInfo | cnf_monitor_stdio conf] ++ [monitorServer monInfo s | (s, _) <- ps]
   where
-    runStdConsole = console conf env mng srvInfo stdin stdout "<std>"
+    kaInfo = " " ++ unwords (("<keepalive-" ++ keepAliveAvail "no-avail" "enabled" ++ ">") : kaNoAvails)
+    kaNoAvails = keepAliveAvail ("no-avail sockopts:" : map show keepNotAvails) []
+    runStdConsole monInfo = console conf env mng srvInfo monInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle :: (SomeException -> IO a) -> IO a -> IO a
     handle onError = either onError return <=< try
@@ -105,13 +110,14 @@ monitor conf env mng@Control{..} srvInfo = do
     servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
         v6only sock a
         S.setSocketOption sock S.ReuseAddr 1
+        keepAliveAvail (pure ()) (setSocketKeepAlive sock $ cnf_monitor_keep_interval conf)
         S.bind sock a
-    monitorServer s = do
+    monitorServer monInfo s = do
         let step = do
                 socketWaitRead s
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
-                let repl = console conf env mng srvInfo sockh sockh $ show addr
+                let repl = console conf env mng srvInfo monInfo sockh sockh $ show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
                 either (const $ return ()) (const loop)
@@ -122,17 +128,33 @@ monitor conf env mng@Control{..} srvInfo = do
         loop
 {- FOURMOLU_ENABLE -}
 
+setSocketKeepAlive :: Socket -> Int -> IO ()
+setSocketKeepAlive sock interval = do
+    S.setSocketOption sock TcpKeepIdle interval
+    S.setSocketOption sock TcpKeepInterval interval
+    S.setSocketOption sock KeepAlive 1
+
+keepAliveAvail :: a -> a -> a
+keepAliveAvail na av
+    | not avail = na
+    | otherwise = av
+  where
+    avail = null keepNotAvails
+
+{- FOURMOLU_DISABLE -}
+keepNotAvails :: [SocketOption]
+keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
+  where
+    addAvail so@(SockOpt lv nm) us
+        | lv >= 0 && nm >= 0  = us
+        | otherwise           = so : us
+{- FOURMOLU_ENABLE -}
+
 {- FOURMOLU_DISABLE -}
 console
-    :: Config
-    -> Env
-    -> Control
-    -> [String]
-    -> Handle
-    -> Handle
-    -> String
-    -> IO ()
-console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainfo = do
+    :: Config -> Env -> Control -> [String]
+    -> [String] -> Handle -> Handle -> String -> IO ()
+console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -183,7 +205,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo inH outH ainf
         "help" : [] -> Just $ Help Nothing
         _ -> Nothing
 
-    getShowParam' = getShowParam conf srvInfo
+    getShowParam' = getShowParam conf srvInfo monInfo
     outLn = hPutStrLn outH
 
     runCmd Quit = quitServer $> True
@@ -253,8 +275,8 @@ socketWaitRead :: Socket -> IO ()
 socketWaitRead sock = S.withFdSocket sock $ threadWaitRead . fromIntegral
 
 {- FOURMOLU_DISABLE -}
-getShowParam :: Config -> [String] -> IO [String]
-getShowParam conf srvInfo =
+getShowParam :: Config -> [String] -> [String] -> IO [String]
+getShowParam conf srvInfo monInfo =
     format <$> sequence
         [ ("capabilities: " ++) . show <$> getNumCapabilities
         , ("euid: " ++) . show <$> getEffectiveUserID
@@ -266,5 +288,6 @@ getShowParam conf srvInfo =
         showConfig conf                      ++
         [ "---------- runtime  ----------" ] ++
         srvInfo                              ++
+        monInfo                              ++
         rtInfo
 {- FOURMOLU_ENABLE -}
