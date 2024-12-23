@@ -29,7 +29,7 @@ import qualified DNS.RRCache as Cache
 import DNS.SEC
 import DNS.Types
 import qualified DNS.Types as DNS
-import Data.IP (IP (IPv4, IPv6))
+import Data.IP (IP)
 import System.Console.ANSI.Types
 
 -- this package
@@ -376,10 +376,8 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
             throwDnsError DNS.ServerFailure
         Just names1  -> do
             name <- randomizedSelectN names1
-            (ip, _) <- resolveNS zone disableV6NS dc name
-            let filled = case ip of
-                    IPv4 v4 -> DEwithA4 name (v4 :| [])
-                    IPv6 v6 -> DEwithA6 name (v6 :| [])
+            let axsDE = foldIPnonEmpty (DEwithA4 name) (DEwithA6 name) (DEwithAx name)
+            filled <- axsDE . fmap fst <$> resolveNS zone disableV6NS dc name
             pure $ d0{delegationNS = replaceTo name filled delegationNS}
     | otherwise       = pure d0
   where
@@ -405,10 +403,10 @@ fillDelegationOnNull dc disableV6NS d0@Delegation{..}
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (IP, ResourceRecord)
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (NonEmpty (IP, ResourceRecord))
 resolveNS zone disableV6NS dc ns = do
     (axs, rank) <- query1Ax
-    maybe (failEmptyAx rank) pure =<< randomizedSelect axs
+    list (failEmptyAx rank) (\a as -> pure $ a :| as) axs
   where
     axPairs = axList disableV6NS (== ns) (,)
 
