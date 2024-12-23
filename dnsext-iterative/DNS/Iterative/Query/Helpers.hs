@@ -7,6 +7,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
 -- other packages
+import Data.List.Split (chunksOf)
 
 -- dnsext packages
 import DNS.RRCache (Ranking)
@@ -208,6 +209,28 @@ foldIPnonEmpty v4 v6 both (x :| xs) = case x of
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
+dentryToPermAx :: MonadIO m =>  Bool -> [DEntry] -> m [Address]
+dentryToPermAx disableV6NS des = do
+    as <- unique . concatMap NE.toList <$> sequence actions
+    randomizedPerm as
+  where
+    actions = dentryIPsetChoices disableV6NS des
+    unique = Set.toList . Set.fromList
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+dentryToPermNS :: MonadIO m => Domain -> [DEntry] -> m [Domain]
+dentryToPermNS zone des = do
+    randomizedPerm $ unique $ foldr takeNS [] des
+  where
+    takeNS (DEonlyNS ns) xs
+        | not (ns `DNS.isSubDomainOf` zone) = ns : xs
+    --    {- skip sub-domain without glue to avoid loop -}
+    takeNS  _            xs =      xs
+    unique = Set.toList . Set.fromList
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [Address]
 dentryToRandomIP entries addrs disableV6NS des = do
     acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
@@ -297,6 +320,15 @@ list1 _   cons xs@(_:_) =  cons xs
 list :: b -> (a -> [a] -> b) ->  [a] -> b
 list nil _     []    =  nil
 list _   cons (x:xs) =  cons x xs
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+chunksOfN :: Int -> NonEmpty a -> NonEmpty [a]
+chunksOfN n xxs@(x:|xs)
+    | n < 1      = chunksOfN 1 xxs
+    | otherwise  = (x:hd) :| chunksOf n tl
+  where
+    (hd, tl) = splitAt (n - 1) xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

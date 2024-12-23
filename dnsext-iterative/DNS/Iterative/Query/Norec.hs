@@ -41,9 +41,9 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
                         , ractionGetTime = currentSeconds_ cxt
                         , ractionLog = logLines_ cxt
                         , ractionShortLog = shortLog_ cxt
-                        , ractionTimeoutTime = 10000000
+                        , ractionTimeoutTime = 5000000
                         }
-                , rinfoUDPRetry = 3
+                , rinfoUDPRetry = 1
                 , rinfoVCLimit = 8 * 1024
                 }
             | (aserver, port) <- aservers

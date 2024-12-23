@@ -3,9 +3,13 @@ module DNS.Iterative.Query.Random (
     randomizedSelectN,
     randomizedChoice,
     randomizedSelects,
+    randomizedPerm,
+    randomizedPermN,
 ) where
 
 -- GHC packages
+import Data.Array.IO hiding (range)
+import System.IO.Unsafe (unsafeInterleaveIO)
 
 -- other packages
 import System.Random (getStdRandom, randomR)
@@ -61,3 +65,48 @@ randomizedSelects num xs
         return $ take num $ drop ix $ xs ++ xs
   where
     len = length xs
+
+-- $setup
+-- >>> :set -Wno-incomplete-patterns
+-- >>> import Data.List
+
+{- FOURMOLU_DISABLE -}
+-- |
+-- >>> toList' (x:|xs) = x : xs
+-- >>> nonEmpty' (x:xs) = x :| xs
+-- >>> permCheck xs = (\rs -> sort (toList' rs) == sort xs) <$> randomizedPermN (nonEmpty' xs)
+-- >>> permCheck ['x']
+-- True
+-- >>> permCheck ['q','p','r']
+-- True
+-- >>> permCheck ['p'..'z']
+-- True
+randomizedPermN :: MonadIO m => NonEmpty a -> m (NonEmpty a)
+randomizedPermN (x :| xs) = liftIO $ unsafeInterleaveIO $ do
+    let nsz = length xs
+    ss <- newListArray (0, nsz) (x:xs)
+    v1 <- permStep nsz ss
+    (v1 :|) <$> interleavedPerm nsz ss
+{- FOURMOLU_ENABLE -}
+
+randomizedPerm :: MonadIO m => [a] -> m [a]
+randomizedPerm xs = do
+    let tsz = length xs
+    liftIO $ interleavedPerm tsz =<< newListArray (0, tsz - 1) xs
+
+{- FOURMOLU_DISABLE -}
+interleavedPerm :: Int -> IOArray Int a -> IO [a]
+interleavedPerm tsz ss = go tsz
+  where
+    go 0  = pure []
+    go sz = unsafeInterleaveIO $ do
+        let nsz = sz - 1
+        (:) <$> permStep nsz ss <*> go nsz
+{- FOURMOLU_ENABLE -}
+
+permStep :: Int -> IOArray Int a -> IO a
+permStep nsz ss = do
+    ix <- randomizedIndex (0, nsz)
+    v  <- readArray ss ix
+    when (ix /= nsz) $ writeArray ss ix =<< readArray ss nsz
+    pure v
