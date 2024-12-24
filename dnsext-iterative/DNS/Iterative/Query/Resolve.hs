@@ -42,6 +42,7 @@ resolveByCache
 resolveByCache =
     resolveLogic
         "cache"
+        (failWithCacheOrigName Cache.RankAnswer ServerFailure)
         (\_ -> pure ((), [], []))
         (\_ _ -> pure $ Right ((), [], []))
 
@@ -52,21 +53,22 @@ resolveByCache =
 resolve
     :: Question
     -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
-resolve = resolveLogic "query" resolveCNAME resolveTYPE
+resolve = resolveLogic "query" (failWithCacheOrigName Cache.RankAnswer ServerFailure) resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |
    result value of resolveLogic:
    * Left ResultRRS                 - cached result
-   * Right (ResultRRS' a)           - queried result like (ResultRRS' DNSMessage)
-   * QueryError                     - other errors   -}
+   * Right (ResultRRS' a)           - queried result like (ResultRRS' DNSMessage)   -}
 resolveLogic
-    :: String
-    -> (Domain -> DNSQuery (ResultRRS' a))
-    -> (Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' a)))
+    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
+    => String
+    -> m (([RRset], Domain), Either ResultRRS (ResultRRS' a))
+    -> (Domain -> m (ResultRRS' a))
+    -> (Domain -> TYPE -> m (Either (Domain, RRset) (ResultRRS' a)))
     -> Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' a))
-resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
+    -> m (([RRset], Domain), Either ResultRRS (ResultRRS' a))
+resolveLogic logMark cnameLimitResult cnameHandler typeHandler (Question n0 typ cls) =
     called >> notLocal
   where
     notLocal
@@ -105,7 +107,7 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
     recCNAMEs cc bn dcnRRsets
         | cc > mcc = do
             logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
-            failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
+            cnameLimitResult
         | otherwise = do
             let recCNAMEs_ (cn, cnRRset) = logLn_ Log.DEMO (show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . Right) =<< typeHandler bn typ
@@ -140,7 +142,6 @@ resolveLogic logMark cnameHandler typeHandler (Question n0 typ cls) =
       where
         mcc = maxCNameChain
 
-    lookupERR :: Domain -> DNSQuery (Maybe (RCODE, [RRset]))
     lookupERR name =
         maybe (pure Nothing) (foldLookupResult soah (\rc -> pure $ Just (rc, [])) inconsistent)
             =<< lookupType name Cache.ERR
