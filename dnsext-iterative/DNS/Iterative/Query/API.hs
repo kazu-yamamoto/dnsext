@@ -60,6 +60,69 @@ data CacheResult
 getResponseCached :: Env -> DNSMessage -> IO CacheResult
 getResponseCached = getResponse "resp-cached" getResultCached (maybe $ pure CResultMissHit) CResultDenied CResultHit
 
+-----
+
+-- | Folding a response corresponding to a query. The cache is maybe updated.
+foldResponseIterative :: (String -> a) -> (DNSMessage -> a) -> Env -> DNSMessage -> IO a
+foldResponseIterative deny reply env reqM =
+    foldResponse "resp-queried" deny reply env reqM (resolveStub reply (identifier reqM) (question reqM))
+
+-- | Folding a response corresponding to a query, from questions and control flags. The cache is maybe updated.
+foldResponseIterative' :: (String -> a) -> (DNSMessage -> a) -> Env -> Identifier -> [Question] -> Question -> QueryControls -> IO a
+foldResponseIterative' deny reply env ident qs q qctl =
+    foldResponse' "resp-queried'" deny reply env ident qs q qctl (resolveStub reply ident qs)
+
+resolveStub :: (DNSMessage -> a) -> Identifier -> [Question] -> DNSQuery a
+resolveStub reply ident qs = do
+    ((cnrrs, _rn), etm) <- resolve =<< asksQP origQuestion_
+    reqDO <- asksQP requestDO_
+    let result rc vans vauth = withResolvedRRs reqDO (cnrrs ++ vans) vauth (withDO rc)
+        withDO rc fs ans auth = filterWithDO reqDO (reply' rc fs) ans auth
+        reply' rc fs ans auth = reply $ replyDNSMessage ident qs rc fs ans auth
+    pure $ either (\(rc, vans, vauth) -> result rc vans vauth) (\(msg, vans, vauth) -> result (rcode msg) vans vauth) etm
+
+-- | Folding a response corresponding to a query from the cache.
+foldResponseCached :: DNSQuery a -> (String -> a) -> (DNSMessage -> a) -> Env -> DNSMessage -> IO a
+foldResponseCached misshit deny reply env reqM = foldResponse "resp-cached" deny reply env reqM $ do
+    ((cnrrs, _rn), m) <- resolveByCache =<< asksQP origQuestion_
+    reqDO <- asksQP requestDO_
+    let hit (rc, vans, vauth) = withResolvedRRs reqDO (cnrrs ++ vans) vauth (withDO rc)
+        withDO rc fs ans auth = filterWithDO reqDO (reply' rc fs) ans auth
+        reply' rc fs ans auth = reply $ replyDNSMessage (identifier reqM) (question reqM) rc fs ans auth
+    maybe misshit (pure . hit) m
+
+{- FOURMOLU_DISABLE -}
+foldResponse
+    :: String -> (String -> a) -> (DNSMessage -> a)
+    -> Env -> DNSMessage -> DNSQuery a -> IO a
+foldResponse name deny reply env reqM@DNSMessage{question=qs,identifier=ident} qaction =
+    handleRequest prefix reqM reqerr result
+  where
+    reqerr = requestError env "" $ \rc -> pure $ reply $ replyDNSMessage ident qs rc resFlags [] []
+    result q = foldResponse' name deny reply env ident qs q (ctrlFromRequestHeader reqM) qaction
+    prefix = concat pws
+    pws = [name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": " | Question bn typ cls <- take 1 qs]
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+foldResponse'
+    :: String -> (String -> a) -> (DNSMessage -> a)
+    -> Env -> Identifier -> [Question] -> Question -> QueryControls -> DNSQuery a -> IO a
+foldResponse' name deny reply env ident qs q@(Question bn typ cls) qctl qaction  =
+    takeLocalResult env q (pure $ deny "local-zone: query-denied") query (pure . local)
+  where
+    query = either eresult pure =<< runDNSQuery (logQueryErrors prefix qaction) env qparam
+    eresult = queryErrorReply ident qs (pure . deny) ereplace
+    {- replace response-code only when query, not replace for request-error or local-result -}
+    ereplace resM = replaceRCODE env "query-error" (rcode resM) <&> \rc1 -> reply resM{rcode = rc1}
+    local (rc, vans, vauth) = withResolvedRRs (requestDO_ qparam) vans vauth h
+      where h fs ans = reply . replyDNSMessage ident qs rc fs ans
+    qparam = queryParam q qctl
+    prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
+{- FOURMOLU_ENABLE -}
+
+-----
+
 {- FOURMOLU_DISABLE -}
 getResponse
     :: String -> (Question -> DNSQuery a) -> ((Result -> IO b) -> a -> IO b)
