@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Types (
+    RR,
     Result,
     ResultRRS',
     ResultRRS,
@@ -339,6 +340,11 @@ data RRset = RRset
     , rrsMayVerified :: MayVerifiedRRS
     }
     deriving (Show)
+
+----------
+-- alias
+
+type RR = ResourceRecord
 
 ----------
 -- results
