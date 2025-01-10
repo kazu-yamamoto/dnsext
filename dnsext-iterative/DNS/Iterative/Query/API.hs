@@ -251,6 +251,30 @@ makeResult reqDO cnRRset (rcode, flags, ans, auth) =
 
     dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
 
+filterWithDO :: RequestDO -> ([RR] -> [RR] -> a) -> ([RR] -> [RR] -> a)
+filterWithDO reqDO k2 ans auth =
+    k2 (denyAnswer reqDO ans) (allowAuthority reqDO auth)
+  where
+    denyAnswer DnssecOK rrs = rrs
+    denyAnswer NoDnssecOK rrs = foldr takeNODNSSEC [] rrs
+      where
+        takeNODNSSEC rr@ResourceRecord{..} xs
+            | rrtype `elem` dnssecTypes = xs
+            | otherwise = rr : xs
+
+    allowAuthority NoDnssecOK = foldr takeSOA []
+      where
+        takeSOA rr@ResourceRecord{rrtype = SOA} xs = rr : xs
+        takeSOA _ xs = xs
+    allowAuthority DnssecOK = foldr takeAuth []
+      where
+        allowTypes = SOA : dnssecTypes
+        takeAuth rr@ResourceRecord{..} xs
+            | rrtype `elem` allowTypes = rr : xs
+            | otherwise = xs
+
+    dnssecTypes = [DNSKEY, DS, RRSIG, NSEC, NSEC3]
+
 resultFromRRS :: RequestDO -> ResultRRS -> Result
 resultFromRRS reqDO (rcode, cans, cauth) = resultFromRRS' reqDO rcode cans cauth (,,,)
 
