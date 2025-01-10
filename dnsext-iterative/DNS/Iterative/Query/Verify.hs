@@ -64,9 +64,9 @@ cases
     => RequestCD
     -> Domain
     -> [RD_DNSKEY]
-    -> (dm -> ([ResourceRecord], Ranking)) -> dm
+    -> (dm -> ([RR], Ranking)) -> dm
     -> Domain  -> TYPE
-    -> (ResourceRecord -> Maybe a)
+    -> (RR -> Maybe a)
     -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
@@ -82,9 +82,9 @@ cases'
     -> RequestCD
     -> Domain
     -> [RD_DNSKEY]
-    -> [ResourceRecord] -> Ranking
+    -> [RR] -> Ranking
     -> Domain -> TYPE
-    -> (ResourceRecord -> Maybe a)
+    -> (RR -> Maybe a)
     -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
@@ -131,7 +131,7 @@ withVerifiedRRset reqCD now dnskeys0 RRset{..} sortedRDatas sigs0 vk =
 
 {- FOURMOLU_DISABLE -}
 rrWithRRSIG
-    :: EpochTime -> [RD_DNSKEY] ->  [ResourceRecord] -> [(RD_RRSIG, a)]
+    :: EpochTime -> [RD_DNSKEY] ->  [RR] -> [(RD_RRSIG, a)]
     -> b -> (String -> b) -> ([(RD_RRSIG, a)] -> b) -> b
 rrWithRRSIG now dnskeys0 rrs sigs0 noverify left right = canonicalRRset rrs left cn
   where
@@ -260,7 +260,7 @@ type NResultK r m a = r -> [RRset] -> m () -> a
 {- FOURMOLU_DISABLE -}
 type GetNE m msg r1 r2 a
     =  Domain -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> Domain
     -> m a -> (String -> m a) -> (String -> m a)
     -> NResultK r1 m (m a) -> NResultK r2 m (m a)
@@ -268,7 +268,7 @@ type GetNE m msg r1 r2 a
 
 type GetNoDatas m msg r1 r2 r3 r4 a
     =  Domain -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> Domain -> TYPE
     -> m a -> (String -> m a) -> (String -> m a)
     -> NResultK r1 m (m a) -> NResultK r2 m (m a) -> NResultK r3 m (m a) -> NResultK r4 m (m a)
@@ -306,7 +306,7 @@ getWithFallback
     :: (MonadIO m, MonadReader Env m)
     => GetResult NSEC_Range nsecr -> GetResult NSEC3_Range nsec3r
     -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a) -> (String -> m a)
     -> NResultK nsecr m (m a) -> NResultK nsec3r m (m a)
     -> m a
@@ -381,7 +381,7 @@ mkHandler ranges rrsets doCache getR resultK fallbackK = case getR ranges of
 nsecWithValid
     :: (MonadIO m, MonadReader Env m)
     => [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
     -> ([NSEC_Range] -> [RRset] -> m () -> m a)
     -> m a
@@ -392,21 +392,21 @@ nsecWithValid = nsecxWithValid SEC.zipSigsNSEC "NSEC"
 nsec3WithValid
     :: (MonadIO m, MonadReader Env m)
     => [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
     -> ([NSEC3_Range] -> [RRset] -> m () -> m a)
     -> m a
 {- FOURMOLU_ENABLE -}
 nsec3WithValid = nsecxWithValid SEC.zipSigsNSEC3 "NSEC3"
 
-type WithZippedSigs r a = [ResourceRecord] -> (String -> a) -> ([(ResourceRecord, r, [(RD_RRSIG, TTL)])] -> a) -> a
+type WithZippedSigs r a = [RR] -> (String -> a) -> ([(RR, r, [(RD_RRSIG, TTL)])] -> a) -> a
 
 {- FOURMOLU_DISABLE -}
 nsecxWithValid
     :: (MonadIO m, MonadReader Env m)
     => WithZippedSigs range (m a) -> String
     -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
     -> ([range] -> [RRset] -> m () -> m a)
     -> m a
@@ -422,7 +422,7 @@ nsecxWithValid'
     :: (MonadIO m, MonadReader Env m)
     => WithZippedSigs range (m a) -> String
     -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a) -> (String -> m a)
     -> ([(range, RRset)] -> m () -> m a)
     -> m a
@@ -448,7 +448,7 @@ nsecxWithRanges
     :: (MonadIO m, MonadReader Env m)
     => WithZippedSigs range (m a)
     -> [RD_DNSKEY]
-    -> (msg -> ([ResourceRecord], Ranking)) -> msg
+    -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
     -> ([(range, RRset)] -> m () -> m a)
     -> m a
@@ -474,7 +474,7 @@ nsecxWithRanges withZippedSigs dnskeys getRanked msg nullK leftK rightK = do
 ---
 
 {- get not verified canonical RRset -}
-canonicalRRset :: [ResourceRecord] -> (String -> a) -> (RRset -> [(Int, DNS.Builder ())] -> a) -> a
+canonicalRRset :: [RR] -> (String -> a) -> (RRset -> [(Int, DNS.Builder ())] -> a) -> a
 canonicalRRset rrs leftK rightK =
     SEC.canonicalRRsetSorted' sortedRRs leftK mkRRset
   where
