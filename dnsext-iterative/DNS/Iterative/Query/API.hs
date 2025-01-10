@@ -261,6 +261,15 @@ resultFromRRS' reqDO rcode cans cauth h = h rcode resFlags{authenData = allValid
     allValid = not (null rrsets) && all rrsetValid rrsets
     fromRRsets = concatMap $ rrListFromRRset reqDO
 
+{- FOURMOLU_DISABLE -}
+withResolvedRRs :: RequestDO -> [RRset] -> [RRset] -> (DNSFlags -> [RR] -> [RR] -> a) -> a
+withResolvedRRs reqDO ans auth h = h resFlags{authenData = allValid} (fromRRsets ans) (fromRRsets auth)
+  where
+    fromRRsets = concatMap $ rrListFromRRset reqDO
+    allValid = not (null rrsets) && all rrsetValid rrsets
+    rrsets = ans ++ auth
+{- FOURMOLU_ENABLE -}
+
 rrListFromRRset :: RequestDO -> RRset -> [ResourceRecord]
 rrListFromRRset reqDO rs@RRset{..} = case reqDO of
     NoDnssecOK -> rrs
