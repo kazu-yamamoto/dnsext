@@ -350,6 +350,6 @@ type RR = ResourceRecord
 -- results
 
 {- response code, answer section, authority section -}
-type Result = (RCODE, DNSFlags, [ResourceRecord], [ResourceRecord])
+type Result = (RCODE, DNSFlags, [RR], [RR])
 type ResultRRS' a = (a, [RRset], [RRset])
 type ResultRRS = ResultRRS' RCODE
