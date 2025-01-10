@@ -109,7 +109,7 @@ handleHits1 = Cache.hitCases1
 -- >>> err3 = cacheNegativeNoSOA Refused "err3.example.com." Cache.ERR 7200 Cache.RankAnswer *> lookupRR "err3.example.com." Cache.ERR
 -- >>> fmap fst <$> runCxt err3
 -- Just []
-lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupRR :: (MonadIO m, MonadReader Env m) => Domain -> TYPE -> m (Maybe ([RR], Ranking))
 lookupRR dom typ = lookupWithHandler h ((": " ++) . show . snd) "" dom typ
   where
     h _now _cache = handleHits1 (\_ _ rank -> Just ([], rank)) (positiveCases rrs rrs (\rds _sigs -> rrs rds))
@@ -138,7 +138,7 @@ lookupErrorRCODE dom = lookupWithHandler h ((": " ++) . show . snd) "" dom Cache
 -- >>> nodata1 = cacheNegative "example.com." [] "nodata1.example.com." A 7200 Cache.RankAnswer *> lookupValidRR "test" "nodata1.example.com." A
 -- >>> fmap fst <$> runCxt nodata1
 -- Just []
-lookupValidRR :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe ([ResourceRecord], Ranking))
+lookupValidRR :: (MonadIO m, MonadReader Env m) => String -> Domain -> TYPE -> m (Maybe ([RR], Ranking))
 lookupValidRR logMark dom typ = lookupWithHandler h ((": " ++) . show . snd) logMark dom typ
   where
     h _ _ = Cache.hitCases (\_ _ -> nodata) nsoa (\_ -> missHit) (\_ -> missHit) valid
@@ -224,7 +224,7 @@ validRRset dom typ cls ttl rds sigs = RRset dom typ cls ttl rds (ValidRRS sigs)
 
 ---
 
-cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
+cacheNoRRSIG :: (MonadIO m, MonadReader Env m) => [RR] -> Ranking -> m ()
 cacheNoRRSIG rrs0 rank = do
     either crrsError insert $ SEC.canonicalRRsetSorted sortedRRs
   where
@@ -239,7 +239,7 @@ cacheNoRRSIG rrs0 rank = do
             liftIO $ Cache.noSig rds (pure ()) $ \crs -> insertRRSet (DNS.Question dom typ cls) ttl crs rank
     (_, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs0
 
-cacheSection :: (MonadIO m, MonadReader Env m) => [ResourceRecord] -> Ranking -> m ()
+cacheSection :: (MonadIO m, MonadReader Env m) => [RR] -> Ranking -> m ()
 cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
   where
     rrsKey rr = (rrname rr, rrtype rr, rrclass rr)
@@ -254,7 +254,7 @@ cacheSectionNegative
     :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
     => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
-    -> (DNSMessage -> ([ResourceRecord], Ranking)) -> DNSMessage
+    -> (DNSMessage -> ([RR], Ranking)) -> DNSMessage
     -> [RRset]
     -> m [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
