@@ -449,7 +449,7 @@ fillDelegationDNSKEY  dc d@Delegation{..} = fillDelegationDNSKEY' getSEP dc d
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY' :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY' :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery Delegation
 fillDelegationDNSKEY' _      _dc d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
     maybe query (fill d . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
@@ -469,7 +469,7 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([ResourceRecord] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String ([RD_DNSKEY], Delegation))
+    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String ([RD_DNSKEY], Delegation))
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
     short <- asks shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
@@ -545,7 +545,7 @@ delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (Either (RCODE, String) (NonEmpty (IP, ResourceRecord)))
+resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (Either (RCODE, String) (NonEmpty (IP, RR)))
 resolveNS zone disableV6NS dc ns = do
     (rc, axs) <- query1Ax
     list (failEmptyAx rc) (\a as -> pure $ Right $ a :| as) axs
