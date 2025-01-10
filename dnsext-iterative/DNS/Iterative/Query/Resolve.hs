@@ -39,10 +39,10 @@ runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryParam q qctl
 {- FOURMOLU_DISABLE -}
 resolveByCache
     :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' ()))
+    -> DNSQuery (([RRset], Domain), Maybe ResultRRS)
 resolveByCache =
     resolveLogic
-        "cache" Left Right
+        "cache" Just (const Nothing)
         (failWithCacheOrigName Cache.RankAnswer ServerFailure) (\_ -> pure ((), [], [])) (\_ _ -> pure $ Right ((), [], []))
 {- FOURMOLU_ENABLE -}
 
