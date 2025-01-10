@@ -25,7 +25,7 @@ import DNS.Iterative.Query.ZoneMap
 -- >>> kvp1 dom typ rds = kvp dom [(typ, rds)]
 
 {- FOURMOLU_DISABLE -}
-nameMap :: [(Domain, LocalZoneType, [ResourceRecord])] -> Map Domain [RRset]
+nameMap :: [(Domain, LocalZoneType, [RR])] -> Map Domain [RRset]
 nameMap lzones =
     Map.fromList $ concatMap (byName . zoneRRsets) lzones
   where
@@ -52,7 +52,7 @@ lookupName' nMap (Question dom typ cls) nothing just = maybe nothing (just . res
 lzDomain :: (Domain, LocalZoneType, a) -> Domain
 lzDomain (d, _, _) = d
 
-apexMap :: Map Domain [RRset] -> [(Domain, LocalZoneType, [ResourceRecord])] -> Map Domain [(Domain, LocalZoneType, [RRset])]
+apexMap :: Map Domain [RRset] -> [(Domain, LocalZoneType, [RR])] -> Map Domain [(Domain, LocalZoneType, [RRset])]
 apexMap nMap lzones = Map.fromList $ subdomainSemilatticeOn lzDomain withSOA
   where
     withSOA = [(d, t, lookupName' nMap (Question d SOA IN) [] id) | (d, t, _) <- lzones]
@@ -104,7 +104,7 @@ lookupName nMap (apex, zt, soa) q = result zt
 
 ---
 
-type Zone = (Domain, LocalZoneType, [ResourceRecord])
+type Zone = (Domain, LocalZoneType, [RR])
 
 {- FOURMOLU_DISABLE -}
 -- | right biased union, zone defs list
