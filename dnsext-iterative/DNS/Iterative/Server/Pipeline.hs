@@ -56,7 +56,7 @@ import DNS.Types.Time
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Query (CacheResult (..), foldResponseCached, foldResponseIterative)
+import DNS.Iterative.Query (foldResponseCached, foldResponseIterative)
 import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.WorkerStats
@@ -108,6 +108,11 @@ mkPipeline env cachersN _workersN workerStats = do
     return (cachers, workers, toCacher)
 
 ----------------------------------------------------------------
+
+data CacheResult
+    = CResultMissHit
+    | CResultHit DNSMessage
+    | CResultDenied String
 
 cacherLogic :: Env -> IO FromReceiver -> (ToWorker -> IO ()) -> IO ()
 cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
