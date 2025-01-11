@@ -85,7 +85,7 @@ getResponse' name qaction liftR denied replied env reqM q@(Question bn typ cls) 
     replace = replaceResponseCode env
     qaction' = logQueryErrors prefix qaction
     local = replied . resultReply ident qs . resultFromRRS (requestDO_ qparam)
-    qparam = queryParam q $ ctrlFromRequestHeader reqF reqEH
+    qparam = queryParam q $ ctrlFromRequestHeader reqM
     prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
     --
     ident = DNS.identifier reqM
@@ -122,8 +122,9 @@ logQueryErrors prefix q = do
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
 
-ctrlFromRequestHeader :: DNSFlags -> EDNSheader -> QueryControls
-ctrlFromRequestHeader reqF reqEH = DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
+ctrlFromRequestHeader :: DNSMessage -> QueryControls
+ctrlFromRequestHeader DNSMessage{flags = reqF, ednsHeader = reqEH} =
+    DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
   where
     doOp
         | dnssecOK = FlagSet
