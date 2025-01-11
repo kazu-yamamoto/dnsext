@@ -56,7 +56,7 @@ import DNS.Types.Time
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Query (CacheResult (..), getResponseCached, getResponseIterative)
+import DNS.Iterative.Query (CacheResult (..), foldResponseCached, foldResponseIterative)
 import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.WorkerStats
@@ -117,8 +117,8 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
         Right queryMsg -> do
             -- Input ByteString -> Input DNSMessage
             let inp = inpBS{inputQuery = queryMsg}
-            mx <- getResponseCached env queryMsg
-            case mx of
+            cres <- foldResponseCached (pure CResultMissHit) CResultDenied CResultHit env queryMsg
+            case cres of
                 CResultMissHit -> toWorker inp
                 CResultHit replyMsg -> do
                     duration <- diffUsec <$> currentTimeUsec_ env <*> pure inputRecvTime
@@ -142,7 +142,7 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
     case question inputQuery of
         q : _ -> setWorkerStat (WRun q)
         [] -> pure ()
-    ex <- getResponseIterative env inputQuery
+    ex <- foldResponseIterative Left Right env inputQuery
     duration <- diffUsec <$> currentTimeUsec_ env <*> pure inputRecvTime
     updateHistogram_ env duration (stats_ env)
     setWorkerStat WWaitEnqueue
