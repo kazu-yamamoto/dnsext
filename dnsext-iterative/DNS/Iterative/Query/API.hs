@@ -2,6 +2,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.API (
+    foldResponseIterative,
+    foldResponseIterative',
+    foldResponseCached,
     getResponseIterative,
     CacheResult (..),
     getResponseCached,

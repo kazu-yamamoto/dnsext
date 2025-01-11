@@ -2,8 +2,11 @@ module DNS.Iterative.Internal (
     -- * types
     module DNS.Iterative.Query.Types,
     module DNS.Iterative.Query.Env,
+    foldResponseIterative,
+    foldResponseIterative',
     getResponseIterative,
     CacheResult (..),
+    foldResponseCached,
     getResponseCached,
     getResultIterative,
     getResultCached,
