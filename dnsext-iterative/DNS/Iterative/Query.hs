@@ -9,7 +9,6 @@ module DNS.Iterative.Query (
 
     -- * Cache
     foldResponseCached,
-    CacheResult (..),
 ) where
 
 import DNS.Do53.Client

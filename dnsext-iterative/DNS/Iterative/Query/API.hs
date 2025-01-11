@@ -5,7 +5,6 @@ module DNS.Iterative.Query.API (
     foldResponseIterative,
     foldResponseIterative',
     foldResponseCached,
-    CacheResult (..),
 ) where
 
 -- GHC packages
@@ -43,13 +42,6 @@ additional セクションにその名前に対するアドレス (A および A
 この情報を使って、繰り返し、子ドメインへの検索を行なう.
 検索ドメインの初期値はTLD、権威サーバ群の初期値はルートサーバとなる.
  -}
-
-data CacheResult
-    = CResultMissHit
-    | CResultHit DNSMessage
-    | CResultDenied String
-
------
 
 -- | Folding a response corresponding to a query. The cache is maybe updated.
 foldResponseIterative :: (String -> a) -> (DNSMessage -> a) -> Env -> DNSMessage -> IO a
