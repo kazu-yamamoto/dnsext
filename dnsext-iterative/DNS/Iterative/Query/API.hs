@@ -161,16 +161,15 @@ handleRequestHeader reqF reqEH eh h
     rd = DNS.recDesired reqF
 {- FOURMOLU_ENABLE -}
 
-{- FOURMOLU_DISABLE -}
 replaceResponseCode :: Env -> String -> DNSMessage -> IO DNSMessage
-replaceResponseCode env tag respM = do
-    let rc0 = DNS.rcode respM
-        rc1 = replace rc0
-    unless (rc0 == rc1) $
-        logLines_ env Log.INFO Nothing [tag ++ ": replace response-code for query: " ++ show rc0 ++ " -> " ++ show rc1]
-    pure $ respM {rcode = rc1}
+replaceResponseCode env tag respM = replaceRCODE env tag (rcode respM) <&> \rc1 -> respM {rcode = rc1}
+
+{- FOURMOLU_DISABLE -}
+replaceRCODE :: Env -> String -> RCODE -> IO RCODE
+replaceRCODE env tag rc0 = unless (rc0 == rc1) putLog $> rc1
   where
-    replace rc = case rc of
+    putLog = logLines_ env Log.INFO Nothing [tag ++ ": replace response-code for query: " ++ show rc0 ++ " -> " ++ show rc1]
+    rc1 = case rc0 of
         DNS.Refused  ->  DNS.ServFail
         x            ->  x
 {- FOURMOLU_ENABLE -}
