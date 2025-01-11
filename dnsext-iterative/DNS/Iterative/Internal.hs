@@ -4,13 +4,8 @@ module DNS.Iterative.Internal (
     module DNS.Iterative.Query.Env,
     foldResponseIterative,
     foldResponseIterative',
-    getResponseIterative,
     CacheResult (..),
     foldResponseCached,
-    getResponseCached,
-    getResultIterative,
-    getResultCached,
-    replyMessage,
 
     -- * testing
     newTestCache,

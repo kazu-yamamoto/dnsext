@@ -6,11 +6,9 @@ module DNS.Iterative.Query (
     resolveResponseIterative,
     foldResponseIterative,
     foldResponseIterative',
-    getResponseIterative,
 
     -- * Cache
     foldResponseCached,
-    getResponseCached,
     CacheResult (..),
 ) where
 
