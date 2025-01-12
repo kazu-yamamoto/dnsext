@@ -42,8 +42,13 @@ jobs:
     - name: Install dependencies
       id: inst-dep
       run: |
+        if [ $GITHUB_REF_NAME = 'ci-uc' ]
+        then
+          rm -fr ~/.cabal
+          mkdir ~/.cabal
+        fi
         cabal update
-        if [ $GITHUB_REF_NAME != 'ci-uc' ] && cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
+        if cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
