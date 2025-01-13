@@ -5,6 +5,7 @@ module DNS.Iterative.Query.API (
     foldResponseIterative,
     foldResponseIterative',
     foldResponseCached,
+    replyMessage,
 ) where
 
 -- GHC packages
