@@ -210,9 +210,9 @@ getResultIterative q = do
 -- | Getting a response corresponding to 'Domain' and 'TYPE' from the cache.
 getResultCached :: Question -> DNSQuery (Maybe Result)
 getResultCached q = do
-    ((cnrrs, _rn), e) <- resolveByCache q
+    ((cnrrs, _rn), m) <- resolveByCache q
     reqDO <- asksQP requestDO_
-    return $ either (Just . makeResult reqDO cnrrs . resultFromRRS reqDO) (const Nothing) e
+    return $ makeResult reqDO cnrrs . resultFromRRS reqDO <$> m
 
 makeResult :: RequestDO -> [RRset] -> Result -> Result
 makeResult reqDO cnRRset (rcode, flags, ans, auth) =
