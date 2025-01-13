@@ -142,6 +142,16 @@ requestError :: Env -> String -> (RCODE -> IO a) -> RCODE -> String -> IO a
 requestError env prefix h rc err = logLines_ env Log.WARN Nothing [prefix ++ err] >> h rc
 
 {- FOURMOLU_DISABLE -}
+handleRequest :: String -> DNSMessage -> (RCODE -> String -> a) -> (Question -> a) -> a
+handleRequest prefix DNSMessage{flags = reqF,ednsHeader=reqEH,question=qs} eh h
+    | reqEH == DNS.InvalidEDNS   =       eh' DNS.ServFail   "InvalidEDNS"
+    | not (DNS.recDesired reqF)  =       eh' DNS.Refused    "RD flag required"
+    | otherwise                  = list (eh' DNS.FormatErr  "empty question") (\q _ -> h q) qs
+  where
+    eh' rc = eh rc . (("request error: " ++ prefix) ++)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
 handleRequestHeader :: DNSFlags -> EDNSheader -> (RCODE -> String -> a) -> a -> a
 handleRequestHeader reqF reqEH eh h
     | reqEH == DNS.InvalidEDNS  = eh DNS.ServFail "request error: InvalidEDNS"
