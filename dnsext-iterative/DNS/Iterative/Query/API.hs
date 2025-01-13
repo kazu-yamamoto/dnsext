@@ -122,23 +122,21 @@ logQueryErrors prefix q = do
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 ctrlFromRequestHeader :: DNSMessage -> QueryControls
-ctrlFromRequestHeader DNSMessage{flags = reqF, ednsHeader = reqEH} =
-    DNS.doFlag doOp <> DNS.cdFlag cdOp <> DNS.adFlag adOp
+ctrlFromRequestHeader DNSMessage{flags=reqF,ednsHeader=reqEH} = DNS.doFlag doF <> DNS.cdFlag cdF <> DNS.adFlag adF
   where
-    doOp
-        | dnssecOK = FlagSet
-        | otherwise = FlagClear
-    cdOp
-        | DNS.chkDisable reqF = FlagSet
-        | otherwise = FlagClear
-    adOp
-        | DNS.authenData reqF = FlagSet
-        | otherwise = FlagClear
+    doF | dnssecOK   = FlagSet
+        | otherwise  = FlagClear
+    cdF | DNS.chkDisable reqF  = FlagSet
+        | otherwise            = FlagClear
+    adF | DNS.authenData reqF  = FlagSet
+        | otherwise            = FlagClear
 
     dnssecOK = case reqEH of
-        DNS.EDNSheader edns | DNS.ednsDnssecOk edns -> True
-        _ -> False
+        DNS.EDNSheader edns | DNS.ednsDnssecOk edns  -> True
+        _                                            -> False
+{- FOURMOLU_ENABLE -}
 
 requestError :: Env -> String -> (RCODE -> IO a) -> RCODE -> String -> IO a
 requestError env prefix h rc err = logLines_ env Log.WARN Nothing [prefix ++ err] >> h rc
