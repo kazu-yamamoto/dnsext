@@ -18,6 +18,7 @@ jobs:
 
     env:
       cache-name: cache-cabal-ghc-${{ matrix.ghc }}
+      target-config: --test-show-details=streaming --enable-tests --disable-benchmarks
 
     steps:
     - run: git config --global core.autocrlf false
@@ -48,11 +49,11 @@ jobs:
           mkdir ~/.cabal
         fi
         cabal update
-        if cabal build --offline --only-dependencies --enable-tests --disable-benchmarks all
+        if cabal build --offline --only-dependencies ${{ env.target-config }} all
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
-          cabal build --only-dependencies --enable-tests --disable-benchmarks all
+          cabal build --only-dependencies ${{ env.target-config }} all
           echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
@@ -64,7 +65,7 @@ jobs:
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
 
     - name: Build
-      run: cabal build --enable-tests --disable-benchmarks all
+      run: cabal build ${{ env.target-config }} all
 
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
@@ -72,9 +73,9 @@ jobs:
         cabal install doctest --overwrite-policy=always
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
-          env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest $package
+          env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
         done
-        env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest dnsext-bowline:bowline
+        env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
 
     - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming --enable-tests all
+      run: env DISABLE_V6_NS=1 cabal test ${{ env.target-config }} all
