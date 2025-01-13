@@ -72,9 +72,9 @@ jobs:
         cabal install doctest --overwrite-policy=always
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
-          env DISABLE_V6_NS=1 cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
+          env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest $package
         done
-        env   DISABLE_V6_NS=1 cabal repl --build-depends=QuickCheck --with-ghc=doctest dnsext-bowline:bowline
+        env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest dnsext-bowline:bowline
 
     - name: Run tests
       run: env DISABLE_V6_NS=1 cabal test --test-show-details=streaming --enable-tests all
