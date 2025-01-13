@@ -57,9 +57,7 @@ resolveStub :: (DNSMessage -> a) -> Identifier -> [Question] -> DNSQuery a
 resolveStub reply ident qs = do
     ((cnrrs, _rn), etm) <- resolve =<< asksQP origQuestion_
     reqDO <- asksQP requestDO_
-    let result rc vans vauth = withResolvedRRs reqDO (cnrrs ++ vans) vauth (withDO rc)
-        withDO rc fs ans auth = filterWithDO reqDO (reply' rc fs) ans auth
-        reply' rc fs ans auth = reply $ replyDNSMessage ident qs rc fs ans auth
+    let result rc vans vauth = replyMessage reqDO cnrrs rc vans vauth ident qs reply
     pure $ either (\(rc, vans, vauth) -> result rc vans vauth) (\(msg, vans, vauth) -> result (rcode msg) vans vauth) etm
 
 -- | Folding a response corresponding to a query from the cache.
@@ -67,10 +65,14 @@ foldResponseCached :: DNSQuery a -> (String -> a) -> (DNSMessage -> a) -> Env ->
 foldResponseCached misshit deny reply env reqM = foldResponse "resp-cached" deny reply env reqM $ do
     ((cnrrs, _rn), m) <- resolveByCache =<< asksQP origQuestion_
     reqDO <- asksQP requestDO_
-    let hit (rc, vans, vauth) = withResolvedRRs reqDO (cnrrs ++ vans) vauth (withDO rc)
-        withDO rc fs ans auth = filterWithDO reqDO (reply' rc fs) ans auth
-        reply' rc fs ans auth = reply $ replyDNSMessage (identifier reqM) (question reqM) rc fs ans auth
+    let hit (rc, vans, vauth) = replyMessage reqDO cnrrs rc vans vauth (identifier reqM) (question reqM) reply
     maybe misshit (pure . hit) m
+
+replyMessage :: RequestDO -> [RRset] -> RCODE -> [RRset] -> [RRset] -> Identifier -> [Question] -> (DNSMessage -> a) -> a
+replyMessage reqDO cnrrs rc vans vauth ident qs k = withResolvedRRs reqDO (cnrrs ++ vans) vauth withDO
+  where
+    withDO fs ans auth = k $ filterWithDO reqDO (h fs) ans auth
+    h fs ans auth = replyDNSMessage ident qs rc fs ans auth
 
 {- FOURMOLU_DISABLE -}
 foldResponse
