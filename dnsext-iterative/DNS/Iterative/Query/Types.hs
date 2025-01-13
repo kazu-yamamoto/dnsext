@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Types (
+    RR,
     Result,
     ResultRRS',
     ResultRRS,
@@ -341,9 +342,14 @@ data RRset = RRset
     deriving (Show)
 
 ----------
+-- alias
+
+type RR = ResourceRecord
+
+----------
 -- results
 
 {- response code, answer section, authority section -}
-type Result = (RCODE, DNSFlags, [ResourceRecord], [ResourceRecord])
+type Result = (RCODE, DNSFlags, [RR], [RR])
 type ResultRRS' a = (a, [RRset], [RRset])
 type ResultRRS = ResultRRS' RCODE

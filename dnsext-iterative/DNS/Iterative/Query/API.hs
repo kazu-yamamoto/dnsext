@@ -185,7 +185,7 @@ queryErrorReply ident rqs left right qe = case qe of
     message rc = replyDNSMessage ident rqs rc resFlags [] []
 {- FOURMOLU_ENABLE -}
 
-replyDNSMessage :: Identifier -> [Question] -> RCODE -> DNSFlags -> Answers -> AuthorityRecords -> DNSMessage
+replyDNSMessage :: Identifier -> [Question] -> RCODE -> DNSFlags -> [RR] -> [RR] -> DNSMessage
 replyDNSMessage ident rqs rcode flags rrs auth =
     res
         { DNS.identifier = ident
@@ -245,7 +245,7 @@ makeResult reqDO cnRRset (rcode, flags, ans, auth) =
 resultFromRRS :: RequestDO -> ResultRRS -> Result
 resultFromRRS reqDO (rcode, cans, cauth) = resultFromRRS' reqDO rcode cans cauth (,,,)
 
-resultFromRRS' :: RequestDO -> RCODE -> [RRset] -> [RRset] -> (RCODE -> DNSFlags -> Answers -> AuthorityRecords -> a) -> a
+resultFromRRS' :: RequestDO -> RCODE -> [RRset] -> [RRset] -> (RCODE -> DNSFlags -> [RR] -> [RR] -> a) -> a
 resultFromRRS' reqDO rcode cans cauth h = h rcode resFlags{authenData = allValid} (fromRRsets cans) (fromRRsets cauth)
   where
     rrsets = cans ++ cauth

@@ -17,7 +17,7 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Types
 
 {- FOURMOLU_DISABLE -}
-defaultLocal :: [(Domain, LocalZoneType, [ResourceRecord])]
+defaultLocal :: [(Domain, LocalZoneType, [RR])]
 defaultLocal =
     [ localhost
     , home_arpa
@@ -38,7 +38,7 @@ defaultLocal =
 -- local-data: "localhost. 10800 IN SOA localhost. nobody.invalid. 1 3600 1200 604800 10800"
 -- local-data: "localhost. 10800 IN A 127.0.0.1"
 -- local-data: "localhost. 10800 IN AAAA ::1"
-localhost :: (Domain, LocalZoneType, [ResourceRecord])
+localhost :: (Domain, LocalZoneType, [RR])
 localhost =
     defineZone "localhost." LZ_Static
     [ mkRR "localhost." 10800 IN NS        localNS
@@ -60,7 +60,7 @@ localhost =
 -- local-zone: "home.arpa." static
 -- local-data: "home.arpa. 10800 IN NS localhost."
 -- local-data: "home.arpa. 10800 IN SOA localhost. nobody.invalid. 1 3600 1200 604800 10800"
-home_arpa :: (Domain, LocalZoneType, [ResourceRecord])
+home_arpa :: (Domain, LocalZoneType, [RR])
 home_arpa =
     defineZone "home.arpa." LZ_Static
     [ mkRR "home.arpa." 10800 IN NS        localNS
@@ -73,7 +73,7 @@ home_arpa =
 -- local-zone: "onion." static
 -- local-data: "onion. 10800 IN NS localhost."
 -- local-data: "onion. 10800 IN SOA localhost. nobody.invalid. 1 3600 1200 604800 10800"
-onion :: (Domain, LocalZoneType, [ResourceRecord])
+onion :: (Domain, LocalZoneType, [RR])
 onion =
     defineZone "onion." LZ_Static
     [ mkRR "onion." 10800 IN NS            localNS
@@ -86,7 +86,7 @@ onion =
 -- local-zone: "test." static
 -- local-data: "test. 10800 IN NS localhost."
 -- local-data: "test. 10800 IN SOA localhost. nobody.invalid. 1 3600 1200 604800 10800"
-test :: (Domain, LocalZoneType, [ResourceRecord])
+test :: (Domain, LocalZoneType, [RR])
 test =
     defineZone "test." LZ_Static
     [ mkRR "test." 10800 IN NS             localNS
@@ -99,7 +99,7 @@ test =
 -- local-zone: "invalid." static
 -- local-data: "invalid. 10800 IN NS localhost."
 -- local-data: "invalid. 10800 IN SOA localhost. nobody.invalid. 1 3600 1200 604800 10800"
-invalid :: (Domain, LocalZoneType, [ResourceRecord])
+invalid :: (Domain, LocalZoneType, [RR])
 invalid =
     defineZone "invalid." LZ_Static
     [ mkRR "invalid." 10800 IN NS          localNS
@@ -110,7 +110,7 @@ invalid =
 ---
 
 {- FOURMOLU_DISABLE -}
-ipv4RevZones :: [(Domain, LocalZoneType, [ResourceRecord])]
+ipv4RevZones :: [(Domain, LocalZoneType, [RR])]
 ipv4RevZones = [defineV4RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv4CIDR cidr]
   where
     cidrs =
@@ -133,7 +133,7 @@ ipv4RevZones = [defineV4RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv4
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-ipv6RevZones :: [(Domain, LocalZoneType, [ResourceRecord])]
+ipv6RevZones :: [(Domain, LocalZoneType, [RR])]
 ipv6RevZones = [defineV6RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv6CIDR cidr]
   where
     cidrs =
@@ -151,7 +151,7 @@ ipv6RevZones = [defineV6RevZone prefix | cidr <- cidrs, prefix <- prefixFromIPv6
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-defineV4RevZone :: [Int] -> (Domain, LocalZoneType, [ResourceRecord])
+defineV4RevZone :: [Int] -> (Domain, LocalZoneType, [RR])
 defineV4RevZone prefix =
     defineZone name LZ_Static
     [ mkRR name       10800 IN SOA         localSOA
@@ -162,7 +162,7 @@ defineV4RevZone prefix =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-defineV6RevZone :: [Int] -> (Domain, LocalZoneType, [ResourceRecord])
+defineV6RevZone :: [Int] -> (Domain, LocalZoneType, [RR])
 defineV6RevZone prefix =
     defineZone name LZ_Static
     [ mkRR name       10800 IN SOA         localSOA
@@ -192,10 +192,10 @@ prefixFromRange pwidth partList range
 
 ---
 
-defineZone :: String -> LocalZoneType -> [ResourceRecord] -> (Domain, LocalZoneType, [ResourceRecord])
+defineZone :: String -> LocalZoneType -> [RR] -> (Domain, LocalZoneType, [RR])
 defineZone name ztype rrs = (domain name, ztype, rrs)
 
-mkRR :: String -> TTL -> CLASS -> TYPE -> RData -> ResourceRecord
+mkRR :: String -> TTL -> CLASS -> TYPE -> RData -> RR
 mkRR name ttl cls typ rd = ResourceRecord { rrname = domain name, rrttl = ttl, rrclass = cls, rrtype = typ, rdata = rd }
 
 localNS :: RData
@@ -216,7 +216,7 @@ read_ msg s = case [x | (x, "") <- reads s] of
     x:_  -> x
 
 {- FOURMOLU_DISABLE -}
-_pprZone :: (Domain, LocalZoneType, [ResourceRecord]) -> String
+_pprZone :: (Domain, LocalZoneType, [RR]) -> String
 _pprZone (apex, ztype, rrs) =
     unlines $
     [ show apex

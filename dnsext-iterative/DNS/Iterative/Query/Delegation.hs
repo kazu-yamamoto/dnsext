@@ -72,7 +72,7 @@ lookupDelegation zone = do
             | otherwise = list Nothing ((Just .) . hasDelegation') es
           where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
-        getDelegation :: (MonadIO m, MonadReader Env m) => ([ResourceRecord], a) -> m (Maybe MayDelegation)
+        getDelegation :: (MonadIO m, MonadReader Env m) => ([RR], a) -> m (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
             let nss = sort $ rrListWith NS (`DNS.rdataField` DNS.ns_domain) zone const rrs

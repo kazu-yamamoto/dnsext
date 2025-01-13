@@ -194,7 +194,7 @@ setRootAnchor as env0 = maybe env0 (\v -> env0{rootAnchor_ = v}) $ Map.lookup (f
 
 ---
 
-getLocalZones :: [(Domain, LocalZoneType, [ResourceRecord])] -> LocalZones
+getLocalZones :: [(Domain, LocalZoneType, [RR])] -> LocalZones
 getLocalZones lzones0 = (Local.apexMap localName lzones, localName)
   where
     localName = Local.nameMap lzones

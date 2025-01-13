@@ -38,8 +38,8 @@ rrListWith
     :: TYPE
     -> (DNS.RData -> Maybe rd)
     -> Domain
-    -> (rd -> ResourceRecord -> a)
-    -> [ResourceRecord]
+    -> (rd -> RR -> a)
+    -> [RR]
     -> [a]
 rrListWith typ fromRD dom = rrListWith' typ fromRD (== dom)
 
@@ -47,8 +47,8 @@ rrListWith'
     :: TYPE
     -> (DNS.RData -> Maybe rd)
     -> (Domain -> Bool)
-    -> (rd -> ResourceRecord -> a)
-    -> [ResourceRecord]
+    -> (rd -> RR -> a)
+    -> [RR]
     -> [a]
 rrListWith' typ fromRD dpred h = foldr takeRR []
   where
@@ -56,7 +56,7 @@ rrListWith' typ fromRD dpred h = foldr takeRR []
         | dpred (rrname rr), rrtype rr == typ, Just ds <- fromRD rd = h ds rr : xs
     takeRR _ xs = xs
 
-rrsigList :: Domain -> Domain -> TYPE -> [ResourceRecord] -> [(RD_RRSIG, TTL)]
+rrsigList :: Domain -> Domain -> TYPE -> [RR] -> [(RD_RRSIG, TTL)]
 rrsigList zone dom typ rrs = rrListWith RRSIG getSIGRD dom pair rrs
   where
     getSIGRD = sigrdZoneWith zone <=< sigrdTypeWith typ <=< DNS.fromRData
@@ -75,17 +75,17 @@ sigrdZoneWith :: Domain -> RD_RRSIG -> Maybe RD_RRSIG
 sigrdZoneWith zone sigrd = guard (rrsig_zone sigrd == zone) $> sigrd
 
 withSection
-    :: (m -> ([ResourceRecord], Ranking))
+    :: (m -> ([RR], Ranking))
     -> m
-    -> ([ResourceRecord] -> Ranking -> a)
+    -> ([RR] -> Ranking -> a)
     -> a
 withSection getRanked msg body = uncurry body $ getRanked msg
 
 axList
     :: Bool
     -> (Domain -> Bool)
-    -> (IP -> ResourceRecord -> a)
-    -> [ResourceRecord]
+    -> (IP -> RR -> a)
+    -> [RR]
     -> [a]
 axList disableV6NS pdom h = foldr takeAx []
   where
@@ -102,7 +102,7 @@ axList disableV6NS pdom h = foldr takeAx []
 rootHint :: Delegation
 rootHint = withRootDelegation error id rootServers
 
-withRootDelegation :: (String -> a) -> (Delegation -> a) -> ([ResourceRecord], [ResourceRecord]) -> a
+withRootDelegation :: (String -> a) -> (Delegation -> a) -> ([RR], [RR]) -> a
 withRootDelegation left right (ns, as) =
     maybe (left "withRootDelegation: bad configuration. NS list is empty?") (right . ($ [])) $
         findDelegation (rrListWith NS (`DNS.rdataField` DNS.ns_domain) (fromString ".") (,) ns) as
@@ -113,11 +113,11 @@ withRootDelegation left right (ns, as) =
 -- >>> as =[mkRR "m.root-servers.net." A $ rd_a "202.12.27.33", mkRR "m.root-servers.net." AAAA $ rd_aaaa "2001:dc3::35"]
 -- >>> delegationNS . ($ []) <$> findDelegation (rrListWith NS (`DNS.rdataField` DNS.ns_domain) "." (,) ns) as
 -- Just (DEwithAx "m.root-servers.net." (202.12.27.33 :| []) (2001:dc3::35 :| []) :| [])
-findDelegation :: [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe ([RD_DS] -> Delegation)
+findDelegation :: [(Domain, RR)] -> [RR] -> Maybe ([RD_DS] -> Delegation)
 findDelegation = findDelegation' (\dom ents dss -> Delegation dom ents (FilledDS dss) [] FreshD)
 
 {- FOURMOLU_DISABLE -}
-findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, ResourceRecord)] -> [ResourceRecord] -> Maybe a
+findDelegation' :: (Domain -> NonEmpty DEntry -> a) -> [(Domain, RR)] -> [RR] -> Maybe a
 findDelegation' k nsps adds = do
     ((_, rr), _) <- uncons nsps
     let nss = map fst nsps
@@ -144,7 +144,7 @@ findDelegation' k nsps adds = do
 -- True
 -- >>> rrnamePairs ["s", "t", "u"] [nagroup "t"] == [("s", []), ("t", agroup "t"), ("u", [])]
 -- True
-rrnamePairs :: [Domain] -> [NonEmpty ResourceRecord] -> [(Domain, [ResourceRecord])]
+rrnamePairs :: [Domain] -> [NonEmpty RR] -> [(Domain, [RR])]
 rrnamePairs = merge id (rrname . NE.head) nullRR noName pair
   where
     nullRR n = ((n, []) :)
