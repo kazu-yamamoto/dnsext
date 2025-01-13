@@ -67,6 +67,9 @@ jobs:
     - name: Build
       run: cabal build ${{ env.target-config }} all
 
+    - name: Run tests
+      run: env DISABLE_V6_NS=1 cabal test ${{ env.target-config }} all
+
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
       run: |
@@ -76,6 +79,3 @@ jobs:
           env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
         done
         env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
-
-    - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal test ${{ env.target-config }} all
