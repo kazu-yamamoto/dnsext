@@ -186,14 +186,16 @@ data ExtraError
     = ErrorNotResp
     | ErrorEDNS DNS.EDNSheader
     | ErrorRCODE DNS.RCODE
+    | ErrorBogus String
     deriving (Show)
 
 {- FOURMOLU_DISABLE -}
-extraError :: a -> (EDNSheader -> a) -> (RCODE -> a) -> ExtraError -> a
-extraError notResp errEDNS errRCODE fe = case fe of
+extraError :: a -> (EDNSheader -> a) -> (RCODE -> a) -> (String -> a) -> ExtraError -> a
+extraError notResp errEDNS errRCODE bogus fe = case fe of
     ErrorNotResp  -> notResp
     ErrorEDNS e   -> errEDNS e
     ErrorRCODE e  -> errRCODE e
+    ErrorBogus s  -> bogus s
 {- FOURMOLU_ENABLE -}
 
 data QueryError
