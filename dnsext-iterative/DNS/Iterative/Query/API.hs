@@ -80,9 +80,9 @@ foldResponse
     :: String -> (String -> a) -> (DNSMessage -> a)
     -> Env -> DNSMessage -> DNSQuery a -> IO a
 foldResponse name deny reply env reqM@DNSMessage{question=qs,identifier=ident} qaction =
-    handleRequest prefix reqM reqerr result
+    handleRequest env prefix reqM (pure . deny) ereply  result
   where
-    reqerr = requestError env "" $ \rc -> pure $ reply $ replyDNSMessage ident qs rc resFlags [] []
+    ereply rc = pure $ reply $ replyDNSMessage ident qs rc resFlags [] []
     result q = foldResponse' name deny reply env ident qs q (ctrlFromRequestHeader reqM) qaction
     prefix = concat pws
     pws = [name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": " | Question bn typ cls <- take 1 qs]
@@ -152,17 +152,16 @@ ctrlFromRequestHeader DNSMessage{flags=reqF,ednsHeader=reqEH} = DNS.doFlag doF <
         _                                            -> False
 {- FOURMOLU_ENABLE -}
 
-requestError :: Env -> String -> (RCODE -> IO a) -> RCODE -> String -> IO a
-requestError env prefix h rc err = logLines_ env Log.WARN Nothing [prefix ++ err] >> h rc
-
 {- FOURMOLU_DISABLE -}
-handleRequest :: String -> DNSMessage -> (RCODE -> String -> a) -> (Question -> a) -> a
-handleRequest prefix DNSMessage{flags = reqF,ednsHeader=reqEH,question=qs} eh h
-    | reqEH == DNS.InvalidEDNS   =       eh' DNS.ServFail   "InvalidEDNS"
-    | not (DNS.recDesired reqF)  =       eh' DNS.Refused    "RD flag required"
-    | otherwise                  = list (eh' DNS.FormatErr  "empty question") (\q _ -> h q) qs
+handleRequest :: Env -> String -> DNSMessage -> (String -> IO a) -> (RCODE -> IO a) -> (Question -> IO a) -> IO a
+handleRequest env prefix DNSMessage{flags = reqF,ednsHeader=reqEH,question=qs} deny ereply h
+    | reqEH == DNS.InvalidEDNS   = ereply' DNS.ServFail   "InvalidEDNS"
+    | not (DNS.recDesired reqF)  = ereply' DNS.Refused    "RD flag required"
+    | otherwise                  = list (deny' "empty question") (\q _ -> h q) qs
   where
-    eh' rc = eh rc . (("request error: " ++ prefix) ++)
+    ereply' rc s = elog s >> ereply rc
+    deny' s = elog s >> deny s
+    elog s = logLines_ env Log.INFO Nothing ["request error: " ++ prefix ++ s]
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
