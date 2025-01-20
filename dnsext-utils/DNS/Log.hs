@@ -107,11 +107,11 @@ newHandleLogger qsize outFh loggerLevel = do
         atomically $ writeTBQueue inQ $ \bk _ -> bk
         takeMVar mvar
 
-    putLines colorize inQ lv color ~xs
+    putLines colorize inQ lv ~color ~xs
         | colorize = withColor color
         | otherwise = withColor Nothing
       where
-        withColor c =
+        withColor ~c =
             when (loggerLevel <= lv) $
                 writeTBQueue inQ $
                     \_ ck -> ck c xs
