@@ -104,7 +104,7 @@ newHandleLogger qsize outFh loggerLevel = do
     return (logger, put, kill)
   where
     killLogger inQ mvar = do
-        atomically $ writeTBQueue inQ Nothing
+        atomically $ writeTBQueue inQ $ \bk _ -> bk
         takeMVar mvar
 
     putLines colorize inQ lv color ~xs
@@ -114,20 +114,19 @@ newHandleLogger qsize outFh loggerLevel = do
         withColor c =
             when (loggerLevel <= lv) $
                 writeTBQueue inQ $
-                    Just (c, xs)
+                    \_ ck -> ck c xs
 
     loggerLoop inQ mvar = loop
       where
         loop = do
             me <- atomically (readTBQueue inQ)
-            case me of
-                Nothing -> putMVar mvar ()
-                Just e -> do
-                    logit e
+            me (putMVar mvar ()) $
+                \c xs -> do
+                    logit c xs
                     loop
 
-    logit (Nothing, xs) = mapM_ (hPutStrLn outFh) xs
-    logit (Just c, xs) = do
+    logit Nothing  xs = mapM_ (hPutStrLn outFh) xs
+    logit (Just c) xs = do
         hSetSGR outFh [SetColor Foreground Vivid c]
         mapM_ (hPutStrLn outFh) xs
         hSetSGR outFh [Reset]
