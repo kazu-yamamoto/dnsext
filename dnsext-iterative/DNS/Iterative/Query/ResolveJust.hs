@@ -451,8 +451,7 @@ fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
     zone = delegationZone
     toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     fill d' dnskeys = pure d'{delegationDNSKEY = dnskeys}
-    verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
-    query = either verifyFailed (\(ks, d') -> fill d' ks) =<< cachedDNSKEY getSEP dc d
+    query = cachedDNSKEY getSEP dc d >>= \(ks, d') -> fill d' ks
 {- FOURMOLU_ENABLE -}
 
 {-
@@ -463,7 +462,7 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String ([RD_DNSKEY], Delegation))
+    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery ([RD_DNSKEY], Delegation)
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
     short <- asks shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
@@ -471,18 +470,18 @@ cachedDNSKEY getSEPs dc d@Delegation{..} = do
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
-            either (pure . Left) (fmap (fmap (\ks -> (ks, d'))) . verifyDNSKEY msg) $ getSEPs srrs
-        _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
+            either bogus (fmap (\ks -> (ks, d')) . verifyDNSKEY msg) $ getSEPs srrs
+        _ -> bogus $ "error rcode to get DNSKEY: " ++ show rcode
   where
-    cachedResult krds dnskeyRRset cacheDNSKEY
-        | rrsetValid dnskeyRRset = cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
-        | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
     verifyDNSKEY msg (s :| ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             {- no DNSKEY case -}
-            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
-            ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
-        Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] *> bogus "null DNSKEYs for non-empty SEP"
+            ncDNSKEY ncLog = ncLog >> bogus "not canonical"
+        Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY withDNSKEY
+    withDNSKEY rds = Verify.withResult DNSKEY msgf (\_ _ _ -> pure rds) rds  {- not reach for no-verify and check-disabled cases -}
+    bogus ~es = Verify.bogusError (msgf es)
+    msgf s = "require-dnskey: " ++ s ++ ": " ++ show zone
     zone = delegationZone
 
 ---
