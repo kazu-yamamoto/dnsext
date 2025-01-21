@@ -62,8 +62,7 @@ import DNS.Iterative.Query.Utils
 cases
     :: (MonadIO m, MonadReader Env m)
     => RequestCD
-    -> Domain
-    -> [RD_DNSKEY]
+    -> Domain -> [RD_DNSKEY]
     -> (dm -> ([RR], Ranking)) -> dm
     -> Domain  -> TYPE
     -> (RR -> Maybe a)
@@ -78,8 +77,7 @@ cases reqCD zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
 cases'
     :: (MonadIO m, MonadReader Env m)
     => RequestCD
-    -> Domain
-    -> [RD_DNSKEY]
+    -> Domain -> [RD_DNSKEY]
     -> [RR] -> Ranking
     -> Domain -> TYPE
     -> (RR -> Maybe a)
