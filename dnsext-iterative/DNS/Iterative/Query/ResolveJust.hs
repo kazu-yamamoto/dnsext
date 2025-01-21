@@ -327,30 +327,24 @@ fillDelegationDS dc src dest
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
     lookupDS zone = lookupValidRR "require-ds" zone DS <&> (>>= dsRDs)
     fill dss = pure dest{delegationDS = FilledDS dss}
-    verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure
-    query = do
-        let zone = delegationZone dest
-            result (e, ~verifyColor, ~verifyMsg) = do
-                let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
-                clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                either verifyFailed (fillCachedDelegation {- fill-cached on queryDS fallbacks -} <=< fill) e
-        result =<< queryDS dc src zone
+    query = fillCachedDelegation =<< fill =<< queryDS dc src (delegationZone dest)
 
 {- FOURMOLU_DISABLE -}
 queryDS
-    :: Int -> Delegation
-    -> Domain -> DNSQuery (Either String [RD_DS], Color, String)
+    :: Int -> Delegation -> Domain -> DNSQuery [RD_DS]
 queryDS dc src@Delegation{..} dom = do
     short <- asks shortLog_
     let ainfo sas = ["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) src dom DS
-    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS withDS
   where
-    nullDS = pure (Right [], Yellow, "no DS, so no verify")
-    ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
-    verifyResult dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
-        | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
+    nullDS = insecure "no DS, so no verify" $> []
+    ncDS ncLog = ncLog *> bogus "not canonical DS"
+    withDS dsrds = Verify.withResult DS msgf (\_ _ _ -> pure dsrds) dsrds  {- not reach for no-verify and check-disabled cases -}
+    insecure ~vmsg = Verify.insecureLog (msgf vmsg)
+    bogus ~es = Verify.bogusError (msgf es)
+    msgf s = "fill delegation - " ++ s ++ ": " ++ domTraceMsg
+    domTraceMsg = show zone ++ " -> " ++ show dom
     zone = delegationZone
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
