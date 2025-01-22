@@ -84,7 +84,7 @@ new Config{..} mng
     | otherwise = return Nothing
 
 runAPI :: String -> Int -> Control -> IO ()
-runAPI addr port mng = withSocketsDo $ do
+runAPI addr port mng = do
     ai <- resolve
     E.bracket (open ai) close $ \sock ->
         runSettingsSocket defaultSettings sock $ app mng
