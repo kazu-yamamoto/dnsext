@@ -251,12 +251,11 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
-    => Domain -> [RD_DNSKEY]
+    :: Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([RR], Ranking)) -> DNSMessage
     -> [RRset]
-    -> m [RRset] {- returns verified authority section -}
+    -> DNSQuery [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
@@ -266,15 +265,14 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL ttl soa = minimum [DNS.soa_minimum soa, ttl, maxNegativeTTL]
         fromSOA ResourceRecord{..} = (,) rrname . soaTTL rrttl <$> DNS.fromRData rdata
-        cacheNoSOA _rrs rank = cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
-        nullSOA = withSection getRanked msg cacheNoSOA
+        nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
+        soaK ps soaRRset _cacheSOA = either (\s -> ncWarn s *> nullSOA $> []) (ncache >>> ($> soaRRset : nws)) $ single ps
+        withSOA = Verify.withResult SOA msgf soaK
         --
-    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
-        let doCache (soaDom, ncttl) = do
-                cacheSOA
-                withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom nws dom typ ncttl rank
-        either (ncWarn >>> ($> [])) (doCache >>> ($> soaRRset : nws)) $ single ps
+    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) withSOA
   where
+    ncache (soaDom, ncttl) = withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom nws dom typ ncttl rank
+    msgf s = "cache-soa: " ++ s ++ ": " ++ show zone
     single xs = case xs of
         [] -> Left "no SOA records found"
         [x] -> Right x
