@@ -374,19 +374,19 @@ cacheNoDelegation d zone dnskeys dom msg
     | otherwise = pure ()
   where
     nameErrors = asksQP requestCD_ >>=
-        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
-        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
+        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME withCNAME
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
     nullCNAME = cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
+    (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     ncCNAME _ncLog = cacheNoDataNS
+    withCNAME = Verify.withResult CNAME (\s -> "no delegation: " ++ s ++ ": " ++ show dom) (\_ _ _ -> cacheNoDataNS)
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
     cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
-    (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode msg
 {- FOURMOLU_ENABLE -}
 
