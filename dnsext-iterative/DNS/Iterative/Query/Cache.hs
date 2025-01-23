@@ -341,26 +341,11 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    (result, cacheX) <- verify =<< asksQP requestCD_
-    cacheX
-    return result
+    verify =<< asksQP requestCD_
   where
-    qinfo = show dom ++ " " ++ show typ
-    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
-        nws <- witnessWildcardExpansion
-        let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
-                | CheckDisabled <- reqCD = ("no verification - check disabled, " ++ qinfo, Just Yellow, pure ())
-                | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
-                | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
-                | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
-                | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
-        clogLn Log.DEMO verifyColor verifyMsg
-        raiseOnVerifyFailure
-        pure (([xRRset], nws), cacheX)
-      where
-        witnessWildcardExpansion = wildcardWitnessAction d dom typ msg
+    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX withX
 
-    nullX = doCacheEmpty <&> \e -> (([], e), pure ())
+    nullX = doCacheEmpty <&> \e -> ([], e)
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
         DNS.NoErr      -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
@@ -369,10 +354,12 @@ cacheAnswer d@Delegation{..} dom typ msg = do
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
-        nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
+        nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ show dom ++ " " ++ show typ
         (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
-
-    ncX _ncLog = pure (([], []), pure ())
+    ncX _ncLog = pure ([], [])
+    withX = Verify.withResult typ (\vmsg -> vmsg ++ ": " ++ show dom) $ \_xs xRRset _cacheX -> do
+        nws <- wildcardWitnessAction d dom typ msg
+        pure ([xRRset], nws)
 
     rcode = DNS.rcode msg
     zone = delegationZone
