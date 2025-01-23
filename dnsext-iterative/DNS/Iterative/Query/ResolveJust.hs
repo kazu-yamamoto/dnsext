@@ -240,15 +240,12 @@ servsChildZone dc nss dom msg =
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
         verifySOA reqQC wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases reqQC zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases reqQC dom dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA withSOA
           where
-            zone = delegationZone wd
             dnskeys = delegationDNSKEY wd
             nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
             ncSOA _ncLog = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
-            result _ soaRRset _cacheSOA
-                | rrsetValid soaRRset = pure $ hasDelegation wd
-                | otherwise = verificationError
+            withSOA = Verify.withResult SOA (\s -> "servs-child: " ++ s ++ ": " ++ show dom) (\_ _ _ -> pure $ hasDelegation wd)
     handleASIG fallback = withSection rankedAnswer msg $ \srrs _rank -> do
         let arrsigRRs = rrListWith RRSIG (signedA <=< DNS.fromRData) dom (\_ rr -> rr) srrs
         case arrsigRRs of
@@ -259,10 +256,6 @@ servsChildZone dc nss dom msg =
            * with DNSSEC, signed with child-zone apex.
            * without DNSSEC, indistinguishable from the A definition without sub-domain cohabitation -}
         signedA rd@RD_RRSIG{..} = guard (rrsig_type == A && rrsig_zone == dom) $> rd
-    verificationError = do
-        logLn Log.WARN $ "servs-child: " ++ show dom ++ ": verification error. invalid SOA:"
-        clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
-        throwDnsError DNS.ServerFailure
     getWorkaround tag = do
         logLn Log.DEMO $ "servs-child: workaround: " ++ tag ++ ": " ++ show dom ++ " may be provided with " ++ show (delegationZone nss)
         fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
