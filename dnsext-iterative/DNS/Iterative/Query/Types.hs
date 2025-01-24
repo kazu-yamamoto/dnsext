@@ -383,6 +383,7 @@ type RR = ResourceRecord
 data VResult
     = VR_Secure
     | VR_Insecure
+    | VR_Bogus
     deriving Show
 
 ---
