@@ -78,7 +78,7 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
         | typ == ANY       = pure (([], n0), left (DNS.NotImpl, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
-    logLines_ lv = logLines lv . pindents ("resolve-with-cname: " ++ logMark)
+    logLines_ lv = logLines lv . pindents ("resolve: " ++ logMark)
     logLn_ lv s = logLines_ lv [s]
     called = do
         let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQP sel
@@ -110,7 +110,8 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
             logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             cnameLimitResult
         | otherwise = do
-            let recCNAMEs_ (cn, cnRRset) = logLn_ Log.DEMO (show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            let traceCNAME cn = logLn_ Log.DEMO ("cname: " ++ show bn ++ " -> " ++ show cn)
+                recCNAMEs_ (cn, cnRRset) = traceCNAME cn *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . right) =<< typeHandler bn typ
 
                 withERRC (rc, soa) = pure ((dcnRRsets [], bn), left (rc, [], soa))
