@@ -570,11 +570,11 @@ maxQueryCount = 64
 
 norec :: Bool -> NonEmpty Address -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnssecOK aservers name typ = do
-    qcount <- (NE.length aservers +) <$> (liftIO =<< asksQS getQueryCount_)
+    qcount <- (NE.length aservers +) <$> getQS queryCounter_
     logLn Log.DEBUG ("query count: " ++ show qcount)
     orig <- showQ "orig-query" <$> asksQP origQuestion_
     m <- dispatch qcount orig
-    asksQS setQueryCount_ >>= \setCount -> liftIO $ setCount qcount
+    setQS queryCounter_ qcount
     pure m
   where
     dispatch qcount orig
