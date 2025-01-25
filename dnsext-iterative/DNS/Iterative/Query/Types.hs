@@ -31,6 +31,8 @@ module DNS.Iterative.Query.Types (
     DNSQuery,
     MonadReaderQP (..),
     MonadReaderQS (..),
+    setQS,
+    getQS,
     CasesNotValid (..),
     notValidNoSig,
     notValidCheckDisabled,
@@ -164,16 +166,24 @@ toRequestAD qctl = case adBit $ qctlHeader qctl of
     FlagSet -> AuthenticatedData
     _ -> NoAuthenticatedData
 
+data QueryCount
+newtype StateVal a n = StateVal (IORef a)
+
+newStateVal :: a -> IO (StateVal a n)
+newStateVal iv = StateVal <$> newIORef iv
+
 data QueryState = QueryState
     { setQueryCount_ :: Int -> IO ()
     , getQueryCount_ :: IO Int
+    , queryCounter_ :: StateVal Int QueryCount
     }
 
 newQueryState :: IO QueryState
 newQueryState = do
     cref <- newIORef 0
     let set x = atomicModifyIORef' cref (\_ -> (x, ()))
-    pure $ QueryState set $ readIORef cref
+    refq <- newStateVal 0
+    pure $ QueryState set (readIORef cref) refq
 
 data ExtraError
     = ErrorNotResp
@@ -218,6 +228,16 @@ instance Monad m => MonadReaderQS (ContextT m) where
 instance MonadReaderQS DNSQuery where
     asksQS = lift . asksQS
     {-# INLINEABLE asksQS #-}
+
+setQS :: (MonadReaderQS m, MonadIO m) => (QueryState -> StateVal a n) -> a -> m ()
+setQS f x = do
+    StateVal ref <- asksQS f
+    liftIO $ atomicModifyIORef' ref (\_ -> (x, ()))
+
+getQS :: (MonadReaderQS m, MonadIO m) => (QueryState -> StateVal a n) -> m a
+getQS f = do
+    StateVal ref <- asksQS f
+    liftIO $ readIORef ref
 
 runDNSQuery' :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a, QueryState)
 runDNSQuery' q e p = do
