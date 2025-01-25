@@ -173,17 +173,13 @@ newStateVal :: a -> IO (StateVal a n)
 newStateVal iv = StateVal <$> newIORef iv
 
 data QueryState = QueryState
-    { setQueryCount_ :: Int -> IO ()
-    , getQueryCount_ :: IO Int
-    , queryCounter_ :: StateVal Int QueryCount
+    { queryCounter_ :: StateVal Int QueryCount
     }
 
 newQueryState :: IO QueryState
 newQueryState = do
-    cref <- newIORef 0
-    let set x = atomicModifyIORef' cref (\_ -> (x, ()))
     refq <- newStateVal 0
-    pure $ QueryState set (readIORef cref) refq
+    pure $ QueryState refq
 
 data ExtraError
     = ErrorNotResp
