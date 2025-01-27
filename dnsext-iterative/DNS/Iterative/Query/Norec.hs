@@ -1,3 +1,5 @@
+{-# LANGUAGE MonadComprehensions #-}
+
 module DNS.Iterative.Query.Norec (norec') where
 
 -- GHC packages
@@ -19,7 +21,6 @@ import DNS.Do53.Internal (
  )
 import qualified DNS.Do53.Internal as DNS
 import DNS.Types
-import qualified Data.List.NonEmpty as NE
 
 -- this package
 import DNS.Iterative.Imports
@@ -30,7 +31,7 @@ import DNS.Iterative.Query.Types
    Note about flags in request to an authoritative server.
   * RD (Recursion Desired) must be 0 for request to authoritative server
   * EDNS must be enable for DNSSEC OK request -}
-norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
+norec' :: Bool -> NonEmpty Address -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
 norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
     let riActions =
             defaultResolveActions
@@ -54,7 +55,7 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
             ResolveEnv
                 { renvResolver      = udpTcpResolver
                 , renvConcurrent    = True -- should set True if multiple RIs are provided
-                , renvResolveInfos  = NE.fromList ris
+                , renvResolveInfos  = ris
                 }
         q = Question name typ IN
         doFlagSet
