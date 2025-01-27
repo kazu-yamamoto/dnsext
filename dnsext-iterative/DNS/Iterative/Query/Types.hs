@@ -168,19 +168,27 @@ toRequestAD qctl = case adBit $ qctlHeader qctl of
     _ -> NoAuthenticatedData
 
 data QueryCount
+data LastQuery
+data AservMessage
 newtype StateVal a n = StateVal (IORef a)
 
 newStateVal :: a -> IO (StateVal a n)
 newStateVal iv = StateVal <$> newIORef iv
 
+{- FOURMOLU_DISABLE -}
 data QueryState = QueryState
-    { queryCounter_ :: StateVal Int QueryCount
+    { queryCounter_  :: StateVal Int QueryCount
+    , lastQuery_     :: StateVal (Question, [Address]) LastQuery
+    , aservMessage_  :: StateVal (Maybe DNSMessage) AservMessage
     }
+{- FOURMOLU_ENABLE -}
 
 newQueryState :: IO QueryState
 newQueryState = do
     refq <- newStateVal 0
-    pure $ QueryState refq
+    rlsq <- newStateVal (Question (fromString "") A IN, [])
+    rasm <- newStateVal Nothing
+    pure $ QueryState refq rlsq rasm
 
 data ExtraError
     = ErrorNotResp
