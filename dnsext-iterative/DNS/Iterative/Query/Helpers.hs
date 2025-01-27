@@ -7,7 +7,6 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as Set
 
 -- other packages
-import Data.List.Split (chunksOf)
 
 -- dnsext packages
 import DNS.RRCache (Ranking)
@@ -345,15 +344,6 @@ cpsChunksOfNE n
       where
         e1 = x:|hd
         (hd, tl) = splitAt (n - 1) xs
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-chunksOfN :: Int -> NonEmpty a -> NonEmpty [a]
-chunksOfN n xxs@(x:|xs)
-    | n < 1      = chunksOfN 1 xxs
-    | otherwise  = (x:hd) :| chunksOf n tl
-  where
-    (hd, tl) = splitAt (n - 1) xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
