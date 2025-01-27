@@ -31,18 +31,19 @@ import DNS.Iterative.Query.Types
   * EDNS must be enable for DNSSEC OK request -}
 norec' :: Bool -> [Address] -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
 norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
-    let ris =
+    let riActions =
+            defaultResolveActions
+                { ractionGenId = idGen_ cxt
+                , ractionGetTime = currentSeconds_ cxt
+                , ractionLog = logLines_ cxt
+                , ractionShortLog = shortLog_ cxt
+                , ractionTimeoutTime = 5000000
+                }
+        ris =
             [ defaultResolveInfo
                 { rinfoIP = aserver
                 , rinfoPort = port
-                , rinfoActions =
-                    defaultResolveActions
-                        { ractionGenId = idGen_ cxt
-                        , ractionGetTime = currentSeconds_ cxt
-                        , ractionLog = logLines_ cxt
-                        , ractionShortLog = shortLog_ cxt
-                        , ractionTimeoutTime = 5000000
-                        }
+                , rinfoActions = riActions
                 , rinfoUDPRetry = 1
                 , rinfoVCLimit = 8 * 1024
                 }
