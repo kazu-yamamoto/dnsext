@@ -322,6 +322,31 @@ list nil _     []    =  nil
 list _   cons (x:xs) =  cons x xs
 {- FOURMOLU_ENABLE -}
 
+-- |
+-- >>> chunksOfNE 1 $ 'a' :| "b"
+-- ('a' :| "") :| ['b' :| ""]
+-- >>> chunksOfNE 2 $ 'a' :| "bcde"
+-- ('a' :| "b") :| ['c' :| "d",'e' :| ""]
+-- >>> chunksOfNE 3 $ 'a' :| "bcdefgh"
+-- ('a' :| "bc") :| ['d' :| "ef",'g' :| "h"]
+chunksOfNE :: Int -> NonEmpty a -> NonEmpty (NonEmpty a)
+chunksOfNE n (x:|xs) = cpsChunksOfNE n x xs (:|)
+
+{- FOURMOLU_DISABLE -}
+cpsChunksOfNE :: Int -> a -> [a] -> (NonEmpty a -> [NonEmpty a] -> b) -> b
+cpsChunksOfNE n
+    | n < 1      = cpsChunksOfNE 1
+    | otherwise  = go
+  where
+    go :: a -> [a] -> (NonEmpty a -> [NonEmpty a] -> b) -> b
+    go x xs k = case tl of
+        []    -> k e1 []
+        y:ys  -> k e1 (go y ys (:))
+      where
+        e1 = x:|hd
+        (hd, tl) = splitAt (n - 1) xs
+{- FOURMOLU_ENABLE -}
+
 {- FOURMOLU_DISABLE -}
 chunksOfN :: Int -> NonEmpty a -> NonEmpty [a]
 chunksOfN n xxs@(x:|xs)
