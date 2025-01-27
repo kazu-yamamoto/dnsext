@@ -59,10 +59,7 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
             | dnssecOK = FlagSet
             | otherwise = FlagClear
         qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
-    either
-        Left
-        (Right . DNS.replyDNSMessage)
-        <$> DNS.resolve renv q qctl
+    fmap DNS.replyDNSMessage <$> DNS.resolve renv q qctl
 
 contextT :: Monad m => (Env -> QueryParam -> QueryState -> m a) -> ContextT m a
 contextT k = ReaderT $ ReaderT . (ReaderT .) . k
