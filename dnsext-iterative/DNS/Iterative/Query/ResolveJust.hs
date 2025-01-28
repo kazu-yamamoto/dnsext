@@ -573,8 +573,8 @@ norec dnssecOK aservers name typ = do
     qcount <- (NE.length aservers +) <$> getQS queryCounter_
     logLn Log.DEBUG ("query count: " ++ show qcount)
     orig <- showQ "orig-query" <$> asksQP origQuestion_
-    m <- dispatch qcount orig
     setQS queryCounter_ qcount
+    m <- dispatch qcount orig
     pure m
   where
     dispatch qcount orig
