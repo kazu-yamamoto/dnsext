@@ -191,7 +191,7 @@ extraError notResp errEDNS errRCODE fe = case fe of
 
 data QueryError
     = DnsError DNSError [String]
-    | ExtraError ExtraError [Address] DNSMessage
+    | ExtraError ExtraError [Address] (Maybe DNSMessage)
     deriving (Show)
 
 type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
@@ -242,7 +242,7 @@ handleQueryError left right q = either left right =<< lift (runExceptT q)
 -- - responseErrEither = handleResponseError Left Right  :: DNSMessage -> Either QueryError DNSMessage
 -- - responseErrDNSQuery = handleResponseError throwError pure  :: DNSMessage -> DNSQuery DNSMessage
 handleResponseError :: [Address] -> (QueryError -> p) -> (DNSMessage -> p) -> DNSMessage -> p
-handleResponseError addrs e f msg = exerror $ \ee -> e $ ExtraError ee addrs msg
+handleResponseError addrs e f msg = exerror $ \ee -> e $ ExtraError ee addrs $ Just msg
   where
     exerror eh
         | not (DNS.isResponse $ DNS.flags msg)              = eh   ErrorNotResp

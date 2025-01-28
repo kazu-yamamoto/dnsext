@@ -125,8 +125,8 @@ logQueryErrors prefix q = do
           UnknownDNSError {}  -> putLog detail
           _                   -> pure ()
         where detail = show de ++ ": " ++ intercalate ", " ss
-      logNotResponse  addrs msg  = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "not response:" msg
-      logInvalidEDNS  DNS.InvalidEDNS addrs  msg = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "invalid EDNS:" msg
+      logNotResponse  addrs msg  = putLog $ pprAddrs addrs ++ ":\n" ++ "not response" ++ maybe "" (pprMessage ":") msg
+      logInvalidEDNS  DNS.InvalidEDNS addrs  msg = putLog $ pprAddrs addrs ++ ":\n" ++ "invalid EDNS" ++ maybe "" (pprMessage ":") msg
       logInvalidEDNS  _               _     _msg = pure ()
       logRcodeError _rcode _addrs _msg = pure ()
       pprAddrs = unwords . map show
