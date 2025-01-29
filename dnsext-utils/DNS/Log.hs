@@ -91,43 +91,38 @@ toIO action = do
     (x, y, z) <- action
     return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
+{- FOURMOLU_DISABLE -}
 newHandleLogger
     :: Natural -> Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
 newHandleLogger qsize outFh loggerLevel = do
     hSetBuffering outFh LineBuffering
-    colorize <- hSupportsANSIColor outFh
-    inQ <- newTBQueueIO qsize
-    mvar <- newEmptyMVar
-    let logger = loggerLoop inQ mvar
-        put = putLines colorize inQ
-        kill = killLogger inQ mvar
+    colorize  <- hSupportsANSIColor outFh
+    inQ       <- newTBQueueIO qsize
+    mvar      <- newEmptyMVar
+    let logger  = loggerLoop inQ mvar
+        put     = putLines colorize inQ
+        kill    = killLogger inQ mvar
     return (logger, put, kill)
   where
     killLogger inQ mvar = do
-        atomically $ writeTBQueue inQ Nothing
+        atomically                              $ writeTBQueue inQ $ \bk _  -> bk
         takeMVar mvar
 
-    putLines colorize inQ lv color ~xs
-        | colorize = withColor color
-        | otherwise = withColor Nothing
+    putLines colorize inQ lv ~color ~xs
+        | colorize   = withColor color
+        | otherwise  = withColor Nothing
       where
-        withColor c =
-            when (loggerLevel <= lv) $
-                writeTBQueue inQ $
-                    Just (c, xs)
+        withColor ~c = when (loggerLevel <= lv) $ writeTBQueue inQ $ \_  ck -> ck c xs
 
     loggerLoop inQ mvar = loop
       where
         loop = do
             me <- atomically (readTBQueue inQ)
-            case me of
-                Nothing -> putMVar mvar ()
-                Just e -> do
-                    logit e
-                    loop
+            me (putMVar mvar ()) $ \c xs -> logit c xs >> loop
 
-    logit (Nothing, xs) = mapM_ (hPutStrLn outFh) xs
-    logit (Just c, xs) = do
+    logit Nothing  xs = mapM_ (hPutStrLn outFh) xs
+    logit (Just c) xs = do
         hSetSGR outFh [SetColor Foreground Vivid c]
         mapM_ (hPutStrLn outFh) xs
         hSetSGR outFh [Reset]
+{- FOURMOLU_ENABLE -}
