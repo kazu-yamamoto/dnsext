@@ -195,8 +195,8 @@ pattern CurConnDoQ       = StatsIx 73
 pattern CurConnDoH3     :: StatsIx
 pattern CurConnDoH3      = StatsIx 74
 
-pattern IxLabledMax     :: StatsIx
-pattern IxLabledMax      = StatsIx 74
+pattern IxLabeledMax    :: StatsIx
+pattern IxLabeledMax     = StatsIx 74
 
 pattern HistogramMin    :: StatsIx
 pattern HistogramMin     = StatsIx 75
@@ -395,7 +395,7 @@ foldStats lower upper (Stats stats) cons nil = do
         | otherwise = return acc
 
 readStats :: Stats -> Builder -> IO Builder
-readStats stats prefix = foldStats StatsIxMin IxLabledMax stats step mempty
+readStats stats prefix = foldStats StatsIxMin IxLabeledMax stats step mempty
   where
     toB :: Int -> Builder
     toB = lazyByteString . BL.pack . show
