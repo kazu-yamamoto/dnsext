@@ -15,7 +15,7 @@ module DNS.Iterative.Query.Resolve (
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
 import qualified DNS.Log as Log
-import DNS.RRCache (Ranking (RankAdditional), rankedAnswer)
+import DNS.RRCache (Ranking (RankAdditional))
 import qualified DNS.RRCache as Cache
 import DNS.Types
 import qualified DNS.Types as DNS
@@ -26,7 +26,7 @@ import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
-import qualified DNS.Iterative.Query.Verify as Verify
+import DNS.Iterative.Query.Helpers
 
 -- 最終的な解決結果を得る
 runResolve
@@ -78,7 +78,7 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
         | typ == ANY       = pure (([], n0), left (DNS.NotImpl, [], []))
         | typ == CNAME     = justCNAME n0
         | otherwise        = recCNAMEs 0 n0 id
-    logLines_ lv = logLines lv . pindents ("resolve-with-cname: " ++ logMark)
+    logLines_ lv = logLines lv . pindents ("resolve: " ++ logMark)
     logLn_ lv s = logLines_ lv [s]
     called = do
         let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQP sel
@@ -110,7 +110,8 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
             logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             cnameLimitResult
         | otherwise = do
-            let recCNAMEs_ (cn, cnRRset) = logLn_ Log.DEMO (show cn) *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
+            let traceCNAME cn = logLn_ Log.DEMO ("cname: " ++ show bn ++ " -> " ++ show cn)
+                recCNAMEs_ (cn, cnRRset) = traceCNAME cn *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
                 noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . right) =<< typeHandler bn typ
 
                 withERRC (rc, soa) = pure ((dcnRRsets [], bn), left (rc, [], soa))
@@ -183,23 +184,25 @@ resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
     uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
 
+{- FOURMOLU_DISABLE -}
 {- 目的の TYPE のレコードを取得できた場合には、結果の DNSMessage と RRset を返す.
    結果が CNAME の場合、そのドメイン名と RRset を返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
 {- returns: result msg, cname, verified answer, verified authority -}
 resolveTYPE :: Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' DNSMessage))
 resolveTYPE bn typ = do
-    (msg, delegation@Delegation{..}) <- resolveExact bn typ
-    let cnDomain rr = DNS.rdataField (rdata rr) DNS.cname_domain
-        nullCNAME = Right . uncurry ((,,) msg) <$> cacheAnswer delegation bn typ msg
-        ncCNAME _ncLog = pure $ Right (msg, [], [])
-        ansHasTYPE = any ((&&) <$> (== bn) . rrname <*> (== typ) . rrtype) $ DNS.answer msg
-        mkResult cnames cnameRRset cacheCNAME = do
-            let cninfo = (,) <$> (fst <$> uncons cnames) <*> pure cnameRRset
-            when ansHasTYPE $ throwDnsError DNS.UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
-            cacheCNAME $> maybe (Right (msg, [], [])) Left cninfo
-    reqCD <- asksQP requestCD_
-    Verify.cases reqCD delegationZone delegationDNSKEY rankedAnswer msg bn CNAME cnDomain nullCNAME ncCNAME mkResult
+    (msg, delegation) <- resolveExact bn typ
+    let has ty = any ((&&) <$> (== bn) . rrname <*> (== ty) . rrtype) $ DNS.answer msg
+        hasCNAME  = has CNAME
+        cns cnAns = [(cn, cnRRset) | cnRRset <- cnAns, rd <- rrsRDatas cnRRset, Just cn <- [DNS.rdataField rd DNS.cname_domain]]
+        ierr = logLn Log.WARN (pprMessage "resolveTYPE: inconsistent, cnames exists or not" msg) >> throwDnsError ServerFailure
+        cnResult (cnAns, _cnAuth) = list ierr (\cn _ -> pure $ Left cn) $ cns cnAns
+        dispatch
+            | not hasCNAME                   = Right . uncurry ((,,) msg) <$> cacheAnswer delegation bn typ msg
+            |     hasCNAME && not (has typ)  = cnResult =<< cacheAnswer delegation bn CNAME msg
+            | otherwise                      = throwDnsError UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
+    dispatch
+{- FOURMOLU_ENABLE -}
 
 maxCNameChain :: Int
 maxCNameChain = 16
