@@ -523,7 +523,7 @@ delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..
         emp d' = list (fh (aa []) >> throwDnsError ServerFailure) (fallbacks (aa . ((tag, []):)) d') runsAxs
         ne d' paxs = list step (\g gs -> step `catchError` \e -> hlog e >> fallbacks (aa . ((tag, paxs'):)) d' g gs) runsAxs
           where
-            step = case [(ah axc >> norec dnssecOK axc name typ) | axc <- chunksOfN qparallel paxs] of
+            step = case [(ah (NE.toList axc) >> norec dnssecOK axc name typ) | axc <- chunksOfNE qparallel paxs] of
                 f:|fs -> (,) <$> catches f fs <*> pure d'
             paxs' = NE.toList paxs
             hlog e = eh' $ unwords $ show e : "for" : map show paxs'
@@ -582,9 +582,9 @@ resolveNS zone disableV6NS dc ns = do
 maxQueryCount :: Int
 maxQueryCount = 64
 
-norec :: Bool -> [Address] -> Domain -> TYPE -> DNSQuery DNSMessage
+norec :: Bool -> NonEmpty Address -> Domain -> TYPE -> DNSQuery DNSMessage
 norec dnssecOK aservers name typ = do
-    qcount <- (length aservers +) <$> (liftIO =<< asksQS getQueryCount_)
+    qcount <- (NE.length aservers +) <$> (liftIO =<< asksQS getQueryCount_)
     logLn Log.DEBUG ("query count: " ++ show qcount)
     orig <- showQ "orig-query" <$> asksQP origQuestion_
     m <- dispatch qcount orig
@@ -593,7 +593,8 @@ norec dnssecOK aservers name typ = do
   where
     dispatch qcount orig
         | qcount > maxQueryCount = logLn Log.WARN (exceeded orig) >> left ServerFailure
-        | otherwise = lift (Norec.norec' dnssecOK aservers name typ) >>= either left (handleResponseError aservers throwError pure)
+        | otherwise = lift (Norec.norec' dnssecOK aservers name typ) >>= either left handleResponse
     exceeded orig = "max-query-count (==" ++ show maxQueryCount ++ ") exceeded: " ++ showQ' "query" name typ ++ ", " ++ orig
+    handleResponse = handleResponseError (NE.toList aservers) throwError pure
     left e = cacheDNSError name typ Cache.RankAnswer e >> dnsError e
     dnsError e = throwError $ uncurry DnsError $ unwrapDNSErrorInfo e
