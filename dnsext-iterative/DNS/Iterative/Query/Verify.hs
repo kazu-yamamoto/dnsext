@@ -62,33 +62,29 @@ import DNS.Iterative.Query.Utils
 cases
     :: (MonadIO m, MonadReader Env m)
     => RequestCD
-    -> Domain
-    -> [RD_DNSKEY]
+    -> Domain -> [RD_DNSKEY]
     -> (dm -> ([RR], Ranking)) -> dm
     -> Domain  -> TYPE
     -> (RR -> Maybe a)
     -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
-cases reqCD zone dnskeys getRanked msg rrn rrty h nullK ncK rightK = do
-    getSec <- asks currentSeconds_
-    withSection getRanked msg $ \srrs rank -> cases' getSec reqCD zone dnskeys srrs rank rrn rrty h nullK ncK rightK
+cases reqCD zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
+    withSection getRanked msg $ \srrs rank -> cases' reqCD zone dnskeys srrs rank rrn rrty h nullK ncK rightK
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 cases'
     :: (MonadIO m, MonadReader Env m)
-    => IO EpochTime
-    -> RequestCD
-    -> Domain
-    -> [RD_DNSKEY]
+    => RequestCD
+    -> Domain -> [RD_DNSKEY]
     -> [RR] -> Ranking
     -> Domain -> TYPE
     -> (RR -> Maybe a)
     -> m b -> (m () -> m b)
     -> ([a] -> RRset -> m () -> m b)
     -> m b
-cases' getSec reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
+cases' reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
     | null xRRs = nullK
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
@@ -102,7 +98,7 @@ cases' getSec reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
         logInvalids  []    = clogLn Log.DEMO (Just Cyan)  "cases: InvalidRRS"
         logInvalids (e:es) = clogLn Log.DEMO (Just Cyan) ("cases: InvalidRRS: " ++ e) *> logLines Log.DEMO es
     rightK rrset sortedRRs = do
-        now <- liftIO getSec
+        now <- liftIO =<< asks currentSeconds_
         withVerifiedRRset reqCD now dnskeys rrset sortedRRs sigs verifiedK
 {- FOURMOLU_ENABLE -}
 
