@@ -168,32 +168,42 @@ toRequestAD qctl = case adBit $ qctlHeader qctl of
     _ -> NoAuthenticatedData
 
 data QueryCount
+data LastQuery
+data AservMessage
 newtype StateVal a n = StateVal (IORef a)
 
 newStateVal :: a -> IO (StateVal a n)
 newStateVal iv = StateVal <$> newIORef iv
 
+{- FOURMOLU_DISABLE -}
 data QueryState = QueryState
-    { queryCounter_ :: StateVal Int QueryCount
+    { queryCounter_  :: StateVal Int QueryCount
+    , lastQuery_     :: StateVal (Question, [Address]) LastQuery
+    , aservMessage_  :: StateVal (Maybe DNSMessage) AservMessage
     }
+{- FOURMOLU_ENABLE -}
 
 newQueryState :: IO QueryState
 newQueryState = do
     refq <- newStateVal 0
-    pure $ QueryState refq
+    rlsq <- newStateVal (Question (fromString "") A IN, [])
+    rasm <- newStateVal Nothing
+    pure $ QueryState refq rlsq rasm
 
 data ExtraError
     = ErrorNotResp
     | ErrorEDNS DNS.EDNSheader
     | ErrorRCODE DNS.RCODE
+    | ErrorBogus String
     deriving (Show)
 
 {- FOURMOLU_DISABLE -}
-extraError :: a -> (EDNSheader -> a) -> (RCODE -> a) -> ExtraError -> a
-extraError notResp errEDNS errRCODE fe = case fe of
+extraError :: a -> (EDNSheader -> a) -> (RCODE -> a) -> (String -> a) -> ExtraError -> a
+extraError notResp errEDNS errRCODE bogus fe = case fe of
     ErrorNotResp  -> notResp
     ErrorEDNS e   -> errEDNS e
     ErrorRCODE e  -> errRCODE e
+    ErrorBogus s  -> bogus s
 {- FOURMOLU_ENABLE -}
 
 data QueryError
@@ -383,6 +393,7 @@ type RR = ResourceRecord
 data VResult
     = VR_Secure
     | VR_Insecure
+    | VR_Bogus
     deriving Show
 
 ---

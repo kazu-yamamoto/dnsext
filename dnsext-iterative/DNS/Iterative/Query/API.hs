@@ -121,7 +121,7 @@ logQueryErrors prefix q = do
           throwError qe
       logQueryError qe = case qe of
           DnsError de ss           -> logDnsError de ss
-          ExtraError ee addrs msg  -> extraError logNotResponse logInvalidEDNS logRcodeError ee addrs msg
+          ExtraError ee addrs msg  -> extraError logNotResponse logInvalidEDNS logRcodeError logBogus ee addrs msg
       logDnsError de ss = case de of
           NetworkFailure {}   -> putLog detail
           DecodeError {}      -> putLog detail
@@ -133,6 +133,7 @@ logQueryErrors prefix q = do
       logInvalidEDNS  DNS.InvalidEDNS addrs  msg = putLog $ pprAddrs addrs ++ ":\n" ++ "invalid EDNS" ++ maybe "" (pprMessage ":") msg
       logInvalidEDNS  _               _     _msg = pure ()
       logRcodeError _rcode _addrs _msg = pure ()
+      logBogus _es _addrs _msg = pure ()
       pprAddrs = unwords . map show
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
@@ -179,7 +180,7 @@ replaceRCODE env tag rc0 = unless (rc0 == rc1) putLog $> rc1
 queryErrorReply :: Identifier -> [Question] -> (String -> a) -> (VResult -> DNSMessage -> a) -> QueryError -> a
 queryErrorReply ident rqs left right qe = case qe of
     DnsError e _       -> dnsError e
-    ExtraError ee _ _  -> extraError (insec srvFail) (\_ -> insec srvFail) (insec . message) ee
+    ExtraError ee _ _  -> extraError (insec srvFail) (\_ -> insec srvFail) (insec . message) (\_ -> right VR_Bogus srvFail) ee
   where
     dnsError e = foldDNSErrorToRCODE (left $ "DNSError: " ++ show e) (insec . message) e
     insec = right VR_Insecure
