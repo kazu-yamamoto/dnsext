@@ -20,7 +20,7 @@ import DNS.Do53.Client (
 import qualified DNS.Do53.Client as DNS
 import qualified DNS.Log as Log
 import DNS.SEC (TYPE (..))
-import DNS.Types hiding (InvalidEDNS)
+import DNS.Types
 import qualified DNS.Types as DNS
 
 -- this package
@@ -116,10 +116,8 @@ logQueryErrors prefix q = do
           logQueryError qe
           throwError qe
       logQueryError qe = case qe of
-          DnsError de ss        -> logDnsError de ss
-          NotResponse addrs resp msg  -> logNotResponse addrs resp msg
-          InvalidEDNS addrs eh msg    -> logInvalidEDNS addrs eh msg
-          HasError addrs rcode msg    -> logHasError addrs rcode msg
+          DnsError de ss           -> logDnsError de ss
+          ExtraError ee addrs msg  -> extraError logNotResponse logInvalidEDNS logRcodeError ee addrs msg
       logDnsError de ss = case de of
           NetworkFailure {}   -> putLog detail
           DecodeError {}      -> putLog detail
@@ -127,11 +125,10 @@ logQueryErrors prefix q = do
           UnknownDNSError {}  -> putLog detail
           _                   -> pure ()
         where detail = show de ++ ": " ++ intercalate ", " ss
-      logNotResponse  addrs False  msg  = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "not response:" msg
-      logNotResponse _addrs True  _msg  = pure ()
-      logInvalidEDNS  addrs DNS.InvalidEDNS  msg = putLog $ pprAddrs addrs ++ ":\n" ++ pprMessage "invalid EDNS:" msg
-      logInvalidEDNS  _     _               _msg = pure ()
-      logHasError _addrs _rcode _msg = pure ()
+      logNotResponse  addrs msg  = putLog $ pprAddrs addrs ++ ":\n" ++ "not response" ++ maybe "" (pprMessage ":") msg
+      logInvalidEDNS  DNS.InvalidEDNS addrs  msg = putLog $ pprAddrs addrs ++ ":\n" ++ "invalid EDNS" ++ maybe "" (pprMessage ":") msg
+      logInvalidEDNS  _               _     _msg = pure ()
+      logRcodeError _rcode _addrs _msg = pure ()
       pprAddrs = unwords . map show
       putLog = logLn Log.WARN . (prefix ++)
 {- FOURMOLU_ENABLE -}
@@ -178,9 +175,7 @@ replaceRCODE env tag rc0 = unless (rc0 == rc1) putLog $> rc1
 queryErrorReply :: Identifier -> [Question] -> (String -> a) -> (DNSMessage -> a) -> QueryError -> a
 queryErrorReply ident rqs left right qe = case qe of
     DnsError e _        -> dnsError e
-    NotResponse{}       -> right $ message DNS.ServFail
-    InvalidEDNS{}       -> right $ message DNS.ServFail
-    HasError _as rc _m  -> right $ message rc
+    ExtraError ee _ _   -> right $ message $ extraError DNS.ServFail (\_ -> DNS.ServFail) id ee
   where
     dnsError e = foldDNSErrorToRCODE (left $ "DNSError: " ++ show e) (right . message) e
     message rc = replyDNSMessage ident rqs rc resFlags [] []
