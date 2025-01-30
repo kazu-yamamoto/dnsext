@@ -195,18 +195,25 @@ pattern CurConnDoQ       = StatsIx 73
 pattern CurConnDoH3     :: StatsIx
 pattern CurConnDoH3      = StatsIx 74
 
+pattern VResSecure      :: StatsIx
+pattern VResSecure       = StatsIx 75
+pattern VResInsecure    :: StatsIx
+pattern VResInsecure     = StatsIx 76
+pattern VResBogus       :: StatsIx
+pattern VResBogus        = StatsIx 77
+
 pattern IxLabeledMax    :: StatsIx
-pattern IxLabeledMax     = StatsIx 74
+pattern IxLabeledMax     = StatsIx 77
 
 pattern HistogramMin    :: StatsIx
-pattern HistogramMin     = StatsIx 75
+pattern HistogramMin     = StatsIx 78
 pattern HistogramMax    :: StatsIx
-pattern HistogramMax     = StatsIx 114
+pattern HistogramMax     = StatsIx 117
 pattern QTimeSumUsec    :: StatsIx
-pattern QTimeSumUsec     = StatsIx 115
+pattern QTimeSumUsec     = StatsIx 118
 
 pattern StatsIxMax      :: StatsIx
-pattern StatsIxMax       = StatsIx 115
+pattern StatsIxMax       = StatsIx 118
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -294,6 +301,10 @@ labels = array (StatsIxMin, StatsIxMax) [
   , (CurConnDoH2C,     "connection_doh2c_current")
   , (CurConnDoQ,       "connection_doq_current")
   , (CurConnDoH3,      "connection_doh3_current")
+  --
+  , (VResSecure,       "answer_secure_total")
+  , (VResInsecure,     "answer_insecure_total")
+  , (VResBogus,        "answer_bogus")
   ]
 {- FOURMOLU_ENABLE -}
 
