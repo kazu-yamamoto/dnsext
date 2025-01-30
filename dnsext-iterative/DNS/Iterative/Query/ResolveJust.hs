@@ -240,15 +240,12 @@ servsChildZone dc nss dom msg =
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
         verifySOA reqQC wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases reqQC zone dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA result
+            | otherwise = Verify.cases reqQC dom dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA withSOA
           where
-            zone = delegationZone wd
             dnskeys = delegationDNSKEY wd
             nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
             ncSOA _ncLog = pure noDelegation {- guarded by soaRRs [_] case. single record must be canonical -}
-            result _ soaRRset _cacheSOA
-                | rrsetValid soaRRset = pure $ hasDelegation wd
-                | otherwise = verificationError
+            withSOA = Verify.withResult SOA (\s -> "servs-child: " ++ s ++ ": " ++ show dom) (\_ _ _ -> pure $ hasDelegation wd)
     handleASIG fallback = withSection rankedAnswer msg $ \srrs _rank -> do
         let arrsigRRs = rrListWith RRSIG (signedA <=< DNS.fromRData) dom (\_ rr -> rr) srrs
         case arrsigRRs of
@@ -259,10 +256,6 @@ servsChildZone dc nss dom msg =
            * with DNSSEC, signed with child-zone apex.
            * without DNSSEC, indistinguishable from the A definition without sub-domain cohabitation -}
         signedA rd@RD_RRSIG{..} = guard (rrsig_type == A && rrsig_zone == dom) $> rd
-    verificationError = do
-        logLn Log.WARN $ "servs-child: " ++ show dom ++ ": verification error. invalid SOA:"
-        clogLn Log.DEMO (Just Red) $ show dom ++ ": verification error. invalid SOA"
-        throwDnsError DNS.ServerFailure
     getWorkaround tag = do
         logLn Log.DEMO $ "servs-child: workaround: " ++ tag ++ ": " ++ show dom ++ " may be provided with " ++ show (delegationZone nss)
         fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
@@ -327,30 +320,24 @@ fillDelegationDS dc src dest
     lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
     lookupDS zone = lookupValidRR "require-ds" zone DS <&> (>>= dsRDs)
     fill dss = pure dest{delegationDS = FilledDS dss}
-    verifyFailed ~es = logLn Log.WARN ("require-ds: " ++ es) *> throwDnsError DNS.ServerFailure
-    query = do
-        let zone = delegationZone dest
-            result (e, ~verifyColor, ~verifyMsg) = do
-                let domTraceMsg = show (delegationZone src) ++ " -> " ++ show zone
-                clogLn Log.DEMO (Just verifyColor) $ "fill delegation - " ++ verifyMsg ++ ": " ++ domTraceMsg
-                either verifyFailed (fillCachedDelegation {- fill-cached on queryDS fallbacks -} <=< fill) e
-        result =<< queryDS dc src zone
+    query = fillCachedDelegation =<< fill =<< queryDS dc src (delegationZone dest)
 
 {- FOURMOLU_DISABLE -}
 queryDS
-    :: Int -> Delegation
-    -> Domain -> DNSQuery (Either String [RD_DS], Color, String)
+    :: Int -> Delegation -> Domain -> DNSQuery [RD_DS]
 queryDS dc src@Delegation{..} dom = do
     short <- asks shortLog_
     let ainfo sas = ["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) src dom DS
-    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS verifyResult
+    Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS withDS
   where
-    nullDS = pure (Right [], Yellow, "no DS, so no verify")
-    ncDS _ncLog = pure (Left "queryDS: not canonical DS", Red, "not canonical DS")
-    verifyResult dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = cacheDS $> (Right dsrds, Green, "verification success - RRSIG of DS")
-        | otherwise = pure (Left "queryDS: verification failed - RRSIG of DS", Red, "verification failed - RRSIG of DS")
+    nullDS = insecure "no DS, so no verify" $> []
+    ncDS ncLog = ncLog *> bogus "not canonical DS"
+    withDS dsrds = Verify.withResult DS msgf (\_ _ _ -> pure dsrds) dsrds  {- not reach for no-verify and check-disabled cases -}
+    insecure ~vmsg = Verify.insecureLog (msgf vmsg)
+    bogus ~es = Verify.bogusError (msgf es)
+    msgf s = "fill delegation - " ++ s ++ ": " ++ domTraceMsg
+    domTraceMsg = show zone ++ " -> " ++ show dom
     zone = delegationZone
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
@@ -457,8 +444,7 @@ fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
     zone = delegationZone
     toDNSKEYs (rrs, _rank) = [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
     fill d' dnskeys = pure d'{delegationDNSKEY = dnskeys}
-    verifyFailed ~es = logLn Log.WARN ("require-dnskey: " ++ es) $> d
-    query = either verifyFailed (\(ks, d') -> fill d' ks) =<< cachedDNSKEY getSEP dc d
+    query = cachedDNSKEY getSEP dc d >>= \(ks, d') -> fill d' ks
 {- FOURMOLU_ENABLE -}
 
 {-
@@ -469,7 +455,7 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery (Either String ([RD_DNSKEY], Delegation))
+    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery ([RD_DNSKEY], Delegation)
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
     short <- asks shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
@@ -477,18 +463,18 @@ cachedDNSKEY getSEPs dc d@Delegation{..} = do
     let rcode = DNS.rcode msg
     case rcode of
         DNS.NoErr -> withSection rankedAnswer msg $ \srrs _rank ->
-            either (pure . Left) (fmap (fmap (\ks -> (ks, d'))) . verifyDNSKEY msg) $ getSEPs srrs
-        _ -> pure $ Left $ "cachedDNSKEY: error rcode to get DNSKEY: " ++ show rcode
+            either bogus (fmap (\ks -> (ks, d')) . verifyDNSKEY msg) $ getSEPs srrs
+        _ -> bogus $ "error rcode to get DNSKEY: " ++ show rcode
   where
-    cachedResult krds dnskeyRRset cacheDNSKEY
-        | rrsetValid dnskeyRRset = cacheDNSKEY $> Right krds {- only cache DNSKEY RRset on verification successs -}
-        | otherwise = pure $ Left $ "cachedDNSKEY: no verified RRSIG found: " ++ show (rrsMayVerified dnskeyRRset)
     verifyDNSKEY msg (s :| ss) = do
         let dnskeyRD rr = DNS.fromRData $ rdata rr :: Maybe RD_DNSKEY
             {- no DNSKEY case -}
-            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] $> Left "cachedDNSKEY: null DNSKEYs"
-            ncDNSKEY _ncLog = pure $ Left "cachedDNSKEY: not canonical"
-        Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY cachedResult
+            nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] *> bogus "null DNSKEYs for non-empty SEP"
+            ncDNSKEY ncLog = ncLog >> bogus "not canonical"
+        Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY withDNSKEY
+    withDNSKEY rds = Verify.withResult DNSKEY msgf (\_ _ _ -> pure rds) rds  {- not reach for no-verify and check-disabled cases -}
+    bogus ~es = Verify.bogusError (msgf es)
+    msgf s = "require-dnskey: " ++ s ++ ": " ++ show zone
     zone = delegationZone
 
 ---

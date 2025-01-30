@@ -3,6 +3,12 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Verify (
+    -- * verified result continuations
+    withResult,
+    insecureLog,
+    bogusError,
+    verifyLog,
+
     -- * case split for RRSIG verification
     cases,
     cases',
@@ -55,6 +61,30 @@ import DNS.Iterative.Query.Utils
 -- >>> :seti -XOverloadedLists
 
 {- FOURMOLU_DISABLE -}
+withResult
+    :: TYPE -> (String -> String)
+    -> ([a] -> RRset -> DNSQuery () -> DNSQuery b)
+    ->  [a] -> RRset -> DNSQuery () -> DNSQuery b
+withResult typ modf rightK xs xRRset cacheX =
+    mayVerifiedRRS noverify cd bogus valid (rrsMayVerified xRRset)
+  where
+    valid _   = verifyLog (Just Green) (modf $ "verification success - RRGIG of " ++ show typ) >> result
+    cd        = verifyLog (Just Yellow) (modf $ "no verification - check-disabled") >> result
+    noverify  = verifyLog (Just Yellow) (modf $ "no verification - no DS or no DNSKEY avail") >> result
+    result    = cacheX >> rightK xs xRRset cacheX
+    bogus _   = bogusError $ modf $ "verification failed - RRSIG of " ++ show typ
+{- FOURMOLU_ENABLE -}
+
+insecureLog :: (MonadIO m, MonadReader Env m) => String -> m ()
+insecureLog ~vmsg =  verifyLog (Just Yellow) vmsg
+
+bogusError :: String -> DNSQuery a
+bogusError ~es = verifyLog (Just Red) es *> throwDnsError ServerFailure
+
+verifyLog :: (MonadIO m, MonadReader Env m) => Maybe Color -> String -> m ()
+verifyLog ~vcolor ~vmsg = clogLn Log.DEMO vcolor vmsg
+
+{- FOURMOLU_DISABLE -}
 -- |
 -- null case is no RR for specified type.
 -- nc case is not canonical RRset.
@@ -88,7 +118,7 @@ cases' reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
     | null xRRs = nullK
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
-    ncK rrs s = ncK0 $ logLines Log.WARN (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
+    ncK rrs s = ncK0 $ logLines Log.DEMO (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
     (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
     sigs = rrsigList zone rrn rrty srrs
     verifiedK rrset@(RRset dom typ cls minTTL rds sigrds) = rightK0 fromRDs rrset (logInv *> cache)

@@ -105,25 +105,18 @@ delegationWithCache zone dnskeys dom msg = do
     found reqCD k = Verify.cases NoCheckDisabled zone dnskeys (getRanked rankedDS) msg dom DS fromDS (nullDS reqCD k) ncDS (withDS k)
     fromDS = DNS.fromRData . rdata
     nullDS CheckDisabled   k =
-        vrfyLog (Just Yellow) "delegation - no DS, check disabled" $> k []
+        Verify.insecureLog (msgf "no DS, check disabled") $> k []
     nullDS NoCheckDisabled k = do
         unsignedDelegationOrNoData $> ()
-        vrfyLog (Just Yellow) "delegation - no DS, so no verification chain"
+        Verify.insecureLog (msgf "no DS, so no verification chain")
         cacheNoData dom DS (getRank rankedDS msg)
         caches $> k []
-    ncDS _ncLog = vrfyLog (Just Red) "delegation - not canonical DS" *> throwDnsError DNS.ServerFailure
-    withDS k dsrds dsRRset cacheDS
-        | rrsetValid dsRRset = do
-            let x = k dsrds
-            vrfyLog (Just Green) "delegation - verification success - RRSIG of DS"
-            caches *> cacheDS $> x
-        | otherwise =
-            vrfyLog (Just Red) "delegation - verification failed - RRSIG of DS" *> throwDnsError DNS.ServerFailure
+    ncDS ncLog = ncLog >> Verify.bogusError (msgf "not canonical DS")
+    withDS k = Verify.withResult DS msgf $ \dsrds _ _ -> caches $> k dsrds
     caches = cacheNS *> cacheAdds
 
-    notFound = vrfyLog Nothing "no delegation"
-    vrfyLog vrfyColor vrfyMsg = clogLn Log.DEMO vrfyColor $ vrfyMsg ++ ": " ++ domTraceMsg
-    domTraceMsg = show zone ++ " -> " ++ show dom
+    notFound = Verify.verifyLog Nothing (msgf "no delegation")
+    msgf s = "delegation - " ++ s ++ ": " ++ show zone ++ " -> " ++ show dom
 
     (nsps, cacheNS) = withSection rankedAuthority msg $ \rrs rank ->
         let nsps_ = rrListWith NS (`DNS.rdataField` DNS.ns_domain) dom (,) rrs

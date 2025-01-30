@@ -251,12 +251,11 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
-    => Domain -> [RD_DNSKEY]
+    :: Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([RR], Ranking)) -> DNSMessage
     -> [RRset]
-    -> m [RRset] {- returns verified authority section -}
+    -> DNSQuery [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asks maxNegativeTTL_
@@ -266,15 +265,14 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
            https://datatracker.ietf.org/doc/html/rfc2308#section-5 -}
         soaTTL ttl soa = minimum [DNS.soa_minimum soa, ttl, maxNegativeTTL]
         fromSOA ResourceRecord{..} = (,) rrname . soaTTL rrttl <$> DNS.fromRData rdata
-        cacheNoSOA _rrs rank = cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
-        nullSOA = withSection getRanked msg cacheNoSOA
+        nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
+        soaK ps soaRRset _cacheSOA = either (\s -> ncWarn s *> nullSOA $> []) (ncache >>> ($> soaRRset : nws)) $ single ps
+        withSOA = Verify.withResult SOA msgf soaK
         --
-    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) $ \ps soaRRset cacheSOA -> do
-        let doCache (soaDom, ncttl) = do
-                cacheSOA
-                withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom nws dom typ ncttl rank
-        either (ncWarn >>> ($> [])) (doCache >>> ($> soaRRset : nws)) $ single ps
+    Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) withSOA
   where
+    ncache (soaDom, ncttl) = withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom nws dom typ ncttl rank
+    msgf s = "cache-soa: " ++ s ++ ": " ++ show zone
     single xs = case xs of
         [] -> Left "no SOA records found"
         [x] -> Right x
@@ -343,26 +341,11 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
 {- FOURMOLU_DISABLE -}
 cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
-    (result, cacheX) <- verify =<< asksQP requestCD_
-    cacheX
-    return result
+    verify =<< asksQP requestCD_
   where
-    qinfo = show dom ++ " " ++ show typ
-    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX $ \_ xRRset cacheX -> do
-        nws <- witnessWildcardExpansion
-        let (~verifyMsg, ~verifyColor, raiseOnVerifyFailure)
-                | CheckDisabled <- reqCD = ("no verification - check disabled, " ++ qinfo, Just Yellow, pure ())
-                | FilledDS [] <- delegationDS = ("no verification - no DS, " ++ qinfo, Just Yellow, pure ())
-                | rrsetValid xRRset = ("verification success - RRSIG of " ++ qinfo, Just Green, pure ())
-                | NotFilledDS o <- delegationDS = ("not consumed not-filled DS: case=" ++ show o ++ ", " ++ qinfo, Nothing, pure ())
-                | otherwise = ("verification failed - RRSIG of " ++ qinfo, Just Red, throwDnsError DNS.ServerFailure)
-        clogLn Log.DEMO verifyColor verifyMsg
-        raiseOnVerifyFailure
-        pure (([xRRset], nws), cacheX)
-      where
-        witnessWildcardExpansion = wildcardWitnessAction d dom typ msg
+    verify reqCD = Verify.cases reqCD zone dnskeys rankedAnswer msg dom typ Just nullX ncX withX
 
-    nullX = doCacheEmpty <&> \e -> (([], e), pure ())
+    nullX = doCacheEmpty <&> \e -> ([], e)
     doCacheEmpty = case rcode of
         {- authority sections for null answer -}
         DNS.NoErr      -> cacheSectionNegative zone dnskeys dom typ       rankedAnswer msg =<< witnessNoDatas
@@ -371,10 +354,12 @@ cacheAnswer d@Delegation{..} dom typ msg = do
           | otherwise  -> pure []
       where
         crc rc = rc `elem` [DNS.FormatErr, DNS.ServFail, DNS.Refused]
-        nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ qinfo
+        nullK = nsecFailed $ "no NSEC/NSEC3 for NameErr/NoData: " ++ show dom ++ " " ++ show typ
         (witnessNoDatas, witnessNameErr) = negativeWitnessActions nullK d dom typ msg
-
-    ncX _ncLog = pure (([], []), pure ())
+    ncX _ncLog = pure ([], [])
+    withX = Verify.withResult typ (\vmsg -> vmsg ++ ": " ++ show dom) $ \_xs xRRset _cacheX -> do
+        nws <- wildcardWitnessAction d dom typ msg
+        pure ([xRRset], nws)
 
     rcode = DNS.rcode msg
     zone = delegationZone
@@ -389,19 +374,19 @@ cacheNoDelegation d zone dnskeys dom msg
     | otherwise = pure ()
   where
     nameErrors = asksQP requestCD_ >>=
-        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME $
-        \_rds _cnRRset cacheCNAME -> cacheCNAME *> cacheNoDataNS
+        \reqCD -> Verify.cases reqCD zone dnskeys rankedAnswer msg dom CNAME cnRD nullCNAME ncCNAME withCNAME
     {- If you want to cache the NXDOMAIN of the CNAME destination, return it here.
        However, without querying the NS of the CNAME destination,
        you cannot obtain the record of rank that can be used for the reply. -}
     cnRD rr = DNS.fromRData $ rdata rr :: Maybe DNS.RD_CNAME
     nullCNAME = cacheSectionNegative zone dnskeys dom Cache.ERR rankedAuthority msg =<< witnessNameErr
+    (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     ncCNAME _ncLog = cacheNoDataNS
+    withCNAME = Verify.withResult CNAME (\s -> "no delegation: " ++ s ++ ": " ++ show dom) (\_ _ _ -> cacheNoDataNS)
     {- not always possible to obtain NoData witness for NS
        * no NSEC/NSEC3 records - ex. A record exists
        * encloser NSEC/NSEC3 records for other than QNAME - ex. dig @ns1.dns-oarc.net. porttest.dns-oarc.net. A +dnssec -}
     cacheNoDataNS = cacheSectionNegative zone dnskeys dom NS rankedAuthority msg []
-    (_witnessNoDatas, witnessNameErr) = negativeWitnessActions (pure []) d dom A msg
     rcode = DNS.rcode msg
 {- FOURMOLU_ENABLE -}
 
