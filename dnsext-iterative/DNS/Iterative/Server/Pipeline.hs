@@ -56,7 +56,7 @@ import DNS.Types.Time
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Internal (Env (..))
-import DNS.Iterative.Query (VResult, foldResponseCached, foldResponseIterative)
+import DNS.Iterative.Query (VResult (..), foldResponseCached, foldResponseIterative)
 import DNS.Iterative.Server.NonBlocking
 import DNS.Iterative.Server.Types
 import DNS.Iterative.Server.WorkerStats
@@ -125,10 +125,10 @@ cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
             cres <- foldResponseCached (pure CResultMissHit) CResultDenied CResultHit env queryMsg
             case cres of
                 CResultMissHit -> toWorker inp
-                CResultHit _vr replyMsg -> do
+                CResultHit vr replyMsg -> do
                     duration <- diffUsec <$> currentTimeUsec_ env <*> pure inputRecvTime
                     updateHistogram_ env duration (stats_ env)
-                    mapM_ (incStats $ stats_ env) [CacheHit, QueriesAll]
+                    mapM_ (incStats $ stats_ env) [statsIxOfVR vr, CacheHit, QueriesAll]
                     let bs = DNS.encode replyMsg
                     record env inp replyMsg bs
                     inputToSender $ Output bs inputPendingOp inputPeerInfo
@@ -152,8 +152,8 @@ workerLogic env WorkerStatOP{..} fromCacher = handledLoop env "worker" $ do
     updateHistogram_ env duration (stats_ env)
     setWorkerStat WWaitEnqueue
     case ex of
-        Right (_vr, replyMsg) -> do
-            mapM_ (incStats $ stats_ env) [CacheMiss, QueriesAll]
+        Right (vr, replyMsg) -> do
+            mapM_ (incStats $ stats_ env) [statsIxOfVR vr, CacheMiss, QueriesAll]
             let bs = DNS.encode replyMsg
             record env inp replyMsg bs
             inputToSender $ Output bs inputPendingOp inputPeerInfo
@@ -177,6 +177,13 @@ inputToSender $ Output bs inputPeerInfo
  -}
 
 ----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+statsIxOfVR :: VResult -> StatsIx
+statsIxOfVR VR_Secure    = VResSecure
+statsIxOfVR VR_Insecure  = VResInsecure
+statsIxOfVR VR_Bogus     = VResBogus
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 record
