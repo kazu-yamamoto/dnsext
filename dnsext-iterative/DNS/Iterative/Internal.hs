@@ -2,12 +2,7 @@ module DNS.Iterative.Internal (
     -- * types
     module DNS.Iterative.Query.Types,
     module DNS.Iterative.Query.Env,
-    getResponseIterative,
-    CacheResult (..),
-    getResponseCached,
-    getResultIterative,
-    getResultCached,
-    replyMessage,
+    module DNS.Iterative.Query.API,
 
     -- * testing
     newTestCache,

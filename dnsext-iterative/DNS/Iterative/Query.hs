@@ -4,20 +4,17 @@ module DNS.Iterative.Query (
 
     -- * Iterative query
     resolveResponseIterative,
-    getResponseIterative,
+    foldResponseIterative,
+    foldResponseIterative',
 
     -- * Cache
-    getResponseCached,
-    CacheResult (..),
+    foldResponseCached,
 ) where
 
 import DNS.Do53.Client
 import DNS.Iterative.Query.API
 import DNS.Iterative.Query.Env
-import DNS.Iterative.Query.Types
 import DNS.Types
 
 resolveResponseIterative :: Env -> Question -> QueryControls -> IO (Either String DNSMessage)
-resolveResponseIterative env q ictl = do
-    ers <- runDNSQuery (getResultIterative q) env $ queryParam q ictl
-    return $ replyMessage ers 0 {- dummy id -} [q]
+resolveResponseIterative env q ictl = foldResponseIterative' Left Right env 0 {- dummy id -} [q] q ictl
