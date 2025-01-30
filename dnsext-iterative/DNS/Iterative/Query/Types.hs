@@ -3,6 +3,7 @@
 
 module DNS.Iterative.Query.Types (
     RR,
+    VResult (..),
     Result,
     ResultRRS',
     ResultRRS,
@@ -377,6 +378,14 @@ type RR = ResourceRecord
 
 ----------
 -- results
+
+-- result tag from DNSSEC verification
+data VResult
+    = VR_Secure
+    | VR_Insecure
+    deriving Show
+
+---
 
 {- response code, answer section, authority section -}
 type Result = (RCODE, DNSFlags, [RR], [RR])
