@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -27,7 +26,6 @@ module DNS.TAP.FastStream (
 import Control.Exception as E
 import Control.Monad
 import qualified Data.ByteString.Char8 as C8
-import Data.Typeable (Typeable)
 import Data.Word
 import Network.ByteOrder
 import Network.Socket
@@ -112,7 +110,7 @@ pattern ContentType = FieldType 0x01
 
 ----------------------------------------------------------------
 
-newtype FSException = FSException String deriving (Show, Typeable)
+newtype FSException = FSException String deriving Show
 
 instance Exception FSException
 

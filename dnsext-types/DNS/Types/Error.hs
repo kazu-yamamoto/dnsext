@@ -2,8 +2,6 @@ module DNS.Types.Error where
 
 import Control.Exception (Exception, IOException)
 
-import DNS.Types.Imports
-
 ----------------------------------------------------------------
 
 -- | An enumeration of all possible DNS errors that can occur.
@@ -58,7 +56,7 @@ data DNSError
       DNSErrorInfo DNSError ~String
     | -- | Error is unknown
       UnknownDNSError
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show)
 
 instance Exception DNSError
 
