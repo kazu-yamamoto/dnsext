@@ -47,6 +47,18 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Install doctest
+      id: doctest-dep
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        if cabal install --offline --overwrite-policy=always doctest
+        then
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        else
+          cabal install doctest --overwrite-policy=always
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Install dependencies
       id: inst-dep
       run: |
@@ -60,7 +72,7 @@ jobs:
 
     - name: Save Cache
       uses: actions/cache/save@v4
-      if: ${{ steps.inst-dep.outputs.installed == 'true' }}
+      if: ${{ steps.inst-dep.outputs.installed == 'true' || steps.doctest-dep.outputs.installed == 'true' }}
       with:
         path: ~/.cabal
         key: ${{ steps.cache-key.outputs.val }}
@@ -74,7 +86,6 @@ jobs:
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
       run: |
-        cabal install doctest --overwrite-policy=always
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
           env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
