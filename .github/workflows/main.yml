@@ -58,13 +58,6 @@ jobs:
           echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Save Cache
-      uses: actions/cache/save@v4
-      if: ${{ steps.inst-dep.outputs.installed == 'true' }}
-      with:
-        path: ~/.cabal
-        key: ${{ steps.cache-key.outputs.val }}
-
     - name: Build
       run: cabal build ${{ env.target-config }} all
 
@@ -72,11 +65,27 @@ jobs:
       run: env DISABLE_V6_NS=1 cabal test ${{ env.target-config }} all
 
     - name: Run doctest
+      id: doctest
       if: ${{ runner.os == 'Linux' }}
       run: |
-        cabal install doctest --overwrite-policy=always
+        if cabal install doctest --overwrite-policy=always --offline
+        then
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        else
+          cabal install doctest --overwrite-policy=always
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
           env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
         done
         env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
+
+    - name: Save Cache
+      uses: actions/cache/save@v4
+      if: ${{ always() &&
+              ( steps.inst-dep.outputs.installed  == 'true' ||
+                steps.doctest.outputs.installed   == 'true' ) }}
+      with:
+        path: ~/.cabal
+        key: ${{ steps.cache-key.outputs.val }}
