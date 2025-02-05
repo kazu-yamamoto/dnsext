@@ -25,6 +25,11 @@ jobs:
 
     - uses: actions/checkout@v3
 
+    - name: Key for Cache
+      id: cache-key
+      run: |
+        echo "val=${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}-1" > "$GITHUB_OUTPUT"
+
     - uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -35,7 +40,7 @@ jobs:
       if: ${{ github.ref_name != 'ci-uc' }}
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        key: ${{ steps.cache-key.outputs.val }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
@@ -58,7 +63,7 @@ jobs:
       if: ${{ steps.inst-dep.outputs.installed == 'true' }}
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        key: ${{ steps.cache-key.outputs.val }}
 
     - name: Build
       run: cabal build ${{ env.target-config }} all
