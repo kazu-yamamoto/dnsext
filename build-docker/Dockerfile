@@ -98,7 +98,6 @@ openssl req -x509 -key privkey.pem -subj /CN=${CHAIN_SUBJ_CN} -out fullchain.pem
 mkdir -p -m 755 /opt/bowline/etc
 install -m 444 \
     bowline.conf.dist \
-    dnsext/dnsext-bowline/bowline/default-local.conf \
     /opt/bowline/etc/
 install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
