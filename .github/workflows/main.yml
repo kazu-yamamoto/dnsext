@@ -17,7 +17,7 @@ jobs:
         ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10' ]
 
     env:
-      cache-name: cache-cabal-ghc-${{ matrix.ghc }}
+      cache-name: cabal-ghc
       target-config: --test-show-details=streaming --enable-tests --disable-benchmarks
 
     steps:
@@ -33,8 +33,10 @@ jobs:
     - name: Hackage index, Cache Key
       id: params
       run: |
+        ghc_version=$(ghc --numeric-version)
         cabal update
-        echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}-1" > "$GITHUB_OUTPUT"
+        echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
+        echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
 
     - name: Restore Cache
       uses: actions/cache/restore@v4
