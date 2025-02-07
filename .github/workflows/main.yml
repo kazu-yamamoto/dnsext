@@ -44,10 +44,6 @@ jobs:
       with:
         path: ~/.cabal
         key: ${{ steps.params.outputs.cache }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
 
     - name: Install doctest
       id: doctest-dep
