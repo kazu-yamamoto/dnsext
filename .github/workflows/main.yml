@@ -31,17 +31,17 @@ jobs:
         cabal-version: latest
 
     - name: Hackage index, Cache Key
-      id: cache-key
+      id: params
       run: |
         cabal update
-        echo "val=${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}-1" > "$GITHUB_OUTPUT"
+        echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}-1" > "$GITHUB_OUTPUT"
 
     - name: Restore Cache
       uses: actions/cache/restore@v4
       if: ${{ github.ref_name != 'ci-uc' }}
       with:
         path: ~/.cabal
-        key: ${{ steps.cache-key.outputs.val }}
+        key: ${{ steps.params.outputs.cache }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
           ${{ runner.os }}-build-
@@ -75,7 +75,7 @@ jobs:
       if: ${{ steps.inst-dep.outputs.installed == 'true' || steps.doctest-dep.outputs.installed == 'true' }}
       with:
         path: ~/.cabal
-        key: ${{ steps.cache-key.outputs.val }}
+        key: ${{ steps.params.outputs.cache }}
 
     - name: Build
       run: cabal build ${{ env.target-config }} all
