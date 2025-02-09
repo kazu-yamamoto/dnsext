@@ -11,6 +11,7 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
 import Data.IP
 import Network.Socket (PortNumber)
+import Network.TLS.ECH.Config
 
 ----------------------------------------------------------------
 
@@ -179,3 +180,24 @@ instance SPV SPV_DoHPath where
 
 spv_dohpath :: ShortByteString -> SvcParamValue
 spv_dohpath as = toSvcParamValue $ SPV_DoHPath as
+
+----------------------------------------------------------------
+
+newtype SPV_ECH = SPV_ECH
+    { ech_configs :: [ECHConfig]
+    }
+    deriving (Eq, Ord, Show)
+
+instance SPV SPV_ECH where
+    toSvcParamValue (SPV_ECH echcs) = toSPV siz $ \wbuf _ -> do
+        put16 wbuf $ fromIntegral siz
+        mapM_ (putECHConfig wbuf) echcs
+      where
+        siz = sum $ map sizeOfECHConfig echcs
+
+    fromSvcParamValue = fromSPV $ \_len rbuf ref -> do
+        len <- fromIntegral <$> get16 rbuf
+        SPV_ECH <$> sGetMany "ECH" len (\_ _ -> getECHConfig rbuf) rbuf ref
+
+spv_ech :: [ECHConfig] -> SvcParamValue
+spv_ech cs = toSvcParamValue $ SPV_ECH cs
