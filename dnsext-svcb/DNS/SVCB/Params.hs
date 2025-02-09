@@ -33,6 +33,9 @@ showValue SPK_ALPN v = case fromSvcParamValue v of
 showValue SPK_DoHPath v = case fromSvcParamValue v of
     Nothing -> ""
     Just x@(SPV_DoHPath _) -> show x
+showValue SPK_ECH v = case fromSvcParamValue v of
+    Nothing -> ""
+    Just x@(SPV_ECH _) -> show x
 showValue _ v = show v
 
 lookupSvcParam :: SvcParamKey -> SvcParams -> Maybe SvcParamValue
