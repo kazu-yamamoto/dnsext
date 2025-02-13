@@ -189,15 +189,13 @@ newtype SPV_ECH = SPV_ECH
     deriving (Eq, Ord, Show)
 
 instance SPV SPV_ECH where
-    toSvcParamValue (SPV_ECH echcs) = toSPV siz $ \wbuf _ -> do
-        put16 wbuf $ fromIntegral siz
-        mapM_ (putECHConfig wbuf) echcs
+    toSvcParamValue (SPV_ECH configs) = toSPV siz $ \wbuf _ ->
+        putECHConfigList wbuf configs
       where
-        siz = sum $ map sizeOfECHConfig echcs
+        siz = sizeOfECHConfigList configs
 
-    fromSvcParamValue = fromSPV $ \_len rbuf ref -> do
-        len <- fromIntegral <$> get16 rbuf
-        SPV_ECH <$> sGetMany "ECH" len (\_ _ -> getECHConfig rbuf) rbuf ref
+    fromSvcParamValue = fromSPV $ \_len rbuf _ ->
+        SPV_ECH <$> getECHConfigList rbuf
 
 spv_ech :: [ECHConfig] -> SvcParamValue
 spv_ech cs = toSvcParamValue $ SPV_ECH cs
