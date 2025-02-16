@@ -331,10 +331,7 @@ setGroupUser
     -> IO Bool
 setGroupUser user group = do
     root <- amIrootUser
-    if root
-        then do
-            getGroupEntryForName group >>= setGroupID . groupID
-            getUserEntryForName user >>= setUserID . userID
-            return True
-        else
-            return False
+    when root $ do
+        getGroupEntryForName group >>= setGroupID . groupID
+        getUserEntryForName user >>= setUserID . userID
+    return root
