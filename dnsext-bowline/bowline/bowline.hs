@@ -21,8 +21,8 @@ import System.Posix (
     getRealUserID,
     getUserEntryForName,
     groupID,
-    setGroupID,
-    setUserID,
+    setEffectiveUserID,
+    setEffectiveGroupID,
     userID,
  )
 import System.Timeout (timeout)
@@ -129,6 +129,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
+    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
@@ -322,6 +323,12 @@ getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
 amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
+recoverRoot :: IO Bool
+recoverRoot = do
+    root <- amIrootUser
+    when root $ setEffectiveUserID 0
+    return root
+
 -- | Setting user and group.
 setGroupUser
     :: String
@@ -332,6 +339,6 @@ setGroupUser
 setGroupUser user group = do
     root <- amIrootUser
     when root $ do
-        getGroupEntryForName group >>= setGroupID . groupID
-        getUserEntryForName user >>= setUserID . userID
+        setEffectiveGroupID . groupID =<< getGroupEntryForName group
+        setEffectiveUserID . userID =<< getUserEntryForName user
     return root
