@@ -133,7 +133,8 @@ test-suite spec
         dnsext-types,
         dnsext-utils,
         QuickCheck,
-        hspec
+        hspec,
+        hspec-expectations
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
