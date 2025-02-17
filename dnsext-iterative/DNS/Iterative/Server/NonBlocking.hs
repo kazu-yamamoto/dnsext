@@ -81,13 +81,13 @@ nbRecvN rcv ref n = do
         | len0 == n -> do
             writeIORef ref (0, id)
             return $ NBytes $ BS.concat $ build0 []
-        | len0 > n -> do
+        | len0 > n -> do  {- only wrong, over-sized case -}
             let bs = BS.concat $ build0 []
                 (ret, left) = BS.splitAt n bs
             writeIORef ref (BS.length left, (left :))
             return $ NBytes ret
         | otherwise -> do
-            bs1 <- rcv 2048 {- dummy arg before fix -}
+            bs1 <- rcv (n - len0)
             if BS.null bs1
                 then do
                     writeIORef ref (0, id)
@@ -99,7 +99,7 @@ nbRecvN rcv ref n = do
                         | len2 == n -> do
                             writeIORef ref (0, id)
                             return $ NBytes $ BS.concat $ build0 [bs1]
-                        | len2 > n -> do
+                        | len2 > n -> do  {- only wrong, over-sized case -}
                             let (bs3, left) = BS.splitAt (n - len0) bs1
                             writeIORef ref (BS.length left, (left :))
                             return $ NBytes $ BS.concat $ build0 [bs3]
