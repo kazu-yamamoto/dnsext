@@ -51,7 +51,7 @@ tcpServer VcServerConfig{..} env toCacher s = do
         let peerInfo = PeerInfoVC peersa
         (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock)
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            recv <- makeNBRecvVC maxSize $ DNS.recvTCP sock
+            recv <- makeNBRecvVCNoSize maxSize $ DNS.recvTCP sock
             let onRecv bs = do
                     checkReceived vc_slowloris_size vcTimer bs
                     incStatsTCP53 peersa (stats_ env)

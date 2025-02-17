@@ -10,6 +10,9 @@ module DNS.Iterative.Server.NonBlocking (
 
     -- * for testing
     makeNBRecvN,
+
+    -- * to fix
+    makeNBRecvVCNoSize,
 )
 where
 
@@ -30,13 +33,17 @@ type NBRecvN = Int -> IO NBRecvR
 
 type Buffer = [ByteString] -> [ByteString]
 
-makeNBRecvVC :: VCLimit -> Recv -> IO NBRecv
+{-# WARNING makeNBRecvVCNoSize "should not recv data not received by app for right socket readable state" #-}
+makeNBRecvVCNoSize :: VCLimit -> Recv -> IO NBRecv
+makeNBRecvVCNoSize lim rcv = makeNBRecvVC lim $ \_ -> rcv
+
+makeNBRecvVC :: VCLimit -> (Int -> IO ByteString) -> IO NBRecv
 makeNBRecvVC lim rcv = do
     ref <- newIORef Nothing
     nbrecvN <- makeNBRecvN "" rcv
     return $ nbRecvVC lim ref nbrecvN
 
-makeNBRecvN :: ByteString -> Recv -> IO NBRecvN
+makeNBRecvN :: ByteString -> (Int -> IO ByteString) -> IO NBRecvN
 makeNBRecvN "" rcv = nbRecvN rcv <$> newIORef (0, id)
 makeNBRecvN bs0 rcv = nbRecvN rcv <$> newIORef (len, (bs0 :))
   where
@@ -65,7 +72,7 @@ nbRecvVC lim ref nbrecvN = do
         Just len -> nbrecvN len
 
 nbRecvN
-    :: Recv
+    :: (Int -> IO ByteString)
     -> IORef (Int, Buffer)
     -> NBRecvN
 nbRecvN rcv ref n = do
@@ -80,7 +87,7 @@ nbRecvN rcv ref n = do
             writeIORef ref (BS.length left, (left :))
             return $ NBytes ret
         | otherwise -> do
-            bs1 <- rcv
+            bs1 <- rcv 2048 {- dummy arg before fix -}
             if BS.null bs1
                 then do
                     writeIORef ref (0, id)
