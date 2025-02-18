@@ -20,6 +20,7 @@ import qualified DNS.ThreadStats as TStat
 -- other packages
 import Network.Run.TCP
 import Network.Socket (getPeerName, getSocketName, waitReadSocketSTM)
+import qualified Network.Socket.ByteString as Network
 
 -- this package
 import DNS.Iterative.Internal (Env (..))
@@ -51,7 +52,7 @@ tcpServer VcServerConfig{..} env toCacher s = do
         let peerInfo = PeerInfoVC peersa
         (vcSess, toSender, fromX) <- initVcSession (waitReadSocketSTM sock)
         withVcTimer tmicro (atomically $ enableVcTimeout $ vcTimeout_ vcSess) $ \vcTimer -> do
-            recv <- makeNBRecvVC maxSize $ DNS.recvTCP sock
+            recv <- makeNBRecvVC maxSize $ Network.recv sock
             let onRecv bs = do
                     checkReceived vc_slowloris_size vcTimer bs
                     incStatsTCP53 peersa (stats_ env)
