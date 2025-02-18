@@ -37,13 +37,13 @@ type Buffer = [ByteString] -> [ByteString]
 makeNBRecvVCNoSize :: VCLimit -> Recv -> IO NBRecv
 makeNBRecvVCNoSize lim rcv = makeNBRecvVC lim $ \_ -> rcv
 
-makeNBRecvVC :: VCLimit -> (Int -> IO ByteString) -> IO NBRecv
+makeNBRecvVC :: VCLimit -> RecvN -> IO NBRecv
 makeNBRecvVC lim rcv = do
     ref <- newIORef Nothing
     nbrecvN <- makeNBRecvN "" rcv
     return $ nbRecvVC lim ref nbrecvN
 
-makeNBRecvN :: ByteString -> (Int -> IO ByteString) -> IO NBRecvN
+makeNBRecvN :: ByteString -> RecvN -> IO NBRecvN
 makeNBRecvN "" rcv = nbRecvN rcv <$> newIORef (0, id)
 makeNBRecvN bs0 rcv = nbRecvN rcv <$> newIORef (len, (bs0 :))
   where
@@ -72,7 +72,7 @@ nbRecvVC lim ref nbrecvN = do
         Just len -> nbrecvN len
 
 nbRecvN
-    :: (Int -> IO ByteString)
+    :: RecvN
     -> IORef (Int, Buffer)
     -> NBRecvN
 nbRecvN rcv ref n = do
@@ -81,7 +81,8 @@ nbRecvN rcv ref n = do
         | len0 == n -> do
             writeIORef ref (0, id)
             return $ NBytes $ BS.concat $ build0 []
-        | len0 > n -> do  {- only wrong, over-sized case -}
+        | len0 > n -> do
+            {- only wrong, over-sized case -}
             let bs = BS.concat $ build0 []
                 (ret, left) = BS.splitAt n bs
             writeIORef ref (BS.length left, (left :))
@@ -99,7 +100,8 @@ nbRecvN rcv ref n = do
                         | len2 == n -> do
                             writeIORef ref (0, id)
                             return $ NBytes $ BS.concat $ build0 [bs1]
-                        | len2 > n -> do  {- only wrong, over-sized case -}
+                        | len2 > n -> do
+                            {- only wrong, over-sized case -}
                             let (bs3, left) = BS.splitAt (n - len0) bs1
                             writeIORef ref (BS.length left, (left :))
                             return $ NBytes $ BS.concat $ build0 [bs3]
