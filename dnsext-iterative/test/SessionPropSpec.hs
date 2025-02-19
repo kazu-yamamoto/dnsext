@@ -153,7 +153,7 @@ dumpSession VcSession{..} = do
     (e, p, a) <- atomically $ (,,) <$> readTVar vcEof_ <*> readTVar vcPendings_ <*> vcRespAvail_
     putStrLn $ unwords ["eof:", show e, "pendings:", show p, "avail:", show a]
 
-getSend :: IO (IO [ByteString], Send)
+getSend :: IO (IO [ByteString], BS -> Peer -> IO ())
 getSend = do
     ref <- newIORef []
     pure (readIORef ref, \x _ -> sstep ref x)
@@ -170,7 +170,7 @@ dummyPeer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
 {- FOURMOLU_DISABLE -}
 eventsRunner
     :: (TaskNum -> String) -> (TaskNum -> IO ()) -> IO ()
-    -> IO (IO a, Event -> IO (), STM (), RecvPI)
+    -> IO (IO a, Event -> IO (), STM (), IO (BS, Peer))
 eventsRunner showTaskNum kickSender enableTimeout = do
     evQ   <- newTQueueIO
     recvQ <- newTQueueIO

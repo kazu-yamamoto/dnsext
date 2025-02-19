@@ -29,8 +29,8 @@ module DNS.Iterative.Server.Pipeline (
     receiverLogic',
     logLn,
     retryUntil,
-    Send,
-    RecvPI,
+    BS,
+    Peer,
 ) where
 
 -- GHC packages
@@ -224,8 +224,8 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
-type RecvPI = IO (ByteString, PeerInfo)
-type Send = ByteString -> PeerInfo -> IO ()
+type BS = ByteString
+type Peer = PeerInfo
 
 type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input ByteString
 
@@ -241,7 +241,7 @@ receiverVC
     :: String
     -> Env
     -> VcSession
-    -> RecvPI
+    -> IO (BS, Peer)
     -> (ToCacher -> IO ())
     -> MkInput
     -> IO VcFinished
@@ -303,12 +303,12 @@ receiverVCnonBlocking name env vcs@VcSession{..} peerInfo recv onRecv toCacher m
             toCacher $ mkInput_ bs peerInfo (VcPendingOp{vpReqNum = i, vpDelete = delPending}) ts
 
 receiverLogic
-    :: Env -> SockAddr -> RecvPI -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
+    :: Env -> SockAddr -> IO (BS, Peer) -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO ()
 receiverLogic env mysa recv toCacher toSender proto =
     handledLoop env "receiverUDP" $ void $ receiverLogic' env mysa recv toCacher toSender proto
 
 receiverLogic'
-    :: Env -> SockAddr -> RecvPI -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO Bool
+    :: Env -> SockAddr -> IO (BS, Peer) -> (ToCacher -> IO ()) -> (ToSender -> IO ()) -> SocketProtocol -> IO Bool
 receiverLogic' env mysa recv toCacher toSender proto = do
     (bs, peerInfo) <- recv
     ts <- currentTimeUsec_ env
@@ -321,14 +321,14 @@ receiverLogic' env mysa recv toCacher toSender proto = do
 noPendingOp :: VcPendingOp
 noPendingOp = VcPendingOp{vpReqNum = 0, vpDelete = pure ()}
 
-getSendVC :: VcTimer -> Send -> Send
+getSendVC :: VcTimer -> (BS -> Peer -> IO ()) -> BS -> Peer -> IO ()
 getSendVC timer send bs peerInfo = resetVcTimer timer >> send bs peerInfo
 
 senderVC
     :: String
     -> Env
     -> VcSession
-    -> Send
+    -> (BS -> Peer -> IO ())
     -> IO FromX
     -> IO VcFinished
 senderVC name env vcs send fromX = loop `E.catch` onError
@@ -343,11 +343,11 @@ senderVC name env vcs send fromX = loop `E.catch` onError
     step = E.bracket fromX finalize $ \(Output bs _ peerInfo) -> send bs peerInfo
     finalize (Output _ VcPendingOp{..} _) = vpDelete
 
-senderLogic :: Env -> Send -> IO FromX -> IO ()
+senderLogic :: Env -> (BS -> Peer -> IO ()) -> IO FromX -> IO ()
 senderLogic env send fromX =
     handledLoop env "senderUDP" $ senderLogic' send fromX
 
-senderLogic' :: Send -> IO FromX -> IO ()
+senderLogic' :: (BS -> Peer -> IO ()) -> IO FromX -> IO ()
 senderLogic' send fromX = do
     Output bs _ peerInfo <- fromX
     send bs peerInfo

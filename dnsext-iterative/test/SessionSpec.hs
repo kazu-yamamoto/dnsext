@@ -160,7 +160,7 @@ getToCacher factor = do
 
 {- FOUMOLU_ENABLE -}
 
-getRecv :: [ByteString] -> IO RecvPI
+getRecv :: [ByteString] -> IO (IO (BS, Peer))
 getRecv ws = do
     ref <- newIORef ws
     pure $ rstep ref
@@ -171,7 +171,7 @@ getRecv ws = do
             [] -> pure (mempty, dummyPeer)
             c : cs -> writeIORef ref cs $> (c, dummyPeer)
 
-getSend :: IO (IO [ByteString], Send)
+getSend :: IO (IO [ByteString], BS -> Peer -> IO ())
 getSend = do
     ref <- newIORef []
     pure (readIORef ref, \x _ -> sstep ref x)
