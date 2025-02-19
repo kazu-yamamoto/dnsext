@@ -37,8 +37,6 @@ module DNS.Iterative.Server (
     -- * Tests
     BS,
     Peer,
-    RecvPI,
-    Send,
     VcTimer (..),
     VcSession (..),
     VcFinished (..),
