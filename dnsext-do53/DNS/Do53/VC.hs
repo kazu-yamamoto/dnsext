@@ -41,7 +41,7 @@ tcpPersistentResolver ri@ResolveInfo{..} body = E.bracket open close $ \sock -> 
     open = openTCP rinfoIP rinfoPort
 
 -- | Making a persistent resolver.
-vcPersistentResolver :: NameTag -> Send -> Recv -> PersistentResolver
+vcPersistentResolver :: NameTag -> (BS -> IO ()) -> IO BS -> PersistentResolver
 vcPersistentResolver tag send recv ResolveInfo{..} body = do
     inpQ <- newTQueueIO
     ref <- newIORef emp

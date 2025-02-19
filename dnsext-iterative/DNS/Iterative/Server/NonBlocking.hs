@@ -29,16 +29,16 @@ data NBRecvR = EOF ByteString | NotEnough | NBytes ByteString
 type Buffer = [ByteString] -> [ByteString]
 
 {-# WARNING makeNBRecvVCNoSize "should not recv data not received by app for right socket readable state" #-}
-makeNBRecvVCNoSize :: VCLimit -> Recv -> IO (IO NBRecvR)
+makeNBRecvVCNoSize :: VCLimit -> (IO BS) -> IO (IO NBRecvR)
 makeNBRecvVCNoSize lim rcv = makeNBRecvVC lim $ \_ -> rcv
 
-makeNBRecvVC :: VCLimit -> RecvN -> IO (IO NBRecvR)
+makeNBRecvVC :: VCLimit -> (Int -> IO BS) -> IO (IO NBRecvR)
 makeNBRecvVC lim rcv = do
     ref <- newIORef Nothing
     nbrecvN <- makeNBRecvN "" rcv
     return $ nbRecvVC lim ref nbrecvN
 
-makeNBRecvN :: ByteString -> RecvN -> IO (Int -> IO NBRecvR)
+makeNBRecvN :: ByteString -> (Int -> IO BS) -> IO (Int -> IO NBRecvR)
 makeNBRecvN "" rcv = nbRecvN rcv <$> newIORef (0, id)
 makeNBRecvN bs0 rcv = nbRecvN rcv <$> newIORef (len, (bs0 :))
   where
@@ -67,7 +67,7 @@ nbRecvVC lim ref nbrecvN = do
         Just len -> nbrecvN len
 
 nbRecvN
-    :: RecvN
+    :: (Int -> IO BS)
     -> IORef (Int, Buffer)
     -> (Int -> IO NBRecvR)
 nbRecvN rcv ref n = do

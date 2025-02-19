@@ -60,7 +60,7 @@ makeAddrInfo a p =
 
 ----------------------------------------------------------------
 
--- TCP and QUIC has its own RecvN.
+-- TCP and QUIC has its own RecvN (i.e., Int -> IO BS).
 -- TLS has Recv. This must be converted to RecvN by makeRecvN in the
 -- "recv" package. If not converted, a message is also read when
 -- obtaining the length of the message!
@@ -68,7 +68,7 @@ makeAddrInfo a p =
 -- | Receiving data from a virtual circuit.
 -- This function returns exactly-necessary-length data.
 -- If necessary-length data is not received, an exception is thrown.
-recvVC :: VCLimit -> Recv -> Recv
+recvVC :: VCLimit -> IO BS -> IO BS
 recvVC lim rcv = do
     recvN <- makeRecvN "" rcv
     b2 <- recvN 2
@@ -93,7 +93,7 @@ decodeVCLength bs = case BS.unpack bs of
     _ -> 0 -- never reached
 
 -- | Receiving data from a TCP socket.
-recvTCP :: Socket -> Recv
+recvTCP :: Socket -> IO BS
 recvTCP sock = recv sock 2048
 
 ----------------------------------------------------------------
@@ -104,13 +104,13 @@ recvTCP sock = recv sock 2048
 -- VC connection, and then loop to collect the results, use 'encodeVC'
 -- to prefix each message with a length, and then use 'sendAll' to send
 -- a concatenated batch of the resulting encapsulated messages.
-sendVC :: SendMany -> Send
+sendVC :: ([BS] -> IO ()) -> BS -> IO ()
 sendVC writev bs = do
     let lb = encodeVCLength $ BS.length bs
     writev [lb, bs]
 
 -- | Sending data to a TCP socket.
-sendTCP :: Socket -> SendMany
+sendTCP :: Socket -> [BS] -> IO ()
 sendTCP = NSB.sendMany
 
 -- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a VC
