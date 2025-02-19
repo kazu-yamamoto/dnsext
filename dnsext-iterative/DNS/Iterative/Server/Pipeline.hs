@@ -335,7 +335,7 @@ senderVC
     :: String
     -> Env
     -> VcSession
-    -> Send
+    -> (BS -> Peer -> IO ())
     -> IO FromX
     -> IO VcFinished
 senderVC name env vcs send fromX = loop `E.catch` onError
