@@ -185,7 +185,7 @@ tcpResolver ri@ResolveInfo{..} q qctl =
     open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> Send -> Recv -> OneshotResolver
+vcResolver :: String -> (BS -> IO ()) -> IO BS -> OneshotResolver
 vcResolver proto send recv ri@ResolveInfo{rinfoActions = ResolveActions{..}} q _qctl = do
     unless ractionShortLog $ ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
