@@ -272,7 +272,7 @@ receiverVCnonBlocking
     -> Env
     -> VcSession
     -> PeerInfo
-    -> NBRecv
+    -> IO NBRecvR
     -> (ByteString -> IO ())
     -> (ToCacher -> IO ())
     -> MkInput
