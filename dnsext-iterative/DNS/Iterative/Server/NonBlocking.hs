@@ -36,22 +36,22 @@ type NBRecvN = Int -> IO NBRecvR
 type Buffer = [ByteString] -> [ByteString]
 
 {-# WARNING makeNBRecvVCNoSize "should not recv data not received by app for right socket readable state" #-}
-makeNBRecvVCNoSize :: VCLimit -> Recv -> IO NBRecv
+makeNBRecvVCNoSize :: VCLimit -> Recv -> IO (IO NBRecvR)
 makeNBRecvVCNoSize lim rcv = makeNBRecvVC lim $ \_ -> rcv
 
-makeNBRecvVC :: VCLimit -> RecvN -> IO NBRecv
+makeNBRecvVC :: VCLimit -> RecvN -> IO (IO NBRecvR)
 makeNBRecvVC lim rcv = do
     ref <- newIORef Nothing
     nbrecvN <- makeNBRecvN "" rcv
     return $ nbRecvVC lim ref nbrecvN
 
-makeNBRecvN :: ByteString -> RecvN -> IO NBRecvN
+makeNBRecvN :: ByteString -> RecvN -> IO (Int -> IO NBRecvR)
 makeNBRecvN "" rcv = nbRecvN rcv <$> newIORef (0, id)
 makeNBRecvN bs0 rcv = nbRecvN rcv <$> newIORef (len, (bs0 :))
   where
     len = BS.length bs0
 
-nbRecvVC :: VCLimit -> IORef (Maybe Int) -> NBRecvN -> NBRecv
+nbRecvVC :: VCLimit -> IORef (Maybe Int) -> (Int -> IO NBRecvR) -> IO NBRecvR
 nbRecvVC lim ref nbrecvN = do
     mi <- readIORef ref
     case mi of
@@ -76,7 +76,7 @@ nbRecvVC lim ref nbrecvN = do
 nbRecvN
     :: RecvN
     -> IORef (Int, Buffer)
-    -> NBRecvN
+    -> (Int -> IO NBRecvR)
 nbRecvN rcv ref n = do
     (len0, build0) <- readIORef ref
     if
