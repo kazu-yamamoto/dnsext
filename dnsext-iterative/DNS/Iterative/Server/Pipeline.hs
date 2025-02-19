@@ -29,6 +29,8 @@ module DNS.Iterative.Server.Pipeline (
     receiverLogic',
     logLn,
     retryUntil,
+    BS,
+    Peer,
     Send,
     RecvPI,
 ) where
@@ -224,7 +226,12 @@ record env Input{..} reply rspWire = do
 
 ----------------------------------------------------------------
 
+type BS = ByteString
+type Peer = PeerInfo
+
+{-# WARNING RecvPI "use IO (BS, Peer)" #-}
 type RecvPI = IO (ByteString, PeerInfo)
+{-# WARNING Send "use (BS -> Peer -> IO ())" #-}
 type Send = ByteString -> PeerInfo -> IO ()
 
 type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input ByteString

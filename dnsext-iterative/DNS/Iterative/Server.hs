@@ -35,6 +35,8 @@ module DNS.Iterative.Server (
     getStats,
 
     -- * Tests
+    BS,
+    Peer,
     RecvPI,
     Send,
     VcTimer (..),
