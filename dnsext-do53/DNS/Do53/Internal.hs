@@ -1,5 +1,6 @@
 module DNS.Do53.Internal (
     -- * IO types
+    BS,
     Recv,
     RecvN,
     Send,

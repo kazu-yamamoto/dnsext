@@ -34,6 +34,7 @@ module DNS.Do53.Types (
     PersistentResolver,
 
     -- * IO
+    BS,
     Recv,
     RecvN,
     Send,
@@ -300,10 +301,16 @@ rsso _ = return ()
 
 ----------------------------------------------------------------
 
+type BS = ByteString
+
+{-# WARNING Recv "use IO BS" #-}
 type Recv = IO ByteString
 
+{-# WARNING RecvN "use (Int -> IO BS)" #-}
 type RecvN = Int -> IO ByteString
 
+{-# WARNING Send "use (BS -> IO ())" #-}
 type Send = ByteString -> IO ()
 
+{-# WARNING SendMany "use ([BS] -> IO ())" #-}
 type SendMany = [ByteString] -> IO ()
