@@ -2,9 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module DNS.Iterative.Server.NonBlocking (
-    -- * Non-blocking RecvN
-    NBRecv,
-    NBRecvN,
+    -- * Non-blocking size specified recv
     NBRecvR (..),
     makeNBRecvVC,
 
@@ -27,11 +25,6 @@ import DNS.Types
 
 data NBRecvR = EOF ByteString | NotEnough | NBytes ByteString
     deriving (Eq, Show)
-
-{-# WARNING NBRecv "use (IO NBRecvR)" #-}
-type NBRecv = IO NBRecvR
-{-# WARNING NBRecvN "use (Int -> IO NBRecvR)" #-}
-type NBRecvN = Int -> IO NBRecvR
 
 type Buffer = [ByteString] -> [ByteString]
 
