@@ -73,10 +73,10 @@ type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
 
 new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
-new out = toIO . new' out
+new oh = toIO . new' oh
 
 new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' = newHandleLogger queueBound . handle
+new' oh lv = newHandleLogger queueBound (pure $ handle oh) (\_ -> pure ()) lv
 
 handle :: OutHandle -> Handle
 handle Stdout = stdout
@@ -95,13 +95,15 @@ toIO action = do
 
 {- FOURMOLU_DISABLE -}
 newHandleLogger
-    :: Natural -> Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
-newHandleLogger qsize outFh loggerLevel = do
+    :: Natural -> IO Handle -> (Handle -> IO ())
+    -> Level -> IO (Logger, PutLines STM, KillLogger)
+newHandleLogger qsize open close loggerLevel = do
+    outFh <- open
     hSetBuffering outFh LineBuffering
     colorize  <- hSupportsANSIColor outFh
     inQ       <- newTBQueueIO qsize
     mvar      <- newEmptyMVar
-    let logger  = loggerLoop inQ mvar
+    let logger  = loggerLoop inQ mvar outFh
         put     = putLines colorize inQ
         kill    = killLogger inQ mvar
     return (logger, put, kill)
@@ -118,12 +120,13 @@ newHandleLogger qsize outFh loggerLevel = do
 
     loggerLoop inQ mvar = loop
       where
-        loop = do
+        loop outFh = do
             me <- atomically (readTBQueue inQ)
-            me (putMVar mvar ()) $ \c xs -> logit c xs >> loop
+            let close' = close outFh >> putMVar mvar ()
+            me close' $ \c xs -> logit outFh c xs >> loop outFh
 
-    logit Nothing  xs = mapM_ (hPutStrLn outFh) xs
-    logit (Just c) xs = do
+    logit outFh Nothing  xs = mapM_ (hPutStrLn outFh) xs
+    logit outFh (Just c) xs = do
         hSetSGR outFh [SetColor Foreground Vivid c]
         mapM_ (hPutStrLn outFh) xs
         hSetSGR outFh [Reset]
