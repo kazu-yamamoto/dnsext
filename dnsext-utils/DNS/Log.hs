@@ -9,7 +9,7 @@ module DNS.Log (
     pattern WARN,
     pattern SYSTEM,
     --
-    Output (..),
+    OutHandle (..),
     Logger,
     PutLines,
     KillLogger,
@@ -60,11 +60,11 @@ pattern SYSTEM   :: Level
 pattern SYSTEM   = ERR
 {- FOURMOLU_ENABLE -}
 
-data Output
+data OutHandle
     = Stdout
     | Stderr
 
-instance Show Output where
+instance Show OutHandle where
     show Stdout = "<stdout>"
     show Stderr = "<stderr>"
 
@@ -72,13 +72,13 @@ type Logger = IO ()
 type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
 
-new :: Output -> Level -> IO (Logger, PutLines IO, KillLogger)
+new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
 new out = toIO . new' out
 
-new' :: Output -> Level -> IO (Logger, PutLines STM, KillLogger)
+new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
 new' = newHandleLogger queueBound . handle
 
-handle :: Output -> Handle
+handle :: OutHandle -> Handle
 handle Stdout = stdout
 handle Stderr = stderr
 
