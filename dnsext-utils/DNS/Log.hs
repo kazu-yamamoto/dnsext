@@ -4,6 +4,7 @@ module DNS.Log (
     new,
     new',
     with,
+    fileWith,
     --
     Level (..),
     pattern DEMO,
@@ -25,8 +26,11 @@ import Numeric.Natural
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
+    IOMode (AppendMode),
+    hClose,
     hPutStrLn,
     hSetBuffering,
+    openFile,
     stderr,
     stdout,
  )
@@ -87,6 +91,9 @@ with oh = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ())
 handle :: OutHandle -> Handle
 handle Stdout = stdout
 handle Stderr = stderr
+
+fileWith :: FilePath -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+fileWith fn lv = withHandleLogger queueBound (openFile fn AppendMode) hClose lv
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
