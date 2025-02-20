@@ -3,6 +3,7 @@
 module DNS.Log (
     new,
     new',
+    with,
     --
     Level (..),
     pattern DEMO,
@@ -78,7 +79,10 @@ new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
 new oh = toIO . new' oh
 
 new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' oh lv = fst <$> newHandleLogger queueBound (pure $ handle oh) (\_ -> pure ()) lv
+new' oh lv = with oh lv $ \lg p k _ -> pure (lg, p, k)
+
+with :: OutHandle -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+with oh = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ())
 
 handle :: OutHandle -> Handle
 handle Stdout = stdout
@@ -96,10 +100,10 @@ toIO action = do
     return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
 {- FOURMOLU_DISABLE -}
-newHandleLogger
+withHandleLogger
     :: Natural -> IO Handle -> (Handle -> IO ())
-    -> Level -> IO ((Logger, PutLines STM, KillLogger), ReopenLogger)
-newHandleLogger qsize open close loggerLevel = do
+    -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+withHandleLogger qsize open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh
     inQ       <- newTBQueueIO qsize
@@ -108,7 +112,7 @@ newHandleLogger qsize open close loggerLevel = do
         put     = putLines colorize inQ
         kill    = killLogger inQ mvar
         reopen  = reopenLogger colorize inQ
-    return ((logger, put, kill), reopen)
+    k logger put kill reopen
   where
     killLogger inQ mvar = do
         atomically                              $ writeTBQueue inQ $ \bk _  _  -> bk
