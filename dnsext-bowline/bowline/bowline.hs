@@ -6,7 +6,7 @@
 module Main where
 
 -- GHC
-import Control.Concurrent (ThreadId, killThread, threadDelay)
+import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Concurrent.STM
 import Control.Exception (bracket_, finally)
@@ -145,7 +145,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
-    _tidL <- runLogger
+    runLogger
     tidA <- API.new conf mng
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
@@ -250,17 +250,17 @@ getCache tc@TimeCache{..} Config{..} = do
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO (), IO ())
+getLogger :: Config -> IO (IO (), Log.PutLines IO, IO (), IO ())
 getLogger Config{..}
     | cnf_log = do
-        let result a p k r = return (Just <$> TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
+        let result a p k r = return (void $ TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
             handle = Log.with cnf_log_output cnf_log_level $ \a p k _ -> result a p k (return ())
             file fn = Log.fileWith fn cnf_log_level result
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
             n = return ()
-        return (return Nothing, p, n, n)
+        return (return (), p, n, n)
 
 ----------------------------------------------------------------
 
