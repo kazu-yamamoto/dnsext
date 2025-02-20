@@ -28,6 +28,7 @@ data Config = Config
     { cnf_user :: String
     , cnf_group :: String
     , cnf_log :: Bool
+    , cnf_log_file :: Maybe FilePath
     , cnf_log_output :: Log.OutHandle
     , cnf_log_level :: Log.Level
     , cnf_short_log :: Bool
@@ -85,6 +86,7 @@ defaultConfig =
         { cnf_user = "root"
         , cnf_group = "wheel"
         , cnf_log = True
+        , cnf_log_file = Nothing
         , cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
         , cnf_short_log = False
@@ -191,6 +193,7 @@ makeConfig def conf =
         { cnf_user = get "user" cnf_user
         , cnf_group = get "group" cnf_group
         , cnf_log = get "log" cnf_log
+        , cnf_log_file = get "log-file" cnf_log_file
         , cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
         , cnf_short_log = get "short-log" cnf_short_log
