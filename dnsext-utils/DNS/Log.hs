@@ -65,20 +65,22 @@ data Output
     | Stderr
 
 instance Show Output where
-    show Stdout = "Stdout"
-    show Stderr = "Stderr"
+    show Stdout = "<stdout>"
+    show Stderr = "<stderr>"
 
 type Logger = IO ()
 type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
 
 new :: Output -> Level -> IO (Logger, PutLines IO, KillLogger)
-new Stdout l = toIO $ newHandleLogger queueBound stdout l
-new Stderr l = toIO $ newHandleLogger queueBound stderr l
+new out = toIO . new' out
 
 new' :: Output -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' Stdout = newHandleLogger queueBound stdout
-new' Stderr = newHandleLogger queueBound stderr
+new' = newHandleLogger queueBound . handle
+
+handle :: Output -> Handle
+handle Stdout = stdout
+handle Stderr = stderr
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
