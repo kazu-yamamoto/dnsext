@@ -29,7 +29,6 @@ module DNS.Iterative.Server.Pipeline (
     receiverLogic',
     logLn,
     retryUntil,
-    BS,
 ) where
 
 -- GHC packages
