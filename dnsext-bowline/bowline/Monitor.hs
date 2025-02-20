@@ -202,7 +202,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         "flush_all" : _       -> Just FlushAll
         "reopen_log" : _ -> Just ReopenLog
         "exit" : _ -> Just Exit
-        "quit-server" : _ -> Just Quit
+        "quit_server" : _ -> Just Quit
         "help" : w : _ -> Just $ Help $ Just w
         "help" : [] -> Just $ Help Nothing
         _ -> Nothing
@@ -263,7 +263,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
             , ("flush_all",       ("flush_all", "remove all cache"))
             , ("reopen_log",      ("reopen_log", "reopen logfile when file logging"))
             , ("exit",            ("exit", "exit this management session"))
-            , ("quit-server",     ("quit-server", "quit this server"))
+            , ("quit_server",     ("quit_server", "quit this server"))
             , ("help",            ("help", "show this help"))
             ]
 {- FOURMOLU_ENABLE -}
