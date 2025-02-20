@@ -161,7 +161,7 @@ getSend = do
     ins x s = (x : s, ())
     sstep ref x = atomicModifyIORef' ref (ins x)
 
-dummyPeer :: PeerInfo
+dummyPeer :: Peer
 dummyPeer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
 
 ------------------------------------------------------------

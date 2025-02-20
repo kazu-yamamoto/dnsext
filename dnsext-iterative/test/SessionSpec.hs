@@ -116,7 +116,7 @@ vcSession waitRead tmicro ws = do
 ---
 
 {- FOUMOLU_DISABLE -}
-runSession :: Int -> IO (ByteString, PeerInfo) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
+runSession :: Int -> IO (ByteString, Peer) -> IO (STM ()) -> Int -> IO ((VcFinished, VcFinished), [ByteString])
 runSession factor recv0 waitRead tmicro = withVc waitRead tmicro $ \(vcSess, toSender, fromX) timer -> do
     env <- newEmptyEnv
     toCacher <- getToCacher factor
@@ -179,5 +179,5 @@ getSend = do
     ins x s = (x : s, ())
     sstep ref x = atomicModifyIORef' ref (ins x)
 
-dummyPeer :: PeerInfo
+dummyPeer :: Peer
 dummyPeer = PeerInfoVC $ SockAddrInet 12345 0x0100007f
