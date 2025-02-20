@@ -110,7 +110,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     --
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger) <- getLogger conf
+    (runLogger, putLines, killLogger, _reopen) <- getLogger conf
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -251,15 +251,17 @@ getCache tc@TimeCache{..} Config{..} = do
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO ())
+getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO (), IO ())
 getLogger Config{..}
     | cnf_log = do
-        (r, p, f) <- Log.new cnf_log_output cnf_log_level
-        return (Just <$> TStat.forkIO "logger" r, p, f)
+        let result a p k r = return (Just <$> TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
+            handle = Log.with cnf_log_output cnf_log_level $ \a p k _ -> result a p k (return ())
+            file fn = Log.fileWith fn cnf_log_level result
+        maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
-            f = return ()
-        return (return Nothing, p, f)
+            n = return ()
+        return (return Nothing, p, n, n)
 
 ----------------------------------------------------------------
 
