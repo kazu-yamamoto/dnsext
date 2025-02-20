@@ -55,7 +55,7 @@ import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 import Config
 import SockOpt
 import SocketUtil (ainfosSkipError)
-import Types (CacheControl (..), Control (..))
+import Types (CacheControl (..), Control (..), QuitCmd (..))
 
 monitorSockets :: S.PortNumber -> [S.HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
@@ -82,7 +82,7 @@ data Command
     | ReopenLog
     | Noop
     | Exit
-    | Quit
+    | QuitCmd QuitCmd
     | Help (Maybe String)
     deriving (Show)
 
@@ -204,7 +204,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         "flush_all"       : _             -> Just   FlushAll
         "reopen_log"      : _             -> Just   ReopenLog
         "exit"            : _             -> Just   Exit
-        "quit_server"     : _             -> Just   Quit
+        "quit_server"     : _             -> Just $ QuitCmd Quit
         "help"            : w  : _        -> Just $ Help $ Just w
         "help" : []                       -> Just $ Help   Nothing
         _ : _                             -> Nothing
@@ -212,8 +212,8 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
     getShowParam' = getShowParam conf srvInfo monInfo
     outLn = hPutStrLn outH
 
-    runCmd Quit = quitServer $> True
-    runCmd Exit = return True
+    runCmd (QuitCmd Quit) = quitServer $> True
+    runCmd  Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
         dispatch  Param = mapM_ outLn =<< getShowParam'
