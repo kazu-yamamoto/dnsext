@@ -89,6 +89,7 @@ instance Read Event where
             (hd, tl) = splitAt (length pre) s
 
 type MilliSec = Int
+type BS = ByteString
 
 ------------------------------------------------------------
 

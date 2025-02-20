@@ -33,6 +33,8 @@ spec = do
     waitOutputSpec
     sessionSpec
 
+type BS = ByteString
+
 withVc
     :: IO (STM ())
     -> Int
