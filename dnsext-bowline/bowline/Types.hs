@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Types where
 
 import Control.Concurrent.STM
@@ -48,3 +49,6 @@ newControl = do
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
             }
+
+quitCmd :: Control -> Command -> IO ()
+quitCmd Control{..} cmd = setCommand cmd >> quitServer
