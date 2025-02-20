@@ -9,6 +9,7 @@ module Main where
 import Control.Concurrent (ThreadId, killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Concurrent.STM
+import Control.Exception (bracket_, finally)
 import Control.Monad (guard, when)
 import Data.ByteString.Builder
 import Data.Functor
@@ -21,16 +22,14 @@ import System.Posix (
     getRealUserID,
     getUserEntryForName,
     groupID,
-    setEffectiveUserID,
     setEffectiveGroupID,
+    setEffectiveUserID,
     userID,
  )
 import System.Timeout (timeout)
 import Text.Printf (printf)
 
 -- dnsext-* deps
-
-import Control.Exception (finally)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -110,7 +109,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     --
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger, _reopen) <- getLogger conf
+    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -136,7 +135,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
-    mng <- getControl env workerStats mng0
+    mng <- getControl env workerStats mng0{reopenLog = withRoot cnf_user cnf_group reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
@@ -346,3 +345,6 @@ setGroupUser user group = do
         setEffectiveGroupID . groupID =<< getGroupEntryForName group
         setEffectiveUserID . userID =<< getUserEntryForName user
     return root
+
+withRoot :: String -> String -> IO a -> IO a
+withRoot user group act = bracket_ (void recoverRoot) (void $ setGroupUser user group) act
