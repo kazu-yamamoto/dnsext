@@ -24,6 +24,7 @@ data Control = Control
     { getStats :: IO Builder
     , getWStats :: IO Builder
     , cacheControl :: CacheControl
+    , reopenLog :: IO ()
     , quitServer :: IO ()
     , waitQuit :: STM ()
     , getCommandAndClear :: IO Command
@@ -42,6 +43,7 @@ newControl = do
             , getWStats = return mempty
             , quitServer = return ()
             , cacheControl = emptyCacheControl
+            , reopenLog = return ()
             , waitQuit = return ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
