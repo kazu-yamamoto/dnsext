@@ -136,16 +136,14 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
     mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     (mas, monInfo) <- Mon.bindMonitor conf env
-    let srvinfo name sockets = do
-            sas <- mapM getSocketName sockets
-            pure $ unwords $ (name ++ ":") : map show sas
-    srvInfo <- sequence [srvinfo n sks | (n, _mk, sks) <- addrs]
-    let monitor = Mon.monitors conf env mng srvInfo mas monInfo
     --
     void $ setGroupUser conf
     -- actions list for threads
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
+    let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
+        monitors srvInfo = Mon.monitors conf env mng srvInfo mas monInfo
+    monitor <- monitors <$> mapM (\(n, _mk, sks) -> srvInfo1 n <$> mapM getSocketName sks) addrs
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
