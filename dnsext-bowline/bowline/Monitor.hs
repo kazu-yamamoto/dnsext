@@ -182,30 +182,29 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         match t = show t == us
         types = map DNS.toTYPE [1 .. 512]
 
-    parseCmd [] = Just Noop
-    parseCmd ws = case ws of
-        "param" : _ -> Just Param
-        "find" : as -> Just $ Find as
-        ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
-        "stats" : _ -> Just Stats
-        "t" : as -> Just $ TStats as
-        "tstats" : as -> Just $ TStats as
-        "w" : _ -> Just WStats
-        "wstats" : _ -> Just WStats
-        "expire" : args -> case args of
-            [] -> Just $ Expire 0
-            x : _ -> Expire <$> readMaybe x
-        "flush" : n : _ -> Just $ Flush $ DNS.fromRepresentation n
-        "flush_type" : n : ty : _ -> FlushType (DNS.fromRepresentation n) <$> readMaybe ty
-        "flush_bogus" : _     -> Just FlushBogus
-        "flush_negative" : _  -> Just FlushNegative
-        "flush_all" : _       -> Just FlushAll
-        "reopen_log" : _ -> Just ReopenLog
-        "exit" : _ -> Just Exit
-        "quit_server" : _ -> Just Quit
-        "help" : w : _ -> Just $ Help $ Just w
-        "help" : [] -> Just $ Help Nothing
-        _ -> Nothing
+    parseCmd []  = Just Noop
+    parseCmd ws  = case ws of
+        "param"           : _             -> Just   Param
+        "find"            : as            -> Just $ Find as
+        "lookup"          : n  : typ : _  -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
+        "stats"           : _             -> Just   Stats
+        "t"               : as            -> Just $ TStats as
+        "tstats"          : as            -> Just $ TStats as
+        "w"               : _             -> Just   WStats
+        "wstats"          : _             -> Just   WStats
+        "expire"          : []            -> Just $ Expire 0
+        "expire"          : x  : _        -> Expire <$> readMaybe x
+        "flush"           : n  : _        -> Just $ Flush $ DNS.fromRepresentation n
+        "flush_type"      : n  : ty : _   -> FlushType (DNS.fromRepresentation n) <$> readMaybe ty
+        "flush_bogus"     : _             -> Just   FlushBogus
+        "flush_negative"  : _             -> Just   FlushNegative
+        "flush_all"       : _             -> Just   FlushAll
+        "reopen_log"      : _             -> Just   ReopenLog
+        "exit"            : _             -> Just   Exit
+        "quit_server"     : _             -> Just   Quit
+        "help"            : w  : _        -> Just $ Help $ Just w
+        "help" : []                       -> Just $ Help   Nothing
+        _ : _                             -> Nothing
 
     getShowParam' = getShowParam conf srvInfo monInfo
     outLn = hPutStrLn outH
