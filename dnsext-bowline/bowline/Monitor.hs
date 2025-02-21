@@ -109,6 +109,28 @@ bindMonitor Config{..} env = do
         logLn Log.INFO monInfo1 $> ((sock, a), monInfo1)
 {- FOURMOLU_ENABLE -}
 
+setSocketKeepAlive :: Socket -> Int -> IO ()
+setSocketKeepAlive sock interval = do
+    S.setSocketOption sock TcpKeepIdle interval
+    S.setSocketOption sock TcpKeepInterval interval
+    S.setSocketOption sock KeepAlive 1
+
+keepAliveAvail :: a -> a -> a
+keepAliveAvail na av
+    | not avail = na
+    | otherwise = av
+  where
+    avail = null keepNotAvails
+
+{- FOURMOLU_DISABLE -}
+keepNotAvails :: [SocketOption]
+keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
+  where
+    addAvail so@(SockOpt lv nm) us
+        | lv >= 0 && nm >= 0  = us
+        | otherwise           = so : us
+{- FOURMOLU_ENABLE -}
+
 {- FOURMOLU_DISABLE -}
 monitors
     :: Config -> Env -> Control -> [String]
@@ -134,28 +156,6 @@ monitors conf env mng@Control{..} srvInfo ps monInfo =
                         (handle (logLn Log.DEBUG . ("monitor io-error: " ++) . show) step)
         S.listen s 5
         loop
-{- FOURMOLU_ENABLE -}
-
-setSocketKeepAlive :: Socket -> Int -> IO ()
-setSocketKeepAlive sock interval = do
-    S.setSocketOption sock TcpKeepIdle interval
-    S.setSocketOption sock TcpKeepInterval interval
-    S.setSocketOption sock KeepAlive 1
-
-keepAliveAvail :: a -> a -> a
-keepAliveAvail na av
-    | not avail = na
-    | otherwise = av
-  where
-    avail = null keepNotAvails
-
-{- FOURMOLU_DISABLE -}
-keepNotAvails :: [SocketOption]
-keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
-  where
-    addAvail so@(SockOpt lv nm) us
-        | lv >= 0 && nm >= 0  = us
-        | otherwise           = so : us
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
