@@ -1,7 +1,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Monitor (
+    bindMonitor,
     monitor,
+    monitors,
 ) where
 
 -- GHC packages
@@ -57,14 +59,6 @@ import SockOpt
 import SocketUtil (ainfosSkipError)
 import Types (CacheControl (..), Control (..), QuitCmd (..), quitCmd)
 
-monitorSockets :: S.PortNumber -> [S.HostName] -> IO [(Socket, SockAddr)]
-monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
-  where
-    aiSocket ai =
-        (,)
-            <$> S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
-            <*> pure (addrAddress ai)
-
 data Command
     = Param
     | EParam
@@ -88,31 +82,45 @@ data Command
 
 {- FOURMOLU_DISABLE -}
 monitor
-    :: Config
-    -> Env
-    -> Control
-    -> [String]
+    :: Config -> Env -> Control -> [String]
     -> IO [IO ()]
-monitor conf env mng@Control{..} srvInfo = do
-    ps <- monitorSockets (cnf_monitor_port conf) (cnf_monitor_addrs conf)
-    let monInfo = ["monitor: " ++ show a ++ kaInfo | (_, a) <- ps]
-    mapM_ servSock ps
-    return $ [runStdConsole monInfo | cnf_monitor_stdio conf] ++ [monitorServer monInfo s | (s, _) <- ps]
+monitor conf env mng srvInfo = uncurry (monitors conf env mng srvInfo) <$> bindMonitor conf env
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+bindMonitor :: Config -> Env -> IO ([(Socket, SockAddr)], [String])
+bindMonitor Config{..} env = do
+    ais  <- ainfosSkipError putStrLn Stream (fromIntegral cnf_monitor_port) cnf_monitor_addrs
+    result . unzip <$> mapM servSock ais
   where
-    kaInfo = " " ++ unwords (("<keepalive-" ++ keepAliveAvail "no-avail" "enabled" ++ ">") : kaNoAvails)
-    kaNoAvails = keepAliveAvail ("no-avail sockopts:" : map show keepNotAvails) []
-    runStdConsole monInfo = console conf env mng srvInfo monInfo stdin stdout "<std>"
+    kaNoAvails hasSock = [unwords $ "no-avail sockopts:" : map show keepNotAvails | hasSock]
+    result (ps, ks) = (ps, ks ++ keepAliveAvail (kaNoAvails $ not $ null ps) [])
+    logLn level = logLines_ env level Nothing . (: [])
+    v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
+    v6only _sock  _                  = pure ()
+    servSock ai@AddrInfo{addrAddress = a} = withLocationIOE (show a ++ "/mon") $ do
+        sock <- S.socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
+        v6only sock a
+        S.setSocketOption sock S.ReuseAddr 1
+        let enableKeepAlive = setSocketKeepAlive sock cnf_monitor_keep_interval
+        ka <- keepAliveAvail (pure "no-avail") (enableKeepAlive $> "enabled")
+        S.bind sock a
+        let monInfo1 = unwords ["monitor:", show a, "<keepalive-" ++ ka ++ ">"]
+        logLn Log.INFO monInfo1 $> ((sock, a), monInfo1)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+monitors
+    :: Config -> Env -> Control -> [String]
+    -> [(Socket, SockAddr)] -> [String] -> [IO ()]
+monitors conf env mng@Control{..} srvInfo ps monInfo =
+    [runStdConsole | cnf_monitor_stdio conf] ++ [monitorServer s | (s, _) <- ps]
+  where
+    runStdConsole = console conf env mng srvInfo monInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle :: (SomeException -> IO a) -> IO a -> IO a
     handle onError = either onError return <=< try
-    v6only  sock  S.SockAddrInet6 {} = S.setSocketOption sock S.IPv6Only 1
-    v6only _sock  _                  = pure ()
-    servSock (sock, a) = withLocationIOE (show a ++ "/mon") $ do
-        v6only sock a
-        S.setSocketOption sock S.ReuseAddr 1
-        keepAliveAvail (pure ()) (setSocketKeepAlive sock $ cnf_monitor_keep_interval conf)
-        S.bind sock a
-    monitorServer monInfo s = do
+    monitorServer s = do
         let step = do
                 socketWaitRead s
                 (sock, addr) <- S.accept s
