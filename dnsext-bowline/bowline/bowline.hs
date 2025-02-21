@@ -135,13 +135,13 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
-    mng <- getControl env workerStats mng0{reopenLog = withRoot cnf_user cnf_group reopenLog0}
+    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
     monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | svs <- servers, (n, sks, _as) <- svs]
     --
-    void $ setGroupUser cnf_user cnf_group
+    void $ setGroupUser conf
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
@@ -332,18 +332,13 @@ recoverRoot = do
     return root
 
 -- | Setting user and group.
-setGroupUser
-    :: String
-    -- ^ User
-    -> String
-    -- ^ Group
-    -> IO Bool
-setGroupUser user group = do
+setGroupUser :: Config -> IO Bool
+setGroupUser Config{..} = do
     root <- amIrootUser
     when root $ do
-        setEffectiveGroupID . groupID =<< getGroupEntryForName group
-        setEffectiveUserID . userID =<< getUserEntryForName user
+        setEffectiveGroupID . groupID =<< getGroupEntryForName cnf_group
+        setEffectiveUserID . userID =<< getUserEntryForName cnf_user
     return root
 
-withRoot :: String -> String -> IO a -> IO a
-withRoot user group act = bracket_ (void recoverRoot) (void $ setGroupUser user group) act
+withRoot :: Config -> IO a -> IO a
+withRoot conf act = bracket_ (void recoverRoot) (void $ setGroupUser conf) act
