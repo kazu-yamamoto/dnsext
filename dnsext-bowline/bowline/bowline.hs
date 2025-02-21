@@ -209,6 +209,24 @@ main = do
 
 ----------------------------------------------------------------
 
+bindServers
+    :: [HostName]
+    -> (Bool, n, a, SocketType, PortNumber)
+    -> IO (n, a, [Socket])
+bindServers _     (False, n, a, _       , _   ) =    return (n, a, [])
+bindServers hosts (True , n, a, socktype, port) = do
+    as <- ainfosSkipError putStrLn socktype port hosts
+    (n, a,) <$> mapM openBind as
+  where
+    openBind ai = do
+        s <- openSocket ai
+        setSocketOption s ReuseAddr 1
+        when (addrFamily ai == AF_INET6) $ setSocketOption s IPv6Only 1
+        withFdSocket s $ setCloseOnExecIfNeeded
+        bind s $ addrAddress ai
+        when (addrSocketType ai == Stream) $ listen s 1024
+        return s
+
 getServers
     :: Env
     -> [HostName]
