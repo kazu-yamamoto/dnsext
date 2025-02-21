@@ -93,9 +93,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     gcache@GlobalCache{..} <- case mcache of
         Nothing -> getCache tcache conf
         Just c -> return c
-    (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger) <- getLogger conf
-    gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
             | cnf_disable_v6_ns = pure True
@@ -109,6 +106,11 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
+    --
+    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
+    --
+    (runWriter, putDNSTAP) <- TAP.new conf
+    (runLogger, putLines, killLogger) <- getLogger conf
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -129,7 +131,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
-    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
@@ -143,6 +144,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     --
     void $ setGroupUser cnf_user cnf_group
     -- Run
+    gcacheSetLogLn putLines
     tidW <- runWriter
     _tidL <- runLogger
     tidA <- API.new conf mng
