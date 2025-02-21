@@ -134,7 +134,8 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
-    servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
+    addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
+    servers <- sequence [map (n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
