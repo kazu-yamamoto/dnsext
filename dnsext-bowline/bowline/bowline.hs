@@ -234,17 +234,14 @@ getServers env hosts toCacher (True, name, mkServer, socktype, port) = do
 
 getCache :: TimeCache -> Config -> IO GlobalCache
 getCache tc@TimeCache{..} Config{..} = do
-    ref <- I.newIORef Nothing
+    ref <- I.newIORef $ \_ _ _ -> return ()
     let memoLogLn msg = do
-            mx <- I.readIORef ref
-            case mx of
-                Nothing -> return ()
-                Just putLines -> do
-                    tstr <- getTimeStr
-                    putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+            putLines <- I.readIORef ref
+            tstr <- getTimeStr
+            putLines Log.WARN Nothing [tstr $ ": " ++ msg]
         cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
     cacheOps <- newRRCacheOps cacheConf
-    let setLog = I.writeIORef ref . Just
+    let setLog = I.writeIORef ref
     return $ GlobalCache cacheOps setLog
 
 ----------------------------------------------------------------
