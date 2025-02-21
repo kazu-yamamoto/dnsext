@@ -133,16 +133,17 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
-    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
-    servers <- sequence [map (n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
-    monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | svs <- servers, (n, sks, _as) <- svs]
+    monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | (n, _mk, sks) <- addrs]
     --
     void $ setGroupUser conf
+    -- actions list for threads
+    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
+    servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
@@ -153,7 +154,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             conc
                 [ TStat.concurrentlyList_ (withNum "cacher" cachers)
                 , TStat.concurrentlyList_ (withNum "worker" workers)
-                , TStat.concurrentlyList_ [(n, as) | svs <- servers, (n, _sks, as) <- svs]
+                , TStat.concurrentlyList_ [(n, as) | (n, _sks, ass) <- servers, as <- ass]
                 ]
     {- Advisedly separating 'dumper' thread from Async thread-tree
        - Keep the 'dumper' thread alive until the end for debugging purposes
