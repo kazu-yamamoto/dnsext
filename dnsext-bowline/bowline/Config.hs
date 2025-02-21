@@ -15,6 +15,7 @@ import Data.Char (toUpper)
 import Data.List
 import Data.List.Split (splitOn)
 import Data.String (fromString)
+import Network.Socket (PortNumber)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
 
@@ -346,6 +347,10 @@ class FromConf a where
 instance FromConf Int where
     fromConf (CV_Int n) = n
     fromConf _ = error "fromConf int"
+
+instance FromConf PortNumber where
+    fromConf (CV_Int n) = fromIntegral n
+    fromConf _ = error "fromConf port"
 
 instance FromConf Bool where
     fromConf (CV_Bool b) = b
