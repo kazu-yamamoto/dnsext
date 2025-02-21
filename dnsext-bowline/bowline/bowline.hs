@@ -135,10 +135,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     workerStats <- Server.getWorkerStats cnf_workers
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
     mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
+    (mas, monInfo) <- Mon.bindMonitor conf env
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
-    monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | (n, _mk, sks) <- addrs]
+    srvInfo <- sequence [srvinfo n sks | (n, _mk, sks) <- addrs]
+    let monitor = Mon.monitors conf env mng srvInfo mas monInfo
     --
     void $ setGroupUser conf
     -- actions list for threads
