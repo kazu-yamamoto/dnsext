@@ -182,14 +182,17 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         match t = show t == us
         types = map DNS.toTYPE [1 .. 512]
 
-    parseCmd []  = Just Noop
-    parseCmd ws  = case ws of
+    nomalizec c
+        | c == '-'   = '_'
+        | otherwise  = c
+    parseCmd  []       = Just Noop
+    parseCmd (cmd:as)  = case map nomalizec cmd:as of
         "param"           : _             -> Just   Param
-        "find"            : as            -> Just $ Find as
+        "find"            : _             -> Just $ Find as
         "lookup"          : n  : typ : _  -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
         "stats"           : _             -> Just   Stats
-        "t"               : as            -> Just $ TStats as
-        "tstats"          : as            -> Just $ TStats as
+        "t"               : _             -> Just $ TStats as
+        "tstats"          : _             -> Just $ TStats as
         "w"               : _             -> Just   WStats
         "wstats"          : _             -> Just   WStats
         "expire"          : []            -> Just $ Expire 0
