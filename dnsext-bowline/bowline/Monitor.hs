@@ -79,6 +79,7 @@ data Command
     | FlushBogus
     | FlushNegative
     | FlushAll
+    | ReopenLog
     | Noop
     | Exit
     | Quit
@@ -199,6 +200,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         "flush_bogus" : _     -> Just FlushBogus
         "flush_negative" : _  -> Just FlushNegative
         "flush_all" : _       -> Just FlushAll
+        "reopen_log" : _ -> Just ReopenLog
         "exit" : _ -> Just Exit
         "quit-server" : _ -> Just Quit
         "help" : w : _ -> Just $ Help $ Just w
@@ -234,6 +236,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         dispatch  FlushBogus      = ccRemoveBogus *> hPutStrLn outH "done."
         dispatch  FlushNegative   = ccRemoveNegative *> hPutStrLn outH "done."
         dispatch  FlushAll        = ccClear *> hPutStrLn outH "done."
+        dispatch  ReopenLog = reopenLog *> hPutStrLn outH "done."
         dispatch (Help w) = printHelp w
         dispatch  x = outLn $ "command: unknown state: " ++ show x
         allInfixOf ws = and . mapM isInfixOf ws
@@ -258,6 +261,7 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
             , ("flush_bogus",     ("flush_bogus", "remove all bogus cache"))
             , ("flush_negative",  ("flush_negative", "remove all negative cache"))
             , ("flush_all",       ("flush_all", "remove all cache"))
+            , ("reopen_log",      ("reopen_log", "reopen logfile when file logging"))
             , ("exit",            ("exit", "exit this management session"))
             , ("quit-server",     ("quit-server", "quit this server"))
             , ("help",            ("help", "show this help"))
