@@ -46,25 +46,25 @@ data Config = Config
     , cnf_cachers :: Int
     , cnf_workers :: Int
     , cnf_udp :: Bool
-    , cnf_udp_port :: Int
+    , cnf_udp_port :: PortNumber
     , cnf_vc_query_max_size :: Int
     , cnf_vc_idle_timeout :: Int
     , cnf_vc_slowloris_size :: Int
     , cnf_tcp :: Bool
-    , cnf_tcp_port :: Int
+    , cnf_tcp_port :: PortNumber
     , cnf_tls :: Bool
-    , cnf_tls_port :: Int
+    , cnf_tls_port :: PortNumber
     , cnf_tls_session_ticket_lifetime :: Int
     , cnf_quic :: Bool
-    , cnf_quic_port :: Int
+    , cnf_quic_port :: PortNumber
     , cnf_h2c :: Bool
-    , cnf_h2c_port :: Int
+    , cnf_h2c_port :: PortNumber
     , cnf_h2 :: Bool
-    , cnf_h2_port :: Int
+    , cnf_h2_port :: PortNumber
     , cnf_h3 :: Bool
-    , cnf_h3_port :: Int
+    , cnf_h3_port :: PortNumber
     , cnf_early_data_size :: Int
-    , cnf_monitor_port :: Int
+    , cnf_monitor_port :: PortNumber
     , cnf_monitor_addrs :: [String]
     , cnf_monitor_stdio :: Bool
     , cnf_monitor_keep_interval :: Int
@@ -74,7 +74,7 @@ data Config = Config
     , cnf_dnstap_reconnect_interval :: Int
     , cnf_webapi :: Bool
     , cnf_webapi_addr :: String
-    , cnf_webapi_port :: Int
+    , cnf_webapi_port :: PortNumber
     , cnf_cache_max_negative_ttl :: Int
     , cnf_cache_failure_rcode_ttl :: Int
     , cnf_interface_automatic :: Bool

@@ -75,7 +75,7 @@ new Config{..} mng
     | cnf_webapi = Just <$> TStat.forkIO "webapi-srv" (runAPI cnf_webapi_addr cnf_webapi_port mng)
     | otherwise = return Nothing
 
-runAPI :: String -> Int -> Control -> IO ()
+runAPI :: String -> PortNumber -> Control -> IO ()
 runAPI addr port mng = do
     ai <- resolve
     E.bracket (open ai) close $ \sock ->

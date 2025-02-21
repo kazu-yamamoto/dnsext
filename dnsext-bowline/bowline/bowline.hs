@@ -213,10 +213,10 @@ getServers
     :: Env
     -> [HostName]
     -> (Server.ToCacher -> IO ())
-    -> (Bool, String, ServerActions, SocketType, Int)
+    -> (Bool, String, ServerActions, SocketType, PortNumber)
     -> IO [(String, [Socket], IO ())]
 getServers _ _ _ (False, _, _, _, _) = return []
-getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
+getServers env hosts toCacher (True, name, mkServer, socktype, port) = do
     as <- ainfosSkipError putStrLn socktype port hosts
     sockets <- mapM openBind as
     map (name,sockets,) <$> mkServer env toCacher sockets
@@ -229,7 +229,6 @@ getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
         bind s $ addrAddress ai
         when (addrSocketType ai == Stream) $ listen s 1024
         return s
-    port = fromIntegral port'
 
 ----------------------------------------------------------------
 
