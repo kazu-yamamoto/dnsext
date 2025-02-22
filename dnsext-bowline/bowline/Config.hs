@@ -32,6 +32,7 @@ data Config = Config
     , cnf_log_file :: Maybe FilePath
     , cnf_log_output :: Log.OutHandle
     , cnf_log_level :: Log.Level
+    , cnf_log_timestamp :: Bool
     , cnf_short_log :: Bool
     , cnf_cert_file :: FilePath
     , cnf_key_file :: FilePath
@@ -90,6 +91,7 @@ defaultConfig =
         , cnf_log_file = Nothing
         , cnf_log_output = Log.Stdout
         , cnf_log_level = Log.WARN
+        , cnf_log_timestamp = False
         , cnf_short_log = False
         , cnf_cert_file = "fullchain.pem"
         , cnf_key_file = "privkey.pem"
@@ -197,6 +199,7 @@ makeConfig def conf =
         , cnf_log_file = get "log-file" cnf_log_file
         , cnf_log_output = Log.Stdout -- fixme
         , cnf_log_level = get "log-level" cnf_log_level
+        , cnf_log_timestamp = get "log-timestamp" cnf_log_timestamp
         , cnf_short_log = get "short-log" cnf_short_log
         , cnf_cert_file = get "cert-file" cnf_cert_file
         , cnf_key_file = get "key-file" cnf_key_file
