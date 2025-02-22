@@ -80,25 +80,24 @@ type KillLogger = IO ()
 type ReopenLogger = IO ()
 
 new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
-new oh lv = with' oh (pure id) lv $ \lg _ p k _ -> pure (lg, p, k)
+new oh lv = with oh (pure id) lv $ \lg _ p k _ -> pure (lg, p, k)
 
 new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' oh lv = with' oh (pure id) lv $ \lg p _ k _ -> pure (lg, p, k)
+new' oh lv = with oh (pure id) lv $ \lg p _ k _ -> pure (lg, p, k)
 
-with :: OutHandle -> Level -> (Logger -> PutLines STM  -> KillLogger -> ReopenLogger -> IO a) -> IO a
-with oh lv h = withHandleLogger queueBound (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg p _ k r -> h lg p k r
-
-with'
+with
     :: OutHandle -> IO ShowS -> Level
     -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
-with' oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
+with oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
 
 handle :: OutHandle -> Handle
 handle Stdout = stdout
 handle Stderr = stderr
 
-fileWith :: FilePath -> Level -> (Logger -> PutLines STM  -> KillLogger -> ReopenLogger -> IO a) -> IO a
-fileWith fn lv h = withHandleLogger queueBound (pure id) (openFile fn AppendMode) hClose lv $ \lg p _ k r -> h lg p k r
+fileWith
+    :: FilePath -> IO ShowS -> Level
+    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+fileWith fn getM = withHandleLogger queueBound getM (openFile fn AppendMode) hClose
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
