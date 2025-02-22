@@ -80,60 +80,61 @@ type KillLogger = IO ()
 type ReopenLogger = IO ()
 
 new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
-new oh = toIO . new' oh
+new oh lv = with' oh lv $ \lg _ p k _ -> pure (lg, p, k)
 
 new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' oh lv = with oh lv $ \lg p k _ -> pure (lg, p, k)
+new' oh lv = with' oh lv $ \lg p _ k _ -> pure (lg, p, k)
 
-with :: OutHandle -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
-with oh = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ())
+with :: OutHandle -> Level -> (Logger -> PutLines STM  -> KillLogger -> ReopenLogger -> IO a) -> IO a
+with oh lv h = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ()) lv $ \lg p _ k r -> h lg p k r
+
+with' :: OutHandle -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+with' oh = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ())
 
 handle :: OutHandle -> Handle
 handle Stdout = stdout
 handle Stderr = stderr
 
-fileWith :: FilePath -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
-fileWith fn lv = withHandleLogger queueBound (openFile fn AppendMode) hClose lv
+fileWith :: FilePath -> Level -> (Logger -> PutLines STM  -> KillLogger -> ReopenLogger -> IO a) -> IO a
+fileWith fn lv h = withHandleLogger queueBound (openFile fn AppendMode) hClose lv $ \lg p _ k r -> h lg p k r
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
 queueBound = 8
 
-toIO
-    :: IO (Logger, PutLines STM, KillLogger)
-    -> IO (Logger, PutLines IO, KillLogger)
-toIO action = do
-    (x, y, z) <- action
-    return (x, (\l mc xs -> atomically $ y l mc xs), z)
-
 {- FOURMOLU_DISABLE -}
 withHandleLogger
     :: Natural -> IO Handle -> (Handle -> IO ())
-    -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
 withHandleLogger qsize open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh
     inQ       <- newTBQueueIO qsize
     mvar      <- newEmptyMVar
     let logger  = loggerLoop inQ mvar outFh
-        put     = putLines colorize inQ
+        putSTM  = putLinesSTM colorize inQ
+        putIO   = putLinesIO  colorize inQ
         kill    = killLogger inQ mvar
         reopen  = reopenLogger colorize inQ
-    k logger put kill reopen
+    k logger putSTM putIO kill reopen
   where
     killLogger inQ mvar = do
         atomically                              $ writeTBQueue inQ $ \bk _  _  -> bk
         takeMVar mvar
 
     reopenLogger colorize inQ = do
-        atomically (putLines colorize inQ INFO Nothing ["re-opening log."])
+        putLinesIO colorize inQ INFO Nothing ["re-opening log."]
         atomically                              $ writeTBQueue inQ $ \_  rk _  -> rk
 
-    putLines colorize inQ lv ~color ~xs
+    putLinesSTM  = putLines_ id
+    putLinesIO   = putLines_ atomically
+
+    putLines_ toM colorize inQ lv ~color ~xs
         | colorize   = withColor color
         | otherwise  = withColor Nothing
       where
-        withColor ~c = when (loggerLevel <= lv) $ writeTBQueue inQ $ \_  _  ck -> ck c xs
+        withColor ~c = when (loggerLevel <= lv) $
+            toM                                 $ writeTBQueue inQ $ \_  _  ck -> ck c xs
 
     loggerLoop inQ mvar = loop
       where
