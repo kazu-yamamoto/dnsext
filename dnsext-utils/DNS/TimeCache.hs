@@ -58,7 +58,7 @@ noneTimeCache =
 ---
 
 getTimeShowS :: UnixTime -> IO ShowS
-getTimeShowS ts = (++) . C8.unpack <$> formatUnixTime "%Y-%m-%d %H:%M:%S %Z" ts
+getTimeShowS ts = (++) . C8.unpack <$> formatUnixTime "%Y-%m-%dT%H:%M:%S%z" ts
 
 unixToEpoch :: UnixTime -> EpochTime
 unixToEpoch (UnixTime (CTime tim) _) = tim
