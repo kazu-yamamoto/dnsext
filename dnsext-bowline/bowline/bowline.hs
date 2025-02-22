@@ -269,9 +269,9 @@ getCache tc@TimeCache{..} Config{..} = do
 getLogger :: Config -> IO (IO (), Log.PutLines IO, IO (), IO ())
 getLogger Config{..}
     | cnf_log = do
-        let result a p k r = return (void $ TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
-            handle = Log.with cnf_log_output cnf_log_level $ \a p k _ -> result a p k (return ())
-            file fn = Log.fileWith fn cnf_log_level result
+        let result a _ p k r = return (void $ TStat.forkIO "logger" a, \lv ~c ~xs -> p lv c xs, k, r)
+            handle = Log.with cnf_log_output (pure id) cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
+            file fn = Log.fileWith fn (pure id) cnf_log_level result
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
