@@ -2,7 +2,6 @@
 
 module Monitor (
     bindMonitor,
-    monitor,
     monitors,
 ) where
 
@@ -79,13 +78,6 @@ data Command
     | QuitCmd QuitCmd
     | Help (Maybe String)
     deriving (Show)
-
-{- FOURMOLU_DISABLE -}
-monitor
-    :: Config -> Env -> Control -> [String]
-    -> IO [IO ()]
-monitor conf env mng srvInfo = uncurry (monitors conf env mng srvInfo) <$> bindMonitor conf env
-{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 bindMonitor :: Config -> Env -> IO ([(Socket, SockAddr)], [String])
