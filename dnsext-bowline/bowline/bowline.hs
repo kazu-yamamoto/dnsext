@@ -109,7 +109,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     --
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf
+    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf tcache
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -253,12 +253,11 @@ getServers env hosts toCacher (True, name, mkServer, socktype, port) = do
 ----------------------------------------------------------------
 
 getCache :: TimeCache -> Config -> IO GlobalCache
-getCache tc@TimeCache{..} Config{..} = do
+getCache tc Config{..} = do
     ref <- I.newIORef $ \_ _ _ -> return ()
     let memoLogLn msg = do
             putLines <- I.readIORef ref
-            tstr <- getTimeStr
-            putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+            putLines Log.WARN Nothing [msg]
         cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
     cacheOps <- newRRCacheOps cacheConf
     let setLog = I.writeIORef ref
@@ -266,17 +265,22 @@ getCache tc@TimeCache{..} Config{..} = do
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (), Log.PutLines IO, IO (), IO ())
-getLogger Config{..}
+{- FOURMOLU_DISABLE -}
+getLogger :: Config -> TimeCache -> IO (IO (), Log.PutLines IO, IO (), IO ())
+getLogger Config{..} TimeCache{..}
     | cnf_log = do
-        let result a _ p k r = return (void $ TStat.forkIO "logger" a, \lv ~c ~xs -> p lv c xs, k, r)
-            handle = Log.with cnf_log_output (pure id) cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
-            file fn = Log.fileWith fn (pure id) cnf_log_level result
+        let getpts
+                | cnf_log_timestamp  = getTimeStr <&> (. (' ' :))
+                | otherwise          = pure id
+            result a _ p k r = return (void $ TStat.forkIO "logger" a, \lv ~c ~xs -> p lv c xs, k, r)
+            handle = Log.with cnf_log_output getpts cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
+            file fn = Log.fileWith fn getpts cnf_log_level result
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
             n = return ()
         return (return (), p, n, n)
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
