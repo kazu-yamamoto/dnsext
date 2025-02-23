@@ -25,6 +25,7 @@ import System.Posix (
     setEffectiveUserID,
     userID,
  )
+import System.Posix (Handler (Catch), installHandler, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
 
@@ -69,6 +70,7 @@ run readConfig = do
         conf <- readConfig
         mng <- newControl
         gcache <- maybe (getCache tcache conf) return mcache
+        void $ installHandler sigHUP (Catch $ quitCmd mng KeepCache) Nothing -- reloading with cache on SIGHUP
         runConfig tcache gcache mng conf
         ctl <- getCommandAndClear mng
         case ctl of
