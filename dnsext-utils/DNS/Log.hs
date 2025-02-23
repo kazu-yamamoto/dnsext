@@ -3,13 +3,15 @@
 module DNS.Log (
     new,
     new',
+    with,
+    fileWith,
     --
     Level (..),
     pattern DEMO,
     pattern WARN,
     pattern SYSTEM,
     --
-    Output (..),
+    OutHandle (..),
     Logger,
     PutLines,
     KillLogger,
@@ -19,12 +21,16 @@ module DNS.Log (
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (when)
+import Data.Functor
 import Numeric.Natural
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
+    IOMode (AppendMode),
+    hClose,
     hPutStrLn,
     hSetBuffering,
+    openFile,
     stderr,
     stdout,
  )
@@ -60,25 +66,34 @@ pattern SYSTEM   :: Level
 pattern SYSTEM   = ERR
 {- FOURMOLU_ENABLE -}
 
-data Output
+data OutHandle
     = Stdout
     | Stderr
 
-instance Show Output where
-    show Stdout = "Stdout"
-    show Stderr = "Stderr"
+instance Show OutHandle where
+    show Stdout = "<stdout>"
+    show Stderr = "<stderr>"
 
 type Logger = IO ()
 type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = IO ()
+type ReopenLogger = IO ()
 
-new :: Output -> Level -> IO (Logger, PutLines IO, KillLogger)
-new Stdout l = toIO $ newHandleLogger queueBound stdout l
-new Stderr l = toIO $ newHandleLogger queueBound stderr l
+new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
+new oh = toIO . new' oh
 
-new' :: Output -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' Stdout = newHandleLogger queueBound stdout
-new' Stderr = newHandleLogger queueBound stderr
+new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
+new' oh lv = with oh lv $ \lg p k _ -> pure (lg, p, k)
+
+with :: OutHandle -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+with oh = withHandleLogger queueBound (pure $ handle oh) (\_ -> pure ())
+
+handle :: OutHandle -> Handle
+handle Stdout = stdout
+handle Stderr = stderr
+
+fileWith :: FilePath -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+fileWith fn lv = withHandleLogger queueBound (openFile fn AppendMode) hClose lv
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
@@ -92,36 +107,46 @@ toIO action = do
     return (x, (\l mc xs -> atomically $ y l mc xs), z)
 
 {- FOURMOLU_DISABLE -}
-newHandleLogger
-    :: Natural -> Handle -> Level -> IO (Logger, PutLines STM, KillLogger)
-newHandleLogger qsize outFh loggerLevel = do
-    hSetBuffering outFh LineBuffering
+withHandleLogger
+    :: Natural -> IO Handle -> (Handle -> IO ())
+    -> Level -> (Logger -> PutLines STM -> KillLogger -> ReopenLogger -> IO a) -> IO a
+withHandleLogger qsize open close loggerLevel k = do
+    outFh <- open'
     colorize  <- hSupportsANSIColor outFh
     inQ       <- newTBQueueIO qsize
     mvar      <- newEmptyMVar
-    let logger  = loggerLoop inQ mvar
+    let logger  = loggerLoop inQ mvar outFh
         put     = putLines colorize inQ
         kill    = killLogger inQ mvar
-    return (logger, put, kill)
+        reopen  = reopenLogger colorize inQ
+    k logger put kill reopen
   where
     killLogger inQ mvar = do
-        atomically                              $ writeTBQueue inQ $ \bk _  -> bk
+        atomically                              $ writeTBQueue inQ $ \bk _  _  -> bk
         takeMVar mvar
+
+    reopenLogger colorize inQ = do
+        atomically (putLines colorize inQ INFO Nothing ["re-opening log."])
+        atomically                              $ writeTBQueue inQ $ \_  rk _  -> rk
 
     putLines colorize inQ lv ~color ~xs
         | colorize   = withColor color
         | otherwise  = withColor Nothing
       where
-        withColor ~c = when (loggerLevel <= lv) $ writeTBQueue inQ $ \_  ck -> ck c xs
+        withColor ~c = when (loggerLevel <= lv) $ writeTBQueue inQ $ \_  _  ck -> ck c xs
 
     loggerLoop inQ mvar = loop
       where
-        loop = do
+        loop outFh = do
             me <- atomically (readTBQueue inQ)
-            me (putMVar mvar ()) $ \c xs -> logit c xs >> loop
+            let close'   = close outFh >> putMVar mvar ()
+                reopen'  = close outFh >> open' >>= loop
+            me close' reopen' $ \c xs -> logit outFh c xs >> loop outFh
 
-    logit Nothing  xs = mapM_ (hPutStrLn outFh) xs
-    logit (Just c) xs = do
+    open' = open >>= \outFh -> hSetBuffering outFh LineBuffering $> outFh
+
+    logit outFh Nothing  xs = mapM_ (hPutStrLn outFh) xs
+    logit outFh (Just c) xs = do
         hSetSGR outFh [SetColor Foreground Vivid c]
         mapM_ (hPutStrLn outFh) xs
         hSetSGR outFh [Reset]

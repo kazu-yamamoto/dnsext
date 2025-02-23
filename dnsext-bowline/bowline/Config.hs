@@ -28,7 +28,7 @@ data Config = Config
     { cnf_user :: String
     , cnf_group :: String
     , cnf_log :: Bool
-    , cnf_log_output :: Log.Output
+    , cnf_log_output :: Log.OutHandle
     , cnf_log_level :: Log.Level
     , cnf_short_log :: Bool
     , cnf_cert_file :: FilePath
