@@ -20,12 +20,13 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.IORef
 
-import DNS.Do53.Internal
+import DNS.Do53.Internal (VCLimit, decodeVCLength)
 import DNS.Types
 
 data NBRecvR = EOF ByteString | NotEnough | NBytes ByteString
     deriving (Eq, Show)
 
+type BS = ByteString
 type Buffer = [ByteString] -> [ByteString]
 
 {-# WARNING makeNBRecvVCNoSize "should not recv data not received by app for right socket readable state" #-}

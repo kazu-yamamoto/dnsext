@@ -12,7 +12,7 @@ module DNS.Iterative.Server.Types (
     VcPendingOp (..),
     Input (..),
     Output (..),
-    PeerInfo (..),
+    Peer (..),
     EpochTimeUsec,
     peerSockAddr,
     withLocationIOE,
@@ -44,13 +44,13 @@ import DNS.Iterative.Query (Env)
 
 data SuperStream = StreamH2 H2I.Stream | StreamQUIC QUIC.Stream deriving (Show)
 
-data PeerInfo
+data Peer
     = PeerInfoUDP SockAddr [Cmsg]
     | PeerInfoStream SockAddr SuperStream
     | PeerInfoVC SockAddr
     deriving (Show)
 
-peerSockAddr :: PeerInfo -> SockAddr
+peerSockAddr :: Peer -> SockAddr
 peerSockAddr (PeerInfoUDP sa _) = sa
 peerSockAddr (PeerInfoStream sa _) = sa
 peerSockAddr (PeerInfoVC sa) = sa
@@ -68,7 +68,7 @@ data Input a = Input
     { inputQuery :: a
     , inputPendingOp :: VcPendingOp
     , inputMysa :: SockAddr
-    , inputPeerInfo :: PeerInfo
+    , inputPeerInfo :: Peer
     , inputProto :: SocketProtocol
     , inputToSender :: ToSender -> IO ()
     , inputRecvTime :: EpochTimeUsec
@@ -77,7 +77,7 @@ data Input a = Input
 data Output = Output
     { outputReplyBS :: ByteString
     , outputPendingOp :: VcPendingOp
-    , outputPeerInfo :: PeerInfo
+    , outputPeerInfo :: Peer
     }
 
 -- Type of the action reveals its arguments and the context of the monad,

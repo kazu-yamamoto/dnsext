@@ -1,7 +1,4 @@
 module DNS.Do53.Internal (
-    -- * IO types
-    BS,
-
     -- * TCP related
     openTCP,
     sendTCP,

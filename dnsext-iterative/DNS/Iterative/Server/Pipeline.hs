@@ -29,8 +29,6 @@ module DNS.Iterative.Server.Pipeline (
     receiverLogic',
     logLn,
     retryUntil,
-    BS,
-    Peer,
 ) where
 
 -- GHC packages
@@ -225,9 +223,8 @@ record env Input{..} reply rspWire = do
 ----------------------------------------------------------------
 
 type BS = ByteString
-type Peer = PeerInfo
 
-type MkInput = ByteString -> PeerInfo -> VcPendingOp -> EpochTimeUsec -> Input ByteString
+type MkInput = ByteString -> Peer -> VcPendingOp -> EpochTimeUsec -> Input ByteString
 
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
 mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
@@ -271,7 +268,7 @@ receiverVCnonBlocking
     :: String
     -> Env
     -> VcSession
-    -> PeerInfo
+    -> Peer
     -> IO NBRecvR
     -> (ByteString -> IO ())
     -> (ToCacher -> IO ())
