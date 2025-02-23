@@ -6,6 +6,7 @@ module WebAPI (new) where
 import Control.Concurrent
 import qualified Control.Exception as E
 import Data.ByteString ()
+import Data.Functor
 import qualified Data.List.NonEmpty as NE
 import Data.String
 import qualified Network.HTTP.Types as HTTP
@@ -44,6 +45,7 @@ doHelp = return $ responseBuilder HTTP.ok200 [] txt
     helps =
         [ ("/metrics"     , "returns metrics info")
         , ("/wstats"      , "returns worker thread info")
+        , ("/reopen-log"  , "reopen logfile when file logging")
         , ("/reload"      , "reload bowline without keeping cache")
         , ("/keep-cache"  , "reload bowline with keeping cache")
         , ("/quit"        , "quit bowline")
@@ -63,6 +65,7 @@ app mng req sendResp = getResp >>= sendResp
             "/metrics"     -> doStats mng
             "/stats"       -> doStats mng
             "/wstats"      -> doWStats mng
+            "/reopen-log"  -> reopenLog mng $> ok
             "/reload"      -> doReload mng Reload
             "/keep-cache"  -> doReload mng KeepCache
             "/quit"        -> doQuit mng

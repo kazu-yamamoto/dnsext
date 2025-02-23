@@ -9,6 +9,7 @@ module Main where
 import Control.Concurrent (ThreadId, killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Concurrent.STM
+import Control.Exception (bracket_, finally)
 import Control.Monad (guard, when)
 import Data.ByteString.Builder
 import Data.Functor
@@ -21,16 +22,14 @@ import System.Posix (
     getRealUserID,
     getUserEntryForName,
     groupID,
-    setEffectiveUserID,
     setEffectiveGroupID,
+    setEffectiveUserID,
     userID,
  )
 import System.Timeout (timeout)
 import Text.Printf (printf)
 
 -- dnsext-* deps
-
-import Control.Exception (finally)
 import DNS.Iterative.Server as Server
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
@@ -93,9 +92,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     gcache@GlobalCache{..} <- case mcache of
         Nothing -> getCache tcache conf
         Just c -> return c
-    (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger) <- getLogger conf
-    gcacheSetLogLn putLines
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
             | cnf_disable_v6_ns = pure True
@@ -109,6 +105,11 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
+    --
+    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
+    --
+    (runWriter, putDNSTAP) <- TAP.new conf
+    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -129,13 +130,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
-    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
-    mng <- getControl env workerStats mng0
+    mng <- getControl env workerStats mng0{reopenLog = withRoot cnf_user cnf_group reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
@@ -143,6 +143,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     --
     void $ setGroupUser cnf_user cnf_group
     -- Run
+    gcacheSetLogLn putLines
     tidW <- runWriter
     _tidL <- runLogger
     tidA <- API.new conf mng
@@ -249,15 +250,17 @@ getCache tc@TimeCache{..} Config{..} = do
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO ())
+getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO (), IO ())
 getLogger Config{..}
     | cnf_log = do
-        (r, p, f) <- Log.new cnf_log_output cnf_log_level
-        return (Just <$> TStat.forkIO "logger" r, p, f)
+        let result a p k r = return (Just <$> TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
+            handle = Log.with cnf_log_output cnf_log_level $ \a p k _ -> result a p k (return ())
+            file fn = Log.fileWith fn cnf_log_level result
+        maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
-            f = return ()
-        return (return Nothing, p, f)
+            n = return ()
+        return (return Nothing, p, n, n)
 
 ----------------------------------------------------------------
 
@@ -342,3 +345,6 @@ setGroupUser user group = do
         setEffectiveGroupID . groupID =<< getGroupEntryForName group
         setEffectiveUserID . userID =<< getUserEntryForName user
     return root
+
+withRoot :: String -> String -> IO a -> IO a
+withRoot user group act = bracket_ (void recoverRoot) (void $ setGroupUser user group) act
