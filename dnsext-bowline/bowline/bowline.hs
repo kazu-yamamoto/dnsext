@@ -68,22 +68,20 @@ run readConfig = do
   where
     go tcache mcache mng = do
         conf <- readConfig
-        gcache <- case mcache of
-            Nothing -> getCache tcache conf
-            Just c -> return c
-        cache <- runConfig tcache gcache mng conf
+        gcache <- maybe (getCache tcache conf) return mcache
+        runConfig tcache gcache mng conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do
                 putStrLn "\nReloading..." -- fixme
-                stopCache $ gcacheRRCacheOps cache
+                stopCache $ gcacheRRCacheOps gcache
                 go tcache Nothing mng
             KeepCache -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
-                go tcache (Just cache) mng
+                go tcache (Just gcache) mng
 
-runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO GlobalCache
+runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO ()
 runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
     -- Setup
     let tmout = timeout cnf_resolve_timeout
@@ -163,7 +161,6 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
             mapM_ maybeKill [tidA, tidW]
             killLogger
     threadDelay 500000 -- avoiding address already in use
-    return gcache
   where
     maybeKill = maybe (return ()) killThread
     trans creds sm =
