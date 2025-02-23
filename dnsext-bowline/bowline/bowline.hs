@@ -130,11 +130,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
+    workerStats <- Server.getWorkerStats cnf_workers
+    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
+    --  filled env and mng(Control) available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
-    workerStats <- Server.getWorkerStats cnf_workers
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
-    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     (mas, monInfo) <- Mon.bindMonitor conf env
     --
     void $ setGroupUser conf
