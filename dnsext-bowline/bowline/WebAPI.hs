@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module WebAPI (new) where
+module WebAPI (
+    bindAPI,
+    run,
+    new,
+) where
 
 import Control.Concurrent
 import qualified Control.Exception as E
@@ -12,7 +16,7 @@ import Data.String
 import qualified Network.HTTP.Types as HTTP
 import Network.Socket
 import Network.Wai
-import Network.Wai.Handler.Warp
+import Network.Wai.Handler.Warp hiding (run)
 
 import DNS.Iterative.Server (withLocationIOE)
 import qualified DNS.ThreadStats as TStat
@@ -70,16 +74,11 @@ ok = responseLBS HTTP.ok200 [] "OK\n"
 ng :: HTTP.Status -> Response
 ng st = responseLBS st [] "NG\n"
 
-new :: Config -> Control -> IO (Maybe ThreadId)
-new Config{..} mng
-    | cnf_webapi = Just <$> TStat.forkIO "webapi-srv" (runAPI cnf_webapi_addr cnf_webapi_port mng)
-    | otherwise = return Nothing
-
-runAPI :: String -> PortNumber -> Control -> IO ()
-runAPI addr port mng = do
-    ai <- resolve
-    E.bracket (open ai) close $ \sock ->
-        runSettingsSocket defaultSettings sock $ app mng
+{- FOURMOLU_DISABLE -}
+bindAPI :: Config -> IO (Maybe Socket)
+bindAPI Config{..}
+    | cnf_webapi  = resolve >>= open <&> Just
+    | otherwise   = return Nothing
   where
     resolve = do
         let hints =
@@ -87,7 +86,7 @@ runAPI addr port mng = do
                     { addrFlags = [AI_PASSIVE, AI_NUMERICHOST, AI_NUMERICSERV]
                     , addrSocketType = Stream
                     }
-        NE.head <$> getAddrInfo (Just hints) (Just addr) (Just $ show port)
+        NE.head <$> getAddrInfo (Just hints) (Just cnf_webapi_addr) (Just $ show cnf_webapi_port)
     open ai = E.bracketOnError (openSocket ai) close $ \sock -> do
         setSocketOption sock ReuseAddr 1
         withFdSocket sock setCloseOnExecIfNeeded
@@ -95,3 +94,10 @@ runAPI addr port mng = do
             bind sock $ addrAddress ai
             listen sock 32
         return sock
+{- FOURMOLU_ENABLE -}
+
+run :: Control -> Socket -> IO ()
+run mng sock = E.finally (runSettingsSocket defaultSettings sock $ app mng) (close sock)
+
+new :: Config -> Control -> IO (Maybe ThreadId)
+new conf mng = mapM (TStat.forkIO "webapi-srv" . run mng) =<< bindAPI conf
