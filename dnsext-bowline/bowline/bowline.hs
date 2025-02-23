@@ -64,10 +64,11 @@ run readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
-    newControl >>= go tcache Nothing
+    go tcache Nothing
   where
-    go tcache mcache mng = do
+    go tcache mcache = do
         conf <- readConfig
+        mng <- newControl
         gcache <- maybe (getCache tcache conf) return mcache
         runConfig tcache gcache mng conf
         ctl <- getCommandAndClear mng
@@ -76,10 +77,10 @@ run readConfig = do
             Reload -> do
                 putStrLn "\nReloading..." -- fixme
                 stopCache $ gcacheRRCacheOps gcache
-                go tcache Nothing mng
+                go tcache Nothing
             KeepCache -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
-                go tcache (Just gcache) mng
+                go tcache (Just gcache)
 
 runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO ()
 runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
