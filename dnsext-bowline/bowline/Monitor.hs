@@ -94,8 +94,7 @@ monitor
     -> [String]
     -> IO [IO ()]
 monitor conf env mng@Control{..} srvInfo = do
-    let monPort' = fromIntegral $ cnf_monitor_port conf
-    ps <- monitorSockets monPort' $ cnf_monitor_addrs conf
+    ps <- monitorSockets (cnf_monitor_port conf) (cnf_monitor_addrs conf)
     let monInfo = ["monitor: " ++ show a ++ kaInfo | (_, a) <- ps]
     mapM_ servSock ps
     return $ [runStdConsole monInfo | cnf_monitor_stdio conf] ++ [monitorServer monInfo s | (s, _) <- ps]

@@ -6,7 +6,7 @@
 module Main where
 
 -- GHC
-import Control.Concurrent (ThreadId, killThread, threadDelay)
+import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
 import Control.Concurrent.STM
 import Control.Exception (bracket_, finally)
@@ -135,17 +135,17 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
-    mng <- getControl env workerStats mng0{reopenLog = withRoot cnf_user cnf_group reopenLog0}
+    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     let srvinfo name sockets = do
             sas <- mapM getSocketName sockets
             pure $ unwords $ (name ++ ":") : map show sas
     monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | svs <- servers, (n, sks, _as) <- svs]
     --
-    void $ setGroupUser cnf_user cnf_group
+    void $ setGroupUser conf
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
-    _tidL <- runLogger
+    runLogger
     tidA <- API.new conf mng
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
@@ -213,10 +213,10 @@ getServers
     :: Env
     -> [HostName]
     -> (Server.ToCacher -> IO ())
-    -> (Bool, String, ServerActions, SocketType, Int)
+    -> (Bool, String, ServerActions, SocketType, PortNumber)
     -> IO [(String, [Socket], IO ())]
 getServers _ _ _ (False, _, _, _, _) = return []
-getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
+getServers env hosts toCacher (True, name, mkServer, socktype, port) = do
     as <- ainfosSkipError putStrLn socktype port hosts
     sockets <- mapM openBind as
     map (name,sockets,) <$> mkServer env toCacher sockets
@@ -229,38 +229,34 @@ getServers env hosts toCacher (True, name, mkServer, socktype, port') = do
         bind s $ addrAddress ai
         when (addrSocketType ai == Stream) $ listen s 1024
         return s
-    port = fromIntegral port'
 
 ----------------------------------------------------------------
 
 getCache :: TimeCache -> Config -> IO GlobalCache
 getCache tc@TimeCache{..} Config{..} = do
-    ref <- I.newIORef Nothing
+    ref <- I.newIORef $ \_ _ _ -> return ()
     let memoLogLn msg = do
-            mx <- I.readIORef ref
-            case mx of
-                Nothing -> return ()
-                Just putLines -> do
-                    tstr <- getTimeStr
-                    putLines Log.WARN Nothing [tstr $ ": " ++ msg]
+            putLines <- I.readIORef ref
+            tstr <- getTimeStr
+            putLines Log.WARN Nothing [tstr $ ": " ++ msg]
         cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
     cacheOps <- newRRCacheOps cacheConf
-    let setLog = I.writeIORef ref . Just
+    let setLog = I.writeIORef ref
     return $ GlobalCache cacheOps setLog
 
 ----------------------------------------------------------------
 
-getLogger :: Config -> IO (IO (Maybe ThreadId), Log.PutLines IO, IO (), IO ())
+getLogger :: Config -> IO (IO (), Log.PutLines IO, IO (), IO ())
 getLogger Config{..}
     | cnf_log = do
-        let result a p k r = return (Just <$> TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
+        let result a p k r = return (void $ TStat.forkIO "logger" a, \lv c ~xs -> atomically $ p lv c xs, k, r)
             handle = Log.with cnf_log_output cnf_log_level $ \a p k _ -> result a p k (return ())
             file fn = Log.fileWith fn cnf_log_level result
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
             n = return ()
-        return (return Nothing, p, n, n)
+        return (return (), p, n, n)
 
 ----------------------------------------------------------------
 
@@ -333,18 +329,13 @@ recoverRoot = do
     return root
 
 -- | Setting user and group.
-setGroupUser
-    :: String
-    -- ^ User
-    -> String
-    -- ^ Group
-    -> IO Bool
-setGroupUser user group = do
+setGroupUser :: Config -> IO Bool
+setGroupUser Config{..} = do
     root <- amIrootUser
     when root $ do
-        setEffectiveGroupID . groupID =<< getGroupEntryForName group
-        setEffectiveUserID . userID =<< getUserEntryForName user
+        setEffectiveGroupID . groupID =<< getGroupEntryForName cnf_group
+        setEffectiveUserID . userID =<< getUserEntryForName cnf_user
     return root
 
-withRoot :: String -> String -> IO a -> IO a
-withRoot user group act = bracket_ (void recoverRoot) (void $ setGroupUser user group) act
+withRoot :: Config -> IO a -> IO a
+withRoot conf act = bracket_ (void recoverRoot) (void $ setGroupUser conf) act
