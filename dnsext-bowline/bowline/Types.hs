@@ -42,9 +42,9 @@ newControl = do
         Control
             { getStats = return mempty
             , getWStats = return mempty
-            , quitServer = return ()
             , cacheControl = emptyCacheControl
             , reopenLog = return ()
+            , quitServer = return ()
             , waitQuit = return ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
