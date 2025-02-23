@@ -8,9 +8,8 @@ module Main where
 -- GHC
 import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
-import Control.Concurrent.STM
 import Control.Exception (bracket_, finally)
-import Control.Monad (guard, when)
+import Control.Monad
 import Data.ByteString.Builder
 import Data.Functor
 import qualified Data.IORef as I
@@ -304,14 +303,11 @@ getCreds Config{..}
 
 getControl :: Env -> [WorkerStatOP] -> Control -> IO Control
 getControl env wstats mng0 = do
-    qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
             mng0
                 { getStats = getStats' env ucacheQSize
                 , getWStats = getWStats' wstats
-                , quitServer = atomically $ writeTVar qRef True
-                , waitQuit = readTVar qRef >>= guard
                 }
     return mng
 

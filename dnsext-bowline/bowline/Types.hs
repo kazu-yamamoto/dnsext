@@ -2,6 +2,7 @@
 module Types where
 
 import Control.Concurrent.STM
+import Control.Monad
 import Data.ByteString.Builder
 import Data.IORef
 
@@ -43,14 +44,15 @@ data Control = Control
 
 newControl :: IO Control
 newControl = do
+    qRef <- newTVarIO False
     ref <- newIORef Quit
     return
         Control
             { getStats = return mempty
             , getWStats = return mempty
             , reopenLog = return ()
-            , quitServer = return ()
-            , waitQuit = return ()
+            , quitServer = atomically $ writeTVar qRef True
+            , waitQuit = readTVar qRef >>= guard
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
             }
