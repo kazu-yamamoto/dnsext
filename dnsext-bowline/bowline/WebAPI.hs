@@ -4,10 +4,8 @@
 module WebAPI (
     bindAPI,
     run,
-    new,
 ) where
 
-import Control.Concurrent
 import qualified Control.Exception as E
 import Data.ByteString ()
 import Data.Functor
@@ -19,7 +17,6 @@ import Network.Wai
 import Network.Wai.Handler.Warp hiding (run)
 
 import DNS.Iterative.Server (withLocationIOE)
-import qualified DNS.ThreadStats as TStat
 
 import Config
 import Types
@@ -98,6 +95,3 @@ bindAPI Config{..}
 
 run :: Control -> Socket -> IO ()
 run mng sock = E.finally (runSettingsSocket defaultSettings sock $ app mng) (close sock)
-
-new :: Config -> Control -> IO (Maybe ThreadId)
-new conf mng = mapM (TStat.forkIO "webapi-srv" . run mng) =<< bindAPI conf
