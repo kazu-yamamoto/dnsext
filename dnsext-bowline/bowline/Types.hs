@@ -7,20 +7,28 @@ import Data.IORef
 
 --
 import DNS.Types
+import DNS.Log (PutLines)
+import DNS.RRCache (RRCacheOps)
 
 {- FOURMOLU_DISABLE -}
-data CacheControl =
-    CacheControl
+data CacheControl = CacheControl
     { ccRemove          :: Domain -> IO ()
     , ccRemoveType      :: Domain -> TYPE -> IO ()
     , ccRemoveBogus     :: IO ()
     , ccRemoveNegative  :: IO ()
     , ccClear           :: IO ()
     }
+
+data GlobalCache = GlobalCache
+    { gcacheRRCacheOps  :: RRCacheOps
+    , gcacheControl     :: CacheControl
+    , gcacheSetLogLn    :: PutLines IO -> IO ()
+    }
 {- FOURMOLU_ENABLE -}
 
 data QuitCmd = Quit | Reload | KeepCache deriving Show
 
+{-# DEPRECATED cacheControl "use gcacheControl" #-}
 data Control = Control
     { getStats :: IO Builder
     , getWStats :: IO Builder

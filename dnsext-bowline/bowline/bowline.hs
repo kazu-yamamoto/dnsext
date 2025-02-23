@@ -54,13 +54,6 @@ import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
-data GlobalCache = GlobalCache
-    { gcacheRRCacheOps :: RRCacheOps
-    , gcacheSetLogLn :: Log.PutLines IO -> IO ()
-    }
-
-----------------------------------------------------------------
-
 help :: IO ()
 help = putStrLn "bowline [<confFile>] [<conf-key>=<conf-value> ...]"
 
@@ -262,7 +255,23 @@ getCache tc Config{..} = do
         cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
     cacheOps <- newRRCacheOps cacheConf
     let setLog = I.writeIORef ref
-    return $ GlobalCache cacheOps setLog
+    return $ GlobalCache cacheOps (getCacheControl cacheOps) setLog
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getCacheControl :: RRCacheOps -> CacheControl
+getCacheControl RRCacheOps{..} =
+    emptyCacheControl
+    { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache }
+  where
+    rmName name     = mapM_ (rmType name) types
+    rmType name ty  = removeCache (DNS.Question name ty DNS.IN)
+    types = [A, AAAA, NS, SOA, CNAME, DNAME, MX, PTR, SRV, TYPE 35, SVCB, HTTPS]
+    rmBogus   = filterCache (\_ _ hit _ -> Cache.hitCases1 (\_ -> True) notBogus hit)
+    notBogus  = Cache.positiveCases (\_ -> True) (\_ -> False) (\_ _ -> True)
+    rmNeg     = filterCache (\_ _ hit _ -> Cache.hitCases1 (\_ -> False) (\_ -> True) hit)
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -302,7 +311,7 @@ getControl env wstats mng0 = do
             mng0
                 { getStats = getStats' env ucacheQSize
                 , getWStats = getWStats' wstats
-                , cacheControl = getCacheControl env
+                , cacheControl = getCacheControl_ env
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
@@ -311,8 +320,8 @@ getControl env wstats mng0 = do
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-getCacheControl :: Env -> CacheControl
-getCacheControl Env{..} =
+getCacheControl_ :: Env -> CacheControl
+getCacheControl_ Env{..} =
     emptyCacheControl
     { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache_ }
   where
