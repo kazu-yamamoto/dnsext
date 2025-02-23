@@ -56,7 +56,7 @@ import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 import Config
 import SockOpt
 import SocketUtil (ainfosSkipError)
-import Types (CacheControl (..), Control (..), QuitCmd (..), quitCmd)
+import Types
 
 data Command
     = Param
@@ -125,12 +125,12 @@ keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
 
 {- FOURMOLU_DISABLE -}
 monitors
-    :: Config -> Env -> Control -> [String]
+    :: Config -> Env -> Control -> GlobalCache -> [String]
     -> [(Socket, SockAddr)] -> [String] -> [IO ()]
-monitors conf env mng@Control{..} srvInfo ps monInfo =
+monitors conf env mng@Control{..} gch srvInfo ps monInfo =
     [runStdConsole | cnf_monitor_stdio conf] ++ [monitorServer s | (s, _) <- ps]
   where
-    runStdConsole = console conf env mng srvInfo monInfo stdin stdout "<std>"
+    runStdConsole = console conf env mng gch srvInfo monInfo stdin stdout "<std>"
     logLn level = logLines_ env level Nothing . (: [])
     handle :: (SomeException -> IO a) -> IO a -> IO a
     handle onError = either onError return <=< try
@@ -139,7 +139,7 @@ monitors conf env mng@Control{..} srvInfo ps monInfo =
                 socketWaitRead s
                 (sock, addr) <- S.accept s
                 sockh <- S.socketToHandle sock ReadWriteMode
-                let repl = console conf env mng srvInfo monInfo sockh sockh $ show addr
+                let repl = console conf env mng gch srvInfo monInfo sockh sockh $ show addr
                 void $ forkFinally repl (\_ -> hClose sockh)
             loop =
                 either (const $ return ()) (const loop)
@@ -152,9 +152,9 @@ monitors conf env mng@Control{..} srvInfo ps monInfo =
 
 {- FOURMOLU_DISABLE -}
 console
-    :: Config -> Env -> Control -> [String]
+    :: Config -> Env -> Control -> GlobalCache -> [String]
     -> [String] -> Handle -> Handle -> String -> IO ()
-console conf env ctl@Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH outH ainfo = do
+console conf env ctl@Control{..} GlobalCache{gcacheControl=CacheControl{..}} srvInfo monInfo inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)

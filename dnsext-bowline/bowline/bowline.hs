@@ -8,9 +8,8 @@ module Main where
 -- GHC
 import Control.Concurrent (killThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently_, race_)
-import Control.Concurrent.STM
 import Control.Exception (bracket_, finally)
-import Control.Monad (guard, when)
+import Control.Monad
 import Data.ByteString.Builder
 import Data.Functor
 import qualified Data.IORef as I
@@ -54,13 +53,6 @@ import qualified WebAPI as API
 
 ----------------------------------------------------------------
 
-data GlobalCache = GlobalCache
-    { gcacheRRCacheOps :: RRCacheOps
-    , gcacheSetLogLn :: Log.PutLines IO -> IO ()
-    }
-
-----------------------------------------------------------------
-
 help :: IO ()
 help = putStrLn "bowline [<confFile>] [<conf-key>=<conf-value> ...]"
 
@@ -71,27 +63,27 @@ run readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
-    newControl >>= go tcache Nothing
+    go tcache Nothing
   where
-    go tcache mcache mng = do
-        cache <- readConfig >>= runConfig tcache mcache mng
+    go tcache mcache = do
+        conf <- readConfig
+        mng <- newControl
+        gcache <- maybe (getCache tcache conf) return mcache
+        runConfig tcache gcache mng conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
             Reload -> do
                 putStrLn "\nReloading..." -- fixme
-                stopCache $ gcacheRRCacheOps cache
-                go tcache Nothing mng
+                stopCache $ gcacheRRCacheOps gcache
+                go tcache Nothing
             KeepCache -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
-                go tcache (Just cache) mng
+                go tcache (Just gcache)
 
-runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
-runConfig tcache mcache mng0 conf@Config{..} = do
+runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO ()
+runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
     -- Setup
-    gcache@GlobalCache{..} <- case mcache of
-        Nothing -> getCache tcache conf
-        Just c -> return c
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
             | cnf_disable_v6_ns = pure True
@@ -130,11 +122,12 @@ runConfig tcache mcache mng0 conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
+    workerStats <- Server.getWorkerStats cnf_workers
+    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
+    --  filled env and mng(Control) available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
-    workerStats <- Server.getWorkerStats cnf_workers
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
-    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
     (mas, monInfo) <- Mon.bindMonitor conf env
     --
     void $ setGroupUser conf
@@ -142,7 +135,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
-        monitors srvInfo = Mon.monitors conf env mng srvInfo mas monInfo
+        monitors srvInfo = Mon.monitors conf env mng gcache srvInfo mas monInfo
     monitor <- monitors <$> mapM (\(n, _mk, sks) -> srvInfo1 n <$> mapM getSocketName sks) addrs
     -- Run
     gcacheSetLogLn putLines
@@ -168,7 +161,6 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             mapM_ maybeKill [tidA, tidW]
             killLogger
     threadDelay 500000 -- avoiding address already in use
-    return gcache
   where
     maybeKill = maybe (return ()) killThread
     trans creds sm =
@@ -261,7 +253,23 @@ getCache tc Config{..} = do
         cacheConf = RRCacheConf cnf_cache_size 1800 memoLogLn $ Server.getTime tc
     cacheOps <- newRRCacheOps cacheConf
     let setLog = I.writeIORef ref
-    return $ GlobalCache cacheOps setLog
+    return $ GlobalCache cacheOps (getCacheControl cacheOps) setLog
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getCacheControl :: RRCacheOps -> CacheControl
+getCacheControl RRCacheOps{..} =
+    emptyCacheControl
+    { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache }
+  where
+    rmName name     = mapM_ (rmType name) types
+    rmType name ty  = removeCache (DNS.Question name ty DNS.IN)
+    types = [A, AAAA, NS, SOA, CNAME, DNAME, MX, PTR, SRV, TYPE 35, SVCB, HTTPS]
+    rmBogus   = filterCache (\_ _ hit _ -> Cache.hitCases1 (\_ -> True) notBogus hit)
+    notBogus  = Cache.positiveCases (\_ -> True) (\_ -> False) (\_ _ -> True)
+    rmNeg     = filterCache (\_ _ hit _ -> Cache.hitCases1 (\_ -> False) (\_ -> True) hit)
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -295,33 +303,13 @@ getCreds Config{..}
 
 getControl :: Env -> [WorkerStatOP] -> Control -> IO Control
 getControl env wstats mng0 = do
-    qRef <- newTVarIO False
     let ucacheQSize = return (0, 0 {- TODO: update ServerMonitor to drop -})
         mng =
             mng0
                 { getStats = getStats' env ucacheQSize
                 , getWStats = getWStats' wstats
-                , cacheControl = getCacheControl env
-                , quitServer = atomically $ writeTVar qRef True
-                , waitQuit = readTVar qRef >>= guard
                 }
     return mng
-
-----------------------------------------------------------------
-
-{- FOURMOLU_DISABLE -}
-getCacheControl :: Env -> CacheControl
-getCacheControl Env{..} =
-    emptyCacheControl
-    { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache_ }
-  where
-    rmName name     = mapM_ (rmType name) types
-    rmType name ty  = removeCache_ (DNS.Question name ty DNS.IN)
-    types = [A, AAAA, NS, SOA, CNAME, DNAME, MX, PTR, SRV, TYPE 35, SVCB, HTTPS]
-    rmBogus = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> True) notBogus hit)
-    notBogus = Cache.positiveCases (\_ -> True) (\_ -> False) (\_ _ -> True)
-    rmNeg = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> False) (\_ -> True) hit)
-{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
