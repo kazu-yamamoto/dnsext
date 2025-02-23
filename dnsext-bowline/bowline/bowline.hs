@@ -311,27 +311,10 @@ getControl env wstats mng0 = do
             mng0
                 { getStats = getStats' env ucacheQSize
                 , getWStats = getWStats' wstats
-                , cacheControl = getCacheControl_ env
                 , quitServer = atomically $ writeTVar qRef True
                 , waitQuit = readTVar qRef >>= guard
                 }
     return mng
-
-----------------------------------------------------------------
-
-{- FOURMOLU_DISABLE -}
-getCacheControl_ :: Env -> CacheControl
-getCacheControl_ Env{..} =
-    emptyCacheControl
-    { ccRemove = rmName, ccRemoveType = rmType, ccRemoveBogus = rmBogus, ccRemoveNegative = rmNeg, ccClear = clearCache_ }
-  where
-    rmName name     = mapM_ (rmType name) types
-    rmType name ty  = removeCache_ (DNS.Question name ty DNS.IN)
-    types = [A, AAAA, NS, SOA, CNAME, DNAME, MX, PTR, SRV, TYPE 35, SVCB, HTTPS]
-    rmBogus = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> True) notBogus hit)
-    notBogus = Cache.positiveCases (\_ -> True) (\_ -> False) (\_ _ -> True)
-    rmNeg = filterCache_ (\_ _ hit _ -> Cache.hitCases1 (\_ -> False) (\_ -> True) hit)
-{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 

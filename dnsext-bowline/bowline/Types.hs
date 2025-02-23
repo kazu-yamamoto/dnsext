@@ -26,22 +26,20 @@ data GlobalCache = GlobalCache
     }
 {- FOURMOLU_ENABLE -}
 
+emptyCacheControl :: CacheControl
+emptyCacheControl = CacheControl (\_ -> pure ()) (\_ _ -> pure ()) (pure ()) (pure ()) (pure ())
+
 data QuitCmd = Quit | Reload | KeepCache deriving Show
 
-{-# DEPRECATED cacheControl "use gcacheControl" #-}
 data Control = Control
     { getStats :: IO Builder
     , getWStats :: IO Builder
-    , cacheControl :: CacheControl
     , reopenLog :: IO ()
     , quitServer :: IO ()
     , waitQuit :: STM ()
     , getCommandAndClear :: IO QuitCmd
     , setCommand :: QuitCmd -> IO ()
     }
-
-emptyCacheControl :: CacheControl
-emptyCacheControl = CacheControl (\_ -> pure ()) (\_ _ -> pure ()) (pure ()) (pure ()) (pure ())
 
 newControl :: IO Control
 newControl = do
@@ -50,7 +48,6 @@ newControl = do
         Control
             { getStats = return mempty
             , getWStats = return mempty
-            , cacheControl = emptyCacheControl
             , reopenLog = return ()
             , quitServer = return ()
             , waitQuit = return ()
