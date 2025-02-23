@@ -55,7 +55,7 @@ import System.Posix (getEffectiveGroupID, getEffectiveUserID)
 import Config
 import SockOpt
 import SocketUtil (ainfosSkipError)
-import Types (CacheControl (..), Control (..))
+import Types (CacheControl (..), Control (..), QuitCmd (..), quitCmd)
 
 monitorSockets :: S.PortNumber -> [S.HostName] -> IO [(Socket, SockAddr)]
 monitorSockets port = mapM aiSocket <=< ainfosSkipError putStrLn Stream port
@@ -82,7 +82,7 @@ data Command
     | ReopenLog
     | Noop
     | Exit
-    | Quit
+    | QuitCmd QuitCmd
     | Help (Maybe String)
     deriving (Show)
 
@@ -155,7 +155,7 @@ keepNotAvails = foldr addAvail [] [KeepAlive, TcpKeepIdle, TcpKeepInterval]
 console
     :: Config -> Env -> Control -> [String]
     -> [String] -> Handle -> Handle -> String -> IO ()
-console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH outH ainfo = do
+console conf env ctl@Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH outH ainfo = do
     let input = do
             s <- hGetLine inH
             let err = hPutStrLn outH ("monitor error: " ++ ainfo ++ ": command parse error: " ++ show s)
@@ -182,36 +182,40 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
         match t = show t == us
         types = map DNS.toTYPE [1 .. 512]
 
-    parseCmd [] = Just Noop
-    parseCmd ws = case ws of
-        "param" : _ -> Just Param
-        "find" : as -> Just $ Find as
-        ["lookup", n, typ] -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
-        "stats" : _ -> Just Stats
-        "t" : as -> Just $ TStats as
-        "tstats" : as -> Just $ TStats as
-        "w" : _ -> Just WStats
-        "wstats" : _ -> Just WStats
-        "expire" : args -> case args of
-            [] -> Just $ Expire 0
-            x : _ -> Expire <$> readMaybe x
-        "flush" : n : _ -> Just $ Flush $ DNS.fromRepresentation n
-        "flush_type" : n : ty : _ -> FlushType (DNS.fromRepresentation n) <$> readMaybe ty
-        "flush_bogus" : _     -> Just FlushBogus
-        "flush_negative" : _  -> Just FlushNegative
-        "flush_all" : _       -> Just FlushAll
-        "reopen_log" : _ -> Just ReopenLog
-        "exit" : _ -> Just Exit
-        "quit-server" : _ -> Just Quit
-        "help" : w : _ -> Just $ Help $ Just w
-        "help" : [] -> Just $ Help Nothing
-        _ -> Nothing
+    nomalizec c
+        | c == '-'   = '_'
+        | otherwise  = c
+    parseCmd  []       = Just Noop
+    parseCmd (cmd:as)  = case map nomalizec cmd:as of
+        "param"           : _             -> Just   Param
+        "find"            : _             -> Just $ Find as
+        "lookup"          : n  : typ : _  -> Lookup (DNS.fromRepresentation n) <$> parseTYPE typ
+        "stats"           : _             -> Just   Stats
+        "t"               : _             -> Just $ TStats as
+        "tstats"          : _             -> Just $ TStats as
+        "w"               : _             -> Just   WStats
+        "wstats"          : _             -> Just   WStats
+        "expire"          : []            -> Just $ Expire 0
+        "expire"          : x  : _        -> Expire <$> readMaybe x
+        "flush"           : n  : _        -> Just $ Flush $ DNS.fromRepresentation n
+        "flush_type"      : n  : ty : _   -> FlushType (DNS.fromRepresentation n) <$> readMaybe ty
+        "flush_bogus"     : _             -> Just   FlushBogus
+        "flush_negative"  : _             -> Just   FlushNegative
+        "flush_all"       : _             -> Just   FlushAll
+        "reopen_log"      : _             -> Just   ReopenLog
+        "exit"            : _             -> Just   Exit
+        "reload"          : _             -> Just $ QuitCmd Reload
+        "keep_cache"      : _             -> Just $ QuitCmd KeepCache
+        "quit_server"     : _             -> Just $ QuitCmd Quit
+        "help"            : w  : _        -> Just $ Help $ Just w
+        "help" : []                       -> Just $ Help   Nothing
+        _ : _                             -> Nothing
 
     getShowParam' = getShowParam conf srvInfo monInfo
     outLn = hPutStrLn outH
 
-    runCmd Quit = quitServer $> True
-    runCmd Exit = return True
+    runCmd (QuitCmd qcmd) = quitCmd ctl qcmd $> True
+    runCmd  Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
         dispatch  Param = mapM_ outLn =<< getShowParam'
@@ -263,7 +267,9 @@ console conf env Control{cacheControl=CacheControl{..},..} srvInfo monInfo inH o
             , ("flush_all",       ("flush_all", "remove all cache"))
             , ("reopen_log",      ("reopen_log", "reopen logfile when file logging"))
             , ("exit",            ("exit", "exit this management session"))
-            , ("quit-server",     ("quit-server", "quit this server"))
+            , ("reload",          ("reload", "reload this server, flush cache"))
+            , ("keep_cache",      ("keep_cache", "reload this server, with keeping cache"))
+            , ("quit_server",     ("quit_server", "quit this server"))
             , ("help",            ("help", "show this help"))
             ]
 {- FOURMOLU_ENABLE -}

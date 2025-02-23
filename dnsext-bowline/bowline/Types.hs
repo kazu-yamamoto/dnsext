@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Types where
 
 import Control.Concurrent.STM
@@ -18,7 +19,7 @@ data CacheControl =
     }
 {- FOURMOLU_ENABLE -}
 
-data Command = Quit | Reload | KeepCache
+data QuitCmd = Quit | Reload | KeepCache deriving Show
 
 data Control = Control
     { getStats :: IO Builder
@@ -27,8 +28,8 @@ data Control = Control
     , reopenLog :: IO ()
     , quitServer :: IO ()
     , waitQuit :: STM ()
-    , getCommandAndClear :: IO Command
-    , setCommand :: Command -> IO ()
+    , getCommandAndClear :: IO QuitCmd
+    , setCommand :: QuitCmd -> IO ()
     }
 
 emptyCacheControl :: CacheControl
@@ -48,3 +49,6 @@ newControl = do
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
             }
+
+quitCmd :: Control -> QuitCmd -> IO ()
+quitCmd Control{..} cmd = setCommand cmd >> quitServer

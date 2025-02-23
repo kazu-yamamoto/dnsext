@@ -26,17 +26,6 @@ doStats Control{..} = responseBuilder HTTP.ok200 [] <$> getStats
 doWStats :: Control -> IO Response
 doWStats Control{..} = responseBuilder HTTP.ok200 [] <$> getWStats
 
-doReload :: Control -> Command -> IO Response
-doReload Control{..} ctl = do
-    setCommand ctl
-    quitServer
-    return ok
-
-doQuit :: Control -> IO Response
-doQuit Control{..} = do
-    quitServer
-    return ok
-
 {- FOURMOLU_DISABLE -}
 doHelp :: IO Response
 doHelp = return $ responseBuilder HTTP.ok200 [] txt
@@ -66,9 +55,9 @@ app mng req sendResp = getResp >>= sendResp
             "/stats"       -> doStats mng
             "/wstats"      -> doWStats mng
             "/reopen-log"  -> reopenLog mng $> ok
-            "/reload"      -> doReload mng Reload
-            "/keep-cache"  -> doReload mng KeepCache
-            "/quit"        -> doQuit mng
+            "/reload"      -> quitCmd mng Reload     $> ok
+            "/keep-cache"  -> quitCmd mng KeepCache  $> ok
+            "/quit"        -> quitCmd mng Quit       $> ok
             "/help"        -> doHelp
             "/"            -> doHelp
             _ -> return $ ng HTTP.badRequest400
