@@ -67,7 +67,11 @@ run readConfig = do
     newControl >>= go tcache Nothing
   where
     go tcache mcache mng = do
-        cache <- readConfig >>= runConfig tcache mcache mng
+        conf <- readConfig
+        gcache <- case mcache of
+            Nothing -> getCache tcache conf
+            Just c -> return c
+        cache <- runConfig tcache gcache mng conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
@@ -79,12 +83,9 @@ run readConfig = do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go tcache (Just cache) mng
 
-runConfig :: TimeCache -> Maybe GlobalCache -> Control -> Config -> IO GlobalCache
-runConfig tcache mcache mng0 conf@Config{..} = do
+runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO GlobalCache
+runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
     -- Setup
-    gcache@GlobalCache{..} <- case mcache of
-        Nothing -> getCache tcache conf
-        Just c -> return c
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
             | cnf_disable_v6_ns = pure True
