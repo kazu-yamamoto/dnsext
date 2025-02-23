@@ -131,6 +131,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
     (mas, monInfo) <- Mon.bindMonitor conf env
+    masock <- API.bindAPI conf
     --
     void $ setGroupUser conf
     -- actions list for threads
@@ -143,7 +144,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
     gcacheSetLogLn putLines
     tidW <- runWriter
     runLogger
-    tidA <- API.new conf mng
+    tidA <- mapM (TStat.forkIO "webapi-srv" . API.run mng) masock
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
             conc
