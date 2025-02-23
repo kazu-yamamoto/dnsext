@@ -133,15 +133,17 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     workerStats <- Server.getWorkerStats cnf_workers
-    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
-    servers <- mapM (getServers env cnf_dns_addrs toCacher) $ trans creds sm
+    addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
     mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
-    let srvinfo name sockets = do
-            sas <- mapM getSocketName sockets
-            pure $ unwords $ (name ++ ":") : map show sas
-    monitor <- Mon.monitor conf env mng =<< sequence [srvinfo n sks | svs <- servers, (n, sks, _as) <- svs]
+    (mas, monInfo) <- Mon.bindMonitor conf env
     --
     void $ setGroupUser conf
+    -- actions list for threads
+    (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
+    servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
+    let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
+        monitors srvInfo = Mon.monitors conf env mng srvInfo mas monInfo
+    monitor <- monitors <$> mapM (\(n, _mk, sks) -> srvInfo1 n <$> mapM getSocketName sks) addrs
     -- Run
     gcacheSetLogLn putLines
     tidW <- runWriter
@@ -152,7 +154,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
             conc
                 [ TStat.concurrentlyList_ (withNum "cacher" cachers)
                 , TStat.concurrentlyList_ (withNum "worker" workers)
-                , TStat.concurrentlyList_ [(n, as) | svs <- servers, (n, _sks, as) <- svs]
+                , TStat.concurrentlyList_ [(n, as) | (n, _sks, ass) <- servers, as <- ass]
                 ]
     {- Advisedly separating 'dumper' thread from Async thread-tree
        - Keep the 'dumper' thread alive until the end for debugging purposes
@@ -208,6 +210,24 @@ main = do
         confFile : aargs -> run (parseConfig confFile aargs)
 
 ----------------------------------------------------------------
+
+bindServers
+    :: [HostName]
+    -> (Bool, n, a, SocketType, PortNumber)
+    -> IO (n, a, [Socket])
+bindServers _     (False, n, a, _       , _   ) =    return (n, a, [])
+bindServers hosts (True , n, a, socktype, port) = do
+    as <- ainfosSkipError putStrLn socktype port hosts
+    (n, a,) <$> mapM openBind as
+  where
+    openBind ai = do
+        s <- openSocket ai
+        setSocketOption s ReuseAddr 1
+        when (addrFamily ai == AF_INET6) $ setSocketOption s IPv6Only 1
+        withFdSocket s $ setCloseOnExecIfNeeded
+        bind s $ addrAddress ai
+        when (addrSocketType ai == Stream) $ listen s 1024
+        return s
 
 getServers
     :: Env
