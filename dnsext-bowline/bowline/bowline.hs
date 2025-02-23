@@ -136,7 +136,7 @@ runConfig tcache mcache mng0 conf@Config{..} = do
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
-        monitors srvInfo = Mon.monitors conf env mng srvInfo mas monInfo
+        monitors srvInfo = Mon.monitors conf env mng gcache srvInfo mas monInfo
     monitor <- monitors <$> mapM (\(n, _mk, sks) -> srvInfo1 n <$> mapM getSocketName sks) addrs
     -- Run
     gcacheSetLogLn putLines
