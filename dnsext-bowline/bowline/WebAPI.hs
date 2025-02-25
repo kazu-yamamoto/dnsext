@@ -56,9 +56,9 @@ app mng req sendResp = getResp >>= sendResp
             "/stats"       -> doStats mng
             "/wstats"      -> doWStats mng
             "/reopen-log"  -> reopenLog mng $> ok
-            "/reload"      -> quitCmd mng Reload     $> ok
-            "/keep-cache"  -> quitCmd mng KeepCache  $> ok
-            "/quit"        -> quitCmd mng Quit       $> ok
+            "/reload"      -> reloadCmd mng Reload    failed ok
+            "/keep-cache"  -> reloadCmd mng KeepCache failed ok
+            "/quit"        -> quitCmd mng Quit $> ok
             "/help"        -> doHelp
             "/"            -> doHelp
             _ -> return $ ng HTTP.badRequest400
@@ -67,6 +67,9 @@ app mng req sendResp = getResp >>= sendResp
 
 ok :: Response
 ok = responseLBS HTTP.ok200 [] "OK\n"
+
+failed :: Response
+failed = responseLBS HTTP.ok200 [] "FAILED\n"
 
 ng :: HTTP.Status -> Response
 ng st = responseLBS st [] "NG\n"
