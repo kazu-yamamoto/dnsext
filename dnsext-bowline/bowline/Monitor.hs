@@ -75,9 +75,17 @@ data Command
     | ReopenLog
     | Noop
     | Exit
-    | QuitCmd QuitCmd
+    | QuitCmd QAction
     | Help (Maybe String)
     deriving (Show)
+
+newtype QAction = QAction (IO Bool)
+
+instance Show QAction where
+    show _ = "<QAction>"
+
+qaction :: IO Bool -> Command
+qaction = QuitCmd . QAction
 
 {- FOURMOLU_DISABLE -}
 bindMonitor :: Config -> Env -> IO ([(Socket, SockAddr)], [String])
@@ -203,9 +211,9 @@ console conf env ctl@Control{..} GlobalCache{gcacheControl=CacheControl{..}} srv
         "flush_all"       : _             -> Just   FlushAll
         "reopen_log"      : _             -> Just   ReopenLog
         "exit"            : _             -> Just   Exit
-        "reload"          : _             -> Just $ QuitCmd Reload
-        "keep_cache"      : _             -> Just $ QuitCmd KeepCache
-        "quit_server"     : _             -> Just $ QuitCmd Quit
+        "reload"          : _             -> Just $ qaction $ reloadCmd ctl Reload    False True
+        "keep_cache"      : _             -> Just $ qaction $ reloadCmd ctl KeepCache False True
+        "quit_server"     : _             -> Just $ qaction $ quitCmd ctl Quit $> True
         "help"            : w  : _        -> Just $ Help $ Just w
         "help" : []                       -> Just $ Help   Nothing
         _ : _                             -> Nothing
@@ -213,7 +221,7 @@ console conf env ctl@Control{..} GlobalCache{gcacheControl=CacheControl{..}} srv
     getShowParam' = getShowParam conf srvInfo monInfo
     outLn = hPutStrLn outH
 
-    runCmd (QuitCmd qcmd) = quitCmd ctl qcmd $> True
+    runCmd (QuitCmd (QAction act)) = act
     runCmd  Exit = return True
     runCmd cmd = dispatch cmd $> False
       where
