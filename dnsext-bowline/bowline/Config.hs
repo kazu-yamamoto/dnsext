@@ -8,10 +8,10 @@ module Config (
     showConfig,
 ) where
 
-import Control.Monad (void)
 import Control.Monad.Trans.State (StateT (..), evalStateT)
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
+import Data.Functor
 import Data.List
 import Data.List.Split (splitOn)
 import Data.String (fromString)
@@ -188,96 +188,95 @@ showConfig2 conf =
 
 -- | Parsing a configuration file to get an 'Config'.
 parseConfig :: FilePath -> [String] -> IO Config
-parseConfig file args = makeConfig defaultConfig <$> ((++) <$> mapM readArg args <*> readConfig file)
+parseConfig file args = makeConfig defaultConfig =<< ((++) <$> mapM readArg args <*> readConfig file)
 
-makeConfig :: Config -> [Conf] -> Config
-makeConfig def conf =
-    Config
-        { cnf_user = get "user" cnf_user
-        , cnf_group = get "group" cnf_group
-        , cnf_log = get "log" cnf_log
-        , cnf_log_file = get "log-file" cnf_log_file
-        , cnf_log_output = Log.Stdout -- fixme
-        , cnf_log_level = get "log-level" cnf_log_level
-        , cnf_log_timestamp = get "log-timestamp" cnf_log_timestamp
-        , cnf_short_log = get "short-log" cnf_short_log
-        , cnf_cert_file = get "cert-file" cnf_cert_file
-        , cnf_key_file = get "key-file" cnf_key_file
-        , cnf_trust_anchor_file = getTrustAnchorFile conf
-        , cnf_root_hints = get "root-hints" cnf_root_hints
-        , cnf_cache_size = get "cache-size" cnf_cache_size
-        , cnf_disable_v6_ns = get "disable-v6-ns" cnf_disable_v6_ns
-        , cnf_local_zones = localZones
-        , cnf_stub_zones = stubZones
-        , cnf_dns_addrs = get "dns-addrs" cnf_dns_addrs
-        , cnf_resolve_timeout = get "resolve-timeout" cnf_resolve_timeout
-        , cnf_cachers = get "cachers" cnf_cachers
-        , cnf_workers = get "workers" cnf_workers
-        , cnf_udp = get "udp" cnf_udp
-        , cnf_udp_port = get "udp-port" cnf_udp_port
-        , cnf_vc_query_max_size = get "vc-query-max-size" cnf_vc_query_max_size
-        , cnf_vc_idle_timeout = get "vc-idle-timeout" cnf_vc_idle_timeout
-        , cnf_vc_slowloris_size = get "vc-slowloris-size" cnf_vc_slowloris_size
-        , cnf_tcp = get "tcp" cnf_tcp
-        , cnf_tcp_port = get "tcp-port" cnf_tcp_port
-        , cnf_tls = get "tls" cnf_tls
-        , cnf_tls_port = get "tls-port" cnf_tls_port
-        , cnf_tls_session_ticket_lifetime = get "tls-session-ticket-lifetime" cnf_tls_session_ticket_lifetime
-        , cnf_quic = get "quic" cnf_quic
-        , cnf_quic_port = get "quic-port" cnf_quic_port
-        , cnf_h2c = get "h2c" cnf_h2c
-        , cnf_h2c_port = get "h2c-port" cnf_h2c_port
-        , cnf_h2 = get "h2" cnf_h2
-        , cnf_h2_port = get "h2-port" cnf_h2_port
-        , cnf_h3 = get "h3" cnf_h3
-        , cnf_h3_port = get "h3-port" cnf_h3_port
-        , cnf_early_data_size = get "early_data_size" cnf_early_data_size
-        , cnf_monitor_port = get "monitor-port" cnf_monitor_port
-        , cnf_monitor_addrs = get "monitor-addrs" cnf_monitor_addrs
-        , cnf_monitor_stdio = get "monitor-stdio" cnf_monitor_stdio
-        , cnf_monitor_keep_interval = get "monitor-keep-interval" cnf_monitor_keep_interval
-        , cnf_threads_dumper = get "threads-dumper" cnf_threads_dumper
-        , cnf_dnstap = get "dnstap" cnf_dnstap
-        , cnf_dnstap_socket_path = get "dnstap-socket-patch" cnf_dnstap_socket_path
-        , cnf_dnstap_reconnect_interval = get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval
-        , cnf_webapi = get "webapi" cnf_webapi
-        , cnf_webapi_addr = get "webapi-addr" cnf_webapi_addr
-        , cnf_webapi_port = get "webapi-port" cnf_webapi_port
-        , cnf_cache_max_negative_ttl = get "cache-max-negative-ttl" cnf_cache_max_negative_ttl
-        , cnf_cache_failure_rcode_ttl = get "cache-failure-rcode-ttl" cnf_cache_failure_rcode_ttl
-        , cnf_interface_automatic = get "interface-automatic" cnf_interface_automatic
-        }
+makeConfig :: Config -> [Conf] -> IO Config
+makeConfig def conf = do
+    cnf_user <- get "user" cnf_user
+    cnf_group <- get "group" cnf_group
+    cnf_log <- get "log" cnf_log
+    cnf_log_file <- get "log-file" cnf_log_file
+    cnf_log_output <- pure Log.Stdout -- fixme
+    cnf_log_level <- get "log-level" cnf_log_level
+    cnf_log_timestamp <- get "log-timestamp" cnf_log_timestamp
+    cnf_short_log <- get "short-log" cnf_short_log
+    cnf_cert_file <- get "cert-file" cnf_cert_file
+    cnf_key_file <- get "key-file" cnf_key_file
+    cnf_trust_anchor_file <- getTrustAnchorFile conf
+    cnf_root_hints <- get "root-hints" cnf_root_hints
+    cnf_cache_size <- get "cache-size" cnf_cache_size
+    cnf_disable_v6_ns <- get "disable-v6-ns" cnf_disable_v6_ns
+    cnf_local_zones <- localZones
+    cnf_stub_zones <- stubZones
+    cnf_dns_addrs <- get "dns-addrs" cnf_dns_addrs
+    cnf_resolve_timeout <- get "resolve-timeout" cnf_resolve_timeout
+    cnf_cachers <- get "cachers" cnf_cachers
+    cnf_workers <- get "workers" cnf_workers
+    cnf_udp <- get "udp" cnf_udp
+    cnf_udp_port <- get "udp-port" cnf_udp_port
+    cnf_vc_query_max_size <- get "vc-query-max-size" cnf_vc_query_max_size
+    cnf_vc_idle_timeout <- get "vc-idle-timeout" cnf_vc_idle_timeout
+    cnf_vc_slowloris_size <- get "vc-slowloris-size" cnf_vc_slowloris_size
+    cnf_tcp <- get "tcp" cnf_tcp
+    cnf_tcp_port <- get "tcp-port" cnf_tcp_port
+    cnf_tls <- get "tls" cnf_tls
+    cnf_tls_port <- get "tls-port" cnf_tls_port
+    cnf_tls_session_ticket_lifetime <- get "tls-session-ticket-lifetime" cnf_tls_session_ticket_lifetime
+    cnf_quic <- get "quic" cnf_quic
+    cnf_quic_port <- get "quic-port" cnf_quic_port
+    cnf_h2c <- get "h2c" cnf_h2c
+    cnf_h2c_port <- get "h2c-port" cnf_h2c_port
+    cnf_h2 <- get "h2" cnf_h2
+    cnf_h2_port <- get "h2-port" cnf_h2_port
+    cnf_h3 <- get "h3" cnf_h3
+    cnf_h3_port <- get "h3-port" cnf_h3_port
+    cnf_early_data_size <- get "early_data_size" cnf_early_data_size
+    cnf_monitor_port <- get "monitor-port" cnf_monitor_port
+    cnf_monitor_addrs <- get "monitor-addrs" cnf_monitor_addrs
+    cnf_monitor_stdio <- get "monitor-stdio" cnf_monitor_stdio
+    cnf_monitor_keep_interval <- get "monitor-keep-interval" cnf_monitor_keep_interval
+    cnf_threads_dumper <- get "threads-dumper" cnf_threads_dumper
+    cnf_dnstap <- get "dnstap" cnf_dnstap
+    cnf_dnstap_socket_path <- get "dnstap-socket-patch" cnf_dnstap_socket_path
+    cnf_dnstap_reconnect_interval <- get "dnstap-reconnect-interval" cnf_dnstap_reconnect_interval
+    cnf_webapi <- get "webapi" cnf_webapi
+    cnf_webapi_addr <- get "webapi-addr" cnf_webapi_addr
+    cnf_webapi_port <- get "webapi-port" cnf_webapi_port
+    cnf_cache_max_negative_ttl <- get "cache-max-negative-ttl" cnf_cache_max_negative_ttl
+    cnf_cache_failure_rcode_ttl <- get "cache-failure-rcode-ttl" cnf_cache_failure_rcode_ttl
+    cnf_interface_automatic <- get "interface-automatic" cnf_interface_automatic
+    pure Config{..}
   where
-    get k func = maybe (func def) fromConf $ lookup k conf
+    get k func = maybe (pure $ func def) fromConf $ lookup k conf
     --
-    localZones = case mapM parseLocalZone $ unfoldr getLocalZone conf of
-        Right zones -> zones
-        Left es -> error $ "parse error during local-data: " ++ es
+    localZones = unfoldrM getLocalZone conf >>= \zs -> case mapM parseLocalZone zs of
+        Right zones -> pure zones
+        Left es -> fail $ "parse error during local-data: " ++ es
     parseLocalZone (d, zt, xs) = evalStateT ((,,) d zt . subdoms d <$> mapM getRR xs) defaultContext{cx_zone = d, cx_name = d}
     subdoms d rrs = [rr | rr <- rrs, rrname rr `isSubDomainOf` d]
     getRR s = StateT $ parseLineRR $ fromString s
     --
-    stubZones = unfoldr getStubZone conf
+    stubZones = unfoldrM getStubZone conf
 
 -- $setup
 -- >>> :seti -XOverloadedStrings
 
-getTrustAnchorFile :: [Conf] -> [FilePath]
-getTrustAnchorFile = map (fromConf . snd) . filter ((== "trust-anchor-file") . fst)
+getTrustAnchorFile :: [Conf] -> IO [FilePath]
+getTrustAnchorFile = mapM (fromConf . snd) . filter ((== "trust-anchor-file") . fst)
 
 {- FOURMOLU_DISABLE -}
 -- |
 -- >>> getLocalZone [("foo",CV_Int 4),("local-zone",CV_Strings ["example.", "static"]),("local-data",CV_String "a.example. A 203.0.113.5"),("bar",CV_Bool True)]
 -- Just (("example.",LZ_Static,["a.example. A 203.0.113.5"]),[("bar",CV_Bool True)])
-getLocalZone :: [Conf] -> Maybe ((Domain, LocalZoneType, [String]), [Conf])
-getLocalZone [] = Nothing
+getLocalZone :: [Conf] -> IO (Maybe ((Domain, LocalZoneType, [String]), [Conf]))
+getLocalZone [] = pure $ Nothing
 getLocalZone ((k, v):xs)
-    | k == "local-zone" =
-        let cstrs = fromConf v
-            ~err = error $ "unknown local-zone pattern: " ++ show cstrs
-            (zone, zt) = maybe err id $ getLocalZone' cstrs
-            (ds, ys) = getLocalData id xs
-        in  Just ((zone, zt, ds), ys)
+    | k == "local-zone" = do
+          cstrs <- fromConf v
+          let err = fail $ "unknown local-zone pattern: " ++ show cstrs
+          (zone, zt) <- maybe err pure $ getLocalZone' cstrs
+          (ds, ys) <- getLocalData id xs
+          pure $ Just ((zone, zt, ds), ys)
     | otherwise = getLocalZone xs
 {- FOURMOLU_ENABLE -}
 
@@ -300,42 +299,42 @@ getLocalZone' _       = Nothing
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-getLocalData :: ([String] -> [String]) -> [Conf] -> ([String], [Conf])
-getLocalData a []        = (a [], [])
+getLocalData :: ([String] -> [String]) -> [Conf] -> IO ([String], [Conf])
+getLocalData a []        = pure (a [], [])
 getLocalData a xxs@((k, v):xs)
-    | k == "local-data"  = getLocalData (a . (fromConf v :)) xs
-    | otherwise          = (a [], xxs)
+    | k == "local-data"  = fromConf v >>= \vstr -> getLocalData (a . (vstr :)) xs
+    | otherwise          = pure (a [], xxs)
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-getStubZone :: [Conf] -> Maybe ((Domain, [Domain], [Address]), [Conf])
-getStubZone  []  = Nothing
+getStubZone :: [Conf] -> IO (Maybe ((Domain, [Domain], [Address]), [Conf]))
+getStubZone  []  = pure Nothing
 getStubZone ((k, v):xs)
-    | k == "stub-zone" =
-      let apex = fromString $ fromConf v
-          (ds, as, ys) = getStubContent id id xs
-      in           Just ((apex, ds, as), ys)
+    | k == "stub-zone" = do
+          apex <- fromString <$> fromConf v
+          (ds, as, ys) <- getStubContent id id xs
+          pure $ Just ((apex, ds, as), ys)
     | otherwise  = getStubZone xs
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-getStubContent :: ([Domain] -> [Domain]) -> ([Address] -> [Address]) -> [Conf] -> ([Domain], [Address], [Conf])
-getStubContent ds as      []  = (ds [], as [], [])
+getStubContent :: ([Domain] -> [Domain]) -> ([Address] -> [Address]) -> [Conf] -> IO ([Domain], [Address], [Conf])
+getStubContent ds as      []  = pure (ds [], as [], [])
 getStubContent ds as xss@((k, v):xs)
-    | k == "stub-addr"         =
-      let (ip', port') = break (== '@') vstr
-          ip = read' "stub-zone: ip-address format error" ip'
-          port = case port' of
-              []   -> 53
-              _:p  -> read' "stub-zone: port format error" p
-      in                         getStubContent ds (as . ((ip, port) :)) xs
-    | k == "stub-host"         = getStubContent (ds . (fromString vstr :)) as xs
-    | otherwise                = (ds [], as [], xss)
+    | k == "stub-addr"         = do
+        vstr <- fromConf v
+        let (ip', port') = break (== '@') vstr
+        ip <- read' "stub-zone: ip-address format error" ip'
+        port <- case port' of
+                    []   -> pure 53
+                    _:p  -> read' "stub-zone: port format error" p
+        getStubContent ds (as . ((ip, port) :)) xs
+    | k == "stub-host"         = fromConf v >>= \vstr -> getStubContent (ds . (fromString vstr :)) as xs
+    | otherwise                = pure (ds [], as [], xss)
   where
     read' e s = case [ x | (x, "") <- reads s ] of
-        []   -> error e
-        x:_  -> x
-    ~vstr = fromConf v
+        []   -> fail e
+        x:_  -> pure x
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -345,44 +344,44 @@ type Conf = (String, ConfValue)
 data ConfValue = CV_Int Int | CV_Bool Bool | CV_String String | CV_Strings [String] deriving (Eq, Show)
 
 class FromConf a where
-    fromConf :: ConfValue -> a
+    fromConf :: ConfValue -> IO a
 
 instance FromConf Int where
-    fromConf (CV_Int n) = n
-    fromConf _ = error "fromConf int"
+    fromConf (CV_Int n) = pure n
+    fromConf _ = fail "fromConf int"
 
 instance FromConf PortNumber where
-    fromConf (CV_Int n) = fromIntegral n
-    fromConf _ = error "fromConf port"
+    fromConf (CV_Int n) = pure $ fromIntegral n
+    fromConf _ = fail "fromConf port"
 
 instance FromConf Bool where
-    fromConf (CV_Bool b) = b
-    fromConf _ = error "fromConf bool"
+    fromConf (CV_Bool b) = pure b
+    fromConf _ = fail "fromConf bool"
 
 instance FromConf String where
-    fromConf (CV_String s) = s
-    fromConf _ = error "fromConf string"
+    fromConf (CV_String s) = pure s
+    fromConf _ = fail "fromConf string"
 
 instance FromConf (Maybe String) where
-    fromConf (CV_String "") = Nothing
-    fromConf (CV_String s) = Just s
-    fromConf _ = error "fromConf maybe string"
+    fromConf (CV_String "") = pure Nothing
+    fromConf (CV_String s) = pure $ Just s
+    fromConf _ = fail "fromConf maybe string"
 
 instance FromConf [String] where
-    fromConf (CV_String s) = filter (/= "") $ splitOn "," s
-    fromConf (CV_Strings ss) = ss
-    fromConf _ = error "fromConf string list"
+    fromConf (CV_String s) = pure $ filter (/= "") $ splitOn "," s
+    fromConf (CV_Strings ss) = pure $ ss
+    fromConf _ = fail "fromConf string list"
 
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
-    fromConf _ = error "fromConf log level"
+    fromConf _ = fail "fromConf log level"
 
 ----------------------------------------------------------------
 
-logLevel :: String -> Log.Level
+logLevel :: String -> IO Log.Level
 logLevel s = case lvs of
-    lv : _ -> lv
-    [] -> error $ "fromConf unknwon log-level " ++ s
+    lv : _ -> pure lv
+    [] -> fail $ "fromConf unknwon log-level " ++ s
   where
     lvs = [lv | (lv, "") <- reads u]
     u = map toUpper s
@@ -390,17 +389,17 @@ logLevel s = case lvs of
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-getInclude :: [Conf] -> Maybe (FilePath, [Conf])
-getInclude []         = Nothing
+getInclude :: [Conf] -> IO (Maybe (FilePath, [Conf]))
+getInclude []         = pure Nothing
 getInclude ((k, v):xs)
-    | k == "include"  = Just (fromConf v, xs)
+    | k == "include"  = fromConf v <&> \path -> Just (path, xs)
     | otherwise       = getInclude xs
 {- FOURMOLU_ENABLE -}
 
 includesConfs :: [Conf] -> IO [Conf]
-includesConfs cs = concat <$> mapM loadInclude (getIncludes cs)
+includesConfs cs = concat <$> (mapM loadInclude =<< getIncludes cs)
   where
-    getIncludes = unfoldr getInclude
+    getIncludes = unfoldrM getInclude
     loadInclude path = do
         putStrLn $ "loading included conf: " ++ path
         parseFile config path
@@ -414,10 +413,19 @@ nestedConfs n cs0 =  do
     cs1 <- includesConfs cs0
     let result
             | null cs1   = pure cs0
-            | n <= 0     = error $ "nestedConfs: nested-limit is " ++ show nestedLimit ++ ", limit exceeded."
+            | n <= 0     = fail $ "nestedConfs: nested-limit is " ++ show nestedLimit ++ ", limit exceeded."
             | otherwise  = (cs0 ++) <$> nestedConfs (n-1) cs1
     result
 {- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
+unfoldrM :: (b -> IO (Maybe (a, b))) -> b -> IO [a]
+unfoldrM next = go id
+  where
+    go xs s = maybe (pure $ xs []) (\(x, s') -> go (xs . (x:)) s') =<< next s
+
+----------------------------------------------------------------
 
 readConfig :: FilePath -> IO [Conf]
 readConfig path = parseFile config path >>= nestedConfs nestedLimit
