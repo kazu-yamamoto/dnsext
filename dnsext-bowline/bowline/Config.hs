@@ -18,6 +18,7 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
+import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
@@ -376,18 +377,29 @@ instance FromConf [String] where
     fromConf _ = fail "fromConf string list"
 
 instance FromConf UserID where
-    fromConf (CV_String s) = userID <$> getUserEntryForName s
+    fromConf (CV_String s) = uidForName s
     fromConf (CV_Int i) = pure $ fromIntegral i
     fromConf _ = fail "fromConf user-ID"
 
 instance FromConf GroupID where
-    fromConf (CV_String s) = groupID <$> getGroupEntryForName s
+    fromConf (CV_String s) = gidForName s
     fromConf (CV_Int i) = pure $ fromIntegral i
     fromConf _ = fail "fromConf group-ID"
 
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
     fromConf _ = fail "fromConf log level"
+
+{- FOURMOLU_DISABLE -}
+uidForName :: String -> IO UserID
+uidForName s = either (nameError ("user: " ++ s)) (pure . userID) =<< tryIOError (getUserEntryForName s)
+
+gidForName :: String -> IO GroupID
+gidForName s = either (nameError ("group: " ++ s)) (pure . groupID) =<< tryIOError (getGroupEntryForName s)
+
+nameError :: String -> IOError -> IO a
+nameError n ioe = ioError $ ioeSetErrorString ioe n
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
