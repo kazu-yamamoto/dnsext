@@ -16,15 +16,7 @@ import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
-import System.Posix (
-    getGroupEntryForName,
-    getRealUserID,
-    getUserEntryForName,
-    groupID,
-    setEffectiveGroupID,
-    setEffectiveUserID,
-    userID,
- )
+import System.Posix (getRealUserID, setEffectiveGroupID, setEffectiveUserID)
 import System.Posix (Handler (Catch), installHandler, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -348,8 +340,8 @@ setGroupUser :: Config -> IO Bool
 setGroupUser Config{..} = do
     root <- amIrootUser
     when root $ do
-        setEffectiveGroupID . groupID =<< getGroupEntryForName cnf_group
-        setEffectiveUserID . userID =<< getUserEntryForName cnf_user
+        setEffectiveGroupID cnf_group
+        setEffectiveUserID cnf_user
     return root
 
 withRoot :: Config -> IO a -> IO a
