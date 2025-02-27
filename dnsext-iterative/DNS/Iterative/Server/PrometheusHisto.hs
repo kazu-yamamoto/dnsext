@@ -22,7 +22,7 @@ formatBuckets prefix hvs sumVal = mconcat $ zipWith bformat bucketUpperBounds pb
         | null pbackets  = 0
         | otherwise      = last pbackets
     bformat ub bv = prefix <> fromString ("response_time_seconds_bucket" ++ "{" ++ bucketKey ub ++ "}" ++ " " ++ show bv ++ "\n")
-    inf_    = prefix <> fromString ("response_time_seconds_bucket" ++ "{\"+Inf\"}" ++ " " ++ show countVal ++ "\n")
+    inf_    = prefix <> fromString ("response_time_seconds_bucket" ++ "{le=\"+Inf\"}" ++ " " ++ show countVal ++ "\n")
     sum_    = prefix <> fromString ("response_time_seconds_sum" ++ " " ++ show sec ++ '.' : replicate (6 - length uss) '0' ++ uss ++ "\n")
       where
         uss = show usec
