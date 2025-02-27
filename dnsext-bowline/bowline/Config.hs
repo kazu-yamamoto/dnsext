@@ -18,6 +18,8 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import Text.Parsec
 import Text.Parsec.ByteString.Lazy
+import System.IO.Error (ioeSetErrorString, tryIOError)
+import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
@@ -26,8 +28,8 @@ import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 import Parser
 
 data Config = Config
-    { cnf_user :: String
-    , cnf_group :: String
+    { cnf_user :: UserID
+    , cnf_group :: GroupID
     , cnf_log :: Bool
     , cnf_log_file :: Maybe FilePath
     , cnf_log_output :: Log.OutHandle
@@ -85,8 +87,8 @@ data Config = Config
 defaultConfig :: Config
 defaultConfig =
     Config
-        { cnf_user = "root"
-        , cnf_group = "wheel"
+        { cnf_user = 0
+        , cnf_group = 0
         , cnf_log = True
         , cnf_log_file = Nothing
         , cnf_log_output = Log.Stdout
@@ -190,6 +192,7 @@ showConfig2 conf =
 parseConfig :: FilePath -> [String] -> IO Config
 parseConfig file args = makeConfig defaultConfig =<< ((++) <$> mapM readArg args <*> readConfig file)
 
+{- FOURMOLU_DISABLE -}
 makeConfig :: Config -> [Conf] -> IO Config
 makeConfig def conf = do
     cnf_user <- get "user" cnf_user
@@ -257,6 +260,7 @@ makeConfig def conf = do
     getRR s = StateT $ parseLineRR $ fromString s
     --
     stubZones = unfoldrM getStubZone conf
+{- FOURMOLU_ENABLE -}
 
 -- $setup
 -- >>> :seti -XOverloadedStrings
@@ -372,9 +376,30 @@ instance FromConf [String] where
     fromConf (CV_Strings ss) = pure $ ss
     fromConf _ = fail "fromConf string list"
 
+instance FromConf UserID where
+    fromConf (CV_String s) = uidForName s
+    fromConf (CV_Int i) = pure $ fromIntegral i
+    fromConf _ = fail "fromConf user-ID"
+
+instance FromConf GroupID where
+    fromConf (CV_String s) = gidForName s
+    fromConf (CV_Int i) = pure $ fromIntegral i
+    fromConf _ = fail "fromConf group-ID"
+
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
     fromConf _ = fail "fromConf log level"
+
+{- FOURMOLU_DISABLE -}
+uidForName :: String -> IO UserID
+uidForName s = either (nameError ("user: " ++ s)) (pure . userID) =<< tryIOError (getUserEntryForName s)
+
+gidForName :: String -> IO GroupID
+gidForName s = either (nameError ("group: " ++ s)) (pure . groupID) =<< tryIOError (getGroupEntryForName s)
+
+nameError :: String -> IOError -> IO a
+nameError n ioe = ioError $ ioeSetErrorString ioe n
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -423,7 +448,7 @@ nestedConfs n cs0 =  do
 unfoldrM :: (b -> IO (Maybe (a, b))) -> b -> IO [a]
 unfoldrM next = go id
   where
-    go xs s = maybe (pure $ xs []) (\(x, s') -> go (xs . (x:)) s') =<< next s
+    go xs s = maybe (pure $ xs []) (\(x, s') -> go (xs . (x :)) s') =<< next s
 
 ----------------------------------------------------------------
 
