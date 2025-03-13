@@ -17,7 +17,7 @@ import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
 import System.IO (IOMode (AppendMode), openFile, hClose)
-import System.Posix (getRealUserID, setEffectiveGroupID, setEffectiveUserID)
+import System.Posix (UserID, getRealUserID, setEffectiveGroupID, setEffectiveUserID)
 import System.Posix (Handler (Catch), installHandler, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -118,7 +118,8 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
                 , timeout_ = tmout
                 }
     workerStats <- Server.getWorkerStats cnf_workers
-    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
+    ruid <- getRealUserID
+    mng <- getControl env workerStats mng0{reopenLog = withRoot ruid conf reopenLog0}
     --  filled env and mng(Control) available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
@@ -331,20 +332,30 @@ getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
 amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
+recoverRoot' :: IO ()
+recoverRoot'= do
+    setEffectiveUserID 0
+    setEffectiveGroupID 0
+
 recoverRoot :: IO Bool
 recoverRoot = do
     root <- amIrootUser
-    when root $ setEffectiveUserID 0
+    when root recoverRoot'
     return root
+
+setGroupUser' :: Config -> IO ()
+setGroupUser' Config{..} = do
+    setEffectiveGroupID cnf_group
+    setEffectiveUserID cnf_user
 
 -- | Setting user and group.
 setGroupUser :: Config -> IO Bool
-setGroupUser Config{..} = do
+setGroupUser conf = do
     root <- amIrootUser
-    when root $ do
-        setEffectiveGroupID cnf_group
-        setEffectiveUserID cnf_user
+    when root $ setGroupUser' conf
     return root
 
-withRoot :: Config -> IO a -> IO a
-withRoot conf act = bracket_ (void recoverRoot) (void $ setGroupUser conf) act
+withRoot :: UserID -> Config -> IO a -> IO a
+withRoot ruid conf act
+    | ruid == 0 = bracket_ recoverRoot' (setGroupUser' conf) act
+    | otherwise = act
