@@ -196,7 +196,7 @@ main = do
         [] -> run ruid (return defaultConfig)
         a : _
             | a `elem` ["-h", "-help", "--help"] -> help
-        confFile : aargs -> run ruid (parseConfig confFile aargs)
+        confFile : aargs -> run ruid (withRootConf ruid $ parseConfig confFile aargs)
 
 ----------------------------------------------------------------
 
@@ -347,3 +347,8 @@ withRoot :: UserID -> Config -> IO a -> IO a
 withRoot ruid conf act
     | ruid == 0 = bracket_ recoverRoot (setGroupUser conf) act
     | otherwise = act
+
+withRootConf :: UserID -> IO Config -> IO Config
+withRootConf ruid getConf
+    | ruid == 0 = recoverRoot >> getConf >>= \conf -> setGroupUser conf $> conf
+    | otherwise = getConf
