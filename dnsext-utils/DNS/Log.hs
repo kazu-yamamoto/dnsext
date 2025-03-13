@@ -81,21 +81,20 @@ type KillLogger = IO ()
 type ReopenLogger = IO ()
 
 new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
-new oh lv = with oh (pure id) lv $ \lg _ p k _ -> pure (lg, p, k)
+new oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
 
 new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' oh lv = with oh (pure id) lv $ \lg p _ k _ -> pure (lg, p, k)
+new' oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 ohandleWith
     :: OutHandle -> IO ShowS -> Level
     -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
 ohandleWith oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
 
-{-# WARNING with "will be renamed to ohandleWith" #-}
 with
-    :: OutHandle -> IO ShowS -> Level
-    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
-with = ohandleWith
+    :: IO ShowS -> IO Handle -> (Handle -> IO ())
+    -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+with = withHandleLogger queueBound
 
 handle :: OutHandle -> Handle
 handle Stdout = stdout
