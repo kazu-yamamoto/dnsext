@@ -276,7 +276,7 @@ getLogger Config{..} TimeCache{..}
                 | cnf_log_timestamp  = getTimeStr <&> (. (' ' :))
                 | otherwise          = pure id
             result a _ p k r = return (void $ TStat.forkIO "logger" a, \lv ~c ~xs -> p lv c xs, k, r)
-            handle = Log.with cnf_log_output getpts cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
+            handle = Log.ohandleWith cnf_log_output getpts cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
             file fn = Log.fileWith fn getpts cnf_log_level result
         maybe handle file cnf_log_file
     | otherwise = do
