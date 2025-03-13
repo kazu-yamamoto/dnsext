@@ -75,25 +75,25 @@ instance Show OutHandle where
     show Stdout = "<stdout>"
     show Stderr = "<stderr>"
 
-type Logger = IO ()
+type Logger = ()
 type PutLines m = Level -> Maybe Color -> [String] -> m ()
-type KillLogger = IO ()
-type ReopenLogger = IO ()
+type KillLogger = ()
+type ReopenLogger = ()
 
-new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
+new :: OutHandle -> Level -> IO (IO Logger, PutLines IO, IO KillLogger)
 new oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
 
-new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
+new' :: OutHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
 new' oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 ohandleWith
     :: OutHandle -> IO ShowS -> Level
-    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 ohandleWith oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
 
 with
     :: IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 with = withHandleLogger queueBound
 
 handle :: OutHandle -> Handle
@@ -102,7 +102,7 @@ handle Stderr = stderr
 
 fileWith
     :: FilePath -> IO ShowS -> Level
-    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 fileWith fn getM = withHandleLogger queueBound getM (openFile fn AppendMode) hClose
 
 {- limit waiting area on server to constant size -}
@@ -112,7 +112,7 @@ queueBound = 8
 {- FOURMOLU_DISABLE -}
 withHandleLogger
     :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 withHandleLogger qsize getM open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh
