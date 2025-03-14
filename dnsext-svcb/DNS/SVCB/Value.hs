@@ -186,7 +186,10 @@ spv_dohpath as = toSvcParamValue $ SPV_DoHPath as
 newtype SPV_ECH = SPV_ECH
     { ech_configs :: [ECHConfig]
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance Show SPV_ECH where
+    show (SPV_ECH cnfs) = "[" ++ intercalate "," (map show cnfs) ++ "]"
 
 instance SPV SPV_ECH where
     toSvcParamValue (SPV_ECH configs) = toSPV siz $ \wbuf _ ->

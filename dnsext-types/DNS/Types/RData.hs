@@ -68,21 +68,28 @@ rdataField rd f = case fromRData rd of
 ---------------------------------------------------------------
 
 prettyShowRData :: RData -> String
-prettyShowRData rd = loop $ show rd
+prettyShowRData rd = loop (0 :: Int) $ show rd
   where
-    loop [] = []
-    loop (c : cs)
-        | c == '=' && take 5 cs `elem` dows = c : take 5 cs ++ loop (drop 5 cs)
-        | c == '[' = c : opaque ']' cs
-        | c == '"' = c : opaque '"' cs
-        | c == '{' = "{\n      " ++ loop cs
-        --      | c == '}'  = "\n    }"  ++ loop cs
-        | c == ',' = "\n    ," ++ loop cs
-        | otherwise = c : loop cs
-    opaque _ [] = []
-    opaque k (c : cs)
-        | c == k = c : loop cs
-        | otherwise = c : opaque k cs
+    loop _ [] = []
+    loop n (c : cs)
+        | c == '=' && take 5 cs `elem` dows = c : take 5 cs ++ loop n (drop 5 cs)
+        | c == '[' = c : bracket (1 :: Int) n cs
+        | c == '"' = c : quote n cs
+        | c == '{' = "{\n" ++ (concat (replicate (n + 1) "    ")) ++ loop (n + 1) cs
+        | c == '}' = "}" ++ loop (n - 1) cs
+        | c == ',' = "\n" ++ (concat (replicate (n - 1) "    ")) ++ "  ," ++ loop n cs
+        | otherwise = c : loop n cs
+    -- it is assumed that "struct"s are not contained in a list
+    bracket _ _ [] = []
+    bracket 0 n ccs = loop n ccs
+    bracket m n (c : cs)
+        | c == '[' = c : bracket (m + 1) n cs
+        | c == ']' = c : bracket (m - 1) n cs
+        | otherwise = c : bracket m n cs
+    quote _ [] = []
+    quote n (c : cs)
+        | c == '"' = c : loop n cs
+        | otherwise = c : quote n cs
     dows = [" Sun,", " Mon,", " Tue,", " Wed,", " Thu,", " Fri,", " Sat,"]
 
 ---------------------------------------------------------------
