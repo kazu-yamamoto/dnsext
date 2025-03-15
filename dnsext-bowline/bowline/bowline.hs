@@ -52,8 +52,8 @@ help = putStrLn "bowline [<confFile>] [<conf-key>=<conf-value> ...]"
 
 ----------------------------------------------------------------
 
-run :: IO Config -> IO ()
-run readConfig = do
+run :: UserID -> IO Config -> IO ()
+run ruid readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
@@ -64,7 +64,7 @@ run readConfig = do
         mng <- newControl readConfig
         gcache <- maybe (getCache tcache conf) return mcache
         void $ installHandler sigHUP (Catch $ reloadCmd mng KeepCache () ()) Nothing -- reloading with cache on SIGHUP
-        runConfig tcache gcache mng conf
+        runConfig tcache gcache mng ruid conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
@@ -76,8 +76,8 @@ run readConfig = do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go tcache (Just gcache) rconf
 
-runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO ()
-runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
+runConfig :: TimeCache -> GlobalCache -> Control -> UserID -> Config -> IO ()
+runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
     -- Setup
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
@@ -118,7 +118,6 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
                 , timeout_ = tmout
                 }
     workerStats <- Server.getWorkerStats cnf_workers
-    ruid <- getRealUserID
     mng <- getControl env workerStats mng0{reopenLog = withRoot ruid conf reopenLog0}
     --  filled env and mng(Control) available
     creds <- getCreds conf
@@ -192,11 +191,12 @@ main = do
         DNS.addResourceDataForDNSSEC
         DNS.addResourceDataForSVCB
     args <- getArgs
+    ruid <- getRealUserID
     case args of
-        [] -> run (return defaultConfig)
+        [] -> run ruid (return defaultConfig)
         a : _
             | a `elem` ["-h", "-help", "--help"] -> help
-        confFile : aargs -> run (parseConfig confFile aargs)
+        confFile : aargs -> run ruid (parseConfig confFile aargs)
 
 ----------------------------------------------------------------
 
