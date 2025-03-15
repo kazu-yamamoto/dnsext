@@ -92,11 +92,11 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
+    (runLogger, putLines, killLogger, reopenLog0) <- getLogger ruid conf tcache
     --
     void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     --
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf tcache
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -118,7 +118,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
                 , timeout_ = tmout
                 }
     workerStats <- Server.getWorkerStats cnf_workers
-    mng <- getControl env workerStats mng0{reopenLog = withRoot ruid conf reopenLog0}
+    mng <- getControl env workerStats mng0{reopenLog = reopenLog0}
     --  filled env and mng(Control) available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
@@ -271,16 +271,16 @@ getCacheControl RRCacheOps{..} =
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-getLogger :: Config -> TimeCache -> IO (IO (), Log.PutLines IO, IO (), IO ())
-getLogger Config{..} TimeCache{..}
+getLogger :: UserID -> Config -> TimeCache -> IO (IO (), Log.PutLines IO, IO (), IO ())
+getLogger ruid conf@Config{..} TimeCache{..}
     | cnf_log = do
         let getpts
                 | cnf_log_timestamp  = getTimeStr <&> (. (' ' :))
                 | otherwise          = pure id
             result hreop a _ p k r = return (void $ TStat.forkIO "logger" a, p, k, hreop r)
             lk open close fr = Log.with getpts open close cnf_log_level (result fr)
-            handle   = lk (pure $ Log.stdHandle cnf_log_output) (\_ -> pure ()) (\_ -> pure ())
-            file fn  = lk (openFile fn AppendMode)               hClose         (\r -> r)
+            handle   = lk (pure $ Log.stdHandle cnf_log_output)         (\_ -> pure ()) (\_ -> pure ())
+            file fn  = lk (withRoot ruid conf $ openFile fn AppendMode)  hClose         (\r -> r)
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
