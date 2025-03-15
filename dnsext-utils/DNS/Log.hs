@@ -12,7 +12,9 @@ module DNS.Log (
     pattern WARN,
     pattern SYSTEM,
     --
-    OutHandle (..),
+    StdHandle (..),
+    stdHandle,
+    OutHandle,
     Logger,
     PutLines,
     KillLogger,
@@ -67,11 +69,14 @@ pattern SYSTEM   :: Level
 pattern SYSTEM   = ERR
 {- FOURMOLU_ENABLE -}
 
-data OutHandle
+data StdHandle
     = Stdout
     | Stderr
 
-instance Show OutHandle where
+{-# DEPRECATED OutHandle "use StdHandle instead of OutHandle" #-}
+type OutHandle = StdHandle
+
+instance Show StdHandle where
     show Stdout = "<stdout>"
     show Stderr = "<stderr>"
 
@@ -80,25 +85,25 @@ type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = ()
 type ReopenLogger = ()
 
-new :: OutHandle -> Level -> IO (IO Logger, PutLines IO, IO KillLogger)
-new oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
+new :: StdHandle -> Level -> IO (IO Logger, PutLines IO, IO KillLogger)
+new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
 
-new' :: OutHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
-new' oh lv = with (pure id) (pure $ handle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
+new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
+new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 ohandleWith
-    :: OutHandle -> IO ShowS -> Level
+    :: StdHandle -> IO ShowS -> Level
     -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
-ohandleWith oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
+ohandleWith oh getM = withHandleLogger queueBound getM (pure $ stdHandle oh) (\_ -> pure ())
 
 with
     :: IO ShowS -> IO Handle -> (Handle -> IO ())
     -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 with = withHandleLogger queueBound
 
-handle :: OutHandle -> Handle
-handle Stdout = stdout
-handle Stderr = stderr
+stdHandle :: StdHandle -> Handle
+stdHandle Stdout = stdout
+stdHandle Stderr = stderr
 
 fileWith
     :: FilePath -> IO ShowS -> Level
