@@ -14,7 +14,6 @@ module DNS.Log (
     --
     StdHandle (..),
     stdHandle,
-    OutHandle,
     Logger,
     PutLines,
     KillLogger,
@@ -72,9 +71,6 @@ pattern SYSTEM   = ERR
 data StdHandle
     = Stdout
     | Stderr
-
-{-# DEPRECATED OutHandle "use StdHandle instead of OutHandle" #-}
-type OutHandle = StdHandle
 
 instance Show StdHandle where
     show Stdout = "<stdout>"
