@@ -332,30 +332,18 @@ getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
 amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
-recoverRoot' :: IO ()
-recoverRoot'= do
+recoverRoot :: IO ()
+recoverRoot= do
     setEffectiveUserID 0
     setEffectiveGroupID 0
 
-recoverRoot :: IO Bool
-recoverRoot = do
-    root <- amIrootUser
-    when root recoverRoot'
-    return root
-
-setGroupUser' :: Config -> IO ()
-setGroupUser' Config{..} = do
+-- | Setting user and group.
+setGroupUser :: Config -> IO ()
+setGroupUser Config{..} = do
     setEffectiveGroupID cnf_group
     setEffectiveUserID cnf_user
 
--- | Setting user and group.
-setGroupUser :: Config -> IO Bool
-setGroupUser conf = do
-    root <- amIrootUser
-    when root $ setGroupUser' conf
-    return root
-
 withRoot :: UserID -> Config -> IO a -> IO a
 withRoot ruid conf act
-    | ruid == 0 = bracket_ recoverRoot' (setGroupUser' conf) act
+    | ruid == 0 = bracket_ recoverRoot (setGroupUser conf) act
     | otherwise = act
