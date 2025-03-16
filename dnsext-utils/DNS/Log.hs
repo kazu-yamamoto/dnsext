@@ -4,8 +4,6 @@ module DNS.Log (
     new,
     new',
     with,
-    ohandleWith,
-    fileWith,
     --
     Level (..),
     pattern DEMO,
@@ -28,11 +26,8 @@ import Numeric.Natural
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
-    IOMode (AppendMode),
-    hClose,
     hPutStrLn,
     hSetBuffering,
-    openFile,
     stderr,
     stdout,
  )
@@ -87,11 +82,6 @@ new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg _ p k 
 new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
 new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
-ohandleWith
-    :: StdHandle -> IO ShowS -> Level
-    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
-ohandleWith oh getM = withHandleLogger queueBound getM (pure $ stdHandle oh) (\_ -> pure ())
-
 with
     :: IO ShowS -> IO Handle -> (Handle -> IO ())
     -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
@@ -100,11 +90,6 @@ with = withHandleLogger queueBound
 stdHandle :: StdHandle -> Handle
 stdHandle Stdout = stdout
 stdHandle Stderr = stderr
-
-fileWith
-    :: FilePath -> IO ShowS -> Level
-    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
-fileWith fn getM = withHandleLogger queueBound getM (openFile fn AppendMode) hClose
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
