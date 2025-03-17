@@ -26,7 +26,6 @@ module DNS.Iterative.Query.Env (
 ) where
 
 -- GHC packages
-
 import Data.IORef (newIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
@@ -92,6 +91,7 @@ newEmptyEnv = do
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
         , idGen_ = genId
+        , statsInfo_ = []
         , stats_ = stats
         , updateHistogram_ = \_ _ -> pure ()
         , timeout_ = timeout 5000000
