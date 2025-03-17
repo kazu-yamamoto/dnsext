@@ -17,7 +17,7 @@ import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
 import System.IO (IOMode (AppendMode), openFile, hClose)
-import System.Posix (getRealUserID, setEffectiveGroupID, setEffectiveUserID)
+import System.Posix (UserID, getRealUserID, setEffectiveGroupID, setEffectiveUserID)
 import System.Posix (Handler (Catch), installHandler, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -52,8 +52,8 @@ help = putStrLn "bowline [<confFile>] [<conf-key>=<conf-value> ...]"
 
 ----------------------------------------------------------------
 
-run :: IO Config -> IO ()
-run readConfig = do
+run :: UserID -> IO Config -> IO ()
+run ruid readConfig = do
     -- TimeCache uses Control.AutoUpdate which
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
@@ -64,7 +64,7 @@ run readConfig = do
         mng <- newControl readConfig
         gcache <- maybe (getCache tcache conf) return mcache
         void $ installHandler sigHUP (Catch $ reloadCmd mng KeepCache () ()) Nothing -- reloading with cache on SIGHUP
-        runConfig tcache gcache mng conf
+        runConfig tcache gcache mng ruid conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
@@ -76,8 +76,8 @@ run readConfig = do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go tcache (Just gcache) rconf
 
-runConfig :: TimeCache -> GlobalCache -> Control -> Config -> IO ()
-runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
+runConfig :: TimeCache -> GlobalCache -> Control -> UserID -> Config -> IO ()
+runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
     -- Setup
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
@@ -92,11 +92,11 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
             putStrLn $ "loading root-hints: " ++ path
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
+    (runLogger, putLines, killLogger, reopenLog0) <- getLogger ruid conf tcache
     --
     void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
     --
     (runWriter, putDNSTAP) <- TAP.new conf
-    (runLogger, putLines, killLogger, reopenLog0) <- getLogger conf tcache
     trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
     rootHint <- mapM readRootHint' cnf_root_hints
     let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
@@ -118,7 +118,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 conf@Config{..} = do
                 , timeout_ = tmout
                 }
     workerStats <- Server.getWorkerStats cnf_workers
-    mng <- getControl env workerStats mng0{reopenLog = withRoot conf reopenLog0}
+    mng <- getControl env workerStats mng0{reopenLog = reopenLog0}
     --  filled env and mng(Control) available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
@@ -191,11 +191,12 @@ main = do
         DNS.addResourceDataForDNSSEC
         DNS.addResourceDataForSVCB
     args <- getArgs
+    ruid <- getRealUserID
     case args of
-        [] -> run (return defaultConfig)
+        [] -> run ruid (return defaultConfig)
         a : _
             | a `elem` ["-h", "-help", "--help"] -> help
-        confFile : aargs -> run (parseConfig confFile aargs)
+        confFile : aargs -> run ruid (parseConfig confFile aargs)
 
 ----------------------------------------------------------------
 
@@ -270,16 +271,16 @@ getCacheControl RRCacheOps{..} =
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-getLogger :: Config -> TimeCache -> IO (IO (), Log.PutLines IO, IO (), IO ())
-getLogger Config{..} TimeCache{..}
+getLogger :: UserID -> Config -> TimeCache -> IO (IO (), Log.PutLines IO, IO (), IO ())
+getLogger ruid conf@Config{..} TimeCache{..}
     | cnf_log = do
         let getpts
                 | cnf_log_timestamp  = getTimeStr <&> (. (' ' :))
                 | otherwise          = pure id
             result hreop a _ p k r = return (void $ TStat.forkIO "logger" a, p, k, hreop r)
             lk open close fr = Log.with getpts open close cnf_log_level (result fr)
-            handle   = lk (pure $ Log.stdHandle cnf_log_output) (\_ -> pure ()) (\_ -> pure ())
-            file fn  = lk (openFile fn AppendMode)               hClose         (\r -> r)
+            handle   = lk (pure $ Log.stdHandle cnf_log_output)         (\_ -> pure ()) (\_ -> pure ())
+            file fn  = lk (withRoot ruid conf $ openFile fn AppendMode)  hClose         (\r -> r)
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
@@ -331,20 +332,30 @@ getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
 amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
+recoverRoot' :: IO ()
+recoverRoot'= do
+    setEffectiveUserID 0
+    setEffectiveGroupID 0
+
 recoverRoot :: IO Bool
 recoverRoot = do
     root <- amIrootUser
-    when root $ setEffectiveUserID 0
+    when root recoverRoot'
     return root
+
+setGroupUser' :: Config -> IO ()
+setGroupUser' Config{..} = do
+    setEffectiveGroupID cnf_group
+    setEffectiveUserID cnf_user
 
 -- | Setting user and group.
 setGroupUser :: Config -> IO Bool
-setGroupUser Config{..} = do
+setGroupUser conf = do
     root <- amIrootUser
-    when root $ do
-        setEffectiveGroupID cnf_group
-        setEffectiveUserID cnf_user
+    when root $ setGroupUser' conf
     return root
 
-withRoot :: Config -> IO a -> IO a
-withRoot conf act = bracket_ (void recoverRoot) (void $ setGroupUser conf) act
+withRoot :: UserID -> Config -> IO a -> IO a
+withRoot ruid conf act
+    | ruid == 0 = bracket_ recoverRoot' (setGroupUser' conf) act
+    | otherwise = act
