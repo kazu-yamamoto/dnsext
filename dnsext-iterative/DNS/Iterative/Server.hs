@@ -57,6 +57,7 @@ module DNS.Iterative.Server (
     module DNS.Iterative.Server.NonBlocking,
 ) where
 
+import DNS.Iterative.Imports
 import DNS.Iterative.Query.Env
 import DNS.Iterative.Server.HTTP2
 import DNS.Iterative.Server.HTTP3
@@ -74,14 +75,12 @@ import DNS.RRCache (RRCache, RRCacheConf (..), RRCacheOps (..), newRRCache, newR
 import qualified DNS.RRCache as RRCache
 import DNS.TimeCache
 
-import Control.Concurrent (getNumCapabilities)
 import Data.ByteString.Builder
-import Data.String (fromString)
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =
     mconcat <$> sequence [readStats stats_ prefix, getHistogramBucktes stats_ prefix, getGlobalStats]
   where
-    getGlobalStats = (<>) <$> (cacheCount <$> getCache_) <*> (info <$> getNumCapabilities)
+    getGlobalStats = (<>) <$> (cacheCount <$> getCache_) <*> pure info
     cacheCount c = prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
-    info cap = prefix <> fromString ("info{threads=\"" ++ show cap ++ "\", version=\"0.0.0.20250317\"} 1\n")
+    info = prefix <> fromString ("info{" ++ intercalate ", " [k ++ "=\"" ++ v ++ "\"" | (k, v) <- statsInfo_] ++ "} 1\n")
