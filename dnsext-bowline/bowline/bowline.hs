@@ -218,27 +218,6 @@ bindServers hosts (True , n, a, socktype, port) = do
         when (addrSocketType ai == Stream) $ listen s 1024
         return s
 
-getServers
-    :: Env
-    -> [HostName]
-    -> (Server.ToCacher -> IO ())
-    -> (Bool, String, ServerActions, SocketType, PortNumber)
-    -> IO [(String, [Socket], IO ())]
-getServers _ _ _ (False, _, _, _, _) = return []
-getServers env hosts toCacher (True, name, mkServer, socktype, port) = do
-    as <- ainfosSkipError putStrLn socktype port hosts
-    sockets <- mapM openBind as
-    map (name,sockets,) <$> mkServer env toCacher sockets
-  where
-    openBind ai = do
-        s <- openSocket ai
-        setSocketOption s ReuseAddr 1
-        when (addrFamily ai == AF_INET6) $ setSocketOption s IPv6Only 1
-        withFdSocket s $ setCloseOnExecIfNeeded
-        bind s $ addrAddress ai
-        when (addrSocketType ai == Stream) $ listen s 1024
-        return s
-
 ----------------------------------------------------------------
 
 getCache :: TimeCache -> Config -> IO GlobalCache
