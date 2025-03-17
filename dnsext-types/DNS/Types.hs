@@ -26,7 +26,7 @@ module DNS.Types (
 
     -- * Question
     Question (..),
-    CLASS (IN),
+    CLASS (IN, CH),
     fromCLASS,
 
     -- * Resource record
