@@ -16,6 +16,7 @@ import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
+import System.IO (IOMode (AppendMode), openFile, hClose)
 import System.Posix (getRealUserID, setEffectiveGroupID, setEffectiveUserID)
 import System.Posix (Handler (Catch), installHandler, sigHUP)
 import System.Timeout (timeout)
@@ -31,7 +32,7 @@ import qualified DNS.SVCB as DNS
 import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import DNS.Types.Internal (TYPE (..))
-import Network.Socket
+import Network.Socket hiding (close)
 import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
 
@@ -275,9 +276,10 @@ getLogger Config{..} TimeCache{..}
         let getpts
                 | cnf_log_timestamp  = getTimeStr <&> (. (' ' :))
                 | otherwise          = pure id
-            result a _ p k r = return (void $ TStat.forkIO "logger" a, \lv ~c ~xs -> p lv c xs, k, r)
-            handle = Log.with cnf_log_output getpts cnf_log_level $ \a sp p k _ -> result a sp p k (return ())
-            file fn = Log.fileWith fn getpts cnf_log_level result
+            result hreop a _ p k r = return (void $ TStat.forkIO "logger" a, p, k, hreop r)
+            lk open close fr = Log.with getpts open close cnf_log_level (result fr)
+            handle   = lk (pure $ Log.stdHandle cnf_log_output) (\_ -> pure ()) (\_ -> pure ())
+            file fn  = lk (openFile fn AppendMode)               hClose         (\r -> r)
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()

@@ -4,14 +4,14 @@ module DNS.Log (
     new,
     new',
     with,
-    fileWith,
     --
     Level (..),
     pattern DEMO,
     pattern WARN,
     pattern SYSTEM,
     --
-    OutHandle (..),
+    StdHandle (..),
+    stdHandle,
     Logger,
     PutLines,
     KillLogger,
@@ -26,11 +26,8 @@ import Numeric.Natural
 import System.IO (
     BufferMode (LineBuffering),
     Handle,
-    IOMode (AppendMode),
-    hClose,
     hPutStrLn,
     hSetBuffering,
-    openFile,
     stderr,
     stdout,
  )
@@ -66,38 +63,33 @@ pattern SYSTEM   :: Level
 pattern SYSTEM   = ERR
 {- FOURMOLU_ENABLE -}
 
-data OutHandle
+data StdHandle
     = Stdout
     | Stderr
 
-instance Show OutHandle where
+instance Show StdHandle where
     show Stdout = "<stdout>"
     show Stderr = "<stderr>"
 
-type Logger = IO ()
+type Logger = ()
 type PutLines m = Level -> Maybe Color -> [String] -> m ()
-type KillLogger = IO ()
-type ReopenLogger = IO ()
+type KillLogger = ()
+type ReopenLogger = ()
 
-new :: OutHandle -> Level -> IO (Logger, PutLines IO, KillLogger)
-new oh lv = with oh (pure id) lv $ \lg _ p k _ -> pure (lg, p, k)
+new :: StdHandle -> Level -> IO (IO Logger, PutLines IO, IO KillLogger)
+new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
 
-new' :: OutHandle -> Level -> IO (Logger, PutLines STM, KillLogger)
-new' oh lv = with oh (pure id) lv $ \lg p _ k _ -> pure (lg, p, k)
+new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
+new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 with
-    :: OutHandle -> IO ShowS -> Level
-    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
-with oh getM = withHandleLogger queueBound getM (pure $ handle oh) (\_ -> pure ())
+    :: IO ShowS -> IO Handle -> (Handle -> IO ())
+    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
+with = withHandleLogger queueBound
 
-handle :: OutHandle -> Handle
-handle Stdout = stdout
-handle Stderr = stderr
-
-fileWith
-    :: FilePath -> IO ShowS -> Level
-    -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
-fileWith fn getM = withHandleLogger queueBound getM (openFile fn AppendMode) hClose
+stdHandle :: StdHandle -> Handle
+stdHandle Stdout = stdout
+stdHandle Stderr = stderr
 
 {- limit waiting area on server to constant size -}
 queueBound :: Natural
@@ -106,7 +98,7 @@ queueBound = 8
 {- FOURMOLU_DISABLE -}
 withHandleLogger
     :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (Logger -> PutLines STM -> PutLines IO -> KillLogger -> ReopenLogger -> IO a) -> IO a
+    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 withHandleLogger qsize getM open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh

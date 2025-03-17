@@ -32,7 +32,7 @@ data Config = Config
     , cnf_group :: GroupID
     , cnf_log :: Bool
     , cnf_log_file :: Maybe FilePath
-    , cnf_log_output :: Log.OutHandle
+    , cnf_log_output :: Log.StdHandle
     , cnf_log_level :: Log.Level
     , cnf_log_timestamp :: Bool
     , cnf_short_log :: Bool

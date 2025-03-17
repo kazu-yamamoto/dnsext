@@ -30,7 +30,7 @@ import qualified DNS.RRCache as Cache
 import DNS.TimeCache (getTime, newTimeCache)
 
 data Config = Config
-    { logOutput :: Log.OutHandle
+    { logOutput :: Log.StdHandle
     , logLevel :: Log.Level
     , maxCacheSize :: Int
     , noopMode :: Bool
