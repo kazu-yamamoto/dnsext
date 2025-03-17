@@ -63,24 +63,27 @@ type RDataDict = M.IntMap (Int -> Parser RData)
 toKey :: TYPE -> M.Key
 toKey = fromIntegral . fromTYPE
 
+{- FOURMOLU_DISABLE -}
 defaultRDataDict :: M.IntMap (Int -> Parser RData)
 defaultRDataDict =
-    M.insert (toKey A) (\len rbuf ref -> toRData <$> get_a len rbuf ref) $
-        M.insert (toKey NS) (\len rbuf ref -> toRData <$> get_ns len rbuf ref) $
-            M.insert (toKey CNAME) (\len rbuf ref -> toRData <$> get_cname len rbuf ref) $
-                M.insert (toKey SOA) (\len rbuf ref -> toRData <$> get_soa len rbuf ref) $
-                    M.insert (toKey NULL) (\len rbuf ref -> toRData <$> get_null len rbuf ref) $
-                        M.insert (toKey PTR) (\len rbuf ref -> toRData <$> get_ptr len rbuf ref) $
-                            M.insert (toKey MX) (\len rbuf ref -> toRData <$> get_mx len rbuf ref) $
-                                M.insert (toKey TXT) (\len rbuf ref -> toRData <$> get_txt len rbuf ref) $
-                                    M.insert (toKey RP) (\len rbuf ref -> toRData <$> get_rp len rbuf ref) $
-                                        M.insert (toKey AAAA) (\len rbuf ref -> toRData <$> get_aaaa len rbuf ref) $
-                                            M.insert (toKey SRV) (\len rbuf ref -> toRData <$> get_srv len rbuf ref) $
-                                                M.insert (toKey DNAME) (\len rbuf ref -> toRData <$> get_dname len rbuf ref) $
-                                                    M.insert
-                                                        (toKey TLSA)
-                                                        (\len rbuf ref -> toRData <$> get_tlsa len rbuf ref)
-                                                        M.empty
+    M.fromList
+        [ (toKey A      , getRD get_a)
+        , (toKey NS     , getRD get_ns)
+        , (toKey CNAME  , getRD get_cname)
+        , (toKey SOA    , getRD get_soa)
+        , (toKey NULL   , getRD get_null)
+        , (toKey PTR    , getRD get_ptr)
+        , (toKey MX     , getRD get_mx)
+        , (toKey TXT    , getRD get_txt)
+        , (toKey RP     , getRD get_rp)
+        , (toKey AAAA   , getRD get_aaaa)
+        , (toKey SRV    , getRD get_srv)
+        , (toKey DNAME  , getRD get_dname)
+        , (toKey TLSA   , getRD get_tlsa)
+        ]
+  where
+    getRD get_x len rbuf ref = toRData <$> get_x len rbuf ref
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -94,13 +97,18 @@ getOData dict code len rbuf ref = case M.lookup (toKeyO code) dict of
 toKeyO :: OptCode -> M.Key
 toKeyO = fromIntegral . fromOptCode
 
+{- FOURMOLU_DISABLE -}
 defaultODataDict :: ODataDict
 defaultODataDict =
-    M.insert (toKeyO NSID) (\len rbuf ref -> toOData <$> get_nsid len rbuf ref) $
-        M.insert (toKeyO ClientSubnet) (\len rbuf ref -> toOData <$> get_clientSubnet len rbuf ref) $
-            M.insert (toKeyO Padding) (\len rbuf ref -> toOData <$> get_padding len rbuf ref) $
-                M.insert (toKeyO EDNSError) (\len rbuf ref -> toOData <$> get_ednsError len rbuf ref) $
-                    M.empty
+    M.fromList
+        [ (toKeyO NSID          , getOD get_nsid)
+        , (toKeyO ClientSubnet  , getOD get_clientSubnet)
+        , (toKeyO Padding       , getOD get_padding)
+        , (toKeyO EDNSError     , getOD get_ednsError)
+        ]
+  where
+    getOD get_x len rbuf ref = toOData <$> get_x len rbuf ref
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
