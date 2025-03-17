@@ -117,9 +117,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
                 , updateHistogram_ = updateHistogram
                 , timeout_ = tmout
                 }
-    workerStats <- Server.getWorkerStats cnf_workers
-    mng <- getControl env workerStats mng0{reopenLog = reopenLog0}
-    --  filled env and mng(Control) available
+    --  filled env available
     creds <- getCreds conf
     sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
     addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
@@ -128,8 +126,10 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
     --
     void $ setGroupUser conf
     -- actions list for threads
+    workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
     servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
+    mng <- getControl env workerStats mng0{reopenLog = reopenLog0}
     let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
         monitors srvInfo = Mon.monitors conf env mng gcache srvInfo mas monInfo
     monitor <- monitors <$> mapM (\(n, _mk, sks) -> srvInfo1 n <$> mapM getSocketName sks) addrs
