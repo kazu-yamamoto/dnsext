@@ -94,37 +94,37 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
     disable_v6_ns <- check_for_v6_ns
     (runLogger, putLines, killLogger, reopenLog0) <- getLogger ruid conf tcache
     --
-    void recoverRoot -- recover root-privilege to bind network-port and to access private-key on reloading
-    --
-    (runWriter, putDNSTAP) <- TAP.new conf
-    trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
-    rootHint <- mapM readRootHint' cnf_root_hints
-    let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
-        localZones = getLocalZones cnf_local_zones
-    stubZones <- getStubZones cnf_stub_zones trustAnchors
-    updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
-    env <-
-        newEnv <&> \env0 ->
-            (setOps env0)
-                { shortLog_ = cnf_short_log
-                , logLines_ = putLines
-                , logDNSTAP_ = putDNSTAP
-                , disableV6NS_ = disable_v6_ns
-                , localZones_ = localZones
-                , stubZones_ = stubZones
-                , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
-                , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
-                , updateHistogram_ = updateHistogram
-                , timeout_ = tmout
-                }
-    --  filled env available
-    creds <- getCreds conf
-    sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
-    addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
-    (mas, monInfo) <- Mon.bindMonitor conf env
-    masock <- API.bindAPI conf
-    --
-    void $ setGroupUser conf
+    let rootpriv = do
+            (runWriter, putDNSTAP) <- TAP.new conf
+            trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
+            rootHint <- mapM readRootHint' cnf_root_hints
+            let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
+                localZones = getLocalZones cnf_local_zones
+            stubZones <- getStubZones cnf_stub_zones trustAnchors
+            updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
+            env <-
+                newEnv <&> \env0 ->
+                    (setOps env0)
+                        { shortLog_ = cnf_short_log
+                        , logLines_ = putLines
+                        , logDNSTAP_ = putDNSTAP
+                        , disableV6NS_ = disable_v6_ns
+                        , localZones_ = localZones
+                        , stubZones_ = stubZones
+                        , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
+                        , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
+                        , updateHistogram_ = updateHistogram
+                        , timeout_ = tmout
+                        }
+            --  filled env available
+            creds <- getCreds conf
+            sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
+            addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
+            (mas, monInfo) <- Mon.bindMonitor conf env
+            masock <- API.bindAPI conf
+            return (runWriter, env, addrs, mas, monInfo, masock)
+    -- recover root-privilege to bind network-port and to access private-key on reloading
+    (runWriter, env, addrs, mas, monInfo, masock) <- withRoot ruid conf rootpriv
     -- actions list for threads
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
@@ -196,7 +196,7 @@ main = do
         [] -> run ruid (return defaultConfig)
         a : _
             | a `elem` ["-h", "-help", "--help"] -> help
-        confFile : aargs -> run ruid (parseConfig confFile aargs)
+        confFile : aargs -> run ruid (withRootConf ruid $ parseConfig confFile aargs)
 
 ----------------------------------------------------------------
 
@@ -332,30 +332,23 @@ getWStats' wstats = fromString . unlines <$> Server.pprWorkerStats 0 wstats
 amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
-recoverRoot' :: IO ()
-recoverRoot'= do
+recoverRoot :: IO ()
+recoverRoot= do
     setEffectiveUserID 0
     setEffectiveGroupID 0
 
-recoverRoot :: IO Bool
-recoverRoot = do
-    root <- amIrootUser
-    when root recoverRoot'
-    return root
-
-setGroupUser' :: Config -> IO ()
-setGroupUser' Config{..} = do
+-- | Setting user and group.
+setGroupUser :: Config -> IO ()
+setGroupUser Config{..} = do
     setEffectiveGroupID cnf_group
     setEffectiveUserID cnf_user
 
--- | Setting user and group.
-setGroupUser :: Config -> IO Bool
-setGroupUser conf = do
-    root <- amIrootUser
-    when root $ setGroupUser' conf
-    return root
-
 withRoot :: UserID -> Config -> IO a -> IO a
 withRoot ruid conf act
-    | ruid == 0 = bracket_ recoverRoot' (setGroupUser' conf) act
+    | ruid == 0 = bracket_ recoverRoot (setGroupUser conf) act
     | otherwise = act
+
+withRootConf :: UserID -> IO Config -> IO Config
+withRootConf ruid getConf
+    | ruid == 0 = recoverRoot >> getConf >>= \conf -> setGroupUser conf $> conf
+    | otherwise = getConf
