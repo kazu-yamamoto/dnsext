@@ -38,7 +38,7 @@ library
         bytestring,
         containers,
         dnsext-types,
-        ech-config,
+        ech-config >= 0.0.1,
         iproute,
         network >= 3.2.2 && < 3.3
 
