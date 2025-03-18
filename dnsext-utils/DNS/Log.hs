@@ -2,7 +2,6 @@
 
 module DNS.Log (
     new,
-    new',
     with,
     --
     Level (..),
@@ -78,9 +77,6 @@ type ReopenLogger = ()
 
 new :: StdHandle -> Level -> IO (IO Logger, PutLines STM, PutLines IO, IO KillLogger)
 new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg sp ip k _ -> pure (lg, sp, ip, k)
-
-new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
-new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 with
     :: IO ShowS
