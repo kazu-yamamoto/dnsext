@@ -103,7 +103,7 @@ options =
     , Option
         ['v']
         ["verbose"]
-        ( NoArg (\opts -> opts{optVerboseLevel = succ $ optVerboseLevel opts}))
+        (NoArg (\opts -> opts{optVerboseLevel = succ $ optVerboseLevel opts}))
         "cumulatively increase the verbosity"
     , Option
         ['R']
@@ -137,8 +137,8 @@ main = do
            Therefore, this action is required prior to reading the TYPE. -}
         addResourceDataForDNSSEC
         addResourceDataForSVCB
-    (deprecated, compatH, args0) <-  getArgs <&> handleDeprecatedVerbose
-    (args, opts0) <-  getArgsOpts args0 <&> fmap compatH
+    (deprecated, compatH, args0) <- getArgs <&> handleDeprecatedVerbose
+    (args, opts0) <- getArgsOpts args0 <&> fmap compatH
     when (optHelp opts0) $ do
         msg <- help
         putStr $ usageInfo msg options
@@ -412,12 +412,13 @@ deprecatedVerboseBanner n ca =
 deprecatedVerboseTable :: [(String, (Int, Options -> Options))]
 deprecatedVerboseTable =
     [ ("-v" ++ n, (nn, \opts -> opts{optVerboseLevel = nn}))
-    | nn <- [0..3]
+    | nn <- [0 .. 3]
     , let n = show nn
     ]
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 toFlag :: String -> IO QueryControls
 toFlag "+rec"       = return $ rdFlag FlagSet
 toFlag "+recurse"   = return $ rdFlag FlagSet
