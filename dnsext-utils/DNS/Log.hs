@@ -78,14 +78,12 @@ type ReopenLogger = ()
 new :: StdHandle -> Level -> IO (IO Logger, PutLines STM, PutLines IO, IO KillLogger)
 new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg sp ip k _ -> pure (lg, sp, ip, k)
 
+{- FOURMOLU_DISABLE -}
 with
-    :: IO ShowS
-    -> IO Handle
-    -> (Handle -> IO ())
-    -> Level
-    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a)
-    -> IO a
+    :: IO ShowS -> IO Handle -> (Handle -> IO ()) -> Level
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 with = withHandleLogger queueBound
+{- FOURMOLU_ENABLE -}
 
 stdHandle :: StdHandle -> Handle
 stdHandle Stdout = stdout
@@ -97,8 +95,8 @@ queueBound = 8
 
 {- FOURMOLU_DISABLE -}
 withHandleLogger
-    :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
+    :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ()) -> Level
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 withHandleLogger qsize getM open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh
