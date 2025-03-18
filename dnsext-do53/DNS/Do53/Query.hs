@@ -13,6 +13,7 @@ module DNS.Do53.Query (
     ednsSetVersion,
     ednsSetUdpSize,
     ednsSetOptions,
+    queryControls,
     modifyQuery,
     encodeQuery,
     ODataOp (..),
@@ -369,11 +370,13 @@ modifyQuery
     -- ^ Flag and EDNS overrides
     -> DNSMessage
     -> DNSMessage
-modifyQuery ctls query =
-    query
-        { flags = queryDNSFlags hctls
-        , ednsHeader = queryEdns ehctls
-        }
+modifyQuery ctls query = queryControls (\mf eh -> query{ flags = mf (flags query), ednsHeader = eh}) ctls
+
+queryControls
+    :: ((DNSFlags -> DNSFlags) -> EDNSheader -> a)
+    -> QueryControls
+    -> a
+queryControls h ctls = h (queryDNSFlags hctls) (queryEdns ehctls)
   where
     hctls = qctlHeader ctls
     ehctls = qctlEdns ctls
@@ -413,12 +416,10 @@ modifyQuery ctls query =
     -- resolvers based on the resulting configuration, with the exception of
     -- 'DNS.Do53.lookupRawCtl' which takes an additional
     -- 'QueryControls' argument to augment the default overrides.
-    queryDNSFlags :: HeaderControls -> DNSFlags
-    queryDNSFlags (HeaderControls rd ad cd) =
+    queryDNSFlags :: HeaderControls -> DNSFlags -> DNSFlags
+    queryDNSFlags (HeaderControls rd ad cd) d =
         d
             { recDesired = applyFlag rd $ recDesired d
             , authenData = applyFlag ad $ authenData d
             , chkDisable = applyFlag cd $ chkDisable d
             }
-      where
-        d = flags query

@@ -13,11 +13,7 @@ module DNS.Iterative.Query.API (
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Client (
-    FlagOp (..),
-    QueryControls (..),
- )
-import qualified DNS.Do53.Client as DNS
+import DNS.Do53.Client (QueryControls)
 import qualified DNS.Log as Log
 import DNS.SEC (TYPE (..))
 import DNS.Types
@@ -52,8 +48,8 @@ foldResponseIterative deny reply env reqM =
 -- | Folding a response corresponding to a query, from questions and control flags. The cache is maybe updated.
 foldResponseIterative'
     :: (String -> a) -> (VResult -> DNSMessage -> a) -> Env -> Identifier -> [Question] -> Question -> QueryControls -> IO a
-foldResponseIterative' deny reply env ident qs q qctl =
-    foldResponse' "resp-queried'" deny reply env ident qs q qctl (resolveStub reply ident qs)
+foldResponseIterative' deny reply env ident qs q =
+    queryControls' $ \fl eh -> foldResponse' "resp-queried'" deny reply env ident qs q fl eh (resolveStub reply ident qs)
 
 resolveStub :: (VResult -> DNSMessage -> a) -> Identifier -> [Question] -> DNSQuery a
 resolveStub reply ident qs = do
@@ -84,11 +80,11 @@ replyMessage reqDO cnrrs rc vans vauth ident qs k = withResolvedRRs reqDO (cnrrs
 foldResponse
     :: String -> (String -> a) -> (VResult -> DNSMessage -> a)
     -> Env -> DNSMessage -> (DNSQuery a) -> IO a
-foldResponse name deny reply env reqM@DNSMessage{question=qs,identifier=ident} qaction =
+foldResponse name deny reply env reqM@DNSMessage{question=qs,identifier=ident,flags=reqF,ednsHeader=reqEH} qaction =
     handleRequest env prefix reqM (pure . deny) ereply  result
   where
     ereply rc = pure $ reply VR_Insecure $ replyDNSMessage ident qs rc resFlags [] []
-    result q = foldResponse' name deny reply env ident qs q (ctrlFromRequestHeader reqM) qaction
+    result q = foldResponse' name deny reply env ident qs q reqF reqEH qaction
     prefix = concat pws
     pws = [name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": " | Question bn typ cls <- take 1 qs]
 {- FOURMOLU_ENABLE -}
@@ -96,8 +92,8 @@ foldResponse name deny reply env reqM@DNSMessage{question=qs,identifier=ident} q
 {- FOURMOLU_DISABLE -}
 foldResponse'
     :: String -> (String -> a) -> (VResult -> DNSMessage -> a)
-    -> Env -> Identifier -> [Question] -> Question -> QueryControls -> DNSQuery a -> IO a
-foldResponse' name deny reply env ident qs q@(Question bn typ cls) qctl qaction  =
+    -> Env -> Identifier -> [Question] -> Question -> DNSFlags -> EDNSheader -> DNSQuery a -> IO a
+foldResponse' name deny reply env ident qs q@(Question bn typ cls) reqF reqEH qaction  =
     takeLocalResult env q (pure $ deny "local-zone: query-denied") query (pure . local)
   where
     query = either eresult pure =<< runDNSQuery (logQueryErrors prefix qaction) env qparam
@@ -106,7 +102,7 @@ foldResponse' name deny reply env ident qs q@(Question bn typ cls) qctl qaction 
     ereplace vr resM = replaceRCODE env "query-error" (rcode resM) <&> \rc1 -> reply vr resM{rcode = rc1}
     local (rc, vans, vauth) = withResolvedRRs (requestDO_ qparam) vans vauth h
       where h vres fs ans = reply vres . replyDNSMessage ident qs rc fs ans
-    qparam = queryParam q qctl
+    qparam = queryParamH q reqF reqEH
     prefix = name ++ ": orig-query " ++ show bn ++ " " ++ show typ ++ " " ++ show cls ++ ": "
 {- FOURMOLU_ENABLE -}
 
@@ -137,22 +133,6 @@ logQueryErrors prefix q = do
       logBogus _es _addrs _msg = pure ()
       pprAddrs = unwords . map show
       putLog = logLn Log.WARN . (prefix ++)
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-ctrlFromRequestHeader :: DNSMessage -> QueryControls
-ctrlFromRequestHeader DNSMessage{flags=reqF,ednsHeader=reqEH} = DNS.doFlag doF <> DNS.cdFlag cdF <> DNS.adFlag adF
-  where
-    doF | dnssecOK   = FlagSet
-        | otherwise  = FlagClear
-    cdF | DNS.chkDisable reqF  = FlagSet
-        | otherwise            = FlagClear
-    adF | DNS.authenData reqF  = FlagSet
-        | otherwise            = FlagClear
-
-    dnssecOK = case reqEH of
-        DNS.EDNSheader edns | DNS.ednsDnssecOk edns  -> True
-        _                                            -> False
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

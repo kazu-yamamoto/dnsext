@@ -14,6 +14,8 @@ module DNS.Iterative.Query.Types (
     QueryParam (..),
     queryParam,
     queryParamIN,
+    queryParamH,
+    queryControls',
     RequestDO (..),
     RequestCD (..),
     RequestAD (..),
@@ -45,6 +47,7 @@ module DNS.Iterative.Query.Types (
     throwDnsError,
     handleQueryError,
     handleResponseError,
+    ednsHeaderCases,
 ) where
 
 -- GHC packages
@@ -54,13 +57,14 @@ import Data.Map.Strict (Map)
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Client (EdnsControls (..), FlagOp (..), HeaderControls (..), QueryControls (..), Reply)
+import DNS.Do53.Client (QueryControls, Reply)
+import DNS.Do53.Internal (queryControls)
 import qualified DNS.Log as Log
 import DNS.RRCache (Cache, Ranking)
 import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types hiding (InvalidEDNS)
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP, IPv4, IPv6)
 import Network.Socket (PortNumber)
@@ -124,10 +128,16 @@ data QueryParam = QueryParam
     }
 
 queryParam :: Question -> QueryControls -> QueryParam
-queryParam q qctl = QueryParam q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
+queryParam q = queryControls' (\fl eh -> queryParamH q fl eh)
 
 queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
-queryParamIN dom typ qctl = queryParam (Question dom typ IN) qctl
+queryParamIN dom typ = queryParam (Question dom typ IN)
+
+queryParamH :: Question -> DNSFlags -> EDNSheader -> QueryParam
+queryParamH q flags eh = QueryParam q (toRequestDO eh) (toRequestCD flags) (toRequestAD flags)
+
+queryControls' :: (DNSFlags -> EDNSheader -> a) -> QueryControls -> a
+queryControls' h =  queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
@@ -152,20 +162,14 @@ data RequestAD
     | NoAuthenticatedData
     deriving (Eq, Show)
 
-toRequestDO :: QueryControls -> RequestDO
-toRequestDO qctl = case extDO $ qctlEdns qctl of
-    FlagSet -> DnssecOK
-    _ -> NoDnssecOK
+toRequestDO :: EDNSheader -> RequestDO
+toRequestDO = ednsHeaderCases (bool NoDnssecOK DnssecOK . ednsDnssecOk) NoDnssecOK NoDnssecOK
 
-toRequestCD :: QueryControls -> RequestCD
-toRequestCD qctl = case cdBit $ qctlHeader qctl of
-    FlagSet -> CheckDisabled
-    _ -> NoCheckDisabled
+toRequestCD :: DNSFlags -> RequestCD
+toRequestCD = bool NoCheckDisabled CheckDisabled . chkDisable
 
-toRequestAD :: QueryControls -> RequestAD
-toRequestAD qctl = case adBit $ qctlHeader qctl of
-    FlagSet -> AuthenticatedData
-    _ -> NoAuthenticatedData
+toRequestAD :: DNSFlags -> RequestAD
+toRequestAD = bool NoAuthenticatedData AuthenticatedData . authenData
 
 data QueryCount
 data LastQuery
@@ -273,7 +277,7 @@ handleResponseError addrs e f msg = exerror $ \ee -> e $ ExtraError ee addrs $ J
   where
     exerror eh
         | not (DNS.isResponse $ DNS.flags msg)              = eh   ErrorNotResp
-        | DNS.ednsHeader msg == DNS.InvalidEDNS             = eh $ ErrorEDNS $ DNS.ednsHeader msg
+        | InvalidEDNS <- DNS.ednsHeader msg                 = eh $ ErrorEDNS $ DNS.ednsHeader msg
         | DNS.rcode msg `notElem` [DNS.NoErr, DNS.NameErr]  = eh $ ErrorRCODE $ DNS.rcode msg
         | otherwise                                         = f msg
 {- FOURMOLU_ENABLE -}
@@ -380,6 +384,17 @@ data RRset = RRset
     , rrsMayVerified :: MayVerifiedRRS
     }
     deriving (Show)
+
+----------
+-- fold EDNS
+
+{- FOURMOLU_DISABLE -}
+ednsHeaderCases :: (EDNS -> a) -> a -> a -> EDNSheader -> a
+ednsHeaderCases heh noh inv eh = case eh of
+    EDNSheader edns  -> heh edns
+    NoEDNS           -> noh
+    InvalidEDNS      -> inv
+{- FOURMOLU_ENABLE -}
 
 ----------
 -- alias
