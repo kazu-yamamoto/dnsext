@@ -172,6 +172,21 @@ foldDNSErrorToRCODE n j e = case e of
     _                       -> n
 {- FOURMOLU_ENABLE -}
 
+---
+
+{- FOURMOLU_DISABLE -}
+addODataEDNS :: [OData] -> EDNSheader -> EDNSheader
+addODataEDNS ods = ednsHeaderCases
+    (\edns  -> EDNSheader        edns{ednsOptions = ods ++ ednsOptions edns})
+    (          EDNSheader defaultEDNS{ednsOptions = ods})
+    InvalidEDNS
+{- FOURMOLU_ENABLE -}
+
+mapOData :: OptData a => (a -> OData) -> [OData] -> [OData]
+mapOData f xs =  [f od | x <- xs, Just od <- [fromOData x]]
+
+---
+
 {- FOURMOLU_DISABLE -}
 foldIPList' :: a -> (NonEmpty IPv4 -> a) -> (NonEmpty IPv6 -> a)
             -> (NonEmpty IPv4 -> NonEmpty IPv6 -> a)
