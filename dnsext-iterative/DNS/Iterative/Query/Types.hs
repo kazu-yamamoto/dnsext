@@ -45,6 +45,7 @@ module DNS.Iterative.Query.Types (
     throwDnsError,
     handleQueryError,
     handleResponseError,
+    ednsHeaderCases,
 ) where
 
 -- GHC packages
@@ -60,7 +61,7 @@ import DNS.RRCache (Cache, Ranking)
 import qualified DNS.RRCache as Cache
 import DNS.SEC
 import qualified DNS.TAP.Schema as DNSTAP
-import DNS.Types hiding (InvalidEDNS)
+import DNS.Types
 import qualified DNS.Types as DNS
 import Data.IP (IP, IPv4, IPv6)
 import Network.Socket (PortNumber)
@@ -380,6 +381,17 @@ data RRset = RRset
     , rrsMayVerified :: MayVerifiedRRS
     }
     deriving (Show)
+
+----------
+-- fold EDNS
+
+{- FOURMOLU_DISABLE -}
+ednsHeaderCases :: (EDNS -> a) -> a -> a -> EDNSheader -> a
+ednsHeaderCases heh noh inv eh = case eh of
+    EDNSheader edns  -> heh edns
+    NoEDNS           -> noh
+    InvalidEDNS      -> inv
+{- FOURMOLU_ENABLE -}
 
 ----------
 -- alias
