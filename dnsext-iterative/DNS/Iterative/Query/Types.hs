@@ -274,7 +274,7 @@ handleResponseError addrs e f msg = exerror $ \ee -> e $ ExtraError ee addrs $ J
   where
     exerror eh
         | not (DNS.isResponse $ DNS.flags msg)              = eh   ErrorNotResp
-        | DNS.ednsHeader msg == DNS.InvalidEDNS             = eh $ ErrorEDNS $ DNS.ednsHeader msg
+        | InvalidEDNS <- DNS.ednsHeader msg                 = eh $ ErrorEDNS $ DNS.ednsHeader msg
         | DNS.rcode msg `notElem` [DNS.NoErr, DNS.NameErr]  = eh $ ErrorRCODE $ DNS.rcode msg
         | otherwise                                         = f msg
 {- FOURMOLU_ENABLE -}
