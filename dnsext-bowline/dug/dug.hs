@@ -58,7 +58,7 @@ import Recursive (recursiveQuery)
 import Types
 
 version :: String
-version = "20240918"
+version = "20250318"
 
 ----------------------------------------------------------------
 
