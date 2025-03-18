@@ -14,6 +14,7 @@ module DNS.Iterative.Query.Types (
     QueryParam (..),
     queryParam,
     queryParamIN,
+    queryParamH,
     RequestDO (..),
     RequestCD (..),
     RequestAD (..),
@@ -55,7 +56,8 @@ import Data.Map.Strict (Map)
 -- other packages
 
 -- dnsext packages
-import DNS.Do53.Client (EdnsControls (..), FlagOp (..), HeaderControls (..), QueryControls (..), Reply)
+import DNS.Do53.Client (QueryControls, Reply)
+import DNS.Do53.Internal (queryControls)
 import qualified DNS.Log as Log
 import DNS.RRCache (Cache, Ranking)
 import qualified DNS.RRCache as Cache
@@ -125,10 +127,13 @@ data QueryParam = QueryParam
     }
 
 queryParam :: Question -> QueryControls -> QueryParam
-queryParam q qctl = QueryParam q (toRequestDO qctl) (toRequestCD qctl) (toRequestAD qctl)
+queryParam q = queryControls (\mf eh -> queryParamH q (mf defaultQueryDNSFlags) eh)
 
 queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
-queryParamIN dom typ qctl = queryParam (Question dom typ IN) qctl
+queryParamIN dom typ = queryParam (Question dom typ IN)
+
+queryParamH :: Question -> DNSFlags -> EDNSheader -> QueryParam
+queryParamH q flags eh = QueryParam q (toRequestDO eh) (toRequestCD flags) (toRequestAD flags)
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
@@ -153,20 +158,14 @@ data RequestAD
     | NoAuthenticatedData
     deriving (Eq, Show)
 
-toRequestDO :: QueryControls -> RequestDO
-toRequestDO qctl = case extDO $ qctlEdns qctl of
-    FlagSet -> DnssecOK
-    _ -> NoDnssecOK
+toRequestDO :: EDNSheader -> RequestDO
+toRequestDO = ednsHeaderCases (bool NoDnssecOK DnssecOK . ednsDnssecOk) NoDnssecOK NoDnssecOK
 
-toRequestCD :: QueryControls -> RequestCD
-toRequestCD qctl = case cdBit $ qctlHeader qctl of
-    FlagSet -> CheckDisabled
-    _ -> NoCheckDisabled
+toRequestCD :: DNSFlags -> RequestCD
+toRequestCD = bool NoCheckDisabled CheckDisabled . chkDisable
 
-toRequestAD :: QueryControls -> RequestAD
-toRequestAD qctl = case adBit $ qctlHeader qctl of
-    FlagSet -> AuthenticatedData
-    _ -> NoAuthenticatedData
+toRequestAD :: DNSFlags -> RequestAD
+toRequestAD = bool NoAuthenticatedData AuthenticatedData . authenData
 
 data QueryCount
 data LastQuery
