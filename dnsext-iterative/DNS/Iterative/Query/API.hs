@@ -177,7 +177,7 @@ replyDNSMessage
     :: EDNSheader -> Maybe OD_NSID
     -> Identifier -> [Question] -> RCODE -> DNSFlags -> [RR] -> [RR] -> DNSMessage
 replyDNSMessage reqEH nsid ident rqs rcode flags rrs auth =
-    res
+    addNSID reqEH nsid res
         { DNS.identifier = ident
         , DNS.rcode = rcode
         , DNS.flags = flags
