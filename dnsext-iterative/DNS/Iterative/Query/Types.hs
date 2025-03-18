@@ -15,6 +15,7 @@ module DNS.Iterative.Query.Types (
     queryParam,
     queryParamIN,
     queryParamH,
+    queryControls',
     RequestDO (..),
     RequestCD (..),
     RequestAD (..),
@@ -127,13 +128,16 @@ data QueryParam = QueryParam
     }
 
 queryParam :: Question -> QueryControls -> QueryParam
-queryParam q = queryControls (\mf eh -> queryParamH q (mf defaultQueryDNSFlags) eh)
+queryParam q = queryControls' (\fl eh -> queryParamH q fl eh)
 
 queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
 queryParamIN dom typ = queryParam (Question dom typ IN)
 
 queryParamH :: Question -> DNSFlags -> EDNSheader -> QueryParam
 queryParamH q flags eh = QueryParam q (toRequestDO eh) (toRequestCD flags) (toRequestAD flags)
+
+queryControls' :: (DNSFlags -> EDNSheader -> a) -> QueryControls -> a
+queryControls' h =  queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver
