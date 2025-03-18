@@ -155,7 +155,7 @@ runBenchmark
     -- ^ Request size
     -> IO ()
 runBenchmark conf@Config{..} noop gplot size = do
-    (logger, putLines, flush) <- Log.new logOutput logLevel
+    (logger, _, putLines, flush) <- Log.new logOutput logLevel
     tid <- forkIO logger
     env <- getEnv conf putLines
 
