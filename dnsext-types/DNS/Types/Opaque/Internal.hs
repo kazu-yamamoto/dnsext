@@ -1,8 +1,8 @@
 module DNS.Types.Opaque.Internal where
 
-import Data.Char (chr)
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Short as Short
+import Data.Char (chr)
 
 import qualified DNS.Types.Base32Hex as B32H
 import qualified Data.ByteString.Base16 as B16
@@ -49,7 +49,7 @@ fromShortByteString :: ShortByteString -> Opaque
 fromShortByteString = Opaque
 
 toString :: Opaque -> String
-toString (Opaque o) = [ chr $ fromIntegral w8 | w8 <- Short.unpack o ]
+toString (Opaque o) = [chr $ fromIntegral w8 | w8 <- Short.unpack o]
 
 toBase16 :: Opaque -> ByteString
 toBase16 (Opaque o) = B16.encode $ Short.fromShort o

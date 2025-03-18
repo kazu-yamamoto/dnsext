@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+
 module Types where
 
 import Control.Concurrent.STM
@@ -9,9 +10,10 @@ import Data.IORef
 import System.IO.Error (tryIOError)
 
 --
-import DNS.Types
+
 import DNS.Log (PutLines)
 import DNS.RRCache (RRCacheOps)
+import DNS.Types
 
 import Config (Config)
 
@@ -34,7 +36,7 @@ data GlobalCache = GlobalCache
 emptyCacheControl :: CacheControl
 emptyCacheControl = CacheControl (\_ -> pure ()) (\_ _ -> pure ()) (pure ()) (pure ()) (pure ())
 
-data QuitCmd = Quit | Reload Config | KeepCache Config deriving Show
+data QuitCmd = Quit | Reload Config | KeepCache Config deriving (Show)
 
 data Control = Control
     { getStats :: IO Builder

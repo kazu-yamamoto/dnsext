@@ -44,9 +44,9 @@ import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
 import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
+import qualified DNS.Iterative.Query.Norec as Norec
 import DNS.Iterative.Query.Random
 import qualified DNS.Iterative.Query.StubZone as Stub
-import qualified DNS.Iterative.Query.Norec as Norec
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -472,7 +472,7 @@ cachedDNSKEY getSEPs dc d@Delegation{..} = do
             nullDNSKEY = cacheSectionNegative zone [] zone DNSKEY rankedAnswer msg [] *> bogus "null DNSKEYs for non-empty SEP"
             ncDNSKEY ncLog = ncLog >> bogus "not canonical"
         Verify.cases NoCheckDisabled zone (s : ss) rankedAnswer msg zone DNSKEY dnskeyRD nullDNSKEY ncDNSKEY withDNSKEY
-    withDNSKEY rds = Verify.withResult DNSKEY msgf (\_ _ _ -> pure rds) rds  {- not reach for no-verify and check-disabled cases -}
+    withDNSKEY rds = Verify.withResult DNSKEY msgf (\_ _ _ -> pure rds) rds {- not reach for no-verify and check-disabled cases -}
     bogus ~es = Verify.bogusError (msgf es)
     msgf s = "require-dnskey: " ++ s ++ ": " ++ show zone
     zone = delegationZone

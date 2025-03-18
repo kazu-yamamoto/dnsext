@@ -9,7 +9,7 @@ import Data.String
 
 -- dnsext-* packages
 import DNS.Types
-import Data.IP (IPv6, AddrRange, fromIPv4)
+import Data.IP (AddrRange, IPv6, fromIPv4)
 import qualified Data.IP as IP
 
 -- this package
@@ -196,7 +196,7 @@ defineZone :: String -> LocalZoneType -> [RR] -> (Domain, LocalZoneType, [RR])
 defineZone name ztype rrs = (domain name, ztype, rrs)
 
 mkRR :: String -> TTL -> CLASS -> TYPE -> RData -> RR
-mkRR name ttl cls typ rd = ResourceRecord { rrname = domain name, rrttl = ttl, rrclass = cls, rrtype = typ, rdata = rd }
+mkRR name ttl cls typ rd = ResourceRecord{rrname = domain name, rrttl = ttl, rrclass = cls, rrtype = typ, rdata = rd}
 
 localNS :: RData
 localNS = rd_ns (domain "localhost.")
@@ -212,8 +212,8 @@ fromIPv6h ip6 = [h | b <- IP.fromIPv6b ip6, h <- [b `unsafeShiftR` 4, b .&. 0xf]
 
 read_ :: Read a => String -> String -> a
 read_ msg s = case [x | (x, "") <- reads s] of
-    []   -> error $ msg ++ ": " ++ s
-    x:_  -> x
+    [] -> error $ msg ++ ": " ++ s
+    x : _ -> x
 
 {- FOURMOLU_DISABLE -}
 _pprZone :: (Domain, LocalZoneType, [RR]) -> String

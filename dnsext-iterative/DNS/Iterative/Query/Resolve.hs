@@ -23,10 +23,10 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
-import DNS.Iterative.Query.Helpers
 
 -- 最終的な解決結果を得る
 runResolve

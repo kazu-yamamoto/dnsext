@@ -107,6 +107,6 @@ interleavedPerm tsz ss = go tsz
 permStep :: Int -> IOArray Int a -> IO a
 permStep nsz ss = do
     ix <- randomizedIndex (0, nsz)
-    v  <- readArray ss ix
+    v <- readArray ss ix
     when (ix /= nsz) $ writeArray ss ix =<< readArray ss nsz
     pure v

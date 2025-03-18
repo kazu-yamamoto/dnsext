@@ -268,7 +268,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         nullSOA = withSection getRanked msg $ \_rrs rank -> cacheNegativeNoSOA (rcode msg) dom typ maxNegativeTTL rank $> []
         soaK ps soaRRset _cacheSOA = either (\s -> ncWarn s *> nullSOA $> []) (ncache >>> ($> soaRRset : nws)) $ single ps
         withSOA = Verify.withResult SOA msgf soaK
-        --
+    --
     Verify.cases reqCD zone dnskeys rankedAuthority msg zone SOA fromSOA nullSOA ($> []) withSOA
   where
     ncache (soaDom, ncttl) = withSection getRanked msg $ \_rrs rank -> cacheNegative soaDom nws dom typ ncttl rank
@@ -327,9 +327,10 @@ cacheNegative zone nrrs dom typ ttl rank = do
     logLn Log.DEBUG $ "cacheNegative: " ++ show (zone, dom, typ, ttl, rank)
     insertRRSet <- asks insert_
     let nsecs =
-            [(ResourceRecord rrsName rrsType rrsClass rrsTTL rd, s:|ss)
-            | RRset{rrsMayVerified=(ValidRRS (s:ss)),..} <- nrrs
-            , rd <- take 1 rrsRDatas]
+            [ (ResourceRecord rrsName rrsType rrsClass rrsTTL rd, s :| ss)
+            | RRset{rrsMayVerified = (ValidRRS (s : ss)), ..} <- nrrs
+            , rd <- take 1 rrsRDatas
+            ]
     liftIO $ cpsInsertNegative zone nsecs dom typ ttl rank insertRRSet
 
 cacheNegativeNoSOA :: (MonadIO m, MonadReader Env m) => RCODE -> Domain -> TYPE -> TTL -> Ranking -> m ()

@@ -58,8 +58,8 @@ peerSockAddr (PeerInfoVC sa) = sa
 -- request identifier in one connection
 type ReqNum = Int
 
-data VcPendingOp =
-    VcPendingOp
+data VcPendingOp
+    = VcPendingOp
     { vpReqNum :: ReqNum
     , vpDelete :: IO ()
     }

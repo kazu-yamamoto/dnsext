@@ -50,7 +50,8 @@ foldResponseIterative deny reply env reqM =
     foldResponse "resp-queried" deny reply env reqM (resolveStub reply (identifier reqM) (question reqM))
 
 -- | Folding a response corresponding to a query, from questions and control flags. The cache is maybe updated.
-foldResponseIterative' :: (String -> a) -> (VResult -> DNSMessage -> a) -> Env -> Identifier -> [Question] -> Question -> QueryControls -> IO a
+foldResponseIterative'
+    :: (String -> a) -> (VResult -> DNSMessage -> a) -> Env -> Identifier -> [Question] -> Question -> QueryControls -> IO a
 foldResponseIterative' deny reply env ident qs q qctl =
     foldResponse' "resp-queried'" deny reply env ident qs q qctl (resolveStub reply ident qs)
 

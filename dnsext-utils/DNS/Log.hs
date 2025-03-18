@@ -83,8 +83,12 @@ new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
 new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
 
 with
-    :: IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
+    :: IO ShowS
+    -> IO Handle
+    -> (Handle -> IO ())
+    -> Level
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a)
+    -> IO a
 with = withHandleLogger queueBound
 
 stdHandle :: StdHandle -> Handle

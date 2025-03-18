@@ -110,7 +110,7 @@ pattern ContentType = FieldType 0x01
 
 ----------------------------------------------------------------
 
-newtype FSException = FSException String deriving Show
+newtype FSException = FSException String deriving (Show)
 
 instance Exception FSException
 

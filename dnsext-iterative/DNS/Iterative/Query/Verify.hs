@@ -76,7 +76,7 @@ withResult typ modf rightK xs xRRset cacheX =
 {- FOURMOLU_ENABLE -}
 
 insecureLog :: (MonadIO m, MonadReader Env m) => String -> m ()
-insecureLog ~vmsg =  verifyLog (Just Yellow) vmsg
+insecureLog ~vmsg = verifyLog (Just Yellow) vmsg
 
 {- FOURMOLU_DISABLE -}
 bogusError :: String -> DNSQuery a

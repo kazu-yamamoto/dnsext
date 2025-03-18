@@ -16,9 +16,8 @@ import qualified Data.IORef as I
 import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
-import System.IO (IOMode (AppendMode), openFile, hClose)
-import System.Posix (UserID, getRealUserID, setEffectiveGroupID, setEffectiveUserID)
-import System.Posix (Handler (Catch), installHandler, sigHUP)
+import System.IO (IOMode (AppendMode), hClose, openFile)
+import System.Posix (Handler (Catch), UserID, getRealUserID, installHandler, setEffectiveGroupID, setEffectiveUserID, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
 
@@ -128,7 +127,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
     -- actions list for threads
     workerStats <- Server.getWorkerStats cnf_workers
     (cachers, workers, toCacher) <- Server.mkPipeline env cnf_cachers cnf_workers workerStats
-    servers <- sequence [(n, sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
+    servers <- sequence [(n,sks,) <$> mkserv env toCacher sks | (n, mkserv, sks) <- addrs, not (null sks)]
     mng <- getControl env workerStats mng0{reopenLog = reopenLog0}
     let srvInfo1 name sas = unwords $ (name ++ ":") : map show sas
         monitors srvInfo = Mon.monitors conf env mng gcache srvInfo mas monInfo
@@ -204,10 +203,10 @@ bindServers
     :: [HostName]
     -> (Bool, n, a, SocketType, PortNumber)
     -> IO (n, a, [Socket])
-bindServers _     (False, n, a, _       , _   ) =    return (n, a, [])
-bindServers hosts (True , n, a, socktype, port) = do
+bindServers _ (False, n, a, _, _) = return (n, a, [])
+bindServers hosts (True, n, a, socktype, port) = do
     as <- ainfosSkipError putStrLn socktype port hosts
-    (n, a,) <$> mapM openBind as
+    (n,a,) <$> mapM openBind as
   where
     openBind ai = do
         s <- openSocket ai
@@ -312,7 +311,7 @@ amIrootUser :: IO Bool
 amIrootUser = (== 0) <$> getRealUserID
 
 recoverRoot :: IO ()
-recoverRoot= do
+recoverRoot = do
     setEffectiveUserID 0
     setEffectiveGroupID 0
 

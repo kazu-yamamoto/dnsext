@@ -48,7 +48,7 @@ module DNS.Iterative.Query.Types (
 ) where
 
 -- GHC packages
-import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.Map.Strict (Map)
 
 -- other packages
@@ -394,7 +394,7 @@ data VResult
     = VR_Secure
     | VR_Insecure
     | VR_Bogus
-    deriving Show
+    deriving (Show)
 
 ---
 

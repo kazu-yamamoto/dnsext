@@ -4,8 +4,8 @@ module NonBlockingSpec where
 
 import Data.ByteString (ByteString)
 import Data.Functor
-import Data.String
 import Data.IORef
+import Data.String
 import Test.Hspec (Spec, describe, hspec, it, shouldReturn)
 import Test.Hspec.Expectations.Contrib (annotate)
 
@@ -141,24 +141,24 @@ testNBRecvNReadable xs = do
     readable `shouldReturn` False
     let check i j (sz, exnbr, exrd) = do
             let ix = show i ++ ": " ++ show j ++ ": "
-            annotate (ix ++ "nbrecv result")        $ nbrecvN sz `shouldReturn` exnbr
-            annotate (ix ++ "readable after recv")  $ readable `shouldReturn` exrd
+            annotate (ix ++ "nbrecv result") $ nbrecvN sz `shouldReturn` exnbr
+            annotate (ix ++ "readable after recv") $ readable `shouldReturn` exrd
         action i (ev, exrd0, ys) = do
             pushEv ev
             annotate (show i ++ ": readable after event") $ readable `shouldReturn` exrd0
-            sequence_ $ zipWith (check i) [(1::Int)..] ys
-    sequence_ $ zipWith action [(1::Int)..] xs
+            sequence_ $ zipWith (check i) [(1 :: Int) ..] ys
+    sequence_ $ zipWith action [(1 :: Int) ..] xs
 
 data InEvent
     = Bytes String
     | Close
-    deriving Show
+    deriving (Show)
 
 data InState'
     = Arrived String
     | EndOfInput String
     | NoArrived
-    deriving Show
+    deriving (Show)
 
 type InState = IORef (Maybe InState')
 

@@ -329,7 +329,7 @@ list _   cons (x:xs) =  cons x xs
 -- >>> chunksOfNE 3 $ 'a' :| "bcdefgh"
 -- ('a' :| "bc") :| ['d' :| "ef",'g' :| "h"]
 chunksOfNE :: Int -> NonEmpty a -> NonEmpty (NonEmpty a)
-chunksOfNE n (x:|xs) = cpsChunksOfNE n x xs (:|)
+chunksOfNE n (x :| xs) = cpsChunksOfNE n x xs (:|)
 
 {- FOURMOLU_DISABLE -}
 cpsChunksOfNE :: Int -> a -> [a] -> (NonEmpty a -> [NonEmpty a] -> b) -> b

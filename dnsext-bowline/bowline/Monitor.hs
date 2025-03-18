@@ -37,7 +37,7 @@ import DNS.Iterative.Server (withLocationIOE)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import qualified DNS.ThreadStats as TStat
-import DNS.Types (Domain, TYPE, Question (..), toRepresentation)
+import DNS.Types (Domain, Question (..), TYPE, toRepresentation)
 import qualified DNS.Types as DNS
 import DNS.Types.Time (EpochTime)
 import qualified Network.Socket as S
@@ -46,8 +46,8 @@ import qualified Network.Socket as S
 import Network.Socket (
     AddrInfo (..),
     SockAddr,
-    SocketOption (SockOpt, KeepAlive),
     Socket,
+    SocketOption (KeepAlive, SockOpt),
     SocketType (Stream),
  )
 import System.Posix (getEffectiveGroupID, getEffectiveUserID)
