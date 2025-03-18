@@ -240,7 +240,7 @@ defaultQuery =
         { identifier = 0
         , opcode = OP_STD
         , rcode = NoErr
-        , flags = defaultDNSFlags
+        , flags = defaultQueryDNSFlags
         , ednsHeader = EDNSheader defaultEDNS
         , question = []
         , answer = []
@@ -283,13 +283,7 @@ defaultResponse =
         { identifier = 0
         , opcode = OP_STD
         , rcode = NoErr
-        , flags =
-            defaultDNSFlags
-                { isResponse = True
-                , authAnswer = True
-                , recAvailable = True
-                , authenData = False
-                }
+        , flags = defaultResponseDNSFlags
         , ednsHeader = NoEDNS
         , question = []
         , answer = []
@@ -342,19 +336,35 @@ data DNSFlags = DNSFlags
 
 ----------------------------------------------------------------
 
--- | Default 'DNSFlags' record suitable for making recursive queries.  By default
--- the RD bit is set, and the AD and CD bits are cleared.
+-- | Default query 'DNSFlags' record suitable for making recursive queries.
+--   By default the RD bit is set, and the AD and CD bits are cleared.
 --
--- >>> defaultDNSFlags
+-- >>> defaultQueryDNSFlags
 -- DNSFlags {isResponse = False, authAnswer = False, trunCation = False, recDesired = True, recAvailable = False, authenData = False, chkDisable = False}
-defaultDNSFlags :: DNSFlags
-defaultDNSFlags =
+defaultQueryDNSFlags :: DNSFlags
+defaultQueryDNSFlags =
     DNSFlags
         { isResponse = False
         , authAnswer = False
         , trunCation = False
         , recDesired = True
         , recAvailable = False
+        , authenData = False
+        , chkDisable = False
+        }
+
+{-# DEPRECATED defaultDNSFlags "use defaultQueryDNSFlags" #-}
+defaultDNSFlags :: DNSFlags
+defaultDNSFlags = defaultQueryDNSFlags
+
+defaultResponseDNSFlags :: DNSFlags
+defaultResponseDNSFlags =
+    DNSFlags
+        { isResponse = True
+        , authAnswer = True
+        , trunCation = False
+        , recDesired = True
+        , recAvailable = True
         , authenData = False
         , chkDisable = False
         }
