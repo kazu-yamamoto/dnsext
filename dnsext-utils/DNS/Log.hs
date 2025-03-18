@@ -2,7 +2,6 @@
 
 module DNS.Log (
     new,
-    new',
     with,
     --
     Level (..),
@@ -76,20 +75,15 @@ type PutLines m = Level -> Maybe Color -> [String] -> m ()
 type KillLogger = ()
 type ReopenLogger = ()
 
-new :: StdHandle -> Level -> IO (IO Logger, PutLines IO, IO KillLogger)
-new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg _ p k _ -> pure (lg, p, k)
+new :: StdHandle -> Level -> IO (IO Logger, PutLines STM, PutLines IO, IO KillLogger)
+new oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg sp ip k _ -> pure (lg, sp, ip, k)
 
-new' :: StdHandle -> Level -> IO (IO Logger, PutLines STM, IO KillLogger)
-new' oh lv = with (pure id) (pure $ stdHandle oh) (\_ -> pure ()) lv $ \lg p _ k _ -> pure (lg, p, k)
-
+{- FOURMOLU_DISABLE -}
 with
-    :: IO ShowS
-    -> IO Handle
-    -> (Handle -> IO ())
-    -> Level
-    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a)
-    -> IO a
+    :: IO ShowS -> IO Handle -> (Handle -> IO ()) -> Level
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 with = withHandleLogger queueBound
+{- FOURMOLU_ENABLE -}
 
 stdHandle :: StdHandle -> Handle
 stdHandle Stdout = stdout
@@ -101,8 +95,8 @@ queueBound = 8
 
 {- FOURMOLU_DISABLE -}
 withHandleLogger
-    :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ())
-    -> Level -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
+    :: Natural -> IO ShowS -> IO Handle -> (Handle -> IO ()) -> Level
+    -> (IO Logger -> PutLines STM -> PutLines IO -> IO KillLogger -> IO ReopenLogger -> IO a) -> IO a
 withHandleLogger qsize getM open close loggerLevel k = do
     outFh <- open'
     colorize  <- hSupportsANSIColor outFh

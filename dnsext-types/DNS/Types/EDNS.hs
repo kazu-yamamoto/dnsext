@@ -206,14 +206,14 @@ class (Typeable a, Eq a, Show a) => OptData a where
 ---------------------------------------------------------------
 
 -- | A type to uniform 'OptData' 'a'.
-data OData = forall a. (Typeable a, Eq a, Show a, OptData a) => OData a
+data OData = forall a. OptData a => OData a
 
 -- | Extracting the original type.
 fromOData :: Typeable a => OData -> Maybe a
 fromOData (OData x) = cast x
 
 -- | Wrapping the original type with 'OData'.
-toOData :: (Typeable a, OptData a) => a -> OData
+toOData :: OptData a => a -> OData
 toOData = OData
 
 odataSize :: OData -> Int
