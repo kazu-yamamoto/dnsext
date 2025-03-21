@@ -40,6 +40,7 @@ executable bowline
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N4 -qn1 -T -A32m -kc2k"
     build-depends:
         base,
+        base16-bytestring,
         bytestring,
         transformers,
         async,
