@@ -9,6 +9,7 @@ module Config (
 ) where
 
 import Control.Monad.Trans.State (StateT (..), evalStateT)
+import Control.Applicative
 import qualified DNS.Log as Log
 import Data.Char (toUpper)
 import Data.Functor
@@ -18,7 +19,7 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
-import Text.Parsec
+import Text.Parsec hiding ((<|>), many)
 import Text.Parsec.ByteString.Lazy
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
