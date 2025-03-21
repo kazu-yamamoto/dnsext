@@ -10,6 +10,7 @@ module Config (
 
 import Control.Monad.Trans.State (StateT (..), evalStateT)
 import Control.Applicative
+import qualified Data.ByteString.Base16 as B16
 import Data.Char (toUpper)
 import Data.Functor
 import Data.List
@@ -23,7 +24,8 @@ import Text.Parsec.ByteString.Lazy
 
 import qualified DNS.Log as Log
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
-import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
+import DNS.Types (Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
+import qualified DNS.Types.Opaque as Opaque
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 
 import Parser
@@ -51,6 +53,7 @@ data Config = Config
     , cnf_version_option :: [String]
     , cnf_local_zones :: [(Domain, LocalZoneType, [ResourceRecord])]
     , cnf_stub_zones :: [(Domain, [Domain], [Address])]
+    , cnf_nsid :: Maybe OD_NSID
     , cnf_dns_addrs :: [String]
     , cnf_resolve_timeout :: Int
     , cnf_cachers :: Int
@@ -116,6 +119,7 @@ defaultConfig =
         , cnf_version_option = []
         , cnf_local_zones = []
         , cnf_stub_zones = []
+        , cnf_nsid = Nothing
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_resolve_timeout = 10000000
         , cnf_cachers = 4
@@ -231,6 +235,7 @@ makeConfig def conf = do
     cnf_local_zones <- localZones
     cnf_stub_zones <- stubZones
     cnf_dns_addrs <- get "dns-addrs" cnf_dns_addrs
+    cnf_nsid <- get "nsid" cnf_nsid
     cnf_resolve_timeout <- get "resolve-timeout" cnf_resolve_timeout
     cnf_cachers <- get "cachers" cnf_cachers
     cnf_workers <- get "workers" cnf_workers
@@ -395,6 +400,11 @@ instance FromConf [String] where
     fromConf (CV_Strings ss) = pure $ ss
     fromConf _ = fail "fromConf string list"
 
+instance FromConf (Maybe OD_NSID) where
+    fromConf (CV_String "") = pure Nothing
+    fromConf (CV_String s) = Just <$> decodeNSID s
+    fromConf _ = fail "fromConf maybe NSID"
+
 instance FromConf UserID where
     fromConf (CV_String s) = uidForName s
     fromConf (CV_Int i) = pure $ fromIntegral i
@@ -408,6 +418,13 @@ instance FromConf GroupID where
 instance FromConf Log.Level where
     fromConf (CV_String s) = logLevel s
     fromConf _ = fail "fromConf log level"
+
+decodeNSID :: String -> IO OD_NSID
+decodeNSID s =
+    maybe (fail "nsid: NSID must be hex-string or ascii-string with ascii_ prefix") (pure . OD_NSID) $ decodeAscii <|> decodeB16
+  where
+    decodeAscii = fromString <$> stripPrefix "ascii_" s
+    decodeB16 = either (\_ -> Nothing) (Just . Opaque.fromByteString) $ B16.decode $ fromString s
 
 {- FOURMOLU_DISABLE -}
 uidForName :: String -> IO UserID
