@@ -62,6 +62,7 @@ library
         containers,
         mtl,
         stm,
+        unix,
         -- dnsext-*
         dnsext-dnssec,
         dnsext-do53,
@@ -71,12 +72,15 @@ library
         -- others
         ansi-terminal,
         async,
+        base16-bytestring,
         base64-bytestring,
+        crypton,
         http-types,
         http2 >= 5.3.2 && < 5.4,
         http2-tls >= 0.4.4 && < 0.5,
         http3 >= 0.0.17,
         iproute,
+        memory,
         network >= 3.2.3 && < 3.3,
         network-run,
         psqueues,
