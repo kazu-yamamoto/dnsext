@@ -55,18 +55,23 @@ library
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:
+        -- GHC packages
         base >=4 && <5,
-        base64,
-        ansi-terminal,
         array,
-        async,
         bytestring,
         containers,
+        mtl,
+        stm,
+        -- dnsext-*
         dnsext-dnssec,
         dnsext-do53,
         dnsext-svcb,
         dnsext-types,
         dnsext-utils,
+        -- others
+        ansi-terminal,
+        async,
+        base64,
         http-types,
         http2 >= 5.3.2 && < 5.4,
         http2-tls >= 0.4.4 && < 0.5,
@@ -74,11 +79,9 @@ library
         iproute,
         network >= 3.2.3 && < 3.3,
         network-run,
-        mtl,
         psqueues,
         quic >= 0.2.1 && < 0.3,
         random,
-        stm,
         time-manager,
         tls >= 2.1.4,
         word8
@@ -92,14 +95,17 @@ executable workers-benchmark
     default-language: Haskell2010
     ghc-options:      -Wall -threaded -rtsopts "-with-rtsopts=-N2 -qn1"
     build-depends:
+        -- GHC packages
         base,
-        async,
         bytestring,
         deepseq,
+        -- dnsext-*
         dnsext-do53,
         dnsext-iterative,
         dnsext-types,
         dnsext-utils,
+        -- others
+        async,
         unix-time
 
     if (os(windows) && impl(ghc >=9.0))
@@ -121,18 +127,21 @@ test-suite spec
     default-language:   Haskell2010
     ghc-options:        -Wall -threaded
     build-depends:
+        -- GHC packages
         base,
         array,
-        async,
         bytestring,
         containers,
         stm,
+        -- dnsext-*
         dnsext-dnssec,
         dnsext-do53,
         dnsext-iterative,
         dnsext-types,
         dnsext-utils,
+        -- others
         QuickCheck,
+        async,
         hspec,
         hspec-expectations
 
