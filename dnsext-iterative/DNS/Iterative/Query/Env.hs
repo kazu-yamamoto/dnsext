@@ -21,18 +21,37 @@ module DNS.Iterative.Query.Env (
     getLocalZones,
     getStubZones,
     --
+    LocalZoneType (..),
+    RR,
+    --
+    identityRefuse,
+    identityHash,
+    identityHost,
+    identityString,
+    --
+    versionRefuse,
+    versionBlank,
+    versionShow,
+    versionString,
+    --
     getUpdateHistogram,
 ) where
 
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
+import qualified Data.ByteString.Char8 as C8
 import Data.IORef (newIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import System.Posix (getSystemID, nodeName)
 import System.Timeout (timeout)
 
 -- other packages
+import Crypto.Hash (hashWith)
+import qualified Crypto.Hash.Algorithms as HA
+import qualified Data.ByteArray as BA
+import Data.ByteString.Base16 as B16
 
 -- dnsext packages
 import DNS.Do53.Internal (newConcurrentGenId)
@@ -48,6 +67,7 @@ import qualified DNS.ZoneFile as Zone
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.DefaultLocal (defaultLocal)
+import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
@@ -203,6 +223,38 @@ getLocalZones lzones0 = (Local.apexMap localName lzones, localName)
   where
     localName = Local.nameMap lzones
     lzones = Local.unionZones defaultLocal lzones0
+
+{- FOURMOLU_DISABLE -}
+identityRefuse  :: IO [(Domain, LocalZoneType, [RR])]
+identityRefuse  = pure Local.hideIdentity
+
+identityHash    :: IO [(Domain, LocalZoneType, [RR])]
+identityHash    = Local.identity . hash' <$> getNode
+  where hash' n = take 7 $ C8.unpack $ B16.encode $ BA.convert $ hashWith HA.SHA256 (fromString n :: ByteString)
+
+identityHost    :: IO [(Domain, LocalZoneType, [RR])]
+identityHost    = Local.identity <$> getNode
+
+identityString  :: String -> IO [(Domain, LocalZoneType, [RR])]
+identityString  = pure . Local.identity
+
+getNode :: IO String
+getNode = nodeName <$> getSystemID
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+versionRefuse  :: [(Domain, LocalZoneType, [RR])]
+versionRefuse  = Local.hideVersion
+
+versionBlank   :: [(Domain, LocalZoneType, [RR])]
+versionBlank   = Local.version   "bowline"
+
+versionShow    :: [(Domain, LocalZoneType, [RR])]
+versionShow    = Local.version $ "bowline " ++ version
+
+versionString  :: String -> [(Domain, LocalZoneType, [RR])]
+versionString  = Local.version
+{- FOURMOLU_ENABLE -}
 
 ---
 
