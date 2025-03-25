@@ -123,7 +123,7 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
 getInput :: H2.Request -> IO (Either String C8.ByteString)
 getInput req
     | method == Just "GET" = case H2.requestPath req of
-        Just path | "/dns-query?dns=" `C8.isPrefixOf` path -> return $ Right $ decodeBase64Lenient $ C8.drop 15 path
+        Just path | "/dns-query?dns=" `C8.isPrefixOf` path -> return $ Right $ decodeLenient $ C8.drop 15 path
         _ -> return $ Left "illegal URL"
     | method == Just "POST" = do
         bs <- recvHTTP2 req
