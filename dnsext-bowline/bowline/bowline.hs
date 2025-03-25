@@ -268,6 +268,36 @@ getLogger ruid conf@Config{..} TimeCache{..}
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
+getIdentity :: Config -> IO [(DNS.Domain, LocalZoneType, [RR])]
+getIdentity Config{..}
+    | cnf_hide_identity       = Server.identityRefuse
+    | Just s <- cnf_identity  = Server.identityString s
+    | otherwise             = case cnf_identity_option of
+        []                 ->   Server.identityHash
+        "refuse"  : _      ->   Server.identityRefuse
+        "hash"    : _      ->   Server.identityHash
+        "host"    : _      ->   Server.identityHost
+        "string"  : s : _  ->   Server.identityString s
+        _         : _      ->   Server.identityHash
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getVersion :: Config -> [(DNS.Domain, LocalZoneType, [RR])]
+getVersion Config{..}
+    | cnf_hide_version       = Server.versionRefuse
+    | Just s <- cnf_version  = Server.versionString s
+    | otherwise            = case cnf_version_option of
+        []                 ->  Server.versionBlank
+        "refuse"  : _      ->  Server.versionRefuse
+        "blank"   : _      ->  Server.versionBlank
+        "show"    : _      ->  Server.versionShow
+        "string"  : s : _  ->  Server.versionString s
+        _         : _      ->  Server.versionBlank
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
 getCreds :: Config -> IO Credentials
 getCreds Config{..}
     | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
