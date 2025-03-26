@@ -47,6 +47,8 @@ data Control = Control
     , getConfig :: IO (Either IOError Config)
     , quitServer :: IO ()
     , waitQuit :: STM ()
+    , reloadSuccess :: ReloadCmd -> IO ()
+    , reloadFailure :: ReloadCmd -> IO ()
     , getCommandAndClear :: IO QuitCmd
     , setCommand :: QuitCmd -> IO ()
     }
@@ -63,6 +65,8 @@ newControl readConfig = do
             , getConfig = tryIOError readConfig
             , quitServer = atomically $ writeTVar qRef True
             , waitQuit = readTVar qRef >>= guard
+            , reloadSuccess = \_ -> pure ()
+            , reloadFailure = \_ -> pure ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
             }
@@ -74,7 +78,7 @@ reloadCmd :: Control -> ReloadCmd -> a -> a -> IO a
 reloadCmd ctl@Control{..} rcmd lv rv = do
     either left right =<< getConfig
   where
-    left e = putStrLn ("reload failed: " ++ show e) $> lv
-    right conf = quitCmd ctl (cmd1 rcmd conf) $> rv
+    left e = putStrLn ("reload failed: " ++ show e) *> reloadFailure rcmd $> lv
+    right conf = quitCmd ctl (cmd1 rcmd conf) *> reloadSuccess rcmd $> rv
     cmd1 Reload = Reload1
     cmd1 KeepCache = KeepCache1
