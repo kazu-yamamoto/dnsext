@@ -67,11 +67,11 @@ run ruid readConfig = do
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
-            Reload rconf -> do
+            Reload1 rconf -> do
                 putStrLn "\nReloading..." -- fixme
                 stopCache $ gcacheRRCacheOps gcache
                 go tcache Nothing rconf
-            KeepCache rconf -> do
+            KeepCache1 rconf -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
                 go tcache (Just gcache) rconf
 
