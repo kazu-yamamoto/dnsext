@@ -30,7 +30,7 @@ nameMap lzones =
     Map.fromList $ concatMap (byName . zoneRRsets) lzones
   where
     rrKey = (,,) <$> rrname <*> rrtype <*> rrclass
-    withName []            = error "newEnv.withName: group must not be null!"
+    withName []            = error "Env: getLocaleZones: nameMap: group must not be null!"
     withName rrss@(rrs:_)  = (rrsName rrs, rrss)
     getRRset rrs = canonicalRRset rrs (const Nothing) (\n t c ttl rds -> Just $ RRset n t c ttl rds notValidNoSig)
     zoneRRsets (_d, _zt, rrs) = mapMaybe getRRset $ groupBy ((==) `on` rrKey) $ sortOn rrKey rrs
