@@ -42,6 +42,12 @@ data Config = Config
     , cnf_root_hints :: Maybe FilePath
     , cnf_cache_size :: Int
     , cnf_disable_v6_ns :: Bool
+    , cnf_hide_identity :: Bool
+    , cnf_identity :: Maybe String
+    , cnf_identity_option :: [String]
+    , cnf_hide_version :: Bool
+    , cnf_version :: Maybe String
+    , cnf_version_option :: [String]
     , cnf_local_zones :: [(Domain, LocalZoneType, [ResourceRecord])]
     , cnf_stub_zones :: [(Domain, [Domain], [Address])]
     , cnf_dns_addrs :: [String]
@@ -101,6 +107,12 @@ defaultConfig =
         , cnf_root_hints = Nothing
         , cnf_cache_size = 2 * 1024
         , cnf_disable_v6_ns = False
+        , cnf_hide_identity = False
+        , cnf_identity = Nothing
+        , cnf_identity_option = []
+        , cnf_hide_version = False
+        , cnf_version = Nothing
+        , cnf_version_option = []
         , cnf_local_zones = []
         , cnf_stub_zones = []
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
@@ -209,6 +221,12 @@ makeConfig def conf = do
     cnf_root_hints <- get "root-hints" cnf_root_hints
     cnf_cache_size <- get "cache-size" cnf_cache_size
     cnf_disable_v6_ns <- get "disable-v6-ns" cnf_disable_v6_ns
+    cnf_hide_identity <- get "hide-identity" cnf_hide_identity
+    cnf_identity <- get "identity" cnf_identity
+    cnf_identity_option <- get "identity-option" cnf_identity_option
+    cnf_hide_version <- get "hide-version" cnf_hide_version
+    cnf_version <- get "version" cnf_version
+    cnf_version_option <- get "version-option" cnf_version_option
     cnf_local_zones <- localZones
     cnf_stub_zones <- stubZones
     cnf_dns_addrs <- get "dns-addrs" cnf_dns_addrs

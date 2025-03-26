@@ -98,7 +98,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
             trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
             rootHint <- mapM readRootHint' cnf_root_hints
             let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
-                localZones = getLocalZones cnf_local_zones
+            localZones <- (\id_ -> getLocalZones $ id_ ++ getVersion conf ++ cnf_local_zones) <$> getIdentity conf
             stubZones <- getStubZones cnf_stub_zones trustAnchors
             updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
             env <-
@@ -264,6 +264,36 @@ getLogger ruid conf@Config{..} TimeCache{..}
         let p _ _ ~_ = return ()
             n = return ()
         return (return (), p, n, n)
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getIdentity :: Config -> IO [(DNS.Domain, LocalZoneType, [RR])]
+getIdentity Config{..}
+    | cnf_hide_identity       = Server.identityRefuse
+    | Just s <- cnf_identity  = Server.identityString s
+    | otherwise             = case cnf_identity_option of
+        []                 ->   Server.identityHash
+        "refuse"  : _      ->   Server.identityRefuse
+        "hash"    : _      ->   Server.identityHash
+        "host"    : _      ->   Server.identityHost
+        "string"  : s : _  ->   Server.identityString s
+        _         : _      ->   Server.identityHash
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getVersion :: Config -> [(DNS.Domain, LocalZoneType, [RR])]
+getVersion Config{..}
+    | cnf_hide_version       = Server.versionRefuse
+    | Just s <- cnf_version  = Server.versionString s
+    | otherwise            = case cnf_version_option of
+        []                 ->  Server.versionBlank
+        "refuse"  : _      ->  Server.versionRefuse
+        "blank"   : _      ->  Server.versionBlank
+        "show"    : _      ->  Server.versionShow
+        "string"  : s : _  ->  Server.versionString s
+        _         : _      ->  Server.versionBlank
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------

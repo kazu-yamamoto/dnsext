@@ -653,8 +653,13 @@ toCLASS = CLASS
 pattern IN :: CLASS
 pattern IN = CLASS 1
 
+-- | Resource record class for Chaos
+pattern CH :: CLASS
+pattern CH = CLASS 3
+
 instance Show CLASS where
     show IN = "IN"
+    show CH = "CH"
     show (CLASS n) = "CLASS " ++ show n
 
 putCLASS :: CLASS -> Builder ()
