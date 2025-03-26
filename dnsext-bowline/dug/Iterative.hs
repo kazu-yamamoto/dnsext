@@ -3,7 +3,7 @@
 module Iterative (iterativeQuery) where
 
 import DNS.Do53.Client (QueryControls)
-import DNS.Iterative.Query (Env (..), newEnv, resolveResponseIterative, setRRCacheOps, setTimeCache)
+import DNS.Iterative.Query (Env (..), newEmptyEnv, resolveResponseIterative, setRRCacheOps, setTimeCache)
 import qualified DNS.Log as Log
 import qualified DNS.RRCache as Cache
 import DNS.TimeCache (getTime, newTimeCache)
@@ -34,7 +34,7 @@ setup putLines opt@Options{..} = do
     cacheOps <- Cache.newRRCacheOps cacheConf
     let tmout = timeout 3000000
         setOps = setRRCacheOps cacheOps . setTimeCache tcache
-    newEnv <&> \env0 ->
+    newEmptyEnv <&> \env0 ->
         (setOps env0)
             { shortLog_ = shortLog opt
             , logLines_ = putLines

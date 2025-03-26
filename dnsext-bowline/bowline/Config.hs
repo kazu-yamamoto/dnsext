@@ -9,7 +9,7 @@ module Config (
 ) where
 
 import Control.Monad.Trans.State (StateT (..), evalStateT)
-import qualified DNS.Log as Log
+import Control.Applicative
 import Data.Char (toUpper)
 import Data.Functor
 import Data.List
@@ -18,9 +18,10 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
-import Text.Parsec
+import Text.Parsec hiding ((<|>), many)
 import Text.Parsec.ByteString.Lazy
 
+import qualified DNS.Log as Log
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import DNS.Types (Domain, ResourceRecord (..), isSubDomainOf)
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
@@ -525,15 +526,15 @@ eov = void (lookAhead $ choice [char '#', char ' ', char '\n']) <|> eof
 cv_int :: Parser ConfValue
 cv_int = CV_Int . read <$> many1 digit <* eov
 
+{- FOURMOLU_DISABLE -}
 cv_bool :: Parser ConfValue
 cv_bool =
-    CV_Bool True <$ string "yes" <* eov
-        <|> CV_Bool False <$ string "no" <* eov
+    CV_Bool True <$ string "yes" <* eov <|>
+    CV_Bool False <$ string "no" <* eov
 
-{- FOURMOLU_DISABLE -}
 cv_string' :: Parser String
 cv_string' =
-    dquote *> (many (noneOf "\"\n")) <* dquote  <|>
+    dquote *> (many (noneOf "\"\n")) <* dquote <|>
     many1 (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 

@@ -102,7 +102,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
             stubZones <- getStubZones cnf_stub_zones trustAnchors
             updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
             env <-
-                newEnv <&> \env0 ->
+                newEmptyEnv <&> \env0 ->
                     (setOps env0)
                         { shortLog_ = cnf_short_log
                         , logLines_ = putLines

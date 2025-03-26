@@ -2,7 +2,6 @@
 
 module DNS.Iterative.Query.Env (
     Env (..),
-    newEnv,
     newEmptyEnv,
     --
     cropMaxNegativeTTL,
@@ -82,9 +81,6 @@ version = "0.0.0.20250317"
 
 {- FOURMOLU_DISABLE -}
 -- | Creating a new 'Env'.
-newEnv :: IO Env
-newEnv = newEmptyEnv
-
 newEmptyEnv :: IO Env
 newEmptyEnv = do
     genId    <- newConcurrentGenId
