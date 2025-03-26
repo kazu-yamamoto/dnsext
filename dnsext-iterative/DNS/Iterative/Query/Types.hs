@@ -117,6 +117,7 @@ data Env = Env
     , idGen_ :: IO DNS.Identifier
     , statsInfo_ :: [(String, String)]
     , stats_ :: Stats
+    , nsid_ :: Maybe OD_NSID
     , updateHistogram_ :: Integer -> Stats -> IO ()
     , timeout_ :: IO Reply -> IO (Maybe Reply)
     }
