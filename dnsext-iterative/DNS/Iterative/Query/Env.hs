@@ -111,6 +111,7 @@ newEmptyEnv = do
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
         , idGen_ = genId
+        , reloadInfo_ = []
         , statsInfo_ = statsInfo
         , stats_ = stats
         , nsid_ = Nothing
