@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os:  [ 'ubuntu-latest', 'macOS-latest' ]
-        ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10' ]
+        ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10', '9.12' ]
 
     env:
       cache-name: cabal-ghc
@@ -23,7 +23,7 @@ jobs:
     steps:
     - run: git config --global core.autocrlf false
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - uses: haskell-actions/setup@v2
       with:
@@ -32,6 +32,7 @@ jobs:
 
     - name: Hackage index, Cache Key
       id: params
+      shell: bash
       run: |
         ghc_version=$(ghc --numeric-version)
         cabal update
@@ -48,6 +49,7 @@ jobs:
     - name: Install doctest
       id: doctest-dep
       if: ${{ runner.os == 'Linux' }}
+      shell: bash
       run: |
         if cabal install --offline --overwrite-policy=always doctest
         then
@@ -59,6 +61,7 @@ jobs:
 
     - name: Install dependencies
       id: inst-dep
+      shell: bash
       run: |
         if cabal build --offline --only-dependencies ${{ env.target-config }} all
         then
