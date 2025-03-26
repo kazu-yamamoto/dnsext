@@ -79,7 +79,8 @@ import Data.ByteString.Builder
 
 getStats :: Env -> Builder -> IO Builder
 getStats Env{..} prefix =
-    mconcat <$> sequence [readStats stats_ prefix, getHistogramBucktes stats_ prefix, getCC, pure info]
+    mconcat <$> sequence [readStats stats_ prefix, getHistogramBucktes stats_ prefix, getCC, pure info, getRI]
   where
     getCC = getCache_ <&> \c -> prefix <> fromString ("rrset_cache_count " <> show (RRCache.size c) <> "\n")
     info = prefix <> fromString ("info{" ++ intercalate ", " [k ++ "=\"" ++ v ++ "\"" | (k, v) <- statsInfo_] ++ "} 1\n")
+    getRI = mconcat <$> sequence [getV <&> \v -> prefix <> fromString (k <> " " <> show v <> "\n") | (k, getV) <- reloadInfo_]
