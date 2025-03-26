@@ -86,6 +86,7 @@ jobs:
 
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
+      shell: bash
       run: |
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
