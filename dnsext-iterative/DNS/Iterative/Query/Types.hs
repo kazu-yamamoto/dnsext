@@ -115,6 +115,7 @@ data Env = Env
     , currentTimeUsec_ :: IO EpochTimeUsec
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
+    , statsInfo_ :: [(String, String)]
     , stats_ :: Stats
     , updateHistogram_ :: Integer -> Stats -> IO ()
     , timeout_ :: IO Reply -> IO (Maybe Reply)

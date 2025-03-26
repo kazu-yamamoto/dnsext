@@ -19,14 +19,13 @@ module DNS.Iterative.Query.Env (
     setRootAnchor,
     --
     getLocalZones,
-    --
     getStubZones,
     --
     getUpdateHistogram,
 ) where
 
 -- GHC packages
-
+import Control.Concurrent (getNumCapabilities)
 import Data.IORef (newIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
@@ -58,6 +57,9 @@ import DNS.Iterative.RootServers (getRootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
 import DNS.Iterative.Stats
 
+version :: String
+version = "0.0.0.20250317"
+
 {- FOURMOLU_DISABLE -}
 -- | Creating a new 'Env'.
 newEnv :: IO Env
@@ -67,6 +69,7 @@ newEmptyEnv :: IO Env
 newEmptyEnv = do
     genId    <- newConcurrentGenId
     rootRef  <- newIORef Nothing
+    statsInfo <- getNumCapabilities <&> \cap -> [("threads", show cap), ("version", version)]
     stats <- newStats
     let TimeCache {..} = noneTimeCache
     pure $
@@ -92,6 +95,7 @@ newEmptyEnv = do
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
         , idGen_ = genId
+        , statsInfo_ = statsInfo
         , stats_ = stats
         , updateHistogram_ = \_ _ -> pure ()
         , timeout_ = timeout 5000000
