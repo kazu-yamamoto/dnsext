@@ -36,7 +36,9 @@ data GlobalCache = GlobalCache
 emptyCacheControl :: CacheControl
 emptyCacheControl = CacheControl (\_ -> pure ()) (\_ _ -> pure ()) (pure ()) (pure ()) (pure ())
 
-data QuitCmd = Quit | Reload Config | KeepCache Config deriving (Show)
+data ReloadCmd = Reload | KeepCache deriving (Show)
+
+data QuitCmd = Quit | Reload1 Config | KeepCache1 Config deriving (Show)
 
 data Control = Control
     { getStats :: IO Builder
@@ -45,6 +47,8 @@ data Control = Control
     , getConfig :: IO (Either IOError Config)
     , quitServer :: IO ()
     , waitQuit :: STM ()
+    , reloadSuccess :: ReloadCmd -> IO ()
+    , reloadFailure :: ReloadCmd -> IO ()
     , getCommandAndClear :: IO QuitCmd
     , setCommand :: QuitCmd -> IO ()
     }
@@ -61,6 +65,8 @@ newControl readConfig = do
             , getConfig = tryIOError readConfig
             , quitServer = atomically $ writeTVar qRef True
             , waitQuit = readTVar qRef >>= guard
+            , reloadSuccess = \_ -> pure ()
+            , reloadFailure = \_ -> pure ()
             , getCommandAndClear = atomicModifyIORef' ref (\x -> (Quit, x))
             , setCommand = atomicWriteIORef ref
             }
@@ -68,9 +74,11 @@ newControl readConfig = do
 quitCmd :: Control -> QuitCmd -> IO ()
 quitCmd Control{..} cmd = setCommand cmd >> quitServer
 
-reloadCmd :: Control -> (Config -> QuitCmd) -> a -> a -> IO a
+reloadCmd :: Control -> ReloadCmd -> a -> a -> IO a
 reloadCmd ctl@Control{..} rcmd lv rv = do
     either left right =<< getConfig
   where
-    left e = putStrLn ("reload failed: " ++ show e) $> lv
-    right conf = quitCmd ctl (rcmd conf) $> rv
+    left e = putStrLn ("reload failed: " ++ show e) *> reloadFailure rcmd $> lv
+    right conf = quitCmd ctl (cmd1 rcmd conf) *> reloadSuccess rcmd $> rv
+    cmd1 Reload = Reload1
+    cmd1 KeepCache = KeepCache1

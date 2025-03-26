@@ -13,6 +13,7 @@ import Control.Monad
 import Data.ByteString.Builder
 import Data.Functor
 import qualified Data.IORef as I
+import Data.Int (Int64)
 import Data.String (fromString)
 import GHC.Stats
 import System.Environment (getArgs)
@@ -57,26 +58,29 @@ run ruid readConfig = do
     -- does not provide a way to kill the internal thread.
     tcache <- newTimeCache
     conf <- readConfig
-    go tcache Nothing conf
+    (ri, nkSuccess, nkFailure, kSuccess, kFailure) <- newReloadInfo $ Server.getTime tcache
+    let rsuccess = \rc -> case rc of { Reload -> nkSuccess; KeepCache -> kSuccess }
+        rfailure = \rc -> case rc of { Reload -> nkFailure; KeepCache -> kFailure }
+    go tcache Nothing ri (\m -> m{reloadSuccess = rsuccess, reloadFailure = rfailure}) conf
   where
-    go tcache mcache conf = do
-        mng <- newControl readConfig
+    go tcache mcache ri um conf = do
+        mng <- um <$> newControl readConfig
         gcache <- maybe (getCache tcache conf) return mcache
         void $ installHandler sigHUP (Catch $ reloadCmd mng KeepCache () ()) Nothing -- reloading with cache on SIGHUP
-        runConfig tcache gcache mng ruid conf
+        runConfig tcache gcache mng ri ruid conf
         ctl <- getCommandAndClear mng
         case ctl of
             Quit -> putStrLn "\nQuiting..." -- fixme
-            Reload rconf -> do
+            Reload1 rconf -> do
                 putStrLn "\nReloading..." -- fixme
                 stopCache $ gcacheRRCacheOps gcache
-                go tcache Nothing rconf
-            KeepCache rconf -> do
+                go tcache Nothing ri um rconf
+            KeepCache1 rconf -> do
                 putStrLn "\nReloading with the current cache..." -- fixme
-                go tcache (Just gcache) rconf
+                go tcache (Just gcache) ri um rconf
 
-runConfig :: TimeCache -> GlobalCache -> Control -> UserID -> Config -> IO ()
-runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
+runConfig :: TimeCache -> GlobalCache -> Control -> [(String, IO Int64)] -> UserID -> Config -> IO ()
+runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = do
     -- Setup
     let tmout = timeout cnf_resolve_timeout
         check_for_v6_ns
@@ -112,6 +116,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 ruid conf@Config{..} = do
                         , stubZones_ = stubZones
                         , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
                         , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
+                        , reloadInfo_ = reloadInfo
                         , nsid_ = cnf_nsid
                         , updateHistogram_ = updateHistogram
                         , timeout_ = tmout

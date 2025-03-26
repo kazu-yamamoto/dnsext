@@ -52,6 +52,7 @@ module DNS.Iterative.Query.Types (
 
 -- GHC packages
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
+import Data.Int (Int64)
 import Data.Map.Strict (Map)
 
 -- other packages
@@ -115,6 +116,7 @@ data Env = Env
     , currentTimeUsec_ :: IO EpochTimeUsec
     , timeString_ :: IO ShowS
     , idGen_ :: IO DNS.Identifier
+    , reloadInfo_ :: [(String, IO Int64)]
     , statsInfo_ :: [(String, String)]
     , stats_ :: Stats
     , nsid_ :: Maybe OD_NSID

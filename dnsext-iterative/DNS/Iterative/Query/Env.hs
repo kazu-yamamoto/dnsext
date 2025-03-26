@@ -1,8 +1,12 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Env (
     Env (..),
     newEmptyEnv,
+    --
+    newReloadInfo,
     --
     cropMaxNegativeTTL,
     cropFailureRcodeTTL,
@@ -38,8 +42,9 @@ module DNS.Iterative.Query.Env (
 
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
+import Data.Array (Ix, (!), listArray)
 import qualified Data.ByteString.Char8 as C8
-import Data.IORef (newIORef)
+import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -111,12 +116,66 @@ newEmptyEnv = do
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
         , idGen_ = genId
+        , reloadInfo_ = []
         , statsInfo_ = statsInfo
         , stats_ = stats
         , nsid_ = Nothing
         , updateHistogram_ = \_ _ -> pure ()
         , timeout_ = timeout 5000000
         }
+{- FOURMOLU_ENABLE -}
+
+---
+
+newtype ReloadIx = ReloadIx Int deriving (Eq, Ord, Enum, Ix)
+
+{- FOURMOLU_DISABLE -}
+pattern ReloadIxMin :: ReloadIx
+pattern ReloadIxMin  = ReloadIx 0
+
+pattern NoKeepCount  :: ReloadIx
+pattern NoKeepCount   = ReloadIx 0
+pattern NoKeepFailed :: ReloadIx
+pattern NoKeepFailed  = ReloadIx 1
+pattern NoKeepLast   :: ReloadIx
+pattern NoKeepLast    = ReloadIx 2
+
+pattern KeepCount    :: ReloadIx
+pattern KeepCount     = ReloadIx 3
+pattern KeepFailed   :: ReloadIx
+pattern KeepFailed    = ReloadIx 4
+pattern KeepLast     :: ReloadIx
+pattern KeepLast      = ReloadIx 5
+
+pattern ReloadIxMax :: ReloadIx
+pattern ReloadIxMax  = ReloadIx 5
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+newReloadInfo :: Num a => IO a -> IO ([(String, IO a)], IO (), IO (), IO (), IO ())
+newReloadInfo getTime = do
+    let l = ReloadIxMin
+        u = ReloadIxMax
+    ria <- listArray (l, u) <$> replicateM (fromEnum u - fromEnum l + 1) (newIORef 0)
+
+    let count ix    = atomicModifyIORef' (ria ! ix) (\c -> (c + 1, ()))
+        settime ix  = getTime >>= \t -> atomicModifyIORef' (ria ! ix) (\_ -> (t, ()))
+        noKeepSuccess  = count NoKeepCount >> settime NoKeepLast
+        noKeepFailure  = count NoKeepFailed
+        keepSuccess    = count KeepCount   >> settime KeepLast
+        keepFailure    = count KeepFailed
+
+    let getc ix = readIORef (ria ! ix)
+        reloadInfo =
+            [ ("reload_count"      , getc NoKeepCount   )
+            , ("reload_failed"     , getc NoKeepFailed  )
+            , ("reload_last"       , getc NoKeepLast    )
+            , ("keepcache_count"   , getc KeepCount     )
+            , ("keepcache_failed"  , getc KeepFailed    )
+            , ("keepcache_last"    , getc KeepLast      )
+            ]
+
+    return (reloadInfo, noKeepSuccess, noKeepFailure, keepSuccess, keepFailure)
 {- FOURMOLU_ENABLE -}
 
 ---
