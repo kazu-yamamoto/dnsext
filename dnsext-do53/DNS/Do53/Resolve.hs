@@ -116,6 +116,7 @@ appendErrorContext Question{..} ResolveInfo{..} e = DNSErrorInfo e info
 -- "good2"
 -- >>> raceAny [left "bad1", left "bad2", left "bad3"]
 -- *** Exception: user error (bad3)
+-- ...
 raceAny :: [IO a] -> IO a
 raceAny ios = withAsyncs ios waitAnyRightCancel
   where
