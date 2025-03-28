@@ -108,6 +108,10 @@ type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
 type QueryT m = ExceptT QueryError (ContextT m)
 type DNSQuery = QueryT IO
 
+instance MonadIO m => MonadEnv (QueryT m) where
+    asksEnv = lift . asks
+    {-# INLINEABLE asksEnv #-}
+
 instance Monad m => MonadReaderQP (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}

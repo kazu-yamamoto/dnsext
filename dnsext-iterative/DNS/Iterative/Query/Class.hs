@@ -1,5 +1,6 @@
 
 module DNS.Iterative.Query.Class (
+    MonadEnv (..),
     MonadReaderQP (..),
     MonadReaderQS (..),
     setQS,
@@ -54,6 +55,14 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Stats (Stats)
+
+----------
+-- tagless-final effect interfaces
+
+class MonadIO m => MonadEnv m where
+    asksEnv :: (Env -> a) -> m a
+
+----------
 
 class Monad m => MonadReaderQP m where
     asksQP :: (QueryParam -> a) -> m a
