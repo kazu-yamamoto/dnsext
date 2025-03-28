@@ -102,6 +102,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
             trustAnchors <- readTrustAnchors' cnf_trust_anchor_file
             rootHint <- mapM readRootHint' cnf_root_hints
             let setOps = setRootHint rootHint . setRootAnchor trustAnchors . setRRCacheOps gcacheRRCacheOps . setTimeCache tcache
+            chaosZones <- getIdentity conf <&> \id_ -> getChaosZones $ id_ ++ getVersion conf
             localZones <- (\id_ -> getLocalZones $ id_ ++ getVersion conf ++ cnf_local_zones) <$> getIdentity conf
             stubZones <- getStubZones cnf_stub_zones trustAnchors
             updateHistogram <- getUpdateHistogram $ putStrLn "response_time_seconds_sum is not supported for Int shorter than 64bit."
@@ -112,6 +113,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                         , logLines_ = putLines
                         , logDNSTAP_ = putDNSTAP
                         , disableV6NS_ = disable_v6_ns
+                        , chaosZones_ = chaosZones
                         , localZones_ = localZones
                         , stubZones_ = stubZones
                         , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
