@@ -15,6 +15,7 @@ module DNS.Iterative.Query.Types (
     ExtraError (..),
     extraError,
     QueryError (..),
+    QueryT,
     DNSQuery,
     runDNSQuery,
     throwDnsError,
@@ -105,13 +106,14 @@ data QueryError
     deriving (Show)
 
 type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
-type DNSQuery = ExceptT QueryError (ContextT IO)
+type QueryT m = ExceptT QueryError (ContextT m)
+type DNSQuery = QueryT IO
 
 instance Monad m => MonadReaderQP (ContextT m) where
     asksQP = lift . asks
     {-# INLINEABLE asksQP #-}
 
-instance MonadReaderQP DNSQuery where
+instance Monad m => MonadReaderQP (QueryT m) where
     asksQP = lift . asksQP
     {-# INLINEABLE asksQP #-}
 
@@ -119,7 +121,7 @@ instance Monad m => MonadReaderQS (ContextT m) where
     asksQS = lift . lift . asks
     {-# INLINEABLE asksQS #-}
 
-instance MonadReaderQS DNSQuery where
+instance Monad m => MonadReaderQS (QueryT m) where
     asksQS = lift . asksQS
     {-# INLINEABLE asksQS #-}
 
