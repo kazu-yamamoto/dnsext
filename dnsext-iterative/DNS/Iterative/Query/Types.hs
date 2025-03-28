@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Types (
     RR,
@@ -138,7 +137,7 @@ queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
 queryParamIN dom typ = queryParam (Question dom typ IN)
 
 queryParamH :: Question -> DNSFlags -> EDNSheader -> QueryParam
-queryParamH q flags eh = QueryParam q (toRequestDO eh) (toRequestCD flags) (toRequestAD flags)
+queryParamH q flags_ eh = QueryParam q (toRequestDO eh) (toRequestCD flags_) (toRequestAD flags_)
 
 queryControls' :: (DNSFlags -> EDNSheader -> a) -> QueryControls -> a
 queryControls' h =  queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)

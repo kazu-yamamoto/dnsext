@@ -42,7 +42,7 @@ module DNS.Iterative.Query.Env (
 
 -- GHC packages
 import Control.Concurrent (getNumCapabilities)
-import Data.Array (Ix, (!), listArray)
+import Data.Array (Ix, listArray, (!))
 import qualified Data.ByteString.Char8 as C8
 import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import qualified Data.List.NonEmpty as NE
