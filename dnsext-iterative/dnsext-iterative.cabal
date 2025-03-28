@@ -20,6 +20,7 @@ library
         DNS.Iterative.Imports
         DNS.Iterative.Query.API
         DNS.Iterative.Query.Cache
+        DNS.Iterative.Query.Class
         DNS.Iterative.Query.Delegation
         DNS.Iterative.Query.Env
         DNS.Iterative.Query.Helpers
