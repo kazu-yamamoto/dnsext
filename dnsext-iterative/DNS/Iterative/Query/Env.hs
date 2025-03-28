@@ -101,6 +101,7 @@ newEmptyEnv = do
         , disableV6NS_ = False
         , rootAnchor_ = FilledDS [rootSepDS]
         , rootHint_ = rootHint
+        , chaosZones_ = mempty
         , localZones_ = mempty
         , stubZones_ = mempty
         , maxNegativeTTL_ = 3600
