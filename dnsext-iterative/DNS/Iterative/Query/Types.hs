@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module DNS.Iterative.Query.Types (
     RR,
@@ -109,20 +108,12 @@ type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
 type QueryT m = ExceptT QueryError (ContextT m)
 type DNSQuery = QueryT IO
 
-instance Monad m => MonadReaderQP (ContextT m) where
-    asksQP = lift . asks
-    {-# INLINEABLE asksQP #-}
-
 instance Monad m => MonadReaderQP (QueryT m) where
-    asksQP = lift . asksQP
+    asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
-
-instance Monad m => MonadReaderQS (ContextT m) where
-    asksQS = lift . lift . asks
-    {-# INLINEABLE asksQS #-}
 
 instance Monad m => MonadReaderQS (QueryT m) where
-    asksQS = lift . asksQS
+    asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
 
 runDNSQuery' :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a, QueryState)
