@@ -100,6 +100,7 @@ data Env = Env
     , disableV6NS_ :: Bool
     , rootAnchor_ :: MayFilledDS
     , rootHint_ :: Delegation
+    , chaosZones_ :: LocalZones
     , localZones_ :: LocalZones
     , stubZones_ :: StubZones
     , maxNegativeTTL_ :: TTL

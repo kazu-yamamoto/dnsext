@@ -21,6 +21,7 @@ module DNS.Iterative.Query.Env (
     readTrustAnchors,
     setRootAnchor,
     --
+    getChaosZones,
     getLocalZones,
     getStubZones,
     --
@@ -101,6 +102,7 @@ newEmptyEnv = do
         , disableV6NS_ = False
         , rootAnchor_ = FilledDS [rootSepDS]
         , rootHint_ = rootHint
+        , chaosZones_ = mempty
         , localZones_ = mempty
         , stubZones_ = mempty
         , maxNegativeTTL_ = 3600
@@ -274,11 +276,14 @@ setRootAnchor as env0 = maybe env0 (\v -> env0{rootAnchor_ = v}) $ Map.lookup (f
 
 ---
 
+getChaosZones :: [(Domain, LocalZoneType, [RR])] -> LocalZones
+getChaosZones = localZones
+
 getLocalZones :: [(Domain, LocalZoneType, [RR])] -> LocalZones
-getLocalZones lzones0 = (Local.apexMap localName lzones, localName)
-  where
-    localName = Local.nameMap lzones
-    lzones = Local.unionZones defaultLocal lzones0
+getLocalZones lzones0 = localZones $ Local.unionZones defaultLocal lzones0
+
+localZones :: [(Domain, LocalZoneType, [RR])] -> LocalZones
+localZones lzones | localName <- Local.nameMap lzones = (Local.apexMap localName lzones, localName)
 
 {- FOURMOLU_DISABLE -}
 identityRefuse  :: IO [(Domain, LocalZoneType, [RR])]

@@ -11,7 +11,8 @@ import DNS.Iterative.Query.Types
 
 {- FOURMOLU_DISABLE -}
 takeLocalResult :: Env -> Question -> a -> a -> (ResultRRS -> a) -> a
-takeLocalResult Env{localZones_ = (apexes, names)} q@(Question dom _ _) denied nothing just
-    | Just apex <- lookupApex apexes dom = maybe denied just $ lookupName names apex q
+takeLocalResult env q@Question{qname=dom,qclass=cls} denied nothing just
+    | CH <- cls, (apexes, names) <- chaosZones_ env, Just apex <- lookupApex apexes dom = maybe denied just $ lookupName names apex q
+    | IN <- cls, (apexes, names) <- localZones_ env, Just apex <- lookupApex apexes dom = maybe denied just $ lookupName names apex q
     | otherwise                          = nothing
 {- FOURMOLU_ENABLE -}
