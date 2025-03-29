@@ -53,6 +53,7 @@ import System.Console.ANSI.Types
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
@@ -75,7 +76,7 @@ withResult typ modf rightK xs xRRset cacheX =
     bogus _   = bogusError $ modf $ "verification failed - RRSIG of " ++ show typ
 {- FOURMOLU_ENABLE -}
 
-insecureLog :: (MonadIO m, MonadReader Env m) => String -> m ()
+insecureLog :: MonadEnv m => String -> m ()
 insecureLog ~vmsg = verifyLog (Just Yellow) vmsg
 
 {- FOURMOLU_DISABLE -}
@@ -84,7 +85,7 @@ bogusError ~es = getQS lastQuery_ >>= \(_, as) -> getQS aservMessage_ >>= \mmsg 
     verifyLog (Just Red) es >> throwError (ExtraError (ErrorBogus es) as mmsg)
 {- FOURMOLU_ENABLE -}
 
-verifyLog :: (MonadIO m, MonadReader Env m) => Maybe Color -> String -> m ()
+verifyLog :: MonadEnv m => Maybe Color -> String -> m ()
 verifyLog ~vcolor ~vmsg = clogLn Log.DEMO vcolor vmsg
 
 {- FOURMOLU_DISABLE -}
@@ -93,7 +94,7 @@ verifyLog ~vcolor ~vmsg = clogLn Log.DEMO vcolor vmsg
 -- nc case is not canonical RRset.
 -- right case is after verified, with valid or invalid RRset.
 cases
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => RequestCD
     -> Domain -> [RD_DNSKEY]
     -> (dm -> ([RR], Ranking)) -> dm
@@ -108,7 +109,7 @@ cases reqCD zone dnskeys getRanked msg rrn rrty h nullK ncK rightK =
 
 {- FOURMOLU_DISABLE -}
 cases'
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => RequestCD
     -> Domain -> [RD_DNSKEY]
     -> [RR] -> Ranking
@@ -131,7 +132,7 @@ cases' reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
         logInvalids  []    = clogLn Log.DEMO (Just Cyan)  "cases: InvalidRRS"
         logInvalids (e:es) = clogLn Log.DEMO (Just Cyan) ("cases: InvalidRRS: " ++ e) *> logLines Log.DEMO es
     rightK rrset sortedRRs = do
-        now <- liftIO =<< asks currentSeconds_
+        now <- liftIO =<< asksEnv currentSeconds_
         withVerifiedRRset reqCD now dnskeys rrset sortedRRs sigs verifiedK
 {- FOURMOLU_ENABLE -}
 
@@ -304,11 +305,11 @@ type GetNoDatas m msg r1 r2 r3 r4 a
     -> m a
 {- FOURMOLU_ENABLE -}
 
-getNameError :: (MonadIO m, MonadReader Env m) => GetNE m msg NSEC_NameError NSEC3_NameError a
+getNameError :: MonadEnv m => GetNE m msg NSEC_NameError NSEC3_NameError a
 getNameError zone dnskeys getRanked msg qname =
     getWithFallback (\rs -> SEC.nameErrorNSEC zone rs qname) (\rs -> SEC.nameErrorNSEC3 zone rs qname) dnskeys getRanked msg
 
-getUnsignedDelegation :: (MonadIO m, MonadReader Env m) => GetNE m msg NSEC_UnsignedDelegation NSEC3_UnsignedDelegation a
+getUnsignedDelegation :: MonadEnv m => GetNE m msg NSEC_UnsignedDelegation NSEC3_UnsignedDelegation a
 getUnsignedDelegation zone dnskeys getRanked msg qname =
     getWithFallback
         (\rs -> SEC.unsignedDelegationNSEC zone rs qname)
@@ -317,7 +318,7 @@ getUnsignedDelegation zone dnskeys getRanked msg qname =
         getRanked
         msg
 
-getWildcardExpansion :: (MonadIO m, MonadReader Env m) => GetNE m msg NSEC_WildcardExpansion NSEC3_WildcardExpansion a
+getWildcardExpansion :: MonadEnv m => GetNE m msg NSEC_WildcardExpansion NSEC3_WildcardExpansion a
 getWildcardExpansion zone dnskeys getRanked msg qname =
     getWithFallback
         (\rs -> SEC.wildcardExpansionNSEC zone rs qname)
@@ -332,7 +333,7 @@ type GetResult range r = [range] -> Either String r
 
 {- FOURMOLU_DISABLE -}
 getWithFallback
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => GetResult NSEC_Range nsecr -> GetResult NSEC3_Range nsec3r
     -> [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
@@ -360,7 +361,7 @@ getWithFallback getNSEC getNSEC3 dnskeys getRanked msg nullK invalidK leftK righ
 ---
 
 {- FOURMOLU_DISABLE -}
-getNoDatas :: (MonadIO m, MonadReader Env m) => GetNoDatas m msg NSEC_WildcardNoData NSEC_NoData NSEC3_WildcardNoData NSEC3_NoData a
+getNoDatas :: MonadEnv m => GetNoDatas m msg NSEC_WildcardNoData NSEC_NoData NSEC3_WildcardNoData NSEC3_NoData a
 getNoDatas zone dnskeys getRanked msg qname qtype nullK invalidK leftK rightNSECwild rightNSEC rightNSEC3wild rightNSEC3 = nsec
   where
     nsec  = nsecWithValid   dnskeys getRanked msg nullNSEC invalidK nsecK
@@ -408,7 +409,7 @@ mkHandler ranges rrsets doCache getR resultK fallbackK = case getR ranges of
 
 {- FOURMOLU_DISABLE -}
 nsecWithValid
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
@@ -419,7 +420,7 @@ nsecWithValid = nsecxWithValid SEC.zipSigsNSEC "NSEC"
 
 {- FOURMOLU_DISABLE -}
 nsec3WithValid
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
     -> m a -> (String -> m a)
@@ -432,7 +433,7 @@ type WithZippedSigs r a = [RR] -> (String -> a) -> ([(RR, r, [(RD_RRSIG, TTL)])]
 
 {- FOURMOLU_DISABLE -}
 nsecxWithValid
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => WithZippedSigs range (m a) -> String
     -> [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
@@ -448,7 +449,7 @@ nsecxWithValid withZippedSigs tag dnskeys getRanked msg nullK invalidK validK0 =
 
 {- FOURMOLU_DISABLE -}
 nsecxWithValid'
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => WithZippedSigs range (m a) -> String
     -> [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
@@ -474,7 +475,7 @@ nsecxWithValid' withZippedSigs tag dnskeys getRanked msg nullK ncK invalidK vali
 
 {- FOURMOLU_DISABLE -}
 nsecxWithRanges
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => WithZippedSigs range (m a)
     -> [RD_DNSKEY]
     -> (msg -> ([RR], Ranking)) -> msg
@@ -483,7 +484,7 @@ nsecxWithRanges
     -> m a
 {- FOURMOLU_ENABLE -}
 nsecxWithRanges withZippedSigs dnskeys getRanked msg nullK leftK rightK = do
-    now <- liftIO =<< asks currentSeconds_
+    now <- liftIO =<< asksEnv currentSeconds_
     withSection getRanked msg $ runSection now
   where
     runSection now srrs rank = withZippedSigs srrs leftK $ runSigned now rank
@@ -511,7 +512,7 @@ canonicalRRset rrs leftK rightK =
     (sortedRDatas, sortedRRs) = unzip $ SEC.sortRDataCanonical rrs
 
 cacheRRset
-    :: (MonadIO m, MonadReader Env m)
+    :: MonadEnv m
     => Ranking
     -> Domain
     -> TYPE
@@ -527,6 +528,6 @@ cacheRRset rank dom typ cls ttl rds mv =
     checkDisalbed = Cache.checkDisabled rds (pure ()) doCache
     valid sigs = Cache.valid rds sigs (pure ()) doCache
     doCache crs = do
-        insertRRSet <- asks insert_
+        insertRRSet <- asksEnv insert_
         logLn Log.DEBUG $ "cacheRRset: " ++ show (((dom, typ, cls), ttl), rank) ++ "  " ++ show rds
         liftIO $ insertRRSet (DNS.Question dom typ cls) ttl crs rank
