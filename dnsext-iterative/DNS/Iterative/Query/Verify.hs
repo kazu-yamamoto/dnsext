@@ -63,9 +63,10 @@ import DNS.Iterative.Query.Utils
 
 {- FOURMOLU_DISABLE -}
 withResult
-    :: TYPE -> (String -> String)
-    -> ([a] -> RRset -> DNSQuery () -> DNSQuery b)
-    ->  [a] -> RRset -> DNSQuery () -> DNSQuery b
+    :: MonadQuery m
+    => TYPE -> (String -> String)
+    -> ([a] -> RRset -> m () -> m b)
+    ->  [a] -> RRset -> m () -> m b
 withResult typ modf rightK xs xRRset cacheX =
     mayVerifiedRRS noverify cd bogus valid (rrsMayVerified xRRset)
   where
@@ -80,9 +81,9 @@ insecureLog :: MonadEnv m => String -> m ()
 insecureLog ~vmsg = verifyLog (Just Yellow) vmsg
 
 {- FOURMOLU_DISABLE -}
-bogusError :: String -> DNSQuery a
+bogusError :: MonadQuery m => String -> m a
 bogusError ~es = getQS lastQuery_ >>= \(_, as) -> getQS aservMessage_ >>= \mmsg ->
-    verifyLog (Just Red) es >> throwError (ExtraError (ErrorBogus es) as mmsg)
+    verifyLog (Just Red) es >> throwQuery (ExtraError (ErrorBogus es) as mmsg)
 {- FOURMOLU_ENABLE -}
 
 verifyLog :: MonadEnv m => Maybe Color -> String -> m ()
