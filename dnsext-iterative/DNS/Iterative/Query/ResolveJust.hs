@@ -279,7 +279,7 @@ fillsDNSSEC' NoCheckDisabled  dc  nss d = do
     return filled
 {- FOURMOLU_ENABLE -}
 
-getCheckEnabled :: MonadReaderQP m => m Bool
+getCheckEnabled :: MonadQP m => m Bool
 getCheckEnabled = noCD <$> asksQP requestCD_
   where
     noCD NoCheckDisabled = True
