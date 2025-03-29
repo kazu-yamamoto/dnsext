@@ -96,7 +96,7 @@ noV4DEntry (DEstubA6  (_:|_))     = True
 
 {- FOURMOLU_DISABLE -}
 -- Caching while retrieving delegation information from the authoritative server's reply
-delegationWithCache :: Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery MayDelegation
+delegationWithCache :: MonadQuery m => Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> m MayDelegation
 delegationWithCache zone dnskeys dom msg = do
     reqCD <- asksQP requestCD_
     {- There is delegation information only when there is a selectable NS -}
@@ -133,7 +133,7 @@ delegationWithCache zone dnskeys dom msg = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-fillCachedDelegation :: Delegation -> DNSQuery Delegation
+fillCachedDelegation :: MonadQuery m => Delegation -> m Delegation
 fillCachedDelegation d = list noAvail result . concat =<< mapM fill des
   where
     des = delegationNS d
@@ -208,9 +208,10 @@ dentryFromCache zone ns = dispatch
 
 {- FOURMOLU_DISABLE -}
 unsignedDelegationOrNoDataAction
-    :: Domain -> [RD_DNSKEY]
+    :: MonadQuery m
+    => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE -> DNSMessage
-    -> DNSQuery [RRset]
+    -> m [RRset]
 unsignedDelegationOrNoDataAction zone dnskeys qname_ qtype_ msg = nsec
   where
     nsec  = Verify.nsecWithValid   dnskeys rankedAuthority msg nullNSEC invalidK nsecK
