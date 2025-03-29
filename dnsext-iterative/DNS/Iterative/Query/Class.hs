@@ -2,6 +2,7 @@
 module DNS.Iterative.Query.Class (
     MonadEnv (..),
     MonadReaderQP (..),
+    MonadQP,
     MonadReaderQS (..),
     setQS,
     getQS,
@@ -66,6 +67,10 @@ class MonadIO m => MonadEnv m where
 
 class Monad m => MonadReaderQP m where
     asksQP :: (QueryParam -> a) -> m a
+
+----------
+
+class (MonadEnv m, MonadReaderQP m) => MonadQP m
 
 ----------
 

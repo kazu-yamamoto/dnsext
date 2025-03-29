@@ -116,6 +116,8 @@ instance Monad m => MonadReaderQP (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
 
+instance MonadIO m => MonadQP (QueryT m)
+
 instance Monad m => MonadReaderQS (QueryT m) where
     asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
