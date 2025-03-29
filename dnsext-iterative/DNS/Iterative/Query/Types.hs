@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module DNS.Iterative.Query.Types (
     RR,
@@ -11,20 +12,16 @@ module DNS.Iterative.Query.Types (
     queryControls',
     ContextT,
     chainedStateDS,
-    ExtraError (..),
-    extraError,
-    QueryError (..),
     QueryT,
     DNSQuery,
     runDNSQuery,
-    throwDnsError,
     handleQueryError,
     handleResponseError,
 
     -- re-exports
-    MonadReaderQS (..),
     setQS,
     getQS,
+    throwDnsError,
     --
     Env (..),
     LocalZoneType (..),
@@ -53,6 +50,10 @@ module DNS.Iterative.Query.Types (
     --
     QueryState (..),
     newQueryState,
+    --
+    ExtraError (..),
+    extraError,
+    QueryError (..),
 ) where
 
 -- GHC packages
@@ -82,27 +83,6 @@ queryControls' h = queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)
 
 ----------
 
-data ExtraError
-    = ErrorNotResp
-    | ErrorEDNS DNS.EDNSheader
-    | ErrorRCODE DNS.RCODE
-    | ErrorBogus String
-    deriving (Show)
-
-{- FOURMOLU_DISABLE -}
-extraError :: a -> (EDNSheader -> a) -> (RCODE -> a) -> (String -> a) -> ExtraError -> a
-extraError notResp errEDNS errRCODE bogus fe = case fe of
-    ErrorNotResp  -> notResp
-    ErrorEDNS e   -> errEDNS e
-    ErrorRCODE e  -> errRCODE e
-    ErrorBogus s  -> bogus s
-{- FOURMOLU_ENABLE -}
-
-data QueryError
-    = DnsError DNSError [String]
-    | ExtraError ExtraError [Address] (Maybe DNSMessage)
-    deriving (Show)
-
 type ContextT m = ReaderT Env (ReaderT QueryParam (ReaderT QueryState m))
 type QueryT m = ExceptT QueryError (ContextT m)
 type DNSQuery = QueryT IO
@@ -115,9 +95,13 @@ instance MonadIO m => MonadQP (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
 
-instance Monad m => MonadReaderQS (QueryT m) where
+instance MonadIO m => MonadQuery (QueryT m) where
     asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
+    throwQuery = throwError
+    {-# INLINEABLE throwQuery #-}
+    catchQuery = catchError
+    {-# INLINEABLE catchQuery #-}
 
 runDNSQuery' :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a, QueryState)
 runDNSQuery' q e p = do
@@ -126,9 +110,6 @@ runDNSQuery' q e p = do
 
 runDNSQuery :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a)
 runDNSQuery q e p = fst <$> runDNSQuery' q e p
-
-throwDnsError :: DNSError -> DNSQuery a
-throwDnsError = throwError . (`DnsError` [])
 
 handleQueryError
     :: (QueryError -> DNSQuery a)
