@@ -581,7 +581,7 @@ norec dnssecOK aservers name typ = do
   where
     dispatch qcount orig
         | qcount > maxQueryCount = logLn Log.WARN (exceeded orig) >> left ServerFailure
-        | otherwise = lift (Norec.norec' dnssecOK aservers name typ) >>= either left handleResponse
+        | otherwise = Norec.norec' dnssecOK aservers name typ >>= either left handleResponse
     exceeded orig = "max-query-count (==" ++ show maxQueryCount ++ ") exceeded: " ++ showQ' "query" name typ ++ ", " ++ orig
     handleResponse = handleResponseError (NE.toList aservers) throwError pure
     left e = cacheDNSError name typ Cache.RankAnswer e >> dnsError e
