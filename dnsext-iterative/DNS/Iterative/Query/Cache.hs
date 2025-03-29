@@ -255,11 +255,12 @@ cacheSection rs rank = mapM_ (`cacheNoRRSIG` rank) $ rrsList rs
 --   The `getRanked` function returns the section with the empty information.
 {- FOURMOLU_DISABLE -}
 cacheSectionNegative
-    :: Domain -> [RD_DNSKEY]
+    :: MonadQuery m
+    => Domain -> [RD_DNSKEY]
     -> Domain -> TYPE
     -> (DNSMessage -> ([RR], Ranking)) -> DNSMessage
     -> [RRset]
-    -> DNSQuery [RRset] {- returns verified authority section -}
+    -> m [RRset] {- returns verified authority section -}
 {- FOURMOLU_ENABLE -}
 cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
     maxNegativeTTL <- asksEnv maxNegativeTTL_
@@ -298,13 +299,13 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         answer = DNS.answer msg
         soas = filter ((== SOA) . rrtype) $ DNS.authority msg
 
-failWithCacheOrigName :: Ranking -> DNSError -> DNSQuery a
+failWithCacheOrigName :: MonadQuery m => Ranking -> DNSError -> m a
 failWithCacheOrigName rank e = do
     Question dom _typ cls <- asksQP origQuestion_
     failWithCache dom Cache.ERR cls rank e
 
 {- FOURMOLU_DISABLE -}
-failWithCache :: Domain -> TYPE -> CLASS -> Ranking -> DNSError -> DNSQuery a
+failWithCache :: MonadQuery m => Domain -> TYPE -> CLASS -> Ranking -> DNSError -> m a
 failWithCache dom typ cls rank e = do
     when (cls == IN) $ foldDNSErrorToRCODE (pure ()) (`cacheRCODE_` rank) e
     throwDnsError e
@@ -344,7 +345,7 @@ cacheNegativeNoSOA rc dom typ ttl rank = do
     liftIO $ cpsInsertNegativeNoSOA rc dom typ ttl rank insertRRSet
 
 {- FOURMOLU_DISABLE -}
-cacheAnswer :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery ([RRset], [RRset])
+cacheAnswer :: MonadQuery m => Delegation -> Domain -> TYPE -> DNSMessage -> m ([RRset], [RRset])
 cacheAnswer d@Delegation{..} dom typ msg = do
     verify =<< asksQP requestCD_
   where
@@ -372,7 +373,7 @@ cacheAnswer d@Delegation{..} dom typ msg = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-cacheNoDelegation :: Delegation -> Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> DNSQuery ()
+cacheNoDelegation :: MonadQuery m => Delegation -> Domain -> [RD_DNSKEY] -> Domain -> DNSMessage -> m ()
 cacheNoDelegation d zone dnskeys dom msg
     | rcode == DNS.NoErr = cacheNoDataNS $> ()
     | rcode == DNS.NameErr = nameErrors $> ()
@@ -396,7 +397,7 @@ cacheNoDelegation d zone dnskeys dom msg
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-wildcardWitnessAction :: Delegation -> Domain -> TYPE -> DNSMessage -> DNSQuery [RRset]
+wildcardWitnessAction :: MonadQuery m => Delegation -> Domain -> TYPE -> DNSMessage -> m [RRset]
 wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion =<< asksQP requestCD_
   where
     witnessWildcardExpansion reqCD
@@ -418,7 +419,7 @@ wildcardWitnessAction Delegation{..} qname qtype msg = witnessWildcardExpansion 
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-negativeWitnessActions :: DNSQuery [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (DNSQuery [RRset], DNSQuery [RRset])
+negativeWitnessActions :: MonadQuery m => m [RRset] -> Delegation -> Domain -> TYPE -> DNSMessage -> (m [RRset], m [RRset])
 negativeWitnessActions nullK Delegation{..} qname qtype msg =
     (witnessNoData =<< asksQP requestCD_, witnessNameError =<< asksQP requestCD_)
   where
@@ -447,5 +448,5 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg =
     dnskeys = delegationDNSKEY
 {- FOURMOLU_ENABLE -}
 
-nsecFailed :: String -> DNSQuery a
+nsecFailed :: MonadQuery m => String -> m a
 nsecFailed s = clogLn Log.DEMO (Just Red) ("nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
