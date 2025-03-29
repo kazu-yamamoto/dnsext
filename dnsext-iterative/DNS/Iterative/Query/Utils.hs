@@ -18,7 +18,6 @@ import System.Console.ANSI.Types
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Class
-import DNS.Iterative.Query.Types
 
 clogLines :: MonadEnv m => Log.Level -> Maybe Color -> [String] -> m ()
 clogLines level color xs = do
