@@ -35,6 +35,7 @@ import System.Console.ANSI.Types
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
@@ -59,9 +60,9 @@ mayDelegation n h (MayDelegation m) = maybe n h m
 {- FOURMOLU_DISABLE -}
 -- If Nothing, it is a miss-hit against the cache.
 -- If Just NoDelegation, cache hit but no delegation information.
-lookupDelegation :: (MonadIO m, MonadReader Env m) => Domain -> m (Maybe MayDelegation)
+lookupDelegation :: MonadEnv m => Domain -> m (Maybe MayDelegation)
 lookupDelegation zone = do
-    disableV6NS <- asks disableV6NS_
+    disableV6NS <- asksEnv disableV6NS_
     let noCachedV4NS es = disableV6NS && all noV4DEntry es
 
         fromDEs es
@@ -72,7 +73,7 @@ lookupDelegation zone = do
             | otherwise = list Nothing ((Just .) . hasDelegation') es
           where hasDelegation' de des = hasDelegation $ Delegation zone (de :| des) (NotFilledDS CachedDelegation) [] CachedD
 
-        getDelegation :: (MonadIO m, MonadReader Env m) => ([RR], a) -> m (Maybe MayDelegation)
+        getDelegation :: MonadEnv m => ([RR], a) -> m (Maybe MayDelegation)
         getDelegation (rrs, _) = do
             {- NS cache hit -}
             let nss = sort $ rrListWith NS (`DNS.rdataField` DNS.ns_domain) zone const rrs
@@ -144,7 +145,7 @@ fillCachedDelegation d = list noAvail result . concat =<< mapM fill des
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-lookupDEntry :: (MonadIO m, MonadReader Env m) => Domain -> Domain -> m [DEntry]
+lookupDEntry :: MonadEnv m => Domain -> Domain -> m [DEntry]
 lookupDEntry zone ns = do
     withERR =<< lookupRR ns Cache.ERR
   where
