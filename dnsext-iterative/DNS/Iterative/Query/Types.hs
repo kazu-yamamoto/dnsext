@@ -22,7 +22,6 @@ module DNS.Iterative.Query.Types (
     handleResponseError,
 
     -- re-exports
-    MonadReaderQP (..),
     MonadReaderQS (..),
     setQS,
     getQS,
@@ -112,11 +111,9 @@ instance MonadIO m => MonadEnv (QueryT m) where
     asksEnv = lift . asks
     {-# INLINEABLE asksEnv #-}
 
-instance Monad m => MonadReaderQP (QueryT m) where
+instance MonadIO m => MonadQP (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
-
-instance MonadIO m => MonadQP (QueryT m)
 
 instance Monad m => MonadReaderQS (QueryT m) where
     asksQS = lift . lift . lift . asks
