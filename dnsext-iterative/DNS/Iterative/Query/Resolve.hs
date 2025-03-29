@@ -22,6 +22,7 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Types
@@ -60,7 +61,7 @@ resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswe
    * left   :: ResultRRS -> b       - cached result
    * right  :: ResultRRS' a -> b    - queried result like (ResultRRS' DNSMessage)   -}
 resolveLogic
-    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
+    :: (MonadEnv m, MonadReaderQP m)
     => String
     -> (ResultRRS -> b) -> (ResultRRS' a -> b)
     -> m (([RRset], Domain), b)
