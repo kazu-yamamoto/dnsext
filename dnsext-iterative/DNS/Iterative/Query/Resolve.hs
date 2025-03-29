@@ -61,7 +61,7 @@ resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswe
    * left   :: ResultRRS -> b       - cached result
    * right  :: ResultRRS' a -> b    - queried result like (ResultRRS' DNSMessage)   -}
 resolveLogic
-    :: (MonadEnv m, MonadReaderQP m)
+    :: MonadQP m
     => String
     -> (ResultRRS -> b) -> (ResultRRS' a -> b)
     -> m (([RRset], Domain), b)
