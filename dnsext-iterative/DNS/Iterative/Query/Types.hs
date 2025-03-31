@@ -60,9 +60,9 @@ instance MonadIO m => MonadQP (QueryT m) where
 instance MonadIO m => MonadQuery (QueryT m) where
     asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
-    throwQuery = throwError
+    throwQuery = throwE
     {-# INLINEABLE throwQuery #-}
-    catchQuery = catchError
+    catchQuery = catchE
     {-# INLINEABLE catchQuery #-}
 
 runDNSQuery' :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a, QueryState)

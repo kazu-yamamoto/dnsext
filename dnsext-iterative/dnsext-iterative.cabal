@@ -61,8 +61,8 @@ library
         array,
         bytestring,
         containers,
-        mtl,
         stm,
+        transformers,
         unix,
         -- dnsext-*
         dnsext-dnssec,

@@ -6,9 +6,10 @@ module DNS.Iterative.Imports (
     module Control.Applicative,
     module Control.Arrow,
     module Control.Monad,
-    module Control.Monad.Trans,
-    module Control.Monad.Except,
-    module Control.Monad.Reader,
+    module Control.Monad.IO.Class,
+    module Control.Monad.Trans.Class,
+    module Control.Monad.Trans.Except,
+    module Control.Monad.Trans.Reader,
     module Data.Bits,
     module Data.Bool,
     module Data.Function,
@@ -31,9 +32,10 @@ where
 import Control.Applicative
 import Control.Arrow (first, second, (&&&), (***), (<<<), (>>>))
 import Control.Monad
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.Trans
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except hiding (liftCallCC)
+import Control.Monad.Trans.Reader
 import Data.Bits
 import Data.Bool (bool)
 import Data.ByteString (ByteString)
