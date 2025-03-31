@@ -10,7 +10,6 @@ import qualified Control.Concurrent as Concurrent
 import Control.Concurrent.Async (Async, asyncThreadId)
 import qualified Control.Concurrent.Async as Async
 import Control.Monad
-import Data.Functor
 import Data.List
 import Data.Maybe
 
