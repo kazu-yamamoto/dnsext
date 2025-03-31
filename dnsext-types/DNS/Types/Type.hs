@@ -177,7 +177,6 @@ insertTypeShowDict (TYPE w) name dict = IM.insert i name dict
 
 defaultTypeShowDict :: TypeShowDict
 defaultTypeShowDict = foldr (uncurry insertTypeShowDict) IM.empty typeAndNames
-  where
 
 {-# NOINLINE globalTypeShowDict #-}
 globalTypeShowDict :: IORef TypeShowDict
@@ -185,7 +184,7 @@ globalTypeShowDict = unsafePerformIO $ newIORef defaultTypeShowDict
 
 -- | All available types.
 allTYPEs :: IO [String]
-allTYPEs = (map snd) . IM.toList <$> readIORef globalTypeShowDict
+allTYPEs = map snd . IM.toList <$> readIORef globalTypeShowDict
 
 ----------------------------------------------------------------
 

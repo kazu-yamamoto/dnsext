@@ -75,9 +75,9 @@ prettyShowRData rd = loop (0 :: Int) $ show rd
         | c == '=' && take 5 cs `elem` dows = c : take 5 cs ++ loop n (drop 5 cs)
         | c == '[' = c : bracket (1 :: Int) n cs
         | c == '"' = c : quote n cs
-        | c == '{' = "{\n" ++ (concat (replicate (n + 1) "    ")) ++ loop (n + 1) cs
+        | c == '{' = "{\n" ++ concat (replicate (n + 1) "    ") ++ loop (n + 1) cs
         | c == '}' = "}" ++ loop (n - 1) cs
-        | c == ',' = "\n" ++ (concat (replicate (n - 1) "    ")) ++ "  ," ++ loop n cs
+        | c == ',' = "\n" ++ concat (replicate (n - 1) "    ") ++ "  ," ++ loop n cs
         | otherwise = c : loop n cs
     -- it is assumed that "struct"s are not contained in a list
     bracket _ _ [] = []

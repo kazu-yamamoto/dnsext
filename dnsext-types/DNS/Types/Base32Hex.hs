@@ -82,7 +82,7 @@ decode bs = do
     let ilen = BS.length bs
         len = (5 * ilen) `div` 8
         r = ilen `mod` 8
-    when (r `notElem` [0, 2, 4, 5, 7]) $
+    unless (r `elem` [0, 2, 4, 5, 7]) $
         Left $ "Base32Hex.decode: invalid length of base32hex: " ++ show ilen
     runST $ do
         mba <- newByteArray len

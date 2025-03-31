@@ -2,7 +2,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module DNS.Types.Domain (
     IsRepresentation (..),
@@ -130,9 +129,8 @@ eqF v0 v1 = l0 == l1 && go 0
     go i
         | i == l0 = True
         | otherwise =
-            if v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
-                then go (i + 1)
-                else False
+            v0 `V.unsafeIndex` i == v1 `V.unsafeIndex` i
+                && go (i + 1)
 
 -- | Ordering according to the DNSSEC definition.
 --

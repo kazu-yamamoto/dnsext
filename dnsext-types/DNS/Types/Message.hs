@@ -737,4 +737,4 @@ section Authority = authority
 section Additional = additional
 
 extractResourceData :: ResourceData a => Section -> DNSMessage -> [a]
-extractResourceData sec = catMaybes . map (fromRData . rdata) . section sec
+extractResourceData sec = mapMaybe (fromRData . rdata) . section sec
