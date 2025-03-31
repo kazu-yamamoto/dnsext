@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 module DNS.ZoneFile.Types where
 
@@ -14,6 +13,7 @@ import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as Short
 import Data.Char (chr)
 import Data.List (unfoldr)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Last (..))
 import Data.Word (Word8)
 
@@ -47,7 +47,7 @@ type Error = Last String
 type Parser t s = StateT s (Except Error)
 
 runError :: Last String -> String
-runError = maybe "<empty error>" id . getLast
+runError = fromMaybe "<empty error>" . getLast
 
 runParser :: Parser t s a -> s -> Either String (a, s)
 runParser p in_ = either (Left . runError) Right $ runExcept (runStateT p in_)
@@ -67,14 +67,14 @@ eof :: (Show t, CaseCons t s) => Parser t s ()
 eof = do
     s <- get
     caseCons
-        (\_ _ -> raise $ "eof: more inputs found: " ++ (unwords $ map show $ takeCons 7 s) ++ " ...")
+        (\_ _ -> raise $ "eof: more inputs found: " ++ unwords (map show $ takeCons 7 s) ++ " ...")
         (pure ())
         s
 
 satisfy :: (Show t, CaseCons t s) => String -> (t -> Bool) -> Parser t s t
 satisfy name p = do
     t <- poly_token
-    guard (p t) <|> raise ("satisfy: not satisfied, <" ++ name ++ "> predicate against " ++ show t ++ "")
+    guard (p t) <|> raise ("satisfy: not satisfied, <" ++ name ++ "> predicate against " ++ show t)
     pure t
 
 this :: (Eq t, Show t, CaseCons t s) => t -> Parser t s t

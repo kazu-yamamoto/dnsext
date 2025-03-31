@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.RRCache.ReaperReduced (
@@ -93,10 +94,9 @@ mkReaper settings@ReaperSettings{..} = do
         case mx of
             NoReaper -> return reaperEmpty
             Workload wl -> return wl
-    stop stateRef = atomicModifyIORef' stateRef $ \mx ->
-        case mx of
-            NoReaper -> (NoReaper, reaperEmpty)
-            Workload x -> (Workload reaperEmpty, x)
+    stop stateRef = atomicModifyIORef' stateRef $ \case
+        NoReaper -> (NoReaper, reaperEmpty)
+        Workload x -> (Workload reaperEmpty, x)
     kill tidRef = do
         mtid <- readIORef tidRef
         case mtid of

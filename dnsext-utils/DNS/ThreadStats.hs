@@ -56,7 +56,7 @@ dumpThreads = do
     width = 24
 
 dumper putLines = forever $ do
-    putLines =<< (dumpThreads <&> (++ ["----------------------------------------"]))
+    putLines . (++ ["----------------------------------------"]) =<< dumpThreads
     threadDelay interval
   where
     interval = 3 * 1000 * 1000
@@ -133,7 +133,7 @@ concurrentlyList ps = withAsyncs ps $ mapM Async.wait
 
 concurrentlyList_ = void . concurrentlyList
 
-raceList ps = withAsyncs ps $ Async.waitAny
+raceList ps = withAsyncs ps Async.waitAny
 
 raceList_ = void . raceList
 

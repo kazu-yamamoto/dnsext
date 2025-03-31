@@ -25,6 +25,8 @@ module DNS.RRCache.Managed (
 )
 where
 
+import Data.Maybe (fromMaybe)
+
 -- dnsext-* packages
 
 -- this package
@@ -78,14 +80,14 @@ readRRCache (RRCache _ reaper) = reaperRead reaper
 expiresRRCache :: EpochTime -> RRCache -> IO ()
 expiresRRCache ts (RRCache _ reaper) = reaperUpdate reaper expires_
   where
-    expires_ c = maybe c id $ Cache.expires ts c
+    expires_ c = fromMaybe c $ Cache.expires ts c
 
 {- for full-resolver. using current EpochTime -}
 insertWithExpiresRRCache :: Question -> TTL -> Cache.Hit -> Ranking -> RRCache -> IO ()
 insertWithExpiresRRCache k ttl crs rank (RRCache RRCacheConf{..} reaper) = do
     t <- rrCacheGetTime
     let withExpire = Cache.insertWithExpires t k ttl crs rank
-    reaperUpdate reaper $ \cache -> maybe cache id $ withExpire cache
+    reaperUpdate reaper $ \cache -> fromMaybe cache $ withExpire cache
 
 removeRRCache :: Question -> RRCache -> IO ()
 removeRRCache k (RRCache _ reaper) = reaperUpdate reaper (Cache.remove k)
@@ -94,7 +96,7 @@ filterRRcache :: (Question -> EpochTime -> Hit -> Ranking -> Bool) -> RRCache ->
 filterRRcache p (RRCache _ reaper) = reaperUpdate reaper (Cache.filters p)
 
 clearRRCache :: RRCache -> IO ()
-clearRRCache (RRCache _ reaper) = reaperUpdate reaper (\c -> Cache.empty $ maxSize c)
+clearRRCache (RRCache _ reaper) = reaperUpdate reaper (Cache.empty . maxSize)
 
 ---
 {- for stub. no alive check -}
@@ -105,7 +107,7 @@ lookupRRCache k rrCache = Cache.stubLookup k <$> readRRCache rrCache
 insertRRCache :: Question -> EpochTime -> Cache.Hit -> RRCache -> IO ()
 insertRRCache k tim crs (RRCache _ reaper) = do
     let ins = Cache.stubInsert k tim crs
-    reaperUpdate reaper $ \cache -> maybe cache id $ ins cache
+    reaperUpdate reaper $ \cache -> fromMaybe cache $ ins cache
 
 {- NameError and other errors RCODE are cached using private ERR, instead of each type -}
 keyForERR :: Question -> Question

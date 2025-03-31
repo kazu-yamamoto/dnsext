@@ -12,7 +12,7 @@ where
 import Control.Monad (unless)
 import Data.Char (toLower, toUpper)
 import Data.List (sort)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.String (IsString)
 import Data.UnixTime (UnixTime (..), getUnixTime)
 import Foreign.C.Types (CTime (..))
@@ -100,7 +100,7 @@ runUpdate t u = case u of
     I k ttl (Val crs rank) -> may $ Cache.insert t k ttl crs rank
     E -> may $ Cache.expires t
   where
-    may f c = maybe c id $ f c
+    may f c = fromMaybe c $ f c
 
 foldUpdates :: [(EpochTime, Update)] -> Cache -> Cache
 foldUpdates = foldr (\p k -> k . uncurry runUpdate p) id
@@ -161,7 +161,8 @@ genCRsRec = do
             | otherwise = nameList
     lbl <- elements labelList
     (,) (Question (DNS.fromRepresentation lbl) typ DNS.IN, genCrs)
-        <$> (DNS.fromRepresentation <$> toULString lbl)
+        . DNS.fromRepresentation
+        <$> toULString lbl
 
 genCRsPair :: Gen (Question, Gen Cache.Hit)
 genCRsPair = fst <$> genCRsRec
@@ -389,7 +390,7 @@ lookupEither (AKey (Question dom typ cls)) (AUpdates us) =
 
 rankingOrdered :: ACR2 -> ATTL -> ATTL -> ARankOrds -> AUpdates -> Property
 rankingOrdered (ACR2 (k@(Question dom typ cls), (crs1, crs2))) (ATTL ttl1) (ATTL ttl2) (ARankOrds (r1, r2)) (AUpdates us) =
-    maybe (property False) id action
+    fromMaybe (property False) action
   where
     rcache = foldUpdates (removeKeyUpdates k us) cacheEmpty -- removing Key to be inserted
     action = do

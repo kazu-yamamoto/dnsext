@@ -54,7 +54,7 @@ isNewline = (||) <$> (== _cr) <*> (== _lf)
 -- >>> isLeft $ runParser spc "abc"
 -- True
 spc :: Parser ()
-spc = () <$ satisfy "tab or space" isSpc
+spc = void $ satisfy "tab or space" isSpc
 
 {- FOURMOLU_DISABLE -}
 -- |
@@ -63,7 +63,7 @@ spc = () <$ satisfy "tab or space" isSpc
 -- >>> isLeft $ runParser lineComment "abc; example"
 -- True
 lineComment :: Parser ()
-lineComment = () <$ ( byte _semicolon *> many not_nl )
+lineComment = void( byte _semicolon *> many not_nl )
   where not_nl = satisfy "not newline" $ not . isNewline
 
 -- |
@@ -75,7 +75,7 @@ lineComment = () <$ ( byte _semicolon *> many not_nl )
 -- Right ((),"")
 newline :: Parser ()
 newline =
-    () <$
+    void
     ( byte _cr *> byte _lf  <|>
       byte _cr              <|>
       byte _lf )
@@ -100,7 +100,7 @@ cstringbSimple = satisfy "not (`.` || `;` || `\\` || `\"`) && not `space` && not
 {- FOURMOLU_ENABLE -}
 
 backslash :: Parser ()
-backslash = () <$ byte _backslash
+backslash = void $ byte _backslash
 
 {- FOURMOLU_DISABLE -}
 -- | backslash escaped byte
@@ -146,7 +146,7 @@ cstringByte =
     cstringbEscaped
 
 quote :: Parser ()
-quote = () <$ byte _quotedbl
+quote = void $ byte _quotedbl
 
 quotedByte :: Parser Word8
 quotedByte =
@@ -179,7 +179,7 @@ lex_cstring =
 {- FOURMOLU_ENABLE -}
 
 comment :: Parser ()
-comment = () <$ (many spc *> lineComment *> optional newline)
+comment = void (many spc *> lineComment *> optional newline)
 
 {- FOURMOLU_DISABLE -}
 token :: Parser Token
