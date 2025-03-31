@@ -97,11 +97,11 @@ runResolveExact
 runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt $ queryParamIN n typ cd
 
 {-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
-resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJust :: MonadQuery m => Domain -> TYPE -> m (DNSMessage, Delegation)
 resolveJust = resolveExact
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
-resolveExact :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExact :: MonadQuery m => Domain -> TYPE -> m (DNSMessage, Delegation)
 resolveExact = resolveExactDC 0
 
 {- FOURMOLU_DISABLE -}
@@ -153,7 +153,7 @@ runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryParam
 --
 -- >>> runDNSQuery (testIterative "arpa.") env (queryParamIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
-iterative :: Delegation -> Domain -> DNSQuery (Maybe DNSMessage, Delegation)
+iterative :: MonadQuery m => Delegation -> Domain -> m (Maybe DNSMessage, Delegation)
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
 {- FOURMOLU_DISABLE -}
