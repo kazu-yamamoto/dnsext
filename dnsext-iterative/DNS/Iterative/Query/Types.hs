@@ -16,43 +16,6 @@ module DNS.Iterative.Query.Types (
     DNSQuery,
     runDNSQuery,
     handleResponseError,
-
-    -- re-exports
-    setQS,
-    getQS,
-    throwDnsError,
-    --
-    Env (..),
-    LocalZoneType (..),
-    LocalZones,
-    StubZones,
-    MayVerifiedRRS (..),
-    mayVerifiedRRS,
-    CasesNotValid (..),
-    notValidNoSig,
-    notValidCheckDisabled,
-    notValidInvalid,
-    RRset (..),
-    CasesNotFilledDS (..),
-    MayFilledDS (..),
-    DFreshState (..),
-    Address,
-    Delegation (..),
-    DEntry (..),
-    --
-    QueryParam (..),
-    queryParamH,
-    RequestDO (..),
-    RequestCD (..),
-    RequestAD (..),
-    ednsHeaderCases,
-    --
-    QueryState (..),
-    newQueryState,
-    --
-    ExtraError (..),
-    extraError,
-    QueryError (..),
 ) where
 
 -- GHC packages
