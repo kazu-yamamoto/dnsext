@@ -1,7 +1,4 @@
 -- % sudo -u unbound dump <sock_path>
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
-
 module Main where
 
 import Control.Concurrent (forkIO)

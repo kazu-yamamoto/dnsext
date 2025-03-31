@@ -6,7 +6,7 @@ module Main (main) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.STM (STM, atomically, newTQueueIO, tryReadTQueue)
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import DNS.Do53.Client (
     FlagOp (..),
     QueryControls,
@@ -38,6 +38,7 @@ import Data.Function (on)
 import Data.Functor
 import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
+import Data.Maybe (fromMaybe, isJust)
 import qualified Data.UnixTime as T
 import Network.Socket (AddrInfo (..), PortNumber)
 import qualified Network.Socket as S
@@ -238,7 +239,7 @@ checkIterative
     -> [(Question, QueryControls)]
     -> IO (Question, QueryControls)
 checkIterative at qs = do
-    when (not (null at)) $ do
+    unless (null at) $ do
         putStrLn "@ cannot used with '-i'"
         exitFailure
     case qs of
@@ -345,7 +346,7 @@ getQueryControls :: [String] -> IO (QueryControls, [String])
 getQueryControls [] = return (mempty, [])
 getQueryControls xs = do
     let (queryControls', ys) = span ("+" `isPrefixOf`) xs
-    queryControls <- fmap mconcat $ sequence $ map toFlag queryControls'
+    queryControls <- mconcat <$> mapM toFlag queryControls'
     return (queryControls, ys)
 
 ----------------------------------------------------------------
@@ -382,11 +383,11 @@ handleDeprecatedVerbose args0 = case reverse cs of
     []    -> (pure (),      id, args0)
     ca:_  -> (banner , handler, args1)
       where
-        (n, handler) = maybe (-1 {- never reach-}, id) id $ lk ca
+        (n, handler) = fromMaybe (-1 {- never reach-}, id) $ lk ca
         banner = deprecatedVerboseBanner n ca
   where
     lk = (`lookup` deprecatedVerboseTable)
-    (cs, args1) = partition (maybe False (const True) . lk) args0
+    (cs, args1) = partition (isJust . lk) args0
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}

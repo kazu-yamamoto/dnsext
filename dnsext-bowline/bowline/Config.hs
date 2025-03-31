@@ -297,7 +297,7 @@ getTrustAnchorFile = mapM (fromConf . snd) . filter ((== "trust-anchor-file") . 
 -- >>> getLocalZone [("foo",CV_Int 4),("local-zone",CV_Strings ["example.", "static"]),("local-data",CV_String "a.example. A 203.0.113.5"),("bar",CV_Bool True)]
 -- Just (("example.",LZ_Static,["a.example. A 203.0.113.5"]),[("bar",CV_Bool True)])
 getLocalZone :: [Conf] -> IO (Maybe ((Domain, LocalZoneType, [String]), [Conf]))
-getLocalZone [] = pure $ Nothing
+getLocalZone [] = pure Nothing
 getLocalZone ((k, v):xs)
     | k == "local-zone" = do
           cstrs <- fromConf v
@@ -397,7 +397,7 @@ instance FromConf (Maybe String) where
 
 instance FromConf [String] where
     fromConf (CV_String s) = pure $ filter (/= "") $ splitOn "," s
-    fromConf (CV_Strings ss) = pure $ ss
+    fromConf (CV_Strings ss) = pure ss
     fromConf _ = fail "fromConf string list"
 
 instance FromConf (Maybe OD_NSID) where
@@ -551,7 +551,7 @@ cv_bool =
 
 cv_string' :: Parser String
 cv_string' =
-    dquote *> (many (noneOf "\"\n")) <* dquote <|>
+    dquote *> many (noneOf "\"\n") <* dquote <|>
     many1 (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 

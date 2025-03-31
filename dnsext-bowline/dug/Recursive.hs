@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Recursive (recursiveQuery) where
@@ -259,6 +258,6 @@ saveResumption file tq name@(NameTag tag) bs = do
 loadResumption :: FilePath -> IO [(NameTag, ByteString)]
 loadResumption file = map toKV . C8.lines <$> C8.readFile file
   where
-    toKV l = (NameTag $ C8.unpack k, either (const "") id $ BS16.decode $ C8.drop 1 v)
+    toKV l = (NameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
       where
         (k, v) = BS.break (== 32) l

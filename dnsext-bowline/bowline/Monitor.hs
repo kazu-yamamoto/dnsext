@@ -238,9 +238,9 @@ console conf env ctl@Control{..} GlobalCache{gcacheControl=CacheControl{..}} srv
                 let lk cache now = Cache.lookup now dom typ DNS.IN cache
                 lk <$> getCache_ env <*> currentSeconds_ env
             hit (rrs, rank) = mapM_ outLn $ ("hit: " ++ show rank) : map show rrs
-        dispatch  Stats = toLazyByteString <$> getStats >>= BL.hPutStrLn outH
+        dispatch  Stats = getStats >>= BL.hPutStrLn outH . toLazyByteString
         dispatch (TStats ws) = hPutStrLn outH . unlines . filter (ws `allInfixOf`) =<< TStat.dumpThreads
-        dispatch  WStats = toLazyByteString <$> getWStats >>= BL.hPutStrLn outH
+        dispatch  WStats = getWStats >>= BL.hPutStrLn outH . toLazyByteString
         dispatch (Expire offset) = expireCache_ env . (+ offset) =<< currentSeconds_ env
         dispatch (Flush n) = ccRemove n *> hPutStrLn outH "done."
         dispatch (FlushType n ty) = ccRemoveType n ty *> hPutStrLn outH "done."

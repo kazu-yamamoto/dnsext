@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
@@ -59,8 +60,8 @@ run ruid readConfig = do
     tcache <- newTimeCache
     conf <- readConfig
     (ri, nkSuccess, nkFailure, kSuccess, kFailure) <- newReloadInfo $ Server.getTime tcache
-    let rsuccess = \rc -> case rc of Reload -> nkSuccess; KeepCache -> kSuccess
-        rfailure = \rc -> case rc of Reload -> nkFailure; KeepCache -> kFailure
+    let rsuccess = \case Reload -> nkSuccess; KeepCache -> kSuccess
+        rfailure = \case Reload -> nkFailure; KeepCache -> kFailure
     go tcache Nothing ri (\m -> m{reloadSuccess = rsuccess, reloadFailure = rfailure}) conf
   where
     go tcache mcache ri um conf = do
@@ -89,7 +90,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                 let disabled _ = putStrLn "cnf_disable_v6_ns is False, but disabling, because IPv6 is not supported." $> True
                 foldAddrInfo disabled (\_ -> pure False) Datagram (Just "::") 53
         readTrustAnchors' ps = do
-            when (not $ null ps) $ putStrLn $ "loading trust-anchor-file: " ++ (unwords ps)
+            unless (null ps) $ putStrLn $ "loading trust-anchor-file: " ++ unwords ps
             readTrustAnchors ps
         readRootHint' path = do
             putStrLn $ "loading root-hints: " ++ path
@@ -219,7 +220,7 @@ bindServers hosts (True, n, a, socktype, port) = do
         s <- openSocket ai
         setSocketOption s ReuseAddr 1
         when (addrFamily ai == AF_INET6) $ setSocketOption s IPv6Only 1
-        withFdSocket s $ setCloseOnExecIfNeeded
+        withFdSocket s setCloseOnExecIfNeeded
         bind s $ addrAddress ai
         when (addrSocketType ai == Stream) $ listen s 1024
         return s
@@ -265,7 +266,7 @@ getLogger ruid conf@Config{..} TimeCache{..}
             result hreop a _ p k r = return (void $ TStat.forkIO "logger" a, p, k, hreop r)
             lk open close fr = Log.with getpts open close cnf_log_level (result fr)
             handle   = lk (pure $ Log.stdHandle cnf_log_output)         (\_ -> pure ()) (\_ -> pure ())
-            file fn  = lk (withRoot ruid conf $ openFile fn AppendMode)  hClose         (\r -> r)
+            file fn  = lk (withRoot ruid conf $ openFile fn AppendMode)  hClose         id
         maybe handle file cnf_log_file
     | otherwise = do
         let p _ _ ~_ = return ()
