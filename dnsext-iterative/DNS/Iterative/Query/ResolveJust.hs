@@ -569,7 +569,7 @@ resolveNS zone disableV6NS dc ns = do
 maxQueryCount :: Int
 maxQueryCount = 64
 
-norec :: Bool -> NonEmpty Address -> Domain -> TYPE -> DNSQuery DNSMessage
+norec :: MonadQuery m => Bool -> NonEmpty Address -> Domain -> TYPE -> m DNSMessage
 norec dnssecOK aservers name typ = do
     qcount <- (NE.length aservers +) <$> getQS queryCounter_
     logLn Log.DEBUG ("query count: " ++ show qcount)
@@ -584,6 +584,6 @@ norec dnssecOK aservers name typ = do
         | qcount > maxQueryCount = logLn Log.WARN (exceeded orig) >> left ServerFailure
         | otherwise = Norec.norec' dnssecOK aservers name typ >>= either left handleResponse
     exceeded orig = "max-query-count (==" ++ show maxQueryCount ++ ") exceeded: " ++ showQ' "query" name typ ++ ", " ++ orig
-    handleResponse = handleResponseError (NE.toList aservers) throwError pure
+    handleResponse = handleResponseError (NE.toList aservers) throwQuery pure
     left e = cacheDNSError name typ Cache.RankAnswer e >> dnsError e
-    dnsError e = throwError $ uncurry DnsError $ unwrapDNSErrorInfo e
+    dnsError e = throwQuery $ uncurry DnsError $ unwrapDNSErrorInfo e
