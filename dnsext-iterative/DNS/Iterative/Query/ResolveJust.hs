@@ -42,6 +42,7 @@ import System.Console.ANSI.Types
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.Norec as Norec
@@ -121,11 +122,11 @@ resolveExactDC dc n typ
   where
     mdc = maxNotSublevelDelegation
     getAnchor = do
-        stub <- asks stubZones_
+        stub <- asksEnv stubZones_
         maybe refreshRoot pure $ Stub.lookupStub stub n
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
             ainfo sas = ["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
         delegationFallbacks dc withDO (logLn Log.DEMO . unwords . ainfo) nss n typ
@@ -174,7 +175,7 @@ iterative_ dc nss0 (x : xs)  = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
             ainfo sas = ["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -193,7 +194,7 @@ iterative_ dc nss0 (x : xs)  = do
         (,) msg <$> (handlers =<< delegationWithCache zone dnskeys name msg)
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         zplogLn Log.DEMO $ ppDelegation short delegationNS
 
     lookupERR = fmap fst <$> lookupErrorRCODE name
@@ -326,7 +327,7 @@ fillDelegationDS dc src dest
 queryDS
     :: Int -> Delegation -> Domain -> DNSQuery [RD_DS]
 queryDS dc src@Delegation{..} dom = do
-    short <- asks shortLog_
+    short <- asksEnv shortLog_
     let ainfo sas = ["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) src dom DS
     Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS withDS
@@ -347,7 +348,7 @@ queryDS dc src@Delegation{..} dom = do
 {- FOURMOLU_DISABLE -}
 refreshRoot :: DNSQuery Delegation
 refreshRoot = do
-    curRef <- asks currentRoot_
+    curRef <- asksEnv currentRoot_
     let refresh = do
             n <- getRoot
             liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
@@ -364,7 +365,7 @@ refreshRoot = do
         let fallback s = do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                asks rootHint_
+                asksEnv rootHint_
         either fallback return =<< rootPriming
 {- FOURMOLU_ENABLE -}
 
@@ -382,7 +383,7 @@ rootPriming =
     left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         logLn Log.DEMO $ ppDelegation short delegationNS
     nullNS = pure $ left "no NS RRs"
     ncNS _ncLog = pure $ left "not canonical NS RRs"
@@ -407,8 +408,8 @@ rootPriming =
         dnskeys = delegationDNSKEY hint
 
     getHint = do
-        hint <- asks rootHint_
-        anchor <- asks rootAnchor_
+        hint <- asksEnv rootHint_
+        anchor <- asksEnv rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
         let short = False
@@ -457,7 +458,7 @@ steps to get verified and cached DNSKEY RRset
 cachedDNSKEY
     :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery ([RD_DNSKEY], Delegation)
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
-    short <- asks shortLog_
+    short <- asksEnv shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, d') <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) d zone DNSKEY
     let rcode = DNS.rcode msg
@@ -484,7 +485,7 @@ delegationFallbacks
     :: Int -> Bool -> ([Address] -> DNSQuery b)
     -> Delegation -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
 delegationFallbacks dc dnssecOK ah d0 name typ = do
-    disableV6NS <- asks disableV6NS_
+    disableV6NS <- asksEnv disableV6NS_
     delegationFallbacks_ handled failed qparallel disableV6NS dc dnssecOK ah d0 name typ
   where
     handled = logLn Log.DEMO
