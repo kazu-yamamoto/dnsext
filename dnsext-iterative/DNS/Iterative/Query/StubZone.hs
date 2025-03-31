@@ -12,7 +12,7 @@ import Data.IP (IP (..))
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.ZoneMap
 
 {- FOURMOLU_DISABLE -}

@@ -18,7 +18,7 @@ import qualified Data.IP as IP
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Class
 
 {- FOURMOLU_DISABLE -}
 defaultLocal :: [(Domain, LocalZoneType, [RR])]

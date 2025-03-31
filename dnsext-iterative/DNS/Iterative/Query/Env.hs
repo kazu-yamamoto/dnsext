@@ -71,12 +71,12 @@ import qualified DNS.ZoneFile as Zone
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.DefaultLocal (defaultLocal)
 import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
-import DNS.Iterative.Query.Types
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)

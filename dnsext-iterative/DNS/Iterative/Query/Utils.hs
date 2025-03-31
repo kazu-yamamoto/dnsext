@@ -17,20 +17,20 @@ import System.Console.ANSI.Types
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Class
 
-clogLines :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> [String] -> m ()
+clogLines :: MonadEnv m => Log.Level -> Maybe Color -> [String] -> m ()
 clogLines level color xs = do
-    putLines <- asks logLines_
+    putLines <- asksEnv logLines_
     liftIO $ putLines level color xs
 
-logLines :: (MonadIO m, MonadReader Env m) => Log.Level -> [String] -> m ()
+logLines :: MonadEnv m => Log.Level -> [String] -> m ()
 logLines level xs = clogLines level Nothing xs
 
-logLn :: (MonadIO m, MonadReader Env m) => Log.Level -> String -> m ()
+logLn :: MonadEnv m => Log.Level -> String -> m ()
 logLn level s = clogLines level Nothing [s]
 
-clogLn :: (MonadIO m, MonadReader Env m) => Log.Level -> Maybe Color -> String -> m ()
+clogLn :: MonadEnv m => Log.Level -> Maybe Color -> String -> m ()
 clogLn level color s = clogLines level color [s]
 
 indent :: String -> String

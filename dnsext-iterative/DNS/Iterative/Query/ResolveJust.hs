@@ -42,6 +42,7 @@ import System.Console.ANSI.Types
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Delegation
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.Norec as Norec
@@ -96,15 +97,15 @@ runResolveExact
 runResolveExact cxt n typ cd = runDNSQuery (resolveExact n typ) cxt $ queryParamIN n typ cd
 
 {-# DEPRECATED resolveJust "use resolveExact instead of this" #-}
-resolveJust :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveJust :: MonadQuery m => Domain -> TYPE -> m (DNSMessage, Delegation)
 resolveJust = resolveExact
 
 -- 反復検索を使って最終的な権威サーバーからの DNSMessage とその委任情報を得る. CNAME は解決しない.
-resolveExact :: Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExact :: MonadQuery m => Domain -> TYPE -> m (DNSMessage, Delegation)
 resolveExact = resolveExactDC 0
 
 {- FOURMOLU_DISABLE -}
-resolveExactDC :: Int -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+resolveExactDC :: MonadQuery m => Int -> Domain -> TYPE -> m (DNSMessage, Delegation)
 resolveExactDC dc n typ
     | dc > mdc = do
         logLn Log.WARN $ unwords ["resolve-exact: not sub-level delegation limit exceeded:", show n, show typ]
@@ -121,11 +122,11 @@ resolveExactDC dc n typ
   where
     mdc = maxNotSublevelDelegation
     getAnchor = do
-        stub <- asks stubZones_
+        stub <- asksEnv stubZones_
         maybe refreshRoot pure $ Stub.lookupStub stub n
     request nss@Delegation{..} = do
         checkEnabled <- getCheckEnabled
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
             ainfo sas = ["resolve-exact: query", show n, show typ] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
         delegationFallbacks dc withDO (logLn Log.DEMO . unwords . ainfo) nss n typ
@@ -152,13 +153,13 @@ runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryParam
 --
 -- >>> runDNSQuery (testIterative "arpa.") env (queryParamIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
-iterative :: Delegation -> Domain -> DNSQuery (Maybe DNSMessage, Delegation)
+iterative :: MonadQuery m => Delegation -> Domain -> m (Maybe DNSMessage, Delegation)
 iterative sa n = iterative_ 0 sa $ DNS.superDomains n
 
 {- FOURMOLU_DISABLE -}
 -- fst: last response message for not delegated last domain
 -- snd: delegation for last domain
-iterative_ :: Int -> Delegation -> [Domain] -> DNSQuery (Maybe DNSMessage, Delegation)
+iterative_ :: MonadQuery m => Int -> Delegation -> [Domain] -> m (Maybe DNSMessage, Delegation)
 iterative_ _  nss0  []       = pure (Nothing, nss0)
 iterative_ dc nss0 (x : xs)  = do
     checkEnabled <- getCheckEnabled
@@ -169,12 +170,12 @@ iterative_ dc nss0 (x : xs)  = do
     --                                       {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
-    stepQuery :: Bool -> Delegation -> DNSQuery (DNSMessage, MayDelegation)
+    stepQuery :: MonadQuery m => Bool -> Delegation -> m (DNSMessage, MayDelegation)
     stepQuery checkEnabled nss@Delegation{..} = do
         let zone = delegationZone
             dnskeys = delegationDNSKEY
         {- When the same NS information is inherited from the parent domain, balancing is performed by re-selecting the NS address. -}
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         let withDO = checkEnabled && chainedStateDS nss && not (null delegationDNSKEY)
             ainfo sas = ["iterative: query", show name, show A] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
         {- Use `A` for iterative queries to the authoritative servers during iterative resolution.
@@ -193,9 +194,10 @@ iterative_ dc nss0 (x : xs)  = do
         (,) msg <$> (handlers =<< delegationWithCache zone dnskeys name msg)
     logDelegation Delegation{..} = do
         let zplogLn lv = logLn lv . (("zone: " ++ show delegationZone ++ ":\n") ++)
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         zplogLn Log.DEMO $ ppDelegation short delegationNS
 
+    lookupERR :: MonadQuery m => m (Maybe RCODE)
     lookupERR = fmap fst <$> lookupErrorRCODE name
     withoutMsg md = pure (Nothing, md)
     withERRC rc = case rc of
@@ -206,7 +208,7 @@ iterative_ dc nss0 (x : xs)  = do
         _          -> throw' ServerFailure
       where throw' e = logLn Log.DEMO ("iterative: " ++ show e ++ " with cached RCODE: " ++ show rc) *> throwDnsError e
 
-    step :: Bool -> Delegation -> DNSQuery (Maybe DNSMessage, MayDelegation)
+    step :: MonadQuery m => Bool -> Delegation -> m (Maybe DNSMessage, MayDelegation)
     step checkEnabled nss@Delegation{..} = do
         let notDelegatedMsg (msg, md) = mayDelegation (Just msg, noDelegation) ((,) Nothing . hasDelegation) md
             stepQuery' = notDelegatedMsg <$> stepQuery checkEnabled nss
@@ -221,7 +223,7 @@ requestDelegationTYPE :: TYPE
 requestDelegationTYPE = A
 
 {- Workaround delegation for one authoritative server has both domain zone and sub-domain zone -}
-servsChildZone :: Int -> Delegation -> Domain -> DNSMessage -> DNSQuery MayDelegation
+servsChildZone :: MonadQuery m => Int -> Delegation -> Domain -> DNSMessage -> m MayDelegation
 servsChildZone dc nss dom msg =
     handleSOA (handleASIG $ pure noDelegation)
   where
@@ -260,13 +262,13 @@ servsChildZone dc nss dom msg =
         logLn Log.DEMO $ "servs-child: workaround: " ++ tag ++ ": " ++ show dom ++ " may be provided with " ++ show (delegationZone nss)
         fillsDNSSEC dc nss (Delegation dom (delegationNS nss) (NotFilledDS ServsChildZone) [] (delegationFresh nss))
 
-fillsDNSSEC :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC :: MonadQuery m => Int -> Delegation -> Delegation -> m Delegation
 fillsDNSSEC dc nss d = do
     reqCD <- asksQP requestCD_
     fillsDNSSEC' reqCD dc nss d
 
 {- FOURMOLU_DISABLE -}
-fillsDNSSEC' :: RequestCD -> Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillsDNSSEC' :: MonadQuery m => RequestCD -> Int -> Delegation -> Delegation -> m Delegation
 fillsDNSSEC' CheckDisabled   _dc _nss d = pure d
 fillsDNSSEC' NoCheckDisabled  dc  nss d = do
     filled@Delegation{..} <- fillDelegationDNSKEY dc =<< fillDelegationDS dc nss d
@@ -278,7 +280,7 @@ fillsDNSSEC' NoCheckDisabled  dc  nss d = do
     return filled
 {- FOURMOLU_ENABLE -}
 
-getCheckEnabled :: MonadReaderQP m => m Bool
+getCheckEnabled :: MonadQP m => m Bool
 getCheckEnabled = noCD <$> asksQP requestCD_
   where
     noCD NoCheckDisabled = True
@@ -302,7 +304,7 @@ getCheckEnabled = noCD <$> asksQP requestCD_
 -- Right True
 -- >>> fmap isFilled <$> (runChild $ mkChild $ FilledDS [])
 -- Right True
-fillDelegationDS :: Int -> Delegation -> Delegation -> DNSQuery Delegation
+fillDelegationDS :: MonadQuery m => Int -> Delegation -> Delegation -> m Delegation
 fillDelegationDS dc src dest
     | null $ delegationDNSKEY src = fill [] {- no src DNSKEY, not chained -}
     | NotFilledDS o <- delegationDS src = do
@@ -317,16 +319,15 @@ fillDelegationDS dc src dest
             maybe query fill =<< lookupDS delegationZone
   where
     dsRDs (rrs, _rank) = Just [rd | rr <- rrs, Just rd <- [DNS.fromRData $ rdata rr]]
-    lookupDS :: Domain -> DNSQuery (Maybe [RD_DS])
+    lookupDS :: MonadQuery m => Domain -> m (Maybe [RD_DS])
     lookupDS zone = lookupValidRR "require-ds" zone DS <&> (>>= dsRDs)
     fill dss = pure dest{delegationDS = FilledDS dss}
     query = fillCachedDelegation =<< fill =<< queryDS dc src (delegationZone dest)
 
 {- FOURMOLU_DISABLE -}
-queryDS
-    :: Int -> Delegation -> Domain -> DNSQuery [RD_DS]
+queryDS :: MonadQuery m => Int -> Delegation -> Domain -> m [RD_DS]
 queryDS dc src@Delegation{..} dom = do
-    short <- asks shortLog_
+    short <- asksEnv shortLog_
     let ainfo sas = ["require-ds: query", show zone, show DS] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, _) <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) src dom DS
     Verify.cases NoCheckDisabled zone dnskeys rankedAnswer msg dom DS (DNS.fromRData . rdata) nullDS ncDS withDS
@@ -345,9 +346,9 @@ queryDS dc src@Delegation{..} dom = do
 ---
 
 {- FOURMOLU_DISABLE -}
-refreshRoot :: DNSQuery Delegation
+refreshRoot :: MonadQuery m => m Delegation
 refreshRoot = do
-    curRef <- asks currentRoot_
+    curRef <- asksEnv currentRoot_
     let refresh = do
             n <- getRoot
             liftIO $ atomicWriteIORef curRef $ Just n{delegationFresh = CachedD} {- got from IORef as cached -}
@@ -364,7 +365,7 @@ refreshRoot = do
         let fallback s = do
                 {- fallback to rootHint -}
                 logLn Log.WARN $ "refreshRoot: " ++ s
-                asks rootHint_
+                asksEnv rootHint_
         either fallback return =<< rootPriming
 {- FOURMOLU_ENABLE -}
 
@@ -375,14 +376,14 @@ steps of root priming
 2. query NS from root-domain with DO flag - get NS RRset and RRSIG
 3. verify NS RRset of root-domain with RRSIGa
  -}
-rootPriming :: DNSQuery (Either String Delegation)
+rootPriming :: MonadQuery m => m (Either String Delegation)
 rootPriming =
     priming =<< fillDelegationDNSKEY 0 =<< getHint
   where
     left s = Left $ "root-priming: " ++ s
     logResult delegationNS color s = do
         clogLn Log.DEMO (Just color) $ "root-priming: " ++ s
-        short <- asks shortLog_
+        short <- asksEnv shortLog_
         logLn Log.DEMO $ ppDelegation short delegationNS
     nullNS = pure $ left "no NS RRs"
     ncNS _ncLog = pure $ left "not canonical NS RRs"
@@ -407,8 +408,8 @@ rootPriming =
         dnskeys = delegationDNSKEY hint
 
     getHint = do
-        hint <- asks rootHint_
-        anchor <- asks rootAnchor_
+        hint <- asksEnv rootHint_
+        anchor <- asksEnv rootAnchor_
         pure hint{delegationDS = anchor}
     priming hint = do
         let short = False
@@ -421,7 +422,7 @@ rootPriming =
 ---
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY :: Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY :: MonadQuery m => Int -> Delegation -> m Delegation
 fillDelegationDNSKEY _dc d@Delegation{delegationDS = NotFilledDS o, delegationZone = zone} = do
     {- DS(Delegation Signer) is not filled -}
     logLn Log.WARN $ "require-dnskey: not consumed not-filled DS: case=" ++ show o ++ " zone: " ++ show zone
@@ -436,7 +437,7 @@ fillDelegationDNSKEY  dc d@Delegation{..} = fillDelegationDNSKEY' getSEP dc d
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-fillDelegationDNSKEY' :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery Delegation
+fillDelegationDNSKEY' :: MonadQuery m => ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> m Delegation
 fillDelegationDNSKEY' _      _dc d@Delegation{delegationDNSKEY = _:_}     = pure d
 fillDelegationDNSKEY' getSEP  dc d@Delegation{delegationDNSKEY = [] , ..} =
     maybe query (fill d . toDNSKEYs) =<< lookupValidRR "require-dnskey" zone DNSKEY
@@ -455,9 +456,9 @@ steps to get verified and cached DNSKEY RRset
 4. cache DNSKEY RRset with RRSIG when validation passes
  -}
 cachedDNSKEY
-    :: ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> DNSQuery ([RD_DNSKEY], Delegation)
+    :: MonadQuery m => ([RR] -> Either String (NonEmpty RD_DNSKEY)) -> Int -> Delegation -> m ([RD_DNSKEY], Delegation)
 cachedDNSKEY getSEPs dc d@Delegation{..} = do
-    short <- asks shortLog_
+    short <- asksEnv shortLog_
     let ainfo sas = ["require-dnskey: query", show zone, show DNSKEY] ++ [w | short, w <- "to" : [pprAddr sa | sa <- sas]]
     (msg, d') <- delegationFallbacks dc True (logLn Log.DEMO . unwords . ainfo) d zone DNSKEY
     let rcode = DNS.rcode msg
@@ -481,10 +482,11 @@ cachedDNSKEY getSEPs dc d@Delegation{..} = do
 
 {- FOURMOLU_DISABLE -}
 delegationFallbacks
-    :: Int -> Bool -> ([Address] -> DNSQuery b)
-    -> Delegation -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+    :: MonadQuery m
+    => Int -> Bool -> ([Address] -> m b)
+    -> Delegation -> Domain -> TYPE -> m (DNSMessage, Delegation)
 delegationFallbacks dc dnssecOK ah d0 name typ = do
-    disableV6NS <- asks disableV6NS_
+    disableV6NS <- asksEnv disableV6NS_
     delegationFallbacks_ handled failed qparallel disableV6NS dc dnssecOK ah d0 name typ
   where
     handled = logLn Log.DEMO
@@ -494,10 +496,11 @@ delegationFallbacks dc dnssecOK ah d0 name typ = do
 
 {- FOURMOLU_DISABLE -}
 delegationFallbacks_
-    :: (String -> DNSQuery c)
-    -> ([(String, [Address])] -> DNSQuery a)
-    -> Int -> Bool -> Int -> Bool -> ([Address] -> DNSQuery b)
-    -> Delegation -> Domain -> TYPE -> DNSQuery (DNSMessage, Delegation)
+    :: MonadQuery m
+    => (String -> m c)
+    -> ([(String, [Address])] -> m a)
+    -> Int -> Bool -> Int -> Bool -> ([Address] -> m b)
+    -> Delegation -> Domain -> TYPE -> m (DNSMessage, Delegation)
 delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..} name typ = do
     paxs1  <- dentryToPermAx disableV6NS dentry
     pnss   <- dentryToPermNS zone dentry
@@ -507,18 +510,18 @@ delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..
     fallbacks aa d (tag, runAxs) runsAxs = runAxs d emp ne
       where
         emp d' = list (fh (aa []) >> throwDnsError ServerFailure) (fallbacks (aa . ((tag, []):)) d') runsAxs
-        ne d' paxs = list step (\g gs -> step `catchError` \e -> hlog e >> fallbacks (aa . ((tag, paxs'):)) d' g gs) runsAxs
+        ne d' paxs = list step (\g gs -> step `catchQuery` \e -> hlog e >> fallbacks (aa . ((tag, paxs'):)) d' g gs) runsAxs
           where
             step = case [ah (NE.toList axc) >> norec dnssecOK axc name typ | axc <- chunksOfNE qparallel paxs] of
                 f:|fs -> (,) <$> catches f fs <*> pure d'
             paxs' = NE.toList paxs
             hlog e = eh' $ unwords $ show e : "for" : map show paxs'
     catches x  []     = x
-    catches x (y:xs)  = x `catchError` \_e -> catches y xs
+    catches x (y:xs)  = x `catchQuery` \_e -> catches y xs
 
     resolveNS' ns d emp ne = do
         {- tryError idiom, before mtl 2.3 -}
-        e <- (Right <$> resolveNS zone disableV6NS dc ns) `catchError` (pure . Left)
+        e <- (Right <$> resolveNS zone disableV6NS dc ns) `catchQuery` (pure . Left)
         d' <- fillCachedDelegation d
         either left (either rleft rright) e d'
       where
@@ -531,7 +534,7 @@ delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-resolveNS :: Domain -> Bool -> Int -> Domain -> DNSQuery (Either (RCODE, String) (NonEmpty (IP, RR)))
+resolveNS :: MonadQuery m => Domain -> Bool -> Int -> Domain -> m (Either (RCODE, String) (NonEmpty (IP, RR)))
 resolveNS zone disableV6NS dc ns = do
     (rc, axs) <- query1Ax
     list (failEmptyAx rc) (\a as -> pure $ Right $ a :| as) axs
@@ -568,7 +571,7 @@ resolveNS zone disableV6NS dc ns = do
 maxQueryCount :: Int
 maxQueryCount = 64
 
-norec :: Bool -> NonEmpty Address -> Domain -> TYPE -> DNSQuery DNSMessage
+norec :: MonadQuery m => Bool -> NonEmpty Address -> Domain -> TYPE -> m DNSMessage
 norec dnssecOK aservers name typ = do
     qcount <- (NE.length aservers +) <$> getQS queryCounter_
     logLn Log.DEBUG ("query count: " ++ show qcount)
@@ -581,8 +584,8 @@ norec dnssecOK aservers name typ = do
   where
     dispatch qcount orig
         | qcount > maxQueryCount = logLn Log.WARN (exceeded orig) >> left ServerFailure
-        | otherwise = lift (Norec.norec' dnssecOK aservers name typ) >>= either left handleResponse
+        | otherwise = Norec.norec' dnssecOK aservers name typ >>= either left handleResponse
     exceeded orig = "max-query-count (==" ++ show maxQueryCount ++ ") exceeded: " ++ showQ' "query" name typ ++ ", " ++ orig
-    handleResponse = handleResponseError (NE.toList aservers) throwError pure
+    handleResponse = handleResponseError (NE.toList aservers) throwQuery pure
     left e = cacheDNSError name typ Cache.RankAnswer e >> dnsError e
-    dnsError e = throwError $ uncurry DnsError $ unwrapDNSErrorInfo e
+    dnsError e = throwQuery $ uncurry DnsError $ unwrapDNSErrorInfo e

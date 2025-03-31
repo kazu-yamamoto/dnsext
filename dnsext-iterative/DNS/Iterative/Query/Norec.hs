@@ -24,15 +24,16 @@ import DNS.Types
 
 -- this package
 import DNS.Iterative.Imports
-import DNS.Iterative.Query.Types
+import DNS.Iterative.Query.Class
 
 {- FOURMOLU_DISABLE -}
 {- Get the answer DNSMessage from the authoritative server.
    Note about flags in request to an authoritative server.
   * RD (Recursion Desired) must be 0 for request to authoritative server
   * EDNS must be enable for DNSSEC OK request -}
-norec' :: Bool -> NonEmpty Address -> Domain -> TYPE -> ContextT IO (Either DNSError DNSMessage)
-norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
+norec' :: MonadEnv m => Bool -> NonEmpty Address -> Domain -> TYPE -> m (Either DNSError DNSMessage)
+norec' dnssecOK aservers name typ = do
+    cxt <- asksEnv id
     let riActions =
             defaultResolveActions
                 { ractionGenId        = idGen_ cxt
@@ -62,8 +63,5 @@ norec' dnssecOK aservers name typ = contextT $ \cxt _qctl _st -> do
             | dnssecOK = FlagSet
             | otherwise = FlagClear
         qctl = DNS.rdFlag FlagClear <> DNS.doFlag doFlagSet
-    fmap DNS.replyDNSMessage <$> DNS.resolve renv q qctl
+    liftIO $ fmap DNS.replyDNSMessage <$> DNS.resolve renv q qctl
 {- FOURMOLU_ENABLE -}
-
-contextT :: Monad m => (Env -> QueryParam -> QueryState -> m a) -> ContextT m a
-contextT k = ReaderT $ ReaderT . (ReaderT .) . k

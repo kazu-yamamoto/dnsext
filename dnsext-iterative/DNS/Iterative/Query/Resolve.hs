@@ -22,6 +22,7 @@ import qualified DNS.Types as DNS
 -- this package
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Cache
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.ResolveJust
 import DNS.Iterative.Query.Types
@@ -36,9 +37,7 @@ runResolve
 runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryParam q qctl
 
 {- FOURMOLU_DISABLE -}
-resolveByCache
-    :: Question
-    -> DNSQuery (([RRset], Domain), Maybe ResultRRS)
+resolveByCache :: MonadQuery m => Question -> m (([RRset], Domain), Maybe ResultRRS)
 resolveByCache =
     resolveLogic
         "cache" Just (const Nothing)
@@ -49,9 +48,7 @@ resolveByCache =
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードをキャッシュする. -}
-resolve
-    :: Question
-    -> DNSQuery (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
+resolve :: MonadQuery m => Question -> m (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
 resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswer ServerFailure) resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
@@ -60,7 +57,7 @@ resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswe
    * left   :: ResultRRS -> b       - cached result
    * right  :: ResultRRS' a -> b    - queried result like (ResultRRS' DNSMessage)   -}
 resolveLogic
-    :: (MonadIO m, MonadReader Env m, MonadReaderQP m)
+    :: MonadQP m
     => String
     -> (ResultRRS -> b) -> (ResultRRS' a -> b)
     -> m (([RRset], Domain), b)
@@ -178,7 +175,7 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
 {- FOURMOLU_ENABLE -}
 
 {- CNAME のレコードを取得し、キャッシュする -}
-resolveCNAME :: Domain -> DNSQuery (ResultRRS' DNSMessage)
+resolveCNAME :: MonadQuery m => Domain -> m (ResultRRS' DNSMessage)
 resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
     uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
@@ -188,7 +185,7 @@ resolveCNAME bn = do
    結果が CNAME の場合、そのドメイン名と RRset を返す.
    どちらの場合も、結果のレコードをキャッシュする. -}
 {- returns: result msg, cname, verified answer, verified authority -}
-resolveTYPE :: Domain -> TYPE -> DNSQuery (Either (Domain, RRset) (ResultRRS' DNSMessage))
+resolveTYPE :: MonadQuery m => Domain -> TYPE -> m (Either (Domain, RRset) (ResultRRS' DNSMessage))
 resolveTYPE bn typ = do
     (msg, delegation) <- resolveExact bn typ
     let has ty = any ((&&) <$> (== bn) . rrname <*> (== ty) . rrtype) $ DNS.answer msg
