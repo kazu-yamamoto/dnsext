@@ -15,7 +15,6 @@ module DNS.Iterative.Query.Types (
     QueryT,
     DNSQuery,
     runDNSQuery,
-    handleQueryError,
     handleResponseError,
 
     -- re-exports
@@ -110,13 +109,6 @@ runDNSQuery' q e p = do
 
 runDNSQuery :: DNSQuery a -> Env -> QueryParam -> IO (Either QueryError a)
 runDNSQuery q e p = fst <$> runDNSQuery' q e p
-
-handleQueryError
-    :: (QueryError -> DNSQuery a)
-    -> (a -> DNSQuery a)
-    -> DNSQuery a
-    -> DNSQuery a
-handleQueryError left right q = either left right =<< lift (runExceptT q)
 
 {- FOURMOLU_DISABLE -}
 -- example instances
