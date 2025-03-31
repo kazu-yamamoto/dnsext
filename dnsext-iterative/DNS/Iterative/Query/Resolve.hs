@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.Resolve (
     runResolve,
@@ -81,7 +80,7 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
     logLines_ lv = logLines lv . pindents ("resolve: " ++ logMark)
     logLn_ lv s = logLines_ lv [s]
     called = do
-        let qbitstr tag sel tbl = ((tag ++ ":") ++) . maybe "" id . (`lookup` tbl) <$> asksQP sel
+        let qbitstr tag sel tbl = ((tag ++ ":") ++) . fromMaybe "" . (`lookup` tbl) <$> asksQP sel
         do_ <- qbitstr "DnssecOK"           requestDO_  [(DnssecOK,           "1"), (NoDnssecOK,           "0")]
         cd_ <- qbitstr "CheckDisabled"      requestCD_  [(CheckDisabled,      "1"), (NoCheckDisabled,      "0")]
         ad_ <- qbitstr "AuthenticatedData"  requestAD_  [(AuthenticatedData,  "1"), (NoAuthenticatedData,  "0")]

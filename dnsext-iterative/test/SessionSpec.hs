@@ -157,7 +157,7 @@ getToCacher factor = do
             let intb = fromMaybe 0 $ readMaybe $ B8.unpack inputQuery
             threadDelay $ intb * factor
             inputToSender $ Output inputQuery inputPendingOp inputPeerInfo
-    _ <- replicateM 4 (forkIO bodyLoop)
+    replicateM_ 4 (forkIO bodyLoop)
     pure (atomically . writeTQueue mq)
 
 {- FOUMOLU_ENABLE -}

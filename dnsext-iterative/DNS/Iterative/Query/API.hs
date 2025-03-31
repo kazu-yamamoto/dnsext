@@ -79,7 +79,7 @@ replyMessage reqDO cnrrs rc vans vauth ident qs eh nsid k = withResolvedRRs reqD
 {- FOURMOLU_DISABLE -}
 foldResponse
     :: String -> (String -> a) -> (VResult -> DNSMessage -> a)
-    -> Env -> DNSMessage -> (DNSQuery a) -> IO a
+    -> Env -> DNSMessage -> DNSQuery a -> IO a
 foldResponse name deny reply env@Env{..} reqM@DNSMessage{question=qs,identifier=ident,flags=reqF,ednsHeader=reqEH} qaction =
     handleRequest env prefix reqM (pure . deny) ereply  result
   where

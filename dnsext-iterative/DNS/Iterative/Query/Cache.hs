@@ -281,7 +281,7 @@ cacheSectionNegative zone dnskeys dom typ getRanked msg nws = do
         | not $ null answer = do
             plogLines Log.DEBUG $ map ("\t" ++) ("because of non empty answers:" : map show answer)
         | null soas = do
-            plogLines Log.WARN $ ["\tno SOA records in authority section"]
+            plogLines Log.WARN ["\tno SOA records in authority section"]
         | otherwise = do
             plogLines Log.WARN $ map ("\t" ++) (("SOA records in authority section:" :) $ map show soas)
       where
@@ -444,4 +444,4 @@ negativeWitnessActions nullK Delegation{..} qname qtype msg =
 {- FOURMOLU_ENABLE -}
 
 nsecFailed :: String -> DNSQuery a
-nsecFailed s = (clogLn Log.DEMO (Just Red) $ "nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure
+nsecFailed s = clogLn Log.DEMO (Just Red) ("nsec verification failed - " ++ s) *> throwDnsError DNS.ServerFailure

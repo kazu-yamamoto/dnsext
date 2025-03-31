@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module QuerySpec where
 
 import Test.Hspec

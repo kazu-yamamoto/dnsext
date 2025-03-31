@@ -35,13 +35,13 @@ tcpServers :: VcServerConfig -> ServerActions
 tcpServers conf env toCacher ss =
     concat <$> mapM (tcpServer conf env toCacher) ss
 
-tcpServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
+tcpServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO [IO ()]
 tcpServer VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/tcp")
     let tcpserver =
             withLocationIOE name $
                 runTCPServerWithSocket s go
-    return ([tcpserver])
+    return [tcpserver]
   where
     maxSize = fromIntegral vc_query_max_size
     tmicro = vc_idle_timeout * 1_000_000

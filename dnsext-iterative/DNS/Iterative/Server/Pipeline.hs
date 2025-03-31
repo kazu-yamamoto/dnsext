@@ -208,7 +208,7 @@ record env Input{..} reply rspWire = do
     let rc = rcode reply
     incStatsM st fromRcode rc Nothing
     when (rc == NoErr) $
-        if answer reply == []
+        if null (answer reply)
             then incStats st RcodeNoData
             else incStats st RcodeNoError
     when authAnswer   $ incStats st FlagAA
@@ -418,7 +418,7 @@ withVcTimer
 withVcTimer micro actionTO = bracket (initVcTimer micro actionTO) finalizeVcTimer
 
 {- FOURMOLU_DISABLE -}
-initVcSession :: IO (STM VcWaitRead) -> IO (VcSession, (ToSender -> IO ()), IO FromX)
+initVcSession :: IO (STM VcWaitRead) -> IO (VcSession, ToSender -> IO (), IO FromX)
 initVcSession getWaitIn = do
     vcEof       <- newTVarIO False
     vcTimeout   <- newTVarIO False

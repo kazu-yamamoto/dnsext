@@ -186,8 +186,8 @@ consume :: IORef (Maybe InState') -> Int -> IO ByteString
 consume is sz = do
     consume' =<< readIORef is
   where
-    consume'  Nothing                = fail $ "cannot consume. after closed"
-    consume' (Just NoArrived)        = fail $ "cannot consume. no-avail data, blocked"
+    consume'  Nothing                = fail "cannot consume. after closed"
+    consume' (Just NoArrived)        = fail "cannot consume. no-avail data, blocked"
     consume' (Just (EndOfInput ""))  = writeIORef is  Nothing $> ""
     consume' (Just (EndOfInput s0))  = writeIORef is (Just next) $> fromString hd
       where

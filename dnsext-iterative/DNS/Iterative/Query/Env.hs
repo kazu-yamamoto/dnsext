@@ -244,7 +244,7 @@ readTrustAnchors ps = do
         keys = ngroup $ concat ks
         results = merge fst fst nullKEY nullDS cons dss keys
         lefts = ["  skipping, mismatch between DS and SEP, zone = " <> show n : map ("    " ++) e | (n, Left e) <- results]
-    when (not $ null lefts) $ do
+    unless (null lefts) $ do
         putStrLn "trust-anchor: mismatch zone(s) are found"
         mapM_ (putStr . unlines) lefts
     pure $ Map.fromList [(n, r) | (n, Right r) <- results]

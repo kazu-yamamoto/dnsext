@@ -509,7 +509,7 @@ delegationFallbacks_ eh fh qparallel disableV6NS dc dnssecOK ah d0@Delegation{..
         emp d' = list (fh (aa []) >> throwDnsError ServerFailure) (fallbacks (aa . ((tag, []):)) d') runsAxs
         ne d' paxs = list step (\g gs -> step `catchError` \e -> hlog e >> fallbacks (aa . ((tag, paxs'):)) d' g gs) runsAxs
           where
-            step = case [(ah (NE.toList axc) >> norec dnssecOK axc name typ) | axc <- chunksOfNE qparallel paxs] of
+            step = case [ah (NE.toList axc) >> norec dnssecOK axc name typ | axc <- chunksOfNE qparallel paxs] of
                 f:|fs -> (,) <$> catches f fs <*> pure d'
             paxs' = NE.toList paxs
             hlog e = eh' $ unwords $ show e : "for" : map show paxs'
@@ -554,7 +554,7 @@ resolveNS zone disableV6NS dc ns = do
             cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
         cacheAnswerAx typ (msg, d) = do
             cacheAnswer d ns typ msg $> ()
-            pure $ (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
+            pure (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
 
     failEmptyAx rc = do
         let emptyInfo = if disableV6NS then "empty A (disable-v6ns)" else "empty A|AAAA"

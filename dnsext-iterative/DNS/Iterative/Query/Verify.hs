@@ -69,8 +69,8 @@ withResult typ modf rightK xs xRRset cacheX =
     mayVerifiedRRS noverify cd bogus valid (rrsMayVerified xRRset)
   where
     valid _   = verifyLog (Just Green) (modf $ "verification success - RRGIG of " ++ show typ) >> result
-    cd        = verifyLog (Just Yellow) (modf $ "no verification - check-disabled") >> result
-    noverify  = verifyLog (Just Yellow) (modf $ "no verification - no DS or no DNSKEY avail") >> result
+    cd        = verifyLog (Just Yellow) (modf "no verification - check-disabled") >> result
+    noverify  = verifyLog (Just Yellow) (modf "no verification - no DS or no DNSKEY avail") >> result
     result    = cacheX >> rightK xs xRRset cacheX
     bogus _   = bogusError $ modf $ "verification failed - RRSIG of " ++ show typ
 {- FOURMOLU_ENABLE -}
@@ -122,7 +122,7 @@ cases' reqCD zone dnskeys srrs rank rrn rrty h nullK ncK0 rightK0
     | otherwise = canonicalRRset xRRs (ncK xRRs) rightK
   where
     ncK rrs s = ncK0 $ logLines Log.DEMO (("not canonical RRset: " ++ s) : map (("\t" ++) . show) rrs)
-    (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, Just x <- [h rr], rrname rr == rrn]
+    (fromRDs, xRRs) = unzip [(x, rr) | rr <- srrs, rrtype rr == rrty, rrname rr == rrn, Just x <- [h rr]]
     sigs = rrsigList zone rrn rrty srrs
     verifiedK rrset@(RRset dom typ cls minTTL rds sigrds) = rightK0 fromRDs rrset (logInv *> cache)
       where
@@ -252,7 +252,7 @@ limitSortedGroupBy colLimit sortKey = map (takeNE colLimit) . NE.groupBy ((==) `
 {- FOURMOLU_ENABLE -}
 
 takeNE :: Int -> NonEmpty a -> NonEmpty a
-takeNE n (x :| xs) = (x :| take n xs)
+takeNE n (x :| xs) = x :| take n xs
 
 {- FOURMOLU_DISABLE -}
 data Match a b

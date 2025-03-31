@@ -132,7 +132,7 @@ data QueryParam = QueryParam
     }
 
 queryParam :: Question -> QueryControls -> QueryParam
-queryParam q = queryControls' (\fl eh -> queryParamH q fl eh)
+queryParam q = queryControls' $ queryParamH q
 
 queryParamIN :: Domain -> TYPE -> QueryControls -> QueryParam
 queryParamIN dom typ = queryParam (Question dom typ IN)

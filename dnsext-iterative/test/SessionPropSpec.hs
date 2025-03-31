@@ -205,7 +205,7 @@ pseudoPipeline readTaskNum = do
                 stateTVar tasksRef getAct
             toSender
 
-    _ <- replicateM 4 (forkIO inputLoop)
+    replicateM_ 4 (forkIO inputLoop)
     pure (atomically . writeTQueue mq, kickSender)
 
 ------------------------------------------------------------
@@ -275,7 +275,7 @@ checkSessionEvents n evs =
   where
     lastEv = last [ev' | ev <- evs, ev' <- recvEv ev]
     recvEv ev@(EvRecv {})  = [ev]
-    recvEv ev@(EvEof)      = [ev]
+    recvEv ev@EvEof        = [ev]
     recvEv     _           = []
 {- FOURMOLU_ENABLE -}
 

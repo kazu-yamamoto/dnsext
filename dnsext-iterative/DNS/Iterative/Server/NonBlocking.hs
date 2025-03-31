@@ -30,7 +30,7 @@ type BS = ByteString
 type Buffer = [ByteString] -> [ByteString]
 
 {-# WARNING makeNBRecvVCNoSize "should not recv data not received by app for right socket readable state" #-}
-makeNBRecvVCNoSize :: VCLimit -> (IO BS) -> IO (IO NBRecvR)
+makeNBRecvVCNoSize :: VCLimit -> IO BS -> IO (IO NBRecvR)
 makeNBRecvVCNoSize lim rcv = makeNBRecvVC lim $ \_ -> rcv
 
 makeNBRecvVC :: VCLimit -> (Int -> IO BS) -> IO (IO NBRecvR)

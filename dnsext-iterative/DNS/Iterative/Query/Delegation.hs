@@ -133,7 +133,7 @@ delegationWithCache zone dnskeys dom msg = do
 
 {- FOURMOLU_DISABLE -}
 fillCachedDelegation :: Delegation -> DNSQuery Delegation
-fillCachedDelegation d = list noAvail result =<< concat <$> mapM fill des
+fillCachedDelegation d = list noAvail result . concat =<< mapM fill des
   where
     des = delegationNS d
     fill (DEonlyNS ns) = lookupDEntry (delegationZone d) ns

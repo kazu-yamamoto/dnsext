@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-
 module DNS.Iterative.Query.Local where
 
 -- dnsext packages

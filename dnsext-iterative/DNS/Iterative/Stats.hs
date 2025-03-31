@@ -365,7 +365,7 @@ newStats = do
     n <- getNumCapabilities
     Stats . listArray (0, n - 1) <$> new n
   where
-    new n = sequence $ replicate n $ newArray (StatsIxMin, StatsIxMax) 0
+    new n = replicateM n $ newArray (StatsIxMin, StatsIxMax) 0
 
 modifyStats :: (Int -> Int) -> Stats -> StatsIx -> IO ()
 modifyStats modify (Stats stats) ix = do

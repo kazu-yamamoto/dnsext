@@ -37,7 +37,7 @@ http2Servers :: VcServerConfig -> ServerActions
 http2Servers conf env toCacher ss =
     concat <$> mapM (http2Server conf env toCacher) ss
 
-http2Server :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
+http2Server :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO [IO ()]
 http2Server VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/h2")
     let http2server = withLocationIOE name $ H2TLS.runIO settings vc_credentials s $ doHTTP "h2" sbracket incQuery env toCacher
@@ -57,7 +57,7 @@ http2cServers :: VcServerConfig -> ServerActions
 http2cServers conf env toCacher ss =
     concat <$> mapM (http2cServer conf env toCacher) ss
 
-http2cServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO ([IO ()])
+http2cServer :: VcServerConfig -> Env -> (ToCacher -> IO ()) -> Socket -> IO [IO ()]
 http2cServer VcServerConfig{..} env toCacher s = do
     name <- socketName s <&> (++ "/h2c")
     let http2server = withLocationIOE name $ H2TLS.runIOH2C settings s $ doHTTP "h2c" sbracket incQuery env toCacher

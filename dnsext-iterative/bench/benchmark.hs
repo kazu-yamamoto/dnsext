@@ -160,7 +160,7 @@ runBenchmark conf@Config{..} noop gplot size = do
     env <- getEnv conf putLines
 
     (workers, enqueueReq, dequeueResp) <- benchServer pipelines env noop
-    _ <- forkIO $ foldr concurrently_ (return ()) $ workers
+    _ <- forkIO $ foldr concurrently_ (return ()) workers
 
     let (initD, ds) = splitAt 4 $ take (4 + size) benchQueries
     ds `deepseq` return ()
