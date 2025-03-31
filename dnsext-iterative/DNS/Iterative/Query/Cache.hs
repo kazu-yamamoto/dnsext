@@ -90,7 +90,7 @@ handleHits1 = Cache.hitCases1
 -- | lookup RRs without sigs. empty RR list result for negative case.
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT c env
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p2.example.com." A IN 7200 $ rd_a "10.0.0.3"] Cache.RankAnswer *> lookupRR "p2.example.com." A
 -- >>> fmap (map rdata . fst) <$> runCxt pos1
 -- Just [10.0.0.3]
@@ -127,7 +127,7 @@ lookupErrorRCODE dom = lookupWithHandler h ((": " ++) . show . snd) "" dom Cache
 -- Just [_, ..]  -- Valid RRset
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT c env
 -- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
 -- >>> dsigs = [RD_RRSIG A RSASHA256 3 1800 "20240601090000" "20250101090000" 0xBEEF "example.com." ""] -- dummy RRSIG
 -- >>> cacheHit dom typ cls ttl hit = do {ins <- asks insert_; liftIO $ ins (Question dom typ cls) ttl hit RankAnswer}
@@ -167,7 +167,7 @@ foldLookupResult negative nsoa positive lkre = case lkre of
 -- | when cache has EMPTY result, lookup SOA data for top domain of this zone
 --
 -- >>> env <- _newTestEnv
--- >>> runCxt c = runReaderT (runReaderT c env) $ queryParamIN "pqr.example.com." A mempty
+-- >>> runCxt c = runReaderT c env
 -- >>> ards = [rd_a "10.0.0.3", rd_a "10.0.0.4"]
 -- >>> pos1 = cacheNoRRSIG [ResourceRecord "p0.example.com." A IN 7200 rd | rd <- ards] Cache.RankAnswer *> lookupRRsetEither "test" "p0.example.com." A
 -- >>> fmap (foldLookupResult (\_ _ _ -> "neg-soa") (\_ -> "neg-no-soa") (show . rrsRDatas) . fst) <$> runCxt pos1
