@@ -370,7 +370,7 @@ modifyQuery
     -- ^ Flag and EDNS overrides
     -> DNSMessage
     -> DNSMessage
-modifyQuery ctls query = queryControls (\mf eh -> query{ flags = mf (flags query), ednsHeader = eh}) ctls
+modifyQuery ctls query = queryControls (\mf eh -> query{flags = mf (flags query), ednsHeader = eh}) ctls
 
 queryControls
     :: ((DNSFlags -> DNSFlags) -> EDNSheader -> a)

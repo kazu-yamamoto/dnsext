@@ -190,10 +190,10 @@ replyDNSMessage reqEH nsid ident rqs rcode flags rrs auth =
 {- FOURMOLU_ENABLE -}
 
 addNSID :: EDNSheader -> Maybe OD_NSID -> DNSMessage -> DNSMessage
-addNSID reqEH mnsid resM@DNSMessage{ednsHeader=eh} = ednsHeaderCases h resM resM reqEH
+addNSID reqEH mnsid resM@DNSMessage{ednsHeader = eh} = ednsHeaderCases h resM resM reqEH
   where
     h edns = maybe resM (add edns) mnsid
-    add EDNS{..} nsid = resM{ednsHeader = addODataEDNS (mapOData (\(OD_NSID {}) -> OData nsid) ednsOptions) eh}
+    add EDNS{..} nsid = resM{ednsHeader = addODataEDNS (mapOData (\(OD_NSID{}) -> OData nsid) ednsOptions) eh}
 
 filterWithDO :: RequestDO -> ([RR] -> [RR] -> a) -> ([RR] -> [RR] -> a)
 filterWithDO reqDO k2 ans auth =

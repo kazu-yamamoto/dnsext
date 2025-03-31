@@ -8,8 +8,8 @@ module Config (
     showConfig,
 ) where
 
-import Control.Monad.Trans.State (StateT (..), evalStateT)
 import Control.Applicative
+import Control.Monad.Trans.State (StateT (..), evalStateT)
 import qualified Data.ByteString.Base16 as B16
 import Data.Char (toUpper)
 import Data.Functor
@@ -19,11 +19,11 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
-import Text.Parsec hiding ((<|>), many)
+import Text.Parsec hiding (many, (<|>))
 import Text.Parsec.ByteString.Lazy
 
-import qualified DNS.Log as Log
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
+import qualified DNS.Log as Log
 import DNS.Types (Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
 import qualified DNS.Types.Opaque as Opaque
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)

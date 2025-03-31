@@ -59,8 +59,8 @@ run ruid readConfig = do
     tcache <- newTimeCache
     conf <- readConfig
     (ri, nkSuccess, nkFailure, kSuccess, kFailure) <- newReloadInfo $ Server.getTime tcache
-    let rsuccess = \rc -> case rc of { Reload -> nkSuccess; KeepCache -> kSuccess }
-        rfailure = \rc -> case rc of { Reload -> nkFailure; KeepCache -> kFailure }
+    let rsuccess = \rc -> case rc of Reload -> nkSuccess; KeepCache -> kSuccess
+        rfailure = \rc -> case rc of Reload -> nkFailure; KeepCache -> kFailure
     go tcache Nothing ri (\m -> m{reloadSuccess = rsuccess, reloadFailure = rfailure}) conf
   where
     go tcache mcache ri um conf = do

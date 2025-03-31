@@ -141,7 +141,7 @@ queryParamH :: Question -> DNSFlags -> EDNSheader -> QueryParam
 queryParamH q flags_ eh = QueryParam q (toRequestDO eh) (toRequestCD flags_) (toRequestAD flags_)
 
 queryControls' :: (DNSFlags -> EDNSheader -> a) -> QueryControls -> a
-queryControls' h =  queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)
+queryControls' h = queryControls (\mf eh -> h (mf defaultQueryDNSFlags) eh)
 
 {- Datatypes for request flags to pass iterative query.
   * DO (DNSSEC OK) must be 1 for DNSSEC available resolver

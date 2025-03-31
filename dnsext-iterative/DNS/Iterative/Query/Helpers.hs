@@ -183,7 +183,7 @@ addODataEDNS ods = ednsHeaderCases
 {- FOURMOLU_ENABLE -}
 
 mapOData :: OptData a => (a -> OData) -> [OData] -> [OData]
-mapOData f xs =  [f od | x <- xs, Just od <- [fromOData x]]
+mapOData f xs = [f od | x <- xs, Just od <- [fromOData x]]
 
 ---
 
