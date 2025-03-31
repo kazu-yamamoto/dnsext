@@ -52,7 +52,7 @@ foldResponseIterative'
 foldResponseIterative' deny reply env@Env{..} ident qs q =
     queryControls' $ \fl eh -> foldResponse' "resp-queried'" deny reply env ident qs q fl eh (resolveStub reply nsid_ ident qs eh)
 
-resolveStub :: (VResult -> DNSMessage -> a) -> Maybe OD_NSID -> Identifier -> [Question] -> EDNSheader -> DNSQuery a
+resolveStub :: MonadQuery m => (VResult -> DNSMessage -> a) -> Maybe OD_NSID -> Identifier -> [Question] -> EDNSheader -> m a
 resolveStub reply nsid ident qs eh = do
     ((cnrrs, _rn), etm) <- resolve =<< asksQP origQuestion_
     reqDO <- asksQP requestDO_
@@ -110,13 +110,13 @@ foldResponse' name deny reply env@Env{..} ident qs q@(Question bn typ cls) reqF 
 -----
 
 {- FOURMOLU_DISABLE -}
-logQueryErrors :: String -> DNSQuery a -> DNSQuery a
+logQueryErrors :: MonadQuery m => String -> m a -> m a
 logQueryErrors prefix q = do
-      handleQueryError left return q
+      q `catchQuery` left
     where
       left qe = do
           logQueryError qe
-          throwError qe
+          throwQuery qe
       logQueryError qe = case qe of
           DnsError de ss           -> logDnsError de ss
           ExtraError ee addrs msg  -> extraError logNotResponse logInvalidEDNS logRcodeError logBogus ee addrs msg
