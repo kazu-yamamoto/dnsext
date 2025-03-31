@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
 
 module DNS.DoX.Client (
     -- * SVCB information
@@ -99,7 +98,7 @@ lookupSVCBInfo lenv@LookupEnv{..} = do
         Left err -> return $ Left err
         Right res -> do
             let ss = extractSVCB res
-                ri = NE.head $ renvResolveInfos $ lenvResolveEnv
+                ri = NE.head $ renvResolveInfos lenvResolveEnv
                 addss = svcbResolveInfos ri ss
             logIt lenv ss
             return $ Right addss
