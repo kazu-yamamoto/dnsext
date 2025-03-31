@@ -128,7 +128,7 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
             Just rply -> do
                 let mqctl = analyzeReply rply qctl0
                 case mqctl of
-                    Nothing -> return $ Right $ rply
+                    Nothing -> return $ Right rply
                     Just qctl -> loop cnt ident qctl send recv
 
     sendQueryRecvAnswer ident qctl send recv = do
@@ -156,7 +156,9 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
                     return $ Reply tag msg tx rx
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
-                    ractionLog Log.DEBUG Nothing $
+                    ractionLog
+                        Log.DEBUG
+                        Nothing
                         ["udpResolver.recvAnswer: checkResp error: ", show rinfoIP, ", ", show msg]
                     recvAnswer ident recv tx
 

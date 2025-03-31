@@ -269,7 +269,7 @@ findAddrPorts (SeedsAddrPort  nh p) = return [(nh, p)]
 findAddrPorts (SeedsAddrs     nss)  = return $ map (,dnsPort) nss
 findAddrPorts (SeedsAddrPorts nhps) = return nhps
 findAddrPorts (SeedsFilePath file)  =
-    catMaybes . map safeAP <$> getDefaultDnsServers file
+    mapMaybe safeAP <$> getDefaultDnsServers file
   where
     safeAP h = case readMaybe h of
       Nothing -> Nothing
