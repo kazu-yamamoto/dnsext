@@ -134,7 +134,7 @@ step_unsignedDelegation =
     n3StepNonExistence $ \nextCloser@(Covers ((_, nextN3), _)) closest -> do
         let unsignedDelegation
                 | OptOut `elem` nsec3_flags nextN3 = Right $ n3_unsignedDelegation closest nextCloser
-                | otherwise = Left $ "NSEC3.UnsignedDelegation: No OptOut flag. Not NameErr, wildcard is not matched or covered."
+                | otherwise = Left "NSEC3.UnsignedDelegation: No OptOut flag. Not NameErr, wildcard is not matched or covered."
         pure unsignedDelegation
 
 step_wildcardNoData :: TYPE -> (Domain -> [RangeProp]) -> RangeProps -> Maybe (Either String NSEC3_WildcardNoData)

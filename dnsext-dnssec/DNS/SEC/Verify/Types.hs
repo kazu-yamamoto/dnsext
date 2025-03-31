@@ -48,7 +48,7 @@ data NSEC3_NameError =
     } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.1 -}
     deriving Show
 
-data NSEC3_NoData =
+newtype NSEC3_NoData =
     NSEC3_NoData
     { nsec3_noData_closest_match :: NSEC3_Witness
     } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.2
@@ -62,7 +62,7 @@ data NSEC3_UnsignedDelegation =
     } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.3 -}
     deriving Show
 
-data NSEC3_WildcardExpansion =
+newtype NSEC3_WildcardExpansion =
     NSEC3_WildcardExpansion
     { nsec3_wildcardExpansion_next_closer_cover :: NSEC3_Witness
     } {- https://datatracker.ietf.org/doc/html/rfc5155#appendix-B.4 -}
@@ -99,19 +99,19 @@ data NSEC_NameError =
     } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.2 -}
     deriving Show
 
-data NSEC_NoData =
+newtype NSEC_NoData =
     NSEC_NoData
     { nsec_noData_qname_match :: NSEC_Witness
     } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.3 -}
     deriving Show
 
-data NSEC_UnsignedDelegation =
+newtype NSEC_UnsignedDelegation =
     NSEC_UnsignedDelegation
     { nsec_unsignedDelegation_ns_qname_cover :: NSEC_Witness
     } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.5 -}
     deriving Show
 
-data NSEC_WildcardExpansion =
+newtype NSEC_WildcardExpansion =
     NSEC_WildcardExpansion
     { nsec_wildcardExpansion_qname_cover :: NSEC_Witness
     } {- https://datatracker.ietf.org/doc/html/rfc4035#appendix-B.6 -}

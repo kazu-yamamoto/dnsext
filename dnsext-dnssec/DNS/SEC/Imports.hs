@@ -43,7 +43,7 @@ import DNS.Types.Time (EpochTime)
 unconsLabels :: Domain -> a -> (Label -> Domain -> a) -> a
 unconsLabels d nothing just = case unconsDomain d of
     Nothing -> nothing
-    Just (x, xs) -> just x $ xs
+    Just (x, xs) -> just x xs
 
 {- FOURMOLU_DISABLE -}
 numLabels :: Domain -> Int

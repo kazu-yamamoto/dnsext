@@ -65,12 +65,12 @@ mkRData typ =
         rd_nsec3 (toHashAlg alg) flgs iter salt hash <$> genNsecTypes
     genNsecTypes = do
         ntypes <- elements [0 .. 15]
-        types <- sequence $ replicate ntypes $ toTYPE <$> elements [1 .. 1024]
+        types <- replicateM ntypes $ toTYPE <$> elements [1 .. 1024]
         return $
             [ the t
             | t <- types
             , then group by
-                (fromTYPE t)
+                fromTYPE t
               using
                 groupWith
             ]

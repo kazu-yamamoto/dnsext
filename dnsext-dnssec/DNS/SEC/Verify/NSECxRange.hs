@@ -98,7 +98,7 @@ uniqueSorted_ lower upper ranges = case reverse ranges of
             | otherwise = us
         (u, us) = splitAt 1 ranges
         overlaps = [(upper r > lower n, (r, n)) | (r, n) <- zip ranges nexts]
-        overlap = or $ map fst overlaps
+        overlap = any fst overlaps
         overlapped = map snd $ filter fst overlaps
   where
     order r = lower r < upper r

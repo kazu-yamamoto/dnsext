@@ -142,7 +142,7 @@ verifyRRSIGwith RRSIGImpl{..} now RD_DNSKEY{..} rrsig@RD_RRSIG{..} rrset_name rr
            "If bit 7 has value 0, then the DNSKEY record holds some other type of DNS public key
             and MUST NOT be used to verify RRSIGs that cover RRsets." -}
         Left "verifyRRSIGwith: ZONE flag is not set for DNSKEY flags"
-    unless (REVOKE `notElem` dnskey_flags) $
+    when (REVOKE `elem` dnskey_flags) $
         {- https://datatracker.ietf.org/doc/html/rfc5011#section-2.1
          "Once the resolver sees the REVOKE bit, it MUST NOT use this key as a trust anchor or for any other purpose except
           to validate the RRSIG it signed over the DNSKEY RRSet specifically for the purpose of validating the revocation." -}
