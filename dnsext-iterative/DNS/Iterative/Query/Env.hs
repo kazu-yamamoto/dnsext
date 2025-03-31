@@ -71,6 +71,7 @@ import qualified DNS.ZoneFile as Zone
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.DefaultLocal (defaultLocal)
 import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers

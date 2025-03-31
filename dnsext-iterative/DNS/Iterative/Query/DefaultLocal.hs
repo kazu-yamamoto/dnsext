@@ -18,6 +18,7 @@ import qualified Data.IP as IP
 
 -- this package
 import DNS.Iterative.Imports
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Types
 
 {- FOURMOLU_DISABLE -}

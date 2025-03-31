@@ -1,5 +1,6 @@
 module DNS.Iterative.Internal (
     -- * types
+    module DNS.Iterative.Query.Class,
     module DNS.Iterative.Query.Types,
     module DNS.Iterative.Query.Env,
     module DNS.Iterative.Query.API,
@@ -21,6 +22,7 @@ module DNS.Iterative.Internal (
 ) where
 
 import DNS.Iterative.Query.API
+import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Env
 import DNS.Iterative.Query.Helpers
 import DNS.Iterative.Query.Resolve
