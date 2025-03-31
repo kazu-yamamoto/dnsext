@@ -55,7 +55,6 @@ import System.Console.ANSI.Types
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 
 -- $setup

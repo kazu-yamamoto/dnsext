@@ -38,6 +38,11 @@ module DNS.Iterative.Query.Class (
     ExtraError (..),
     extraError,
     QueryError (..),
+    --
+    RR,
+    Result,
+    ResultRRS',
+    ResultRRS,
 ) where
 
 -- GHC packages
@@ -338,3 +343,13 @@ data QueryError
     = DnsError DNSError [String]
     | ExtraError ExtraError [Address] (Maybe DNSMessage)
     deriving (Show)
+
+----------
+-- synonyms
+
+type RR = ResourceRecord
+
+{- response code, answer section, authority section -}
+type Result = (RCODE, DNSFlags, [RR], [RR])
+type ResultRRS' a = (a, [RRset], [RRset])
+type ResultRRS = ResultRRS' RCODE

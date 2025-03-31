@@ -77,7 +77,6 @@ import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
-import DNS.Iterative.Query.Types
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)

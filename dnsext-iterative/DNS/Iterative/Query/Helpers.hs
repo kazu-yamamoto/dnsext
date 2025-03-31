@@ -19,7 +19,6 @@ import Data.IP (IP (IPv4, IPv6), IPv4, IPv6)
 import DNS.Iterative.Imports
 import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Random
-import DNS.Iterative.Query.Types
 import DNS.Iterative.RootServers (rootServers)
 
 -- $setup

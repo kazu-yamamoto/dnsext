@@ -45,7 +45,6 @@ import System.Console.ANSI.Types
 import DNS.Iterative.Imports hiding (insert)
 import DNS.Iterative.Query.Class
 import DNS.Iterative.Query.Helpers
-import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.Query.WitnessInfo

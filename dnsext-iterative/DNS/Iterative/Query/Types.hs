@@ -2,11 +2,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module DNS.Iterative.Query.Types (
-    RR,
     VResult (..),
-    Result,
-    ResultRRS',
-    ResultRRS,
     queryParam,
     queryParamIN,
     queryControls',
@@ -100,11 +96,6 @@ chainedStateDS d = case delegationDS d of
 {- FOURMOLU_ENABLE -}
 
 ----------
--- alias
-
-type RR = ResourceRecord
-
-----------
 -- results
 
 -- result tag from DNSSEC verification
@@ -113,10 +104,3 @@ data VResult
     | VR_Insecure
     | VR_Bogus
     deriving (Show)
-
----
-
-{- response code, answer section, authority section -}
-type Result = (RCODE, DNSFlags, [RR], [RR])
-type ResultRRS' a = (a, [RRset], [RRset])
-type ResultRRS = ResultRRS' RCODE
