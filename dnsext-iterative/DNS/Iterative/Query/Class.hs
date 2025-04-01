@@ -72,6 +72,7 @@ class MonadIO m => MonadEnv m where
 
 class MonadEnv m => MonadQuery m where
     asksQP :: (QueryParam -> a) -> m a
+    localQP :: (QueryParam -> QueryParam) -> m a -> m a
     asksQS :: (QueryState -> a) -> m a
     throwQuery :: QueryError -> m a
     catchQuery :: m a -> (QueryError -> m a) -> m a

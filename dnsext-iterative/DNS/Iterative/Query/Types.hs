@@ -52,6 +52,8 @@ instance MonadIO m => MonadEnv (QueryT m) where
 instance MonadIO m => MonadQuery (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
+    localQP f = mapExceptT $ mapReaderT $ local f
+    {-# INLINEABLE localQP #-}
     asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
     throwQuery = throwE
