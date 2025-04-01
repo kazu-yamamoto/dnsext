@@ -9,6 +9,7 @@ module Config (
 ) where
 
 import Control.Applicative
+import qualified Control.Exception as E
 import Control.Monad.Trans.State (StateT (..), evalStateT)
 import qualified Data.ByteString.Base16 as B16
 import Data.Char (toUpper)
@@ -24,7 +25,7 @@ import Text.Parsec.ByteString.Lazy
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import qualified DNS.Log as Log
-import DNS.Types (Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
+import DNS.Types (DNSError, Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
 import qualified DNS.Types.Opaque as Opaque
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
 
@@ -236,7 +237,7 @@ makeConfig def conf = do
     cnf_version_option <- get "version-option" cnf_version_option
     cnf_local_zones <- localZones
     cnf_stub_zones <- stubZones
-    cnf_domain_insecures <- pure []
+    cnf_domain_insecures <- domainInsecures
     cnf_dns_addrs <- get "dns-addrs" cnf_dns_addrs
     cnf_nsid <- get "nsid" cnf_nsid
     cnf_resolve_timeout <- get "resolve-timeout" cnf_resolve_timeout
@@ -287,6 +288,8 @@ makeConfig def conf = do
     getRR s = StateT $ parseLineRR $ fromString s
     --
     stubZones = unfoldrM getStubZone conf
+    --
+    domainInsecures = unfoldrM getDomainInsecure conf
 {- FOURMOLU_ENABLE -}
 
 -- $setup
@@ -366,6 +369,20 @@ getStubContent ds as xss@((k, v):xs)
     read' e s = case [ x | (x, "") <- reads s ] of
         []   -> fail e
         x:_  -> pure x
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getDomainInsecure :: [Conf] -> IO (Maybe (Domain, [Conf]))
+getDomainInsecure  []         = pure Nothing
+getDomainInsecure ((k, v):xs)
+    | k == "domain-insecure"  = do
+          vstr <- fromConf v
+          either (left vstr) right =<< E.try (E.evaluate $ fromString vstr)
+    | otherwise = getDomainInsecure xs
+  where
+    left :: String -> DNSError -> IO a
+    left vstr e = fail ("domain-insecure: " ++ show e ++ ": " ++ vstr)
+    right d = pure $ Just (d, xs)
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
