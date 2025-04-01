@@ -36,20 +36,15 @@ runResolve
     -> IO (Either QueryError (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage)))
 runResolve cxt q qctl = runDNSQuery (resolve q) cxt $ queryParam q qctl
 
-{- FOURMOLU_DISABLE -}
 resolveByCache :: MonadQuery m => Question -> m (([RRset], Domain), Maybe ResultRRS)
-resolveByCache =
-    resolveLogic
-        "cache" Just (const Nothing)
-        (failWithCacheOrigName Cache.RankAnswer ServerFailure) (\_ -> pure ((), [], [])) (\_ _ -> pure $ Right ((), [], []))
-{- FOURMOLU_ENABLE -}
+resolveByCache = resolveLogic "cache" Just (const Nothing) (\_ -> pure ((), [], [])) (\_ _ -> pure $ Right ((), [], []))
 
 {- 反復検索を使って最終的な権威サーバーからの DNSMessage を得る.
    目的の TYPE の RankAnswer 以上のキャッシュ読み出しが得られた場合はそれが結果となる.
    目的の TYPE が CNAME 以外の場合、結果が CNAME なら繰り返し解決する. その際に CNAME レコードのキャッシュ書き込みを行なう.
    目的の TYPE の結果レコードをキャッシュする. -}
 resolve :: MonadQuery m => Question -> m (([RRset], Domain), Either ResultRRS (ResultRRS' DNSMessage))
-resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswer ServerFailure) resolveCNAME resolveTYPE
+resolve = resolveLogic "query" Left Right resolveCNAME resolveTYPE
 
 {- FOURMOLU_DISABLE -}
 {- |
@@ -57,15 +52,14 @@ resolve = resolveLogic "query" Left Right (failWithCacheOrigName Cache.RankAnswe
    * left   :: ResultRRS -> b       - cached result
    * right  :: ResultRRS' a -> b    - queried result like (ResultRRS' DNSMessage)   -}
 resolveLogic
-    :: MonadQP m
+    :: MonadQuery m
     => String
     -> (ResultRRS -> b) -> (ResultRRS' a -> b)
-    -> m (([RRset], Domain), b)
     -> (Domain -> m (ResultRRS' a))
     -> (Domain -> TYPE -> m (Either (Domain, RRset) (ResultRRS' a)))
     -> Question
     -> m (([RRset], Domain), b)
-resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Question n0 typ cls) =
+resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
     called >> notLocal
   where
     notLocal
@@ -104,7 +98,7 @@ resolveLogic logMark left right cnameLimitResult cnameHandler typeHandler (Quest
     recCNAMEs cc bn dcnRRsets
         | cc > mcc = do
             logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
-            cnameLimitResult
+            failWithCacheOrigName Cache.RankAnswer ServerFailure
         | otherwise = do
             let traceCNAME cn = logLn_ Log.DEMO ("cname: " ++ show bn ++ " -> " ++ show cn)
                 recCNAMEs_ (cn, cnRRset) = traceCNAME cn *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))

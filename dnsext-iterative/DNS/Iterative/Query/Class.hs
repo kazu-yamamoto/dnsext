@@ -1,7 +1,6 @@
 
 module DNS.Iterative.Query.Class (
     MonadEnv (..),
-    MonadQP (..),
     MonadQuery (..),
     setQS,
     getQS,
@@ -72,10 +71,8 @@ import DNS.Iterative.Stats (Stats)
 class MonadIO m => MonadEnv m where
     asksEnv :: (Env -> a) -> m a
 
-class MonadEnv m => MonadQP m where
+class MonadEnv m  => MonadQuery m where
     asksQP :: (QueryParam -> a) -> m a
-
-class MonadQP m  => MonadQuery m where
     asksQS :: (QueryState -> a) -> m a
     throwQuery :: QueryError -> m a
     catchQuery :: m a -> (QueryError -> m a) -> m a

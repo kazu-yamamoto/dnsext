@@ -112,7 +112,7 @@ resolveExactDC dc n typ
         failWithCacheOrigName Cache.RankAnswer DNS.ServerFailure
     | otherwise = do
         anchor <- getAnchor
-        (mmsg, nss) <- iterative_ dc anchor $ DNS.superDomains' (delegationZone anchor) n
+        (mmsg, nss) <- iterative dc anchor $ DNS.superDomains' (delegationZone anchor) n
         let reuseMsg msg
                 | typ == requestDelegationTYPE  = do
                       logLn Log.DEMO $ unwords ["resolve-exact: skip exact query", show n, show typ, "for last no-delegation"]
@@ -142,31 +142,29 @@ runIterative
     -> Domain
     -> QueryControls
     -> IO (Either QueryError Delegation)
-runIterative cxt sa n cd = runDNSQuery (snd <$> iterative sa n) cxt $ queryParamIN n A cd
+runIterative cxt sa n cd = runDNSQuery (snd <$> iterative 0 sa (DNS.superDomains n)) cxt $ queryParamIN n A cd
 
+{- FOURMOLU_DISABLE -}
 -- | 反復検索
 -- 繰り返し委任情報をたどって目的の答えを知るはずの権威サーバー群を見つける
 --
--- >>> testIterative dom = do { root <- refreshRoot; iterative root dom }
+-- >>> testIterative dom = do { root <- refreshRoot; iterative 0 root (DNS.superDomains dom) }
 -- >>> env <- _newTestEnv _findConsumed
 -- >>> runDNSQuery (testIterative "mew.org.") env (queryParamIN "mew.org." A mempty) $> ()  {- fill-action is not called -}
 --
 -- >>> runDNSQuery (testIterative "arpa.") env (queryParamIN "arpa." NS mempty) $> ()  {- fill-action is called for `ServsChildZone` -}
 -- consume message found
-iterative :: MonadQuery m => Delegation -> Domain -> m (Maybe DNSMessage, Delegation)
-iterative sa n = iterative_ 0 sa $ DNS.superDomains n
-
-{- FOURMOLU_DISABLE -}
+--
 -- fst: last response message for not delegated last domain
 -- snd: delegation for last domain
-iterative_ :: MonadQuery m => Int -> Delegation -> [Domain] -> m (Maybe DNSMessage, Delegation)
-iterative_ _  nss0  []       = pure (Nothing, nss0)
-iterative_ dc nss0 (x : xs)  = do
+iterative :: MonadQuery m => Int -> Delegation -> [Domain] -> m (Maybe DNSMessage, Delegation)
+iterative _  nss0  []       = pure (Nothing, nss0)
+iterative dc nss0 (x : xs)  = do
     checkEnabled <- getCheckEnabled
     {- If NS is not returned, the information of the same NS is used for the child domain. or.jp and ad.jp are examples of this case. -}
     recurse . fmap (mayDelegation nss0 id) =<< step checkEnabled nss0
   where
-    recurse (m, nss) = list1 (pure (m, nss)) (iterative_ dc nss) xs
+    recurse (m, nss) = list1 (pure (m, nss)) (iterative dc nss) xs
     --                                       {- sub-level delegation. increase dc only not sub-level case. -}
     name = x
 
@@ -280,7 +278,7 @@ fillsDNSSEC' NoCheckDisabled  dc  nss d = do
     return filled
 {- FOURMOLU_ENABLE -}
 
-getCheckEnabled :: MonadQP m => m Bool
+getCheckEnabled :: MonadQuery m => m Bool
 getCheckEnabled = noCD <$> asksQP requestCD_
   where
     noCD NoCheckDisabled = True
