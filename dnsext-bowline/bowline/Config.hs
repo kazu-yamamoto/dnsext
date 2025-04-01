@@ -53,6 +53,7 @@ data Config = Config
     , cnf_version_option :: [String]
     , cnf_local_zones :: [(Domain, LocalZoneType, [ResourceRecord])]
     , cnf_stub_zones :: [(Domain, [Domain], [Address])]
+    , cnf_domain_insecures :: [Domain]
     , cnf_nsid :: Maybe OD_NSID
     , cnf_dns_addrs :: [String]
     , cnf_resolve_timeout :: Int
@@ -119,6 +120,7 @@ defaultConfig =
         , cnf_version_option = []
         , cnf_local_zones = []
         , cnf_stub_zones = []
+        , cnf_domain_insecures = []
         , cnf_nsid = Nothing
         , cnf_dns_addrs = ["127.0.0.1", "::1"]
         , cnf_resolve_timeout = 10000000
@@ -234,6 +236,7 @@ makeConfig def conf = do
     cnf_version_option <- get "version-option" cnf_version_option
     cnf_local_zones <- localZones
     cnf_stub_zones <- stubZones
+    cnf_domain_insecures <- pure []
     cnf_dns_addrs <- get "dns-addrs" cnf_dns_addrs
     cnf_nsid <- get "nsid" cnf_nsid
     cnf_resolve_timeout <- get "resolve-timeout" cnf_resolve_timeout
