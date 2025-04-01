@@ -105,6 +105,7 @@ newEmptyEnv = do
         , chaosZones_ = mempty
         , localZones_ = mempty
         , stubZones_ = mempty
+        , negativeTrustAnchors_ = mempty
         , maxNegativeTTL_ = 3600
         , failureRcodeTTL_ = 180
         , insert_ = \_ _ _ _ -> pure ()
