@@ -552,7 +552,8 @@ resolveNS zone disableV6NS dc ns = do
         querySection typ = do
             logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
             {- resolve for not sub-level delegation. increase dc (delegation count) -}
-            cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
+            let modifyQP qp = qp{requestCD_ = NoCheckDisabled}  {- do DNSSEC checks for recursive iterative context -}
+            localQP modifyQP $ cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
         cacheAnswerAx typ (msg, d) = do
             cacheAnswer d ns typ msg $> ()
             pure (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
