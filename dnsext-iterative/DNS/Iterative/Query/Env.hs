@@ -24,6 +24,7 @@ module DNS.Iterative.Query.Env (
     getChaosZones,
     getLocalZones,
     getStubZones,
+    getNegTrustAnchors,
     --
     LocalZoneType (..),
     RR,
@@ -77,6 +78,7 @@ import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
+import qualified DNS.Iterative.Query.ZoneMap as ZMap
 import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.RootServers (getRootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
@@ -326,3 +328,8 @@ getStubZones zones anchors = either fail pure $ Stub.getStubMap zones'
   where
     zones' = [ (apex, ns, as, dstate) | (apex, ns, as) <- zones, let dstate = fromMaybe (FilledDS []) $ Map.lookup apex anchors ]
 {- FOURMOLU_ENABLE -}
+
+---
+
+getNegTrustAnchors :: [Domain] -> NegTrustAnchors
+getNegTrustAnchors xs = Map.fromList $ ZMap.subdomainSemilatticeOn id xs
