@@ -116,6 +116,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                         , chaosZones_ = chaosZones
                         , localZones_ = getLocalZones cnf_local_zones
                         , stubZones_ = stubZones
+                        , negativeTrustAnchors_ = getNegTrustAnchors cnf_domain_insecures
                         , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
                         , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
                         , reloadInfo_ = reloadInfo
