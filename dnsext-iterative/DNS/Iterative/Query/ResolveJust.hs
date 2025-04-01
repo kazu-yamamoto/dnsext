@@ -227,10 +227,10 @@ servsChildZone dc nss dom msg =
   where
     handleSOA fallback = withSection rankedAuthority msg $ \srrs rank -> do
         let soaRRs = rrListWith SOA soaRD dom (\_ rr -> rr) srrs
-        reqQC <- asksQP requestCD_
+        reqCD <- asksQP requestCD_
         case soaRRs of
             [] -> fallback
-            [_] -> getWorkaround "SOA" >>= verifySOA reqQC
+            [_] -> getWorkaround "SOA" >>= verifySOA reqCD
             _ : _ : _ -> multipleSOA rank soaRRs
       where
         soaRD rd = DNS.fromRData rd :: Maybe DNS.RD_SOA
@@ -238,9 +238,9 @@ servsChildZone dc nss dom msg =
             logLn Log.WARN $ "servs-child: " ++ show dom ++ ": multiple SOAs are found:"
             logLn Log.DEMO $ show dom ++ ": multiple SOA: " ++ show soaRRs
             failWithCache dom Cache.ERR IN rank DNS.ServerFailure {- wrong child-zone  -}
-        verifySOA reqQC wd
+        verifySOA reqCD wd
             | null dnskeys = pure $ hasDelegation wd
-            | otherwise = Verify.cases reqQC dom dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA withSOA
+            | otherwise = Verify.cases reqCD dom dnskeys rankedAuthority msg dom SOA (soaRD . rdata) nullSOA ncSOA withSOA
           where
             dnskeys = delegationDNSKEY wd
             nullSOA = pure noDelegation {- guarded by soaRRs [] case -}
