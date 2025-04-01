@@ -49,11 +49,9 @@ instance MonadIO m => MonadEnv (QueryT m) where
     asksEnv = lift . asks
     {-# INLINEABLE asksEnv #-}
 
-instance MonadIO m => MonadQP (QueryT m) where
+instance MonadIO m => MonadQuery (QueryT m) where
     asksQP = lift . lift . asks
     {-# INLINEABLE asksQP #-}
-
-instance MonadIO m => MonadQuery (QueryT m) where
     asksQS = lift . lift . lift . asks
     {-# INLINEABLE asksQS #-}
     throwQuery = throwE
