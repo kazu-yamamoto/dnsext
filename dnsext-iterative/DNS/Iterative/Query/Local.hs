@@ -4,8 +4,9 @@ module DNS.Iterative.Query.Local where
 import DNS.Types
 
 -- this package
-import DNS.Iterative.Query.LocalZone (lookupApex, lookupName)
+
 import DNS.Iterative.Query.Class
+import DNS.Iterative.Query.LocalZone (lookupApex, lookupName)
 
 {- FOURMOLU_DISABLE -}
 takeLocalResult :: Env -> Question -> a -> a -> (ResultRRS -> a) -> a

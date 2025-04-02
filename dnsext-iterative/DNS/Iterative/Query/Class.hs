@@ -1,4 +1,3 @@
-
 module DNS.Iterative.Query.Class (
     MonadEnv (..),
     MonadQuery (..),
@@ -46,10 +45,10 @@ module DNS.Iterative.Query.Class (
 
 -- GHC packages
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
-import Data.Int (Int64)
 import Data.IP (IP, IPv4, IPv6)
-import Network.Socket (PortNumber)
+import Data.Int (Int64)
 import Data.Map.Strict (Map)
+import Network.Socket (PortNumber)
 
 -- dnsext packages
 import DNS.Do53.Client (Reply)
@@ -71,7 +70,7 @@ import DNS.Iterative.Stats (Stats)
 class MonadIO m => MonadEnv m where
     asksEnv :: (Env -> a) -> m a
 
-class MonadEnv m  => MonadQuery m where
+class MonadEnv m => MonadQuery m where
     asksQP :: (QueryParam -> a) -> m a
     asksQS :: (QueryState -> a) -> m a
     throwQuery :: QueryError -> m a
