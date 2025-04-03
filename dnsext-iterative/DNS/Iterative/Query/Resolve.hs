@@ -78,21 +78,17 @@ resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
         ad_ <- qbitstr "AuthenticatedData"  requestAD_  [(AuthenticatedData,  "1"), (NoAuthenticatedData,  "0")]
         logLines__ Log.DEMO [unwords [show n0, show typ, show cls], intercalate ", " [do_, cd_, ad_]]
     justCNAME bn = do
-        let noCache = do
-                result <- cnameHandler bn
-                pure (([], bn), right result)
+        let result x = (([], bn), x)
 
-            withERRC (rc, soa)          = pure (([], bn), left (rc, [], soa))
-            cachedCNAME (rc, rrs, soa)  = pure (([], bn), left (rc, rrs, soa))
+            errorCached = MaybeT (lookupERR bn) <&> \(rc, soa) -> result $ left (rc, [], soa)
+            cnameCached = result . left . foldLookupResult negative noSOA positive <$> MaybeT (lookupType bn CNAME)
+              where
+                negative soa nsecs _rank  = (DNS.NoErr, [], soa : nsecs)
+                noSOA rc                  = (rc, [], [])
+                positive cname            = (DNS.NoErr, [cname], [])
 
-            negative soa nsecs _rank  = (DNS.NoErr, [], soa : nsecs)
-            noSOA rc                  = (rc, [], [])
-
-        maybe
-            (maybe noCache withERRC =<< lookupERR bn)
-            {- target RR is not CNAME destination, but CNAME result is NoErr -}
-            (cachedCNAME . foldLookupResult negative noSOA (\cname -> (DNS.NoErr, [cname], [])))
-            =<< lookupType bn CNAME
+        (maybe (result . right <$> cnameHandler bn) pure =<<) $ runMaybeT $
+            cnameCached <|> errorCached
 
     -- CNAME 以外のタイプの検索について、CNAME のラベルで検索しなおす.
     -- recCNAMEs :: Int -> Domain -> [RRset] -> DNSQuery (([RRset], Domain), Either Result a)
