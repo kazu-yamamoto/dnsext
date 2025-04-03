@@ -10,6 +10,7 @@ module DNS.Iterative.Query.Resolve (
 -- GHC packages
 
 -- other packages
+import Control.Monad.Trans.Maybe hiding (liftCallCC, liftCatch, liftListen, liftPass)
 
 -- dnsext packages
 import DNS.Do53.Client (QueryControls (..))
@@ -102,35 +103,27 @@ resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
         | otherwise = do
             let traceCNAME cn = logLn_ Log.DEMO ("cname: " ++ show bn ++ " -> " ++ show cn)
                 recCNAMEs_ (cn, cnRRset) = traceCNAME cn *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
-                noCache = either recCNAMEs_ (pure . (,) (dcnRRsets [], bn) . right) =<< typeHandler bn typ
 
-                withERRC (rc, soa) = pure ((dcnRRsets [], bn), left (rc, [], soa))
+                result x = ((dcnRRsets [], bn), x)
 
-                noTypeCache =
-                    maybe
-                        (maybe noCache withERRC =<< lookupERR bn)
-                        recCNAMEs_ {- recurse with cname cache -}
-                        =<< (withCN =<<) . joinLKR <$> lookupType bn CNAME
+                notCached = either recCNAMEs_ (pure . result . right)
+                typeCached = result . left . foldLookupResult negative noSOA positive <$> MaybeT (lookupType bn typ)
                   where
-                    {- when CNAME has NODATA, do not loop with CNAME domain -}
-                    joinLKR = (foldLookupResult (\_ _ _ -> Nothing) (\_ -> Nothing) Just =<<)
-                    withCN cnRRset = do
-                        (cn, _) <- uncons cns
-                        Just (cn, cnRRset)
+                    negative soa nsecs _rank  = (DNS.NoErr, [], soa : nsecs)
+                    noSOA rc                  = (rc, [], [])
+                    positive xrrs             = (DNS.NoErr, [xrrs], [])  {- cached result with target typ -}
+                lookupCNAME = MaybeT $ (withCN =<<) . (foldLK =<<) <$> lookupType bn CNAME
+                  where
+                    foldLK = foldLookupResult (\_ _ _ -> Nothing) (\_ -> Nothing) Just
+                    withCN cnRRset = uncons cns <&> \(cn, _) -> (cn, cnRRset)
                       where
                         cns = [cn | rd <- rrsRDatas cnRRset, Just cn <- [DNS.rdataField rd DNS.cname_domain]]
+                errorCached = MaybeT (lookupERR bn) <&> \(rc, soa) -> result $ left (rc, [], soa)
 
-                cachedType (rc, tyRRs, soa) = pure ((dcnRRsets [], bn), left (rc, tyRRs, soa))
-
-            maybe
-                noTypeCache
-                ( cachedType
-                    . foldLookupResult
-                        (\soa nsecs _rank -> (DNS.NoErr, [], soa : nsecs))
-                        (\rc -> (rc, [], []))
-                        (\xrrs -> (DNS.NoErr, [xrrs], [] {- return cached result with target typ -}))
-                )
-                =<< lookupType bn typ
+            (maybe (notCached =<< typeHandler bn typ) pure =<<) $ runMaybeT $
+                typeCached                           <|>
+                (lift . recCNAMEs_ =<<) lookupCNAME  <|>
+                errorCached
       where
         mcc = maxCNameChain
 
