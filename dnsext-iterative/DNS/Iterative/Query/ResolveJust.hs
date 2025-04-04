@@ -4,10 +4,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module DNS.Iterative.Query.ResolveJust (
-    -- * Iteratively search authritative server and exactly query to that
+    -- * Iteratively search things
     runResolveExact,
     resolveExact,
     runIterative,
+    findNegativeTrustAnchor,
 
     -- * backword compatibility
     runResolveJust,
@@ -48,6 +49,7 @@ import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.Norec as Norec
 import DNS.Iterative.Query.Random
 import qualified DNS.Iterative.Query.StubZone as Stub
+import qualified DNS.Iterative.Query.ZoneMap as ZMap
 import DNS.Iterative.Query.Types
 import DNS.Iterative.Query.Utils
 import qualified DNS.Iterative.Query.Verify as Verify
@@ -552,8 +554,9 @@ resolveNS zone disableV6NS dc ns = do
         querySection typ = do
             logLn Log.DEMO $ unwords ["resolveNS:", show (ns, typ), "dc:" ++ show dc, "->", show (succ dc)]
             {- resolve for not sub-level delegation. increase dc (delegation count) -}
-            let modifyQP qp = qp{requestCD_ = NoCheckDisabled}  {- do DNSSEC checks for recursive iterative context -}
-            localQP modifyQP $ cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
+            recursiveCD <- maybe NoCheckDisabled (\_ -> CheckDisabled) <$> findNegativeTrustAnchor ns
+            {- negative-trust-anchor: <not found>: do DNSSEC checks, <found>: do not DNSSEC checks -}
+            localQP (\qp -> qp{requestCD_ = recursiveCD}) $ cacheAnswerAx typ =<< resolveExactDC (succ dc) ns typ
         cacheAnswerAx typ (msg, d) = do
             cacheAnswer d ns typ msg $> ()
             pure (rcode msg, withSection rankedAnswer msg $ \rrs _rank -> axPairs rrs)
@@ -569,6 +572,9 @@ resolveNS zone disableV6NS dc ns = do
 
 maxQueryCount :: Int
 maxQueryCount = 64
+
+findNegativeTrustAnchor :: MonadQuery m => Domain -> m (Maybe Domain)
+findNegativeTrustAnchor qn =  asksEnv negativeTrustAnchors_ <&> \na -> ZMap.lookupApexOn id na qn
 
 norec :: MonadQuery m => Bool -> NonEmpty Address -> Domain -> TYPE -> m DNSMessage
 norec dnssecOK aservers name typ = do

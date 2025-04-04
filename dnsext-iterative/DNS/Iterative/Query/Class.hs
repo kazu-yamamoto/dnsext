@@ -9,6 +9,7 @@ module DNS.Iterative.Query.Class (
     LocalZoneType (..),
     LocalZones,
     StubZones,
+    NegTrustAnchors,
     MayVerifiedRRS (..),
     mayVerifiedRRS,
     CasesNotValid (..),
@@ -103,6 +104,7 @@ data Env = Env
     , chaosZones_ :: LocalZones
     , localZones_ :: LocalZones
     , stubZones_ :: StubZones
+    , negativeTrustAnchors_ :: NegTrustAnchors
     , maxNegativeTTL_ :: TTL
     , failureRcodeTTL_ :: TTL
     , insert_ :: Question -> TTL -> Cache.Hit -> Ranking -> IO ()
@@ -140,6 +142,7 @@ data LocalZoneType
 
 type LocalZones = (Map Domain [(Domain, LocalZoneType, [RRset])], Map Domain [RRset])
 type StubZones = Map Domain [Delegation]
+type NegTrustAnchors = Map Domain [Domain]
 
 ----------
 -- DNSSEC Verification state and RRset

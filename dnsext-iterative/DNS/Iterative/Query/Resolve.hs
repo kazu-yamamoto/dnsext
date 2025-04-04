@@ -77,7 +77,7 @@ resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
         cd_ <- qbitstr "CheckDisabled"      requestCD_  [(CheckDisabled,      "1"), (NoCheckDisabled,      "0")]
         ad_ <- qbitstr "AuthenticatedData"  requestAD_  [(AuthenticatedData,  "1"), (NoAuthenticatedData,  "0")]
         logLines__ Log.DEMO [unwords [show n0, show typ, show cls], intercalate ", " [do_, cd_, ad_]]
-    justCNAME bn = do
+    justCNAME bn = withNegativeTrustAnchor bn $ do
         let result x = (([], bn), x)
 
             errorCached = MaybeT (lookupERR bn) <&> \(rc, soa) -> result $ left (rc, [], soa)
@@ -96,7 +96,7 @@ resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
         | cc > mcc = do
             logLn_ Log.WARN $ "cname chain limit exceeded: " ++ show (n0, typ)
             failWithCacheOrigName Cache.RankAnswer ServerFailure
-        | otherwise = do
+        | otherwise = withNegativeTrustAnchor bn $ do
             let traceCNAME cn = logLn_ Log.DEMO ("cname: " ++ show bn ++ " -> " ++ show cn)
                 recCNAMEs_ (cn, cnRRset) = traceCNAME cn *> recCNAMEs (succ cc) cn (dcnRRsets . (cnRRset :))
 
@@ -157,11 +157,13 @@ resolveLogic logMark left right cnameHandler typeHandler (Question n0 typ cls) =
     guardReply rank = guard (rank > RankAdditional)
 {- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 {- CNAME のレコードを取得し、キャッシュする -}
 resolveCNAME :: MonadQuery m => Domain -> m (ResultRRS' DNSMessage)
 resolveCNAME bn = do
     (msg, d) <- resolveExact bn CNAME
     uncurry ((,,) msg) <$> cacheAnswer d bn CNAME msg
+{- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
 {- 目的の TYPE のレコードを取得できた場合には、結果の DNSMessage と RRset を返す.
@@ -181,6 +183,17 @@ resolveTYPE bn typ = do
             |     hasCNAME && not (has typ)  = cnResult =<< cacheAnswer delegation bn CNAME msg
             | otherwise                      = throwDnsError UnexpectedRDATA {- CNAME と目的の TYPE が同時に存在した場合はエラー -}
     dispatch
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+withNegativeTrustAnchor :: MonadQuery m => Domain -> m a -> m a
+withNegativeTrustAnchor qn action = do
+   let cases _       CheckDisabled    = CheckDisabled
+       cases Just{}  NoCheckDisabled  = CheckDisabled  {- negative-trust-anchor found -}
+       cases Nothing NoCheckDisabled  = NoCheckDisabled
+       getModify nta qp = qp{requestCD_ = cases nta (requestCD_ qp)}
+   modify <- getModify <$> findNegativeTrustAnchor qn
+   localQP modify action
 {- FOURMOLU_ENABLE -}
 
 maxCNameChain :: Int
