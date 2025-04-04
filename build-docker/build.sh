@@ -109,8 +109,10 @@ set -x
 DNSEXT_REV="$1"
 [ x"$DNSEXT_REV" != x ] || DNSEXT_REV=dist-latest
 
+[ x"$DEFAULT_CLONE_URL" != x ] || DEFAULT_CLONE_URL=http://github.com/kazu-yamamoto/dnsext
+
 CLONE_URL="$2"
-[ x"$CLONE_URL" != x ] || CLONE_URL=http://github.com/kazu-yamamoto/dnsext
+[ x"$CLONE_URL" != x ] || CLONE_URL=$DEFAULT_CLONE_URL
 
 bowline_revision=${DNSEXT_REV#dist-}
 set +x
