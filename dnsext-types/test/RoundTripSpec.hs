@@ -128,7 +128,7 @@ mkRData dom typ =
         A -> rd_a <$> genIPv4
         AAAA -> rd_aaaa <$> genIPv6
         NS -> pure $ rd_ns dom
-        TXT -> rd_txt <$> genTextString
+        TXT -> rd_txt_n <$> genTextStrings
         MX -> rd_mx <$> genWord16 <*> genDomain
         CNAME -> pure $ rd_cname dom
         SOA ->
@@ -145,8 +145,11 @@ mkRData dom typ =
         TLSA -> rd_tlsa <$> genWord8 <*> genWord8 <*> genWord8 <*> genOpaque
         _ -> pure . rd_txt $ fromString ("Unhandled type " <> show typ)
   where
+    genTextStrings = do
+        chunks <- elements [1..5] -- chunk=0 is not llegal one or more <character-sstring>s, RFC 1035, RFC 6763
+        replicateM chunks genTextString
     genTextString = do
-        len <- elements [0, 1, 63, 255, 256, 511, 512, 1023, 1024]
+        len <- elements [0, 1, 63, 127, 255]
         Opaque.fromShortByteString . Short.pack <$> replicateM len genWord8
 
 genIPv4 :: Gen IPv4
