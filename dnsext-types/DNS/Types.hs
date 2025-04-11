@@ -99,6 +99,7 @@ module DNS.Types (
     -- *** TXT RR
     RD_TXT,
     rd_txt,
+    rd_txt_n,
     txt_opaque,
 
     -- *** RP RR

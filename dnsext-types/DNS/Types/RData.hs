@@ -289,34 +289,39 @@ rd_mx a b = toRData $ RD_MX a b
 
 -- | Text strings (RFC1035)
 newtype RD_TXT = RD_TXT
-    { txt_opaque :: Opaque
+    { txt_opaque :: [Opaque]
     -- ^ Setter/getter for 'Opaque'
     }
     deriving (Eq, Ord)
 
+{- FOURMOLU_DISABLE -}
 instance ResourceData RD_TXT where
     resourceDataType _ = TXT
 
-    -- https://datatracker.ietf.org/doc/html/rfc6763#section-6.1
-    resourceDataSize (RD_TXT o) =
-        let l = Opaque.length o
-            (d, r) = l `divMod` 255
-            s = if r == 0 then 0 else 1
-         in l + d + s
-    putResourceData _ (RD_TXT o) = putTXT o
+    {- https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.14  TXT RDATA format
+         "TXT-DATA    One or more <character-string>s."
+       https://datatracker.ietf.org/doc/html/rfc1035#section-3.3  Standard RRs
+         "<character-string> is a single length octet followed by that number of characters."
+       https://datatracker.ietf.org/doc/html/rfc6763#section-6.1
+         "* An empty (zero-length) TXT record.
+            (This is not strictly legal, but should one be received,
+            it should be interpreted as the same as a single empty string.)" -}
+    resourceDataSize (RD_TXT []) = 1
+    resourceDataSize (RD_TXT os) =
+        let len o = 1 + Opaque.length o
+         in sum $ map len os
+    putResourceData _ (RD_TXT os) = putTXT os
       where
-        putTXT txt wbuf ref
-            | Opaque.null txt = return ()
-            | otherwise = do
-                let (h, t) = Opaque.splitAt 255 txt
-                putLenOpaque h wbuf ref
-                putTXT t wbuf ref
+        {- RFC 6763 - not strictly legal, should be interpreted as the same as a single empty string -}
+        putTXT [] wbuf ref = putLenOpaque "" wbuf ref
+        putTXT xs wbuf ref = mapM_ (\o -> putLenOpaque o wbuf ref) xs
+{- FOURMOLU_ENABLE -}
 
 get_txt :: Int -> Parser RD_TXT
-get_txt len rbuf ref = RD_TXT . Opaque.concat <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
+get_txt len rbuf ref = RD_TXT <$> sGetMany "TXT RR string" len getLenOpaque rbuf ref
 
 instance Show RD_TXT where
-    show (RD_TXT o) = '"' : conv o '"'
+    show (RD_TXT os) = unwords ['"' : conv o '"' | o <- os]
       where
         conv t c = Opaque.foldr escape [c] t
         escape :: Word8 -> [Char] -> [Char]
@@ -334,9 +339,13 @@ instance Show RD_TXT where
         w8ToDigit w = chr $ fromIntegral (w + _0)
         w8ToChar = chr . fromIntegral
 
+-- | Smart constructor for multiple txt string.
+rd_txt_n :: [Opaque] -> RData
+rd_txt_n os = toRData $ RD_TXT os
+
 -- | Smart constructor.
 rd_txt :: Opaque -> RData
-rd_txt x = toRData $ RD_TXT x
+rd_txt o = rd_txt_n [o]
 
 ----------------------------------------------------------------
 
