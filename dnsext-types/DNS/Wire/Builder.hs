@@ -72,6 +72,16 @@ popPointer dom ref = M.lookup dom . bstDomain <$> readIORef ref
 
 ----------------------------------------------------------------
 
+integralCast :: (Show a, Integral a, Integral b) => String -> a -> IO b
+integralCast err src
+    | toInteger src == toInteger dst = return dst
+    | otherwise = fail (err ++ ": out-of-range: " ++ show src)
+  where
+    dst = fromIntegral src
+{-# INLINEABLE integralCast #-}
+
+----------------------------------------------------------------
+
 put8 :: WriteBuffer -> Word8 -> IO ()
 put8 = write8
 
@@ -82,13 +92,13 @@ put32 :: WriteBuffer -> Word32 -> IO ()
 put32 = write32
 
 putInt8 :: WriteBuffer -> Int -> IO ()
-putInt8 wbuf n = write8 wbuf $ fromIntegral n
+putInt8 wbuf n = write8 wbuf =<< integralCast "putInt8" n
 
 putInt16 :: WriteBuffer -> Int -> IO ()
-putInt16 wbuf n = write16 wbuf $ fromIntegral n
+putInt16 wbuf n = write16 wbuf =<< integralCast "putInt16" n
 
 putInt32 :: WriteBuffer -> Int -> IO ()
-putInt32 wbuf n = write32 wbuf $ fromIntegral n
+putInt32 wbuf n = write32 wbuf =<< integralCast "putInt32" n
 
 ----------------------------------------------------------------
 
@@ -98,10 +108,9 @@ putShortByteString = copyShortByteString
 -- In the case of the TXT record, we need to put the string length
 putLenShortByteString :: WriteBuffer -> ShortByteString -> IO ()
 putLenShortByteString wbuf txt = do
+    len <- integralCast "putLenShortByteString" $ Short.length txt
     write8 wbuf len
     putShortByteString wbuf txt
-  where
-    len = fromIntegral $ Short.length txt
 
 with16Length :: Builder () -> Builder ()
 with16Length builder wbuf ref = do
@@ -112,5 +121,5 @@ with16Length builder wbuf ref = do
     end <- position wbuf
     let len = end - beg
     goBack wbuf
-    write16 wbuf $ fromIntegral len
+    write16 wbuf =<< integralCast "with16Length" len
     ff wbuf len
