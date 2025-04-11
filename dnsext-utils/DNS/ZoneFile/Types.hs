@@ -19,7 +19,6 @@ import Data.Word (Word8)
 
 -- dnsext-* packages
 import DNS.Types
-import qualified DNS.Types.Opaque as Opaque
 
 class CaseCons t s | s -> t where
     caseCons :: (t -> s -> a) -> a -> s -> a
@@ -95,9 +94,6 @@ type CString = Short.ShortByteString
 
 cstringW8 :: [Word8] -> CString
 cstringW8 = Short.pack
-
-txtCString :: CString -> Opaque
-txtCString cs = Opaque.fromShortByteString $ Short.cons (fromIntegral $ Short.length cs) cs
 
 fromCString :: CString -> String
 fromCString = map (chr . fromIntegral) . Short.unpack
