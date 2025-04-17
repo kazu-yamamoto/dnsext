@@ -58,7 +58,7 @@ uniqueSorted Impl{..} = uniqueSorted_ nrangeLower nrangeUpper
 ---
 
 -- $setup
--- >>> :set -XTypeApplications
+-- >>> :seti -XTypeApplications
 
 -- |
 -- util to check unique and ordered range set of NSEC/NSEC3

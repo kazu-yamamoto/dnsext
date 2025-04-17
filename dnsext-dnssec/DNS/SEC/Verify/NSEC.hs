@@ -148,8 +148,8 @@ propWild xs = case [x | W x <- xs] of
 ---
 
 -- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -XTypeApplications
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XTypeApplications
 
 -- |
 -- >>> nsecCovers @Int 1 5 3
