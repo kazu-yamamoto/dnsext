@@ -67,7 +67,7 @@ randomizedSelects num xs
     len = length xs
 
 -- $setup
--- >>> :set -Wno-incomplete-patterns
+-- >>> :seti -Wno-incomplete-patterns
 -- >>> import Data.List
 
 {- FOURMOLU_DISABLE -}

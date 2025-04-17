@@ -58,8 +58,8 @@ import qualified DNS.Iterative.Query.Verify as Verify
 import DNS.Iterative.Query.TestEnv
 
 -- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -Wno-incomplete-uni-patterns
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -Wno-incomplete-uni-patterns
 -- >>> import System.IO
 -- >>> import qualified DNS.Types.Opaque as Opaque
 -- >>> import DNS.SEC

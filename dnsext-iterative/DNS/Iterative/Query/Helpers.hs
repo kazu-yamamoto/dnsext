@@ -22,9 +22,9 @@ import DNS.Iterative.Query.Random
 import DNS.Iterative.RootServers (rootServers)
 
 -- $setup
--- >>> :set -XNoOverloadedLists
--- >>> :set -XOverloadedStrings
--- >>> :set -Wno-incomplete-patterns
+-- >>> :seti -XNoOverloadedLists
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -Wno-incomplete-patterns
 -- >>> import DNS.Types
 
 showQ' :: String -> Domain -> TYPE -> String
