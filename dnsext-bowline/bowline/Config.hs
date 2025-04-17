@@ -536,6 +536,8 @@ config = commentLines *> many cfield <* eof
 -- Right ("prefix-bool-2",CV_String "yesterday")
 -- >>> parse field "" "d-quoted: \"foo bar baz\" # foo\n"
 -- Right ("d-quoted",CV_String "foo bar baz")
+-- >>> parse field "" "s-quoted: 'foo bar baz' # foo\n"
+-- Right ("s-quoted",CV_String "foo bar baz")
 -- >>> parse field "" "list: \"a b\" c\n"
 -- Right ("list",CV_Strings ["a b","c"])
 -- >>> parse field "" "listc: \"d e\" f # comment \n"
@@ -551,6 +553,9 @@ key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* sp
 
 sep :: Parser ()
 sep = void $ char ':' *> spcs
+
+squote :: Parser ()
+squote = void $ char '\''
 
 dquote :: Parser ()
 dquote = void $ char '"'
@@ -573,6 +578,7 @@ cv_bool =
 
 cv_string' :: Parser String
 cv_string' =
+    squote *> many (noneOf "'\n")  <* squote <|>
     dquote *> many (noneOf "\"\n") <* dquote <|>
     many1 (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
