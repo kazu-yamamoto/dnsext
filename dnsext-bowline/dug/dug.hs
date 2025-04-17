@@ -15,6 +15,7 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
+import qualified DNS.Do53.Client as Do53
 import DNS.Do53.Internal (NameTag (..))
 import DNS.DoX.Client
 import DNS.SEC (addResourceDataForDNSSEC)
@@ -29,18 +30,20 @@ import DNS.Types (
     fromRepresentation,
     runInitIO,
  )
+import qualified DNS.Types as DNS
 import Data.Bits
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Char (toLower)
+import Data.Either (rights)
 import Data.Function (on)
 import Data.Functor
 import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.UnixTime as T
-import Network.Socket (AddrInfo (..), PortNumber)
+import Network.Socket (AddrInfo (..), HostName, PortNumber)
 import qualified Network.Socket as S
 import System.Console.ANSI.Types
 import System.Console.GetOpt
@@ -167,7 +170,8 @@ main = do
             iterativeQuery putLn putLines target opts
         else do
             let mserver = map (drop 1) at
-            recursiveQuery mserver port putLnSTM putLinesSTM qs opts tq
+            ips <- resolveServers opts mserver
+            recursiveQuery (map show ips) port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
     killLogger
@@ -211,6 +215,23 @@ checkDisableV6 opt
         case as of
             []    -> disabled
             _:_   -> pure opt
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+resolveServers :: Options -> [HostName] -> IO [IP]
+resolveServers Options{..} hs = concat <$> mapM toNumeric hs
+  where
+    toNumeric sname
+        | Just ip <- readMaybe sname  = pure [IPv4 ip]
+        | Just ip <- readMaybe sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [IPv6 ip]
+    toNumeric sname = Do53.withLookupConf Do53.defaultLookupConf $ \env -> do
+        let dom = fromRepresentation sname
+        eA <- fmap (fmap (IPv4 . DNS.a_ipv4)) <$> Do53.lookupA env dom
+        eAAAA <- sequence [ fmap (fmap (IPv6 . DNS.aaaa_ipv6)) <$> Do53.lookupAAAA env dom | not optDisableV6NS ]
+        let as = concat $ rights $ eA : eAAAA
+        when (null as) (fail $ show eA) $> as
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
