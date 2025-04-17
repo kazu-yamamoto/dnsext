@@ -208,9 +208,9 @@ rdataPTR :: Parser RData
 rdataPTR = rd_ptr <$> domain
 
 rdataTXT :: Parser RData
-rdataTXT = rd_txt . txt <$> ((:) <$> nbstring <*> many (blank *> nbstring))
+rdataTXT = rd_txt_n . txts <$> ((:) <$> nbstring <*> many (blank *> nbstring))
   where
-    txt = Opaque.concat . map txtCString
+    txts = map Opaque.fromShortByteString
     nbstring = mconcat <$> some (cstring <|> dot $> ".")
 
 rdataMX :: Parser RData
