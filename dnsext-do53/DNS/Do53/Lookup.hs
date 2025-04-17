@@ -33,7 +33,7 @@ import DNS.Types hiding (Seconds)
 import DNS.Types.Internal (section)
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 
 ----------------------------------------------------------------
 
