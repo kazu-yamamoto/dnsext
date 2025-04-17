@@ -42,7 +42,7 @@ import System.IO.Unsafe (unsafeDupablePerformIO, unsafePerformIO)
 
 -- $setup
 -- >>> import Data.ByteString
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 
 ----------------------------------------------------------------
 
