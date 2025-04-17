@@ -342,8 +342,8 @@ lookup_ mk k (Cache cache _) = do
     mk eol crset rank
 
 -- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -Wno-incomplete-uni-patterns
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -Wno-incomplete-uni-patterns
 
 -- |
 -- >>> c0 = empty 256

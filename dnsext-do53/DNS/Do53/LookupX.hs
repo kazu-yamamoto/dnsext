@@ -33,7 +33,7 @@
 --
 --   We perform a successful lookup of \"www.example.com\":
 --
---   >>> :set -XOverloadedStrings
+--   >>> :seti -XOverloadedStrings
 --   >>>
 --   >>> withLookupConf defaultLookupConf (\env -> lookupA env "mew.org")
 --   Right [202.238.220.92]
@@ -87,7 +87,7 @@ import Data.IP
 import Data.String (fromString)
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 
 ----------------------------------------------------------------
 

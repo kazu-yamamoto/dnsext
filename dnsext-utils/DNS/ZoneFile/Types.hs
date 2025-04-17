@@ -115,7 +115,7 @@ data Token
 type Line = [Token]
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 
 {- FOURMOLU_DISABLE -}
 -- |

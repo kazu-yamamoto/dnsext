@@ -54,7 +54,7 @@ import qualified Data.Semigroup as Sem
 -- __Example:__ Use EDNS version 1 (yet to be specified), request nameserver
 -- ids from the server, and indicate a client subnet of "192.0.2.1/24".
 --
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 -- >>> let emptyNSID = ""
 -- >>> let msk = 24
 -- >>> let ipaddr = read "192.0.2.1"
@@ -144,7 +144,7 @@ doFlag d0 = mempty{qctlEdns = mempty{extDO = d0}}
 
 -- | Generator of 'QueryControls' that adjusts the list of 'EDNS' options.
 --
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 -- >>> ednsSetOptions (ODataAdd [od_nsid ""])
 -- edns.options:[NSID]
 ednsSetOptions :: ODataOp -> QueryControls

@@ -220,8 +220,8 @@ propCover xs = case [x | C x <- xs] of
 ---
 
 -- $setup
--- >>> :set -XOverloadedStrings
--- >>> :set -XTypeApplications
+-- >>> :seti -XOverloadedStrings
+-- >>> :seti -XTypeApplications
 
 -- |
 -- >>> n3Covers @Int 1 5 3

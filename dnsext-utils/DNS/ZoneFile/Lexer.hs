@@ -35,7 +35,7 @@ string s = bytes $ map (fromIntegral . ord) s
 -- RFC 1035 5.1 Format
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 -- >>> import Data.String (fromString)
 -- >>> import Data.Either (isLeft, isRight)
 -- >>> import Text.Printf (printf)

@@ -43,7 +43,7 @@ import qualified DNS.Types.Parser as P
 import DNS.Wire
 
 -- $setup
--- >>> :set -XOverloadedStrings
+-- >>> :seti -XOverloadedStrings
 
 class IsRepresentation a b where
     fromRepresentation :: b -> a
