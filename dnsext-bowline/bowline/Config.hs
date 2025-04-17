@@ -534,6 +534,8 @@ config = commentLines *> many cfield <* eof
 -- Right ("prefix-bool-1",CV_String "nothing")
 -- >>> parse field "" "prefix-bool-2: yesterday # comment \n"
 -- Right ("prefix-bool-2",CV_String "yesterday")
+-- >>> parse field "" "d-quoted: \"foo bar baz\" # foo\n"
+-- Right ("d-quoted",CV_String "foo bar baz")
 -- >>> parse field "" "list: \"a b\" c\n"
 -- Right ("list",CV_Strings ["a b","c"])
 -- >>> parse field "" "listc: \"d e\" f # comment \n"
