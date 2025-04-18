@@ -23,6 +23,7 @@ module DNS.Iterative.Query.Class (
     Address,
     Delegation (..),
     DEntry (..),
+    delegationEntry,
     --
     QueryParam (..),
     queryParamH,
@@ -237,6 +238,21 @@ data DEntry
     | DEstubA4 !(NonEmpty (IPv4, PortNumber))
     | DEstubA6 !(NonEmpty (IPv6, PortNumber))
     deriving (Show)
+
+{- FOURMOLU_DISABLE -}
+delegationEntry
+    :: (Domain -> NonEmpty IPv4 -> NonEmpty IPv6 -> a)
+    -> (Domain -> NonEmpty IPv4 -> a) -> (Domain -> NonEmpty IPv6 -> a) -> (Domain -> a)
+    -> (NonEmpty (IPv4, PortNumber) -> a) -> (NonEmpty (IPv6, PortNumber) -> a)
+    -> DEntry -> a
+delegationEntry ax a4 a6 ns s4 s6 de = case de of
+    DEwithAx d n4 n6  -> ax d n4 n6
+    DEwithA4 d n4     -> a4 d n4
+    DEwithA6 d n6     -> a6 d n6
+    DEonlyNS d        -> ns d
+    DEstubA4 na4      -> s4 na4
+    DEstubA6 na6      -> s6 na6
+{- FOURMOLU_ENABLE -}
 
 ----------
 -- QueryParam context type for Monad
