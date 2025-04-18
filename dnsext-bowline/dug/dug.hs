@@ -172,7 +172,7 @@ main = do
             let mserver = map (drop 1) at
             ips <- resolveServers opts1 mserver
             opts <- checkFallbackV4 opts1 [(ip, 53) | ip <- ips]
-            recursiveQuery (map show ips) port putLnSTM putLinesSTM qs opts tq
+            recursiveQuery ips port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
     killLogger
