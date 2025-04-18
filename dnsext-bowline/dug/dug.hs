@@ -55,7 +55,7 @@ import Text.Read (readMaybe)
 
 import qualified DNS.Log as Log
 
-import Iterative (iterativeQuery)
+import Iterative (iterativeQuery, getRootV6)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQuery)
@@ -153,8 +153,8 @@ main = do
         exitSuccess
     ------------------------
     deprecated
-    opts@Options{..} <- checkDisableV6 opts0
-    (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
+    opts1@Options{..} <- checkDisableV6 opts0
+    (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts1
     when (null qs) $ do
         putStrLn "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
         exitFailure
@@ -167,10 +167,12 @@ main = do
     if optIterative
         then do
             target <- checkIterative at qs
+            opts <- checkFallbackV4 opts1 =<< getRootV6
             iterativeQuery putLn putLines target opts
         else do
             let mserver = map (drop 1) at
-            ips <- resolveServers opts mserver
+            ips <- resolveServers opts1 mserver
+            opts <- checkFallbackV4 opts1 [(ip, 53) | ip <- ips]
             recursiveQuery (map show ips) port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
