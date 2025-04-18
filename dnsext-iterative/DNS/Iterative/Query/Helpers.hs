@@ -245,18 +245,6 @@ dentryToPermNS zone des = do
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-dentryToRandomIP :: MonadIO m => Int -> Int -> Bool -> [DEntry] -> m [Address]
-dentryToRandomIP entries addrs disableV6NS des = do
-    acts  <- randomizedSelects entries actions             {- randomly select DEntry list -}
-    es    <- map NE.toList <$> sequence acts               {- run randomly choice actions, ipv4 or ipv6  -}
-    as    <- concat <$> mapM (randomizedSelects addrs) es  {- randomly select addresses from each DEntries -}
-    pure $ unique as
-  where
-    actions = dentryIPsetChoices disableV6NS des
-    unique = Set.toList . Set.fromList
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
 -- |
 -- >>> v4 (i,_) = case i of { IPv4{} -> True  ; IPv6{} -> False }
 -- >>> v6 (i,_) = case i of { IPv4{} -> False ; IPv6{} -> True  }
