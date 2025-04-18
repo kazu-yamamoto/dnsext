@@ -142,8 +142,8 @@ main = do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
     (deprecated, compatH, args0) <- getArgs <&> handleDeprecatedVerbose
-    (args, opts0) <- getArgsOpts args0 <&> fmap compatH
-    when (optHelp opts0) $ do
+    (args, opts1@Options{..}) <- getArgsOpts args0 <&> fmap compatH
+    when optHelp $ do
         msg <- help
         putStr $ usageInfo msg options
         putStr "\n"
@@ -153,7 +153,6 @@ main = do
         exitSuccess
     ------------------------
     deprecated
-    opts1@Options{..} <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts1
     when (null qs) $ do
         putStrLn "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
@@ -220,28 +219,6 @@ checkFallbackV4 opt addrs
         checkRoute local remote
     checkRoute (sa:_) (AddrInfo{addrAddress = peer}:_)  = (S.openSocket sa >>= \s -> S.connect s peer) $> opt
     checkRoute  _      _                                = disabled "cannot get IPv6 address"
-{- FOURMOLU_ENABLE -}
-
-{- FOURMOLU_DISABLE -}
-checkDisableV6 :: Options -> IO Options
-checkDisableV6 opt
-    | optDisableV6NS opt  = pure opt
-    | otherwise           =
-      either (\_ -> disabled) (\_ -> pure opt) =<< tryIOError checkSocketV6
-  where
-    disabled = putStrLn "disabling IPv6, because of not supported." $> opt{optDisableV6NS = True}
-    checkSocketV6 = do
-        {- Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
-           If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
-           * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
-               * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
-           * POSIX, BSD: `[]`.
-               * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
-           So, specifying `AI_ADDRCONFIG` explicitly. -}
-        as <- S.getAddrInfo (Just S.defaultHints{addrFlags = [S.AI_ADDRCONFIG]}) (Just "::") (Just "53")
-        case as of
-            []    -> disabled
-            _:_   -> pure opt
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
