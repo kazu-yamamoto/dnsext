@@ -152,6 +152,9 @@ main = do
     deprecated
     opts@Options{..} <- checkDisableV6 opts0
     (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
+    when (null qs) $ do
+        putStrLn "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
+        exitFailure
     let putLn = atomically . putLnSTM
         putLines a b c = atomically $ putLinesSTM a b c
     void $ forkIO runLogger
