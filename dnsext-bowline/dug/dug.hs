@@ -15,6 +15,7 @@ import DNS.Do53.Client (
     doFlag,
     rdFlag,
  )
+import qualified DNS.Do53.Client as Do53
 import DNS.Do53.Internal (NameTag (..))
 import DNS.DoX.Client
 import DNS.SEC (addResourceDataForDNSSEC)
@@ -29,18 +30,20 @@ import DNS.Types (
     fromRepresentation,
     runInitIO,
  )
+import qualified DNS.Types as DNS
 import Data.Bits
 import qualified Data.ByteString.Char8 as C8
 import Data.ByteString.Short (ShortByteString)
 import qualified Data.ByteString.Short as Short
 import Data.Char (toLower)
+import Data.Either (rights)
 import Data.Function (on)
 import Data.Functor
 import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.UnixTime as T
-import Network.Socket (AddrInfo (..), PortNumber)
+import Network.Socket (AddrInfo (..), AddrInfoFlag (..), HostName, PortNumber)
 import qualified Network.Socket as S
 import System.Console.ANSI.Types
 import System.Console.GetOpt
@@ -52,7 +55,7 @@ import Text.Read (readMaybe)
 
 import qualified DNS.Log as Log
 
-import Iterative (iterativeQuery)
+import Iterative (iterativeQuery, getRootV6)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQuery)
@@ -139,8 +142,8 @@ main = do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
     (deprecated, compatH, args0) <- getArgs <&> handleDeprecatedVerbose
-    (args, opts0) <- getArgsOpts args0 <&> fmap compatH
-    when (optHelp opts0) $ do
+    (args, opts1@Options{..}) <- getArgsOpts args0 <&> fmap compatH
+    when optHelp $ do
         msg <- help
         putStr $ usageInfo msg options
         putStr "\n"
@@ -150,8 +153,7 @@ main = do
         exitSuccess
     ------------------------
     deprecated
-    opts@Options{..} <- checkDisableV6 opts0
-    (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts
+    (at, port, qs, runLogger, putLnSTM, putLinesSTM, killLogger) <- cookOpts args opts1
     when (null qs) $ do
         putStrLn "Usage: dug [options] [@server]* [name [query-type] [query-control]*]+"
         exitFailure
@@ -164,10 +166,13 @@ main = do
     if optIterative
         then do
             target <- checkIterative at qs
+            opts <- checkFallbackV4 opts1 =<< getRootV6
             iterativeQuery putLn putLines target opts
         else do
             let mserver = map (drop 1) at
-            recursiveQuery mserver port putLnSTM putLinesSTM qs opts tq
+            ips <- resolveServers opts1 mserver
+            opts <- checkFallbackV4 opts1 [(ip, 53) | ip <- ips]
+            recursiveQuery ips port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
     killLogger
@@ -192,25 +197,45 @@ main = do
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-checkDisableV6 :: Options -> IO Options
-checkDisableV6 opt
-    | optDisableV6NS opt  = pure opt
-    | otherwise           =
-      either (\_ -> disabled) (\_ -> pure opt) =<< tryIOError checkSocketV6
+checkFallbackV4 :: Options -> [(IP, PortNumber)] -> IO Options
+checkFallbackV4 opt addrs
+    | optDisableV6NS opt =  pure opt
+    | v6:_ <- v6s        =  either (disabled . show) pure =<< tryIOError (checkV6 v6)
+    | otherwise          =  pure opt
   where
-    disabled = putStrLn "disabling IPv6, because of not supported." $> opt{optDisableV6NS = True}
-    checkSocketV6 = do
-        {- Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
-           If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
-           * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
-               * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
-           * POSIX, BSD: `[]`.
-               * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
-           So, specifying `AI_ADDRCONFIG` explicitly. -}
-        as <- S.getAddrInfo (Just S.defaultHints{addrFlags = [S.AI_ADDRCONFIG]}) (Just "::") (Just "53")
-        case as of
-            []    -> disabled
-            _:_   -> pure opt
+    v6s = [(v6, port) | (IPv6 v6, port) <- addrs]
+    {- Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
+       If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
+       * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
+           * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
+       * POSIX, BSD: `[]`.
+           * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
+       So, specifying `AI_ADDRCONFIG` explicitly. -}
+    datagramAI6 an srv = S.getAddrInfo (Just S.defaultHints{addrFlags = [AI_ADDRCONFIG]}) (Just an) srv
+    disabled e = putStrLn ("disabling IPv6: " ++ e) $> opt{optDisableV6NS = True}
+    checkV6 (dst, port)  = do
+        local   <- datagramAI6  "::"       Nothing
+        remote  <- datagramAI6 (show dst) (Just $ show port)
+        checkRoute local remote
+    checkRoute (sa:_) (AddrInfo{addrAddress = peer}:_)  = (S.openSocket sa >>= \s -> S.connect s peer) $> opt
+    checkRoute  _      _                                = disabled "cannot get IPv6 address"
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+resolveServers :: Options -> [HostName] -> IO [IP]
+resolveServers Options{..} hs = concat <$> mapM toNumeric hs
+  where
+    toNumeric sname
+        | Just ip <- readMaybe sname  = pure [IPv4 ip]
+        | Just ip <- readMaybe sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [IPv6 ip]
+    toNumeric sname = Do53.withLookupConf Do53.defaultLookupConf $ \env -> do
+        let dom = fromRepresentation sname
+        eA <- fmap (fmap (IPv4 . DNS.a_ipv4)) <$> Do53.lookupA env dom
+        eAAAA <- sequence [ fmap (fmap (IPv6 . DNS.aaaa_ipv6)) <$> Do53.lookupAAAA env dom | not optDisableV6NS ]
+        let as = concat $ rights $ eA : eAAAA
+        when (null as) (fail $ show eA) $> as
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------

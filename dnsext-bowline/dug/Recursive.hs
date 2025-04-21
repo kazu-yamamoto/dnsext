@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Recursive (recursiveQuery) where
 
@@ -38,22 +37,20 @@ import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as BL
 import Data.Either
-import Data.Functor
-import Data.IP (IP, IPv4, IPv6)
+import Data.IP (IP (..))
 import qualified Data.List as List
 import Data.String
 import qualified Network.QUIC.Client as QUIC
-import Network.Socket (HostName, PortNumber)
+import Network.Socket (PortNumber)
 import qualified Network.TLS as TLS
 import System.Console.ANSI.Types
 import System.Directory (doesFileExist, removeFile)
 import System.Exit (exitFailure)
-import Text.Read (readMaybe)
 
 import Types
 
 recursiveQuery
-    :: [HostName]
+    :: [IP]
     -> PortNumber
     -> (DNS.DNSMessage -> STM ())
     -> Log.PutLines STM
@@ -184,7 +181,7 @@ makeResolveInfo ractions tq aps ss = mk <$> aps
 
 {- FOURMOLU_DISABLE -}
 getCustomConf
-    :: [HostName]
+    :: [IP]
     -> PortNumber
     -> QueryControls
     -> Options
@@ -193,8 +190,8 @@ getCustomConf
 getCustomConf mserver port ctl Options{..} ractions = case mserver of
     [] -> return (conf, [])
     hs -> do
-        as <- concat <$> mapM toNumeric hs
-        let aps = map (\h -> (fromString h, port)) as
+        let as = if optDisableV6NS then [ip4 | ip4@IPv4{} <- hs] else hs
+            aps = map (\h -> (fromString h, port)) $ map show as
         return (conf{lconfSeeds = SeedsAddrPorts aps}, aps)
   where
     conf =
@@ -204,18 +201,6 @@ getCustomConf mserver port ctl Options{..} ractions = case mserver of
             , lconfConcurrent = True
             , lconfActions = ractions
             }
-
-    toNumeric :: HostName -> IO [HostName]
-    toNumeric sname
-        | Just {} <- readMaybe @IPv4 sname  = pure [sname]
-        | Just {} <- readMaybe @IPv6 sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [sname]
-    toNumeric sname = DNS.withLookupConf DNS.defaultLookupConf $ \env -> do
-        let dom = DNS.fromRepresentation sname
-        eA <- fmap (fmap (show . DNS.a_ipv4)) <$> DNS.lookupA env dom
-        eAAAA <- sequence [ fmap (fmap (show . DNS.aaaa_ipv6)) <$> DNS.lookupAAAA env dom | not optDisableV6NS ]
-        case rights $ eA : eAAAA of
-            [] -> fail $ show eA
-            hss -> return $ concat hss
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
