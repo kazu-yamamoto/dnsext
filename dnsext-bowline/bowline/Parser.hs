@@ -25,10 +25,6 @@ module Parser (
     char,
     oneOf,
     noneOf,
-
-    -- * Deprecated
-    try,
-    many1,
 ) where
 
 import Control.Applicative
@@ -157,15 +153,3 @@ noneOf cs = satisfyChar "noneOf" (`notElem` cs)
 
 satisfyChar :: String -> (Char -> Bool) -> Parser Char
 satisfyChar name p = P.w8toChar <$> satisfy name (p . P.w8toChar)
-
------
-
-{-# DEPRECATED try "remove try operator" #-}
-
-try :: Parser a -> Parser a
-try = id
-
-{-# DEPRECATED many1 "use some instead of this" #-}
-
-many1 :: Parser a -> Parser [a]
-many1 = some
