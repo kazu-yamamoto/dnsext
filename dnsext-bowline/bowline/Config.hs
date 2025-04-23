@@ -547,7 +547,7 @@ arg :: Parser Conf
 arg = (,) <$> key <*> (char '=' *> value)
 
 key :: Parser String
-key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
+key = some (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
 
 sep :: Parser ()
 sep = void $ char ':' *> spcs
@@ -559,14 +559,14 @@ dquote :: Parser ()
 dquote = void $ char '"'
 
 value :: Parser ConfValue
-value = choice [try cv_int, try cv_bool, cv_strings]
+value = choice [cv_int, cv_bool, cv_strings]
 
 eov :: Parser ()
 eov = void (lookAhead $ choice [char '#', char ' ', char '\n']) <|> eof
 
 -- Trailing should be included in try to allow IP addresses.
 cv_int :: Parser ConfValue
-cv_int = CV_Int . read <$> many1 digit <* eov
+cv_int = CV_Int . read <$> some digit <* eov
 
 {- FOURMOLU_DISABLE -}
 cv_bool :: Parser ConfValue
@@ -578,7 +578,7 @@ cv_string' :: Parser String
 cv_string' =
     squote *> many (noneOf "'\n")  <* squote <|>
     dquote *> many (noneOf "\"\n") <* dquote <|>
-    many1 (noneOf "\"# \t\n")
+    some (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -590,7 +590,7 @@ cv_string' =
 cv_strings :: Parser ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (try (spcs1 *> cv_string'))
+    vs <- many (spcs1 *> cv_string')
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
