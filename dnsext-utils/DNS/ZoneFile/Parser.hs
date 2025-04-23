@@ -22,8 +22,9 @@ import Data.IP (IPv4, IPv6)
 import qualified Data.Vector as V
 
 -- this package
-import DNS.ZoneFile.Types hiding (Parser, runParser)
-import qualified DNS.ZoneFile.Types as Poly
+import DNS.Parser hiding (Parser, runParser)
+import qualified DNS.Parser as Poly
+import DNS.ZoneFile.Types
 
 {- FOURMOLU_DISABLE -}
 data Context =
@@ -42,7 +43,7 @@ instance Show Context where
 defaultContext :: Context
 defaultContext = Context "." "." 1800 IN
 
-type Parser a = StateT Context (Poly.Parser Token [Token]) a
+type Parser a = StateT Context (Poly.Parser [Token]) a
 
 runParser :: Parser a -> Context -> [Token] -> Either String ((a, Context), [Token])
 runParser p = Poly.runParser . runStateT p

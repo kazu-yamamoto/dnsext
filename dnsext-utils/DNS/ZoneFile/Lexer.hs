@@ -13,10 +13,11 @@ import Numeric (readOct)
 import Data.Word8
 
 -- this package
-import DNS.ZoneFile.Types hiding (Parser)
-import qualified DNS.ZoneFile.Types as Poly
+import DNS.Parser hiding (Parser, token)
+import qualified DNS.Parser as Poly
+import DNS.ZoneFile.Types
 
-type Parser a = Poly.Parser Word8 LB.ByteString a
+type Parser a = Poly.Parser LB.ByteString a
 
 byte_token :: Parser Word8
 byte_token = poly_token
