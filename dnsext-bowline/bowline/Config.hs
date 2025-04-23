@@ -20,8 +20,6 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
-import Text.Parsec hiding (many, (<|>))
-import Text.Parsec.ByteString.Lazy
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import qualified DNS.Log as Log
