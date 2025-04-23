@@ -13,7 +13,7 @@ import Numeric (readOct)
 import Data.Word8
 
 -- this package
-import DNS.Parser hiding (Parser, token)
+import DNS.Parser hiding (Parser)
 import qualified DNS.Parser as Poly
 import DNS.ZoneFile.Types
 
@@ -183,8 +183,8 @@ comment :: Parser ()
 comment = void (many spc *> lineComment *> optional newline)
 
 {- FOURMOLU_DISABLE -}
-token :: Parser Token
-token =
+lexerToken :: Parser Token
+lexerToken =
     Directive <$> directive     <|>
     At <$ byte _at              <|>
     LParen <$ byte _parenleft   <|>
@@ -199,4 +199,4 @@ token =
 -- >>> lexLine "example.com. 7200 IN A 203.0.113.3  ; example record"
 -- Right [CS "example",Dot,CS "com",Dot,Blank,CS "7200",Blank,CS "IN",Blank,CS "A",Blank,CS "203",Dot,CS "0",Dot,CS "113",Dot,CS "3",Blank,Comment]
 lexLine :: LB.ByteString -> Either String [Token]
-lexLine = (fst <$>) . runParser (many token <* eof)
+lexLine = (fst <$>) . runParser (many lexerToken <* eof)
