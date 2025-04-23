@@ -11,6 +11,7 @@ library
     exposed-modules:
         DNS.Array
         DNS.Log
+        DNS.Parser
         DNS.TAP.FastStream
         DNS.TAP.ProtocolBuffer
         DNS.TAP.Schema
@@ -23,6 +24,8 @@ library
         DNS.RRCache.Managed
         DNS.RRCache.ReaperReduced
         DNS.RRCache.Types
+        DNS.Parser.Class
+        DNS.Parser.State
         DNS.ZoneFile.Types
         DNS.ZoneFile.Lexer
         DNS.ZoneFile.Parser
