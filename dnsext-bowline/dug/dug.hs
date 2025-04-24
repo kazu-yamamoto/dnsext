@@ -55,7 +55,7 @@ import Text.Read (readMaybe)
 
 import qualified DNS.Log as Log
 
-import Iterative (iterativeQuery, getRootV6)
+import Iterative (getRootV6, iterativeQuery)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQuery)
@@ -130,6 +130,11 @@ options =
             "<file>"
         )
         "specify a file to save TLS main secret keys"
+    , Option
+        ['e']
+        ["validate"]
+        (NoArg (\o -> o{optValidate = True}))
+        "validate server's certificate"
     ]
 
 ----------------------------------------------------------------

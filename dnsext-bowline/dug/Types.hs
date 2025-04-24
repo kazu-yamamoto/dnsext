@@ -18,6 +18,7 @@ data Options = Options
     , optKeyLogFile :: Maybe FilePath
     , optResumptionFile :: Maybe FilePath
     , opt0RTT :: Bool
+    , optValidate :: Bool
     }
     deriving (Show)
 
@@ -34,6 +35,7 @@ defaultOptions =
         , optKeyLogFile = Nothing
         , optResumptionFile = Nothing
         , opt0RTT = False
+        , optValidate = False
         }
 
 shortLog :: Options -> Bool

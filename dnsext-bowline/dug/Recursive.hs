@@ -69,6 +69,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                 , ractionKeyLog = case optKeyLogFile of
                     Nothing -> \_ -> return ()
                     Just file -> \msg -> appendFile file (msg ++ "\n")
+                , ractionValidate = optValidate
                 }
     (conf, aps) <- getCustomConf mserver port mempty opt ractions
     mx <-
