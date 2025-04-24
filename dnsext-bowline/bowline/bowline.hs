@@ -98,6 +98,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
     (runLogger, putLines, killLogger, reopenLog0) <- getLogger ruid conf tcache
+    (runSSLKeyLogger, putSSLKeyLog, killSSLKeyLogger) <- getSSLKeyLogger ruid conf
     --
     let rootpriv = do
             (runWriter, putDNSTAP) <- TAP.new conf
@@ -120,6 +121,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                         , negativeTrustAnchors_ = getNegTrustAnchors cnf_domain_insecures
                         , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
                         , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
+                        , putSSLKeyLog_ = putSSLKeyLog
                         , reloadInfo_ = reloadInfo
                         , nsid_ = cnf_nsid
                         , updateHistogram_ = updateHistogram
@@ -146,6 +148,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
     gcacheSetLogLn putLines
     tidW <- runWriter
     runLogger
+    runSSLKeyLogger
     tidA <- mapM (TStat.forkIO "webapi-srv" . API.run mng) masock
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
@@ -164,6 +167,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
         -- Teardown
         `finally` do
             mapM_ maybeKill [tidA, tidW]
+            killSSLKeyLogger
             killLogger
     threadDelay 500000 -- avoiding address already in use
   where
