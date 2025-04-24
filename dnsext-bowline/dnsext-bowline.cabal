@@ -53,7 +53,6 @@ executable bowline
         http-types,
         iproute,
         network >= 3.2.3 && < 3.3,
-        parsec,
         split,
         stm,
         tls >= 2.1.4,
