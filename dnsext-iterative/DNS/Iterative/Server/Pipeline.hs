@@ -112,11 +112,14 @@ data CacheResult
     | CResultHit VResult DNSMessage
     | CResultDenied String
 
+inputAddr :: Input a -> String
+inputAddr Input{..} = show inputPeerInfo ++ " -> " ++ show inputMysa
+
 cacherLogic :: Env -> IO FromReceiver -> (ToWorker -> IO ()) -> IO ()
 cacherLogic env fromReceiver toWorker = handledLoop env "cacher" $ do
     inpBS@Input{..} <- fromReceiver
     case DNS.decode inputQuery of
-        Left e -> logLn env Log.WARN $ "decode-error: " ++ show e
+        Left e -> logLn env Log.WARN $ "cacher.decode-error: " ++ inputAddr inpBS ++ " : " ++ show e
         Right queryMsg -> do
             -- Input ByteString -> Input DNSMessage
             let inp = inpBS{inputQuery = queryMsg}
