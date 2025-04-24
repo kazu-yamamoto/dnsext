@@ -51,6 +51,7 @@ http2Server VcServerConfig{..} env toCacher s = do
             , H2TLS.settingsSlowlorisSize = vc_slowloris_size
             , H2TLS.settingsSessionManager = vc_session_manager
             , H2TLS.settingsEarlyDataSize = vc_early_data_size
+            , H2TLS.settingsKeyLogger = putSSLKeyLog_ env
             }
 
 http2cServers :: VcServerConfig -> ServerActions

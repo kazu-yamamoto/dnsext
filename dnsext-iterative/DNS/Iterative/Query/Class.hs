@@ -115,6 +115,7 @@ data Env = Env
     , filterCache_ :: (Question -> EpochTime -> Cache.Hit -> Ranking -> Bool) -> IO ()
     , clearCache_ :: IO ()
     , currentRoot_ :: IORef (Maybe Delegation)
+    , putSSLKeyLog_ :: String -> IO ()
     , currentSeconds_ :: IO EpochTime
     , currentTimeUsec_ :: IO EpochTimeUsec
     , timeString_ :: IO ShowS

@@ -17,8 +17,9 @@ import qualified Data.IORef as I
 import Data.Int (Int64)
 import Data.String (fromString)
 import GHC.Stats
-import System.Environment (getArgs)
-import System.IO (IOMode (AppendMode), hClose, openFile)
+import System.Environment (getArgs, lookupEnv)
+import System.IO (IOMode (AppendMode), BufferMode (..), hClose, hSetBuffering, openFile)
+import System.IO.Error (tryIOError)
 import System.Posix (Handler (Catch), UserID, getRealUserID, installHandler, setEffectiveGroupID, setEffectiveUserID, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -97,6 +98,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
             readRootHint path
     disable_v6_ns <- check_for_v6_ns
     (runLogger, putLines, killLogger, reopenLog0) <- getLogger ruid conf tcache
+    (runSSLKeyLogger, putSSLKeyLog, killSSLKeyLogger) <- getSSLKeyLogger ruid conf
     --
     let rootpriv = do
             (runWriter, putDNSTAP) <- TAP.new conf
@@ -119,6 +121,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                         , negativeTrustAnchors_ = getNegTrustAnchors cnf_domain_insecures
                         , maxNegativeTTL_ = cropMaxNegativeTTL cnf_cache_max_negative_ttl
                         , failureRcodeTTL_ = cropFailureRcodeTTL cnf_cache_failure_rcode_ttl
+                        , putSSLKeyLog_ = putSSLKeyLog
                         , reloadInfo_ = reloadInfo
                         , nsid_ = cnf_nsid
                         , updateHistogram_ = updateHistogram
@@ -145,6 +148,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
     gcacheSetLogLn putLines
     tidW <- runWriter
     runLogger
+    runSSLKeyLogger
     tidA <- mapM (TStat.forkIO "webapi-srv" . API.run mng) masock
     let withNum name xs = zipWith (\i x -> (name ++ printf "%4d" i, x)) [1 :: Int ..] xs
     let concServer =
@@ -163,6 +167,7 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
         -- Teardown
         `finally` do
             mapM_ maybeKill [tidA, tidW]
+            killSSLKeyLogger
             killLogger
     threadDelay 500000 -- avoiding address already in use
   where
@@ -273,6 +278,24 @@ getLogger ruid conf@Config{..} TimeCache{..}
         let p _ _ ~_ = return ()
             n = return ()
         return (return (), p, n, n)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getSSLKeyLogger :: UserID -> Config -> IO (IO (), String -> IO (), IO ())
+getSSLKeyLogger ruid conf =
+    maybe (pure nolog) logger =<< lookupEnv "BOWLINE_SSLKEYLOGFILE"
+  where
+    logger fn = either left pure =<< tryIOError (logger' fn)
+    left e = putStrLn ("sslkey-logfile: logger open failed: " ++ show e) $> nolog
+    logger' fn = Log.with (pure id) (open fn) hClose Log.INFO $
+        \a _ p k _ -> pure (void $ TStat.forkIO "logger" a, \s -> p Log.INFO Nothing [s], k)
+    open fn = do
+        fh <- withRoot ruid conf $ openFile fn AppendMode
+        hSetBuffering fh LineBuffering
+        putStrLn $ "sslkey-logfile: opened: " ++ fn
+        pure fh
+    nolog = (nop, (\_ -> return ()), nop)
+    nop = return ()
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
