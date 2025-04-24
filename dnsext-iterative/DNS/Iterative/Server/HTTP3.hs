@@ -7,6 +7,7 @@ module DNS.Iterative.Server.HTTP3 (
 
 -- GHC packages
 import Control.Monad (when)
+import Data.Functor
 
 -- dnsext-* packages
 
@@ -29,9 +30,10 @@ http3Servers :: VcServerConfig -> ServerActions
 http3Servers VcServerConfig{..} env toCacher ss = do
     -- fixme: withLocationIOE naming
     when vc_interface_automatic $ mapM_ setPktInfo ss
+    name <- mapM socketName ss <&> \xs -> show xs ++ "/h3"
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
-            withLocationIOE "h3" $ QUIC.runWithSockets ss sconf $ \conn ->
-                H3.runIO conn (conf mgr) $ doHTTP "h3" sbracket incQuery env toCacher
+            withLocationIOE name $ QUIC.runWithSockets ss sconf $ \conn ->
+                H3.runIO conn (conf mgr) $ doHTTP name sbracket incQuery env toCacher
     return [http3server]
   where
     sbracket = sessionStatsDoH3 (stats_ env)
