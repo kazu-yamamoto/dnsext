@@ -45,6 +45,7 @@ tlsServer VcServerConfig{..} env toCacher s = do
             , H2.settingsSlowlorisSize = vc_slowloris_size
             , H2.settingsSessionManager = vc_session_manager
             , H2.settingsEarlyDataSize = vc_early_data_size
+            , H2.settingsKeyLogger = putSSLKeyLog_ env
             }
     go _ backend = sessionStatsDoT (stats_ env) $ do
         let mysa = H2.mySockAddr backend
