@@ -117,6 +117,7 @@ newEmptyEnv = do
         , filterCache_ = \_ -> pure()
         , clearCache_ = pure ()
         , currentRoot_ = rootRef
+        , putSSLKeyLog_ = \_ -> pure ()
         , currentSeconds_ = getTime
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
