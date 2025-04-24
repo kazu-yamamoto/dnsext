@@ -87,11 +87,11 @@ bindAPI Config{..}
                     , addrSocketType = Stream
                     }
         NE.head <$> getAddrInfo (Just hints) (Just cnf_webapi_addr) (Just $ show cnf_webapi_port)
-    open ai = E.bracketOnError (openSocket ai) close $ \sock -> do
-        setSocketOption sock ReuseAddr 1
-        withFdSocket sock setCloseOnExecIfNeeded
-        withLocationIOE (show ai ++ "/webapi") $ do
-            bind sock $ addrAddress ai
+    open ai@AddrInfo{addrAddress = a} = E.bracketOnError (openSocket ai) close $ \sock -> do
+        withLocationIOE (show a ++ "/webapi") $ do
+            setSocketOption sock ReuseAddr 1
+            withFdSocket sock setCloseOnExecIfNeeded
+            bind sock a
             listen sock 32
         return sock
 {- FOURMOLU_ENABLE -}
