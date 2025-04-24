@@ -17,8 +17,9 @@ import qualified Data.IORef as I
 import Data.Int (Int64)
 import Data.String (fromString)
 import GHC.Stats
-import System.Environment (getArgs)
-import System.IO (IOMode (AppendMode), hClose, openFile)
+import System.Environment (getArgs, lookupEnv)
+import System.IO (IOMode (AppendMode), BufferMode (..), hClose, hSetBuffering, openFile)
+import System.IO.Error (tryIOError)
 import System.Posix (Handler (Catch), UserID, getRealUserID, installHandler, setEffectiveGroupID, setEffectiveUserID, sigHUP)
 import System.Timeout (timeout)
 import Text.Printf (printf)
@@ -273,6 +274,24 @@ getLogger ruid conf@Config{..} TimeCache{..}
         let p _ _ ~_ = return ()
             n = return ()
         return (return (), p, n, n)
+{- FOURMOLU_ENABLE -}
+
+{- FOURMOLU_DISABLE -}
+getSSLKeyLogger :: UserID -> Config -> IO (IO (), String -> IO (), IO ())
+getSSLKeyLogger ruid conf =
+    maybe (pure nolog) logger =<< lookupEnv "BOWLINE_SSLKEYLOGFILE"
+  where
+    logger fn = either left pure =<< tryIOError (logger' fn)
+    left e = putStrLn ("sslkey-logfile: logger open failed: " ++ show e) $> nolog
+    logger' fn = Log.with (pure id) (open fn) hClose Log.INFO $
+        \a _ p k _ -> pure (void $ TStat.forkIO "logger" a, \s -> p Log.INFO Nothing [s], k)
+    open fn = do
+        fh <- withRoot ruid conf $ openFile fn AppendMode
+        hSetBuffering fh LineBuffering
+        putStrLn $ "sslkey-logfile: opened: " ++ fn
+        pure fh
+    nolog = (nop, (\_ -> return ()), nop)
+    nop = return ()
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
