@@ -267,6 +267,8 @@ data ResolveActions = ResolveActions
     -- ^ Use 0-RTT or not.
     , ractionOnConnectionInfo :: NameTag -> String -> IO ()
     -- ^ Action for connection information
+    , ractionValidate :: Bool
+    -- ^ Validating server's certificate.
     }
 
 instance Show ResolveActions where
@@ -286,6 +288,7 @@ defaultResolveActions =
         , ractionOnResumptionInfo = \_ _ -> return ()
         , ractionUseEarlyData = False
         , ractionOnConnectionInfo = \_ _ -> return ()
+        , ractionValidate = True
         }
 
 rsso :: Socket -> IO ()

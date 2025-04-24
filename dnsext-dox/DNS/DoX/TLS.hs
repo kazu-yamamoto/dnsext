@@ -27,7 +27,7 @@ tlsPersistentResolver ri@ResolveInfo{..} body =
 makeSettings :: ResolveInfo -> NameTag -> H2.Settings
 makeSettings ResolveInfo{..} tag =
     H2.defaultSettings
-        { H2.settingsValidateCert = False
+        { H2.settingsValidateCert = ractionValidate rinfoActions
         , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
         , H2.settingsKeyLogger = ractionKeyLog rinfoActions
         , H2.settingsWantSessionResumeList =
