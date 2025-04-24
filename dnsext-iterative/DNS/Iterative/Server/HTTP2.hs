@@ -103,7 +103,7 @@ doHTTP name sbracket incQuery env toCacher ServerIO{..} = do
             let peerInfo = PeerInfoStream sioPeerSockAddr (toSuperStream sprstrm)
             einp <- getInput req
             case einp of
-                Left emsg -> logLn env Log.WARN $ "decode-error: " ++ emsg
+                Left emsg -> logLn env Log.WARN $ "http.decode-error: " ++ name ++ ": " ++ emsg
                 Right bs -> do
                     let inp = Input bs noPendingOp sioMySockAddr peerInfo DOH toSender ts
                     incQuery sioPeerSockAddr
