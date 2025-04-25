@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoStrict #-}
 
@@ -43,10 +45,17 @@ instance Show Context where
 defaultContext :: Context
 defaultContext = Context "." "." 1800 IN
 
-type Parser a = StateT Context (Poly.Parser [Token]) a
+type Parser = StateT Context (Poly.Parser [Token])
 
 runParser :: Parser a -> Context -> [Token] -> Either String ((a, Context), [Token])
 runParser p = Poly.runParser . runStateT p
+
+instance MonadParser Token [Token] Parser where
+    getInput = lift getInput
+    putInput = lift . putInput
+    raiseParser = lift . raiseParser
+    getPos = lift getPos
+    putPos = lift . putPos
 
 setCx :: (a -> Context -> Context) -> a -> Parser a
 setCx set_ x = modify (set_ x) $> x
@@ -72,37 +81,37 @@ setClass = setCx (\x s -> s{cx_class = x})
 -- |
 -- >>> runParser dot cx [Dot]
 -- Right ((Dot,Context "." "." 3600 IN),[])
-dot :: Parser Token
-dot = lift $ this Dot
+dot :: MonadParser Token s m => m Token
+dot = this Dot
 
 -- |
 -- >>> runParser blank cx [Blank]
 -- Right ((Blank,Context "." "." 3600 IN),[])
-blank :: Parser Token
-blank = lift $ this Blank
+blank :: MonadParser Token s m => m Token
+blank = this Blank
 
 {- FOURMOLU_DISABLE -}
-lstring :: Parser CString
-lstring = lift $ do
-    t <- poly_token
+lstring :: MonadParser Token s m => m CString
+lstring = do
+    t <- token
     case t of
         CS cs -> pure cs
         _     -> raise $ "Parser.lstring: not CString: " ++ show t
 
-cstring :: Parser CString
+cstring :: MonadParser Token s m => m CString
 cstring = do
     cs <- lstring
-    guard (Short.length cs < 256) <|> lift (raise $ "Parser.cstring: too long: " ++ show cs)
+    guard (Short.length cs < 256) <|> raise ("Parser.cstring: too long: " ++ show cs)
     pure cs
 
-readable :: Read a => String -> Parser a
+readable :: (Read a, MonadParser t s m) => String -> m a
 readable str =
     case [ x | (x, "") <- reads str ] of
-        []   -> lift $  raise $ "Parser.readable: unable to read: " ++ str
+        []   -> raise $ "Parser.readable: unable to read: " ++ str
         x:_  -> pure x
 {- FOURMOLU_ENABLE -}
 
-readCString :: Read a => Parser a
+readCString :: (Read a, MonadParser Token s m) => m a
 readCString = readable . fromCString =<< cstring
 
 ---
@@ -110,11 +119,11 @@ readCString = readable . fromCString =<< cstring
 type Labels = [CString]
 
 -- | not empty relative domain labels
-rlabels' :: Parser (Labels -> Labels)
+rlabels' :: MonadParser Token s m => m (Labels -> Labels)
 rlabels' = (++) <$> ((:) <$> cstring <*> many (dot *> cstring))
 
 -- | absolute domain labels
-alabels :: Parser Labels
+alabels :: MonadParser Token s m => m Labels
 alabels = (rlabels' <|> pure id {- root case -}) <*> (dot $> [])
 
 rlabels :: Parser Labels
@@ -129,7 +138,7 @@ fromLabels = fromWireLabels . V.fromList
 -- | absolute domain name
 -- >>> runParser adomain cx [CS "example",Dot,CS "net",Dot]
 -- Right (("example.net.",Context "." "." 3600 IN),[])
-adomain :: Parser Domain
+adomain :: MonadParser Token s m => m Domain
 adomain = fromLabels <$> alabels
 
 -- | not empty relative domain name
@@ -150,7 +159,7 @@ domain :: Parser Domain
 domain =
     adomain                         <|>
     rdomain                         <|>
-    lift (this At) *> gets cx_zone
+    this At *> gets cx_zone
 
 mailbox :: Parser Mailbox
 mailbox = fromLabels <$> ( alabels  <|> rlabels )
@@ -168,16 +177,16 @@ ttl = seconds
 -- |
 -- >>> runParser class_ cx [CS "IN"]
 -- Right ((IN,Context "." "." 3600 IN),[])
-class_ :: Parser CLASS
-class_ = lift (this $ CS "IN") $> IN
+class_ :: MonadParser Token s m => m CLASS
+class_ = this (CS "IN") $> IN
 
 -- |
 -- >>> runParser (type_ AAAA) cx [CS "AAAA"]
 -- Right ((AAAA,Context "." "." 3600 IN),[])
-type_ :: TYPE -> Parser TYPE
+type_ :: MonadParser Token s m => TYPE -> m TYPE
 type_ ty = do
     t <- readCString
-    guard (t == ty) <|> lift (raise $ "ztype: expected: " ++ show ty ++ ", actual: " ++ show t)
+    guard (t == ty) <|> raise ("ztype: expected: " ++ show ty ++ ", actual: " ++ show t)
     pure t
 
 ---
@@ -185,7 +194,7 @@ type_ ty = do
 -- |
 -- >>> runParser ipv4 cx [CS "203",Dot,CS "0",Dot,CS "113",Dot,CS "3"]
 -- Right ((203.0.113.3,Context "." "." 3600 IN),[])
-ipv4 :: Parser IPv4
+ipv4 :: MonadParser Token s m => m IPv4
 ipv4 = join $ readv4 <$> cstrstr <*> (dot *> cstrstr) <*> (dot *> cstrstr) <*> (dot *> cstrstr)
   where
     cstrstr = fromCString <$> cstring
@@ -194,21 +203,21 @@ ipv4 = join $ readv4 <$> cstrstr <*> (dot *> cstrstr) <*> (dot *> cstrstr) <*> (
 -- |
 -- >>> runParser ipv6 cx [CS "2001:db8::3"]
 -- Right ((2001:db8::3,Context "." "." 3600 IN),[])
-ipv6 :: Parser IPv6
+ipv6 :: MonadParser Token s m => m IPv6
 ipv6 = readCString
 
 ---
 
-rdataA :: Parser RData
+rdataA :: MonadParser Token s m => m RData
 rdataA = rd_a <$> ipv4
 
-rdataAAAA :: Parser RData
+rdataAAAA :: MonadParser Token s m => m RData
 rdataAAAA = rd_aaaa <$> ipv6
 
 rdataPTR :: Parser RData
 rdataPTR = rd_ptr <$> domain
 
-rdataTXT :: Parser RData
+rdataTXT :: MonadParser Token s m => m RData
 rdataTXT = rd_txt_n . txts <$> ((:) <$> nbstring <*> many (blank *> nbstring))
   where
     txts = map Opaque.fromShortByteString
@@ -233,24 +242,24 @@ rdataSOA =
 
 ---
 
-keytag :: Parser Word16
+keytag :: MonadParser Token s m => m Word16
 keytag = readCString
 
-pubalg :: Parser PubAlg
+pubalg :: MonadParser Token s m => m PubAlg
 pubalg = toPubAlg <$> readCString
 
-digestalg :: Parser DigestAlg
+digestalg :: MonadParser Token s m => m DigestAlg
 digestalg = toDigestAlg <$> readCString
 
-digest :: Parser Opaque
+digest :: MonadParser Token s m => m Opaque
 digest = handleB16 . Opaque.fromBase16 . fromShort =<< cstring
   where
-    handleB16 = either (lift . raise . ("Parser.digest: fromBase16: " ++)) pure
+    handleB16 = either (raise . ("Parser.digest: fromBase16: " ++)) pure
 
 ---
 
 {- FOURMOLU_DISABLE -}
-rdataDS :: Parser RData
+rdataDS :: MonadParser Token s m => m RData
 rdataDS =
     rd_ds
     <$> keytag <*> (blank *> pubalg) <*> (blank *> digestalg)
@@ -258,7 +267,7 @@ rdataDS =
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
-rdataDNSKEY :: Parser RData
+rdataDNSKEY :: MonadParser Token s m => m RData
 rdataDNSKEY = do
     mkRD  <- rd_dnskey <$> keyflags <*> (blank *> proto)
     alg   <- blank *> pubalg
@@ -267,7 +276,7 @@ rdataDNSKEY = do
   where
     keyflags = toDNSKEYflags <$> readCString
     proto = readCString
-    handleB64 = either (lift . raise . ("Parser.rdataDNSKEY: fromBase64: " ++)) pure
+    handleB64 = either (raise . ("Parser.rdataDNSKEY: fromBase64: " ++)) pure
     part = fromShort <$> lstring
     parts = (BS.concat <$>) $ (:) <$> part <*> many (blank *> part)
     keyB64 = handleB64 . Opaque.fromBase64 =<< parts
@@ -283,7 +292,7 @@ rdataDNSKEY = do
 -- >>> runParser zoneOrigin cx [Directive D_Origin,Blank,CS "example",Dot,CS "net",Dot]
 -- Right (("example.net.",Context "example.net." "." 3600 IN),[])
 zoneOrigin :: Parser Domain
-zoneOrigin = lift (this (Directive D_Origin) *> this Blank) *> adomain >>= setZone
+zoneOrigin = this (Directive D_Origin) *> this Blank *> adomain >>= setZone
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -294,7 +303,7 @@ zoneOrigin = lift (this (Directive D_Origin) *> this Blank) *> adomain >>= setZo
 -- >>> runParser zoneTTL cx [Directive D_TTL,Blank,CS "7200"]
 -- Right ((7200(2 hours),Context "." "." 7200 IN),[])
 zoneTTL :: Parser TTL
-zoneTTL = lift (this (Directive D_TTL) *> this Blank) *> ttl >>= setTTL
+zoneTTL = this (Directive D_TTL) *> this Blank *> ttl >>= setTTL
 {- FOURMOLU_ENABLE -}
 
 {- NOT SUPPORT --- $INCLUDE <file-name> [<domain-name>] [<comment>] -}
@@ -363,14 +372,14 @@ record =
 
 {- FOURMOLU_DISABLE -}
 file :: Parser [Record]
-file = many (record <* lift (this RSep))
+file = many (record <* this RSep)
 {- FOURMOLU_ENABLE -}
 
 -- |
 -- >>> parseLineRR [CS "example",Dot,CS "net",Dot,Blank,CS "7200",Blank,CS "IN",Blank,CS "AAAA",Blank,CS "2001:db8::3"] defaultContext
 -- Right (ResourceRecord {rrname = "example.net.", rrtype = AAAA, rrclass = IN, rrttl = 7200(2 hours), rdata = 2001:db8::3},Context "." "example.net." 7200 IN)
 parseLineRR :: [Token] -> Context -> Either String (ResourceRecord, Context)
-parseLineRR ts icontext = fst <$> runParser (zoneRR <* lift eof) icontext ts
+parseLineRR ts icontext = fst <$> runParser (zoneRR <* eof) icontext ts
 
 -- |
 -- >>> parseLineRecord [Directive D_Origin,Blank,CS "example",Dot,CS "net",Dot] defaultContext
@@ -378,10 +387,10 @@ parseLineRR ts icontext = fst <$> runParser (zoneRR <* lift eof) icontext ts
 -- >>> parseLineRecord [CS "example",Dot,CS "net",Dot,Blank,CS "7200",Blank,CS "IN",Blank,CS "AAAA",Blank,CS "2001:db8::3"] defaultContext
 -- Right (R_RR (ResourceRecord {rrname = "example.net.", rrtype = AAAA, rrclass = IN, rrttl = 7200(2 hours), rdata = 2001:db8::3}),Context "." "example.net." 7200 IN)
 parseLineRecord :: [Token] -> Context -> Either String (Record, Context)
-parseLineRecord ts icontext = fst <$> runParser (record <* lift eof) icontext ts
+parseLineRecord ts icontext = fst <$> runParser (record <* eof) icontext ts
 
 -- |
 -- >>> parseFile [CS "example",Dot,CS "net",Dot,Blank,CS "7200",Blank,CS "IN",Blank,CS "AAAA",Blank,CS "2001:db8::3",RSep]
 -- Right ([R_RR (ResourceRecord {rrname = "example.net.", rrtype = AAAA, rrclass = IN, rrttl = 7200(2 hours), rdata = 2001:db8::3})],Context "." "example.net." 7200 IN)
 parseFile :: [Token] -> Either String ([Record], Context)
-parseFile = (fst <$>) . runParser (file <* lift eof) defaultContext
+parseFile = (fst <$>) . runParser (file <* eof) defaultContext
