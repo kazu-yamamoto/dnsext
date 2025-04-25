@@ -203,6 +203,8 @@ data ResolveInfo = ResolveInfo
     , rinfoUDPRetry :: UDPRetry
     , rinfoVCLimit :: VCLimit
     , rinfoPath :: Maybe ShortByteString
+    , rinfoServerName :: Maybe String
+    -- ^ Server name indication for TLS.
     }
     deriving (Show)
 
@@ -215,6 +217,7 @@ defaultResolveInfo =
         , rinfoUDPRetry = 3
         , rinfoVCLimit = 2048
         , rinfoPath = Nothing
+        , rinfoServerName = Nothing
         }
 
 data Reply = Reply
@@ -267,6 +270,8 @@ data ResolveActions = ResolveActions
     -- ^ Use 0-RTT or not.
     , ractionOnConnectionInfo :: NameTag -> String -> IO ()
     -- ^ Action for connection information
+    , ractionValidate :: Bool
+    -- ^ Validating server's certificate.
     }
 
 instance Show ResolveActions where
@@ -286,6 +291,7 @@ defaultResolveActions =
         , ractionOnResumptionInfo = \_ _ -> return ()
         , ractionUseEarlyData = False
         , ractionOnConnectionInfo = \_ _ -> return ()
+        , ractionValidate = True
         }
 
 rsso :: Socket -> IO ()

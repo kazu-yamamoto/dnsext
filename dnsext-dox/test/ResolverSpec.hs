@@ -46,6 +46,7 @@ spec = describe "solvers" $ do
                 defaultResolveInfo
                     { rinfoIP = "103.2.57.5"
                     , rinfoPort = 853
+                    , rinfoServerName = Just "public.dns.iij.jp"
                     }
 
         Right Reply{..} <- tlsResolver ri3 q mempty
@@ -98,6 +99,7 @@ spec = describe "solvers" $ do
                     { rinfoIP = "103.2.57.5"
                     , rinfoPort = 443
                     , rinfoPath = Just "/dns-query"
+                    , rinfoServerName = Just "public.dns.iij.jp"
                     }
 
         Right Reply{..} <- http2Resolver ri3 q mempty

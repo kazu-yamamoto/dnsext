@@ -182,13 +182,14 @@ tcpResolver ri@ResolveInfo{..} q qctl =
         ractionSetSockOpt rinfoActions sock
         let send = sendVC $ sendTCP sock
             recv = recvVC rinfoVCLimit $ recvTCP sock
-        vcResolver "TCP" send recv ri q qctl
+        vcResolver tag send recv ri q qctl
   where
+    tag = nameTag ri "TCP"
     open = openTCP rinfoIP rinfoPort
 
 -- | Generic resolver for virtual circuit.
-vcResolver :: String -> (BS -> IO ()) -> IO BS -> OneshotResolver
-vcResolver proto send recv ri@ResolveInfo{rinfoActions = ResolveActions{..}} q _qctl = do
+vcResolver :: NameTag -> (BS -> IO ()) -> IO BS -> OneshotResolver
+vcResolver tag send recv ResolveInfo{rinfoActions = ResolveActions{..}} q _qctl = do
     unless ractionShortLog $ ractionLog Log.DEMO Nothing [qtag]
     ex <- E.try $ go _qctl
     case ex of
@@ -199,7 +200,6 @@ vcResolver proto send recv ri@ResolveInfo{rinfoActions = ResolveActions{..}} q _
                 return $ Left $ fromIOException qtag e
             | otherwise -> return $ Left $ BadThing (show se)
   where
-    tag = nameTag ri proto
     ~qtag = queryTag q tag
     go qctl0 = do
         erply <- sendQueryRecvAnswer qctl0
