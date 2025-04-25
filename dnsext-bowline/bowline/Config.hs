@@ -24,7 +24,7 @@ import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName,
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import qualified DNS.Log as Log
-import DNS.Parser hiding (Parser, eof, lookAhead, choice)
+import DNS.Parser hiding (Parser)
 import DNS.Types (DNSError, Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
 import qualified DNS.Types.Opaque as Opaque
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)

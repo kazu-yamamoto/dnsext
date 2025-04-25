@@ -17,9 +17,6 @@ module Parser (
     commentLines,
     trailing,
     comment,
-    eof,
-    lookAhead,
-    choice,
     digit,
     string,
     char,
@@ -33,7 +30,7 @@ import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Word (Word8)
 import System.IO
 
-import DNS.Parser hiding (Parser, eof, lookAhead, choice)
+import DNS.Parser hiding (Parser)
 import qualified DNS.Parser as P
 
 -- $setup
@@ -125,15 +122,6 @@ comment :: MonadParser W8 s m => m ()
 comment = void $ char '#' <* many (noneOf "\n")
 
 -----
-
-eof :: MonadParser W8 s m => m ()
-eof = P.eof
-
-lookAhead :: MonadParser W8 s m => m a -> m a
-lookAhead = P.lookAhead
-
-choice :: MonadParser W8 s m => [m a] -> m a
-choice = P.choice
 
 newline :: MonadParser W8 s m => m Char
 newline = satisfyChar "newline" (== '\n')
