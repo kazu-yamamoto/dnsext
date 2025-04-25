@@ -58,7 +58,7 @@ recursiveQuery
     -> Options
     -> TQueue (NameTag, String)
     -> IO ()
-recursiveQuery mserver port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
+recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     let ractions =
             defaultResolveActions
                 { ractionLog = \a b c -> atomically $ putLinesSTM a b c
@@ -71,7 +71,7 @@ recursiveQuery mserver port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                     Just file -> \msg -> appendFile file (msg ++ "\n")
                 , ractionValidate = optValidate
                 }
-    (conf, aps) <- getCustomConf mserver port mempty opt ractions
+    (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
             then resolvePipeline conf
@@ -188,7 +188,7 @@ getCustomConf
     -> Options
     -> ResolveActions
     -> IO (LookupConf, [(IP, PortNumber)])
-getCustomConf mserver port ctl Options{..} ractions = case mserver of
+getCustomConf ips port ctl Options{..} ractions = case ips of
     [] -> return (conf, [])
     hs -> do
         let as = if optDisableV6NS then [ip4 | ip4@IPv4{} <- hs] else hs
