@@ -27,7 +27,7 @@ main = do
     stdoutLock <- newMVar ()
     foldr1 race_ $ map (withServer stdoutLock targets) ris
   where
-    withServer stdoutLock targets ri = withTcpResolver ri $ \resolv -> do
+    withServer stdoutLock targets ri = tcpPersistentResolver ri $ \resolv -> do
         foldr1 concurrently_ $ map (lookupAndPrint resolv stdoutLock) targets
     lookupAndPrint resolv stdoutLock (dom, ref) = do
         r <- resolv q mempty
