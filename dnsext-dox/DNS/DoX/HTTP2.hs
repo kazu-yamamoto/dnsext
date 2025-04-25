@@ -43,22 +43,22 @@ withTimeout ResolveInfo{..} action = do
 
 http2PersistentResolver :: PersistentResolver
 http2PersistentResolver ri@ResolveInfo{..} body = do
+    settings <- makeSettings ri tag
     ident <- ractionGenId rinfoActions
     H2.run settings (show rinfoIP) rinfoPort $
         doHTTP tag ident ri body
   where
     tag = nameTag ri "H2"
-    settings = makeSettings ri tag
 
 http2Resolver :: OneshotResolver
 http2Resolver ri@ResolveInfo{..} q qctl = do
+    settings <- makeSettings ri tag
     ident <- ractionGenId rinfoActions
     withTimeout ri $
         H2.run settings (show rinfoIP) rinfoPort $
             doHTTPOneshot tag ident ri q qctl
   where
     tag = nameTag ri "H2"
-    settings = makeSettings ri tag
 
 http2cPersistentResolver :: PersistentResolver
 http2cPersistentResolver ri@ResolveInfo{..} body = do
