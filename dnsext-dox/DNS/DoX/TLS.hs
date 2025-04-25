@@ -14,6 +14,8 @@ import System.X509
 
 import DNS.Do53.Internal
 
+import DNS.DoX.Imports
+
 tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body = do
     settings <- makeSettings ri tag
@@ -33,6 +35,7 @@ makeSettings ResolveInfo{..} tag = do
             { H2.settingsValidateCert = ractionValidate rinfoActions
             , H2.settingsCAStore = caStore
             , H2.settingsUseEarlyData = ractionUseEarlyData rinfoActions
+            , H2.settingsServerNameOverride = rinfoServerName
             , H2.settingsKeyLogger = ractionKeyLog rinfoActions
             , H2.settingsWantSessionResumeList =
                 rights (deserialiseOrFail . BL.fromStrict <$> ractionResumptionInfo rinfoActions tag)

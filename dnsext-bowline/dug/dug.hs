@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main (main) where
 
@@ -176,7 +177,7 @@ main = do
         else do
             let mserver = map (drop 1) at
             ips <- resolveServers opts1 mserver
-            opts <- checkFallbackV4 opts1 [(ip, 53) | ip <- ips]
+            opts <- checkFallbackV4 opts1 [(ip, 53) | (ip, _) <- ips]
             recursiveQuery ips port putLnSTM putLinesSTM qs opts tq
     ------------------------
     putTime t0 putLines
@@ -229,18 +230,18 @@ checkFallbackV4 opt addrs
 ----------------------------------------------------------------
 
 {- FOURMOLU_DISABLE -}
-resolveServers :: Options -> [HostName] -> IO [IP]
+resolveServers :: Options -> [HostName] -> IO [(IP, Maybe HostName)]
 resolveServers Options{..} hs = concat <$> mapM toNumeric hs
   where
     toNumeric sname
-        | Just ip <- readMaybe sname  = pure [IPv4 ip]
-        | Just ip <- readMaybe sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [IPv6 ip]
+        | Just ip <- readMaybe sname  = pure [(IPv4 ip, Nothing)]
+        | Just ip <- readMaybe sname  = when optDisableV6NS (fail $ "IPv6 host address with '-4': " ++ sname) $> [(IPv6 ip, Nothing)]
     toNumeric sname = Do53.withLookupConf Do53.defaultLookupConf $ \env -> do
         let dom = fromRepresentation sname
         eA <- fmap (fmap (IPv4 . DNS.a_ipv4)) <$> Do53.lookupA env dom
         eAAAA <- sequence [ fmap (fmap (IPv6 . DNS.aaaa_ipv6)) <$> Do53.lookupAAAA env dom | not optDisableV6NS ]
         let as = concat $ rights $ eA : eAAAA
-        when (null as) (fail $ show eA) $> as
+        when (null as) (fail $ show eA) $> map (, Just sname) as
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------

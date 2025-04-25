@@ -39,9 +39,8 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Either
 import Data.IP (IP (..))
 import qualified Data.List as List
-import Data.String
 import qualified Network.QUIC.Client as QUIC
-import Network.Socket (PortNumber)
+import Network.Socket (HostName, PortNumber)
 import qualified Network.TLS as TLS
 import System.Console.ANSI.Types
 import System.Directory (doesFileExist, removeFile)
@@ -50,7 +49,7 @@ import System.Exit (exitFailure)
 import Types
 
 recursiveQuery
-    :: [IP]
+    :: [(IP, Maybe HostName)]
     -> PortNumber
     -> (DNS.DNSMessage -> STM ())
     -> Log.PutLines STM
@@ -160,18 +159,19 @@ printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
 makeResolveInfo
     :: ResolveActions
     -> TQueue (NameTag, String)
-    -> [(IP, PortNumber)]
+    -> [(IP, Maybe HostName, PortNumber)]
     -> [(NameTag, ByteString)]
     -> [ResolveInfo]
 makeResolveInfo ractions tq aps ss = mk <$> aps
   where
-    mk (ip, port) =
+    mk (ip, msvr, port) =
         defaultResolveInfo
             { rinfoIP = ip
             , rinfoPort = port
             , rinfoUDPRetry = 2
             , rinfoActions = ractions'
             , rinfoVCLimit = 8192
+            , rinfoServerName = msvr
             }
       where
         ractions' =
@@ -182,18 +182,19 @@ makeResolveInfo ractions tq aps ss = mk <$> aps
 
 {- FOURMOLU_DISABLE -}
 getCustomConf
-    :: [IP]
+    :: [(IP, Maybe HostName)]
     -> PortNumber
     -> QueryControls
     -> Options
     -> ResolveActions
-    -> IO (LookupConf, [(IP, PortNumber)])
+    -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
 getCustomConf ips port ctl Options{..} ractions = case ips of
     [] -> return (conf, [])
     hs -> do
-        let as = if optDisableV6NS then [ip4 | ip4@IPv4{} <- hs] else hs
-            aps = map (\h -> (fromString h, port)) $ map show as
-        return (conf{lconfSeeds = SeedsAddrPorts aps}, aps)
+        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- hs] else hs
+            ahps = map (\(x,y) -> (x,y,port)) ahs
+            aps = map (\(x,_) -> (x,port)) ahs
+        return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
   where
     conf =
         DNS.defaultLookupConf

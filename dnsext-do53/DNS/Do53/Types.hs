@@ -203,6 +203,8 @@ data ResolveInfo = ResolveInfo
     , rinfoUDPRetry :: UDPRetry
     , rinfoVCLimit :: VCLimit
     , rinfoPath :: Maybe ShortByteString
+    , rinfoServerName :: Maybe String
+    -- ^ Server name indication for TLS.
     }
     deriving (Show)
 
@@ -215,6 +217,7 @@ defaultResolveInfo =
         , rinfoUDPRetry = 3
         , rinfoVCLimit = 2048
         , rinfoPath = Nothing
+        , rinfoServerName = Nothing
         }
 
 data Reply = Reply
