@@ -55,14 +55,12 @@ makeSettings ResolveInfo{..} tag = do
             }
 
 tlsResolver :: OneshotResolver
-tlsResolver ri@ResolveInfo{..} q qctl =
+tlsResolver ri@ResolveInfo{..} q qctl = do
+    settings <- makeSettings ri tag
     -- Using a fresh connection
     H2.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do
         let sendDoT = sendVC $ H2.sendManyTLS ctx
             recvDoT = recvVC rinfoVCLimit $ H2.recvTLS ctx
-        vcResolver "TLS" sendDoT recvDoT ri q qctl
+        vcResolver tag sendDoT recvDoT ri q qctl
   where
-    settings =
-        H2.defaultSettings
-            { H2.settingsValidateCert = False
-            }
+    tag = nameTag ri "TLS"
