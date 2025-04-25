@@ -13,7 +13,7 @@ import DNS.Types
 -- this package
 import DNS.Parser
 
-raise :: CaseCons t s => String -> Parser s a
+raise :: MonadParser t s m => String -> m a
 raise = parseError
 
 poly_token :: CaseCons t s => Parser s t
