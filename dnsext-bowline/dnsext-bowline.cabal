@@ -97,7 +97,7 @@ executable dug
         iproute,
         network,
         prettyprinter,
-        quic,
+        quic >= 0.2.11 && < 0.3,
         random,
         serialise,
         stm,
