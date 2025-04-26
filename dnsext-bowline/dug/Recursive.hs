@@ -76,7 +76,7 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
-            then resolvePipeline conf
+            then resolvePipeline conf tq
             else case makePersistentResolver optDoX of
                 -- PersistentResolver
                 Just persitResolver -> do
@@ -111,15 +111,15 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
             -- are certainly saved.
             mapConcurrently_ (resolver putLnSTM putLinesSTM targets) pipes
 
-resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
-resolvePipeline conf = do
+resolvePipeline :: LookupConf -> TQueue (NameTag, String) -> IO (Maybe [PipelineResolver])
+resolvePipeline conf tq = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
         Left err -> do
             print err
             exitFailure
         Right si -> do
-            let psss = map toPipelineResolvers si
+            let psss = map toPipelineResolvers $ map (map addAction) si -- fixme
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
@@ -129,6 +129,15 @@ resolvePipeline conf = do
                         putStrLn "No proper SVCB"
                         exitFailure
                     ps : _ -> return $ Just ps
+  where
+    addAction (alpn, ris) = (alpn, map add ris)
+    add ri@ResolveInfo{..} =
+        ri
+            { rinfoActions =
+                rinfoActions
+                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+                    }
+            }
 
 resolver
     :: (DNS.DNSMessage -> STM ())
