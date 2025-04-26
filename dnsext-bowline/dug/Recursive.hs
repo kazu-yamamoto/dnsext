@@ -136,11 +136,15 @@ resolver
     -> [((Question, QueryControls), TVar Bool)]
     -> PipelineResolver
     -> IO ()
-resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
-    -- running concurrently for multiple target domains
-    mapConcurrently_ (printIt resolv) targets
+resolver putLnSTM putLinesSTM targets pipeline =
+    E.handle ignore $ pipeline $ \resolv ->
+        -- running concurrently for multiple target domains
+        mapConcurrently_ (printIt resolv) targets
   where
-    printIt resolv ((q, ctl), tvar) = do
+    ignore (E.SomeException se)
+        | isAsyncException se = E.throwIO se
+        | otherwise = return ()
+    printIt resolv ((q, ctl), tvar) = E.handle ignore $ do
         er <- resolv q ctl
         atomically $ do
             done <- readTVar tvar
@@ -264,3 +268,9 @@ safeAppendFile file bs = loop (10 :: Int)
                 r <- randomRIO (1, 10)
                 threadDelay (r * 1000)
                 loop (n - 1)
+
+isAsyncException :: E.Exception e => e -> Bool
+isAsyncException e =
+    case E.fromException (E.toException e) of
+        Just (E.SomeAsyncException _) -> True
+        Nothing -> False
