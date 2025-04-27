@@ -5,8 +5,10 @@
 module Recursive (recursiveQuery) where
 
 import Codec.Serialise
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import qualified Control.Exception as E
 import Control.Monad
 import DNS.Do53.Client (
     LookupConf (..),
@@ -45,6 +47,7 @@ import qualified Network.TLS as TLS
 import System.Console.ANSI.Types
 import System.Directory (doesFileExist, removeFile)
 import System.Exit (exitFailure)
+import System.Random (randomRIO)
 
 import Types
 
@@ -67,13 +70,13 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                 , ractionUseEarlyData = opt0RTT
                 , ractionKeyLog = case optKeyLogFile of
                     Nothing -> \_ -> return ()
-                    Just file -> \msg -> appendFile file (msg ++ "\n")
+                    Just file -> \msg -> safeAppendFile file (C8.pack (msg ++ "\n"))
                 , ractionValidate = optValidate
                 }
     (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
-            then resolvePipeline conf
+            then resolvePipeline conf tq
             else case makePersistentResolver optDoX of
                 -- PersistentResolver
                 Just persitResolver -> do
@@ -108,15 +111,15 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
             -- are certainly saved.
             mapConcurrently_ (resolver putLnSTM putLinesSTM targets) pipes
 
-resolvePipeline :: LookupConf -> IO (Maybe [PipelineResolver])
-resolvePipeline conf = do
+resolvePipeline :: LookupConf -> TQueue (NameTag, String) -> IO (Maybe [PipelineResolver])
+resolvePipeline conf tq = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
         Left err -> do
             print err
             exitFailure
         Right si -> do
-            let psss = map toPipelineResolvers si
+            let psss = map toPipelineResolvers $ map (map addAction) si -- fixme
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
@@ -126,6 +129,15 @@ resolvePipeline conf = do
                         putStrLn "No proper SVCB"
                         exitFailure
                     ps : _ -> return $ Just ps
+  where
+    addAction (alpn, ris) = (alpn, map add ris)
+    add ri@ResolveInfo{..} =
+        ri
+            { rinfoActions =
+                rinfoActions
+                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+                    }
+            }
 
 resolver
     :: (DNS.DNSMessage -> STM ())
@@ -133,11 +145,15 @@ resolver
     -> [((Question, QueryControls), TVar Bool)]
     -> PipelineResolver
     -> IO ()
-resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv ->
-    -- running concurrently for multiple target domains
-    mapConcurrently_ (printIt resolv) targets
+resolver putLnSTM putLinesSTM targets pipeline =
+    E.handle ignore $ pipeline $ \resolv ->
+        -- running concurrently for multiple target domains
+        mapConcurrently_ (printIt resolv) targets
   where
-    printIt resolv ((q, ctl), tvar) = do
+    ignore (E.SomeException se)
+        | isAsyncException se = E.throwIO se
+        | otherwise = return ()
+    printIt resolv ((q, ctl), tvar) = E.handle ignore $ do
         er <- resolv q ctl
         atomically $ do
             done <- readTVar tvar
@@ -225,7 +241,7 @@ saveResumption file tq name@(NameTag tag) bs = do
     case extractInfo of
         Nothing -> return ()
         Just info -> atomically $ writeTQueue tq (name, info)
-    BS.appendFile file (C8.pack tag <> " " <> BS16.encode bs <> "\n")
+    safeAppendFile file (C8.pack tag <> " " <> BS16.encode bs <> "\n")
   where
     extractInfo
         | "QUIC" `List.isSuffixOf` tag || "H3" `List.isSuffixOf` tag =
@@ -248,3 +264,22 @@ loadResumption file = map toKV . C8.lines <$> C8.readFile file
     toKV l = (NameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
       where
         (k, v) = BS.break (== 32) l
+
+safeAppendFile :: FilePath -> ByteString -> IO ()
+safeAppendFile file bs = loop (10 :: Int)
+  where
+    loop 0 = putStrLn "appendFile failed"
+    loop n = do
+        ex <- E.try (BS.appendFile file bs)
+        case ex of
+            Right () -> return ()
+            Left (E.SomeException _) -> do
+                r <- randomRIO (1, 10)
+                threadDelay (r * 1000)
+                loop (n - 1)
+
+isAsyncException :: E.Exception e => e -> Bool
+isAsyncException e =
+    case E.fromException (E.toException e) of
+        Just (E.SomeAsyncException _) -> True
+        Nothing -> False

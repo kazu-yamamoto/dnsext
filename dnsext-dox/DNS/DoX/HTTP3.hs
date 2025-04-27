@@ -10,6 +10,7 @@ import Network.HTTP3.Client
 import qualified Network.QUIC.Client as QUIC
 
 import DNS.DoX.HTTP2
+import DNS.DoX.Imports
 import DNS.DoX.QUIC
 
 http3PersistentResolver :: PersistentResolver
@@ -22,10 +23,11 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
   where
     tag = nameTag ri "H3"
     cc = getQUICParams ri tag "h3"
+    auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         ClientConfig
             { scheme = "https"
-            , authority = show rinfoIP
+            , authority = auth
             }
 
 http3Resolver :: OneshotResolver
@@ -41,8 +43,9 @@ http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
   where
     tag = nameTag ri "H3"
     cc = getQUICParams ri tag "h3"
+    auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         ClientConfig
             { scheme = "https"
-            , authority = show rinfoIP
+            , authority = auth
             }

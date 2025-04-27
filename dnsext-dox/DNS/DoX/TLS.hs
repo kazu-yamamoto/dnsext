@@ -14,8 +14,6 @@ import System.X509
 
 import DNS.Do53.Internal
 
-import DNS.DoX.Imports
-
 tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body = do
     settings <- makeSettings ri tag
