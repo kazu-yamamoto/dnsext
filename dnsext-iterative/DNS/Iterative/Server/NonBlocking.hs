@@ -69,7 +69,12 @@ nbRecvVC lim ref nbrecvN = do
                     writeIORef ref $ Just len
                     return NotEnough
                 _ -> return x
-        Just len -> nbrecvN len
+        Just len -> do
+            y <- nbrecvN len
+            case y of
+                NBytes _ -> writeIORef ref Nothing
+                _ -> return ()
+            return y
 
 ----------------------------------------------------------------
 
