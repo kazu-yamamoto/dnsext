@@ -78,6 +78,7 @@ spec = do
                 , EOF ""
                 ]
     specReadable
+    specVCReadable
 
 specReadable :: Spec
 specReadable = do
@@ -108,6 +109,58 @@ specReadable = do
                                                           , (7, NBytes "abcdefg" , False)
                                                           ])
                 , (Close                          , True, [ (2, EOF ""          , False) ])
+                ]
+
+specVCReadable :: Spec
+specVCReadable = do
+    describe "NBRecvVC readable" $ do
+        it "eof" $ do
+            testNBRecvVCReadable
+                [ (Close, True, [ (EOF "", False) ])
+                ]
+        it "q1" $ do
+            testNBRecvVCReadable
+                [ ( Bytes ("\x00\x03" <> "abc")
+                  , True, [ (NotEnough, True)
+                          , (NBytes "abc", False)
+                          ])
+                , ( Close
+                  , True, [] )
+                ]
+        it "q1-s" $ do
+            testNBRecvVCReadable
+                [ ( Bytes ("\x00\x03")
+                  , True, [ (NotEnough, False)
+                          ])
+                , ( Bytes ("abc")
+                  , True, [ (NBytes "abc", False)
+                          ])
+                , ( Close
+                  , True, [] )
+                ]
+        it "q2" $ do
+            testNBRecvVCReadable
+                [ (Bytes ("\x00\x03" <> "abc" <> "\x00\x04" <> "defg")
+                  , True, [ (NotEnough, True)
+                          , (NBytes "abc", True)
+                          , (NotEnough, True)
+                          , (NBytes "defg", False)
+                          ])
+                , (Close
+                  , True, [] )
+                ]
+        it "q2-s" $ do
+            testNBRecvVCReadable
+                [ (Bytes ("\x00\x03" <> "abc")
+                  , True, [ (NotEnough, True)
+                          , (NBytes "abc", False)
+                          ])
+                , (Bytes ("\x00\x04" <> "defg")
+                  , True, [ (NotEnough, True)
+                          , (NBytes "defg", False)
+                          ])
+                , (Close
+                  , True, [] )
                 ]
 {- FOURMOLU_ENABLE -}
 
@@ -143,6 +196,22 @@ testNBRecvNReadable xs = do
             let ix = show i ++ ": " ++ show j ++ ": "
             annotate (ix ++ "nbrecv result") $ nbrecvN sz `shouldReturn` exnbr
             annotate (ix ++ "readable after recv") $ readable `shouldReturn` exrd
+        action i (ev, exrd0, ys) = do
+            pushEv ev
+            annotate (show i ++ ": readable after event") $ readable `shouldReturn` exrd0
+            sequence_ $ zipWith (check i) [(1 :: Int) ..] ys
+    sequence_ $ zipWith action [(1 :: Int) ..] xs
+
+testNBRecvVCReadable
+    :: [(InEvent, Bool, [(NBRecvR, Bool)])] -> IO ()
+testNBRecvVCReadable xs = do
+    (readable, pushEv, rcv) <- makeSizedRecv
+    nbrecvVC <- makeNBRecvVC 2048 rcv
+    readable `shouldReturn` False
+    let check i j (exnbr, exrd) = do
+            let ix = show i ++ ": " ++ show j ++ ": "
+            annotate (ix ++ "nbrecvVC result") $ nbrecvVC `shouldReturn` exnbr
+            annotate (ix ++ "readable after recvVC") $ readable `shouldReturn` exrd
         action i (ev, exrd0, ys) = do
             pushEv ev
             annotate (show i ++ ": readable after event") $ readable `shouldReturn` exrd0
