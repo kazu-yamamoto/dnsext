@@ -1,86 +1,20 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 
 module DNS.ZoneFile.Types where
 
 -- ghc packages
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
-import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Short as Short
 import Data.Char (chr)
 import Data.List (unfoldr)
-import Data.Maybe (fromMaybe)
-import Data.Monoid (Last (..))
 import Data.Word (Word8)
 
 -- dnsext-* packages
 import DNS.Types
 
-class CaseCons t s | s -> t where
-    caseCons :: (t -> s -> a) -> a -> s -> a
+-- this package
+import DNS.Parser
 
-{- FOURMOLU_DISABLE -}
-instance CaseCons Word8 LB.ByteString where
-    caseCons c n bs
-        | LB.null bs  = n
-        | otherwise   = c (LB.head bs) (LB.tail bs)
-
-instance CaseCons a [a] where
-    caseCons c n xxs = case xxs of
-        []      -> n
-        x : xs  -> c x xs
-
-takeCons :: CaseCons t s => Int -> s -> [t]
-takeCons n s
-    | n <= 0     = []
-    | otherwise  = caseCons (\t ts -> t : takeCons (n-1) ts) [] s
-{- FOURMOLU_ENABLE -}
-
----
-
-type Error = Last String
-type Parser t s = StateT s (Except Error)
-
-runError :: Last String -> String
-runError = fromMaybe "<empty error>" . getLast
-
-runParser :: Parser t s a -> s -> Either String (a, s)
-runParser p in_ = either (Left . runError) Right $ runExcept (runStateT p in_)
-
-raise :: String -> Parser t s a
-raise = lift . throwE . Last . Just
-
-poly_token :: CaseCons t s => Parser t s t
-poly_token = do
-    s <- get
-    caseCons
-        (\t ts -> put ts *> pure t)
-        (raise "token: eof")
-        s
-
-eof :: (Show t, CaseCons t s) => Parser t s ()
-eof = do
-    s <- get
-    caseCons
-        (\_ _ -> raise $ "eof: more inputs found: " ++ unwords (map show $ takeCons 7 s) ++ " ...")
-        (pure ())
-        s
-
-satisfy :: (Show t, CaseCons t s) => String -> (t -> Bool) -> Parser t s t
-satisfy name p = do
-    t <- poly_token
-    guard (p t) <|> raise ("satisfy: not satisfied, <" ++ name ++ "> predicate against " ++ show t)
-    pure t
-
-this :: (Eq t, Show t, CaseCons t s) => t -> Parser t s t
-this tk = satisfy ("this " ++ show tk) (== tk)
-
-these :: (Eq t, Show t, CaseCons t s) => [t] -> Parser t s [t]
-these = mapM this
+raise :: MonadParser t s m => String -> m a
+raise = parseError
 
 ---
 
@@ -109,6 +43,8 @@ data Token
     | Comment
     | RSep
     deriving (Eq, Show)
+
+instance ParserToken Token
 
 ---
 

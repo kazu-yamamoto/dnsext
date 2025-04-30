@@ -13,6 +13,7 @@ module DNS.ZoneFile (
 import qualified Data.ByteString.Lazy as LB
 
 -- this package
+import DNS.Parser (runParser)
 import DNS.ZoneFile.IO
 import DNS.ZoneFile.Lexer hiding (Parser)
 import qualified DNS.ZoneFile.Lexer as L
