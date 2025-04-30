@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -19,6 +20,7 @@ import Data.List
 import Data.List.Split (splitOn)
 import Data.String (fromString)
 import Network.Socket (PortNumber)
+import Network.TLS (Credentials (..), credentialLoadX509)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
 
@@ -42,6 +44,7 @@ data Config = Config
     , cnf_short_log :: Bool
     , cnf_cert_file :: FilePath
     , cnf_key_file :: FilePath
+    , cnf_credentials :: Credentials
     , cnf_trust_anchor_file :: [FilePath]
     , cnf_root_hints :: Maybe FilePath
     , cnf_cache_size :: Int
@@ -109,6 +112,7 @@ defaultConfig =
         , cnf_short_log = False
         , cnf_cert_file = "fullchain.pem"
         , cnf_key_file = "privkey.pem"
+        , cnf_credentials = Credentials []
         , cnf_trust_anchor_file = []
         , cnf_root_hints = Nothing
         , cnf_cache_size = 2 * 1024
@@ -276,6 +280,10 @@ makeConfig def conf = do
     cnf_cache_max_negative_ttl <- get "cache-max-negative-ttl" cnf_cache_max_negative_ttl
     cnf_cache_failure_rcode_ttl <- get "cache-failure-rcode-ttl" cnf_cache_failure_rcode_ttl
     cnf_interface_automatic <- get "interface-automatic" cnf_interface_automatic
+    let getCreds
+            | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = loadCredentials cnf_cert_file cnf_key_file
+            | otherwise = pure $ Credentials []
+    cnf_credentials <- getCreds
     pure Config{..}
   where
     get k func = maybe (pure $ func def) fromConf $ lookup k conf
@@ -290,6 +298,9 @@ makeConfig def conf = do
     stubZones = unfoldrM getStubZone conf
     --
     domainInsecures = unfoldrM getDomainInsecure conf
+    --
+    credLeft s = fail $ "config: fail to load credentials: " ++ s
+    loadCredentials certf keyf = either credLeft (\c@(!_cc, !_pri) -> pure (Credentials [c])) =<< credentialLoadX509 certf keyf
 {- FOURMOLU_ENABLE -}
 
 -- $setup
