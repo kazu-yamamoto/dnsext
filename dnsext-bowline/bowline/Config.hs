@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -20,11 +21,10 @@ import Data.String (fromString)
 import Network.Socket (PortNumber)
 import System.IO.Error (ioeSetErrorString, tryIOError)
 import System.Posix (GroupID, UserID, getGroupEntryForName, getUserEntryForName, groupID, userID)
-import Text.Parsec hiding (many, (<|>))
-import Text.Parsec.ByteString.Lazy
 
 import DNS.Iterative.Internal (Address, LocalZoneType (..))
 import qualified DNS.Log as Log
+import DNS.Parser hiding (Parser)
 import DNS.Types (DNSError, Domain, OD_NSID (..), ResourceRecord (..), isSubDomainOf)
 import qualified DNS.Types.Opaque as Opaque
 import DNS.ZoneFile (Context (cx_name, cx_zone), defaultContext, parseLineRR)
@@ -516,7 +516,7 @@ readArg = parseString arg
 
 ----------------------------------------------------------------
 
-config :: Parser [Conf]
+config :: MonadParser W8 s m => m [Conf]
 config = commentLines *> many cfield <* eof
   where
     cfield = field <* commentLines
@@ -542,45 +542,45 @@ config = commentLines *> many cfield <* eof
 -- Right ("list",CV_Strings ["a b","c"])
 -- >>> parse field "" "listc: \"d e\" f # comment \n"
 -- Right ("listc",CV_Strings ["d e","f"])
-field :: Parser Conf
+field :: MonadParser W8 s m => m Conf
 field = (,) <$> key <*> (sep *> value) <* trailing
 
-arg :: Parser Conf
+arg :: MonadParser W8 s m => m Conf
 arg = (,) <$> key <*> (char '=' *> value)
 
-key :: Parser String
-key = many1 (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
+key :: MonadParser W8 s m => m String
+key = some (oneOf $ ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['0' .. '9'] ++ "_-") <* spcs
 
-sep :: Parser ()
+sep :: MonadParser W8 s m => m ()
 sep = void $ char ':' *> spcs
 
-squote :: Parser ()
+squote :: MonadParser W8 s m => m ()
 squote = void $ char '\''
 
-dquote :: Parser ()
+dquote :: MonadParser W8 s m => m ()
 dquote = void $ char '"'
 
-value :: Parser ConfValue
-value = choice [try cv_int, try cv_bool, cv_strings]
+value :: MonadParser W8 s m => m ConfValue
+value = choice [cv_int, cv_bool, cv_strings]
 
-eov :: Parser ()
+eov :: MonadParser W8 s m => m ()
 eov = void (lookAhead $ choice [char '#', char ' ', char '\n']) <|> eof
 
 -- Trailing should be included in try to allow IP addresses.
-cv_int :: Parser ConfValue
-cv_int = CV_Int . read <$> many1 digit <* eov
+cv_int :: MonadParser W8 s m => m ConfValue
+cv_int = CV_Int . read <$> some digit <* eov
 
 {- FOURMOLU_DISABLE -}
-cv_bool :: Parser ConfValue
+cv_bool :: MonadParser W8 s m => m ConfValue
 cv_bool =
     CV_Bool True <$ string "yes" <* eov <|>
     CV_Bool False <$ string "no" <* eov
 
-cv_string' :: Parser String
+cv_string' :: MonadParser W8 s m => m String
 cv_string' =
     squote *> many (noneOf "'\n")  <* squote <|>
     dquote *> many (noneOf "\"\n") <* dquote <|>
-    many1 (noneOf "\"# \t\n")
+    some (noneOf "\"# \t\n")
 {- FOURMOLU_ENABLE -}
 
 {- FOURMOLU_DISABLE -}
@@ -589,10 +589,10 @@ cv_string' =
 -- Right (CV_String "conf.txt")
 -- >>> parse cv_strings "" "\"example. 1800 TXT 'abc'\" static"
 -- Right (CV_Strings ["example. 1800 TXT 'abc'","static"])
-cv_strings :: Parser ConfValue
+cv_strings :: MonadParser W8 s m => m ConfValue
 cv_strings = do
     v1 <- cv_string'
-    vs <- many (try (spcs1 *> cv_string'))
+    vs <- many (spcs1 *> cv_string')
     pure $ if null vs
            then CV_String v1
            else CV_Strings $ v1:vs
