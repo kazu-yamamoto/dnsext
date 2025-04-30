@@ -16,9 +16,6 @@ import DNS.Parser
 raise :: MonadParser t s m => String -> m a
 raise = parseError
 
-poly_token :: CaseCons t s => Parser s t
-poly_token = token
-
 ---
 
 data Directive
