@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -35,7 +34,6 @@ import qualified DNS.ThreadStats as TStat
 import qualified DNS.Types as DNS
 import DNS.Types.Internal (TYPE (..))
 import Network.Socket hiding (close)
-import Network.TLS (Credentials (..), credentialLoadX509)
 import qualified Network.TLS.SessionTicket as ST
 
 -- this package
@@ -128,9 +126,8 @@ runConfig tcache gcache@GlobalCache{..} mng0 reloadInfo ruid conf@Config{..} = d
                         , timeout_ = tmout
                         }
             --  filled env available
-            creds <- getCreds conf
             sm <- ST.newSessionTicketManager ST.defaultConfig{ST.ticketLifetime = cnf_tls_session_ticket_lifetime}
-            addrs <- mapM (bindServers cnf_dns_addrs) $ trans creds sm
+            addrs <- mapM (bindServers cnf_dns_addrs) $ trans cnf_credentials sm
             (mas, monInfo) <- Mon.bindMonitor conf env
             masock <- API.bindAPI conf
             return (runWriter, env, addrs, mas, monInfo, masock)
@@ -327,15 +324,6 @@ getVersion Config{..}
         "string"  : s : _  ->  Server.versionString s
         _         : _      ->  Server.versionBlank
 {- FOURMOLU_ENABLE -}
-
-----------------------------------------------------------------
-
-getCreds :: Config -> IO Credentials
-getCreds Config{..}
-    | cnf_tls || cnf_quic || cnf_h2 || cnf_h3 = do
-        Right cred@(!_cc, !_priv) <- credentialLoadX509 cnf_cert_file cnf_key_file
-        return $ Credentials [cred]
-    | otherwise = return $ Credentials []
 
 ----------------------------------------------------------------
 
