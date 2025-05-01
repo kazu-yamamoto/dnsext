@@ -58,7 +58,8 @@ profiles =
         { company = "IIJ"
         , serverName = "public.dns.iij.jp"
         , transports = ["dot", "h2"]
-        , ipAddr = "103.2.57.5"
+        , -- 46.243.231.30 etc do not allow SNI of IP address
+          ipAddr = "103.2.57.5"
         , transportsIP = ["dot", "h2"]
         , ipInCert = False -- No IP addresses in certificate
         }
