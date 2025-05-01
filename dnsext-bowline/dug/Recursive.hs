@@ -109,7 +109,14 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
             let targets = zip qcs refs
             -- raceAny cannot be used to ensure that TLS sessino tickets
             -- are certainly saved.
-            mapConcurrently_ (resolver putLnSTM putLinesSTM targets) pipes
+            rs <- mapConcurrently (E.try . resolver putLnSTM putLinesSTM targets) pipes
+            let r@(Right _) `op` _ = r
+                _ `op` l = l
+            case foldr1 op rs of
+                Left e -> do
+                    print (e :: DNS.DNSError)
+                    exitFailure
+                _ -> return ()
 
 resolvePipeline :: LookupConf -> TQueue (NameTag, String) -> IO (Maybe [PipelineResolver])
 resolvePipeline conf tq = do
@@ -145,15 +152,16 @@ resolver
     -> [((Question, QueryControls), TVar Bool)]
     -> PipelineResolver
     -> IO ()
-resolver putLnSTM putLinesSTM targets pipeline =
-    E.handle ignore $ pipeline $ \resolv ->
-        -- running concurrently for multiple target domains
-        mapConcurrently_ (printIt resolv) targets
+resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv -> do
+    -- running concurrently for multiple target domains
+    rs <- mapConcurrently (printIt resolv) targets
+    case foldr op (Right ()) rs of
+        Right () -> return ()
+        Left e -> E.throwIO (e :: DNS.DNSError)
   where
-    ignore (E.SomeException se)
-        | isAsyncException se = E.throwIO se
-        | otherwise = return ()
-    printIt resolv ((q, ctl), tvar) = E.handle ignore $ do
+    l@(Left _) `op` _ = l
+    _ `op` r = r
+    printIt resolv ((q, ctl), tvar) = E.try $ do
         er <- resolv q ctl
         atomically $ do
             done <- readTVar tvar
@@ -277,9 +285,3 @@ safeAppendFile file bs = loop (10 :: Int)
                 r <- randomRIO (1, 10)
                 threadDelay (r * 1000)
                 loop (n - 1)
-
-isAsyncException :: E.Exception e => e -> Bool
-isAsyncException e =
-    case E.fromException (E.toException e) of
-        Just (E.SomeAsyncException _) -> True
-        Nothing -> False
