@@ -77,10 +77,14 @@ runTest host certCheck transport = do
             | certCheck = ["-e"]
             | otherwise = []
     let args = ['@' : host] ++ options ++ ["-d", transport] ++ domains
-    (ec, _, _) <- readProcessWithExitCode dug args input
+    (ec, out, err) <- readProcessWithExitCode dug args input
     case ec of
         ExitSuccess -> return ()
         ExitFailure _ -> do
             putStrLn "FAILED FAILED FAILED FAILED FAILED FAILED"
             putStrLn $ "    dug " ++ intercalate " " args
+            putStrLn "stdout:"
+            putStrLn out
+            putStrLn "stderr:"
+            putStrLn err
             exitFailure
