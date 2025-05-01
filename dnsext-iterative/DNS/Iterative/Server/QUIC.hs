@@ -37,7 +37,7 @@ quicServers VcServerConfig{..} env toCacher ss = do
     return [quicserver]
   where
     tmicro = vc_idle_timeout * 1_000_000
-    sconf = getServerConfig vc_credentials vc_session_manager "doq" (vc_idle_timeout * 1_000 + quicDeferMills)
+    sconf = getServerConfig vc_credentials vc_session_manager "doq" (vc_idle_timeout * 1_000 + quicDeferMills) env
     quicDeferMills = 20 {- deferral until an exception is raised from quic library -}
     maxSize = fromIntegral vc_query_max_size
     go conn = sessionStatsDoQ (stats_ env) $ do
@@ -66,12 +66,13 @@ quicServers VcServerConfig{..} env toCacher ss = do
                 sender = senderVC "quic-send" env vcSess send fromX
             TStat.concurrently_ "quic-send" sender "quic-recv" receiver
 
-getServerConfig :: Credentials -> SessionManager -> ByteString -> Int -> ServerConfig
-getServerConfig creds sm alpn tmills =
+getServerConfig :: Credentials -> SessionManager -> ByteString -> Int -> Env -> ServerConfig
+getServerConfig creds sm alpn tmills env =
     QUIC.defaultServerConfig
         { scALPN = Just (\_ bss -> if alpn `elem` bss then return alpn else return "")
         , scCredentials = creds
         , scUse0RTT = True
         , scSessionManager = sm
         , QUIC.scParameters = (QUIC.scParameters QUIC.defaultServerConfig){QUIC.maxIdleTimeout = fromIntegral tmills}
+        , QUIC.scKeyLog = putSSLKeyLog_ env
         }
