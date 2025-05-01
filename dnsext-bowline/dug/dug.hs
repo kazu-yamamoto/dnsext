@@ -184,6 +184,7 @@ main = do
     killLogger
     sentinel tq
     deprecated
+    exitSuccess
   where
     sentinel tq = do
         xs <- readQ

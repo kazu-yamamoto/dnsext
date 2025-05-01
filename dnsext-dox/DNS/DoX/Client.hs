@@ -148,6 +148,7 @@ extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
 extractResolveInfo ri s alpn = updateIPPort <$> ips
   where
     params = svcb_params s
+    target = svcb_target s
     port = maybe (doxPort alpn) port_number $ extractSvcParam SPK_Port params
     mdohpath = dohpath <$> extractSvcParam SPK_DoHPath params
     v4s = case extractSvcParam SPK_IPv4Hint params of
@@ -159,4 +160,4 @@ extractResolveInfo ri s alpn = updateIPPort <$> ips
     ips = case v4s ++ v6s of
         [] -> [(rinfoIP ri, port)] -- no "ipv4hint" nor "ipv6hint"
         xs -> (\h -> (fromString h, port)) <$> xs
-    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath}
+    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath, rinfoServerName = Just $ init $ toRepresentation target}
