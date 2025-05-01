@@ -63,7 +63,8 @@ getQUICParams :: ResolveInfo -> NameTag -> ByteString -> ClientConfig
 getQUICParams ResolveInfo{..} tag alpn0 =
     defaultClientConfig
         { ccServerName = show rinfoIP
-        , ccServerNameOverride = rinfoServerName
+        , -- TLS SNI
+          ccServerNameOverride = rinfoServerName
         , ccPortName = show rinfoPort
         , ccALPN = \_ -> return $ Just [alpn0]
         , ccDebugLog = False

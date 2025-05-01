@@ -22,12 +22,12 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
         saveResumptionInfo conn ri tag
   where
     tag = nameTag ri "H3"
-    cc = getQUICParams ri tag "h3"
+    cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         H3.ClientConfig
             { H3.scheme = "https"
-            , H3.authority = auth
+            , H3.authority = auth -- HTTP :authority
             }
 
 http3Resolver :: OneshotResolver
@@ -42,10 +42,10 @@ http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
             return res
   where
     tag = nameTag ri "H3"
-    cc = getQUICParams ri tag "h3"
+    cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         H3.ClientConfig
             { H3.scheme = "https"
-            , H3.authority = auth
+            , H3.authority = auth -- HTTP :authority
             }
