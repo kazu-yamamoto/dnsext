@@ -268,24 +268,33 @@ rd_ptr d = toRData $ RD_PTR d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Mail exchange (RFC1035)
 data RD_MX = RD_MX
     { mx_preference :: Word16
     -- ^ Setter/getter for preference
-    , mx_exchange :: Domain
+    , mx_exchange   :: Domain
     -- ^ Setter/getter for 'Domain'
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 instance ResourceData RD_MX where
     resourceDataType _ = MX
     resourceDataSize RD_MX{..} = 2 + domainSize mx_exchange
     putResourceData cf RD_MX{..} = \wbuf ref -> do
-        put16 wbuf mx_preference
+        put16          wbuf mx_preference
         putDomainRFC1035 cf mx_exchange wbuf ref
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 get_mx :: Int -> Parser RD_MX
-get_mx _ rbuf ref = RD_MX <$> get16 rbuf <*> getDomainRFC1035 rbuf ref
+get_mx _ rbuf ref = do
+    mx_preference <- get16            rbuf
+    mx_exchange   <- getDomainRFC1035 rbuf ref
+    return RD_MX {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
