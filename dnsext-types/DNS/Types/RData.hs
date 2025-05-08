@@ -166,47 +166,53 @@ rd_cname d = toRData $ RD_CNAME d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Marks the start of a zone of authority (RFC1035)
 data RD_SOA = RD_SOA
-    { soa_mname :: Domain
+    { soa_mname   :: Domain
     -- ^ Setter/getter for mname
-    , soa_rname :: Mailbox
+    , soa_rname   :: Mailbox
     -- ^ Setter/getter for rname
-    , soa_serial :: Word32
+    , soa_serial  :: Word32
     -- ^ Setter/getter for serial
     , soa_refresh :: Seconds
     -- ^ Setter/getter for refresh
-    , soa_retry :: Seconds
+    , soa_retry   :: Seconds
     -- ^ Setter/getter for retry
-    , soa_expire :: Seconds
+    , soa_expire  :: Seconds
     -- ^ Setter/getter for expire
     , soa_minimum :: Seconds
     -- ^ Setter/getter for minimum
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
     resourceDataSize RD_SOA{..} = domainSize soa_mname + mailboxSize soa_rname + 20
     putResourceData cf RD_SOA{..} = \wbuf ref -> do
-        putDomainRFC1035 cf soa_mname wbuf ref
-        putMailboxRFC1035 cf soa_rname wbuf ref
-        put32 wbuf soa_serial
-        putSeconds soa_refresh wbuf ref
-        putSeconds soa_retry wbuf ref
-        putSeconds soa_expire wbuf ref
-        putSeconds soa_minimum wbuf ref
+        putDomainRFC1035  cf soa_mname   wbuf ref
+        putMailboxRFC1035 cf soa_rname   wbuf ref
+        put32 wbuf           soa_serial
+        putSeconds           soa_refresh wbuf ref
+        putSeconds           soa_retry   wbuf ref
+        putSeconds           soa_expire  wbuf ref
+        putSeconds           soa_minimum wbuf ref
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 get_soa :: Int -> Parser RD_SOA
-get_soa _ rbuf ref =
-    RD_SOA
-        <$> getDomainRFC1035 rbuf ref
-        <*> getMailboxRFC1035 rbuf ref
-        <*> get32 rbuf
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
+get_soa _ rbuf ref = do
+    soa_mname   <- getDomainRFC1035 rbuf ref
+    soa_rname   <- getMailboxRFC1035 rbuf ref
+    soa_serial  <- get32 rbuf
+    soa_refresh <- getSeconds rbuf ref
+    soa_retry   <- getSeconds rbuf ref
+    soa_expire  <- getSeconds rbuf ref
+    soa_minimum <- getSeconds rbuf ref
+    return RD_SOA{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_soa
