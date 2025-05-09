@@ -268,16 +268,18 @@ rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC hashed denial of existence (RFC5155)
 data RD_NSEC3 = RD_NSEC3
-    { nsec3_hashalg :: HashAlg
-    , nsec3_flags :: [NSEC3_Flag]
-    , nsec3_iterations :: Word16
-    , nsec3_salt :: Opaque
+    { nsec3_hashalg                :: HashAlg
+    , nsec3_flags                  :: [NSEC3_Flag]
+    , nsec3_iterations             :: Word16
+    , nsec3_salt                   :: Opaque
     , nsec3_next_hashed_owner_name :: Opaque
-    , nsec3_types :: [TYPE]
+    , nsec3_types                  :: [TYPE]
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
@@ -298,16 +300,19 @@ instance ResourceData RD_NSEC3 where
         putLenOpaque nsec3_next_hashed_owner_name wbuf ref
         putNsecTypes nsec3_types wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec3 :: Int -> Parser RD_NSEC3
 get_nsec3 len rbuf ref = do
     dend <- rdataEnd len rbuf ref
-    halg <- getHashAlg rbuf ref
-    flgs <- getNSEC3flags rbuf ref
-    iter <- get16 rbuf
-    salt <- getLenOpaque rbuf ref
-    hash <- getLenOpaque rbuf ref
+    nsec3_hashalg                <- getHashAlg rbuf ref
+    nsec3_flags                  <- getNSEC3flags rbuf ref
+    nsec3_iterations             <- get16 rbuf
+    nsec3_salt                   <- getLenOpaque rbuf ref
+    nsec3_next_hashed_owner_name <- getLenOpaque rbuf ref
     tpos <- position rbuf
-    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos) rbuf ref
+    nsec3_types                  <- getNsecTypes (dend - tpos) rbuf ref
+    return RD_NSEC3{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec3
