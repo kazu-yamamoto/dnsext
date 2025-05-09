@@ -231,14 +231,16 @@ rd_nsec a b = toRData $ RD_NSEC a b
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSKEY (RFC4034)
 data RD_DNSKEY = RD_DNSKEY
-    { dnskey_flags :: [DNSKEY_Flag]
-    , dnskey_protocol :: Word8
-    , dnskey_pubalg :: PubAlg
+    { dnskey_flags      :: [DNSKEY_Flag]
+    , dnskey_protocol   :: Word8
+    , dnskey_pubalg     :: PubAlg
     , dnskey_public_key :: PubKey
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
@@ -250,13 +252,15 @@ instance ResourceData RD_DNSKEY where
         putPubAlg dnskey_pubalg wbuf ref
         putPubKey dnskey_public_key wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_dnskey :: Int -> Parser RD_DNSKEY
 get_dnskey len rbuf ref = do
-    flags <- getDNSKEYflags rbuf ref
-    proto <- get8 rbuf
-    pubalg <- getPubAlg rbuf ref
-    pubkey <- getPubKey pubalg (len - 4) rbuf ref
-    return $ RD_DNSKEY flags proto pubalg pubkey
+    dnskey_flags      <- getDNSKEYflags rbuf ref
+    dnskey_protocol   <- get8 rbuf
+    dnskey_pubalg     <- getPubAlg rbuf ref
+    dnskey_public_key <- getPubKey dnskey_pubalg (len - 4) rbuf ref
+    return RD_DNSKEY{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
