@@ -89,13 +89,14 @@ mapEDNS _ _ a = a
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNS message format for queries and replies.
 data DNSMessage = DNSMessage
     { identifier :: Identifier
     -- ^ Query or response identifier.
-    , opcode :: OPCODE
+    , opcode     :: OPCODE
     -- ^ Kind of query.
-    , rcode :: RCODE
+    , rcode      :: RCODE
     -- ^ The full 12-bit extended RCODE when EDNS is in use.
     -- Should always be zero in well-formed requests.
     -- When decoding replies, the high eight bits from
@@ -103,20 +104,21 @@ data DNSMessage = DNSMessage
     -- RCODE from the DNS header.  When encoding
     -- replies, if no EDNS OPT record is provided, RCODE
     -- values > 15 are mapped to 'FormatErr'.
-    , flags :: DNSFlags
+    , flags      :: DNSFlags
     -- ^ Flags
     , ednsHeader :: EDNSheader
     -- ^ EDNS pseudo-header
-    , question :: [Question]
+    , question   :: [Question]
     -- ^ The question for the name server
-    , answer :: Answers
+    , answer     :: Answers
     -- ^ RRs answering the question
-    , authority :: AuthorityRecords
+    , authority  :: AuthorityRecords
     -- ^ RRs pointing toward an authority
     , additional :: AdditionalRecords
     -- ^ RRs holding additional information
     }
     deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
 
 -- | An identifier assigned by the program that
 --   generates any kind of query.
@@ -171,21 +173,23 @@ putDNSMessage DNSMessage{..} wbuf ref = do
                 | otherwise = ttl0' .|. vers'
             rdata' = RData $ RD_OPT $ ednsOptions edns
 
+{- FOURMOLU_DISABLE -}
 getDNSMessage :: Parser DNSMessage
 getDNSMessage rbuf ref = do
-    idt <- getIdentifier rbuf
-    (flgs, op, rc0) <- getDNSFlags rbuf ref
+    identifier <- getIdentifier rbuf
+    (flags, opcode, rc0) <- getDNSFlags rbuf ref
     qdCount <- getInt16 rbuf
     anCount <- getInt16 rbuf
     nsCount <- getInt16 rbuf
     arCount <- getInt16 rbuf
-    queries <- getQuestions qdCount rbuf ref
-    answers <- getResourceRecords anCount rbuf ref
-    authrrs <- getResourceRecords nsCount rbuf ref
-    addnrrs <- getResourceRecords arCount rbuf ref
+    question   <- getQuestions qdCount rbuf ref
+    answer     <- getResourceRecords anCount rbuf ref
+    authority  <- getResourceRecords nsCount rbuf ref
+    addnrrs    <- getResourceRecords arCount rbuf ref
     let (opts, rest) = partition ((==) OPT . rrtype) addnrrs
-        (eh, rc) = getEDNS (fromRCODE rc0) opts
-    pure $ DNSMessage idt op rc flgs eh queries answers authrrs $ ifEDNS eh rest addnrrs
+        (ednsHeader, rcode) = getEDNS (fromRCODE rc0) opts
+        additional = ifEDNS ednsHeader rest addnrrs
+    return DNSMessage {..}
   where
     getIdentifier = get16
     -- \| Get EDNS pseudo-header and the high eight bits of the extended RCODE.
@@ -206,6 +210,7 @@ getDNSMessage rbuf ref = do
             erc = shiftR (ttl' .&. 0xff000000) 20 .|. hrc
             secok = ttl' `testBit` 15
             vers = fromIntegral $ shiftR (ttl' .&. 0x00ff0000) 16
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
