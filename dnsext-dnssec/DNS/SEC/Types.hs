@@ -358,14 +358,16 @@ rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Child DS (RFC7344)
 data RD_CDS = RD_CDS
-    { cds_key_tag :: Word16
-    , cds_pubalg :: PubAlg
+    { cds_key_tag   :: Word16
+    , cds_pubalg    :: PubAlg
     , cds_digestalg :: DigestAlg
-    , cds_digest :: Opaque
+    , cds_digest    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
@@ -380,13 +382,15 @@ instance ResourceData RD_CDS where
         putDigestAlg cds_digestalg wbuf ref
         putOpaque cds_digest wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_cds :: Int -> Parser RD_CDS
-get_cds len rbuf ref =
-    RD_CDS
-        <$> get16 rbuf
-        <*> getPubAlg rbuf ref
-        <*> getDigestAlg rbuf ref
-        <*> getOpaque (len - 4) rbuf ref
+get_cds len rbuf ref = do
+    cds_key_tag   <- get16 rbuf
+    cds_pubalg    <- getPubAlg rbuf ref
+    cds_digestalg <- getDigestAlg rbuf ref
+    cds_digest    <- getOpaque (len - 4) rbuf ref
+    return RD_CDS {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
