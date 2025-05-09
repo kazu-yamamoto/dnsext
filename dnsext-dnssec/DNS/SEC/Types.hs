@@ -197,12 +197,14 @@ rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC denial of existence NSEC record
 data RD_NSEC = RD_NSEC
     { nsec_next_domain :: Domain
-    , nsec_types :: [TYPE]
+    , nsec_types       :: [TYPE]
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
@@ -213,12 +215,15 @@ instance ResourceData RD_NSEC where
         _ <- putDomain cf nsec_next_domain wbuf ref
         putNsecTypes nsec_types wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec :: Int -> Parser RD_NSEC
 get_nsec len rbuf ref = do
     end <- rdataEnd len rbuf ref
-    dom <- getDomain rbuf ref
+    nsec_next_domain <- getDomain rbuf ref
     pos <- position rbuf
-    RD_NSEC dom <$> getNsecTypes (end - pos) rbuf ref
+    nsec_types       <- getNsecTypes (end - pos) rbuf ref
+    return RD_NSEC {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
