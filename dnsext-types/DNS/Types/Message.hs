@@ -616,15 +616,17 @@ toRCODE = RCODE
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Raw data format for DNS questions.
 data Question = Question
-    { qname :: Domain
+    { qname  :: Domain
     -- ^ A domain name
-    , qtype :: TYPE
+    , qtype  :: TYPE
     -- ^ The type of the query
     , qclass :: CLASS
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 putQuestion :: CanonicalFlag -> Question -> Builder ()
 putQuestion cf Question{..} wbuf ref = do
@@ -635,12 +637,14 @@ putQuestion cf Question{..} wbuf ref = do
 getQuestions :: Int -> Parser [Question]
 getQuestions n rbuf ref = replicateM n $ getQuestion rbuf ref
 
+{- FOURMOLU_DISABLE -}
 getQuestion :: Parser Question
-getQuestion rbuf ref =
-    Question
-        <$> getDomainRFC1035 rbuf ref
-        <*> getTYPE rbuf ref
-        <*> getCLASS rbuf ref
+getQuestion rbuf ref = do
+    qname  <- getDomainRFC1035 rbuf ref
+    qtype  <- getTYPE rbuf ref
+    qclass <- getCLASS rbuf ref
+    return Question{..}
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -676,20 +680,22 @@ getCLASS rbuf _ = CLASS <$> get16 rbuf
 -- | Time to live in second.
 type TTL = Seconds
 
+{- FOURMOLU_DISABLE -}
 -- | Raw data format for resource records.
 data ResourceRecord = ResourceRecord
-    { rrname :: Domain
+    { rrname  :: Domain
     -- ^ Name
-    , rrtype :: TYPE
+    , rrtype  :: TYPE
     -- ^ Resource record type
     , rrclass :: CLASS
     -- ^ Resource record class
-    , rrttl :: TTL
+    , rrttl   :: TTL
     -- ^ Time to live
-    , rdata :: RData
+    , rdata   :: RData
     -- ^ Resource data
     }
     deriving (Eq, Show)
+{- FOURMOLU_ENABLE -}
 
 resourceRecordSize :: ResourceRecord -> Int
 resourceRecordSize ResourceRecord{..} = domainSize rrname + 10 + rdataSize rdata
@@ -722,15 +728,17 @@ getResourceRecords n rbuf ref = go 0 id
                 then go i b
                 else go (i + 1) (b . (r :))
 
+{- FOURMOLU_DISABLE -}
 getResourceRecord :: Parser ResourceRecord
 getResourceRecord rbuf ref = do
-    dom <- getDomainRFC1035 rbuf ref
-    typ <- getTYPE rbuf ref
-    cls <- getCLASS rbuf ref
-    ttl <- getSeconds rbuf ref
-    len <- getInt16 rbuf
-    dat <- getRData typ len rbuf ref
-    return $ ResourceRecord dom typ cls ttl dat
+    rrname  <- getDomainRFC1035 rbuf ref
+    rrtype  <- getTYPE rbuf ref
+    rrclass <- getCLASS rbuf ref
+    rrttl   <- getSeconds rbuf ref
+    len     <- getInt16 rbuf
+    rdata   <- getRData rrtype len rbuf ref
+    return ResourceRecord {..}
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
