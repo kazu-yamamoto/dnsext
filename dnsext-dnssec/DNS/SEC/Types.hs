@@ -50,6 +50,7 @@ pattern CDNSKEY = TYPE 60 -- RFC 7344
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC signature
 --
 -- As noted in
@@ -73,26 +74,27 @@ pattern CDNSKEY = TYPE 60 -- RFC 7344
 --
 -- The 'dnsTime' function performs the requisite conversion.
 data RD_RRSIG = RD_RRSIG
-    { rrsig_type :: TYPE
+    { rrsig_type       :: TYPE
     -- ^ RRtype of RRset signed
-    , rrsig_pubalg :: PubAlg
+    , rrsig_pubalg     :: PubAlg
     -- ^ DNSKEY algorithm
     , rrsig_num_labels :: Word8
     -- ^ Number of labels signed
-    , rrsig_ttl :: TTL
+    , rrsig_ttl        :: TTL
     -- ^ Maximum origin TTL
     , rrsig_expiration :: DNSTime
     -- ^ Time last valid
-    , rrsig_inception :: DNSTime
+    , rrsig_inception  :: DNSTime
     -- ^ Time first valid
-    , rrsig_key_tag :: Word16
+    , rrsig_key_tag    :: Word16
     -- ^ Signing key tag
-    , rrsig_zone :: Domain
+    , rrsig_zone       :: Domain
     -- ^ Signing domain
-    , rrsig_signature :: Opaque
+    , rrsig_signature  :: Opaque
     -- ^ Opaque signature
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
@@ -117,6 +119,7 @@ instance ResourceData RD_RRSIG where
         putDomain cf rrsig_zone wbuf ref
         putOpaque rrsig_signature wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_rrsig :: Int -> Parser RD_RRSIG
 get_rrsig lim rbuf ref = do
     -- The signature follows a variable length zone name
@@ -124,19 +127,19 @@ get_rrsig lim rbuf ref = do
     -- checkpoint the position at the start of the RData,
     -- and after reading the zone name, and subtract that
     -- from the RData length.
-    --
     end <- rdataEnd lim rbuf ref
-    typ <- getTYPE rbuf ref
-    alg <- getPubAlg rbuf ref
-    cnt <- get8 rbuf
-    ttl <- getSeconds rbuf ref
-    tex <- getDNSTime rbuf ref
-    tin <- getDNSTime rbuf ref
-    tag <- get16 rbuf
-    dom <- getDomain rbuf ref -- XXX: Enforce no compression?
+    rrsig_type       <- getTYPE rbuf ref
+    rrsig_pubalg     <- getPubAlg rbuf ref
+    rrsig_num_labels <- get8 rbuf
+    rrsig_ttl        <- getSeconds rbuf ref
+    rrsig_expiration <- getDNSTime rbuf ref
+    rrsig_inception  <- getDNSTime rbuf ref
+    rrsig_key_tag    <- get16 rbuf
+    rrsig_zone       <- getDomain rbuf ref -- XXX: Enforce no compression?
     pos <- position rbuf
-    val <- getOpaque (end - pos) rbuf ref
-    return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
+    rrsig_signature  <- getOpaque (end - pos) rbuf ref
+    return RD_RRSIG{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_rrsig
