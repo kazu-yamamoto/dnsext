@@ -398,14 +398,16 @@ rd_cds a b c d = toRData $ RD_CDS a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Child DNSKEY (RFC7344)
 data RD_CDNSKEY = RD_CDNSKEY
-    { cdnskey_flags :: [DNSKEY_Flag]
-    , cdnskey_protocol :: Word8
-    , cdnskey_pubalg :: PubAlg
+    { cdnskey_flags      :: [DNSKEY_Flag]
+    , cdnskey_protocol   :: Word8
+    , cdnskey_pubalg     :: PubAlg
     , cdnskey_public_key :: PubKey
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
@@ -417,13 +419,15 @@ instance ResourceData RD_CDNSKEY where
         putPubAlg cdnskey_pubalg wbuf ref
         putPubKey cdnskey_public_key wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_cdnskey :: Int -> Parser RD_CDNSKEY
 get_cdnskey len rbuf ref = do
-    flags <- getDNSKEYflags rbuf ref
-    proto <- get8 rbuf
-    pubalg <- getPubAlg rbuf ref
-    pubkey <- getPubKey pubalg (len - 4) rbuf ref
-    return $ RD_CDNSKEY flags proto pubalg pubkey
+    cdnskey_flags      <- getDNSKEYflags rbuf ref
+    cdnskey_protocol   <- get8 rbuf
+    cdnskey_pubalg     <- getPubAlg rbuf ref
+    cdnskey_public_key <- getPubKey cdnskey_pubalg (len - 4) rbuf ref
+    return RD_CDNSKEY {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
