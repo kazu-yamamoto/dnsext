@@ -321,14 +321,16 @@ rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | NSEC3 zone parameters (RFC5155)
 data RD_NSEC3PARAM = RD_NSEC3PARAM
-    { nsec3param_hashalg :: HashAlg
-    , nsec3param_flags :: Word8
+    { nsec3param_hashalg    :: HashAlg
+    , nsec3param_flags      :: Word8
     , nsec3param_iterations :: Word16
-    , nsec3param_salt :: Opaque
+    , nsec3param_salt       :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
@@ -340,13 +342,15 @@ instance ResourceData RD_NSEC3PARAM where
         put16 wbuf nsec3param_iterations
         putLenOpaque nsec3param_salt wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec3param :: Int -> Parser RD_NSEC3PARAM
-get_nsec3param _ rbuf ref =
-    RD_NSEC3PARAM
-        <$> getHashAlg rbuf ref
-        <*> get8 rbuf
-        <*> get16 rbuf
-        <*> getLenOpaque rbuf ref
+get_nsec3param _ rbuf ref = do
+    nsec3param_hashalg    <- getHashAlg rbuf ref
+    nsec3param_flags      <- get8 rbuf
+    nsec3param_iterations <- get16 rbuf
+    nsec3param_salt       <- getLenOpaque rbuf ref
+    return RD_NSEC3PARAM {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
