@@ -157,14 +157,16 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Delegation Signer (RFC4034)
 data RD_DS = RD_DS
-    { ds_key_tag :: Word16
-    , ds_pubalg :: PubAlg
+    { ds_key_tag   :: Word16
+    , ds_pubalg    :: PubAlg
     , ds_digestalg :: DigestAlg
-    , ds_digest :: Opaque
+    , ds_digest    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
@@ -179,13 +181,15 @@ instance ResourceData RD_DS where
         putDigestAlg ds_digestalg wbuf ref
         putOpaque ds_digest wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_ds :: Int -> Parser RD_DS
-get_ds len rbuf ref =
-    RD_DS
-        <$> get16 rbuf
-        <*> getPubAlg rbuf ref
-        <*> getDigestAlg rbuf ref
-        <*> getOpaque (len - 4) rbuf ref
+get_ds len rbuf ref = do
+    ds_key_tag   <- get16 rbuf
+    ds_pubalg    <- getPubAlg rbuf ref
+    ds_digestalg <- getDigestAlg rbuf ref
+    ds_digest    <- getOpaque (len - 4) rbuf ref
+    return RD_DS {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
