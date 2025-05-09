@@ -411,14 +411,16 @@ rd_aaaa ipv6 = toRData $ RD_AAAA ipv6
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Server Selection (RFC2782)
 data RD_SRV = RD_SRV
     { srv_priority :: Word16
-    , srv_weight :: Word16
-    , srv_port :: Word16
-    , srv_target :: Domain
+    , srv_weight   :: Word16
+    , srv_port     :: Word16
+    , srv_target   :: Domain
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
@@ -429,13 +431,15 @@ instance ResourceData RD_SRV where
         put16 wbuf srv_port
         putDomain cf srv_target wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_srv :: Int -> Parser RD_SRV
-get_srv _ rbuf ref =
-    RD_SRV
-        <$> get16 rbuf
-        <*> get16 rbuf
-        <*> get16 rbuf
-        <*> getDomain rbuf ref
+get_srv _ rbuf ref = do
+    srv_priority <- get16 rbuf
+    srv_weight   <- get16 rbuf
+    srv_port     <- get16 rbuf
+    srv_target   <- getDomain rbuf ref
+    return RD_SRV {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -486,14 +490,16 @@ rd_opt x = toRData $ RD_OPT x
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | TLSA (RFC6698)
 data RD_TLSA = RD_TLSA
-    { tlsa_usage :: Word8
-    , tlsa_selector :: Word8
+    { tlsa_usage         :: Word8
+    , tlsa_selector      :: Word8
     , tlsa_matching_type :: Word8
-    , tlsa_assoc_data :: Opaque
+    , tlsa_assoc_data    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
@@ -504,13 +510,15 @@ instance ResourceData RD_TLSA where
         put8 wbuf tlsa_matching_type
         putOpaque tlsa_assoc_data wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_tlsa :: Int -> Parser RD_TLSA
-get_tlsa len rbuf ref =
-    RD_TLSA
-        <$> get8 rbuf
-        <*> get8 rbuf
-        <*> get8 rbuf
-        <*> getOpaque (len - 3) rbuf ref
+get_tlsa len rbuf ref = do
+    tlsa_usage         <- get8 rbuf
+    tlsa_selector      <- get8 rbuf
+    tlsa_matching_type <- get8 rbuf
+    tlsa_assoc_data    <- getOpaque (len - 3) rbuf ref
+    return RD_TLSA {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData
