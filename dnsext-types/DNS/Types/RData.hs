@@ -166,47 +166,53 @@ rd_cname d = toRData $ RD_CNAME d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Marks the start of a zone of authority (RFC1035)
 data RD_SOA = RD_SOA
-    { soa_mname :: Domain
+    { soa_mname   :: Domain
     -- ^ Setter/getter for mname
-    , soa_rname :: Mailbox
+    , soa_rname   :: Mailbox
     -- ^ Setter/getter for rname
-    , soa_serial :: Word32
+    , soa_serial  :: Word32
     -- ^ Setter/getter for serial
     , soa_refresh :: Seconds
     -- ^ Setter/getter for refresh
-    , soa_retry :: Seconds
+    , soa_retry   :: Seconds
     -- ^ Setter/getter for retry
-    , soa_expire :: Seconds
+    , soa_expire  :: Seconds
     -- ^ Setter/getter for expire
     , soa_minimum :: Seconds
     -- ^ Setter/getter for minimum
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 instance ResourceData RD_SOA where
     resourceDataType _ = SOA
     resourceDataSize RD_SOA{..} = domainSize soa_mname + mailboxSize soa_rname + 20
     putResourceData cf RD_SOA{..} = \wbuf ref -> do
-        putDomainRFC1035 cf soa_mname wbuf ref
-        putMailboxRFC1035 cf soa_rname wbuf ref
-        put32 wbuf soa_serial
-        putSeconds soa_refresh wbuf ref
-        putSeconds soa_retry wbuf ref
-        putSeconds soa_expire wbuf ref
-        putSeconds soa_minimum wbuf ref
+        putDomainRFC1035  cf soa_mname   wbuf ref
+        putMailboxRFC1035 cf soa_rname   wbuf ref
+        put32 wbuf           soa_serial
+        putSeconds           soa_refresh wbuf ref
+        putSeconds           soa_retry   wbuf ref
+        putSeconds           soa_expire  wbuf ref
+        putSeconds           soa_minimum wbuf ref
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 get_soa :: Int -> Parser RD_SOA
-get_soa _ rbuf ref =
-    RD_SOA
-        <$> getDomainRFC1035 rbuf ref
-        <*> getMailboxRFC1035 rbuf ref
-        <*> get32 rbuf
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
-        <*> getSeconds rbuf ref
+get_soa _ rbuf ref = do
+    soa_mname   <- getDomainRFC1035 rbuf ref
+    soa_rname   <- getMailboxRFC1035 rbuf ref
+    soa_serial  <- get32 rbuf
+    soa_refresh <- getSeconds rbuf ref
+    soa_retry   <- getSeconds rbuf ref
+    soa_expire  <- getSeconds rbuf ref
+    soa_minimum <- getSeconds rbuf ref
+    return RD_SOA{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_soa
@@ -262,24 +268,33 @@ rd_ptr d = toRData $ RD_PTR d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Mail exchange (RFC1035)
 data RD_MX = RD_MX
     { mx_preference :: Word16
     -- ^ Setter/getter for preference
-    , mx_exchange :: Domain
+    , mx_exchange   :: Domain
     -- ^ Setter/getter for 'Domain'
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 instance ResourceData RD_MX where
     resourceDataType _ = MX
     resourceDataSize RD_MX{..} = 2 + domainSize mx_exchange
     putResourceData cf RD_MX{..} = \wbuf ref -> do
-        put16 wbuf mx_preference
+        put16          wbuf mx_preference
         putDomainRFC1035 cf mx_exchange wbuf ref
+{- FOURMOLU_ENABLE -}
 
+{- FOURMOLU_DISABLE -}
 get_mx :: Int -> Parser RD_MX
-get_mx _ rbuf ref = RD_MX <$> get16 rbuf <*> getDomainRFC1035 rbuf ref
+get_mx _ rbuf ref = do
+    mx_preference <- get16            rbuf
+    mx_exchange   <- getDomainRFC1035 rbuf ref
+    return RD_MX {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_mx :: Word16 -> Domain -> RData
@@ -396,14 +411,16 @@ rd_aaaa ipv6 = toRData $ RD_AAAA ipv6
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Server Selection (RFC2782)
 data RD_SRV = RD_SRV
     { srv_priority :: Word16
-    , srv_weight :: Word16
-    , srv_port :: Word16
-    , srv_target :: Domain
+    , srv_weight   :: Word16
+    , srv_port     :: Word16
+    , srv_target   :: Domain
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_SRV where
     resourceDataType _ = SRV
@@ -414,13 +431,15 @@ instance ResourceData RD_SRV where
         put16 wbuf srv_port
         putDomain cf srv_target wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_srv :: Int -> Parser RD_SRV
-get_srv _ rbuf ref =
-    RD_SRV
-        <$> get16 rbuf
-        <*> get16 rbuf
-        <*> get16 rbuf
-        <*> getDomain rbuf ref
+get_srv _ rbuf ref = do
+    srv_priority <- get16 rbuf
+    srv_weight   <- get16 rbuf
+    srv_port     <- get16 rbuf
+    srv_target   <- getDomain rbuf ref
+    return RD_SRV {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_srv :: Word16 -> Word16 -> Word16 -> Domain -> RData
@@ -471,14 +490,16 @@ rd_opt x = toRData $ RD_OPT x
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | TLSA (RFC6698)
 data RD_TLSA = RD_TLSA
-    { tlsa_usage :: Word8
-    , tlsa_selector :: Word8
+    { tlsa_usage         :: Word8
+    , tlsa_selector      :: Word8
     , tlsa_matching_type :: Word8
-    , tlsa_assoc_data :: Opaque
+    , tlsa_assoc_data    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_TLSA where
     resourceDataType _ = TLSA
@@ -489,13 +510,15 @@ instance ResourceData RD_TLSA where
         put8 wbuf tlsa_matching_type
         putOpaque tlsa_assoc_data wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_tlsa :: Int -> Parser RD_TLSA
-get_tlsa len rbuf ref =
-    RD_TLSA
-        <$> get8 rbuf
-        <*> get8 rbuf
-        <*> get8 rbuf
-        <*> getOpaque (len - 3) rbuf ref
+get_tlsa len rbuf ref = do
+    tlsa_usage         <- get8 rbuf
+    tlsa_selector      <- get8 rbuf
+    tlsa_matching_type <- get8 rbuf
+    tlsa_assoc_data    <- getOpaque (len - 3) rbuf ref
+    return RD_TLSA {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_tlsa :: Word8 -> Word8 -> Word8 -> Opaque -> RData
