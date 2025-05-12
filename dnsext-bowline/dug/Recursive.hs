@@ -5,7 +5,7 @@
 module Recursive (recursiveQuery) where
 
 import Codec.Serialise
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (MVar, newMVar, withMVar)
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import qualified Control.Exception as E
@@ -47,7 +47,6 @@ import qualified Network.TLS as TLS
 import System.Console.ANSI.Types
 import System.Directory (doesFileExist, removeFile)
 import System.Exit (exitFailure)
-import System.Random (randomRIO)
 
 import Types
 
@@ -61,16 +60,18 @@ recursiveQuery
     -> TQueue (NameTag, String)
     -> IO ()
 recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
+    keyloglock <- newMVar ()
+    resumplock <- newMVar ()
     let ractions =
             defaultResolveActions
                 { ractionLog = \a b c -> atomically $ putLinesSTM a b c
                 , ractionOnResumptionInfo = case optResumptionFile of
                     Nothing -> \_ _ -> return ()
-                    Just file -> saveResumption file tq
+                    Just file -> saveResumption file resumplock tq
                 , ractionUseEarlyData = opt0RTT
                 , ractionKeyLog = case optKeyLogFile of
                     Nothing -> \_ -> return ()
-                    Just file -> \msg -> safeAppendFile file (C8.pack (msg ++ "\n"))
+                    Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
                 , ractionValidate = optValidate
                 }
     (conf, aps) <- getCustomConf ips port mempty opt ractions
@@ -244,12 +245,12 @@ mkHeader Reply{..} =
 
 ----------------------------------------------------------------
 
-saveResumption :: FilePath -> TQueue (NameTag, String) -> NameTag -> ByteString -> IO ()
-saveResumption file tq name@(NameTag tag) bs = do
+saveResumption :: FilePath -> MVar () -> TQueue (NameTag, String) -> NameTag -> ByteString -> IO ()
+saveResumption file lock tq name@(NameTag tag) bs = do
     case extractInfo of
         Nothing -> return ()
         Just info -> atomically $ writeTQueue tq (name, info)
-    safeAppendFile file (C8.pack tag <> " " <> BS16.encode bs <> "\n")
+    safeAppendFile file lock (C8.pack tag <> " " <> BS16.encode bs <> "\n")
   where
     extractInfo
         | "QUIC" `List.isSuffixOf` tag || "H3" `List.isSuffixOf` tag =
@@ -273,15 +274,5 @@ loadResumption file = map toKV . C8.lines <$> C8.readFile file
       where
         (k, v) = BS.break (== 32) l
 
-safeAppendFile :: FilePath -> ByteString -> IO ()
-safeAppendFile file bs = loop (10 :: Int)
-  where
-    loop 0 = putStrLn "appendFile failed"
-    loop n = do
-        ex <- E.try (BS.appendFile file bs)
-        case ex of
-            Right () -> return ()
-            Left (E.SomeException _) -> do
-                r <- randomRIO (1, 10)
-                threadDelay (r * 1000)
-                loop (n - 1)
+safeAppendFile :: FilePath -> MVar () -> ByteString -> IO ()
+safeAppendFile file lock bs = withMVar lock $ \_ -> BS.appendFile file bs
