@@ -50,6 +50,7 @@ pattern CDNSKEY = TYPE 60 -- RFC 7344
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC signature
 --
 -- As noted in
@@ -73,26 +74,27 @@ pattern CDNSKEY = TYPE 60 -- RFC 7344
 --
 -- The 'dnsTime' function performs the requisite conversion.
 data RD_RRSIG = RD_RRSIG
-    { rrsig_type :: TYPE
+    { rrsig_type       :: TYPE
     -- ^ RRtype of RRset signed
-    , rrsig_pubalg :: PubAlg
+    , rrsig_pubalg     :: PubAlg
     -- ^ DNSKEY algorithm
     , rrsig_num_labels :: Word8
     -- ^ Number of labels signed
-    , rrsig_ttl :: TTL
+    , rrsig_ttl        :: TTL
     -- ^ Maximum origin TTL
     , rrsig_expiration :: DNSTime
     -- ^ Time last valid
-    , rrsig_inception :: DNSTime
+    , rrsig_inception  :: DNSTime
     -- ^ Time first valid
-    , rrsig_key_tag :: Word16
+    , rrsig_key_tag    :: Word16
     -- ^ Signing key tag
-    , rrsig_zone :: Domain
+    , rrsig_zone       :: Domain
     -- ^ Signing domain
-    , rrsig_signature :: Opaque
+    , rrsig_signature  :: Opaque
     -- ^ Opaque signature
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_RRSIG where
     resourceDataType _ = RRSIG
@@ -117,6 +119,7 @@ instance ResourceData RD_RRSIG where
         putDomain cf rrsig_zone wbuf ref
         putOpaque rrsig_signature wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_rrsig :: Int -> Parser RD_RRSIG
 get_rrsig lim rbuf ref = do
     -- The signature follows a variable length zone name
@@ -124,19 +127,19 @@ get_rrsig lim rbuf ref = do
     -- checkpoint the position at the start of the RData,
     -- and after reading the zone name, and subtract that
     -- from the RData length.
-    --
     end <- rdataEnd lim rbuf ref
-    typ <- getTYPE rbuf ref
-    alg <- getPubAlg rbuf ref
-    cnt <- get8 rbuf
-    ttl <- getSeconds rbuf ref
-    tex <- getDNSTime rbuf ref
-    tin <- getDNSTime rbuf ref
-    tag <- get16 rbuf
-    dom <- getDomain rbuf ref -- XXX: Enforce no compression?
+    rrsig_type       <- getTYPE rbuf ref
+    rrsig_pubalg     <- getPubAlg rbuf ref
+    rrsig_num_labels <- get8 rbuf
+    rrsig_ttl        <- getSeconds rbuf ref
+    rrsig_expiration <- getDNSTime rbuf ref
+    rrsig_inception  <- getDNSTime rbuf ref
+    rrsig_key_tag    <- get16 rbuf
+    rrsig_zone       <- getDomain rbuf ref -- XXX: Enforce no compression?
     pos <- position rbuf
-    val <- getOpaque (end - pos) rbuf ref
-    return $ RD_RRSIG typ alg cnt ttl tex tin tag dom val
+    rrsig_signature  <- getOpaque (end - pos) rbuf ref
+    return RD_RRSIG{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_rrsig
@@ -154,14 +157,16 @@ rd_rrsig a b c d e f g h i = toRData $ RD_RRSIG a b c d e f g h i
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Delegation Signer (RFC4034)
 data RD_DS = RD_DS
-    { ds_key_tag :: Word16
-    , ds_pubalg :: PubAlg
+    { ds_key_tag   :: Word16
+    , ds_pubalg    :: PubAlg
     , ds_digestalg :: DigestAlg
-    , ds_digest :: Opaque
+    , ds_digest    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_DS where
     resourceDataType _ = DS
@@ -176,13 +181,15 @@ instance ResourceData RD_DS where
         putDigestAlg ds_digestalg wbuf ref
         putOpaque ds_digest wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_ds :: Int -> Parser RD_DS
-get_ds len rbuf ref =
-    RD_DS
-        <$> get16 rbuf
-        <*> getPubAlg rbuf ref
-        <*> getDigestAlg rbuf ref
-        <*> getOpaque (len - 4) rbuf ref
+get_ds len rbuf ref = do
+    ds_key_tag   <- get16 rbuf
+    ds_pubalg    <- getPubAlg rbuf ref
+    ds_digestalg <- getDigestAlg rbuf ref
+    ds_digest    <- getOpaque (len - 4) rbuf ref
+    return RD_DS {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_ds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -190,12 +197,14 @@ rd_ds a b c d = toRData $ RD_DS a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC denial of existence NSEC record
 data RD_NSEC = RD_NSEC
     { nsec_next_domain :: Domain
-    , nsec_types :: [TYPE]
+    , nsec_types       :: [TYPE]
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC where
     resourceDataType _ = NSEC
@@ -206,12 +215,15 @@ instance ResourceData RD_NSEC where
         _ <- putDomain cf nsec_next_domain wbuf ref
         putNsecTypes nsec_types wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec :: Int -> Parser RD_NSEC
 get_nsec len rbuf ref = do
     end <- rdataEnd len rbuf ref
-    dom <- getDomain rbuf ref
+    nsec_next_domain <- getDomain rbuf ref
     pos <- position rbuf
-    RD_NSEC dom <$> getNsecTypes (end - pos) rbuf ref
+    nsec_types       <- getNsecTypes (end - pos) rbuf ref
+    return RD_NSEC {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec :: Domain -> [TYPE] -> RData
@@ -219,14 +231,16 @@ rd_nsec a b = toRData $ RD_NSEC a b
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSKEY (RFC4034)
 data RD_DNSKEY = RD_DNSKEY
-    { dnskey_flags :: [DNSKEY_Flag]
-    , dnskey_protocol :: Word8
-    , dnskey_pubalg :: PubAlg
+    { dnskey_flags      :: [DNSKEY_Flag]
+    , dnskey_protocol   :: Word8
+    , dnskey_pubalg     :: PubAlg
     , dnskey_public_key :: PubKey
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_DNSKEY where
     resourceDataType _ = DNSKEY
@@ -238,13 +252,15 @@ instance ResourceData RD_DNSKEY where
         putPubAlg dnskey_pubalg wbuf ref
         putPubKey dnskey_public_key wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_dnskey :: Int -> Parser RD_DNSKEY
 get_dnskey len rbuf ref = do
-    flags <- getDNSKEYflags rbuf ref
-    proto <- get8 rbuf
-    pubalg <- getPubAlg rbuf ref
-    pubkey <- getPubKey pubalg (len - 4) rbuf ref
-    return $ RD_DNSKEY flags proto pubalg pubkey
+    dnskey_flags      <- getDNSKEYflags rbuf ref
+    dnskey_protocol   <- get8 rbuf
+    dnskey_pubalg     <- getPubAlg rbuf ref
+    dnskey_public_key <- getPubKey dnskey_pubalg (len - 4) rbuf ref
+    return RD_DNSKEY{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_dnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
@@ -252,16 +268,18 @@ rd_dnskey a b c d = toRData $ RD_DNSKEY a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | DNSSEC hashed denial of existence (RFC5155)
 data RD_NSEC3 = RD_NSEC3
-    { nsec3_hashalg :: HashAlg
-    , nsec3_flags :: [NSEC3_Flag]
-    , nsec3_iterations :: Word16
-    , nsec3_salt :: Opaque
+    { nsec3_hashalg                :: HashAlg
+    , nsec3_flags                  :: [NSEC3_Flag]
+    , nsec3_iterations             :: Word16
+    , nsec3_salt                   :: Opaque
     , nsec3_next_hashed_owner_name :: Opaque
-    , nsec3_types :: [TYPE]
+    , nsec3_types                  :: [TYPE]
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC3 where
     resourceDataType _ = NSEC3
@@ -282,16 +300,19 @@ instance ResourceData RD_NSEC3 where
         putLenOpaque nsec3_next_hashed_owner_name wbuf ref
         putNsecTypes nsec3_types wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec3 :: Int -> Parser RD_NSEC3
 get_nsec3 len rbuf ref = do
     dend <- rdataEnd len rbuf ref
-    halg <- getHashAlg rbuf ref
-    flgs <- getNSEC3flags rbuf ref
-    iter <- get16 rbuf
-    salt <- getLenOpaque rbuf ref
-    hash <- getLenOpaque rbuf ref
+    nsec3_hashalg                <- getHashAlg rbuf ref
+    nsec3_flags                  <- getNSEC3flags rbuf ref
+    nsec3_iterations             <- get16 rbuf
+    nsec3_salt                   <- getLenOpaque rbuf ref
+    nsec3_next_hashed_owner_name <- getLenOpaque rbuf ref
     tpos <- position rbuf
-    RD_NSEC3 halg flgs iter salt hash <$> getNsecTypes (dend - tpos) rbuf ref
+    nsec3_types                  <- getNsecTypes (dend - tpos) rbuf ref
+    return RD_NSEC3{..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec3
@@ -300,14 +321,16 @@ rd_nsec3 a b c d e f = toRData $ RD_NSEC3 a b c d e f
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | NSEC3 zone parameters (RFC5155)
 data RD_NSEC3PARAM = RD_NSEC3PARAM
-    { nsec3param_hashalg :: HashAlg
-    , nsec3param_flags :: Word8
+    { nsec3param_hashalg    :: HashAlg
+    , nsec3param_flags      :: Word8
     , nsec3param_iterations :: Word16
-    , nsec3param_salt :: Opaque
+    , nsec3param_salt       :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_NSEC3PARAM where
     resourceDataType _ = NSEC3PARAM
@@ -319,13 +342,15 @@ instance ResourceData RD_NSEC3PARAM where
         put16 wbuf nsec3param_iterations
         putLenOpaque nsec3param_salt wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_nsec3param :: Int -> Parser RD_NSEC3PARAM
-get_nsec3param _ rbuf ref =
-    RD_NSEC3PARAM
-        <$> getHashAlg rbuf ref
-        <*> get8 rbuf
-        <*> get16 rbuf
-        <*> getLenOpaque rbuf ref
+get_nsec3param _ rbuf ref = do
+    nsec3param_hashalg    <- getHashAlg rbuf ref
+    nsec3param_flags      <- get8 rbuf
+    nsec3param_iterations <- get16 rbuf
+    nsec3param_salt       <- getLenOpaque rbuf ref
+    return RD_NSEC3PARAM {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_nsec3param :: HashAlg -> Word8 -> Word16 -> Opaque -> RData
@@ -333,14 +358,16 @@ rd_nsec3param a b c d = toRData $ RD_NSEC3PARAM a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Child DS (RFC7344)
 data RD_CDS = RD_CDS
-    { cds_key_tag :: Word16
-    , cds_pubalg :: PubAlg
+    { cds_key_tag   :: Word16
+    , cds_pubalg    :: PubAlg
     , cds_digestalg :: DigestAlg
-    , cds_digest :: Opaque
+    , cds_digest    :: Opaque
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_CDS where
     resourceDataType _ = CDS
@@ -355,13 +382,15 @@ instance ResourceData RD_CDS where
         putDigestAlg cds_digestalg wbuf ref
         putOpaque cds_digest wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_cds :: Int -> Parser RD_CDS
-get_cds len rbuf ref =
-    RD_CDS
-        <$> get16 rbuf
-        <*> getPubAlg rbuf ref
-        <*> getDigestAlg rbuf ref
-        <*> getOpaque (len - 4) rbuf ref
+get_cds len rbuf ref = do
+    cds_key_tag   <- get16 rbuf
+    cds_pubalg    <- getPubAlg rbuf ref
+    cds_digestalg <- getDigestAlg rbuf ref
+    cds_digest    <- getOpaque (len - 4) rbuf ref
+    return RD_CDS {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_cds :: Word16 -> PubAlg -> DigestAlg -> Opaque -> RData
@@ -369,14 +398,16 @@ rd_cds a b c d = toRData $ RD_CDS a b c d
 
 ----------------------------------------------------------------
 
+{- FOURMOLU_DISABLE -}
 -- | Child DNSKEY (RFC7344)
 data RD_CDNSKEY = RD_CDNSKEY
-    { cdnskey_flags :: [DNSKEY_Flag]
-    , cdnskey_protocol :: Word8
-    , cdnskey_pubalg :: PubAlg
+    { cdnskey_flags      :: [DNSKEY_Flag]
+    , cdnskey_protocol   :: Word8
+    , cdnskey_pubalg     :: PubAlg
     , cdnskey_public_key :: PubKey
     }
     deriving (Eq, Ord, Show)
+{- FOURMOLU_ENABLE -}
 
 instance ResourceData RD_CDNSKEY where
     resourceDataType _ = CDNSKEY
@@ -388,13 +419,15 @@ instance ResourceData RD_CDNSKEY where
         putPubAlg cdnskey_pubalg wbuf ref
         putPubKey cdnskey_public_key wbuf ref
 
+{- FOURMOLU_DISABLE -}
 get_cdnskey :: Int -> Parser RD_CDNSKEY
 get_cdnskey len rbuf ref = do
-    flags <- getDNSKEYflags rbuf ref
-    proto <- get8 rbuf
-    pubalg <- getPubAlg rbuf ref
-    pubkey <- getPubKey pubalg (len - 4) rbuf ref
-    return $ RD_CDNSKEY flags proto pubalg pubkey
+    cdnskey_flags      <- getDNSKEYflags rbuf ref
+    cdnskey_protocol   <- get8 rbuf
+    cdnskey_pubalg     <- getPubAlg rbuf ref
+    cdnskey_public_key <- getPubKey cdnskey_pubalg (len - 4) rbuf ref
+    return RD_CDNSKEY {..}
+{- FOURMOLU_ENABLE -}
 
 -- | Smart constructor.
 rd_cdnskey :: [DNSKEY_Flag] -> Word8 -> PubAlg -> PubKey -> RData
