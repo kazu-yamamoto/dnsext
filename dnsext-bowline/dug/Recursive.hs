@@ -70,7 +70,7 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                     Just file -> saveResumption file resumplock tq
                 , ractionUseEarlyData = opt0RTT
                 , ractionKeyLog = case optKeyLogFile of
-                    Nothing -> \_ -> return ()
+                    Nothing -> TLS.defaultKeyLogger
                     Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
                 , ractionValidate = optValidate
                 }

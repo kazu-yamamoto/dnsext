@@ -38,10 +38,13 @@ module DNS.Do53.Types (
 )
 where
 
+import Control.Concurrent (MVar, newMVar, withMVar)
 import Data.IP
 #ifdef mingw32_HOST_OS
 import Network.Socket (setSocketOption, SocketOption(..))
 #endif
+import System.Environment (lookupEnv)
+import System.IO.Unsafe (unsafePerformIO)
 import Prelude
 
 import DNS.Do53.Id
@@ -286,7 +289,7 @@ defaultResolveActions =
         , ractionSetSockOpt = rsso
         , ractionLog = \_ _ ~_ -> return ()
         , ractionShortLog = False
-        , ractionKeyLog = \ ~_ -> return ()
+        , ractionKeyLog = defaultKeyLogger
         , ractionResumptionInfo = \_ -> []
         , ractionOnResumptionInfo = \_ _ -> return ()
         , ractionUseEarlyData = False
@@ -304,3 +307,19 @@ rsso _ = return ()
 ----------------------------------------------------------------
 
 type BS = ByteString
+
+----------------------------------------------------------------
+
+{-# NOINLINE keyLogLock #-}
+keyLogLock :: MVar ()
+keyLogLock = unsafePerformIO $ newMVar ()
+
+{-# NOINLINE keyLogFile #-}
+keyLogFile :: Maybe FilePath
+keyLogFile = unsafePerformIO $ lookupEnv "SSLKEYLOGFILE"
+
+-- | Key logger with the SSLKEYLOGFILE environment variable.
+defaultKeyLogger :: String -> IO ()
+defaultKeyLogger ~msg = case keyLogFile of
+    Nothing -> return ()
+    Just file -> withMVar keyLogLock $ \_ -> appendFile file (msg ++ "\n")

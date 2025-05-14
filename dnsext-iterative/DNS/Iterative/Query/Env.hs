@@ -50,6 +50,7 @@ import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Network.TLS (defaultKeyLogger)
 import System.Posix (getSystemID, nodeName)
 import System.Timeout (timeout)
 
@@ -78,8 +79,8 @@ import qualified DNS.Iterative.Query.DefaultLocal as Local
 import DNS.Iterative.Query.Helpers
 import qualified DNS.Iterative.Query.LocalZone as Local
 import qualified DNS.Iterative.Query.StubZone as Stub
-import qualified DNS.Iterative.Query.ZoneMap as ZMap
 import qualified DNS.Iterative.Query.Verify as Verify
+import qualified DNS.Iterative.Query.ZoneMap as ZMap
 import DNS.Iterative.RootServers (getRootServers)
 import DNS.Iterative.RootTrustAnchors (rootSepDS)
 import DNS.Iterative.Stats
@@ -117,7 +118,7 @@ newEmptyEnv = do
         , filterCache_ = \_ -> pure()
         , clearCache_ = pure ()
         , currentRoot_ = rootRef
-        , putSSLKeyLog_ = \_ -> pure ()
+        , putSSLKeyLog_ = defaultKeyLogger
         , currentSeconds_ = getTime
         , currentTimeUsec_ = getCurrentTimeUsec
         , timeString_ = getTimeStr
