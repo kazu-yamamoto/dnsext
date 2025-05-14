@@ -55,7 +55,7 @@ executable bowline
         network >= 3.2.3 && < 3.3,
         split,
         stm,
-        tls >= 2.1.4,
+        tls >= 2.1.10,
         tls-session-manager,
         unix,
         wai,
@@ -96,11 +96,11 @@ executable dug
         iproute,
         network,
         prettyprinter,
-        quic >= 0.2.11 && < 0.3,
+        quic >= 0.2.14 && < 0.3,
         random,
         serialise,
         stm,
-        tls >= 2.1.4,
+        tls >= 2.1.10,
         transformers,
         unix-time
 
