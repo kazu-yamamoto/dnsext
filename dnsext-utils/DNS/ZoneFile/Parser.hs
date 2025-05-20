@@ -29,27 +29,21 @@ import qualified DNS.Parser as Poly
 import DNS.ZoneFile.Types
 
 {- FOURMOLU_DISABLE -}
-data Context = Context
-    { cx_zone  :: Domain
-    , cx_name  :: Domain
-    , cx_ttl   :: TTL
-    , cx_class :: CLASS
+data Context =
+    Context
+    { cx_zone   :: Domain
+    , cx_name   :: Domain
+    , cx_ttl    :: TTL
+    , cx_class  :: CLASS
     }
-{- FOURMOLU_ENABLE -}
 
 instance Show Context where
     show (Context z n t c) = unwords ["Context", show z, show n, show $ toInt t, show c]
-      where
-        toInt = fromIntegral :: TTL -> Int
+      where toInt = fromIntegral :: TTL -> Int
+{- FOURMOLU_ENABLE -}
 
 defaultContext :: Context
-defaultContext =
-    Context
-        { cx_zone = "."
-        , cx_name = "."
-        , cx_ttl = 1800
-        , cx_class = IN
-        }
+defaultContext = Context "." "." 1800 IN
 
 type Parser = StateT Context (Poly.Parser [Token])
 
