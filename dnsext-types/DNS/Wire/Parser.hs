@@ -99,29 +99,29 @@ getInt32 rbuf = fromIntegral <$> get32 rbuf
 
 getNBytes :: ReadBuffer -> Int -> IO [Int]
 getNBytes rbuf n
-    | n < 0 = error "malformed or truncated input"
+    | n < 0 = failParser "getNBytes: malformed or truncated input"
     | otherwise = toInts <$> extractByteString rbuf n
   where
     toInts = map fromIntegral . BS.unpack
 
 getNOctets :: ReadBuffer -> Int -> IO [Word8]
 getNOctets rbuf n
-    | n < 0 = error "malformed or truncated input"
+    | n < 0 = failParser "getNOctets: malformed or truncated input"
     | otherwise = BS.unpack <$> extractByteString rbuf n
 
 skipNBytes :: ReadBuffer -> Int -> IO ()
 skipNBytes rbuf n
-    | n < 0 = error "malformed or truncated input"
+    | n < 0 = failParser "skipNBytes: malformed or truncated input"
     | otherwise = ff rbuf n
 
 getNByteString :: ReadBuffer -> Int -> IO ByteString
 getNByteString rbuf n
-    | n < 0 = error "malformed or truncated input"
+    | n < 0 = failParser "getNByteString: malformed or truncated input"
     | otherwise = extractByteString rbuf n
 
 getNShortByteString :: ReadBuffer -> Int -> IO ShortByteString
 getNShortByteString rbuf n
-    | n < 0 = error "malformed or truncated input"
+    | n < 0 = failParser "getNShortByteString: malformed or truncated input"
     | otherwise = Short.toShort <$> extractByteString rbuf n
 
 -- | Parse a list of elements that takes up exactly a given number of bytes.
@@ -146,7 +146,7 @@ sGetMany elemname len parser = \rbuf ref -> do
             LT -> do
                 x <- parser rbuf ref
                 go lim (build . (x :)) rbuf ref
-            GT -> error $ "internal error: in-place success for " ++ elemname
+            GT -> failParser $ "sGetMany: internal error: in-place success for " ++ elemname
 
 ----------------------------------------------------------------
 
