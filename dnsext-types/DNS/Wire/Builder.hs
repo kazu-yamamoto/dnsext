@@ -61,9 +61,15 @@ runBuilder len builder = unsafeDupablePerformIO $ do
 
 ----------------------------------------------------------------
 
+maxCompressionPerMsg :: Int
+maxCompressionPerMsg = 128
+
 pushPointer :: WireLabels -> Int -> IORef BState -> IO ()
 pushPointer dom pos ref = do
     BState m <- readIORef ref
+    when (M.size m >= maxCompressionPerMsg) $ do
+        let info = unwords $ map show $ dom : take 16 (M.keys m)
+        fail ("Wire.Builder: pushPointer: compression limit exceeded: " ++ info ++ " ...")
     let m' = M.insert dom pos m
     writeIORef ref $ BState m'
 
