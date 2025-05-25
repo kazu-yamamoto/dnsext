@@ -1,0 +1,16 @@
+Source: bowline
+Priority: extra
+Section: haskell
+Maintainer: Kei Hibino <ex8k.hibino@gmail.com>
+Build-Depends:
+ dpkg-dev (>= 1.18.0),
+ debhelper (>= 9),
+Standards-Version: 3.9.8
+
+Package: bowline
+Architecture: any
+Depends: curl, ${misc:Depends}, ${shlibs:Depends}
+Description: full service resolver Bowline, executables
+ Full service resolver implementation Bowline, written in Haskell.
+ .
+ This package provides executable files and bootstrap scripts.
