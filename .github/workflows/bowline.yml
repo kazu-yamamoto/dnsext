@@ -1,0 +1,122 @@
+name: bowline CI
+
+on:
+  push:
+    branches: [ 'main', 'ci', 'ci-uc' ]
+  pull_request:
+    branches: [ 'main' ]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
+
+jobs:
+  build-deb-and-tests:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:  [ 'ubuntu-latest' ]
+
+    steps:
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
+      with:
+        detached: true
+    - name: env variable
+      run: |
+        echo "deb_version=0.0.0."$(date +%Y%m%d)"" >> $GITHUB_ENV
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      id: cache
+      with:
+        path: |
+          cabal-cache
+        key: cache-${{ hashFiles('dnsext-bowline/dnsext-bowline.cabal') }}
+    - name: inject cache into docker
+      uses: reproducible-containers/buildkit-cache-dance@v3.1.0
+      with:
+        cache-map: |
+          {
+            "cabal-cache": "/root/.cabal"
+          }
+        skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
+    - name: build docker image (and binaries)
+      run: |
+        mkdir -p linux/pkg/opt/bowline/bin linux/pkg/opt/bowline/etc
+        cd build-docker
+        ./build.sh -x ${{ github.sha }} ${{ github.server_url }}/${{ github.repository }}
+        cd ..
+        docker run --rm -v /home:/home bowline:bookworm bash -c \
+            "cp /opt/bowline/bin/{bowline,dug,dump} `pwd`/"
+    - name: build deb package
+      run: |
+        mkdir -p pkg/work/bowline-${{ env.deb_version }}/bin
+        docker run --rm -i --name build-bowline \
+            -v /home:/home bowline:bookworm \
+            bash -x -c \
+            "apt-get update ;\
+            apt-get install -y devscripts ;\
+            cd `pwd`; \
+            cd pkg/template; debchange -v ${{ env.deb_version }} -M 'gh action build'; \
+            cd ../work; ln -s ../../../dnsext ./; cd .. ; \
+            ./pkgctl.sh data ${{ env.deb_version }} ;\
+            cp ../{bowline,dug,dump} ./work/bowline-${{ env.deb_version }}/bin/ ;\
+            ./pkgctl.sh pkgs ${{ env.deb_version }} ;\
+            "
+        mv pkg/work/*.deb ./
+        echo "PACKAGE_FILENAME="$(ls *.deb) >> $GITHUB_ENV
+        export PACKAGE_FILENAME=$(ls *.deb)
+        dpkg --contents ${PACKAGE_FILENAME}
+
+    - name: .deb installation
+      run: |
+        docker run -d --name bowline \
+            -p 1853:853/udp -p 1853:853 -p 1443:443/udp -p 1443:443 \
+            -p 1053:53/udp -p 1053:53 -p 1080:80 \
+            -v /home:/home debian:bookworm bash -x -c \
+            "apt-get update ;\
+            apt-get install -y curl `pwd`/${{ env.PACKAGE_FILENAME }} ;\
+            echo \"DAEMON_OPTS='dns-addrs=0.0.0.0 log-level=debug h2c=yes'\" >> /etc/default/bowline ; \
+            bash -x /etc/init.d/bowline start ; sleep 10000;\
+            "
+    - name: basic test
+      run: |
+        sleep 10
+        docker ps -a
+        set -x
+        dig @127.0.0.1 -p 1053 github.com
+        dig @127.0.0.1 -p 1853 github.com +tls
+        dig @127.0.0.1 -p 1443 github.com +https
+        PATH=`pwd`:${PATH} sh -xe ./pkg/proto-checks.sh all non-root
+
+    - name: additional tests
+      run: |
+        echo "===current pid==="
+        docker exec bowline cat /run/bowline.pid
+        docker exec bowline /etc/init.d/bowline restart
+        echo "===new pid==="
+        docker exec bowline cat /run/bowline.pid
+        echo "===reload==="
+        sleep 3
+        docker exec bowline /etc/init.d/bowline reload
+        docker exec -i bowline bash -c "cat /opt/bowline/log/bowline.log" | grep "monitor"
+        echo "===re-open==="
+        sleep 3
+        docker exec bowline bash -c "curl --silent http://127.0.0.1:8080/reopen-log"
+        docker exec -i bowline bash -c "cat /opt/bowline/log/bowline.log" | grep "re-opening log"
+    - name: logs
+      if: always()
+      run: |
+        docker logs bowline
+        docker exec -i bowline bash -c "cat /opt/bowline/log/bowline.log"
+    - name: upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        path: ${{ env.PACKAGE_FILENAME }}
+        name: ${{ env.PACKAGE_FILENAME }}

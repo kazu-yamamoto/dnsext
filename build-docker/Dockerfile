@@ -103,7 +103,7 @@ install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
 
 ## Build and Install
-RUN <<EOF
+RUN --mount=type=cache,target=/root/.cabal <<EOF
 set -e -x
 [ ! -r ~/builder-path ] || . ~/builder-path
 cabal v2-update
