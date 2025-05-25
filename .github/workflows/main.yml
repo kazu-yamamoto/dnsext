@@ -5,7 +5,9 @@ on:
     branches: [ 'main', 'ci', 'ci-uc' ]
   pull_request:
     branches: [ 'main' ]
-
+  release:
+    types:
+      - created
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -93,3 +95,48 @@ jobs:
           env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
         done
         env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
+
+    - name: Install
+      run: |
+        cabal install dnsext-bowline
+        mkdir dist
+        if [ ${{ matrix.os }} == "macOS-latest" ] ; then
+          cp -L ~/.cabal/bin/bowline  dist/bowline-mac-arm64
+          cp -L ~/.cabal/bin/dug  dist/dug-mac-arm64
+        elif [ ${{ matrix.os }} == "ubuntu-latest" ] ; then
+          cp -L ~/.cabal/bin/bowline  dist/bowline-linux-amd64
+          cp -L ~/.cabal/bin/dug  dist/dug-linux-amd64
+        fi
+    - name: Upload artifact
+      if: ${{ matrix.ghc == '9.6' }}
+      uses: actions/upload-artifact@v4
+      with:
+        path: |
+          dist/*
+        name: dnsext-bowline-${{ runner.os }}-${{ runner.arch }}
+    - name: Github Releases
+      if: gitHub.event_name == 'release' && matrix.ghc == '9.6'
+      uses: softprops/action-gh-release@v2
+      with:
+        prerelease: true
+        token: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          dist/*
+    - name: Homebrew-checksum
+      id: checksum
+      if: gitHub.event_name == 'release' && matrix.ghc == '9.6'
+      run: |
+        echo "::set-output name=sha256::$(sha256sum dist/dug-mac-arm64 | awk '{print $1}')"
+    - name: Homebrew-version
+      id: version
+      if: gitHub.event_name == 'release' && matrix.ghc == '9.6'
+      run: |
+        echo ::set-output name=version::${{ github.ref_name }}
+    - name: trigger Homebrew formulae update
+      uses: peter-evans/repository-dispatch@v1
+      if: gitHub.event_name == 'release' && matrix.ghc == '9.6' && runner.os == 'macOS'
+      with:
+        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        repository: thehajime/homebrew-tap
+        event-type: update-brew
+        client-payload: '{ "url": "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/dug-mac-arm64", "sha256": "${{ steps.checksum.outputs.sha256 }}", "version": "${{ steps.version.outputs.version }}" }'
