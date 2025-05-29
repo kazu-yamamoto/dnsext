@@ -29,7 +29,6 @@ module DNS.Types.Domain (
 ) where
 
 import qualified Control.Exception as E
-import Data.Array (Array)
 import Data.Array.Base (listArray, (!))
 import qualified Data.Array.Base as Array
 import qualified Data.ByteString.Char8 as C8
@@ -48,8 +47,8 @@ import DNS.Wire
 class IsRepresentation a b where
     fromRepresentation :: b -> a
     toRepresentation :: a -> b
-    fromWireLabels :: Array Int b -> a
-    toWireLabels :: a -> Array Int b
+    fromWireLabels :: [b] -> a
+    toWireLabels :: a -> [b]
 
 -- | The type for domain names. This holds the /wire format/ internally.
 --
@@ -191,20 +190,20 @@ instance Semigroup Domain where
 instance IsRepresentation Domain ShortByteString where
     fromRepresentation = domain
     toRepresentation = toDomainRep
-    fromWireLabels = domainFromWireLabels
-    toWireLabels = wireLabels_
+    fromWireLabels = domainFromWireLabels . listWireLabels
+    toWireLabels = wireLabels
 
 instance IsRepresentation Domain ByteString where
     fromRepresentation = domain . Short.toShort
     toRepresentation = Short.fromShort . toDomainRep
-    fromWireLabels = domainFromWireLabels . (Short.toShort <$>)
-    toWireLabels = (Short.fromShort <$>) . wireLabels_
+    fromWireLabels = domainFromWireLabels . listWireLabels . (Short.toShort <$>)
+    toWireLabels = (Short.fromShort <$>) . wireLabels
 
 instance IsRepresentation Domain String where
     fromRepresentation = domain . fromString
     toRepresentation = shortToString . toDomainRep
-    fromWireLabels = domainFromWireLabels . (fromString <$>)
-    toWireLabels = (shortToString <$>) . wireLabels_
+    fromWireLabels = domainFromWireLabels . listWireLabels . (fromString <$>)
+    toWireLabels = (shortToString <$>) . wireLabels
 
 -- | Wire size of domain.
 --
@@ -318,20 +317,20 @@ mailboxFromWireLabels lls
 instance IsRepresentation Mailbox ShortByteString where
     fromRepresentation = mailbox
     toRepresentation = toMailboxRep
-    fromWireLabels = toMailbox . domainFromWireLabels
-    toWireLabels = wireLabels_ . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels . listWireLabels
+    toWireLabels = wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox ByteString where
     fromRepresentation = mailbox . Short.toShort
     toRepresentation = Short.fromShort . toMailboxRep
-    fromWireLabels = toMailbox . domainFromWireLabels . (Short.toShort <$>)
-    toWireLabels = (Short.fromShort <$>) . wireLabels_ . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels . listWireLabels . (Short.toShort <$>)
+    toWireLabels = (Short.fromShort <$>) . wireLabels . fromMailbox
 
 instance IsRepresentation Mailbox String where
     fromRepresentation = mailbox . fromString
     toRepresentation = shortToString . toMailboxRep
-    fromWireLabels = toMailbox . domainFromWireLabels . (fromString <$>)
-    toWireLabels = (shortToString <$>) . wireLabels_ . fromMailbox
+    fromWireLabels = toMailbox . domainFromWireLabels . listWireLabels . (fromString <$>)
+    toWireLabels = (shortToString <$>) . wireLabels . fromMailbox
 
 mailboxSize :: Mailbox -> Int
 mailboxSize = domainSize . fromMailbox
