@@ -21,7 +21,6 @@ import DNS.SEC
 import DNS.Types hiding (rrclass, rrname, rrttl, rrtype)
 import qualified DNS.Types.Opaque as Opaque
 import Data.IP (IPv4, IPv6)
-import qualified Data.Vector as V
 
 -- this package
 import DNS.Parser hiding (Parser, runParser)
@@ -130,10 +129,10 @@ rlabels :: Parser Labels
 rlabels = rlabels' <*> (toLabels <$> gets cx_zone)
 
 toLabels :: IsRepresentation a CString => a -> Labels
-toLabels = V.toList . toWireLabels
+toLabels = toWireLabels
 
 fromLabels :: IsRepresentation a CString => Labels -> a
-fromLabels = fromWireLabels . V.fromList
+fromLabels = fromWireLabels
 
 -- | absolute domain name
 -- >>> runParser adomain cx [CS "example",Dot,CS "net",Dot]
