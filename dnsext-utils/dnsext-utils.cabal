@@ -47,7 +47,6 @@ library
         iproute,
         network >= 3.2.2 && < 3.3,
         network-byte-order,
-        primitive,
         psqueues,
         recv,
         stm,
