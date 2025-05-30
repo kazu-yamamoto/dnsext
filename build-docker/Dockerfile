@@ -117,12 +117,11 @@ set -e -x
 [ ! -r ~/builder-path ] || . ~/builder-path
 cabal v2-update
 ( cd dnsext
-  cabal v2-configure ${GHC_OPTIMIZE} \
+  mkdir -p -m 755 /opt/bowline/bin
+  cabal v2-install dnsext-bowline ${GHC_OPTIMIZE} \
     --enable-split-sections \
     --enable-split-objs \
-    --ghc-options="-j${GHC_PARALLEL} +RTS -qg -RTS"
-  mkdir -p -m 755 /opt/bowline/bin
-  cabal v2-install dnsext-bowline \
+    --ghc-options="-j${GHC_PARALLEL} +RTS -qg -RTS" \
     -j${CABAL_PARALLEL} --install-method=copy --installdir /opt/bowline/bin/ )
 strip /opt/bowline/bin/*
 EOF
