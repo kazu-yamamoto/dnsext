@@ -6,10 +6,10 @@
 
 module DNS.Array where
 
-import Control.Monad.Primitive (primitive)
 import Data.Array.Base (STUArray (..))
 import Data.Array.IO.Internals (IOUArray (..))
 import Data.Array.MArray (Ix (..))
+import GHC.IO (IO (..))
 import GHC.Exts (Int (..), atomicReadIntArray#, casIntArray#, (==#))
 
 atomicModifyIntArray :: Ix ix => IOUArray ix Int -> ix -> (Int -> Int) -> IO Int
@@ -25,7 +25,7 @@ atomicModifyIntArray (IOUArray (STUArray l u _s mba)) ix f =
                             case o# ==# o'# of
                                 0# -> go s# o'#
                                 _ -> (# s'#, I# o# #)
-         in primitive $ \s# ->
+         in IO $ \s# ->
                 case atomicReadIntArray# mba# i# s# of
                     (# s'#, o# #) -> go s'# o#
     {-# INLINE atomicModify #-}
