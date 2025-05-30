@@ -44,7 +44,6 @@ library
         deepseq,
         dnsext-dnssec,
         dnsext-types,
-        ghc-prim,
         iproute,
         network >= 3.2.2 && < 3.3,
         network-byte-order,
