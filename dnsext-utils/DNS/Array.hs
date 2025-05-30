@@ -10,8 +10,7 @@ import Control.Monad.Primitive (primitive)
 import Data.Array.Base (STUArray (..))
 import Data.Array.IO.Internals (IOUArray (..))
 import Data.Array.MArray (Ix (..))
-import GHC.Exts (Int (..))
-import GHC.PrimopWrappers (atomicReadIntArray#, casIntArray#, (==#))
+import GHC.Exts (Int (..), atomicReadIntArray#, casIntArray#, (==#))
 
 atomicModifyIntArray :: Ix ix => IOUArray ix Int -> ix -> (Int -> Int) -> IO Int
 atomicModifyIntArray (IOUArray (STUArray l u _s mba)) ix f =
