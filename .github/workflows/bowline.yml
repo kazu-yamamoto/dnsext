@@ -69,7 +69,7 @@ jobs:
       run: |
         mkdir -p pkg/work/bowline-${{ env.deb_version }}/bin
         docker run --rm -i --name build-bowline \
-            -v /home:/home bowline:bookworm \
+            -v /home:/home debian:bookworm-slim \
             bash -x -c \
             "apt-get update ;\
             apt-get install -y devscripts ;\
