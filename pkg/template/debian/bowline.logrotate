@@ -1,0 +1,13 @@
+
+/opt/bowline/log/bowline.log {
+        missingok
+        weekly
+        rotate 106
+        dateext
+        create 0664 root adm
+        minsize 1M
+        compress
+        postrotate
+                /usr/bin/curl http://127.0.0.1:8080/reopen-log
+        endscript
+}

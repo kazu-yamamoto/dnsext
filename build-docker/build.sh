@@ -51,6 +51,7 @@ build_with_ghcup() {
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
+           --build-arg PULL_REQ_NUMBER=${PULL_REQ_NUMBER} \
            -f Dockerfile \
            .
 
@@ -78,6 +79,7 @@ build_with_haskell() {
            --build-arg CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN} \
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
+           --build-arg PULL_REQ_NUMBER=${PULL_REQ_NUMBER} \
            -f Dockerfile \
            .
 }
@@ -115,6 +117,7 @@ CLONE_URL="$2"
 [ x"$CLONE_URL" != x ] || CLONE_URL=$DEFAULT_CLONE_URL
 
 bowline_revision=${DNSEXT_REV#dist-}
+PULL_REQ_NUMBER=${GITHUB_PR_NUMBER}
 set +x
 
 ## ----------

@@ -10,6 +10,7 @@ ARG CABAL_VERSION
 
 ARG CLONE_URL
 ARG DNSEXT_REV
+ARG PULL_REQ_NUMBER
 
 ARG PRIVKEY_ALG
 ARG PRIVKEY_ALGOPT
@@ -72,6 +73,9 @@ RUN <<EOF
 set -e -x
 git clone ${CLONE_URL}
 ( cd dnsext
+  if [ -n "${PULL_REQ_NUMBER}" ] ; then
+    git fetch origin pull/${PULL_REQ_NUMBER}/head:tmp
+  fi
   git checkout ${DNSEXT_REV}
   for dir in \
     dnsext-types     \
@@ -103,7 +107,12 @@ install -m 400 privkey.pem fullchain.pem /opt/bowline/etc/
 EOF
 
 ## Build and Install
-RUN <<EOF
+## cache: in order to explicitly delete the cache, check with
+## % docker buildx du --verbose --filter 'type=exec.cachemount'
+## and delete with
+## % docker buildx prune --verbose --filter 'id=<ID-string>'
+##
+RUN --mount=type=cache,target=/root/.cabal <<EOF
 set -e -x
 [ ! -r ~/builder-path ] || . ~/builder-path
 cabal v2-update
@@ -131,6 +140,7 @@ PRIVKEY_ALG=${PRIVKEY_ALG}
 PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
 CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}
 GHC_OPTIMIZE=${GHC_OPTIMIZE}
+PULL_REQ_NUMBER=${PULL_REQ_NUMBER}
 META
 EOF
 
@@ -143,6 +153,7 @@ ARG GHC_VERSION
 
 ARG CLONE_URL
 ARG DNSEXT_REV
+ARG PULL_REQ_NUMBER
 
 ARG PRIVKEY_ALG
 ARG PRIVKEY_ALGOPT
@@ -155,6 +166,7 @@ LABEL build-arg.GHC_VERSION=${GHC_VERSION}
 #LABEL build-arg.CABAL_VERSION=${CABAL_VERSION}
 LABEL build-arg.CLONE_URL=${CLONE_URL}
 LABEL build-arg.DNSEXT_REV=${DNSEXT_REV}
+LABEL build-arg.PULL_REQ_NUMBER=${PULL_REQ_NUMBER}
 LABEL build-arg.PRIVKEY_ALG=${PRIVKEY_ALG}
 LABEL build-arg.PRIVKEY_ALGOPT=${PRIVKEY_ALGOPT}
 LABEL build-arg.CHAIN_SUBJ_CN=${CHAIN_SUBJ_CN}

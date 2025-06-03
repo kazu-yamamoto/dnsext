@@ -1,0 +1,54 @@
+bowline (0.0.0.20250521) unstable; urgency=medium
+
+  * fix along with lintian checks.
+
+ -- Kei Hibino <ex8k.hibino@gmail.com>  Wed, 21 May 2025 22:52:40 +0900
+
+bowline (0.0.0.20250519) unstable; urgency=medium
+
+  * New upstream release.
+  * fix init.d script. add '--make-pidfile'.
+
+ -- IIJLab bowline <bowline@bowline.iijlab.net>  Mon, 19 May 2025 14:30:47 +0900
+
+bowline (0.0.0.20250501) unstable; urgency=medium
+
+  * feature-quic-keylog
+
+ -- Kei Hibino <ex8k.hibino@gmail.com>  Thu, 01 May 2025 18:33:10 +0900
+
+bowline (0.0.0.20250428) unstable; urgency=medium
+
+  * fix-server-recv
+
+ -- Kei Hibino <ex8k.hibino@gmail.com>  Mon, 28 Apr 2025 12:45:29 +0900
+
+bowline (0.0.0.20250424) unstable; urgency=medium
+
+  * support BOWLINE_SSLKEYLOGFILE.
+
+ -- Kei Hibino <khibino@iij.ad.jp>  Thu, 24 Apr 2025 17:21:45 +0900
+
+bowline (0.0.0.20250422) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Kei Hibino <khibino@iij.ad.jp>  Thu, 24 Apr 2025 11:28:10 +0900
+
+bowline (0.0.0.20250317) unstable; urgency=medium
+
+  * Set root privilege for reopen log.
+
+ -- Kei Hibino <khibino@iij.ad.jp>  Mon, 17 Mar 2025 02:54:56 +0900
+
+bowline (0.0.0.20250225) unstable; urgency=medium
+
+  * Not to exit on reloading with parsing config.
+
+ -- Kei Hibino <khibino@iij.ad.jp>  Tue, 25 Feb 2025 15:12:18 +0900
+
+bowline (0.0.0.20250218) unstable; urgency=medium
+
+  * Initial release.
+
+ -- Kei Hibino <khibino@iij.ad.jp>  Tue, 18 Feb 2025 15:11:56 +0900
