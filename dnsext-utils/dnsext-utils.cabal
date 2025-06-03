@@ -52,7 +52,6 @@ library
         stm,
         transformers,
         unix-time,
-        vector,
         word8
 
     if impl(ghc >=8)

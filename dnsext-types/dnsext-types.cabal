@@ -61,7 +61,6 @@ library
         mtl,
         network-byte-order,
         unix-time,
-        vector,
         word8
 
     if impl(ghc >=8)

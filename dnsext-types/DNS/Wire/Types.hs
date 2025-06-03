@@ -1,10 +1,10 @@
 module DNS.Wire.Types where
 
+import Data.Array (Array)
 import Data.ByteString.Short
-import Data.Vector (Vector)
 
 type Label = ShortByteString
 type Labels = [Label]
-type WireLabels = Vector Label
+type WireLabels = Array Int Label
 
 type Position = Int
