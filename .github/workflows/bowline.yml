@@ -69,7 +69,7 @@ jobs:
       run: |
         mkdir -p pkg/work/bowline-${{ env.deb_version }}/bin
         docker run --rm -i --name build-bowline \
-            -v /home:/home bowline:bookworm \
+            -v /home:/home debian:bookworm-slim \
             bash -x -c \
             "apt-get update ;\
             apt-get install -y devscripts ;\
@@ -90,7 +90,7 @@ jobs:
         docker run -d --name bowline \
             -p 1853:853/udp -p 1853:853 -p 1443:443/udp -p 1443:443 \
             -p 1053:53/udp -p 1053:53 -p 1080:80 \
-            -v /home:/home debian:bookworm bash -x -c \
+            -v /home:/home debian:bookworm-slim bash -x -c \
             "apt-get update ;\
             apt-get install -y curl `pwd`/${{ env.PACKAGE_FILENAME }} ;\
             echo \"DAEMON_OPTS='dns-addrs=0.0.0.0 log-level=debug h2c=yes'\" >> /etc/default/bowline ; \
