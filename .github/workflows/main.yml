@@ -28,6 +28,7 @@ jobs:
     env:
       cache-name: cabal-ghc
       target-config: --test-show-details=streaming --enable-tests --disable-benchmarks
+      build-targets: --disable-benchmarks all:libs all:exes all:tests
 
     steps:
     - run: git config --global core.autocrlf false
@@ -72,11 +73,11 @@ jobs:
       id: inst-dep
       shell: bash
       run: |
-        if cabal v2-build --offline --only-dependencies ${{ env.target-config }} all
+        if cabal v2-build --offline --only-dependencies ${{ env.build-targets }}
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
-          cabal v2-build --only-dependencies ${{ env.target-config }} all
+          cabal v2-build --only-dependencies ${{ env.build-targets }}
           echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
@@ -88,10 +89,10 @@ jobs:
         key: ${{ steps.params.outputs.cache }}
 
     - name: Build
-      run: cabal v2-build ${{ env.target-config }} all
+      run: cabal v2-build ${{ env.build-targets }}
 
     - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal v2-test ${{ env.target-config }} all
+      run: env DISABLE_V6_NS=1 cabal v2-test --test-show-details=streaming all:tests
 
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
