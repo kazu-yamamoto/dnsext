@@ -111,7 +111,7 @@ jobs:
         cp -L ~/.cabal/bin/bowline  dist/bowline-${{ matrix.osname }}-${{ matrix.arch }}
         cp -L ~/.cabal/bin/dug  dist/dug-${{ matrix.osname }}-${{ matrix.arch }}
     - name: Upload artifact
-      if: ${{ matrix.ghc == '9.6' }}
+      if: matrix.ghc == '9.6'
       uses: actions/upload-artifact@v4
       with:
         path: |
