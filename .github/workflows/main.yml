@@ -27,7 +27,6 @@ jobs:
 
     env:
       cache-name: cabal-ghc
-      target-config: --test-show-details=streaming --enable-tests --disable-benchmarks
       build-targets: --disable-benchmarks all:libs all:exes all:tests
 
     steps:
@@ -100,9 +99,9 @@ jobs:
       run: |
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
-          env DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest ${{ env.target-config }} $package
+          env DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest $package
         done
-        env   DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
+        env   DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest dnsext-bowline:bowline
 
     - name: Install
       if: matrix.ghc == '9.6'
