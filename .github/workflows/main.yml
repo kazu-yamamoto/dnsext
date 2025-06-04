@@ -106,10 +106,12 @@ jobs:
     - name: Install
       if: matrix.ghc == '9.6'
       run: |
-        cabal v2-install dnsext-bowline
         mkdir dist
-        cp -L ~/.cabal/bin/bowline  dist/bowline-${{ matrix.osname }}-${{ matrix.arch }}
-        cp -L ~/.cabal/bin/dug  dist/dug-${{ matrix.osname }}-${{ matrix.arch }}
+        for name in bowline dug ; do
+          cp -L $(cabal list-bin ./dnsext-bowline:$name) dist/$name-${{ matrix.osname }}-${{ matrix.arch }}
+          strip dist/$name-${{ matrix.osname }}-${{ matrix.arch }}
+          ls -l dist/$name-${{ matrix.osname }}-${{ matrix.arch }}
+        done
     - name: Upload artifact
       if: matrix.ghc == '9.6'
       uses: actions/upload-artifact@v4
