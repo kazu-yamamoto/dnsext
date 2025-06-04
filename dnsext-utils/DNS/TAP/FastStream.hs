@@ -108,6 +108,13 @@ newtype FieldType = FieldType {fromFieldType :: Word32} deriving (Eq, Show)
 pattern ContentType :: FieldType
 pattern ContentType = FieldType 0x01
 
+-- | content type of frame stream (fstrm) used for dnstap
+--
+-- I couldn't find the specification for this but found several
+-- implementations include unbound use this value as a content type.
+dnsTapContentType :: ByteString
+dnsTapContentType = "protobuf:dnstap.Dnstap"
+
 ----------------------------------------------------------------
 
 newtype FSException = FSException String deriving (Show)
@@ -189,9 +196,9 @@ handshake ctx@Context{..}
         void $ recvControlFrame ctx START False
     | otherwise = do
         when ctxBidi $ do
-            sendControlFrame ctx READY [] -- fixme ct
+            sendControlFrame ctx READY [(ContentType, dnsTapContentType)]
             void $ recvControlFrame ctx ACCEPT False
-        sendControlFrame ctx START []
+        sendControlFrame ctx START [(ContentType, dnsTapContentType)]
 
 -- | Receiving data.
 --   "" indicates that writer stops writing.
