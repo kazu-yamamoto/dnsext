@@ -104,6 +104,7 @@ jobs:
         env   DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
 
     - name: Install
+      if: matrix.ghc == '9.6'
       run: |
         cabal v2-install dnsext-bowline
         mkdir dist
