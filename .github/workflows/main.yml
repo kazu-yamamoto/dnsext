@@ -44,7 +44,7 @@ jobs:
       shell: bash
       run: |
         ghc_version=$(ghc --numeric-version)
-        cabal update
+        cabal v2-update
         echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
         echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
 
@@ -60,11 +60,11 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
-        if cabal install --offline --overwrite-policy=always doctest
+        if cabal v2-install --offline --overwrite-policy=always doctest
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
-          cabal install doctest --overwrite-policy=always
+          cabal v2-install doctest --overwrite-policy=always
           echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
@@ -72,11 +72,11 @@ jobs:
       id: inst-dep
       shell: bash
       run: |
-        if cabal build --offline --only-dependencies ${{ env.target-config }} all
+        if cabal v2-build --offline --only-dependencies ${{ env.target-config }} all
         then
           echo "installed=false" >> "$GITHUB_OUTPUT"
         else
-          cabal build --only-dependencies ${{ env.target-config }} all
+          cabal v2-build --only-dependencies ${{ env.target-config }} all
           echo "installed=true" >> "$GITHUB_OUTPUT"
         fi
 
@@ -88,10 +88,10 @@ jobs:
         key: ${{ steps.params.outputs.cache }}
 
     - name: Build
-      run: cabal build ${{ env.target-config }} all
+      run: cabal v2-build ${{ env.target-config }} all
 
     - name: Run tests
-      run: env DISABLE_V6_NS=1 cabal test ${{ env.target-config }} all
+      run: env DISABLE_V6_NS=1 cabal v2-test ${{ env.target-config }} all
 
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
@@ -99,18 +99,19 @@ jobs:
       run: |
         for package in $(cat cabal.project | sed 's/packages://g' | sed 's/dnsext-bowline//g')
         do
-          env DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} $package
+          env DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest ${{ env.target-config }} $package
         done
-        env   DISABLE_V6_NS=1 cabal repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
+        env   DISABLE_V6_NS=1 cabal v2-repl --with-ghc=doctest ${{ env.target-config }} dnsext-bowline:bowline
 
     - name: Install
+      if: matrix.ghc == '9.6'
       run: |
-        cabal install dnsext-bowline
+        cabal v2-install dnsext-bowline
         mkdir dist
         cp -L ~/.cabal/bin/bowline  dist/bowline-${{ matrix.osname }}-${{ matrix.arch }}
         cp -L ~/.cabal/bin/dug  dist/dug-${{ matrix.osname }}-${{ matrix.arch }}
     - name: Upload artifact
-      if: ${{ matrix.ghc == '9.6' }}
+      if: matrix.ghc == '9.6'
       uses: actions/upload-artifact@v4
       with:
         path: |
