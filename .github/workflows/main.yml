@@ -143,6 +143,6 @@ jobs:
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       with:
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        repository: thehajime/homebrew-tap
+        repository: iijlab/homebrew-tap
         event-type: update-brew
         client-payload: '{ "url": "${{ github.server_url }}/${{ github.repository }}/releases/download/${{ steps.version.outputs.version }}/dug-mac-arm64", "sha256": "${{ steps.checksum.outputs.sha256 }}", "version": "${{ steps.version.outputs.version }}" }'
