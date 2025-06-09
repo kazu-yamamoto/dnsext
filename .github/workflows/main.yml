@@ -2,7 +2,7 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ 'main', 'ci', 'ci-uc' ]
+    branches: [ 'main', 'ci', 'ci-uc', 'ci-brew' ]
   pull_request:
     branches: [ 'main' ]
   release:
@@ -47,6 +47,7 @@ jobs:
         cabal v2-update
         echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
         echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
+        echo "release_brew=${{ (github.event_name == 'release' || github.ref_name == 'ci-brew') && runner.os == 'macOS' }}" >> "$GITHUB_OUTPUT"
 
     - name: Restore Cache
       uses: actions/cache/restore@v4
@@ -129,17 +130,17 @@ jobs:
           dist/*
     - name: Homebrew-checksum
       id: checksum
-      if: gitHub.event_name == 'release' && matrix.ghc == '9.6'
+      if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       run: |
-        echo "::set-output name=sha256::$(sha256sum dist/dug-mac-arm64 | awk '{print $1}')"
+        echo "::set-output name=sha256::$(shasum -a 256 dist/dug-mac-arm64 | awk '{print $1}')"
     - name: Homebrew-version
       id: version
-      if: gitHub.event_name == 'release' && matrix.ghc == '9.6'
+      if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       run: |
         echo ::set-output name=version::${{ github.ref_name }}
     - name: trigger Homebrew formulae update
       uses: peter-evans/repository-dispatch@v1
-      if: gitHub.event_name == 'release' && matrix.ghc == '9.6' && runner.os == 'macOS'
+      if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       with:
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         repository: thehajime/homebrew-tap
