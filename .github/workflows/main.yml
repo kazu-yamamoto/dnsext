@@ -132,7 +132,7 @@ jobs:
       id: checksum
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       run: |
-        echo "::set-output name=sha256::$(sha256sum dist/dug-mac-arm64 | awk '{print $1}')"
+        echo "::set-output name=sha256::$(shasum -a 256 dist/dug-mac-arm64 | awk '{print $1}')"
     - name: Homebrew-version
       id: version
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
