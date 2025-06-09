@@ -2,7 +2,7 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ 'main', 'ci', 'ci-uc' ]
+    branches: [ 'main', 'ci', 'ci-uc', 'ci-brew' ]
   pull_request:
     branches: [ 'main' ]
   release:
@@ -47,7 +47,7 @@ jobs:
         cabal v2-update
         echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
         echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
-        echo "release_brew=${{ github.event_name == 'release' }}" >> "$GITHUB_OUTPUT"
+        echo "release_brew=${{ github.event_name == 'release' || github.ref_name == 'ci-brew' }}" >> "$GITHUB_OUTPUT"
 
     - name: Restore Cache
       uses: actions/cache/restore@v4
