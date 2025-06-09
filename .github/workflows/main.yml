@@ -132,12 +132,12 @@ jobs:
       id: checksum
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       run: |
-        echo "::set-output name=sha256::$(shasum -a 256 dist/dug-mac-arm64 | awk '{print $1}')"
+        echo "sha256=$(shasum -a 256 dist/dug-mac-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
     - name: Homebrew-version
       id: version
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
       run: |
-        echo ::set-output name=version::${{ github.ref_name }}
+        echo version=${{ github.ref_name }} >> "$GITHUB_OUTPUT"
     - name: trigger Homebrew formulae update
       uses: peter-evans/repository-dispatch@v1
       if: steps.params.outputs.release_brew == 'true' && matrix.ghc == '9.6'
