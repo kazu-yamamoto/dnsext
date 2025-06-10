@@ -61,7 +61,7 @@ jobs:
       run: |
         mkdir -p linux/pkg/opt/bowline/bin linux/pkg/opt/bowline/etc
         cd build-docker
-        ./build.sh -x ${{ env.head_commit }} ${{ github.server_url }}/${{ github.repository }}
+        USE_DOCKER_CACHE=1 ./build.sh -x ${{ env.head_commit }} ${{ github.server_url }}/${{ github.repository }}
         cd ..
         docker run --rm -v /home:/home bowline:bookworm bash -c \
             "cp /opt/bowline/bin/{bowline,dug,dump} `pwd`/"
