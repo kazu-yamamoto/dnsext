@@ -29,6 +29,11 @@ fi
 [ x"$GHC_PARALLEL" != x ] || GHC_PARALLEL=3
 [ x"$CABAL_PARALLEL" != x ] || CABAL_PARALLEL=3
 
+NO_CACHE='--no-cache'
+if [ x"$USE_DOCKER_CACHE" = x1 ]; then
+    NO_CACHE=
+fi
+
 PRIVKEY_ALG=EC
 PRIVKEY_ALGOPT=ec_paramgen_curve:P-256
 CHAIN_SUBJ_CN=bowline.example.com
@@ -52,6 +57,7 @@ build_with_ghcup() {
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
            --build-arg PULL_REQ_NUMBER=${PULL_REQ_NUMBER} \
+           ${NO_CACHE} \
            -f Dockerfile \
            .
 
@@ -80,6 +86,7 @@ build_with_haskell() {
            --build-arg CLONE_URL=${CLONE_URL} \
            --build-arg DNSEXT_REV=${DNSEXT_REV} \
            --build-arg PULL_REQ_NUMBER=${PULL_REQ_NUMBER} \
+           ${NO_CACHE} \
            -f Dockerfile \
            .
 }
