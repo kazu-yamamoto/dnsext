@@ -39,9 +39,4 @@ http3Servers VcServerConfig{..} env toCacher ss = do
     sbracket = sessionStatsDoH3 (stats_ env)
     incQuery inet6 = incStatsDoH3 inet6 (stats_ env)
     sconf = getServerConfig vc_credentials vc_session_manager "h3" (vc_idle_timeout * 1000) env
-    conf mgr =
-        H3.Config
-            { confHooks = H3.defaultHooks
-            , confTimeoutManager = mgr
-            , confPositionReadMaker = H3.defaultPositionReadMaker
-            }
+    conf mgr = H3.defaultConfig{H3.confTimeoutManager = mgr}

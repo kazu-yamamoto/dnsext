@@ -25,7 +25,7 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
     cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
-        H3.ClientConfig
+        H3.defaultClientConfig
             { H3.scheme = "https"
             , H3.authority = auth -- HTTP :authority
             }
@@ -45,7 +45,7 @@ http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
     cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
-        H3.ClientConfig
+        H3.defaultClientConfig
             { H3.scheme = "https"
             , H3.authority = auth -- HTTP :authority
             }
