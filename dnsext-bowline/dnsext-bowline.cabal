@@ -75,6 +75,7 @@ executable dug
         JSON
         Output
         Recursive
+        SocketUtil
         Types
 
     default-language: Haskell2010
