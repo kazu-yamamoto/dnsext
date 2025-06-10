@@ -278,7 +278,12 @@ data ResolveActions = ResolveActions
     }
 
 instance Show ResolveActions where
-    show ResolveActions{..} = "ResolveActions { ractionTimeoutTime = " ++ show ractionTimeoutTime ++ "}"
+    show ResolveActions{..} =
+        "ResolveActions { ractionTimeoutTime = "
+            ++ show ractionTimeoutTime
+            ++ ", ractionValidate = "
+            ++ show ractionValidate
+            ++ "}"
 
 defaultResolveActions :: ResolveActions
 defaultResolveActions =
