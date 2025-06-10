@@ -48,6 +48,7 @@ import System.Console.ANSI.Types
 import System.Directory (doesFileExist, removeFile)
 import System.Exit (exitFailure)
 
+import SocketUtil (checkDisableV6)
 import Types
 
 recursiveQuery
@@ -131,11 +132,12 @@ resolvePipeline Options{..} conf tq = do
             print err
             exitFailure
         Right si0 -> do
+            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- si0, (_, ris) <- sis, ri <- ris]
             let isIPv4 (IPv4 _) = True
                 isIPv4 _ = False
                 ipv4only (alpn, ris) = (alpn, filter (isIPv4 . rinfoIP) ris)
             let si
-                    | optDisableV6NS = map (map ipv4only) si0
+                    | optDisableV6NS || disableV6 = map (map ipv4only) si0
                     | otherwise = si0
             let psss = map toPipelineResolvers $ map (map addAction) si
             case psss of
