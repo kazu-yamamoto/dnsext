@@ -44,13 +44,11 @@ import Data.IP (IP (..), fromIPv4, fromIPv6b)
 import Data.List (groupBy, intercalate, isPrefixOf, nub, partition, sort)
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.UnixTime as T
-import Network.Socket (AddrInfo (..), AddrInfoFlag (..), HostName, PortNumber)
-import qualified Network.Socket as S
+import Network.Socket (HostName, PortNumber)
 import System.Console.ANSI.Types
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
-import System.IO.Error (tryIOError)
 import Text.Printf (printf)
 import Text.Read (readMaybe)
 
@@ -60,6 +58,7 @@ import Iterative (getRootV6, iterativeQuery)
 import JSON (showJSON)
 import Output (OutputFlag (..), pprResult)
 import Recursive (recursiveQuery)
+import SocketUtil (checkDisableV6)
 import Types
 
 version :: String
@@ -207,25 +206,7 @@ main = do
 checkFallbackV4 :: Options -> [(IP, PortNumber)] -> IO Options
 checkFallbackV4 opt addrs
     | optDisableV6NS opt =  pure opt
-    | v6:_ <- v6s        =  either (disabled . show) pure =<< tryIOError (checkV6 v6)
-    | otherwise          =  pure opt
-  where
-    v6s = [(v6, port) | (IPv6 v6, port) <- addrs]
-    {- Check whether IPv6 is available by specifying `AI_ADDRCONFIG` to `addrFlags` of hints passed to `getAddrInfo`.
-       If `Nothing` is passed to `hints`, the default value of `addrFlags` is implementation-dependent.
-       * Glibc: `[AI_ADDRCONFIG, AI_V4MAPPED]`.
-           * https://man7.org/linux/man-pages/man3/getaddrinfo.3.html#DESCRIPTION
-       * POSIX, BSD: `[]`.
-           * https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3
-       So, specifying `AI_ADDRCONFIG` explicitly. -}
-    datagramAI6 an srv = S.getAddrInfo (Just S.defaultHints{addrFlags = [AI_ADDRCONFIG]}) (Just an) srv
-    disabled e = putStrLn ("disabling IPv6: " ++ e) $> opt{optDisableV6NS = True}
-    checkV6 (dst, port)  = do
-        local   <- datagramAI6  "::"       Nothing
-        remote  <- datagramAI6 (show dst) (Just $ show port)
-        checkRoute local remote
-    checkRoute (sa:_) (AddrInfo{addrAddress = peer}:_)  = (S.openSocket sa >>= \s -> S.connect s peer) $> opt
-    checkRoute  _      _                                = disabled "cannot get IPv6 address"
+    | otherwise          =  checkDisableV6 [a | (a, _) <- addrs] <&> \d -> opt{optDisableV6NS = d}
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
