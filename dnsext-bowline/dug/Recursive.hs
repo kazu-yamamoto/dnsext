@@ -77,7 +77,7 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
-            then resolvePipeline conf tq
+            then resolvePipeline opt conf tq
             else case makePersistentResolver optDoX of
                 -- PersistentResolver
                 Just persitResolver -> do
@@ -119,15 +119,25 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                     exitFailure
                 _ -> return ()
 
-resolvePipeline :: LookupConf -> TQueue (NameTag, String) -> IO (Maybe [PipelineResolver])
-resolvePipeline conf tq = do
+resolvePipeline
+    :: Options
+    -> LookupConf
+    -> TQueue (NameTag, String)
+    -> IO (Maybe [PipelineResolver])
+resolvePipeline Options{..} conf tq = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
         Left err -> do
             print err
             exitFailure
-        Right si -> do
-            let psss = map toPipelineResolvers $ map (map addAction) si -- fixme
+        Right si0 -> do
+            let isIPv4 (IPv4 _) = True
+                isIPv4 _ = False
+                ipv4only (alpn, ris) = (alpn, filter (isIPv4 . rinfoIP) ris)
+            let si
+                    | optDisableV6NS = map (map ipv4only) si0
+                    | otherwise = si0
+            let psss = map toPipelineResolvers $ map (map addAction) si
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
