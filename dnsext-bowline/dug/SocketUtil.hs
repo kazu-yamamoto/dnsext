@@ -20,9 +20,8 @@ disabled e = do
 
 checkV6 :: IPv6 -> IO Bool
 checkV6 dst = do
-    local <- datagramAI6 "::" Nothing
-    remote <- datagramAI6 (show dst) Nothing
-    checkRoute local remote
+    remote <- S.getAddrInfo (Just hint) (Just (show dst)) (Just "53")
+    checkRoute remote
   where
     -- Check whether IPv6 is available by specifying `AI_ADDRCONFIG`
     -- to `addrFlags` of hints passed to `getAddrInfo`.  If `Nothing`
@@ -40,9 +39,8 @@ checkV6 dst = do
             { addrFlags = [AI_ADDRCONFIG]
             , addrSocketType = Datagram
             }
-    datagramAI6 an srv = S.getAddrInfo (Just hint) (Just an) srv
 
-    checkRoute (sa : _) (AddrInfo{addrAddress = peer} : _) = do
-        bracket (S.openSocket sa) S.close $ \s -> S.connect s peer
+    checkRoute (ai@AddrInfo{addrAddress = peer} : _) = do
+        bracket (S.openSocket ai) S.close $ \s -> S.connect s peer
         return False
-    checkRoute _ _ = disabled "cannot get IPv6 address"
+    checkRoute _ = disabled "cannot get IPv6 address"
