@@ -1,7 +1,7 @@
 module SocketUtil (checkDisableV6) where
 
 import Control.Exception (bracket)
-import Data.IP (IP (..))
+import Data.IP (IP (..), IPv6)
 import Network.Socket (AddrInfo (..), AddrInfoFlag (..), SocketType (..))
 import qualified Network.Socket as S
 import System.IO.Error (tryIOError)
@@ -18,7 +18,7 @@ disabled e = do
     putStrLn ("disabling IPv6: " ++ e)
     return True
 
-checkV6 :: Show a => a -> IO Bool
+checkV6 :: IPv6 -> IO Bool
 checkV6 dst = do
     local <- datagramAI6 "::" Nothing
     remote <- datagramAI6 (show dst) Nothing
