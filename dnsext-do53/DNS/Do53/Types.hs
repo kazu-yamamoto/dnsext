@@ -154,6 +154,7 @@ data LookupConf = LookupConf
     , lconfActions :: ResolveActions
     -- ^ Actions for resolvers.
     }
+    deriving (Show)
 
 -- | Return a default 'LookupConf':
 --
