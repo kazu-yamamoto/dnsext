@@ -133,18 +133,18 @@ resolvePipeline Options{..} conf tq = do
         Left err -> do
             print err
             exitFailure
-        Right si0 -> do
-            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- si0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
+        Right siss0 -> do
+            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- siss0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
             let isIPv4 (IPv4 _) = True
                 isIPv4 _ = False
                 ipv4only si =
                     si
                         { svcbInfoResolveInfos = filter (isIPv4 . rinfoIP) $ svcbInfoResolveInfos si
                         }
-            let si
-                    | optDisableV6NS || disableV6 = map (map ipv4only) si0
-                    | otherwise = si0
-            let psss = map toPipelineResolvers $ map (map addAction) si
+            let siss
+                    | optDisableV6NS || disableV6 = map (map ipv4only) siss0
+                    | otherwise = siss0
+            let psss = map toPipelineResolvers $ map (map addAction) siss
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
