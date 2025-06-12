@@ -308,6 +308,8 @@ data ResolveActions = ResolveActions
     -- ^ Action for connection information
     , ractionValidate :: Bool
     -- ^ Validating server's certificate.
+    , ractionServerAltName :: Maybe IP
+    -- ^ Checking if the target IP is included in ServerAltName.
     }
 
 instance Show ResolveActions where
@@ -316,6 +318,8 @@ instance Show ResolveActions where
             ++ show ractionTimeoutTime
             ++ ", ractionValidate = "
             ++ show ractionValidate
+            ++ ", ractionServerAltName = "
+            ++ show ractionServerAltName
             ++ "}"
 
 defaultResolveActions :: ResolveActions
@@ -333,6 +337,7 @@ defaultResolveActions =
         , ractionUseEarlyData = False
         , ractionOnConnectionInfo = \_ _ -> return ()
         , ractionValidate = True
+        , ractionServerAltName = Nothing
         }
 
 rsso :: Socket -> IO ()

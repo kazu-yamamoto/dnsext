@@ -157,13 +157,14 @@ resolvePipeline Options{..} conf tq = do
   where
     addAction si =
         si
-            { svcbInfoResolveInfos = map add $ svcbInfoResolveInfos si
+            { svcbInfoResolveInfos = map (add si) $ svcbInfoResolveInfos si
             }
-    add ri@ResolveInfo{..} =
+    add si ri@ResolveInfo{..} =
         ri
             { rinfoActions =
                 rinfoActions
                     { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+                    , ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
                     }
             , -- RFC 9462, Sec 4.2 says:
               --
