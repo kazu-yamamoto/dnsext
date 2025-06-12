@@ -153,7 +153,13 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
-                    return $ Reply tag msg tx rx
+                    return $
+                        Reply
+                            { replyTag = tag
+                            , replyDNSMessage = msg
+                            , replyTxBytes = tx
+                            , replyRxBytes = rx
+                            }
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog
@@ -233,5 +239,12 @@ vcResolver tag send recv ResolveInfo{rinfoActions = ResolveActions{..}} q _qctl 
         case decodeAt now bs of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
-                Nothing -> return $ Reply tag msg tx $ BS.length bs
+                Nothing ->
+                    return $
+                        Reply
+                            { replyTag = tag
+                            , replyDNSMessage = msg
+                            , replyTxBytes = tx
+                            , replyRxBytes = BS.length bs
+                            }
                 Just err -> E.throwIO err
