@@ -15,6 +15,7 @@ import qualified Network.TLS as TLS
 
 import DNS.DoX.HTTP2
 import DNS.DoX.Imports
+import DNS.DoX.SAN
 
 quicPersistentResolver :: PersistentResolver
 quicPersistentResolver ri body = toDNSError "quicPersistentResolver" $ run cc $ \conn -> do
@@ -69,6 +70,7 @@ getQUICParams ResolveInfo{..} tag alpn0 =
         , ccALPN = \_ -> return $ Just [alpn0]
         , ccDebugLog = False
         , ccValidate = ractionValidate rinfoActions
+        , ccOnServerCertificate = makeOnServerCertificate $ ractionServerAltName rinfoActions
         , ccResumption = rinfo
         , ccUse0RTT = ractionUseEarlyData rinfoActions
         , ccKeyLog = ractionKeyLog rinfoActions

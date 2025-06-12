@@ -14,6 +14,8 @@ import Network.TLS
 import DNS.Do53.Internal
 import DNS.DoX.Imports
 
+import DNS.DoX.SAN
+
 tlsPersistentResolver :: PersistentResolver
 tlsPersistentResolver ri@ResolveInfo{..} body = toDNSError "tlsPersistentResolver" $ do
     -- Using a fresh connection
@@ -29,6 +31,7 @@ makeSettings :: ResolveInfo -> NameTag -> H2TLS.Settings
 makeSettings ResolveInfo{..} tag =
     H2TLS.defaultSettings
         { H2TLS.settingsValidateCert = ractionValidate rinfoActions
+        , H2TLS.settingsOnServerCertificate = makeOnServerCertificate $ ractionServerAltName rinfoActions
         , H2TLS.settingsUseEarlyData = ractionUseEarlyData rinfoActions
         , -- TLS SNI
           H2TLS.settingsServerNameOverride = rinfoServerName
