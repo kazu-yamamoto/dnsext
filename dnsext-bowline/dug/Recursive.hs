@@ -27,7 +27,9 @@ import DNS.Do53.Internal (
     ResolveInfo (..),
     defaultResolveActions,
     defaultResolveInfo,
+    fromNameTag,
     resolve,
+    toNameTag,
  )
 import DNS.DoX.Client
 import qualified DNS.Log as Log
@@ -247,7 +249,7 @@ getCustomConf ips port ctl Options{..} ractions = case ips of
 mkHeader :: Reply -> String
 mkHeader Reply{..} =
     ";; "
-        ++ unNameTag replyTag
+        ++ fromNameTag replyTag
         ++ ", Tx:"
         ++ show replyTxBytes
         ++ "bytes"
@@ -258,14 +260,14 @@ mkHeader Reply{..} =
 ----------------------------------------------------------------
 
 saveResumption :: FilePath -> MVar () -> TQueue (NameTag, String) -> NameTag -> ByteString -> IO ()
-saveResumption file lock tq name@(NameTag tag) bs = do
+saveResumption file lock tq name bs = do
     case extractInfo of
         Nothing -> return ()
         Just info -> atomically $ writeTQueue tq (name, info)
-    safeAppendFile file lock (C8.pack tag <> " " <> BS16.encode bs <> "\n")
+    safeAppendFile file lock (C8.pack (fromNameTag name) <> " " <> BS16.encode bs <> "\n")
   where
     extractInfo
-        | "QUIC" `List.isSuffixOf` tag || "H3" `List.isSuffixOf` tag =
+        | "QUIC" == nameTagProto name || "H3" == nameTagProto name =
             case deserialiseOrFail $ BL.fromStrict bs of
                 Left _ -> Nothing
                 Right (info :: QUIC.ResumptionInfo) ->
@@ -282,7 +284,7 @@ saveResumption file lock tq name@(NameTag tag) bs = do
 loadResumption :: FilePath -> IO [(NameTag, ByteString)]
 loadResumption file = map toKV . C8.lines <$> C8.readFile file
   where
-    toKV l = (NameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
+    toKV l = (toNameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
       where
         (k, v) = BS.break (== 32) l
 

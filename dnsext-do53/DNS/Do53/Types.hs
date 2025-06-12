@@ -27,6 +27,9 @@ module DNS.Do53.Types (
     ResolveActions (..),
     defaultResolveActions,
     NameTag (..),
+    nameTag,
+    fromNameTag,
+    toNameTag,
     Reply (..),
     Resolver,
     OneshotResolver,
@@ -249,7 +252,36 @@ type OneshotResolver = ResolveInfo -> Resolver
 
 ----------------------------------------------------------------
 
-newtype NameTag = NameTag {unNameTag :: String} deriving (Eq, Ord, Show)
+data NameTag = NameTag
+    { nameTagIP :: IP
+    , nameTagPort :: PortNumber
+    , nameTagProto :: String
+    }
+    deriving (Eq, Ord, Show)
+
+nameTag :: ResolveInfo -> String -> NameTag
+nameTag ResolveInfo{..} proto =
+    NameTag
+        { nameTagIP = rinfoIP
+        , nameTagPort = rinfoPort
+        , nameTagProto = proto
+        }
+
+fromNameTag :: NameTag -> String
+fromNameTag NameTag{..} = show nameTagIP ++ "#" ++ show nameTagPort ++ "/" ++ nameTagProto
+
+toNameTag :: String -> NameTag
+toNameTag str =
+    NameTag
+        { nameTagIP = read ip
+        , nameTagPort = read port
+        , nameTagProto = proto
+        }
+  where
+    (ip, portProto') = break ('#' ==) str
+    portProto = drop 1 portProto'
+    (port, proto') = break ('/' ==) portProto
+    proto = drop 1 proto'
 
 data ResolveActions = ResolveActions
     { ractionTimeoutTime :: Int

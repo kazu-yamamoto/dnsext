@@ -9,7 +9,6 @@ module DNS.Do53.Do53 (
     tcpResolver,
     vcResolver,
     checkRespM,
-    nameTag,
     queryTag,
     fromIOException,
 )
@@ -70,11 +69,8 @@ fromIOException tag ioe = NetworkFailure aioe
   where
     aioe = annotateIOError ioe tag Nothing Nothing
 
-nameTag :: ResolveInfo -> String -> NameTag
-nameTag ResolveInfo{..} proto = NameTag $ show rinfoIP ++ "#" ++ show rinfoPort ++ "/" ++ proto
-
 queryTag :: Question -> NameTag -> String
-queryTag Question{..} (NameTag tag) = tag'
+queryTag Question{..} tag = tag'
   where
     ~tag' =
         "    query "
@@ -82,7 +78,7 @@ queryTag Question{..} (NameTag tag) = tag'
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ tag
+            ++ fromNameTag tag
 
 analyzeReply :: Reply -> QueryControls -> Maybe QueryControls
 analyzeReply rply qctl0
