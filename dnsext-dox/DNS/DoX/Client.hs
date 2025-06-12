@@ -4,7 +4,7 @@
 module DNS.DoX.Client (
     -- * SVCB information
     lookupSVCBInfo,
-    SVCBInfo,
+    SVCBInfo (..),
 
     -- * Pipeline resolver
     toPipelineResolvers,
@@ -89,7 +89,12 @@ lookupRawDoX lenv@LookupEnv{..} q = do
 
 ----------------------------------------------------------------
 
-type SVCBInfo = (ALPN, [ResolveInfo])
+data SVCBInfo = SVCBInfo
+    { svcbInfoALPN :: ALPN
+    , svcbInfoNameTag :: NameTag
+    , svcbInfoResolveInfos :: [ResolveInfo]
+    }
+    deriving (Show)
 
 lookupSVCBInfo :: LookupEnv -> IO (Either DNSError [[SVCBInfo]])
 lookupSVCBInfo lenv@LookupEnv{..} = do
@@ -117,19 +122,21 @@ toResolveEnvs :: [SVCBInfo] -> [ResolveEnv]
 toResolveEnvs sis = mapMaybe toResolveEnv sis
 
 toResolveEnv :: SVCBInfo -> Maybe ResolveEnv
-toResolveEnv (_, []) = Nothing
-toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
-    Nothing -> Nothing
-    Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+toResolveEnv SVCBInfo{..}
+    | null svcbInfoResolveInfos = Nothing
+    | otherwise = case makeOneshotResolver svcbInfoALPN of
+        Nothing -> Nothing
+        Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList svcbInfoResolveInfos
 
 toPipelineResolvers :: [SVCBInfo] -> [[PipelineResolver]]
 toPipelineResolvers sis = toPipelineResolver <$> sis
 
 toPipelineResolver :: SVCBInfo -> [PipelineResolver]
-toPipelineResolver (_, []) = []
-toPipelineResolver (alpn, ris) = case makePersistentResolver alpn of
-    Nothing -> []
-    Just resolver -> resolver <$> ris
+toPipelineResolver SVCBInfo{..}
+    | null svcbInfoResolveInfos = []
+    | otherwise = case makePersistentResolver svcbInfoALPN of
+        Nothing -> []
+        Just resolver -> resolver <$> svcbInfoResolveInfos
 
 ----------------------------------------------------------------
 
@@ -142,7 +149,12 @@ onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
     Just alpns -> onALPN ri s <$> alpn_names alpns
 
 onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> SVCBInfo
-onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
+onALPN ri s alpn =
+    SVCBInfo
+        { svcbInfoALPN = alpn
+        , svcbInfoNameTag = nameTag ri "UDP"
+        , svcbInfoResolveInfos = extractResolveInfo ri s alpn
+        }
 
 extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
 extractResolveInfo ri s alpn = updateIPPort <$> ips

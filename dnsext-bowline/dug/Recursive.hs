@@ -134,10 +134,13 @@ resolvePipeline Options{..} conf tq = do
             print err
             exitFailure
         Right si0 -> do
-            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- si0, (_, ris) <- sis, ri <- ris]
+            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- si0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
             let isIPv4 (IPv4 _) = True
                 isIPv4 _ = False
-                ipv4only (alpn, ris) = (alpn, filter (isIPv4 . rinfoIP) ris)
+                ipv4only si =
+                    si
+                        { svcbInfoResolveInfos = filter (isIPv4 . rinfoIP) $ svcbInfoResolveInfos si
+                        }
             let si
                     | optDisableV6NS || disableV6 = map (map ipv4only) si0
                     | otherwise = si0
@@ -152,7 +155,10 @@ resolvePipeline Options{..} conf tq = do
                         exitFailure
                     ps : _ -> return $ Just ps
   where
-    addAction (alpn, ris) = (alpn, map add ris)
+    addAction si =
+        si
+            { svcbInfoResolveInfos = map add $ svcbInfoResolveInfos si
+            }
     add ri@ResolveInfo{..} =
         ri
             { rinfoActions =
