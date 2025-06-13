@@ -165,6 +165,27 @@ resolvePipeline Options{..} conf tq = do
                 rinfoActions
                     { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
                     }
+            , -- RFC 9462, Sec 4.2 says:
+              --
+              -- 1. The client MUST verify the chain of certificates
+              --    up to a trust anchor as described in Section 6 of
+              --    [RFC5280].  The client SHOULD use the default
+              --    system or application trust anchors, unless
+              --    otherwise configured.
+              --
+              -- 2. The client MUST verify that the certificate
+              --    contains the IP address of the designating
+              --    Unencrypted DNS Resolver in an iPAddress entry of
+              --    the subjectAltName extension as described in
+              --    Section 4.2.1.6 of [RFC5280].
+              --
+              -- CloudFlare returns its certificate whose SAN does not
+              -- include IP addresses is SNI is a host name (aka
+              -- "one.one.one.one").
+              --
+              -- To satisfy both 1 and 2 AND rescue CloudFlare, let's
+              -- specify an IP address to SNI.
+              rinfoServerName = Nothing
             }
 
 resolver
