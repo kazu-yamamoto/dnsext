@@ -19,7 +19,6 @@ import qualified Data.ByteString as BS
 import qualified Data.List.NonEmpty as NE
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
-import System.IO.Error (annotateIOError)
 import System.Timeout (timeout)
 
 import DNS.Do53.IO
@@ -65,9 +64,7 @@ udpTcpResolver ri q qctl = do
 ----------------------------------------------------------------
 
 fromIOException :: String -> E.IOException -> DNSError
-fromIOException tag ioe = NetworkFailure aioe
-  where
-    aioe = annotateIOError ioe tag Nothing Nothing
+fromIOException tag ioe = NetworkFailure (SomeException ioe) tag
 
 queryTag :: Question -> NameTag -> String
 queryTag Question{..} tag = tag'

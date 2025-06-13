@@ -43,7 +43,7 @@ withTimeout ResolveInfo{..} action = do
         Just res -> return res
 
 http2PersistentResolver :: PersistentResolver
-http2PersistentResolver ri@ResolveInfo{..} body = do
+http2PersistentResolver ri@ResolveInfo{..} body = toDNSError "http2PersistentResolver" $ do
     -- TLS SNI
     settings <- makeSettings ri tag
     ident <- ractionGenId rinfoActions
@@ -56,7 +56,7 @@ http2PersistentResolver ri@ResolveInfo{..} body = do
     config = H2.defaultClientConfig{H2.authority = fromMaybe ipstr rinfoServerName}
 
 http2Resolver :: OneshotResolver
-http2Resolver ri@ResolveInfo{..} q qctl = do
+http2Resolver ri@ResolveInfo{..} q qctl = toDNSError "http2Resolver" $ do
     settings <- makeSettings ri tag
     ident <- ractionGenId rinfoActions
     withTimeout ri $
@@ -69,7 +69,7 @@ http2Resolver ri@ResolveInfo{..} q qctl = do
     config = H2.defaultClientConfig{H2.authority = fromMaybe ipstr rinfoServerName}
 
 http2cPersistentResolver :: PersistentResolver
-http2cPersistentResolver ri@ResolveInfo{..} body = do
+http2cPersistentResolver ri@ResolveInfo{..} body = toDNSError "http2cPersistentResolver" $ do
     let tag = nameTag ri "H2C"
     ident <- ractionGenId rinfoActions
     H2TLS.runH2CWithConfig config H2TLS.defaultSettings ipstr rinfoPort $
@@ -80,7 +80,7 @@ http2cPersistentResolver ri@ResolveInfo{..} body = do
     config = H2.defaultClientConfig{H2.authority = fromMaybe ipstr rinfoServerName}
 
 http2cResolver :: OneshotResolver
-http2cResolver ri@ResolveInfo{..} q qctl = do
+http2cResolver ri@ResolveInfo{..} q qctl = toDNSError "http2cResolver" $ do
     let tag = nameTag ri "H2C"
     ident <- ractionGenId rinfoActions
     withTimeout ri $

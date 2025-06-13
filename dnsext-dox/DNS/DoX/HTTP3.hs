@@ -14,7 +14,7 @@ import DNS.DoX.Imports
 import DNS.DoX.QUIC
 
 http3PersistentResolver :: PersistentResolver
-http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
+http3PersistentResolver ri@ResolveInfo{..} body = toDNSError "http3PersistentResolver" $ QUIC.run cc $ \conn ->
     E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
         ident <- ractionGenId rinfoActions
         H3.run conn cliconf conf $
@@ -31,7 +31,7 @@ http3PersistentResolver ri@ResolveInfo{..} body = QUIC.run cc $ \conn ->
             }
 
 http3Resolver :: OneshotResolver
-http3Resolver ri@ResolveInfo{..} q qctl = QUIC.run cc $ \conn ->
+http3Resolver ri@ResolveInfo{..} q qctl = toDNSError "http3Resolver" $ QUIC.run cc $ \conn ->
     E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
         ident <- ractionGenId rinfoActions
         withTimeout ri $ do

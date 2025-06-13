@@ -13,9 +13,10 @@ import Network.TLS
 import System.X509
 
 import DNS.Do53.Internal
+import DNS.DoX.Imports
 
 tlsPersistentResolver :: PersistentResolver
-tlsPersistentResolver ri@ResolveInfo{..} body = do
+tlsPersistentResolver ri@ResolveInfo{..} body = toDNSError "tlsPersistentResolver" $ do
     settings <- makeSettings ri tag
     -- Using a fresh connection
     H2TLS.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do
@@ -57,7 +58,7 @@ makeSettings ResolveInfo{..} tag = do
             }
 
 tlsResolver :: OneshotResolver
-tlsResolver ri@ResolveInfo{..} q qctl = do
+tlsResolver ri@ResolveInfo{..} q qctl = toDNSError "tlsResolver" $ do
     settings <- makeSettings ri tag
     -- Using a fresh connection
     H2TLS.runTLS settings (show rinfoIP) rinfoPort "dot" $ \ctx _ _ -> do

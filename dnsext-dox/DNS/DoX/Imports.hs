@@ -14,6 +14,7 @@ module DNS.DoX.Imports (
     module Data.Typeable,
     module Data.Word,
     module Numeric,
+    toDNSError,
 )
 where
 
@@ -32,3 +33,12 @@ import Data.String
 import Data.Typeable
 import Data.Word
 import Numeric
+
+import qualified Control.Exception as E
+
+import DNS.Types
+
+toDNSError :: String -> IO a -> IO a
+toDNSError tag action = action `E.catch` handler
+  where
+    handler se@(E.SomeException _) = E.throwIO $ NetworkFailure se tag
