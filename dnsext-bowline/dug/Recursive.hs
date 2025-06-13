@@ -233,10 +233,10 @@ getCustomConf
     -> Options
     -> ResolveActions
     -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
-getCustomConf ips port ctl Options{..} ractions = case ips of
-    [] -> return (conf, [])
-    hs -> do
-        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- hs] else hs
+getCustomConf ips port ctl Options{..} ractions
+  | null ips = return (conf, [])
+  | otherwise = do
+        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
             ahps = map (\(x,y) -> (x,y,port)) ahs
             aps = map (\(x,_) -> (x,port)) ahs
         return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
