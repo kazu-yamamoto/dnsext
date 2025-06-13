@@ -27,7 +27,9 @@ import DNS.Do53.Internal (
     ResolveInfo (..),
     defaultResolveActions,
     defaultResolveInfo,
+    fromNameTag,
     resolve,
+    toNameTag,
  )
 import DNS.DoX.Client
 import qualified DNS.Log as Log
@@ -131,15 +133,18 @@ resolvePipeline Options{..} conf tq = do
         Left err -> do
             print err
             exitFailure
-        Right si0 -> do
-            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- si0, (_, ris) <- sis, ri <- ris]
+        Right siss0 -> do
+            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- siss0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
             let isIPv4 (IPv4 _) = True
                 isIPv4 _ = False
-                ipv4only (alpn, ris) = (alpn, filter (isIPv4 . rinfoIP) ris)
-            let si
-                    | optDisableV6NS || disableV6 = map (map ipv4only) si0
-                    | otherwise = si0
-            let psss = map toPipelineResolvers $ map (map addAction) si
+                ipv4only si =
+                    si
+                        { svcbInfoResolveInfos = filter (isIPv4 . rinfoIP) $ svcbInfoResolveInfos si
+                        }
+            let siss
+                    | optDisableV6NS || disableV6 = map (map ipv4only) siss0
+                    | otherwise = siss0
+            let psss = map toPipelineResolvers $ map (map addAction) siss
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
@@ -150,7 +155,10 @@ resolvePipeline Options{..} conf tq = do
                         exitFailure
                     ps : _ -> return $ Just ps
   where
-    addAction (alpn, ris) = (alpn, map add ris)
+    addAction si =
+        si
+            { svcbInfoResolveInfos = map add $ svcbInfoResolveInfos si
+            }
     add ri@ResolveInfo{..} =
         ri
             { rinfoActions =
@@ -225,10 +233,10 @@ getCustomConf
     -> Options
     -> ResolveActions
     -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
-getCustomConf ips port ctl Options{..} ractions = case ips of
-    [] -> return (conf, [])
-    hs -> do
-        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- hs] else hs
+getCustomConf ips port ctl Options{..} ractions
+  | null ips = return (conf, [])
+  | otherwise = do
+        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
             ahps = map (\(x,y) -> (x,y,port)) ahs
             aps = map (\(x,_) -> (x,port)) ahs
         return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
@@ -247,7 +255,7 @@ getCustomConf ips port ctl Options{..} ractions = case ips of
 mkHeader :: Reply -> String
 mkHeader Reply{..} =
     ";; "
-        ++ unNameTag replyTag
+        ++ fromNameTag replyTag
         ++ ", Tx:"
         ++ show replyTxBytes
         ++ "bytes"
@@ -258,14 +266,14 @@ mkHeader Reply{..} =
 ----------------------------------------------------------------
 
 saveResumption :: FilePath -> MVar () -> TQueue (NameTag, String) -> NameTag -> ByteString -> IO ()
-saveResumption file lock tq name@(NameTag tag) bs = do
+saveResumption file lock tq name bs = do
     case extractInfo of
         Nothing -> return ()
         Just info -> atomically $ writeTQueue tq (name, info)
-    safeAppendFile file lock (C8.pack tag <> " " <> BS16.encode bs <> "\n")
+    safeAppendFile file lock (C8.pack (fromNameTag name) <> " " <> BS16.encode bs <> "\n")
   where
     extractInfo
-        | "QUIC" `List.isSuffixOf` tag || "H3" `List.isSuffixOf` tag =
+        | "QUIC" == nameTagProto name || "H3" == nameTagProto name =
             case deserialiseOrFail $ BL.fromStrict bs of
                 Left _ -> Nothing
                 Right (info :: QUIC.ResumptionInfo) ->
@@ -282,7 +290,7 @@ saveResumption file lock tq name@(NameTag tag) bs = do
 loadResumption :: FilePath -> IO [(NameTag, ByteString)]
 loadResumption file = map toKV . C8.lines <$> C8.readFile file
   where
-    toKV l = (NameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
+    toKV l = (toNameTag $ C8.unpack k, fromRight "" $ BS16.decode $ C8.drop 1 v)
       where
         (k, v) = BS.break (== 32) l
 

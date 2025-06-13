@@ -58,8 +58,7 @@ profiles =
         { company = "IIJ"
         , serverName = "public.dns.iij.jp"
         , transports = ["dot", "h2"]
-        , -- 46.243.231.30 etc do not allow SNI of IP address
-          ipAddr = "103.2.57.5"
+        , ipAddr = "103.2.57.5"
         , transportsIP = ["dot", "h2"]
         , ipInCert = False -- No IP addresses in certificate
         }
@@ -83,7 +82,7 @@ runTest host certCheck transport = do
         ExitSuccess -> return ()
         ExitFailure _ -> do
             putStrLn "FAILED FAILED FAILED FAILED FAILED FAILED"
-            putStrLn $ "    dug " ++ intercalate " " args
+            putStrLn $ "    " ++ dug ++ " " ++ intercalate " " args
             putStrLn "stdout:"
             putStrLn out
             putStrLn "stderr:"

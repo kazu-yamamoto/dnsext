@@ -76,7 +76,7 @@ resolveConcurrent ris@(ResolveInfo{rinfoActions = riAct} :| _) resolver q@Questi
                         ++ " "
                         ++ show qtype
                         ++ " to "
-                        ++ unNameTag replyTag
+                        ++ fromNameTag replyTag
             ractionLog riAct Log.DEMO Nothing [tag ++ ": win"]
             return $ Right r
         le@(Left (_ :: DNSError)) -> return le

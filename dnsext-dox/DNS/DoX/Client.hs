@@ -4,7 +4,7 @@
 module DNS.DoX.Client (
     -- * SVCB information
     lookupSVCBInfo,
-    SVCBInfo,
+    SVCBInfo (..),
 
     -- * Pipeline resolver
     toPipelineResolvers,
@@ -89,7 +89,12 @@ lookupRawDoX lenv@LookupEnv{..} q = do
 
 ----------------------------------------------------------------
 
-type SVCBInfo = (ALPN, [ResolveInfo])
+data SVCBInfo = SVCBInfo
+    { svcbInfoALPN :: ALPN
+    , svcbInfoNameTag :: NameTag
+    , svcbInfoResolveInfos :: [ResolveInfo]
+    }
+    deriving (Show)
 
 lookupSVCBInfo :: LookupEnv -> IO (Either DNSError [[SVCBInfo]])
 lookupSVCBInfo lenv@LookupEnv{..} = do
@@ -98,8 +103,9 @@ lookupSVCBInfo lenv@LookupEnv{..} = do
         Left err -> return $ Left err
         Right res -> do
             let ss = extractSVCB res
+                -- mainly to pass 'rinfoActions'
                 ri = NE.head $ renvResolveInfos lenvResolveEnv
-                addss = svcbResolveInfos ri ss
+                addss = svcbResolveInfos (replyTag res) ri ss
             logIt lenv ss
             return $ Right addss
 
@@ -117,35 +123,42 @@ toResolveEnvs :: [SVCBInfo] -> [ResolveEnv]
 toResolveEnvs sis = mapMaybe toResolveEnv sis
 
 toResolveEnv :: SVCBInfo -> Maybe ResolveEnv
-toResolveEnv (_, []) = Nothing
-toResolveEnv (alpn, ris) = case makeOneshotResolver alpn of
-    Nothing -> Nothing
-    Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList ris
+toResolveEnv SVCBInfo{..}
+    | null svcbInfoResolveInfos = Nothing
+    | otherwise = case makeOneshotResolver svcbInfoALPN of
+        Nothing -> Nothing
+        Just resolver -> Just $ ResolveEnv resolver True $ NE.fromList svcbInfoResolveInfos
 
 toPipelineResolvers :: [SVCBInfo] -> [[PipelineResolver]]
 toPipelineResolvers sis = toPipelineResolver <$> sis
 
 toPipelineResolver :: SVCBInfo -> [PipelineResolver]
-toPipelineResolver (_, []) = []
-toPipelineResolver (alpn, ris) = case makePersistentResolver alpn of
-    Nothing -> []
-    Just resolver -> resolver <$> ris
+toPipelineResolver SVCBInfo{..}
+    | null svcbInfoResolveInfos = []
+    | otherwise = case makePersistentResolver svcbInfoALPN of
+        Nothing -> []
+        Just resolver -> resolver <$> svcbInfoResolveInfos
 
 ----------------------------------------------------------------
 
-svcbResolveInfos :: ResolveInfo -> [RD_SVCB] -> [[SVCBInfo]]
-svcbResolveInfos ri ss = onPriority ri <$> ss
+svcbResolveInfos :: NameTag -> ResolveInfo -> [RD_SVCB] -> [[SVCBInfo]]
+svcbResolveInfos ntag ri ss = onPriority ntag ri <$> ss
 
-onPriority :: ResolveInfo -> RD_SVCB -> [SVCBInfo]
-onPriority ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
+onPriority :: NameTag -> ResolveInfo -> RD_SVCB -> [SVCBInfo]
+onPriority ntag ri s = case extractSvcParam SPK_ALPN $ svcb_params s of
     Nothing -> []
-    Just alpns -> onALPN ri s <$> alpn_names alpns
+    Just alpns -> onALPN ntag ri s <$> alpn_names alpns
 
-onALPN :: ResolveInfo -> RD_SVCB -> ALPN -> SVCBInfo
-onALPN ri s alpn = (alpn, extractResolveInfo ri s alpn)
+onALPN :: NameTag -> ResolveInfo -> RD_SVCB -> ALPN -> SVCBInfo
+onALPN ntag ri s alpn =
+    SVCBInfo
+        { svcbInfoALPN = alpn
+        , svcbInfoNameTag = ntag
+        , svcbInfoResolveInfos = extractResolveInfo ntag ri s alpn
+        }
 
-extractResolveInfo :: ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
-extractResolveInfo ri s alpn = updateIPPort <$> ips
+extractResolveInfo :: NameTag -> ResolveInfo -> RD_SVCB -> ShortByteString -> [ResolveInfo]
+extractResolveInfo ntag ri s alpn = updateIPPort <$> ips
   where
     params = svcb_params s
     target = svcb_target s
@@ -158,6 +171,12 @@ extractResolveInfo ri s alpn = updateIPPort <$> ips
         Nothing -> []
         Just v6 -> show <$> hint_ipv6s v6
     ips = case v4s ++ v6s of
-        [] -> [(rinfoIP ri, port)] -- no "ipv4hint" nor "ipv6hint"
+        [] -> [(nameTagIP ntag, port)] -- no "ipv4hint" nor "ipv6hint"
         xs -> (\h -> (fromString h, port)) <$> xs
-    updateIPPort (x, y) = ri{rinfoIP = x, rinfoPort = y, rinfoPath = mdohpath, rinfoServerName = Just $ init $ toRepresentation target}
+    updateIPPort (x, y) =
+        ri
+            { rinfoIP = x
+            , rinfoPort = y
+            , rinfoPath = mdohpath
+            , rinfoServerName = Just $ init $ toRepresentation target
+            }

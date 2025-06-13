@@ -9,7 +9,6 @@ module DNS.Do53.Do53 (
     tcpResolver,
     vcResolver,
     checkRespM,
-    nameTag,
     queryTag,
     fromIOException,
 )
@@ -70,11 +69,8 @@ fromIOException tag ioe = NetworkFailure aioe
   where
     aioe = annotateIOError ioe tag Nothing Nothing
 
-nameTag :: ResolveInfo -> String -> NameTag
-nameTag ResolveInfo{..} proto = NameTag $ show rinfoIP ++ "#" ++ show rinfoPort ++ "/" ++ proto
-
 queryTag :: Question -> NameTag -> String
-queryTag Question{..} (NameTag tag) = tag'
+queryTag Question{..} tag = tag'
   where
     ~tag' =
         "    query "
@@ -82,7 +78,7 @@ queryTag Question{..} (NameTag tag) = tag'
             ++ " "
             ++ show qtype
             ++ " to "
-            ++ tag
+            ++ fromNameTag tag
 
 analyzeReply :: Reply -> QueryControls -> Maybe QueryControls
 analyzeReply rply qctl0
@@ -153,7 +149,13 @@ udpResolver ri@ResolveInfo{rinfoActions = ResolveActions{..}, ..} q _qctl = do
             Right msg
                 | checkResp q ident msg -> do
                     let rx = BS.length ans
-                    return $ Reply tag msg tx rx
+                    return $
+                        Reply
+                            { replyTag = tag
+                            , replyDNSMessage = msg
+                            , replyTxBytes = tx
+                            , replyRxBytes = rx
+                            }
                 -- Just ignoring a wrong answer.
                 | otherwise -> do
                     ractionLog
@@ -233,5 +235,12 @@ vcResolver tag send recv ResolveInfo{rinfoActions = ResolveActions{..}} q _qctl 
         case decodeAt now bs of
             Left e -> E.throwIO e
             Right msg -> case checkRespM q ident msg of
-                Nothing -> return $ Reply tag msg tx $ BS.length bs
+                Nothing ->
+                    return $
+                        Reply
+                            { replyTag = tag
+                            , replyDNSMessage = msg
+                            , replyTxBytes = tx
+                            , replyRxBytes = BS.length bs
+                            }
                 Just err -> E.throwIO err

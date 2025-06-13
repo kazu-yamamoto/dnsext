@@ -73,7 +73,7 @@ vcPersistentResolver tag send recv ResolveInfo{..} body = do
     recver ref = forever $ do
         bs <-
             recv `E.catch` \ne -> do
-                let e = fromIOException (unNameTag tag) ne
+                let e = fromIOException (fromNameTag tag) ne
                 cleanup ref e
                 E.throwIO e
         now <- ractionGetTime rinfoActions

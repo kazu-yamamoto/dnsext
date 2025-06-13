@@ -54,6 +54,8 @@ module DNS.Do53.Internal (
     withLookupConfAndResolver,
     NameTag (..),
     nameTag,
+    fromNameTag,
+    toNameTag,
     queryTag,
     raceAny,
 )

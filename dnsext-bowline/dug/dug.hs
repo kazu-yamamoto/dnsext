@@ -17,7 +17,7 @@ import DNS.Do53.Client (
     rdFlag,
  )
 import qualified DNS.Do53.Client as Do53
-import DNS.Do53.Internal (NameTag (..))
+import DNS.Do53.Internal (fromNameTag)
 import DNS.DoX.Client
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (ALPN, addResourceDataForSVCB)
@@ -190,7 +190,7 @@ main = do
         let summary = map Prelude.unzip $ groupBy ((==) `on` fst) $ nub $ sort xs
         mapM_ printIt summary
       where
-        printIt (NameTag tag : _, ds) = putStrLn $ tag ++ ": " ++ intercalate ", " (reverse ds)
+        printIt (tag : _, ds) = putStrLn $ fromNameTag tag ++ ": " ++ intercalate ", " (reverse ds)
         printIt (_, _) = error "printIt"
         readQ = do
             mx <- atomically $ tryReadTQueue tq
