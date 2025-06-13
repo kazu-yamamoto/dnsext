@@ -60,7 +60,7 @@ data DNSTAP = DNSTAP
     , dnstapMessage  :: Maybe Message
     , dnstapType     :: DnstapType
     }
-    deriving (Eq, Show)
+    deriving (Show)
 
 defaultDNSTAP :: DNSTAP
 defaultDNSTAP =
@@ -86,7 +86,7 @@ data TapMsg =
     DnsMsg DNSMessage
   | DecErr DNSError ByteString
   | WireFt ByteString
-  deriving (Eq, Show)
+  deriving (Show)
 
 data Message = Message
     { messageType             :: MessageType
@@ -104,7 +104,7 @@ data Message = Message
     , messageResponseTimeNsec :: Maybe Int
     , messageResponseMessage  :: Maybe TapMsg
     }
-    deriving (Eq, Show)
+    deriving (Show)
 
 defaultMessage :: Message
 defaultMessage =

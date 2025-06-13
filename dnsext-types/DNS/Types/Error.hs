@@ -1,6 +1,6 @@
 module DNS.Types.Error where
 
-import Control.Exception (Exception, IOException)
+import Control.Exception (Exception, SomeException)
 
 ----------------------------------------------------------------
 
@@ -47,7 +47,7 @@ data DNSError
     | -- | Configuration is wrong.
       BadConfiguration
     | -- | Network failure.
-      NetworkFailure IOException
+      NetworkFailure SomeException String
     | -- | Bad thing happens.
       BadThing String -- SomeException cannot be used due to Eq
     | -- | Wire format cannot be decoded.
@@ -56,7 +56,7 @@ data DNSError
       DNSErrorInfo DNSError ~String
     | -- | Error is unknown
       UnknownDNSError
-    deriving (Eq, Show)
+    deriving (Show)
 
 instance Exception DNSError
 
