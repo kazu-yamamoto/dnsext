@@ -58,6 +58,31 @@ data DNSError
       UnknownDNSError
     deriving (Show)
 
+{- FOURMOLU_DISABLE -}
+-- SomeException is not an instance of Eq.
+instance Eq DNSError where
+    SequenceNumberMismatch == SequenceNumberMismatch = True
+    QuestionMismatch       == QuestionMismatch       = True
+    InvalidAXFRLookup      == InvalidAXFRLookup      = True
+    RetryLimitExceeded     == RetryLimitExceeded     = True
+    TimeoutExpired         == TimeoutExpired         = True
+    UnexpectedRDATA        == UnexpectedRDATA        = True
+    IllegalDomain          == IllegalDomain          = True
+    FormatError            == FormatError            = True
+    ServerFailure          == ServerFailure          = True
+    NameError              == NameError              = True
+    NotImplemented         == NotImplemented         = True
+    OperationRefused       == OperationRefused       = True
+    BadOptRecord           == BadOptRecord           = True
+    BadConfiguration       == BadConfiguration       = True
+    NetworkFailure _ s1    == NetworkFailure _ s2    = s1 == s2
+    BadThing s1            == BadThing s2            = s1 == s2
+    DecodeError s1         == DecodeError s2         = s1 == s2
+    DNSErrorInfo e1 s1     == DNSErrorInfo e2 s2     = e1 == e2 && s1 == s2
+    UnknownDNSError        == UnknownDNSError        = True
+    _                      == _                      = False
+{- FOURMOLU_ENABLE -}
+
 instance Exception DNSError
 
 {- FOURMOLU_DISABLE -}
