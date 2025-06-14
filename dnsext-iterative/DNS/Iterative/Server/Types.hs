@@ -35,7 +35,7 @@ import Network.Socket
 import Network.TLS (Credentials (..), SessionManager)
 
 -- dnsext
-import DNS.TAP.Schema (SocketProtocol)
+import DNS.TAP.Schema (SocketProtocol, HttpProtocol)
 import DNS.Types (DNSMessage)
 import DNS.Types.Time (EpochTimeUsec)
 
@@ -71,6 +71,7 @@ data Input a = Input
     , inputPeerInfo :: Peer
     , inputProto :: SocketProtocol
     , inputToSender :: ToSender -> IO ()
+    , inputHttpProto :: HttpProtocol
     , inputRecvTime :: EpochTimeUsec
     }
 
