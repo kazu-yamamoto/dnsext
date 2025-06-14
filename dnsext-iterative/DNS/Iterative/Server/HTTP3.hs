@@ -10,6 +10,7 @@ import Control.Monad (when)
 import Data.Functor
 
 -- dnsext-* packages
+import DNS.TAP.Schema (HttpProtocol (..))
 
 -- other packages
 
@@ -33,7 +34,7 @@ http3Servers VcServerConfig{..} env toCacher ss = do
     name <- mapM socketName ss <&> \xs -> show xs ++ "/h3"
     let http3server = T.withManager (vc_idle_timeout * 1000000) $ \mgr ->
             withLocationIOE name $ QUIC.runWithSockets ss sconf $ \conn ->
-                H3.runIO conn (conf mgr) $ doHTTP name sbracket incQuery env toCacher
+                H3.runIO conn (conf mgr) $ doHTTP name sbracket incQuery env toCacher HTTP3
     return [http3server]
   where
     sbracket = sessionStatsDoH3 (stats_ env)
