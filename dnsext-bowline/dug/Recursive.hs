@@ -164,7 +164,8 @@ resolvePipeline Options{..} conf tq = do
             { rinfoActions =
                 rinfoActions
                     { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                    , ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
+                    , -- This implements 2) below.
+                      ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
                     }
             , -- RFC 9462, Sec 4.2 says:
               --
@@ -182,11 +183,9 @@ resolvePipeline Options{..} conf tq = do
               --
               -- CloudFlare returns its certificate whose SAN does not
               -- include IP addresses is SNI is a host name (aka
-              -- "one.one.one.one").
-              --
-              -- To satisfy both 1 and 2 AND rescue CloudFlare, let's
-              -- specify an IP address to SNI.
-              rinfoServerName = Nothing
+              -- "one.one.one.one").  So, let's specify an IP address
+              -- to SNI for CloudFlare.
+              rinfoServerName = if rinfoServerName == Just "one.one.one.one" then Nothing else rinfoServerName
             }
 
 resolver
