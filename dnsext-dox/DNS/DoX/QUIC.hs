@@ -17,7 +17,7 @@ import DNS.DoX.HTTP2
 import DNS.DoX.Imports
 
 quicPersistentResolver :: PersistentResolver
-quicPersistentResolver ri body = run cc $ \conn -> do
+quicPersistentResolver ri body = toDNSError "quicPersistentResolver" $ run cc $ \conn -> do
     body $ resolv conn ri
     saveResumptionInfo conn ri tag
   where
@@ -25,7 +25,7 @@ quicPersistentResolver ri body = run cc $ \conn -> do
     cc = getQUICParams ri tag "doq"
 
 quicResolver :: OneshotResolver
-quicResolver ri q qctl = run cc $ \conn -> withTimeout ri $ do
+quicResolver ri q qctl = toDNSError "quicResolver" $ run cc $ \conn -> withTimeout ri $ do
     res <- resolv conn ri q qctl
     saveResumptionInfo conn ri tag
     return res
