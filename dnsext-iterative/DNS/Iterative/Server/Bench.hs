@@ -12,7 +12,7 @@ import Data.ByteString (ByteString)
 import qualified Data.List.NonEmpty as NE
 
 -- dnsext-* packages
-import DNS.TAP.Schema (SocketProtocol (..))
+import DNS.TAP.Schema (SocketProtocol (..), HttpProtocol (..))
 
 -- other packages
 import Network.Socket
@@ -54,7 +54,7 @@ benchServer bench_pipelines env _ = do
 
     let toSender = writeChan resQ
 
-        enqueueReq (bs, ()) = toCacher (Input bs noPendingOp myDummy (PeerInfoUDP clntDummy []) UDP toSender usecDummy)
+        enqueueReq (bs, ()) = toCacher (Input bs noPendingOp myDummy (PeerInfoUDP clntDummy []) UDP toSender HTTP_NONE usecDummy)
         dequeueRes = (\(Output bs _ _) -> (bs, ())) <$> readChan resQ
     return (cachers ++ workers, enqueueReq, dequeueRes)
   where

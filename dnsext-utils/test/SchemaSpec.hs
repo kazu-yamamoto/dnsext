@@ -25,6 +25,8 @@ gMSG =
         , messageResponseTimeSec = Nothing
         , messageResponseTimeNsec = Nothing
         , messageResponseMessage = Nothing
+        , messagePolicy = Nothing
+        , messageHttpProtocol = Just HTTP_NONE
         }
 
 spec :: Spec

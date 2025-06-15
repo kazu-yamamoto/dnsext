@@ -44,7 +44,7 @@ import Control.Concurrent.Async (AsyncCancelled)
 
 -- dnsext packages
 import qualified DNS.Log as Log
-import DNS.TAP.Schema (SocketProtocol (..))
+import DNS.TAP.Schema (SocketProtocol (..), HttpProtocol (..))
 import qualified DNS.TAP.Schema as DNSTAP
 import DNS.Types (DNSFlags (..), DNSMessage (..), EDNS (..), EDNSheader (..), Question (..), RCODE (..))
 import qualified DNS.Types.Decode as DNS
@@ -196,7 +196,7 @@ record
 record env Input{..} reply rspWire = do
     let peersa = peerSockAddr inputPeerInfo
     logDNSTAP_ env $ runEpochTimeUsec inputRecvTime $
-        \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire
+        \s us -> DNSTAP.composeMessage inputProto inputMysa peersa s (fromIntegral us * 1000) rspWire inputHttpProto
     let st = stats_ env
         Question{..} = case question inputQuery of
           [] -> error "record"
@@ -230,7 +230,7 @@ type BS = ByteString
 type MkInput = ByteString -> Peer -> VcPendingOp -> EpochTimeUsec -> Input ByteString
 
 mkInput :: SockAddr -> (ToSender -> IO ()) -> SocketProtocol -> MkInput
-mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender
+mkInput mysa toSender proto bs peerInfo pendingOp = Input bs pendingOp mysa peerInfo proto toSender HTTP_NONE
 
 checkReceived :: Int -> VcTimer -> ByteString -> IO ()
 checkReceived slsize timer bs = do
@@ -315,7 +315,7 @@ receiverLogic' env mysa recv toCacher toSender proto = do
     if bs == ""
         then return False
         else do
-            toCacher $ Input bs noPendingOp mysa peerInfo proto toSender ts
+            toCacher $ Input bs noPendingOp mysa peerInfo proto toSender HTTP_NONE ts
             return True
 
 noPendingOp :: VcPendingOp
