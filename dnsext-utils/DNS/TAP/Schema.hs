@@ -15,6 +15,7 @@ module DNS.TAP.Schema (
     composeMessage,
     SocketFamily (IPv4, IPv6),
     SocketProtocol (UDP, TCP, DOT, DOH, DNSCryptUDP, DNSCryptTCP, DOQ),
+    HttpProtocol (..),
     MessageType (
         AUTH_QUERY,
         AUTH_RESPONSE,
@@ -103,6 +104,8 @@ data Message = Message
     , messageResponseTimeSec  :: Maybe Int
     , messageResponseTimeNsec :: Maybe Int
     , messageResponseMessage  :: Maybe TapMsg
+    , messagePolicy           :: Maybe Int     -- not implemented yet
+    , messageHttpProtocol     :: Maybe HttpProtocol
     }
     deriving (Eq, Show)
 
@@ -123,6 +126,8 @@ defaultMessage =
     , messageResponseTimeSec  = Nothing
     , messageResponseTimeNsec = Nothing
     , messageResponseMessage  = Nothing
+    , messagePolicy           = Nothing
+    , messageHttpProtocol     = Nothing
     }
 
 composeMessage
@@ -132,8 +137,9 @@ composeMessage
     -> EpochTime
     -> Int64
     -> ByteString
+    -> HttpProtocol
     -> Message
-composeMessage proto mysa peersa s ns bs =
+composeMessage proto mysa peersa s ns bs httpproto =
     defaultMessage
         { messageSocketFamily     = toFamily peersa
         , messageSocketProtocol   = Just proto
@@ -144,6 +150,7 @@ composeMessage proto mysa peersa s ns bs =
         , messageResponseTimeSec  = Just $ fromIntegral s
         , messageResponseTimeNsec = Just $ fromIntegral ns
         , messageResponseMessage  = Just $ WireFt bs
+        , messageHttpProtocol     = Just $ httpproto
         }
  where
    toFamily sa = case sa of
@@ -173,6 +180,8 @@ decodeMessage bs =
         , messageResponseTimeSec  = getOptI obj 12 id
         , messageResponseTimeNsec = getOptI obj 13 id
         , messageResponseMessage  = getOptS obj 14 decodeDNS
+        , messagePolicy           = getOptI obj 15 id
+        , messageHttpProtocol     = Just $ (toEnum (getI obj 16 id) :: HttpProtocol)
         }
   where
     obj = decode bs
@@ -198,6 +207,8 @@ encodeDnstap DNSTAP{..} = encode $
 
 encodeMessage :: Message -> ByteString
 encodeMessage Message{..} = encode $
+    setOptVAR 16 (fromEnum <$> messageHttpProtocol) $
+    setOptVAR 15 messagePolicy $
     setOptS   14 (encodeDNS <$> messageResponseMessage) $
     setOptI32 13 messageResponseTimeNsec $
     setOptVAR 12 messageResponseTimeSec $
@@ -232,6 +243,16 @@ pattern MESSAGE  = DnstapType 1
 instance Show DnstapType where
     show MESSAGE        = "MESSAGE"
     show (DnstapType x) = "DnstapType " ++ show x
+
+----------------------------------------------------------------
+
+data HttpProtocol = HTTP_NONE | HTTP1 | HTTP2 | HTTP3 deriving (Eq, Enum)
+
+instance Show HttpProtocol where
+    show HTTP_NONE = "(none)"
+    show HTTP1 = "HTTP/1"
+    show HTTP2 = "HTTP/2"
+    show HTTP3 = "HTTP/3"
 
 ----------------------------------------------------------------
 
