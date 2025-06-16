@@ -35,6 +35,7 @@ makeSettings ResolveInfo{..} tag =
         , H2TLS.settingsUseEarlyData = ractionUseEarlyData rinfoActions
         , -- TLS SNI
           H2TLS.settingsServerNameOverride = rinfoServerName
+        , H2TLS.settingsUseServerNameIndication = ractionUseServerNameIndication rinfoActions
         , H2TLS.settingsKeyLogger = ractionKeyLog rinfoActions
         , H2TLS.settingsWantSessionResumeList =
             rights (deserialiseOrFail . BL.fromStrict <$> ractionResumptionInfo rinfoActions tag)

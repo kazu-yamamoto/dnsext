@@ -159,33 +159,46 @@ resolvePipeline Options{..} conf tq = do
         si
             { svcbInfoResolveInfos = map (add si) $ svcbInfoResolveInfos si
             }
+    -- RFC 9642 requires the following *designation*:
+    --
+    --   ipaddr -> SVCB(ipv4hint)
+    --   ipv4hint -> SAN(ipaddr)
+    --       SNI = None
+    --       Host: ipaddr
     add si ri@ResolveInfo{..} =
         ri
             { rinfoActions =
                 rinfoActions
                     { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                    , -- This implements 2) below.
+                    , -- RFC 9462, Sec 4.2 says:
+                      --
+                      -- 1. The client MUST verify the chain of certificates
+                      --    up to a trust anchor as described in Section 6 of
+                      --    [RFC5280].  The client SHOULD use the default
+                      --    system or application trust anchors, unless
+                      --    otherwise configured.
+                      --
+                      -- 2. The client MUST verify that the certificate
+                      --    contains the IP address of the designating
+                      --    Unencrypted DNS Resolver in an iPAddress entry of
+                      --    the subjectAltName extension as described in
+                      --    Section 4.2.1.6 of [RFC5280].
                       ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
+                    , -- SEc 6.3 says:
+                      -- Note that since IP addresses are not
+                      -- supported by default in the TLS SNI,
+                      -- resolvers that support discovery using IP
+                      -- addresses will need to be configured to
+                      -- present the appropriate TLS certificate when
+                      -- no SNI is present for DoT, DoQ, and DoH.
+                      ractionUseServerNameIndication = False
                     }
-            , -- RFC 9462, Sec 4.2 says:
-              --
-              -- 1. The client MUST verify the chain of certificates
-              --    up to a trust anchor as described in Section 6 of
-              --    [RFC5280].  The client SHOULD use the default
-              --    system or application trust anchors, unless
-              --    otherwise configured.
-              --
-              -- 2. The client MUST verify that the certificate
-              --    contains the IP address of the designating
-              --    Unencrypted DNS Resolver in an iPAddress entry of
-              --    the subjectAltName extension as described in
-              --    Section 4.2.1.6 of [RFC5280].
-              --
-              -- CloudFlare returns its certificate whose SAN does not
-              -- include IP addresses is SNI is a host name (aka
-              -- "one.one.one.one").  So, let's specify an IP address
-              -- to SNI for CloudFlare.
-              rinfoServerName = if rinfoServerName == Just "one.one.one.one" then Nothing else rinfoServerName
+            , -- SEc 6.3 says:
+              -- When performing discovery using resolver IP addresses,
+              -- clients MUST use the original IP address of the
+              -- Unencrypted DNS Resolver as the URI host for DoH
+              -- requests.
+              rinfoServerName = Just $ show $ nameTagIP $ svcbInfoNameTag si
             }
 
 resolver
