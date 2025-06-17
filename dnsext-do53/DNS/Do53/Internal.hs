@@ -9,6 +9,7 @@ module DNS.Do53.Internal (
     recvVC,
     encodeVCLength,
     decodeVCLength,
+    BS,
 
     -- * Resolver
     Resolver,

@@ -87,7 +87,7 @@ recvVC lim rcv = do
         else return bs
 
 -- | Decoding the length from the first two bytes.
-decodeVCLength :: ByteString -> Int
+decodeVCLength :: BS -> Int
 decodeVCLength bs = case BS.unpack bs of
     [hi, lo] -> 256 * fromIntegral hi + fromIntegral lo
     _ -> 0 -- never reached
@@ -116,7 +116,7 @@ sendTCP = NSB.sendMany
 -- | Encapsulate an encoded 'DNSMessage' buffer for transmission over a VC
 -- virtual circuit.  With VC the buffer needs to start with an explicit
 -- length (the length is implicit with UDP).
-encodeVCLength :: Int -> ByteString
+encodeVCLength :: Int -> BS
 encodeVCLength len = BS.pack [fromIntegral u, fromIntegral l]
   where
     (u, l) = len `divMod` 256
