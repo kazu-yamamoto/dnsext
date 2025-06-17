@@ -29,6 +29,7 @@ library
         DNS.DoX.HTTP3
         DNS.DoX.Imports
         DNS.DoX.QUIC
+        DNS.DoX.SAN
         DNS.DoX.TLS
 
     default-language: Haskell2010
@@ -36,18 +37,19 @@ library
     build-depends:
         base >=4 && <5,
         bytestring,
-        crypton-x509-system,
+        crypton-x509 >=1.7 && <1.8,
+        crypton-x509-validation >=1.6 && <1.7,
         dnsext-do53,
         dnsext-svcb,
         dnsext-types,
         dnsext-utils,
         http-types,
         http2 >= 5.3.2 && < 5.4,
-        http2-tls >= 0.4.6 && < 0.5,
+        http2-tls >= 0.4.7 && < 0.5,
         http3 >= 0.1 && < 0.2,
         iproute,
         network >= 3.2.2 && < 3.3,
-        quic >= 0.2.14 && < 0.3,
+        quic >= 0.2.15 && < 0.3,
         serialise,
         tls >= 2.1.10
 

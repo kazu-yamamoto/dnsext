@@ -32,7 +32,7 @@ profiles =
     [ Profile
         { company = "Google"
         , serverName = "dns.google"
-        , transports = ["udp", "tcp", "dot", "h2", "auto"]
+        , transports = ["udp", "tcp", "dot", "h2", "h3", "auto"]
         , ipAddr = "8.8.8.8"
         , -- 8.8.8.8 + h3 is not allowed since SNI must be a hostname, sigh
           transportsIP = ["udp", "tcp", "dot", "h2", "auto"]
@@ -73,8 +73,13 @@ testCompany Profile{..} = do
 
 runTest :: String -> Bool -> String -> IO ()
 runTest host certCheck transport = do
-    let options
-            | certCheck = ["-e"]
+    -- AdGuard is using certificates signed by ZeroSSL.
+    -- This means that IPv6 addresses are not contained in SAN, sign.
+    let workaround
+            | host == "unfiltered.adguard-dns.com" = ["-4"]
+            | otherwise = []
+        options
+            | certCheck = ["-e"] ++ workaround
             | otherwise = []
     let args = ['@' : host] ++ options ++ ["-d", transport] ++ domains
     (ec, out, err) <- readProcessWithExitCode dug args input
