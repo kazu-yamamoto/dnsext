@@ -73,8 +73,13 @@ testCompany Profile{..} = do
 
 runTest :: String -> Bool -> String -> IO ()
 runTest host certCheck transport = do
-    let options
-            | certCheck = ["-e"]
+    -- AdGuard is using certificates signed by ZeroSSL.
+    -- This means that IPv6 addresses are not contained in SAN, sign.
+    let workaround
+            | host == "unfiltered.adguard-dns.com" = ["-4"]
+            | otherwise = []
+        options
+            | certCheck = ["-e"] ++ workaround
             | otherwise = []
     let args = ['@' : host] ++ options ++ ["-d", transport] ++ domains
     (ec, out, err) <- readProcessWithExitCode dug args input
