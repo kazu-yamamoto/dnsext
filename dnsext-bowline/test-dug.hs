@@ -34,8 +34,7 @@ profiles =
         , serverName = "dns.google"
         , transports = ["udp", "tcp", "dot", "h2", "h3", "auto"]
         , ipAddr = "8.8.8.8"
-        , -- 8.8.8.8 + h3 is not allowed since SNI must be a hostname, sigh
-          transportsIP = ["udp", "tcp", "dot", "h2", "auto"]
+        , transportsIP = ["udp", "tcp", "dot", "h2", "h3", "auto"]
         , ipInCert = True
         }
     , Profile

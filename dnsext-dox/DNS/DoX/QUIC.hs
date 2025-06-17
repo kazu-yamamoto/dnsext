@@ -66,7 +66,7 @@ getQUICParams ResolveInfo{..} tag alpn0 =
         { ccServerName = show rinfoIP
         , -- TLS SNI
           ccServerNameOverride = rinfoServerName
-        , ccUseServerNameIndication = ractionUseServerNameIndication rinfoActions
+        , ccUseServerNameIndication = False
         , ccPortName = show rinfoPort
         , ccALPN = \_ -> return $ Just [alpn0]
         , ccDebugLog = False

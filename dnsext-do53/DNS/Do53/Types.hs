@@ -310,7 +310,6 @@ data ResolveActions = ResolveActions
     -- ^ Validating server's certificate.
     , ractionServerAltName :: Maybe IP
     -- ^ Checking if the target IP is included in ServerAltName.
-    , ractionUseServerNameIndication :: Bool
     }
 
 instance Show ResolveActions where
@@ -321,8 +320,6 @@ instance Show ResolveActions where
             ++ show ractionValidate
             ++ ", ractionServerAltName = "
             ++ show ractionServerAltName
-            ++ ", ractionUseServerNameIndication = "
-            ++ show ractionUseServerNameIndication
             ++ "}"
 
 defaultResolveActions :: ResolveActions
@@ -341,7 +338,6 @@ defaultResolveActions =
         , ractionOnConnectionInfo = \_ _ -> return ()
         , ractionValidate = True
         , ractionServerAltName = Nothing
-        , ractionUseServerNameIndication = True
         }
 
 rsso :: Socket -> IO ()

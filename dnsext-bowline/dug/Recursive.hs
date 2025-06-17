@@ -184,14 +184,6 @@ resolvePipeline Options{..} conf tq = do
                       --    the subjectAltName extension as described in
                       --    Section 4.2.1.6 of [RFC5280].
                       ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
-                    , -- SEc 6.3 says:
-                      -- Note that since IP addresses are not
-                      -- supported by default in the TLS SNI,
-                      -- resolvers that support discovery using IP
-                      -- addresses will need to be configured to
-                      -- present the appropriate TLS certificate when
-                      -- no SNI is present for DoT, DoQ, and DoH.
-                      ractionUseServerNameIndication = False
                     }
             , -- SEc 6.3 says:
               -- When performing discovery using resolver IP addresses,
