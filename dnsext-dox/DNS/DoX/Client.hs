@@ -5,6 +5,7 @@ module DNS.DoX.Client (
     -- * SVCB information
     lookupSVCBInfo,
     SVCBInfo (..),
+    modifyForDDR,
 
     -- * Pipeline resolver
     toPipelineResolvers,
@@ -180,4 +181,59 @@ extractResolveInfo ntag ri s alpn = updateIPPort <$> ips
             , rinfoPort = y
             , rinfoPath = mdohpath
             , rinfoServerName = Just $ init $ toRepresentation target
+            }
+
+----------------------------------------------------------------
+
+-- | Extracting 'ResolveInfo' from 'SVCBInfo' for DDR
+--
+-- RFC 9462 (Discovery of Designated Resolvers) requires the following
+-- *designation*:
+--
+--   ipaddr -> SVCB(ipv4hint)
+--   ipv4hint -> SAN(ipaddr)
+--       SNI = None
+--       Host: ipaddr
+--
+-- Sec 4.2 says:
+--
+-- 1. The client MUST verify the chain of certificates up to a trust
+--    anchor as described in Section 6 of [RFC5280].  The client
+--    SHOULD use the default system or application trust anchors,
+--    unless otherwise configured.
+--
+--     onServerCertificate: validateDefault
+--
+-- 2. The client MUST verify that the certificate contains the IP
+--    address of the designating Unencrypted DNS Resolver in an
+--    iPAddress entry of the subjectAltName extension as described in
+--    Section 4.2.1.6 of [RFC5280].
+--
+--     ractionServerAltName = Just ip
+--     onServerCertificate: + makeOnServerCertificate ractionServerAltName
+--
+-- Sec 6.3 says:
+--
+-- When performing discovery using resolver IP addresses, clients MUST
+-- use the original IP address of the Unencrypted DNS Resolver as the
+-- URI host for DoH requests.
+--
+--    rinfoServerName = Just $ show ip
+--    H2.defaultClientConfig{H2.authority = fromMaybe ipstr rinfoServerName}
+--
+-- Note that since IP addresses are not supported by default in the
+-- TLS SNI, resolvers that support discovery using IP addresses will
+-- need to be configured to present the appropriate TLS certificate
+-- when no SNI is present for DoT, DoQ, and DoH.
+--
+--    clientUseServerNameIndication = False
+modifyForDDR :: SVCBInfo -> SVCBInfo
+modifyForDDR si@SVCBInfo{..} = si{svcbInfoResolveInfos = map modify svcbInfoResolveInfos}
+  where
+    ip = nameTagIP svcbInfoNameTag
+    modify ri =
+        ri
+            { rinfoActions =
+                defaultResolveActions{ractionServerAltName = Just ip}
+            , rinfoServerName = Just $ show ip
             }

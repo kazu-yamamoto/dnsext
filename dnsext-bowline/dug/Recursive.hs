@@ -80,7 +80,7 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
-            then resolvePipeline opt conf tq
+            then resolveDDR opt conf tq
             else case makePersistentResolver optDoX of
                 -- PersistentResolver
                 Just persitResolver -> do
@@ -122,12 +122,12 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                     exitFailure
                 _ -> return ()
 
-resolvePipeline
+resolveDDR
     :: Options
     -> LookupConf
     -> TQueue (NameTag, String)
     -> IO (Maybe [PipelineResolver])
-resolvePipeline Options{..} conf tq = do
+resolveDDR Options{..} conf tq = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
         Left err -> do
@@ -144,7 +144,7 @@ resolvePipeline Options{..} conf tq = do
             let siss
                     | optDisableV6NS || disableV6 = map (map ipv4only) siss0
                     | otherwise = siss0
-            let psss = map toPipelineResolvers $ map (map addAction) siss
+            let psss = map toPipelineResolvers $ map (map modifyForDDR) siss
             case psss of
                 [] -> do
                     putStrLn "No proper SVCB"
@@ -154,44 +154,6 @@ resolvePipeline Options{..} conf tq = do
                         putStrLn "No proper SVCB"
                         exitFailure
                     ps : _ -> return $ Just ps
-  where
-    addAction si =
-        si
-            { svcbInfoResolveInfos = map (add si) $ svcbInfoResolveInfos si
-            }
-    -- RFC 9642 requires the following *designation*:
-    --
-    --   ipaddr -> SVCB(ipv4hint)
-    --   ipv4hint -> SAN(ipaddr)
-    --       SNI = None
-    --       Host: ipaddr
-    add si ri@ResolveInfo{..} =
-        ri
-            { rinfoActions =
-                rinfoActions
-                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                    , -- RFC 9462, Sec 4.2 says:
-                      --
-                      -- 1. The client MUST verify the chain of certificates
-                      --    up to a trust anchor as described in Section 6 of
-                      --    [RFC5280].  The client SHOULD use the default
-                      --    system or application trust anchors, unless
-                      --    otherwise configured.
-                      --
-                      -- 2. The client MUST verify that the certificate
-                      --    contains the IP address of the designating
-                      --    Unencrypted DNS Resolver in an iPAddress entry of
-                      --    the subjectAltName extension as described in
-                      --    Section 4.2.1.6 of [RFC5280].
-                      ractionServerAltName = if optValidate then Just $ nameTagIP $ svcbInfoNameTag si else Nothing
-                    }
-            , -- SEc 6.3 says:
-              -- When performing discovery using resolver IP addresses,
-              -- clients MUST use the original IP address of the
-              -- Unencrypted DNS Resolver as the URI host for DoH
-              -- requests.
-              rinfoServerName = Just $ show $ nameTagIP $ svcbInfoNameTag si
-            }
 
 resolver
     :: (DNS.DNSMessage -> STM ())
