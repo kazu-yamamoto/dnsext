@@ -96,6 +96,7 @@ data SVCBInfo = SVCBInfo
     }
     deriving (Show)
 
+-- | Don't forget to call 'addResourceDataForSVCB'.
 lookupSVCBInfo :: LookupEnv -> IO (Either DNSError [[SVCBInfo]])
 lookupSVCBInfo lenv@LookupEnv{..} = do
     er <- lookupRaw lenv $ Question "_dns.resolver.arpa" SVCB IN
