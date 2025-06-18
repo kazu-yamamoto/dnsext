@@ -13,6 +13,7 @@ import DNS.SVCB
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
+import Data.ByteString (ByteString)
 import Data.IP ()
 import qualified Data.List.NonEmpty as NE
 import Network.Socket
@@ -57,19 +58,28 @@ main = do
                 withLookupConf conf $ mainLoop s
 
 mainLoop :: Socket -> LookupEnv -> IO ()
-mainLoop s env = loop
+mainLoop s env = do
+    readCheck <- waitReadSocketSTM s
+    loop readCheck
   where
-    loop = do
-        -- checking socket data availability
+    loop readCheck = do
+        putStrLn "checking..."
+        bssa <- NSB.recvFrom s 2048
+        putStrLn "checking...done"
         piplineResolver <- selectSVCB <$> lookupSVCBInfo env
-        piplineResolver (serverLoop s) `E.catch` \(E.SomeException se) -> print se
-        loop
+        piplineResolver (serverLoop s bssa) `E.catch` \(E.SomeException se) -> print se
+        loop readCheck
 
-serverLoop :: Socket -> Resolver -> IO ()
-serverLoop s resolver = loop
+serverLoop :: Socket -> (ByteString, SockAddr) -> (Question -> QueryControls -> IO (Either DNSError Reply)) -> IO ()
+serverLoop s (bs0, sa0) resolver = do
+    sendReply bs0 sa0
+    loop
   where
     loop = do
         (bs, sa) <- NSB.recvFrom s 2048
+        sendReply bs sa
+        loop
+    sendReply bs sa =
         case decode bs of
             Left _ -> error "serverLoop (1)"
             Right msg -> case question msg of
@@ -85,7 +95,6 @@ serverLoop s resolver = loop
                                         { identifier = idnt
                                         }
                             void $ NSB.sendTo s (encode msg') sa
-        loop
 
 selectSVCB :: Either DNSError [[SVCBInfo]] -> PipelineResolver
 selectSVCB (Left _) = error "selectSVCB Left"
