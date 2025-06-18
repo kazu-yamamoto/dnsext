@@ -320,6 +320,8 @@ instance Show ResolveActions where
             ++ show ractionValidate
             ++ ", ractionServerAltName = "
             ++ show ractionServerAltName
+            ++ ", ractionUseEarlyData = "
+            ++ show ractionUseEarlyData
             ++ "}"
 
 defaultResolveActions :: ResolveActions
