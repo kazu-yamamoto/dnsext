@@ -71,17 +71,19 @@ serverLoop s resolver = loop
         (bs, sa) <- NSB.recvFrom s 2048
         case decode bs of
             Left _ -> error "serverLoop (1)"
-            Right msg -> do
-                let idnt = identifier msg
-                eres <- resolver (head $ question msg) mempty
-                case eres of
-                    Left _ -> error "serverLoop (2)"
-                    Right res -> do
-                        let msg' =
-                                (replyDNSMessage res)
-                                    { identifier = idnt
-                                    }
-                        void $ NSB.sendTo s (encode msg') sa
+            Right msg -> case question msg of
+                [] -> return ()
+                q : _ -> do
+                    let idnt = identifier msg
+                    eres <- resolver q mempty
+                    case eres of
+                        Left _ -> error "serverLoop (2)"
+                        Right res -> do
+                            let msg' =
+                                    (replyDNSMessage res)
+                                        { identifier = idnt
+                                        }
+                            void $ NSB.sendTo s (encode msg') sa
         loop
 
 selectSVCB :: Either DNSError [[SVCBInfo]] -> PipelineResolver
