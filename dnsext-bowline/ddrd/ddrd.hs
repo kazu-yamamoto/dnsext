@@ -3,13 +3,11 @@
 
 module Main where
 
-import Control.Concurrent
 import qualified Control.Exception as E
 import Control.Monad
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Client
-import DNS.DoX.Internal
 import DNS.SEC
 import DNS.SVCB
 import DNS.Types
@@ -20,6 +18,8 @@ import qualified Data.List.NonEmpty as NE
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Environment
+
+-- fixme: saving resumption info
 
 serverAddr :: String
 serverAddr = "127.0.0.1"
@@ -60,6 +60,7 @@ mainLoop :: Socket -> LookupEnv -> IO ()
 mainLoop s env = loop
   where
     loop = do
+        -- checking socket data availability
         piplineResolver <- selectSVCB <$> lookupSVCBInfo env
         piplineResolver (serverLoop s) `E.catch` \(E.SomeException se) -> print se
         loop
@@ -89,7 +90,11 @@ serverLoop s resolver = loop
 selectSVCB :: Either DNSError [[SVCBInfo]] -> PipelineResolver
 selectSVCB (Left _) = error "selectSVCB Left"
 selectSVCB (Right []) = error "selectSVCB Right"
-selectSVCB (Right (sis : _)) = head $ head $ toPipelineResolvers $ map modifyForDDR sis
+selectSVCB (Right (sis : _)) = case toPipelineResolvers $ map modifyForDDR sis of
+    [] -> error "selectSVCB"
+    ps : _ -> case ps of
+        [] -> error "selectSVCB"
+        p : _ -> p
 
 makeConf :: [String] -> LookupConf
 makeConf addrs =
