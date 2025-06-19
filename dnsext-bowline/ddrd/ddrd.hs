@@ -8,6 +8,7 @@ import Control.Monad
 import Data.ByteString (ByteString)
 import Data.IORef
 import Data.IP ()
+import Data.List
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import Data.Maybe
@@ -142,7 +143,7 @@ serverLoop opts s (bs0, sa0) resolver = do
             Right msg -> case question msg of
                 [] -> printDebug opts "No questions"
                 q : _ -> do
-                    printDebug opts $ show q
+                    printDebug opts $ "Q: " ++ pprDomain (qname q) ++ " " ++ show (qtype q)
                     let idnt = identifier msg
                     eres <- resolver q mempty
                     case eres of
@@ -152,7 +153,14 @@ serverLoop opts s (bs0, sa0) resolver = do
                                     (replyDNSMessage res)
                                         { identifier = idnt
                                         }
+                            printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
                             void $ NSB.sendTo s (encode msg') sa
+
+pprDomain :: Domain -> String
+pprDomain = init . toRepresentation
+
+pprRR :: ResourceRecord -> String
+pprRR ResourceRecord{..} = pprDomain rrname ++ " " ++ show rrtype ++ " " ++ show rdata
 
 ----------------------------------------------------------------
 
