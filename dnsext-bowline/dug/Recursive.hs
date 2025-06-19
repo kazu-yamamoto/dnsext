@@ -138,14 +138,15 @@ getCustomConf
     -> QueryControls
     -> Options
     -> ResolveActions
-    -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
+    -> IO (LookupConf, [ResolveInfo])
 getCustomConf ips port ctl Options{..} ractions
   | null ips = return (conf, [])
   | otherwise = do
         let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
             ahps = map (\(x,y) -> (x,y,port)) ahs
             aps = map (\(x,_) -> (x,port)) ahs
-        return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
+            ris = makeResolveInfo ractions ahps
+        return (conf{lconfSeeds = SeedsAddrPorts aps}, ris)
   where
     conf =
         DNS.defaultLookupConf
@@ -169,11 +170,11 @@ recursiveQuery
     -> IO ()
 recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     ractions <- makeAction opt tq putLinesSTM
-    (conf, aps) <- getCustomConf ips port mempty opt ractions
+    (conf, ris) <- getCustomConf ips port mempty opt ractions
     pipes <-
         if optDoX == "auto"
             then resolveDDR opt conf
-            else resolveDoX opt ractions aps
+            else resolveDoX opt ris
     if null pipes
         then runUDP conf putLnSTM putLinesSTM qcs
         else runVC pipes putLnSTM putLinesSTM qcs
@@ -247,16 +248,13 @@ resolveDDR Options{..} conf = do
 
 resolveDoX
     :: Options
-    -> ResolveActions
-    -> [(IP, Maybe HostName, PortNumber)]
+    -> [ResolveInfo]
     -> IO [PipelineResolver]
-resolveDoX opt ractions aps = case makePersistentResolver $ optDoX opt of
+resolveDoX opt ris = case makePersistentResolver $ optDoX opt of
     Nothing -> do
         putStrLn "optDoX is unknown"
         exitFailure
-    Just persitResolver -> do
-        let ris = makeResolveInfo ractions aps
-        return (persitResolver <$> ris)
+    Just persitResolver -> return (persitResolver <$> ris)
 
 ----------------------------------------------------------------
 
