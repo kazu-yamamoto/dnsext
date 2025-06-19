@@ -53,6 +53,112 @@ import System.Exit (exitFailure)
 import SocketUtil (checkDisableV6)
 import Types
 
+----------------------------------------------------------------
+
+printReplySTM
+    :: (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> Either DNS.DNSError Reply
+    -> STM ()
+printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
+printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
+    let h = mkHeader r
+    putLinesSTM Log.WARN (Just Green) [h]
+    putLnSTM replyDNSMessage
+
+mkHeader :: Reply -> String
+mkHeader Reply{..} =
+    ";; "
+        ++ fromNameTag replyTag
+        ++ ", Tx:"
+        ++ show replyTxBytes
+        ++ "bytes"
+        ++ ", Rx:"
+        ++ show replyRxBytes
+        ++ "bytes"
+
+----------------------------------------------------------------
+
+makeResolveInfo
+    :: ResolveActions
+    -> [(IP, Maybe HostName, PortNumber)]
+    -> [ResolveInfo]
+makeResolveInfo ractions aps = mk <$> aps
+  where
+    mk (ip, msvr, port) =
+        defaultResolveInfo
+            { rinfoIP = ip
+            , rinfoPort = port
+            , rinfoUDPRetry = 2
+            , rinfoActions = ractions
+            , rinfoVCLimit = 8192
+            , rinfoServerName = msvr
+            }
+
+makeAction
+    :: Options
+    -> TQueue (NameTag, String)
+    -> Log.PutLines STM
+    -> IO ResolveActions
+makeAction Options{..} tq putLinesSTM = do
+    keyloglock <- newMVar ()
+    resumplock <- newMVar ()
+    ss <- load optResumptionFile
+    return
+        defaultResolveActions
+            { ractionLog = \a b c -> atomically $ putLinesSTM a b c
+            , ractionOnResumptionInfo = case optResumptionFile of
+                Nothing -> \_ _ -> return ()
+                Just file -> saveResumption file resumplock tq
+            , ractionUseEarlyData = opt0RTT
+            , ractionKeyLog = case optKeyLogFile of
+                Nothing -> TLS.defaultKeyLogger
+                Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
+            , ractionValidate = optValidate
+            , ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+            , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
+            }
+  where
+    load Nothing = return []
+    load (Just file) = do
+        exist <- doesFileExist file
+        if exist
+            then do
+                ct <- loadResumption file
+                removeFile file
+                return ct
+            else return []
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getCustomConf
+    :: [(IP, Maybe HostName)]
+    -> PortNumber
+    -> QueryControls
+    -> Options
+    -> ResolveActions
+    -> IO (LookupConf, [ResolveInfo])
+getCustomConf ips port ctl Options{..} ractions
+  | null ips = return (conf, [])
+  | otherwise = do
+        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
+            ahps = map (\(x,y) -> (x,y,port)) ahs
+            aps = map (\(x,_) -> (x,port)) ahs
+            ris = makeResolveInfo ractions ahps
+        return (conf{lconfSeeds = SeedsAddrPorts aps}, ris)
+  where
+    conf =
+        DNS.defaultLookupConf
+            { lconfUDPRetry = 2
+            , lconfQueryControls = ctl
+            , lconfConcurrent = True
+            , lconfActions = ractions
+            }
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
 recursiveQuery
     :: [(IP, Maybe HostName)]
     -> PortNumber
@@ -63,110 +169,51 @@ recursiveQuery
     -> TQueue (NameTag, String)
     -> IO ()
 recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
-    keyloglock <- newMVar ()
-    resumplock <- newMVar ()
-    let ractions =
-            defaultResolveActions
-                { ractionLog = \a b c -> atomically $ putLinesSTM a b c
-                , ractionOnResumptionInfo = case optResumptionFile of
-                    Nothing -> \_ _ -> return ()
-                    Just file -> saveResumption file resumplock tq
-                , ractionUseEarlyData = opt0RTT
-                , ractionKeyLog = case optKeyLogFile of
-                    Nothing -> TLS.defaultKeyLogger
-                    Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
-                , ractionValidate = optValidate
-                }
-    (conf, aps) <- getCustomConf ips port mempty opt ractions
-    mx <-
+    ractions <- makeAction opt tq putLinesSTM
+    (conf, ris) <- getCustomConf ips port mempty opt ractions
+    pipes <-
         if optDoX == "auto"
-            then resolveDDR opt conf tq
-            else case makePersistentResolver optDoX of
-                -- PersistentResolver
-                Just persitResolver -> do
-                    mrs <- case optResumptionFile of
-                        Nothing -> return []
-                        Just file -> do
-                            exist <- doesFileExist file
-                            if exist
-                                then do
-                                    ct <- loadResumption file
-                                    removeFile file
-                                    return ct
-                                else return []
-                    let ris = makeResolveInfo ractions tq aps mrs
-                    -- [PipelineResolver]
-                    return $ Just (persitResolver <$> ris)
-                Nothing -> return Nothing
-    case mx of
-        Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
-            -- UDP
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printReplySTM putLnSTM putLinesSTM
-            mapM_ printIt qcs
-        Just [] -> do
-            putStrLn $ show optDoX ++ " connection cannot be created"
-            exitFailure
-        Just pipes -> do
-            -- VC
-            let len = length qcs
-            refs <- replicateM len $ newTVarIO False
-            let targets = zip qcs refs
-            -- raceAny cannot be used to ensure that TLS sessino tickets
-            -- are certainly saved.
-            rs <- mapConcurrently (E.try . resolver putLnSTM putLinesSTM targets) pipes
-            let r@(Right _) `op` _ = r
-                _ `op` l = l
-            case foldr1 op rs of
-                Left e -> do
-                    print (e :: DNS.DNSError)
-                    exitFailure
-                _ -> return ()
+            then resolveDDR opt conf
+            else resolveDoX opt ris
+    if null pipes
+        then runUDP conf putLnSTM putLinesSTM qcs
+        else runVC pipes putLnSTM putLinesSTM qcs
 
-resolveDDR
-    :: Options
-    -> LookupConf
-    -> TQueue (NameTag, String)
-    -> IO (Maybe [PipelineResolver])
-resolveDDR Options{..} conf tq = do
-    er <- withLookupConf conf lookupSVCBInfo
-    case er of
-        Left err -> do
-            print err
+----------------------------------------------------------------
+
+runUDP
+    :: LookupConf
+    -> (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> [(Question, QueryControls)]
+    -> IO ()
+runUDP conf putLnSTM putLinesSTM qcs = withLookupConf conf $ \LookupEnv{..} -> do
+    let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printReplySTM putLnSTM putLinesSTM
+    mapM_ printIt qcs
+
+runVC
+    :: [PipelineResolver]
+    -> (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> [(Question, QueryControls)]
+    -> IO ()
+runVC pipes putLnSTM putLinesSTM qcs = do
+    refs <- replicateM len $ newTVarIO False
+    let targets = zip qcs refs
+    -- raceAny cannot be used to ensure that TLS sessino tickets
+    -- are certainly saved.
+    rs <- mapConcurrently (E.try . resolver putLnSTM putLinesSTM targets) pipes
+    case foldr1 op rs of
+        Right _ -> return ()
+        Left e -> do
+            print (e :: DNS.DNSError)
             exitFailure
-        Right siss0 -> do
-            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- siss0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
-            let isIPv4 (IPv4 _) = True
-                isIPv4 _ = False
-                ipv4only si =
-                    si
-                        { svcbInfoResolveInfos = filter (isIPv4 . rinfoIP) $ svcbInfoResolveInfos si
-                        }
-            let siss
-                    | optDisableV6NS || disableV6 = map (map ipv4only) siss0
-                    | otherwise = siss0
-            case siss of
-                [] -> do
-                    putStrLn "No proper SVCB"
-                    exitFailure
-                sis : _ -> case sis of
-                    [] -> do
-                        putStrLn "No proper SVCB"
-                        exitFailure
-                    si : _ -> do
-                        let ps = toPipelineResolver $ modifyAction $ modifyForDDR si
-                        return $ Just ps
   where
-    modifyAction si@SVCBInfo{..} =
-        si
-            { svcbInfoResolveInfos = map modify svcbInfoResolveInfos
-            }
-    modify ri@ResolveInfo{..} =
-        ri
-            { rinfoActions =
-                rinfoActions
-                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                    }
-            }
+    len = length qcs
+    r@(Right _) `op` _ = r
+    _ `op` l = l
+
+----------------------------------------------------------------
 
 resolver
     :: (DNS.DNSMessage -> STM ())
@@ -191,78 +238,48 @@ resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv -> do
                 printReplySTM putLnSTM putLinesSTM er
                 writeTVar tvar True
 
-printReplySTM
-    :: (DNS.DNSMessage -> STM ())
-    -> Log.PutLines STM
-    -> Either DNS.DNSError Reply
-    -> STM ()
-printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
-printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
-    let h = mkHeader r
-    putLinesSTM Log.WARN (Just Green) [h]
-    putLnSTM replyDNSMessage
-
-makeResolveInfo
-    :: ResolveActions
-    -> TQueue (NameTag, String)
-    -> [(IP, Maybe HostName, PortNumber)]
-    -> [(NameTag, ByteString)]
-    -> [ResolveInfo]
-makeResolveInfo ractions tq aps ss = mk <$> aps
-  where
-    mk (ip, msvr, port) =
-        defaultResolveInfo
-            { rinfoIP = ip
-            , rinfoPort = port
-            , rinfoUDPRetry = 2
-            , rinfoActions = ractions'
-            , rinfoVCLimit = 8192
-            , rinfoServerName = msvr
-            }
-      where
-        ractions' =
-            ractions
-                { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
-                }
-
-{- FOURMOLU_DISABLE -}
-getCustomConf
-    :: [(IP, Maybe HostName)]
-    -> PortNumber
-    -> QueryControls
-    -> Options
-    -> ResolveActions
-    -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
-getCustomConf ips port ctl Options{..} ractions
-  | null ips = return (conf, [])
-  | otherwise = do
-        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
-            ahps = map (\(x,y) -> (x,y,port)) ahs
-            aps = map (\(x,_) -> (x,port)) ahs
-        return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
-  where
-    conf =
-        DNS.defaultLookupConf
-            { lconfUDPRetry = 2
-            , lconfQueryControls = ctl
-            , lconfConcurrent = True
-            , lconfActions = ractions
-            }
-{- FOURMOLU_ENABLE -}
-
 ----------------------------------------------------------------
 
-mkHeader :: Reply -> String
-mkHeader Reply{..} =
-    ";; "
-        ++ fromNameTag replyTag
-        ++ ", Tx:"
-        ++ show replyTxBytes
-        ++ "bytes"
-        ++ ", Rx:"
-        ++ show replyRxBytes
-        ++ "bytes"
+resolveDDR
+    :: Options
+    -> LookupConf
+    -> IO [PipelineResolver]
+resolveDDR Options{..} conf = do
+    er <- withLookupConf conf lookupSVCBInfo
+    case er of
+        Left err -> do
+            print err
+            exitFailure
+        Right siss0 -> do
+            disableV6 <- checkDisableV6 [rinfoIP ri | sis <- siss0, SVCBInfo{..} <- sis, ri <- svcbInfoResolveInfos]
+            let isIPv4 (IPv4 _) = True
+                isIPv4 _ = False
+                ipv4only si =
+                    si
+                        { svcbInfoResolveInfos = filter (isIPv4 . rinfoIP) $ svcbInfoResolveInfos si
+                        }
+            let siss
+                    | optDisableV6NS || disableV6 = map (map ipv4only) siss0
+                    | otherwise = siss0
+            case siss of
+                [] -> do
+                    putStrLn "No proper SVCB"
+                    exitFailure
+                sis : _ -> case sis of
+                    [] -> do
+                        putStrLn "No proper SVCB"
+                        exitFailure
+                    si : _ -> return $ toPipelineResolver $ modifyForDDR si
+
+resolveDoX
+    :: Options
+    -> [ResolveInfo]
+    -> IO [PipelineResolver]
+resolveDoX opt ris = case makePersistentResolver $ optDoX opt of
+    Nothing -> do
+        putStrLn "optDoX is unknown"
+        exitFailure
+    Just persitResolver -> return (persitResolver <$> ris)
 
 ----------------------------------------------------------------
 

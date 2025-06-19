@@ -235,6 +235,6 @@ modifyForDDR si@SVCBInfo{..} = si{svcbInfoResolveInfos = map modify svcbInfoReso
     modify ri =
         ri
             { rinfoActions =
-                defaultResolveActions{ractionServerAltName = Just ip}
+                (rinfoActions ri){ractionServerAltName = Just ip}
             , rinfoServerName = Just $ show ip
             }
