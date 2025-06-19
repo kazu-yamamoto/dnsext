@@ -5,6 +5,18 @@ module Main where
 
 import qualified Control.Exception as E
 import Control.Monad
+import Data.ByteString (ByteString)
+import Data.IORef
+import Data.IP ()
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as Map
+import Data.Maybe
+import Network.Socket
+import qualified Network.Socket.ByteString as NSB
+import System.Console.GetOpt
+import System.Environment
+import System.Exit
+
 import DNS.Do53.Client
 import DNS.Do53.Internal
 import DNS.DoX.Client
@@ -13,14 +25,50 @@ import DNS.SVCB
 import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
-import Data.ByteString (ByteString)
-import Data.IORef
-import Data.IP ()
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map as Map
-import Network.Socket
-import qualified Network.Socket.ByteString as NSB
-import System.Environment
+
+----------------------------------------------------------------
+
+data Options = Options
+    { optHelp :: Bool
+    , optDebug :: Bool
+    }
+
+defaultOptions :: Options
+defaultOptions =
+    Options
+        { optHelp = False
+        , optDebug = False
+        }
+
+options :: [OptDescr (Options -> Options)]
+options =
+    [ Option
+        ['h']
+        ["help"]
+        (NoArg (\opts -> opts{optHelp = True}))
+        "print help"
+    , Option
+        ['d']
+        ["debug"]
+        (NoArg (\opts -> opts{optDebug = True}))
+        "print debug info"
+    ]
+
+usage :: String
+usage = "Usage: ddrd [OPTION] ipaddr [ipaddr...]"
+
+showUsageAndExit :: IO a
+showUsageAndExit = do
+    putStrLn $ usageInfo usage options
+    exitFailure
+
+parseOpts :: [String] -> IO (Options, [String])
+parseOpts argv =
+    case getOpt Permute options argv of
+        (o, n, []) -> return (foldl (flip id) defaultOptions o, n)
+        (_, _, _errs) -> showUsageAndExit
+
+----------------------------------------------------------------
 
 serverAddr :: String
 serverAddr = "127.0.0.1"
@@ -43,33 +91,44 @@ serverSocket ai = E.bracketOnError (openSocket ai) close $ \s -> do
     bind s $ addrAddress ai
     return s
 
+----------------------------------------------------------------
+
+printDebug :: Options -> String -> IO ()
+printDebug opts msg = when (optDebug opts) $ putStrLn msg
+
+----------------------------------------------------------------
+
 main :: IO ()
 main = do
     args <- getArgs
-    case args of
-        [] -> putStrLn "ddrd ipaddr [ipaddr...]"
-        addrs -> do
-            runInitIO $ do
-                addResourceDataForDNSSEC
-                addResourceDataForSVCB
-            ai <- serverResolve serverAddr serverPort
-            E.bracket (serverSocket ai) close $ \s -> do
-                ref <- newIORef Map.empty
-                let conf = makeConf ref addrs
-                withLookupConf conf $ mainLoop s
+    (opts, ips) <- parseOpts args
+    when (optHelp opts) showUsageAndExit
+    when (null ips) showUsageAndExit
+    runInitIO $ do
+        addResourceDataForDNSSEC
+        addResourceDataForSVCB
+    ai <- serverResolve serverAddr serverPort
+    E.bracket (serverSocket ai) close $ \s -> do
+        ref <- newIORef Map.empty
+        let conf = makeConf ref ips
+        withLookupConf conf $ mainLoop opts s
 
-mainLoop :: Socket -> LookupEnv -> IO ()
-mainLoop s env = loop
+mainLoop :: Options -> Socket -> LookupEnv -> IO ()
+mainLoop opts s env = loop
   where
     loop = do
         bssa <- NSB.recvFrom s 2048
-        piplineResolver <- selectSVCB <$> lookupSVCBInfo env
-        piplineResolver (serverLoop s bssa) `E.catch` ignore
+        mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
+        case mPiplineResolver of
+            Nothing -> printDebug opts "SVCB RR is not available"
+            Just piplineResolver -> do
+                printDebug opts "Running a pipeline resolver"
+                piplineResolver (serverLoop opts s bssa) `E.catch` ignore
         loop
-    ignore (E.SomeException _se) = return ()
+    ignore (E.SomeException se) = printDebug opts $ show se
 
-serverLoop :: Socket -> (ByteString, SockAddr) -> (Question -> QueryControls -> IO (Either DNSError Reply)) -> IO ()
-serverLoop s (bs0, sa0) resolver = do
+serverLoop :: Options -> Socket -> (ByteString, SockAddr) -> Resolver -> IO ()
+serverLoop opts s (bs0, sa0) resolver = do
     sendReply bs0 sa0
     loop
   where
@@ -79,14 +138,15 @@ serverLoop s (bs0, sa0) resolver = do
         loop
     sendReply bs sa =
         case decode bs of
-            Left _ -> error "serverLoop (1)"
+            Left _ -> printDebug opts "Decode error"
             Right msg -> case question msg of
-                [] -> return ()
+                [] -> printDebug opts "No questions"
                 q : _ -> do
+                    printDebug opts $ show q
                     let idnt = identifier msg
                     eres <- resolver q mempty
                     case eres of
-                        Left _ -> error "serverLoop (2)"
+                        Left _ -> printDebug opts "No reply"
                         Right res -> do
                             let msg' =
                                     (replyDNSMessage res)
@@ -94,14 +154,17 @@ serverLoop s (bs0, sa0) resolver = do
                                         }
                             void $ NSB.sendTo s (encode msg') sa
 
-selectSVCB :: Either DNSError [[SVCBInfo]] -> PipelineResolver
-selectSVCB (Left _) = error "selectSVCB Left"
-selectSVCB (Right []) = error "selectSVCB Right"
-selectSVCB (Right (sis : _)) = case toPipelineResolvers $ map modifyForDDR sis of
-    [] -> error "selectSVCB"
-    ps : _ -> case ps of
-        [] -> error "selectSVCB"
-        p : _ -> p
+----------------------------------------------------------------
+
+selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe PipelineResolver
+selectSVCB (Left _) = Nothing
+selectSVCB (Right []) = Nothing
+selectSVCB (Right (sis : _)) =
+    listToMaybe $
+        catMaybes $
+            map listToMaybe $
+                toPipelineResolvers $
+                    map modifyForDDR sis
 
 makeConf
     :: IORef (Map.Map NameTag ByteString)
