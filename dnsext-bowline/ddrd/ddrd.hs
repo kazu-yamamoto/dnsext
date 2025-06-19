@@ -47,7 +47,7 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [] -> error "usage"
+        [] -> putStrLn "ddrd ipaddr [ipaddr...]"
         addrs -> do
             runInitIO $ do
                 addResourceDataForDNSSEC
