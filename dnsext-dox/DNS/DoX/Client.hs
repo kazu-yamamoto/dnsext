@@ -8,6 +8,7 @@ module DNS.DoX.Client (
     modifyForDDR,
 
     -- * Pipeline resolver
+    toPipelineResolver,
     toPipelineResolvers,
     makePersistentResolver,
 

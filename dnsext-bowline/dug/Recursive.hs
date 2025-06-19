@@ -144,16 +144,29 @@ resolveDDR Options{..} conf tq = do
             let siss
                     | optDisableV6NS || disableV6 = map (map ipv4only) siss0
                     | otherwise = siss0
-            let psss = map toPipelineResolvers $ map (map modifyForDDR) siss
-            case psss of
+            case siss of
                 [] -> do
                     putStrLn "No proper SVCB"
                     exitFailure
-                pss : _ -> case pss of
+                sis : _ -> case sis of
                     [] -> do
                         putStrLn "No proper SVCB"
                         exitFailure
-                    ps : _ -> return $ Just ps
+                    si : _ -> do
+                        let ps = toPipelineResolver $ modifyAction $ modifyForDDR si
+                        return $ Just ps
+  where
+    modifyAction si@SVCBInfo{..} =
+        si
+            { svcbInfoResolveInfos = map modify svcbInfoResolveInfos
+            }
+    modify ri@ResolveInfo{..} =
+        ri
+            { rinfoActions =
+                rinfoActions
+                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+                    }
+            }
 
 resolver
     :: (DNS.DNSMessage -> STM ())
