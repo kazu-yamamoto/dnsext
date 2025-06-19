@@ -277,9 +277,7 @@ resolveDoX
     -> [ResolveInfo]
     -> IO [PipelineResolver]
 resolveDoX opt ris = case makePersistentResolver $ optDoX opt of
-    Nothing -> do
-        putStrLn "optDoX is unknown"
-        exitFailure
+    Nothing -> return [] -- udp
     Just persitResolver -> return (persitResolver <$> ris)
 
 ----------------------------------------------------------------
