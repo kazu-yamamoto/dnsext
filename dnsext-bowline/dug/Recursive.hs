@@ -53,6 +53,111 @@ import System.Exit (exitFailure)
 import SocketUtil (checkDisableV6)
 import Types
 
+----------------------------------------------------------------
+
+printReplySTM
+    :: (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> Either DNS.DNSError Reply
+    -> STM ()
+printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
+printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
+    let h = mkHeader r
+    putLinesSTM Log.WARN (Just Green) [h]
+    putLnSTM replyDNSMessage
+
+mkHeader :: Reply -> String
+mkHeader Reply{..} =
+    ";; "
+        ++ fromNameTag replyTag
+        ++ ", Tx:"
+        ++ show replyTxBytes
+        ++ "bytes"
+        ++ ", Rx:"
+        ++ show replyRxBytes
+        ++ "bytes"
+
+----------------------------------------------------------------
+
+makeResolveInfo
+    :: ResolveActions
+    -> [(IP, Maybe HostName, PortNumber)]
+    -> [ResolveInfo]
+makeResolveInfo ractions aps = mk <$> aps
+  where
+    mk (ip, msvr, port) =
+        defaultResolveInfo
+            { rinfoIP = ip
+            , rinfoPort = port
+            , rinfoUDPRetry = 2
+            , rinfoActions = ractions
+            , rinfoVCLimit = 8192
+            , rinfoServerName = msvr
+            }
+
+makeAction
+    :: Options
+    -> TQueue (NameTag, String)
+    -> Log.PutLines STM
+    -> IO ResolveActions
+makeAction Options{..} tq putLinesSTM = do
+    keyloglock <- newMVar ()
+    resumplock <- newMVar ()
+    ss <- load optResumptionFile
+    return
+        defaultResolveActions
+            { ractionLog = \a b c -> atomically $ putLinesSTM a b c
+            , ractionOnResumptionInfo = case optResumptionFile of
+                Nothing -> \_ _ -> return ()
+                Just file -> saveResumption file resumplock tq
+            , ractionUseEarlyData = opt0RTT
+            , ractionKeyLog = case optKeyLogFile of
+                Nothing -> TLS.defaultKeyLogger
+                Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
+            , ractionValidate = optValidate
+            , ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
+            , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
+            }
+  where
+    load Nothing = return []
+    load (Just file) = do
+        exist <- doesFileExist file
+        if exist
+            then do
+                ct <- loadResumption file
+                removeFile file
+                return ct
+            else return []
+
+----------------------------------------------------------------
+
+{- FOURMOLU_DISABLE -}
+getCustomConf
+    :: [(IP, Maybe HostName)]
+    -> PortNumber
+    -> QueryControls
+    -> Options
+    -> ResolveActions
+    -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
+getCustomConf ips port ctl Options{..} ractions
+  | null ips = return (conf, [])
+  | otherwise = do
+        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
+            ahps = map (\(x,y) -> (x,y,port)) ahs
+            aps = map (\(x,_) -> (x,port)) ahs
+        return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
+  where
+    conf =
+        DNS.defaultLookupConf
+            { lconfUDPRetry = 2
+            , lconfQueryControls = ctl
+            , lconfConcurrent = True
+            , lconfActions = ractions
+            }
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
+
 recursiveQuery
     :: [(IP, Maybe HostName)]
     -> PortNumber
@@ -63,20 +168,7 @@ recursiveQuery
     -> TQueue (NameTag, String)
     -> IO ()
 recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
-    keyloglock <- newMVar ()
-    resumplock <- newMVar ()
-    let ractions =
-            defaultResolveActions
-                { ractionLog = \a b c -> atomically $ putLinesSTM a b c
-                , ractionOnResumptionInfo = case optResumptionFile of
-                    Nothing -> \_ _ -> return ()
-                    Just file -> saveResumption file resumplock tq
-                , ractionUseEarlyData = opt0RTT
-                , ractionKeyLog = case optKeyLogFile of
-                    Nothing -> TLS.defaultKeyLogger
-                    Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
-                , ractionValidate = optValidate
-                }
+    ractions <- makeAction opt tq putLinesSTM
     (conf, aps) <- getCustomConf ips port mempty opt ractions
     mx <-
         if optDoX == "auto"
@@ -84,17 +176,7 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
             else case makePersistentResolver optDoX of
                 -- PersistentResolver
                 Just persitResolver -> do
-                    mrs <- case optResumptionFile of
-                        Nothing -> return []
-                        Just file -> do
-                            exist <- doesFileExist file
-                            if exist
-                                then do
-                                    ct <- loadResumption file
-                                    removeFile file
-                                    return ct
-                                else return []
-                    let ris = makeResolveInfo ractions tq aps mrs
+                    let ris = makeResolveInfo ractions aps
                     -- [PipelineResolver]
                     return $ Just (persitResolver <$> ris)
                 Nothing -> return Nothing
@@ -121,6 +203,8 @@ recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
                     print (e :: DNS.DNSError)
                     exitFailure
                 _ -> return ()
+
+----------------------------------------------------------------
 
 resolveDDR
     :: Options
@@ -168,6 +252,8 @@ resolveDDR Options{..} conf tq = do
                     }
             }
 
+----------------------------------------------------------------
+
 resolver
     :: (DNS.DNSMessage -> STM ())
     -> Log.PutLines STM
@@ -190,79 +276,6 @@ resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv -> do
             unless done $ do
                 printReplySTM putLnSTM putLinesSTM er
                 writeTVar tvar True
-
-printReplySTM
-    :: (DNS.DNSMessage -> STM ())
-    -> Log.PutLines STM
-    -> Either DNS.DNSError Reply
-    -> STM ()
-printReplySTM _ putLinesSTM (Left err) = putLinesSTM Log.WARN (Just Red) [show err]
-printReplySTM putLnSTM putLinesSTM (Right r@Reply{..}) = do
-    let h = mkHeader r
-    putLinesSTM Log.WARN (Just Green) [h]
-    putLnSTM replyDNSMessage
-
-makeResolveInfo
-    :: ResolveActions
-    -> TQueue (NameTag, String)
-    -> [(IP, Maybe HostName, PortNumber)]
-    -> [(NameTag, ByteString)]
-    -> [ResolveInfo]
-makeResolveInfo ractions tq aps ss = mk <$> aps
-  where
-    mk (ip, msvr, port) =
-        defaultResolveInfo
-            { rinfoIP = ip
-            , rinfoPort = port
-            , rinfoUDPRetry = 2
-            , rinfoActions = ractions'
-            , rinfoVCLimit = 8192
-            , rinfoServerName = msvr
-            }
-      where
-        ractions' =
-            ractions
-                { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
-                }
-
-{- FOURMOLU_DISABLE -}
-getCustomConf
-    :: [(IP, Maybe HostName)]
-    -> PortNumber
-    -> QueryControls
-    -> Options
-    -> ResolveActions
-    -> IO (LookupConf, [(IP, Maybe HostName, PortNumber)])
-getCustomConf ips port ctl Options{..} ractions
-  | null ips = return (conf, [])
-  | otherwise = do
-        let ahs = if optDisableV6NS then [ip4 | ip4@(IPv4{}, _) <- ips] else ips
-            ahps = map (\(x,y) -> (x,y,port)) ahs
-            aps = map (\(x,_) -> (x,port)) ahs
-        return (conf{lconfSeeds = SeedsAddrPorts aps}, ahps)
-  where
-    conf =
-        DNS.defaultLookupConf
-            { lconfUDPRetry = 2
-            , lconfQueryControls = ctl
-            , lconfConcurrent = True
-            , lconfActions = ractions
-            }
-{- FOURMOLU_ENABLE -}
-
-----------------------------------------------------------------
-
-mkHeader :: Reply -> String
-mkHeader Reply{..} =
-    ";; "
-        ++ fromNameTag replyTag
-        ++ ", Tx:"
-        ++ show replyTxBytes
-        ++ "bytes"
-        ++ ", Rx:"
-        ++ show replyRxBytes
-        ++ "bytes"
 
 ----------------------------------------------------------------
 
