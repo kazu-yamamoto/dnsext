@@ -170,48 +170,55 @@ recursiveQuery
 recursiveQuery ips port putLnSTM putLinesSTM qcs opt@Options{..} tq = do
     ractions <- makeAction opt tq putLinesSTM
     (conf, aps) <- getCustomConf ips port mempty opt ractions
-    mx <-
+    pipes <-
         if optDoX == "auto"
-            then resolveDDR opt conf tq
-            else case makePersistentResolver optDoX of
-                -- PersistentResolver
-                Just persitResolver -> do
-                    let ris = makeResolveInfo ractions aps
-                    -- [PipelineResolver]
-                    return $ Just (persitResolver <$> ris)
-                Nothing -> return Nothing
-    case mx of
-        Nothing -> withLookupConf conf $ \LookupEnv{..} -> do
-            -- UDP
-            let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printReplySTM putLnSTM putLinesSTM
-            mapM_ printIt qcs
-        Just [] -> do
-            putStrLn $ show optDoX ++ " connection cannot be created"
+            then resolveDDR opt conf
+            else resolveDoX opt ractions aps
+    if null pipes
+        then runUDP conf putLnSTM putLinesSTM qcs
+        else runVC pipes putLnSTM putLinesSTM qcs
+
+----------------------------------------------------------------
+
+runUDP
+    :: LookupConf
+    -> (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> [(Question, QueryControls)]
+    -> IO ()
+runUDP conf putLnSTM putLinesSTM qcs = withLookupConf conf $ \LookupEnv{..} -> do
+    let printIt (q, ctl) = resolve lenvResolveEnv q ctl >>= atomically . printReplySTM putLnSTM putLinesSTM
+    mapM_ printIt qcs
+
+runVC
+    :: [PipelineResolver]
+    -> (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> [(Question, QueryControls)]
+    -> IO ()
+runVC pipes putLnSTM putLinesSTM qcs = do
+    refs <- replicateM len $ newTVarIO False
+    let targets = zip qcs refs
+    -- raceAny cannot be used to ensure that TLS sessino tickets
+    -- are certainly saved.
+    rs <- mapConcurrently (E.try . resolver putLnSTM putLinesSTM targets) pipes
+    case foldr1 op rs of
+        Right _ -> return ()
+        Left e -> do
+            print (e :: DNS.DNSError)
             exitFailure
-        Just pipes -> do
-            -- VC
-            let len = length qcs
-            refs <- replicateM len $ newTVarIO False
-            let targets = zip qcs refs
-            -- raceAny cannot be used to ensure that TLS sessino tickets
-            -- are certainly saved.
-            rs <- mapConcurrently (E.try . resolver putLnSTM putLinesSTM targets) pipes
-            let r@(Right _) `op` _ = r
-                _ `op` l = l
-            case foldr1 op rs of
-                Left e -> do
-                    print (e :: DNS.DNSError)
-                    exitFailure
-                _ -> return ()
+  where
+    len = length qcs
+    r@(Right _) `op` _ = r
+    _ `op` l = l
 
 ----------------------------------------------------------------
 
 resolveDDR
     :: Options
     -> LookupConf
-    -> TQueue (NameTag, String)
-    -> IO (Maybe [PipelineResolver])
-resolveDDR Options{..} conf tq = do
+    -> IO [PipelineResolver]
+resolveDDR Options{..} conf = do
     er <- withLookupConf conf lookupSVCBInfo
     case er of
         Left err -> do
@@ -236,21 +243,20 @@ resolveDDR Options{..} conf tq = do
                     [] -> do
                         putStrLn "No proper SVCB"
                         exitFailure
-                    si : _ -> do
-                        let ps = toPipelineResolver $ modifyAction $ modifyForDDR si
-                        return $ Just ps
-  where
-    modifyAction si@SVCBInfo{..} =
-        si
-            { svcbInfoResolveInfos = map modify svcbInfoResolveInfos
-            }
-    modify ri@ResolveInfo{..} =
-        ri
-            { rinfoActions =
-                rinfoActions
-                    { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                    }
-            }
+                    si : _ -> return $ toPipelineResolver $ modifyForDDR si
+
+resolveDoX
+    :: Options
+    -> ResolveActions
+    -> [(IP, Maybe HostName, PortNumber)]
+    -> IO [PipelineResolver]
+resolveDoX opt ractions aps = case makePersistentResolver $ optDoX opt of
+    Nothing -> do
+        putStrLn "optDoX is unknown"
+        exitFailure
+    Just persitResolver -> do
+        let ris = makeResolveInfo ractions aps
+        return (persitResolver <$> ris)
 
 ----------------------------------------------------------------
 
