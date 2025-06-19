@@ -107,16 +107,17 @@ makeAction Options{..} tq putLinesSTM = do
     return
         defaultResolveActions
             { ractionLog = \a b c -> atomically $ putLinesSTM a b c
-            , ractionOnResumptionInfo = case optResumptionFile of
-                Nothing -> \_ _ -> return ()
-                Just file -> saveResumption file resumplock tq
             , ractionUseEarlyData = opt0RTT
             , ractionKeyLog = case optKeyLogFile of
                 Nothing -> TLS.defaultKeyLogger
                 Just file -> \msg -> safeAppendFile file keyloglock (C8.pack (msg ++ "\n"))
             , ractionValidate = optValidate
             , ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-            , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
+            , -- don't load the file here since the file is removed.
+              ractionResumptionInfo = \tag -> return $ map snd $ List.filter (\(t, _) -> t == tag) ss
+            , ractionOnResumptionInfo = case optResumptionFile of
+                Nothing -> \_ _ -> return ()
+                Just file -> saveResumption file resumplock tq
             }
   where
     load Nothing = return []

@@ -14,15 +14,16 @@ import DNS.DoX.Imports
 import DNS.DoX.QUIC
 
 http3PersistentResolver :: PersistentResolver
-http3PersistentResolver ri@ResolveInfo{..} body = toDNSError "http3PersistentResolver" $ QUIC.run cc $ \conn ->
-    E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
-        ident <- ractionGenId rinfoActions
-        H3.run conn cliconf conf $
-            doHTTP tag ident ri body
-        saveResumptionInfo conn ri tag
+http3PersistentResolver ri@ResolveInfo{..} body = do
+    cc <- getQUICParams ri tag "h3" -- TLS SNI
+    toDNSError "http3PersistentResolver" $ QUIC.run cc $ \conn ->
+        E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
+            ident <- ractionGenId rinfoActions
+            H3.run conn cliconf conf $
+                doHTTP tag ident ri body
+            saveResumptionInfo conn ri tag
   where
     tag = nameTag ri "H3"
-    cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         H3.defaultClientConfig
@@ -31,18 +32,19 @@ http3PersistentResolver ri@ResolveInfo{..} body = toDNSError "http3PersistentRes
             }
 
 http3Resolver :: OneshotResolver
-http3Resolver ri@ResolveInfo{..} q qctl = toDNSError "http3Resolver" $ QUIC.run cc $ \conn ->
-    E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
-        ident <- ractionGenId rinfoActions
-        withTimeout ri $ do
-            res <-
-                H3.run conn cliconf conf $
-                    doHTTPOneshot tag ident ri q qctl
-            saveResumptionInfo conn ri tag
-            return res
+http3Resolver ri@ResolveInfo{..} q qctl = do
+    cc <- getQUICParams ri tag "h3" -- TLS SNI
+    toDNSError "http3Resolver" $ QUIC.run cc $ \conn ->
+        E.bracket H3.allocSimpleConfig H3.freeSimpleConfig $ \conf -> do
+            ident <- ractionGenId rinfoActions
+            withTimeout ri $ do
+                res <-
+                    H3.run conn cliconf conf $
+                        doHTTPOneshot tag ident ri q qctl
+                saveResumptionInfo conn ri tag
+                return res
   where
     tag = nameTag ri "H3"
-    cc = getQUICParams ri tag "h3" -- TLS SNI
     auth = fromMaybe (show rinfoIP) rinfoServerName
     cliconf =
         H3.defaultClientConfig
