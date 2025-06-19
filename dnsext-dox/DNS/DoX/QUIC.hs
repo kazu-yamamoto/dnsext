@@ -18,21 +18,23 @@ import DNS.DoX.Imports
 import DNS.DoX.SAN
 
 quicPersistentResolver :: PersistentResolver
-quicPersistentResolver ri body = toDNSError "quicPersistentResolver" $ run cc $ \conn -> do
-    body $ resolv conn ri
-    saveResumptionInfo conn ri tag
+quicPersistentResolver ri body = do
+    cc <- getQUICParams ri tag "doq"
+    toDNSError "quicPersistentResolver" $ run cc $ \conn -> do
+        body $ resolv conn ri
+        saveResumptionInfo conn ri tag
   where
     tag = nameTag ri "QUIC"
-    cc = getQUICParams ri tag "doq"
 
 quicResolver :: OneshotResolver
-quicResolver ri q qctl = toDNSError "quicResolver" $ run cc $ \conn -> withTimeout ri $ do
-    res <- resolv conn ri q qctl
-    saveResumptionInfo conn ri tag
-    return res
+quicResolver ri q qctl = do
+    cc <- getQUICParams ri tag "doq"
+    toDNSError "quicResolver" $ run cc $ \conn -> withTimeout ri $ do
+        res <- resolv conn ri q qctl
+        saveResumptionInfo conn ri tag
+        return res
   where
     tag = nameTag ri "QUIC"
-    cc = getQUICParams ri tag "doq"
 
 resolv :: Connection -> ResolveInfo -> Resolver
 resolv conn ri@ResolveInfo{..} q qctl = do
@@ -60,36 +62,37 @@ saveResumptionInfo conn ResolveInfo{..} tag = do
         let bs = BL.toStrict $ serialise rinfo
         ractionOnResumptionInfo rinfoActions tag bs
 
-getQUICParams :: ResolveInfo -> NameTag -> ByteString -> ClientConfig
-getQUICParams ResolveInfo{..} tag alpn0 =
-    defaultClientConfig
-        { ccServerName = show rinfoIP
-        , -- TLS SNI
-          ccServerNameOverride = rinfoServerName
-        , ccUseServerNameIndication = False
-        , ccPortName = show rinfoPort
-        , ccALPN = \_ -> return $ Just [alpn0]
-        , ccDebugLog = False
-        , ccValidate = ractionValidate rinfoActions
-        , ccOnServerCertificate = makeOnServerCertificate $ ractionServerAltName rinfoActions
-        , ccResumption = rinfo
-        , ccUse0RTT = ractionUseEarlyData rinfoActions
-        , ccKeyLog = ractionKeyLog rinfoActions
-        , ccHooks =
-            defaultHooks
-                { onConnectionEstablished = \i -> do
-                    let ~ver = if version i == Version1 then "v1" else "v2"
-                        ~mode = case handshakeMode i of
-                            TLS.PreSharedKey -> "Resumption"
-                            TLS.RTT0 -> "0-RTT"
-                            x -> show x
-                        ~msg = ver ++ "(" ++ mode ++ ")"
-                    ractionOnConnectionInfo rinfoActions tag msg
-                }
-        }
-  where
-    rinfo = case ractionResumptionInfo rinfoActions tag of
-        [] -> defaultResumptionInfo
-        r : _ -> case deserialiseOrFail $ BL.fromStrict r of
-            Left _ -> defaultResumptionInfo
-            Right x -> x
+getQUICParams :: ResolveInfo -> NameTag -> ByteString -> IO ClientConfig
+getQUICParams ResolveInfo{..} tag alpn0 = do
+    resInfo <- ractionResumptionInfo rinfoActions tag
+    let rinfo = case resInfo of
+            [] -> defaultResumptionInfo
+            r : _ -> case deserialiseOrFail $ BL.fromStrict r of
+                Left _ -> defaultResumptionInfo
+                Right x -> x
+    return $
+        defaultClientConfig
+            { ccServerName = show rinfoIP
+            , -- TLS SNI
+              ccServerNameOverride = rinfoServerName
+            , ccUseServerNameIndication = False
+            , ccPortName = show rinfoPort
+            , ccALPN = \_ -> return $ Just [alpn0]
+            , ccDebugLog = False
+            , ccValidate = ractionValidate rinfoActions
+            , ccOnServerCertificate = makeOnServerCertificate $ ractionServerAltName rinfoActions
+            , ccResumption = rinfo
+            , ccUse0RTT = ractionUseEarlyData rinfoActions
+            , ccKeyLog = ractionKeyLog rinfoActions
+            , ccHooks =
+                defaultHooks
+                    { onConnectionEstablished = \i -> do
+                        let ~ver = if version i == Version1 then "v1" else "v2"
+                            ~mode = case handshakeMode i of
+                                TLS.PreSharedKey -> "Resumption"
+                                TLS.RTT0 -> "0-RTT"
+                                x -> show x
+                            ~msg = ver ++ "(" ++ mode ++ ")"
+                        ractionOnConnectionInfo rinfoActions tag msg
+                    }
+            }
