@@ -215,6 +215,31 @@ runVC pipes putLnSTM putLinesSTM qcs = do
 
 ----------------------------------------------------------------
 
+resolver
+    :: (DNS.DNSMessage -> STM ())
+    -> Log.PutLines STM
+    -> [((Question, QueryControls), TVar Bool)]
+    -> PipelineResolver
+    -> IO ()
+resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv -> do
+    -- running concurrently for multiple target domains
+    rs <- mapConcurrently (printIt resolv) targets
+    case foldr op (Right ()) rs of
+        Right () -> return ()
+        Left e -> E.throwIO (e :: DNS.DNSError)
+  where
+    l@(Left _) `op` _ = l
+    _ `op` r = r
+    printIt resolv ((q, ctl), tvar) = E.try $ do
+        er <- resolv q ctl
+        atomically $ do
+            done <- readTVar tvar
+            unless done $ do
+                printReplySTM putLnSTM putLinesSTM er
+                writeTVar tvar True
+
+----------------------------------------------------------------
+
 resolveDDR
     :: Options
     -> LookupConf
@@ -255,31 +280,6 @@ resolveDoX opt ris = case makePersistentResolver $ optDoX opt of
         putStrLn "optDoX is unknown"
         exitFailure
     Just persitResolver -> return (persitResolver <$> ris)
-
-----------------------------------------------------------------
-
-resolver
-    :: (DNS.DNSMessage -> STM ())
-    -> Log.PutLines STM
-    -> [((Question, QueryControls), TVar Bool)]
-    -> PipelineResolver
-    -> IO ()
-resolver putLnSTM putLinesSTM targets pipeline = pipeline $ \resolv -> do
-    -- running concurrently for multiple target domains
-    rs <- mapConcurrently (printIt resolv) targets
-    case foldr op (Right ()) rs of
-        Right () -> return ()
-        Left e -> E.throwIO (e :: DNS.DNSError)
-  where
-    l@(Left _) `op` _ = l
-    _ `op` r = r
-    printIt resolv ((q, ctl), tvar) = E.try $ do
-        er <- resolv q ctl
-        atomically $ do
-            done <- readTVar tvar
-            unless done $ do
-                printReplySTM putLnSTM putLinesSTM er
-                writeTVar tvar True
 
 ----------------------------------------------------------------
 
