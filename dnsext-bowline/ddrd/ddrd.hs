@@ -87,6 +87,8 @@ options =
         "print debug info"
     ]
 
+----------------------------------------------------------------
+
 usage :: String
 usage = "Usage: ddrd [OPTION] ipaddr [ipaddr...]"
 
@@ -109,6 +111,8 @@ serverAddr = "127.0.0.1"
 serverPort :: String
 serverPort = "53"
 
+----------------------------------------------------------------
+
 serverResolve :: HostName -> ServiceName -> IO AddrInfo
 serverResolve addr port = NE.head <$> getAddrInfo (Just hints) (Just addr) (Just port)
   where
@@ -128,6 +132,12 @@ serverSocket ai = E.bracketOnError (openSocket ai) close $ \s -> do
 
 printDebug :: Options -> String -> IO ()
 printDebug opts msg = when (optDebug opts) $ putStrLn msg
+
+pprDomain :: Domain -> String
+pprDomain = init . toRepresentation
+
+pprRR :: ResourceRecord -> String
+pprRR ResourceRecord{..} = pprDomain rrname ++ " " ++ show rrtype ++ " " ++ show rdata
 
 ----------------------------------------------------------------
 
@@ -188,12 +198,6 @@ serverLoop opts s (bs0, sa0) resolver = do
                             printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
                             void $ NSB.sendTo s (encode msg') sa
 
-pprDomain :: Domain -> String
-pprDomain = init . toRepresentation
-
-pprRR :: ResourceRecord -> String
-pprRR ResourceRecord{..} = pprDomain rrname ++ " " ++ show rrtype ++ " " ++ show rdata
-
 ----------------------------------------------------------------
 
 selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe PipelineResolver
@@ -205,6 +209,8 @@ selectSVCB (Right (sis : _)) =
             map listToMaybe $
                 toPipelineResolvers $
                     map modifyForDDR sis
+
+----------------------------------------------------------------
 
 makeConf
     :: IORef (Map.Map NameTag ByteString)
