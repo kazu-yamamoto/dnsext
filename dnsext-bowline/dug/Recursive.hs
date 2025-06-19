@@ -223,7 +223,7 @@ makeResolveInfo ractions tq aps ss = mk <$> aps
         ractions' =
             ractions
                 { ractionOnConnectionInfo = \tag info -> atomically $ writeTQueue tq (tag, info)
-                , ractionResumptionInfo = \tag -> map snd $ fst $ List.partition (\(t, _) -> t == tag) ss
+                , ractionResumptionInfo = \tag -> map snd $ List.filter (\(t, _) -> t == tag) ss
                 }
 
 {- FOURMOLU_DISABLE -}
