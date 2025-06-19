@@ -4,27 +4,60 @@
 module Main where
 
 import qualified Control.Exception as E
-import Control.Monad
+import Control.Monad (void, when)
 import Data.ByteString (ByteString)
-import Data.IORef
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.IP ()
+import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe
+import Data.Maybe (catMaybes, listToMaybe)
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
-import System.Console.GetOpt
-import System.Environment
-import System.Exit
+import System.Console.GetOpt (
+    ArgDescr (..),
+    ArgOrder (..),
+    OptDescr (..),
+    getOpt,
+    usageInfo,
+ )
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
 
-import DNS.Do53.Client
-import DNS.Do53.Internal
-import DNS.DoX.Client
-import DNS.SEC
-import DNS.SVCB
-import DNS.Types
-import DNS.Types.Decode
-import DNS.Types.Encode
+import DNS.Do53.Client (
+    LookupConf (..),
+    LookupEnv,
+    Seeds (..),
+    defaultCacheConf,
+    defaultLookupConf,
+    withLookupConf,
+ )
+import DNS.Do53.Internal (
+    NameTag (..),
+    PipelineResolver,
+    Reply (..),
+    ResolveActions (..),
+    Resolver,
+ )
+import DNS.DoX.Client (
+    SVCBInfo,
+    lookupSVCBInfo,
+    modifyForDDR,
+    toPipelineResolvers,
+ )
+import DNS.SEC (addResourceDataForDNSSEC)
+import DNS.SVCB (addResourceDataForSVCB)
+import DNS.Types (
+    DNSError (..),
+    DNSMessage (..),
+    Domain,
+    Question (..),
+    ResourceRecord (..),
+    runInitIO,
+    toRepresentation,
+ )
+import DNS.Types.Decode (decode)
+import DNS.Types.Encode (encode)
 
 ----------------------------------------------------------------
 
@@ -54,6 +87,8 @@ options =
         "print debug info"
     ]
 
+----------------------------------------------------------------
+
 usage :: String
 usage = "Usage: ddrd [OPTION] ipaddr [ipaddr...]"
 
@@ -76,6 +111,8 @@ serverAddr = "127.0.0.1"
 serverPort :: String
 serverPort = "53"
 
+----------------------------------------------------------------
+
 serverResolve :: HostName -> ServiceName -> IO AddrInfo
 serverResolve addr port = NE.head <$> getAddrInfo (Just hints) (Just addr) (Just port)
   where
@@ -95,6 +132,12 @@ serverSocket ai = E.bracketOnError (openSocket ai) close $ \s -> do
 
 printDebug :: Options -> String -> IO ()
 printDebug opts msg = when (optDebug opts) $ putStrLn msg
+
+pprDomain :: Domain -> String
+pprDomain = init . toRepresentation
+
+pprRR :: ResourceRecord -> String
+pprRR ResourceRecord{..} = pprDomain rrname ++ " " ++ show rrtype ++ " " ++ show rdata
 
 ----------------------------------------------------------------
 
@@ -142,7 +185,7 @@ serverLoop opts s (bs0, sa0) resolver = do
             Right msg -> case question msg of
                 [] -> printDebug opts "No questions"
                 q : _ -> do
-                    printDebug opts $ show q
+                    printDebug opts $ "Q: " ++ pprDomain (qname q) ++ " " ++ show (qtype q)
                     let idnt = identifier msg
                     eres <- resolver q mempty
                     case eres of
@@ -152,6 +195,7 @@ serverLoop opts s (bs0, sa0) resolver = do
                                     (replyDNSMessage res)
                                         { identifier = idnt
                                         }
+                            printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
                             void $ NSB.sendTo s (encode msg') sa
 
 ----------------------------------------------------------------
@@ -165,6 +209,8 @@ selectSVCB (Right (sis : _)) =
             map listToMaybe $
                 toPipelineResolvers $
                     map modifyForDDR sis
+
+----------------------------------------------------------------
 
 makeConf
     :: IORef (Map.Map NameTag ByteString)
