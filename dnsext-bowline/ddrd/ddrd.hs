@@ -58,17 +58,13 @@ main = do
                 withLookupConf conf $ mainLoop s
 
 mainLoop :: Socket -> LookupEnv -> IO ()
-mainLoop s env = do
-    readCheck <- waitReadSocketSTM s
-    loop readCheck
+mainLoop s env = loop
   where
-    loop readCheck = do
-        putStrLn "checking..."
+    loop = do
         bssa <- NSB.recvFrom s 2048
-        putStrLn "checking...done"
         piplineResolver <- selectSVCB <$> lookupSVCBInfo env
         piplineResolver (serverLoop s bssa) `E.catch` \(E.SomeException se) -> print se
-        loop readCheck
+        loop
 
 serverLoop :: Socket -> (ByteString, SockAddr) -> (Question -> QueryControls -> IO (Either DNSError Reply)) -> IO ()
 serverLoop s (bs0, sa0) resolver = do
