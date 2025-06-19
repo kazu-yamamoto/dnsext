@@ -4,28 +4,60 @@
 module Main where
 
 import qualified Control.Exception as E
-import Control.Monad
+import Control.Monad (void, when)
 import Data.ByteString (ByteString)
-import Data.IORef
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.IP ()
-import Data.List
+import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe
+import Data.Maybe (catMaybes, listToMaybe)
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
-import System.Console.GetOpt
-import System.Environment
-import System.Exit
+import System.Console.GetOpt (
+    ArgDescr (..),
+    ArgOrder (..),
+    OptDescr (..),
+    getOpt,
+    usageInfo,
+ )
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
 
-import DNS.Do53.Client
-import DNS.Do53.Internal
-import DNS.DoX.Client
-import DNS.SEC
-import DNS.SVCB
-import DNS.Types
-import DNS.Types.Decode
-import DNS.Types.Encode
+import DNS.Do53.Client (
+    LookupConf (..),
+    LookupEnv,
+    Seeds (..),
+    defaultCacheConf,
+    defaultLookupConf,
+    withLookupConf,
+ )
+import DNS.Do53.Internal (
+    NameTag (..),
+    PipelineResolver,
+    Reply (..),
+    ResolveActions (..),
+    Resolver,
+ )
+import DNS.DoX.Client (
+    SVCBInfo,
+    lookupSVCBInfo,
+    modifyForDDR,
+    toPipelineResolvers,
+ )
+import DNS.SEC (addResourceDataForDNSSEC)
+import DNS.SVCB (addResourceDataForSVCB)
+import DNS.Types (
+    DNSError (..),
+    DNSMessage (..),
+    Domain,
+    Question (..),
+    ResourceRecord (..),
+    runInitIO,
+    toRepresentation,
+ )
+import DNS.Types.Decode (decode)
+import DNS.Types.Encode (encode)
 
 ----------------------------------------------------------------
 
