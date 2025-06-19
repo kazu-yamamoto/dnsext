@@ -14,13 +14,13 @@ import DNS.Types
 import DNS.Types.Decode
 import DNS.Types.Encode
 import Data.ByteString (ByteString)
+import Data.IORef
 import Data.IP ()
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as Map
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Environment
-
--- fixme: saving resumption info
 
 serverAddr :: String
 serverAddr = "127.0.0.1"
@@ -54,7 +54,8 @@ main = do
                 addResourceDataForSVCB
             ai <- serverResolve serverAddr serverPort
             E.bracket (serverSocket ai) close $ \s -> do
-                let conf = makeConf addrs
+                ref <- newIORef Map.empty
+                let conf = makeConf ref addrs
                 withLookupConf conf $ mainLoop s
 
 mainLoop :: Socket -> LookupEnv -> IO ()
@@ -101,8 +102,11 @@ selectSVCB (Right (sis : _)) = case toPipelineResolvers $ map modifyForDDR sis o
         [] -> error "selectSVCB"
         p : _ -> p
 
-makeConf :: [String] -> LookupConf
-makeConf addrs =
+makeConf
+    :: IORef (Map.Map NameTag ByteString)
+    -> [String]
+    -> LookupConf
+makeConf ref addrs =
     defaultLookupConf
         { lconfCacheConf = Just defaultCacheConf
         , lconfConcurrent = True
@@ -111,6 +115,13 @@ makeConf addrs =
             actions
                 { ractionUseEarlyData = True
                 , ractionValidate = False
+                , ractionResumptionInfo = \tag -> do
+                    m <- readIORef ref
+                    case Map.lookup tag m of
+                        Nothing -> return []
+                        Just x -> return [x]
+                , ractionOnResumptionInfo = \tag bs ->
+                    atomicModifyIORef' ref $ \m -> (Map.insert tag bs m, ())
                 }
         }
   where

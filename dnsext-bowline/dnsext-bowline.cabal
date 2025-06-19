@@ -121,6 +121,7 @@ executable ddrd
     build-depends:
         base,
         bytestring,
+        containers,
         dnsext-dnssec,
         dnsext-do53,
         dnsext-dox,
