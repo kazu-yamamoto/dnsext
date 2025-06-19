@@ -18,6 +18,7 @@ import Data.IORef
 import Data.IP ()
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import Data.Maybe
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Environment
@@ -63,8 +64,10 @@ mainLoop s env = loop
   where
     loop = do
         bssa <- NSB.recvFrom s 2048
-        piplineResolver <- selectSVCB <$> lookupSVCBInfo env
-        piplineResolver (serverLoop s bssa) `E.catch` ignore
+        mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
+        case mPiplineResolver of
+            Nothing -> return ()
+            Just piplineResolver -> piplineResolver (serverLoop s bssa) `E.catch` ignore
         loop
     ignore (E.SomeException _se) = return ()
 
@@ -79,14 +82,14 @@ serverLoop s (bs0, sa0) resolver = do
         loop
     sendReply bs sa =
         case decode bs of
-            Left _ -> error "serverLoop (1)"
+            Left _ -> return ()
             Right msg -> case question msg of
                 [] -> return ()
                 q : _ -> do
                     let idnt = identifier msg
                     eres <- resolver q mempty
                     case eres of
-                        Left _ -> error "serverLoop (2)"
+                        Left _ -> return ()
                         Right res -> do
                             let msg' =
                                     (replyDNSMessage res)
@@ -94,14 +97,15 @@ serverLoop s (bs0, sa0) resolver = do
                                         }
                             void $ NSB.sendTo s (encode msg') sa
 
-selectSVCB :: Either DNSError [[SVCBInfo]] -> PipelineResolver
-selectSVCB (Left _) = error "selectSVCB Left"
-selectSVCB (Right []) = error "selectSVCB Right"
-selectSVCB (Right (sis : _)) = case toPipelineResolvers $ map modifyForDDR sis of
-    [] -> error "selectSVCB"
-    ps : _ -> case ps of
-        [] -> error "selectSVCB"
-        p : _ -> p
+selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe PipelineResolver
+selectSVCB (Left _) = Nothing
+selectSVCB (Right []) = Nothing
+selectSVCB (Right (sis : _)) =
+    listToMaybe $
+        catMaybes $
+            map listToMaybe $
+                toPipelineResolvers $
+                    map modifyForDDR sis
 
 makeConf
     :: IORef (Map.Map NameTag ByteString)
