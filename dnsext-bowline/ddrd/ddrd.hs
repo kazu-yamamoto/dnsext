@@ -64,8 +64,9 @@ mainLoop s env = loop
     loop = do
         bssa <- NSB.recvFrom s 2048
         piplineResolver <- selectSVCB <$> lookupSVCBInfo env
-        piplineResolver (serverLoop s bssa) `E.catch` \(E.SomeException se) -> print se
+        piplineResolver (serverLoop s bssa) `E.catch` ignore
         loop
+    ignore (E.SomeException _se) = return ()
 
 serverLoop :: Socket -> (ByteString, SockAddr) -> (Question -> QueryControls -> IO (Either DNSError Reply)) -> IO ()
 serverLoop s (bs0, sa0) resolver = do
