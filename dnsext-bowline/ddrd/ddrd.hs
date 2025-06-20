@@ -48,7 +48,6 @@ import DNS.DoX.Client (
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
 import DNS.Types (
-    DNSError (..),
     DNSMessage (..),
     Domain,
     Question (..),
@@ -166,15 +165,17 @@ mainLoop opts s env = loop
         wait <- waitReadSocketSTM s
         atomically wait
         printDebug opts "Waiting...done"
-        mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
-        case mPiplineResolver of
-            Nothing -> printDebug opts "SVCB RR is not available"
-            Just si -> do
-                let ri = unsafeHead $ svcbInfoResolveInfos si
-                printDebug opts $
-                    "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
-                let piplineResolver = unsafeHead $ toPipelineResolver si
-                piplineResolver (serverLoop opts s) `E.catch` ignore
+        er <- lookupSVCBInfo env
+        case er of
+            Left e -> printDebug opts $ show e
+            Right siss -> case selectSVCB siss of
+                Nothing -> printDebug opts "SVCB RR is not available"
+                Just si -> do
+                    let ri = unsafeHead $ svcbInfoResolveInfos si
+                    printDebug opts $
+                        "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
+                    let piplineResolver = unsafeHead $ toPipelineResolver si
+                    piplineResolver (serverLoop opts s) `E.catch` ignore
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
 
@@ -206,8 +207,8 @@ serverLoop opts s resolver = loop
 
 ----------------------------------------------------------------
 
-selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe SVCBInfo
-selectSVCB (Right ((si : _) : _)) = Just $ modifyForDDR si
+selectSVCB :: [[SVCBInfo]] -> Maybe SVCBInfo
+selectSVCB ((si : _) : _) = Just $ modifyForDDR si
 selectSVCB _ = Nothing
 
 ----------------------------------------------------------------
