@@ -12,7 +12,6 @@ import Data.IP ()
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, listToMaybe)
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Console.GetOpt (
@@ -35,16 +34,16 @@ import DNS.Do53.Client (
  )
 import DNS.Do53.Internal (
     NameTag (..),
-    PipelineResolver,
     Reply (..),
     ResolveActions (..),
+    ResolveInfo (..),
     Resolver,
  )
 import DNS.DoX.Client (
-    SVCBInfo,
+    SVCBInfo (..),
     lookupSVCBInfo,
     modifyForDDR,
-    toPipelineResolvers,
+    toPipelineResolver,
  )
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
@@ -160,6 +159,8 @@ main = do
 mainLoop :: Options -> Socket -> LookupEnv -> IO ()
 mainLoop opts s env = loop
   where
+    unsafeHead [] = error "unsafeHead"
+    unsafeHead (x : _) = x
     loop = do
         printDebug opts "Waiting..."
         wait <- waitReadSocketSTM s
@@ -168,9 +169,12 @@ mainLoop opts s env = loop
         mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
         case mPiplineResolver of
             Nothing -> printDebug opts "SVCB RR is not available"
-            Just piplineResolver -> do
-                printDebug opts "Running a pipeline resolver"
-                piplineResolver (serverLoop opts s bssa) `E.catch` ignore
+            Just si -> do
+                let ri = unsafeHead $ svcbInfoResolveInfos si
+                printDebug opts $
+                    "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
+                let piplineResolver = unsafeHead $ toPipelineResolver si
+                piplineResolver (serverLoop opts s) `E.catch` ignore
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
 
@@ -202,15 +206,9 @@ serverLoop opts s resolver = loop
 
 ----------------------------------------------------------------
 
-selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe PipelineResolver
-selectSVCB (Left _) = Nothing
-selectSVCB (Right []) = Nothing
-selectSVCB (Right (sis : _)) =
-    listToMaybe $
-        catMaybes $
-            map listToMaybe $
-                toPipelineResolvers $
-                    map modifyForDDR sis
+selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe SVCBInfo
+selectSVCB (Right ((si : _) : _)) = Just $ modifyForDDR si
+selectSVCB _ = Nothing
 
 ----------------------------------------------------------------
 
