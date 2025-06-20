@@ -224,7 +224,7 @@ makeConf ref addrs =
         , lconfActions =
             actions
                 { ractionUseEarlyData = True
-                , ractionValidate = False
+                , ractionValidate = True
                 , ractionResumptionInfo = \tag -> do
                     m <- readIORef ref
                     case Map.lookup tag m of
