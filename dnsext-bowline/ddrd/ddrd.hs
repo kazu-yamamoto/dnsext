@@ -7,11 +7,14 @@ import Control.Concurrent.STM (atomically)
 import qualified Control.Exception as E
 import Control.Monad (void, when)
 import Data.ByteString (ByteString)
+import Data.ByteString.Short ()
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
 import Data.IP ()
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
+import Data.Maybe (listToMaybe)
+import Data.String (fromString)
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Console.GetOpt (
@@ -46,7 +49,7 @@ import DNS.DoX.Client (
     toPipelineResolver,
  )
 import DNS.SEC (addResourceDataForDNSSEC)
-import DNS.SVCB (addResourceDataForSVCB)
+import DNS.SVCB (ALPN, addResourceDataForSVCB)
 import DNS.Types (
     DNSMessage (..),
     Domain,
@@ -63,6 +66,7 @@ import DNS.Types.Encode (encode)
 data Options = Options
     { optHelp :: Bool
     , optDebug :: Bool
+    , optALPN :: Maybe ALPN
     }
 
 defaultOptions :: Options
@@ -70,6 +74,7 @@ defaultOptions =
     Options
         { optHelp = False
         , optDebug = False
+        , optALPN = Nothing
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -84,6 +89,11 @@ options =
         ["debug"]
         (NoArg (\opts -> opts{optDebug = True}))
         "print debug info"
+    , Option
+        ['a']
+        ["alpn"]
+        (ReqArg (\s o -> o{optALPN = Just (fromString s)}) "<alpn>")
+        "specify ALPN to select SVCB entries"
     ]
 
 ----------------------------------------------------------------
@@ -168,7 +178,7 @@ mainLoop opts s env = loop
         er <- lookupSVCBInfo env
         case er of
             Left e -> printDebug opts $ show e
-            Right siss -> case selectSVCB siss of
+            Right siss -> case selectSVCB (optALPN opts) siss of
                 Nothing -> printDebug opts "SVCB RR is not available"
                 Just si -> do
                     let ri = unsafeHead $ svcbInfoResolveInfos si
@@ -207,9 +217,10 @@ serverLoop opts s resolver = loop
 
 ----------------------------------------------------------------
 
-selectSVCB :: [[SVCBInfo]] -> Maybe SVCBInfo
-selectSVCB ((si : _) : _) = Just $ modifyForDDR si
-selectSVCB _ = Nothing
+selectSVCB :: Maybe ALPN -> [[SVCBInfo]] -> Maybe SVCBInfo
+selectSVCB (Just alpn) siss = modifyForDDR <$> listToMaybe (filter (\s -> svcbInfoALPN s == alpn) (concat siss))
+selectSVCB Nothing ((si : _) : _) = Just $ modifyForDDR si
+selectSVCB _ _ = Nothing
 
 ----------------------------------------------------------------
 
