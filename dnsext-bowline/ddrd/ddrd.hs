@@ -3,6 +3,7 @@
 
 module Main where
 
+import Control.Concurrent.STM (atomically)
 import qualified Control.Exception as E
 import Control.Monad (void, when)
 import Data.ByteString (ByteString)
@@ -160,7 +161,10 @@ mainLoop :: Options -> Socket -> LookupEnv -> IO ()
 mainLoop opts s env = loop
   where
     loop = do
-        bssa <- NSB.recvFrom s 2048
+        printDebug opts "Waiting..."
+        wait <- waitReadSocketSTM s
+        atomically wait
+        printDebug opts "Waiting...done"
         mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
         case mPiplineResolver of
             Nothing -> printDebug opts "SVCB RR is not available"
@@ -170,10 +174,8 @@ mainLoop opts s env = loop
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
 
-serverLoop :: Options -> Socket -> (ByteString, SockAddr) -> Resolver -> IO ()
-serverLoop opts s (bs0, sa0) resolver = do
-    sendReply bs0 sa0
-    loop
+serverLoop :: Options -> Socket -> Resolver -> IO ()
+serverLoop opts s resolver = loop
   where
     loop = do
         (bs, sa) <- NSB.recvFrom s 2048
