@@ -3,6 +3,7 @@
 
 module Main where
 
+import Control.Concurrent.STM (atomically)
 import qualified Control.Exception as E
 import Control.Monad (void, when)
 import Data.ByteString (ByteString)
@@ -11,7 +12,6 @@ import Data.IP ()
 import Data.List (intercalate)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, listToMaybe)
 import Network.Socket
 import qualified Network.Socket.ByteString as NSB
 import System.Console.GetOpt (
@@ -34,16 +34,16 @@ import DNS.Do53.Client (
  )
 import DNS.Do53.Internal (
     NameTag (..),
-    PipelineResolver,
     Reply (..),
     ResolveActions (..),
+    ResolveInfo (..),
     Resolver,
  )
 import DNS.DoX.Client (
-    SVCBInfo,
+    SVCBInfo (..),
     lookupSVCBInfo,
     modifyForDDR,
-    toPipelineResolvers,
+    toPipelineResolver,
  )
 import DNS.SEC (addResourceDataForDNSSEC)
 import DNS.SVCB (addResourceDataForSVCB)
@@ -159,21 +159,27 @@ main = do
 mainLoop :: Options -> Socket -> LookupEnv -> IO ()
 mainLoop opts s env = loop
   where
+    unsafeHead [] = error "unsafeHead"
+    unsafeHead (x : _) = x
     loop = do
-        bssa <- NSB.recvFrom s 2048
+        printDebug opts "Waiting..."
+        wait <- waitReadSocketSTM s
+        atomically wait
+        printDebug opts "Waiting...done"
         mPiplineResolver <- selectSVCB <$> lookupSVCBInfo env
         case mPiplineResolver of
             Nothing -> printDebug opts "SVCB RR is not available"
-            Just piplineResolver -> do
-                printDebug opts "Running a pipeline resolver"
-                piplineResolver (serverLoop opts s bssa) `E.catch` ignore
+            Just si -> do
+                let ri = unsafeHead $ svcbInfoResolveInfos si
+                printDebug opts $
+                    "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
+                let piplineResolver = unsafeHead $ toPipelineResolver si
+                piplineResolver (serverLoop opts s) `E.catch` ignore
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
 
-serverLoop :: Options -> Socket -> (ByteString, SockAddr) -> Resolver -> IO ()
-serverLoop opts s (bs0, sa0) resolver = do
-    sendReply bs0 sa0
-    loop
+serverLoop :: Options -> Socket -> Resolver -> IO ()
+serverLoop opts s resolver = loop
   where
     loop = do
         (bs, sa) <- NSB.recvFrom s 2048
@@ -200,15 +206,9 @@ serverLoop opts s (bs0, sa0) resolver = do
 
 ----------------------------------------------------------------
 
-selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe PipelineResolver
-selectSVCB (Left _) = Nothing
-selectSVCB (Right []) = Nothing
-selectSVCB (Right (sis : _)) =
-    listToMaybe $
-        catMaybes $
-            map listToMaybe $
-                toPipelineResolvers $
-                    map modifyForDDR sis
+selectSVCB :: Either DNSError [[SVCBInfo]] -> Maybe SVCBInfo
+selectSVCB (Right ((si : _) : _)) = Just $ modifyForDDR si
+selectSVCB _ = Nothing
 
 ----------------------------------------------------------------
 
@@ -224,7 +224,7 @@ makeConf ref addrs =
         , lconfActions =
             actions
                 { ractionUseEarlyData = True
-                , ractionValidate = False
+                , ractionValidate = True
                 , ractionResumptionInfo = \tag -> do
                     m <- readIORef ref
                     case Map.lookup tag m of

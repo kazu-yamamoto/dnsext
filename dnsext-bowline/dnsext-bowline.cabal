@@ -128,7 +128,8 @@ executable ddrd
         dnsext-svcb,
         dnsext-types,
         iproute,
-        network
+        network,
+        stm
 
     if (os(windows) && impl(ghc >=9.0))
         ghc-options: -with-rtsopts=--io-manager=native
