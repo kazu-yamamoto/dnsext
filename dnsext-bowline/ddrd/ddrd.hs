@@ -4,7 +4,13 @@
 module Main where
 
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.STM (TQueue, atomically, newTQueueIO, readTQueue, writeTQueue)
+import Control.Concurrent.STM (
+    TBQueue,
+    atomically,
+    newTBQueueIO,
+    readTBQueue,
+    writeTBQueue,
+ )
 import qualified Control.Exception as E
 import Control.Monad (forever, replicateM_, void, when)
 import Data.ByteString (ByteString)
@@ -151,6 +157,11 @@ pprRR ResourceRecord{..} = pprDomain rrname ++ " " ++ show rrtype ++ " " ++ show
 
 ----------------------------------------------------------------
 
+numberOfWorkers :: Int
+numberOfWorkers = 10
+
+----------------------------------------------------------------
+
 main :: IO ()
 main = do
     args <- getArgs
@@ -162,18 +173,34 @@ main = do
         addResourceDataForSVCB
     ai <- serverResolve serverAddr serverPort
     E.bracket (serverSocket ai) close $ \s -> do
+        let recv = NSB.recvFrom s 2048
+            send sa bs = void $ NSB.sendTo s bs sa
+            wait = do
+                printDebug opts "Waiting..."
+                wait' <- waitReadSocketSTM s
+                atomically wait'
+                printDebug opts "Waiting...done"
+        q <- newTBQueueIO 128
+        void $ forkIO $ reader recv q
         ref <- newIORef Map.empty
         let conf = makeConf ref ips
-        withLookupConf conf $ mainLoop opts s
+        withLookupConf conf $ mainLoop opts wait send q
 
-reader :: Socket -> TQueue (ByteString, SockAddr) -> IO ()
-reader s q = forever $ do
-    x <- NSB.recvFrom s 2048
-    atomically $ writeTQueue q x
+----------------------------------------------------------------
 
-worker :: Options -> Socket -> TQueue (ByteString, SockAddr) -> Resolver -> IO ()
-worker opts s q resolver = forever $ do
-    (bs, sa) <- atomically $ readTQueue q
+type InpQ = TBQueue (ByteString, SockAddr)
+type SendIO = SockAddr -> ByteString -> IO ()
+type RecvIO = IO (ByteString, SockAddr)
+type WaitIO = IO ()
+
+reader :: RecvIO -> InpQ -> IO ()
+reader recv q = forever $ do
+    x <- recv
+    atomically $ writeTBQueue q x
+
+worker :: Options -> SendIO -> InpQ -> Resolver -> IO ()
+worker opts send q resolver = forever $ do
+    (bs, sa) <- atomically $ readTBQueue q
     case decode bs of
         Left _ -> printDebug opts "Decode error"
         Right msg -> case question msg of
@@ -190,18 +217,15 @@ worker opts s q resolver = forever $ do
                                     { identifier = idnt
                                     }
                         printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
-                        void $ NSB.sendTo s (encode msg') sa
+                        void $ send sa $ encode msg'
 
-mainLoop :: Options -> Socket -> LookupEnv -> IO ()
-mainLoop opts s env = loop
+mainLoop :: Options -> WaitIO -> SendIO -> InpQ -> LookupEnv -> IO ()
+mainLoop opts wait send q env = loop
   where
     unsafeHead [] = error "unsafeHead"
     unsafeHead (x : _) = x
     loop = do
-        printDebug opts "Waiting..."
-        wait <- waitReadSocketSTM s
-        atomically wait
-        printDebug opts "Waiting...done"
+        wait
         er <- lookupSVCBInfo env
         case er of
             Left e -> do
@@ -217,10 +241,8 @@ mainLoop opts s env = loop
                         "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
                     let piplineResolver = unsafeHead $ toPipelineResolver si
                     E.handle ignore $ piplineResolver $ \resolver -> do
-                        q <- newTQueueIO
-                        void $ forkIO $ reader s q
-                        replicateM_ 10 $ void $ forkIO $ worker opts s q resolver
-                        worker opts s q resolver
+                        replicateM_ 10 $ void $ forkIO $ worker opts send q resolver
+                        worker opts send q resolver
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
 
