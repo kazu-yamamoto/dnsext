@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.Async (concurrently_)
 import Control.Concurrent.STM (
     TBQueue,
     atomically,
@@ -12,7 +13,7 @@ import Control.Concurrent.STM (
     writeTBQueue,
  )
 import qualified Control.Exception as E
-import Control.Monad (forever, replicateM_, void, when)
+import Control.Monad (forever, void, when)
 import Data.ByteString (ByteString)
 import Data.ByteString.Short ()
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
@@ -33,6 +34,7 @@ import System.Console.GetOpt (
  )
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
+import System.Log.FastLogger
 
 import DNS.Do53.Client (
     LookupConf (..),
@@ -171,20 +173,25 @@ main = do
     runInitIO $ do
         addResourceDataForDNSSEC
         addResourceDataForSVCB
+    let logtyp
+            | optDebug opts = LogStderr 1024
+            | otherwise = LogNone
+    (putLog, killLogger) <- newFastLogger1 logtyp
     ai <- serverResolve serverAddr serverPort
     E.bracket (serverSocket ai) close $ \s -> do
         let recv = NSB.recvFrom s 2048
             send sa bs = void $ NSB.sendTo s bs sa
             wait = do
-                printDebug opts "Waiting..."
+                putLog "Waiting...\n"
                 wait' <- waitReadSocketSTM s
                 atomically wait'
-                printDebug opts "Waiting...done"
+                putLog "Waiting...done\n"
         q <- newTBQueueIO 128
         void $ forkIO $ reader recv q
         ref <- newIORef Map.empty
         let conf = makeConf ref ips
-        withLookupConf conf $ mainLoop opts wait send q
+        withLookupConf conf $ mainLoop opts wait send q putLog
+    killLogger
 
 ----------------------------------------------------------------
 
@@ -192,35 +199,36 @@ type InpQ = TBQueue (ByteString, SockAddr)
 type SendIO = SockAddr -> ByteString -> IO ()
 type RecvIO = IO (ByteString, SockAddr)
 type WaitIO = IO ()
+type PutLog = LogStr -> IO ()
 
 reader :: RecvIO -> InpQ -> IO ()
 reader recv q = forever $ do
     x <- recv
     atomically $ writeTBQueue q x
 
-worker :: Options -> SendIO -> InpQ -> Resolver -> IO ()
-worker opts send q resolver = forever $ do
+worker :: SendIO -> InpQ -> PutLog -> Resolver -> IO ()
+worker send q putLog resolver = forever $ do
     (bs, sa) <- atomically $ readTBQueue q
     case decode bs of
-        Left _ -> printDebug opts "Decode error"
+        Left _ -> putLog "Decode error\n"
         Right msg -> case question msg of
-            [] -> printDebug opts "No questions"
+            [] -> putLog "No questions\n"
             qry : _ -> do
-                printDebug opts $ "Q: " ++ pprDomain (qname qry) ++ " " ++ show (qtype qry)
+                putLog $ toLogStr $ "Q: " ++ pprDomain (qname qry) ++ " " ++ show (qtype qry) ++ "\n"
                 let idnt = identifier msg
                 erep <- resolver qry mempty
                 case erep of
-                    Left _ -> printDebug opts "No reply"
+                    Left _ -> putLog "No reply\n"
                     Right rep -> do
                         let msg' =
                                 (replyDNSMessage rep)
                                     { identifier = idnt
                                     }
-                        printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
+                        putLog $ toLogStr $ "R: " ++ intercalate "\n   " (map pprRR (answer msg')) ++ "\n"
                         void $ send sa $ encode msg'
 
-mainLoop :: Options -> WaitIO -> SendIO -> InpQ -> LookupEnv -> IO ()
-mainLoop opts wait send q env = loop
+mainLoop :: Options -> WaitIO -> SendIO -> InpQ -> PutLog -> LookupEnv -> IO ()
+mainLoop opts wait send q putLog env = loop
   where
     unsafeHead [] = error "unsafeHead"
     unsafeHead (x : _) = x
@@ -229,22 +237,23 @@ mainLoop opts wait send q env = loop
         er <- lookupSVCBInfo env
         case er of
             Left e -> do
-                printDebug opts $ show e
+                putLog $ toLogStr $ show e ++ "\n"
                 threadDelay 3000000
             Right siss -> case selectSVCB (optALPN opts) siss of
                 Nothing -> do
-                    printDebug opts "SVCB RR is not available"
+                    putLog "SVCB RR is not available\n"
                     threadDelay 3000000
                 Just si -> do
                     let ri = unsafeHead $ svcbInfoResolveInfos si
-                    printDebug opts $
-                        "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
+                    putLog $
+                        toLogStr $
+                            "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri) ++ "\n"
                     let piplineResolver = unsafeHead $ toPipelineResolver si
                     E.handle ignore $ piplineResolver $ \resolver -> do
-                        replicateM_ 10 $ void $ forkIO $ worker opts send q resolver
-                        worker opts send q resolver
+                        let runWorkers = foldr1 concurrently_ $ replicate numberOfWorkers $ worker send q putLog resolver
+                        runWorkers
         loop
-    ignore (E.SomeException se) = printDebug opts $ show se
+    ignore (E.SomeException se) = putLog $ toLogStr $ show se
 
 ----------------------------------------------------------------
 

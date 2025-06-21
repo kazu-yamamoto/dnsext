@@ -120,6 +120,7 @@ executable ddrd
     ghc-options:      -Wall -threaded
     build-depends:
         base,
+        async,
         bytestring,
         containers,
         dnsext-dnssec,
@@ -127,6 +128,7 @@ executable ddrd
         dnsext-dox,
         dnsext-svcb,
         dnsext-types,
+        fast-logger,
         iproute,
         network,
         stm
