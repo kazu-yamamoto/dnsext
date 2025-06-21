@@ -3,6 +3,7 @@
 
 module Main where
 
+import Control.Concurrent (threadDelay)
 import Control.Concurrent.STM (atomically)
 import qualified Control.Exception as E
 import Control.Monad (void, when)
@@ -177,9 +178,13 @@ mainLoop opts s env = loop
         printDebug opts "Waiting...done"
         er <- lookupSVCBInfo env
         case er of
-            Left e -> printDebug opts $ show e
+            Left e -> do
+                printDebug opts $ show e
+                threadDelay 3000000
             Right siss -> case selectSVCB (optALPN opts) siss of
-                Nothing -> printDebug opts "SVCB RR is not available"
+                Nothing -> do
+                    printDebug opts "SVCB RR is not available"
+                    threadDelay 3000000
                 Just si -> do
                     let ri = unsafeHead $ svcbInfoResolveInfos si
                     printDebug opts $
