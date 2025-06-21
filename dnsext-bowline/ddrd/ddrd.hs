@@ -3,10 +3,10 @@
 
 module Main where
 
-import Control.Concurrent (threadDelay)
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.STM (TQueue, atomically, newTQueueIO, readTQueue, writeTQueue)
 import qualified Control.Exception as E
-import Control.Monad (void, when)
+import Control.Monad (forever, replicateM_, void, when)
 import Data.ByteString (ByteString)
 import Data.ByteString.Short ()
 import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef)
@@ -166,6 +166,32 @@ main = do
         let conf = makeConf ref ips
         withLookupConf conf $ mainLoop opts s
 
+reader :: Socket -> TQueue (ByteString, SockAddr) -> IO ()
+reader s q = forever $ do
+    x <- NSB.recvFrom s 2048
+    atomically $ writeTQueue q x
+
+worker :: Options -> Socket -> TQueue (ByteString, SockAddr) -> Resolver -> IO ()
+worker opts s q resolver = forever $ do
+    (bs, sa) <- atomically $ readTQueue q
+    case decode bs of
+        Left _ -> printDebug opts "Decode error"
+        Right msg -> case question msg of
+            [] -> printDebug opts "No questions"
+            qry : _ -> do
+                printDebug opts $ "Q: " ++ pprDomain (qname qry) ++ " " ++ show (qtype qry)
+                let idnt = identifier msg
+                erep <- resolver qry mempty
+                case erep of
+                    Left _ -> printDebug opts "No reply"
+                    Right rep -> do
+                        let msg' =
+                                (replyDNSMessage rep)
+                                    { identifier = idnt
+                                    }
+                        printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
+                        void $ NSB.sendTo s (encode msg') sa
+
 mainLoop :: Options -> Socket -> LookupEnv -> IO ()
 mainLoop opts s env = loop
   where
@@ -190,35 +216,13 @@ mainLoop opts s env = loop
                     printDebug opts $
                         "Running a pipeline resolver on " ++ show (svcbInfoALPN si) ++ " " ++ show (rinfoIP ri) ++ " " ++ show (rinfoPort ri)
                     let piplineResolver = unsafeHead $ toPipelineResolver si
-                    piplineResolver (serverLoop opts s) `E.catch` ignore
+                    E.handle ignore $ piplineResolver $ \resolver -> do
+                        q <- newTQueueIO
+                        void $ forkIO $ reader s q
+                        replicateM_ 10 $ void $ forkIO $ worker opts s q resolver
+                        worker opts s q resolver
         loop
     ignore (E.SomeException se) = printDebug opts $ show se
-
-serverLoop :: Options -> Socket -> Resolver -> IO ()
-serverLoop opts s resolver = loop
-  where
-    loop = do
-        (bs, sa) <- NSB.recvFrom s 2048
-        sendReply bs sa
-        loop
-    sendReply bs sa =
-        case decode bs of
-            Left _ -> printDebug opts "Decode error"
-            Right msg -> case question msg of
-                [] -> printDebug opts "No questions"
-                q : _ -> do
-                    printDebug opts $ "Q: " ++ pprDomain (qname q) ++ " " ++ show (qtype q)
-                    let idnt = identifier msg
-                    eres <- resolver q mempty
-                    case eres of
-                        Left _ -> printDebug opts "No reply"
-                        Right res -> do
-                            let msg' =
-                                    (replyDNSMessage res)
-                                        { identifier = idnt
-                                        }
-                            printDebug opts $ "R: " ++ intercalate "\n   " (map pprRR (answer msg'))
-                            void $ NSB.sendTo s (encode msg') sa
 
 ----------------------------------------------------------------
 
